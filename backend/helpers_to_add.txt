@@ -1,0 +1,3 @@
+async function getLivePrice(market, ticker) {  const { getStockQuote } = require('./marketService');  try {    const sym = market === 'NSE' ? `NSE:${ticker}` : ticker;    const quote = await getStockQuote(sym).catch(() => null);    if (quote && quote.price) return quote.price;  } catch {}  return null;}
+
+async function getFxRate() {  try { _fxRate = await fxService.getRate(); } catch {}  return _fxRate;}

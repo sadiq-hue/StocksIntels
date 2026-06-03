@@ -1,0 +1,26 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: stockintel_db
+    restart: always
+    environment:
+      POSTGRES_USER: stockintel
+      POSTGRES_PASSWORD: stockintel
+      POSTGRES_DB: stockintel
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+  nocodb:
+    image: nocodb/nocodb:latest
+    container_name: stockintel_nocodb
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      NC_DB: "pg://db:5432?u=stockintel&p=stockintel&d=stockintel"
+    depends_on:
+      - db
+volumes:
+  postgres_data:

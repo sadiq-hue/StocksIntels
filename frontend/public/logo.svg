@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 56" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0D7490"/>
+      <stop offset="50%" stop-color="#0A8BA8"/>
+      <stop offset="100%" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.35)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0D7490"/>
+      <stop offset="60%" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <linearGradient id="bar1" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="bar2" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#6EE7B7"/>
+    </linearGradient>
+    <linearGradient id="bar3" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#FBBF24"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0D7490" flood-opacity="0.3"/>
+    </filter>
+    <filter id="insetGlow">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feComposite in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1" result="shadowDiff"/>
+      <feFlood flood-color="white" flood-opacity="0.2"/>
+      <feComposite in2="shadowDiff" operator="in"/>
+      <feComposite in2="SourceGraphic" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Icon container with depth -->
+  <rect x="4" y="8" width="40" height="40" rx="10" fill="url(#bg)" filter="url(#shadow)"/>
+  <rect x="4" y="8" width="40" height="40" rx="10" fill="url(#glow)"/>
+
+  <!-- Chart elements -->
+  <!-- Baseline -->
+  <line x1="10" y1="38" x2="38" y2="38" stroke="rgba(255,255,255,0.25)" stroke-width="0.5"/>
+
+  <!-- Candlestick 1 - down (red-ish) -->
+  <rect x="12" y="30" width="4" height="8" rx="0.5" fill="url(#bar3)"/>
+  <line x1="14" y1="28" x2="14" y2="30" stroke="#FBBF24" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Candlestick 2 - up (green) -->
+  <rect x="18" y="24" width="4" height="14" rx="0.5" fill="url(#bar1)"/>
+  <line x1="20" y1="22" x2="20" y2="24" stroke="#34D399" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Candlestick 3 - up (green) -->
+  <rect x="24" y="20" width="4" height="18" rx="0.5" fill="url(#bar2)"/>
+  <line x1="26" y1="18" x2="26" y2="20" stroke="#6EE7B7" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Candlestick 4 - small up -->
+  <rect x="30" y="28" width="4" height="10" rx="0.5" fill="url(#bar1)"/>
+  <line x1="32" y1="26" x2="32" y2="28" stroke="#34D399" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Trend line overlay -->
+  <path d="M14 31 L20 26 L26 21 L32 27" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.7"/>
+
+  <!-- Glow dot at the end -->
+  <circle cx="32" cy="27" r="2" fill="white" opacity="0.9"/>
+  <circle cx="32" cy="27" r="4" fill="white" opacity="0.2"/>
+
+  <!-- Typography -->
+  <text x="54" y="36" font-family="'Inter',system-ui,-apple-system,sans-serif" font-size="22" font-weight="800" fill="url(#textGrad)" letter-spacing="-0.5">Stocks</text>
+  <text x="118" y="36" font-family="'Inter',system-ui,-apple-system,sans-serif" font-size="22" font-weight="600" fill="#1E293B" letter-spacing="-0.3">Intels</text>
+
+  <!-- Small tagline dot -->
+  <circle cx="54" cy="44" r="1.5" fill="#0D7490" opacity="0.4"/>
+</svg>
