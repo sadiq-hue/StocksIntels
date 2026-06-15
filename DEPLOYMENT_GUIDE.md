@@ -12,7 +12,7 @@ This project is split so the **frontend** and **backend** can be deployed indepe
 ## 1. Backend on Render
 
 ### What gets deployed
-- `backend/Dockerfile` builds a Node.js 20 + Python container.
+- `backend/Dockerfile` builds a Node.js 20 + Python container and installs dependencies with pnpm from the workspace lockfile.
 - `render.yaml` provisions:
   - Web service (`stockintel-backend`)
   - PostgreSQL database (`stockintel-db`)
@@ -62,8 +62,8 @@ Then redeploy the backend service so the change takes effect.
 ## 2. Frontend on Vercel
 
 ### What gets deployed
-- `frontend/vercel.json` configures the Vite build and SPA routing.
-- `frontend/package.json` provides the build scripts.
+- `frontend/vercel.json` configures the Vite build, SPA routing, and uses `pnpm install`.
+- `frontend/package.json` provides the build scripts and pins pnpm via `packageManager`.
 
 ### Steps
 
