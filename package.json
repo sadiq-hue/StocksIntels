@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "cd frontend && vite build",
+    "build": "npm install --include=dev && cd frontend && vite build",
     "dev": "cd frontend && vite"
   },
   "dependencies": {
