@@ -4,8 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "npm install --include=dev && cd frontend && vite build",
-    "dev": "cd frontend && vite"
+    "build": "cd frontend && npm run build",
+    "dev": "cd frontend && npm run dev"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

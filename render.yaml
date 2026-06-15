@@ -32,8 +32,8 @@ services:
       - key: LOG_LEVEL
         value: info
       - key: CORS_ORIGIN
-        # TODO: Replace with your real Netlify URL after deploying the frontend
-        value: https://stockintel.netlify.app
+        # TODO: Replace with your Vercel frontend URL after deploying (e.g., https://stockintels.vercel.app)
+        value: https://stockintels.vercel.app
       - key: SIGNAL_INTERVAL_MS
         value: "30000"
       - key: MARKET_DATA_PROVIDER
