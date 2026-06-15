@@ -138,8 +138,14 @@ function sanitizeText(text) {
 }
 
 // ── Frontend Static Serving ───────────────────────────────────────
+// When the frontend is deployed separately (e.g. Vercel), the backend
+// runs in API-only mode and does not try to serve a local dist folder.
+const fs = require('fs');
 const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
-app.use(express.static(frontendDist));
+const serveFrontend = fs.existsSync(frontendDist);
+if (serveFrontend) {
+  app.use(express.static(frontendDist));
+}
 
 // ── Admin API Routes ─────────────────────────────────────────────
 // Extra security headers for admin endpoints
@@ -8211,10 +8217,16 @@ async function sendDailySentimentReports() {
 }
 
 // ── SPA fallback: serve index.html for all non-API routes ────────
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api/')) return next();
-  res.sendFile(path.join(frontendDist, 'index.html'));
-});
+// Only enabled when the backend is co-located with a built frontend.
+if (serveFrontend) {
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+} else {
+  // API-only fallback for separate frontend deployments
+  app.get('/', (_req, res) => res.json({ status: 'StocksIntels API', time: new Date().toISOString() }));
+}
 
 // ===================== START SERVER =====================
 

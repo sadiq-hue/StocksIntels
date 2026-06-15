@@ -1,147 +1,161 @@
-# Separate Frontend & Backend Deployment Guide
+# StocksIntels Deployment Guide
 
-## Overview
-This project is configured for separate deployments:
-- **Frontend**: Vercel (static hosting)
-- **Backend**: Render (Docker-based Node.js + PostgreSQL + Redis)
+This project is split so the **frontend** and **backend** can be deployed independently:
 
----
-
-## Frontend Deployment (Vercel)
-
-### Configuration Files
-- **`vercel.json`**: Root-level config that tells Vercel to build the frontend directory
-- **`frontend/package.json`**: Frontend build scripts and dependencies
-
-### Deploy Frontend
-
-1. **Connect GitHub Repository**
-   - Go to [vercel.com](https://vercel.com)
-   - Click "Add New" → "Project"
-   - Select your GitHub repository (`sadiq-hue/StocksIntels`)
-
-2. **Configure Project**
-   - **Root Directory**: Set to `frontend/` (Vercel should auto-detect from vercel.json)
-   - **Build Command**: `npm run build` (auto-filled from frontend/package.json)
-   - **Output Directory**: `dist` (auto-filled from frontend/package.json)
-
-3. **Environment Variables** (if needed in frontend):
-   - Add any API endpoints or config as needed
-
-4. **Deploy**
-   - Click "Deploy"
-   - Vercel builds and deploys automatically on every `main` branch push
-
-5. **Update Backend CORS**
-   - After frontend deploys, note your Vercel URL (e.g., `https://stockintels.vercel.app`)
-   - Update backend's `CORS_ORIGIN` environment variable in Render dashboard
+| Part | Platform | Folder | Why |
+|------|----------|--------|-----|
+| Frontend | Vercel | `frontend/` | Static Vite + React app |
+| Backend | Render | `backend/` | Dockerized Node.js + Python/ML API |
 
 ---
 
-## Backend Deployment (Render)
+## 1. Backend on Render
 
-### Configuration Files
-- **`render.yaml`**: Infrastructure as Code (databases, Redis, web service)
-- **`backend/Dockerfile`**: Containerized Node.js + Python environment
-- **`backend/package.json`**: Backend dependencies and start script
+### What gets deployed
+- `backend/Dockerfile` builds a Node.js 20 + Python container.
+- `render.yaml` provisions:
+  - Web service (`stockintel-backend`)
+  - PostgreSQL database (`stockintel-db`)
+  - Redis cache (`stockintel-redis`)
 
-### Deploy Backend
+### Steps
 
-1. **Push render.yaml to GitHub**
-   - Ensure `render.yaml` is in the repository root
-
-2. **Create Render Blueprint**
-   - Go to [render.com](https://render.com)
-   - Click "Create New" → "Blueprint"
-   - Connect your GitHub repository
-   - Select branch: `main`
-   - Render auto-detects `render.yaml`
-
-3. **Configure Services**
-   - Render will create:
-     - Web service (backend container)
-     - PostgreSQL database (`stockintel-db`)
-     - Redis cache (`stockintel-redis`)
-
-4. **Set Environment Variables**
-   In Render dashboard, add these secrets (marked `sync: false` in render.yaml):
-   - `RAPIDAPI_KEY` (Yahoo Finance API)
+1. Push this repo to GitHub (ensure `render.yaml` is at the repo root).
+2. Go to [render.com](https://render.com) → **Create New** → **Blueprint**.
+3. Connect your GitHub repo and select the `main` branch.
+4. Render detects `render.yaml` and shows the services it will create.
+5. Click **Create Blueprint**.
+6. While the backend builds, go to the Render dashboard for `stockintel-backend` and add the required secrets under **Environment**:
+   - `JWT_SECRET` — generate: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
+   - `BROKER_ENCRYPTION_KEY` — generate: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+   - `RAPIDAPI_KEY`
    - `TWELVE_DATA_API_KEY` (optional)
    - `FMP_API_KEY` (optional)
    - `POLYGON_API_KEY`
-   - `JWT_SECRET` (generate a strong random string)
-   - `BROKER_ENCRYPTION_KEY` (generate a strong random string)
-   - `ENSEND_PROJECT_SECRET` (email service)
-   - `PAYHERO_*` (payments, optional)
-   - `PAYD_*` (payments, optional)
+   - `SEC_EDGAR_API_KEY` (optional)
+   - `SIMFIN_API_KEY` (optional)
+   - `ENSEND_PROJECT_SECRET` (optional, for email)
+   - `ENSEND_SENDER_ADDRESS` (optional)
+   - `PAYHERO_AUTH_TOKEN`, `PAYHERO_CHANNEL_ID`, `PAYHERO_CALLBACK_URL` (optional)
+   - `PAYD_*` credentials (optional)
+7. Wait for the service status to show **Live**.
+8. Note the backend URL, e.g. `https://stockintel-backend.onrender.com`.
 
-5. **Update CORS**
-   - Set `CORS_ORIGIN` to your Vercel frontend URL
-   - Example: `https://stockintels.vercel.app`
+### Update CORS after frontend deploys
 
-6. **Deploy**
-   - Click "Create Blueprint"
-   - Render deploys all services automatically
+After you deploy the frontend, edit the `CORS_ORIGIN` environment variable in Render:
+
+```
+CORS_ORIGIN=https://stockintels.vercel.app
+```
+
+To allow multiple origins, use a comma-separated list:
+
+```
+CORS_ORIGIN=https://stockintels.vercel.app,https://stockintels-git-main.vercel.app
+```
+
+Then redeploy the backend service so the change takes effect.
 
 ---
 
-## After Deployment
+## 2. Frontend on Vercel
 
-### Update API Endpoints in Frontend
-1. Update frontend code to call backend from the new Render URL
-2. Example: `https://stockintels.onrender.com` or your custom domain
-3. Redeploy frontend on Vercel (auto on push to main)
+### What gets deployed
+- `frontend/vercel.json` configures the Vite build and SPA routing.
+- `frontend/package.json` provides the build scripts.
 
-### Monitor & Scale
-- **Vercel**: Monitor deployments in Vercel dashboard
-- **Render**: Monitor services, databases, and logs in Render dashboard
+### Steps
 
-### Custom Domains (Optional)
-- **Frontend**: Add custom domain in Vercel project settings
-- **Backend**: Add custom domain in Render service settings
+1. Go to [vercel.com](https://vercel.com) → **Add New** → **Project**.
+2. Import the same GitHub repo.
+3. In the project configuration screen:
+   - **Framework Preset**: Vite
+   - **Root Directory**: `frontend` (this is required)
+   - **Build Command**: `npm run build` (auto-filled)
+   - **Output Directory**: `dist` (auto-filled)
+4. Add environment variables under **Environment Variables**:
+   - `VITE_API_URL` — set to your Render backend URL + `/api`
+     - Example: `https://stockintel-backend.onrender.com/api`
+   - `VITE_GOOGLE_CLIENT_ID` — your Google OAuth client ID
+   - `VITE_NEWSAPI_KEY` (optional)
+   - `VITE_FINNHUB_KEY` (optional)
+   - `VITE_POLYGON_API_KEY` (optional)
+   - `VITE_BENZINGA_API_KEY` (optional)
+5. Click **Deploy**.
+6. Vercel will build `frontend/` and deploy it.
+7. Note the production URL (e.g. `https://stockintels.vercel.app`).
+
+> **Important:** The `frontend/vercel.json` file must live inside the `frontend/` folder, and the Vercel project **Root Directory** must be set to `frontend`. If you import the repo without setting the root directory, Vercel will look for the app at the repo root and the build will fail.
+
+---
+
+## 3. Final Wiring
+
+1. Copy the Vercel production URL.
+2. Paste it into Render → `stockintel-backend` → Environment → `CORS_ORIGIN`.
+3. Redeploy the backend on Render.
+4. Open the Vercel URL and verify the app loads and talks to the backend.
+
+---
+
+## 4. Local Development
+
+```bash
+# Backend
+cd backend
+cp .env.example .env   # fill in your values
+npm install
+npm run dev            # http://localhost:3001
+
+# Frontend (new terminal)
+cd frontend
+cp .env.example .env   # fill in your values
+npm install
+npm run dev            # http://localhost:5173
+```
+
+The frontend `.env` should contain:
+
+```env
+VITE_API_URL=http://localhost:3001/api
+VITE_GOOGLE_CLIENT_ID=your_google_client_id_here
+```
+
+---
+
+## 5. Project Layout for Deployment
+
+```text
+StocksIntels/
+├── frontend/                 # Vercel root directory
+│   ├── package.json          # Frontend deps + build scripts
+│   ├── vite.config.ts
+│   ├── vercel.json           # Vercel build config
+│   └── .env.example          # Frontend env vars
+├── backend/                  # Render service
+│   ├── Dockerfile            # Container build
+│   ├── package.json          # Backend deps + start script
+│   ├── index.js              # API server entry
+│   └── .env.example          # Backend env vars
+└── render.yaml               # Render Blueprint (repo root)
+```
 
 ---
 
 ## Troubleshooting
 
-### Frontend build fails: "vite: command not found"
-- Ensure `vercel.json` points to frontend directory
-- Check frontend/package.json has vite in devDependencies
+### `vite: command not found` on Vercel
+- Make sure the Vercel project **Root Directory** is set to `frontend`.
+- Confirm `vite` is in `frontend/package.json` `devDependencies`.
 
-### Backend won't start
-- Check Docker build logs in Render dashboard
-- Verify all environment variables are set
-- Check database and Redis are healthy
+### Backend returns 500 or CORS errors
+- Check that `CORS_ORIGIN` on Render exactly matches your Vercel URL (including `https://`).
+- Remember to redeploy the backend after changing `CORS_ORIGIN`.
 
-### CORS errors
-- Frontend and backend URLs must match exactly
-- Update backend's `CORS_ORIGIN` environment variable
-- Include protocol (https://) and full domain
+### Backend health check fails on Render
+- Check the Render logs for database connection errors.
+- Verify all required secrets (`JWT_SECRET`, `DATABASE_URL`, etc.) are set.
 
----
-
-## Local Development
-
-```bash
-# Install dependencies for both
-npm install
-cd backend && npm install && cd ..
-
-# Frontend only
-npm run dev
-
-# Backend only
-cd backend && npm run dev
-
-# Load testing (after backend running)
-npm run load-test:setup
-npm run load-test
-```
-
----
-
-## Files Modified for Separation
-
-- **`vercel.json`** (created) - Vercel configuration
-- **`render.yaml`** (existing) - Render backend infrastructure
-- **`package.json`** (updated) - Root dev scripts now point to frontend
+### Frontend routes show 404 on refresh
+- Confirm `frontend/vercel.json` has the SPA rewrite: `{"source": "/(.*)", "destination": "/index.html"}`.

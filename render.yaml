@@ -1,6 +1,6 @@
 # Render Blueprint for StocksIntels backend
 # Deploy: push this file to GitHub, then create a Blueprint on Render pointing to this repo.
-# After the backend deploys, update CORS_ORIGIN with your real Netlify URL and redeploy.
+# After the backend deploys, update CORS_ORIGIN with your real Vercel frontend URL and redeploy.
 
 services:
   - type: web
@@ -32,7 +32,8 @@ services:
       - key: LOG_LEVEL
         value: info
       - key: CORS_ORIGIN
-        # TODO: Replace with your Vercel frontend URL after deploying (e.g., https://stockintels.vercel.app)
+        # TODO: Replace with your Vercel frontend URL after deploying (e.g., https://stockintels.vercel.app).
+        # To allow multiple origins, use a comma-separated list.
         value: https://stockintels.vercel.app
       - key: SIGNAL_INTERVAL_MS
         value: "30000"
