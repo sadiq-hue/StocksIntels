@@ -1,0 +1,2256 @@
+◇ injected env (25) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+📰 News Service Loaded
+◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+◇ injected env (0) from .env // tip: ⌘ suppress logs { quiet: true }
+◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
+Stocks table already contains data, skipping seed
+Database schema verified
+Backend server running at http://localhost:3001
+[QueueService] Connected to Redis
+[SignalPublisher] Starting background worker (interval: 30000ms)
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+Redis pub/sub and signal publisher initialized
+[CRON] Daily portfolio report scheduled Mon-Fri at midnight UTC
+[SENTIMENT CRON] Daily sentiment email scheduled Mon-Fri at 16:00 UTC
+[SUBSCRIPTION CRON] Expiry check scheduled every hour
+[QueueService] Subscribed to signal:updates
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for KUKZ: {
+  ticker: 'KUKZ',
+  name: 'Kakuzi Ltd',
+  price: 439.25,
+  change: -4.5,
+  changePercent: -1.0140845070422535,
+  volume: 609,
+  previousClose: 443.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859606,
+  symbol: 'KUKZ'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for LIMT: {
+  ticker: 'LIMT',
+  name: 'Limuru Tea Company Ltd',
+  price: 446.75,
+  change: 0,
+  changePercent: 0,
+  volume: 11,
+  previousClose: 446.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859606,
+  symbol: 'LIMT'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for LIMT: {
+  ticker: 'LIMT',
+  name: 'Limuru Tea Company Ltd',
+  price: 446.75,
+  change: 0,
+  changePercent: 0,
+  volume: 11,
+  previousClose: 446.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859606,
+  symbol: 'LIMT'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for KUKZ: {
+  ticker: 'KUKZ',
+  name: 'Kakuzi Ltd',
+  price: 439.25,
+  change: -4.5,
+  changePercent: -1.0140845070422535,
+  volume: 609,
+  previousClose: 443.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'KUKZ'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for KAPC: {
+  ticker: 'KAPC',
+  name: 'Kapchorua Tea Company Ltd',
+  price: 275.5,
+  change: 0.5,
+  changePercent: 0.18181818181818182,
+  volume: 1176,
+  previousClose: 275,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'KAPC'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for KAPC: {
+  ticker: 'KAPC',
+  name: 'Kapchorua Tea Company Ltd',
+  price: 275.5,
+  change: 0.5,
+  changePercent: 0.18181818181818182,
+  volume: 1176,
+  previousClose: 275,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'KAPC'
+}
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[MarketService] Caching quote for WTK: {
+  ticker: 'WTK',
+  name: 'Williamson Tea Kenya Ltd',
+  price: 132.25,
+  change: -1,
+  changePercent: -0.7504690431519699,
+  volume: 15585,
+  previousClose: 133.25,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'WTK'
+}
+[MarketService] Caching quote for WTK: {
+  ticker: 'WTK',
+  name: 'Williamson Tea Kenya Ltd',
+  price: 132.25,
+  change: -1,
+  changePercent: -0.7504690431519699,
+  volume: 15585,
+  previousClose: 133.25,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'WTK'
+}
+[MarketService] Caching quote for SASN: {
+  ticker: 'SASN',
+  name: 'Sasini Tea and Coffee Ltd',
+  price: 21.95,
+  change: 0,
+  changePercent: 0,
+  volume: 30803,
+  previousClose: 21.95,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'SASN'
+}
+[MarketService] Caching quote for SASN: {
+  ticker: 'SASN',
+  name: 'Sasini Tea and Coffee Ltd',
+  price: 21.95,
+  change: 0,
+  changePercent: 0,
+  volume: 30803,
+  previousClose: 21.95,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'SASN'
+}
+[MarketService] Caching quote for REA: {
+  symbol: 'REA',
+  company_name: 'Rare Earths Americas, Inc.',
+  price: 19.35,
+  currency: 'USD',
+  change: -1.24,
+  changePercent: -6.02234,
+  volume: 213383,
+  dayHigh: 21.49,
+  dayLow: 19.35,
+  previousClose: 20.59,
+  marketCap: 391580640,
+  timestamp: 1780859616,
+  lastUpdated: '2026-06-07T19:13:36.904Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for REA: {
+  symbol: 'REA',
+  company_name: 'Rare Earths Americas, Inc.',
+  price: 19.35,
+  currency: 'USD',
+  change: -1.24,
+  changePercent: -6.02234,
+  volume: 213383,
+  dayHigh: 21.49,
+  dayLow: 19.35,
+  previousClose: 20.59,
+  marketCap: 391580640,
+  timestamp: 1780859616,
+  lastUpdated: '2026-06-07T19:13:36.908Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for EGAD: {
+  ticker: 'EGAD',
+  name: 'Eaagads Ltd',
+  price: 33.4,
+  change: 0.7,
+  changePercent: 2.140672782874618,
+  volume: 386,
+  previousClose: 32.699999999999996,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'EGAD'
+}
+[MarketService] Caching quote for EGAD: {
+  ticker: 'EGAD',
+  name: 'Eaagads Ltd',
+  price: 33.4,
+  change: 0.7,
+  changePercent: 2.140672782874618,
+  volume: 386,
+  previousClose: 32.699999999999996,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'EGAD'
+}
+[MarketService] Caching quote for CGEN: {
+  ticker: 'CGEN',
+  name: 'Car and General Kenya Ltd',
+  price: 80,
+  change: 0.25,
+  changePercent: 0.3134796238244514,
+  volume: 5807,
+  previousClose: 79.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'CGEN'
+}
+[MarketService] Caching quote for CGEN: {
+  ticker: 'CGEN',
+  name: 'Car and General Kenya Ltd',
+  price: 80,
+  change: 0.25,
+  changePercent: 0.3134796238244514,
+  volume: 5807,
+  previousClose: 79.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'CGEN'
+}
+[MarketService] Caching quote for EQTY: {
+  ticker: 'EQTY',
+  name: 'Equity Group Holdings Ltd',
+  price: 77.25,
+  change: -0.25,
+  changePercent: -0.3225806451612903,
+  volume: 3162767,
+  previousClose: 77.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'EQTY'
+}
+[MarketService] Caching quote for EQTY: {
+  ticker: 'EQTY',
+  name: 'Equity Group Holdings Ltd',
+  price: 77.25,
+  change: -0.25,
+  changePercent: -0.3225806451612903,
+  volume: 3162767,
+  previousClose: 77.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'EQTY'
+}
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[MarketService] Caching quote for KCB: {
+  ticker: 'KCB',
+  name: 'KCB Group',
+  price: 70.75,
+  change: 1.25,
+  changePercent: 1.7985611510791366,
+  volume: 1629749,
+  previousClose: 69.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'KCB'
+}
+[MarketService] Caching quote for KCB: {
+  ticker: 'KCB',
+  name: 'KCB Group',
+  price: 70.75,
+  change: 1.25,
+  changePercent: 1.7985611510791366,
+  volume: 1629749,
+  previousClose: 69.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'KCB'
+}
+[MarketService] Caching quote for COOP: {
+  ticker: 'COOP',
+  name: 'Co-operative Bank of Kenya',
+  price: 31.95,
+  change: 0.15,
+  changePercent: 0.4716981132075472,
+  volume: 387226,
+  previousClose: 31.8,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'COOP'
+}
+[MarketService] Caching quote for COOP: {
+  ticker: 'COOP',
+  name: 'Co-operative Bank of Kenya',
+  price: 31.95,
+  change: 0.15,
+  changePercent: 0.4716981132075472,
+  volume: 387226,
+  previousClose: 31.8,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'COOP'
+}
+[MarketService] Caching quote for ABSA: {
+  ticker: 'ABSA',
+  name: 'Absa Bank Kenya Plc',
+  price: 29.05,
+  change: 0,
+  changePercent: 0,
+  volume: 828311,
+  previousClose: 29.05,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'ABSA'
+}
+[MarketService] Caching quote for ABSA: {
+  ticker: 'ABSA',
+  name: 'Absa Bank Kenya Plc',
+  price: 29.05,
+  change: 0,
+  changePercent: 0,
+  volume: 828311,
+  previousClose: 29.05,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'ABSA'
+}
+[MarketService] Caching quote for SBIC: {
+  ticker: 'SBIC',
+  name: 'Stanbic Holdings Ltd',
+  price: 285,
+  change: 14.5,
+  changePercent: 5.360443622920517,
+  volume: 148576,
+  previousClose: 270.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'SBIC'
+}
+[MarketService] Caching quote for SBIC: {
+  ticker: 'SBIC',
+  name: 'Stanbic Holdings Ltd',
+  price: 285,
+  change: 14.5,
+  changePercent: 5.360443622920517,
+  volume: 148576,
+  previousClose: 270.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'SBIC'
+}
+[MarketService] Caching quote for NCBA: {
+  ticker: 'NCBA',
+  name: 'NCBA Group Plc',
+  price: 88.25,
+  change: -0.5,
+  changePercent: -0.5633802816901409,
+  volume: 421495,
+  previousClose: 88.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'NCBA'
+}
+[MarketService] Caching quote for NCBA: {
+  ticker: 'NCBA',
+  name: 'NCBA Group Plc',
+  price: 88.25,
+  change: -0.5,
+  changePercent: -0.5633802816901409,
+  volume: 421495,
+  previousClose: 88.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'NCBA'
+}
+[MarketService] Caching quote for IMH: {
+  ticker: 'IMH',
+  name: 'I&M Holdings Plc',
+  price: 52.5,
+  change: 1,
+  changePercent: 1.9417475728155338,
+  volume: 39604,
+  previousClose: 51.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'IMH'
+}
+[MarketService] Caching quote for IMH: {
+  ticker: 'IMH',
+  name: 'I&M Holdings Plc',
+  price: 52.5,
+  change: 1,
+  changePercent: 1.9417475728155338,
+  volume: 39604,
+  previousClose: 51.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'IMH'
+}
+[MarketService] Caching quote for DTK: {
+  ticker: 'DTK',
+  name: 'Diamond Trust Bank Kenya Ltd',
+  price: 143,
+  change: 0,
+  changePercent: 0,
+  volume: 29418,
+  previousClose: 143,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'DTK'
+}
+[MarketService] Caching quote for DTK: {
+  ticker: 'DTK',
+  name: 'Diamond Trust Bank Kenya Ltd',
+  price: 143,
+  change: 0,
+  changePercent: 0,
+  volume: 29418,
+  previousClose: 143,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'DTK'
+}
+[MarketService] Caching quote for SCBK: {
+  ticker: 'SCBK',
+  name: 'Standard Chartered Bank Ltd',
+  price: 331.75,
+  change: 0.75,
+  changePercent: 0.22658610271903326,
+  volume: 15604,
+  previousClose: 331,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'SCBK'
+}
+[MarketService] Caching quote for SCBK: {
+  ticker: 'SCBK',
+  name: 'Standard Chartered Bank Ltd',
+  price: 331.75,
+  change: 0.75,
+  changePercent: 0.22658610271903326,
+  volume: 15604,
+  previousClose: 331,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'SCBK'
+}
+[MarketService] Caching quote for BKG: {
+  ticker: 'BKG',
+  name: 'BK Group Plc',
+  price: 53.5,
+  change: 0.5,
+  changePercent: 0.9433962264150944,
+  volume: 8688,
+  previousClose: 53,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'BKG'
+}
+[MarketService] Caching quote for BKG: {
+  ticker: 'BKG',
+  name: 'BK Group Plc',
+  price: 53.5,
+  change: 0.5,
+  changePercent: 0.9433962264150944,
+  volume: 8688,
+  previousClose: 53,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859608,
+  symbol: 'BKG'
+}
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[MarketService] Caching quote for HFCK: {
+  ticker: 'HFCK',
+  name: 'HF Group Ltd',
+  price: 9.64,
+  change: 0.02,
+  changePercent: 0.20790020790020786,
+  volume: 160976,
+  previousClose: 9.620000000000001,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'HFCK'
+}
+[MarketService] Caching quote for HFCK: {
+  ticker: 'HFCK',
+  name: 'HF Group Ltd',
+  price: 9.64,
+  change: 0.02,
+  changePercent: 0.20790020790020786,
+  volume: 160976,
+  previousClose: 9.620000000000001,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'HFCK'
+}
+[MarketService] Caching quote for NMG: {
+  ticker: 'NMG',
+  name: 'Nation Media Group',
+  price: 12.85,
+  change: 0.05,
+  changePercent: 0.3906250000000001,
+  volume: 16214,
+  previousClose: 12.799999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'NMG'
+}
+[MarketService] Caching quote for NMG: {
+  ticker: 'NMG',
+  name: 'Nation Media Group',
+  price: 12.85,
+  change: 0.05,
+  changePercent: 0.3906250000000001,
+  volume: 16214,
+  previousClose: 12.799999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'NMG'
+}
+[MarketService] Caching quote for SGL: {
+  ticker: 'SGL',
+  name: 'Standard Group Ltd',
+  price: 5.9,
+  change: 0.04,
+  changePercent: 0.6825938566552902,
+  volume: 359,
+  previousClose: 5.86,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'SGL'
+}
+[MarketService] Caching quote for SGL: {
+  ticker: 'SGL',
+  name: 'Standard Group Ltd',
+  price: 5.9,
+  change: 0.04,
+  changePercent: 0.6825938566552902,
+  volume: 359,
+  previousClose: 5.86,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'SGL'
+}
+[MarketService] Caching quote for TPSE: {
+  ticker: 'TPSE',
+  name: 'TPS Eastern Africa Serena Ltd',
+  price: 15.3,
+  change: -0.45,
+  changePercent: -2.857142857142857,
+  volume: 2473,
+  previousClose: 15.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'TPSE'
+}
+[MarketService] Caching quote for TPSE: {
+  ticker: 'TPSE',
+  name: 'TPS Eastern Africa Serena Ltd',
+  price: 15.3,
+  change: -0.45,
+  changePercent: -2.857142857142857,
+  volume: 2473,
+  previousClose: 15.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'TPSE'
+}
+[MarketService] Caching quote for SCAN: {
+  ticker: 'SCAN',
+  name: 'ScanGroup Ltd',
+  price: 2.12,
+  change: -0.01,
+  changePercent: -0.4694835680751174,
+  volume: 139901,
+  previousClose: 2.13,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'SCAN'
+}
+[MarketService] Caching quote for SCAN: {
+  ticker: 'SCAN',
+  name: 'ScanGroup Ltd',
+  price: 2.12,
+  change: -0.01,
+  changePercent: -0.4694835680751174,
+  volume: 139901,
+  previousClose: 2.13,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'SCAN'
+}
+[MarketService] Caching quote for KQ: {
+  ticker: 'KQ',
+  name: 'Kenya Airways Ltd',
+  price: 5.64,
+  change: -0.02,
+  changePercent: -0.35335689045936397,
+  volume: 233004,
+  previousClose: 5.659999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'KQ'
+}
+[MarketService] Caching quote for KQ: {
+  ticker: 'KQ',
+  name: 'Kenya Airways Ltd',
+  price: 5.64,
+  change: -0.02,
+  changePercent: -0.35335689045936397,
+  volume: 233004,
+  previousClose: 5.659999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'KQ'
+}
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[MarketService] Caching quote for XPRS: {
+  ticker: 'XPRS',
+  name: 'Express Kenya Ltd',
+  price: 6.8,
+  change: -0.02,
+  changePercent: -0.2932551319648094,
+  volume: 874,
+  previousClose: 6.819999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'XPRS'
+}
+[MarketService] Caching quote for XPRS: {
+  ticker: 'XPRS',
+  name: 'Express Kenya Ltd',
+  price: 6.8,
+  change: -0.02,
+  changePercent: -0.2932551319648094,
+  volume: 874,
+  previousClose: 6.819999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'XPRS'
+}
+[MarketService] Caching quote for SMER: {
+  ticker: 'SMER',
+  name: 'Sameer Africa Plc',
+  price: 14.65,
+  change: -0.1,
+  changePercent: -0.6779661016949153,
+  volume: 10753,
+  previousClose: 14.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'SMER'
+}
+[MarketService] Caching quote for SMER: {
+  ticker: 'SMER',
+  name: 'Sameer Africa Plc',
+  price: 14.65,
+  change: -0.1,
+  changePercent: -0.6779661016949153,
+  volume: 10753,
+  previousClose: 14.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'SMER'
+}
+[MarketService] Caching quote for BAMB: {
+  ticker: 'BAMB',
+  name: 'Bamburi Cement Ltd',
+  price: 54,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 54,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'BAMB'
+}
+[MarketService] Caching quote for BAMB: {
+  ticker: 'BAMB',
+  name: 'Bamburi Cement Ltd',
+  price: 54,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 54,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'BAMB'
+}
+[MarketService] Caching quote for PORT: {
+  ticker: 'PORT',
+  name: 'East African Portland Cement',
+  price: 74.5,
+  change: -1,
+  changePercent: -1.3245033112582782,
+  volume: 846,
+  previousClose: 75.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'PORT'
+}
+[MarketService] Caching quote for PORT: {
+  ticker: 'PORT',
+  name: 'East African Portland Cement',
+  price: 74.5,
+  change: -1,
+  changePercent: -1.3245033112582782,
+  volume: 846,
+  previousClose: 75.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'PORT'
+}
+[MarketService] Caching quote for CRWN: {
+  ticker: 'CRWN',
+  name: 'Crown Paints Kenya Ltd',
+  price: 58.5,
+  change: -1.25,
+  changePercent: -2.092050209205021,
+  volume: 3370,
+  previousClose: 59.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'CRWN'
+}
+[MarketService] Caching quote for CRWN: {
+  ticker: 'CRWN',
+  name: 'Crown Paints Kenya Ltd',
+  price: 58.5,
+  change: -1.25,
+  changePercent: -2.092050209205021,
+  volume: 3370,
+  previousClose: 59.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'CRWN'
+}
+[MarketService] Caching quote for ARM: {
+  ticker: 'ARM',
+  name: 'ARM Cement Ltd',
+  price: 5.5,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 5.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'ARM'
+}
+[MarketService] Caching quote for ARM: {
+  ticker: 'ARM',
+  name: 'ARM Cement Ltd',
+  price: 5.5,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 5.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'ARM'
+}
+Socket connected: rOIBFqxUCpT5krICAAAB
+[MarketService] Caching quote for KPLC: {
+  ticker: 'KPLC',
+  name: 'Kenya Power & Lighting Company',
+  price: 15.7,
+  change: 0,
+  changePercent: 0,
+  volume: 657427,
+  previousClose: 15.7,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'KPLC'
+}
+[MarketService] Caching quote for KPLC: {
+  ticker: 'KPLC',
+  name: 'Kenya Power & Lighting Company',
+  price: 15.7,
+  change: 0,
+  changePercent: 0,
+  volume: 657427,
+  previousClose: 15.7,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'KPLC'
+}
+[MarketService] Caching quote for KEGN: {
+  ticker: 'KEGN',
+  name: 'KenGen Plc',
+  price: 9.1,
+  change: 0,
+  changePercent: 0,
+  volume: 894500,
+  previousClose: 9.1,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'KEGN'
+}
+[MarketService] Caching quote for KEGN: {
+  ticker: 'KEGN',
+  name: 'KenGen Plc',
+  price: 9.1,
+  change: 0,
+  changePercent: 0,
+  volume: 894500,
+  previousClose: 9.1,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'KEGN'
+}
+[MarketService] Caching quote for TOTL: {
+  ticker: 'TOTL',
+  name: 'Total Kenya Ltd',
+  price: 47.7,
+  change: -0.4,
+  changePercent: -0.8316008316008316,
+  volume: 70820,
+  previousClose: 48.1,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'TOTL'
+}
+[MarketService] Caching quote for TOTL: {
+  ticker: 'TOTL',
+  name: 'Total Kenya Ltd',
+  price: 47.7,
+  change: -0.4,
+  changePercent: -0.8316008316008316,
+  volume: 70820,
+  previousClose: 48.1,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859667,
+  symbol: 'TOTL'
+}
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for JUB: {
+  ticker: 'JUB',
+  name: 'Jubilee Holdings Ltd',
+  price: 397,
+  change: 25.5,
+  changePercent: 6.864064602960969,
+  volume: 6175,
+  previousClose: 371.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'JUB'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for KNRE: {
+  ticker: 'KNRE',
+  name: 'Kenya Re-Insurance Corporation',
+  price: 3.49,
+  change: 0.05,
+  changePercent: 1.4534883720930232,
+  volume: 1403696,
+  previousClose: 3.4400000000000004,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'KNRE'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for UMME: {
+  ticker: 'UMME',
+  name: 'Umeme Ltd',
+  price: 7.84,
+  change: -0.08,
+  changePercent: -1.0101010101010102,
+  volume: 17490,
+  previousClose: 7.92,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'UMME'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for JUB: {
+  ticker: 'JUB',
+  name: 'Jubilee Holdings Ltd',
+  price: 397,
+  change: 25.5,
+  changePercent: 6.864064602960969,
+  volume: 6175,
+  previousClose: 371.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'JUB'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for UMME: {
+  ticker: 'UMME',
+  name: 'Umeme Ltd',
+  price: 7.84,
+  change: -0.08,
+  changePercent: -1.0101010101010102,
+  volume: 17490,
+  previousClose: 7.92,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'UMME'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for KNRE: {
+  ticker: 'KNRE',
+  name: 'Kenya Re-Insurance Corporation',
+  price: 3.49,
+  change: 0.05,
+  changePercent: 1.4534883720930232,
+  volume: 1403696,
+  previousClose: 3.4400000000000004,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'KNRE'
+}
+[MarketService] Caching quote for CIC: {
+  ticker: 'CIC',
+  name: 'CIC Insurance Group Ltd',
+  price: 4.2,
+  change: 0.01,
+  changePercent: 0.23866348448687347,
+  volume: 286667,
+  previousClose: 4.19,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'CIC'
+}
+[MarketService] Caching quote for CIC: {
+  ticker: 'CIC',
+  name: 'CIC Insurance Group Ltd',
+  price: 4.2,
+  change: 0.01,
+  changePercent: 0.23866348448687347,
+  volume: 286667,
+  previousClose: 4.19,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'CIC'
+}
+[MarketService] Caching quote for BRIT: {
+  ticker: 'BRIT',
+  name: 'Britam Holdings Ltd',
+  price: 12.65,
+  change: 0.2,
+  changePercent: 1.6064257028112447,
+  volume: 8611,
+  previousClose: 12.450000000000001,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'BRIT'
+}
+[MarketService] Caching quote for BRIT: {
+  ticker: 'BRIT',
+  name: 'Britam Holdings Ltd',
+  price: 12.65,
+  change: 0.2,
+  changePercent: 1.6064257028112447,
+  volume: 8611,
+  previousClose: 12.450000000000001,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'BRIT'
+}
+[MarketService] Caching quote for LBTY: {
+  ticker: 'LBTY',
+  name: 'Liberty Kenya Holdings Ltd',
+  price: 10,
+  change: 0.02,
+  changePercent: 0.2004008016032064,
+  volume: 18375,
+  previousClose: 9.98,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'LBTY'
+}
+[MarketService] Caching quote for LBTY: {
+  ticker: 'LBTY',
+  name: 'Liberty Kenya Holdings Ltd',
+  price: 10,
+  change: 0.02,
+  changePercent: 0.2004008016032064,
+  volume: 18375,
+  previousClose: 9.98,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'LBTY'
+}
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[MarketService] Caching quote for SLAM: {
+  ticker: 'SLAM',
+  name: 'Sanlam Kenya Plc',
+  price: 8.48,
+  change: -0.02,
+  changePercent: -0.23529411764705885,
+  volume: 5257,
+  previousClose: 8.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'SLAM'
+}
+[MarketService] Caching quote for SLAM: {
+  ticker: 'SLAM',
+  name: 'Sanlam Kenya Plc',
+  price: 8.48,
+  change: -0.02,
+  changePercent: -0.23529411764705885,
+  volume: 5257,
+  previousClose: 8.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'SLAM'
+}
+[MarketService] Caching quote for CTUM: {
+  ticker: 'CTUM',
+  name: 'Centum Investment Company',
+  price: 13.85,
+  change: 0.05,
+  changePercent: 0.3623188405797102,
+  volume: 30218,
+  previousClose: 13.799999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'CTUM'
+}
+[MarketService] Caching quote for CTUM: {
+  ticker: 'CTUM',
+  name: 'Centum Investment Company',
+  price: 13.85,
+  change: 0.05,
+  changePercent: 0.3623188405797102,
+  volume: 30218,
+  previousClose: 13.799999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'CTUM'
+}
+[MarketService] Caching quote for OCH: {
+  ticker: 'OCH',
+  name: 'Olympia Capital Holdings Ltd',
+  price: 6.62,
+  change: 0.02,
+  changePercent: 0.30303030303030304,
+  volume: 679,
+  previousClose: 6.6000000000000005,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'OCH'
+}
+[MarketService] Caching quote for OCH: {
+  ticker: 'OCH',
+  name: 'Olympia Capital Holdings Ltd',
+  price: 6.62,
+  change: 0.02,
+  changePercent: 0.30303030303030304,
+  volume: 679,
+  previousClose: 6.6000000000000005,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'OCH'
+}
+[MarketService] Caching quote for HAFR: {
+  ticker: 'HAFR',
+  name: 'Home Afrika Ltd',
+  price: 1.25,
+  change: 0.04,
+  changePercent: 3.3057851239669422,
+  volume: 226084,
+  previousClose: 1.21,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'HAFR'
+}
+[MarketService] Caching quote for HAFR: {
+  ticker: 'HAFR',
+  name: 'Home Afrika Ltd',
+  price: 1.25,
+  change: 0.04,
+  changePercent: 3.3057851239669422,
+  volume: 226084,
+  previousClose: 1.21,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'HAFR'
+}
+[MarketService] Caching quote for NSE: {
+  ticker: 'NSE',
+  name: 'Nairobi Securities Exchange Ltd',
+  price: 19.05,
+  change: 0.3,
+  changePercent: 1.6,
+  volume: 67533,
+  previousClose: 18.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'NSE'
+}
+[MarketService] Caching quote for NSE: {
+  ticker: 'NSE',
+  name: 'Nairobi Securities Exchange Ltd',
+  price: 19.05,
+  change: 0.3,
+  changePercent: 1.6,
+  volume: 67533,
+  previousClose: 18.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'NSE'
+}
+[MarketService] Caching quote for AMAC: {
+  ticker: 'AMAC',
+  name: 'Africa Mega Agricorp',
+  price: 111,
+  change: 0,
+  changePercent: 0,
+  volume: 81,
+  previousClose: 111,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'AMAC'
+}
+[MarketService] Caching quote for AMAC: {
+  ticker: 'AMAC',
+  name: 'Africa Mega Agricorp',
+  price: 111,
+  change: 0,
+  changePercent: 0,
+  volume: 81,
+  previousClose: 111,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'AMAC'
+}
+[MarketService] Caching quote for EABL: {
+  ticker: 'EABL',
+  name: 'East African Breweries Ltd',
+  price: 240.5,
+  change: -7.25,
+  changePercent: -2.9263370332996974,
+  volume: 123849,
+  previousClose: 247.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'EABL'
+}
+[MarketService] Caching quote for EABL: {
+  ticker: 'EABL',
+  name: 'East African Breweries Ltd',
+  price: 240.5,
+  change: -7.25,
+  changePercent: -2.9263370332996974,
+  volume: 123849,
+  previousClose: 247.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'EABL'
+}
+[MarketService] Caching quote for BAT: {
+  ticker: 'BAT',
+  name: 'British American Tobacco Kenya',
+  price: 520,
+  change: 0,
+  changePercent: 0,
+  volume: 13216,
+  previousClose: 520,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'BAT'
+}
+[MarketService] Caching quote for BAT: {
+  ticker: 'BAT',
+  name: 'British American Tobacco Kenya',
+  price: 520,
+  change: 0,
+  changePercent: 0,
+  volume: 13216,
+  previousClose: 520,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'BAT'
+}
+[MarketService] Caching quote for BOC: {
+  ticker: 'BOC',
+  name: 'BOC Kenya Ltd',
+  price: 161.75,
+  change: -3.75,
+  changePercent: -2.2658610271903323,
+  volume: 2826,
+  previousClose: 165.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'BOC'
+}
+[MarketService] Caching quote for BOC: {
+  ticker: 'BOC',
+  name: 'BOC Kenya Ltd',
+  price: 161.75,
+  change: -3.75,
+  changePercent: -2.2658610271903323,
+  volume: 2826,
+  previousClose: 165.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'BOC'
+}
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[MarketService] Caching quote for CARB: {
+  ticker: 'CARB',
+  name: 'Carbacid Investments',
+  price: 29.6,
+  change: -0.05,
+  changePercent: -0.16863406408094433,
+  volume: 22024,
+  previousClose: 29.650000000000002,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'CARB'
+}
+[MarketService] Caching quote for CARB: {
+  ticker: 'CARB',
+  name: 'Carbacid Investments',
+  price: 29.6,
+  change: -0.05,
+  changePercent: -0.16863406408094433,
+  volume: 22024,
+  previousClose: 29.650000000000002,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'CARB'
+}
+[MarketService] Caching quote for UNGA: {
+  ticker: 'UNGA',
+  name: 'Unga Group Ltd',
+  price: 25.2,
+  change: -1.1,
+  changePercent: -4.182509505703423,
+  volume: 4361,
+  previousClose: 26.3,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'UNGA'
+}
+[MarketService] Caching quote for UNGA: {
+  ticker: 'UNGA',
+  name: 'Unga Group Ltd',
+  price: 25.2,
+  change: -1.1,
+  changePercent: -4.182509505703423,
+  volume: 4361,
+  previousClose: 26.3,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'UNGA'
+}
+[MarketService] Caching quote for MSC: {
+  ticker: 'MSC',
+  name: 'Mumias Sugar Company Ltd',
+  price: 0.28,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 0.28,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'MSC'
+}
+[MarketService] Caching quote for MSC: {
+  ticker: 'MSC',
+  name: 'Mumias Sugar Company Ltd',
+  price: 0.28,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 0.28,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859737,
+  symbol: 'MSC'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for FTGH: {
+  ticker: 'FTGH',
+  name: 'Flame Tree Group Holdings',
+  price: 1.92,
+  change: -0.01,
+  changePercent: -0.5181347150259068,
+  volume: 90161,
+  previousClose: 1.93,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'FTGH'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for SCOM: {
+  ticker: 'SCOM',
+  name: 'Safaricom Plc',
+  price: 31.75,
+  change: 0.3,
+  changePercent: 0.9538950715421303,
+  volume: 13812903,
+  previousClose: 31.45,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'SCOM'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for FTGH: {
+  ticker: 'FTGH',
+  name: 'Flame Tree Group Holdings',
+  price: 1.92,
+  change: -0.01,
+  changePercent: -0.5181347150259068,
+  volume: 90161,
+  previousClose: 1.93,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'FTGH'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for SCOM: {
+  ticker: 'SCOM',
+  name: 'Safaricom Plc',
+  price: 31.75,
+  change: 0.3,
+  changePercent: 0.9538950715421303,
+  volume: 13812903,
+  previousClose: 31.45,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'SCOM'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for EVRD: {
+  ticker: 'EVRD',
+  name: 'Eveready East Africa Ltd',
+  price: 1.05,
+  change: 0,
+  changePercent: 0,
+  volume: 79310,
+  previousClose: 1.05,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'EVRD'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for EVRD: {
+  ticker: 'EVRD',
+  name: 'Eveready East Africa Ltd',
+  price: 1.05,
+  change: 0,
+  changePercent: 0,
+  volume: 79310,
+  previousClose: 1.05,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'EVRD'
+}
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[MarketService] Caching quote for LKL: {
+  ticker: 'LKL',
+  name: 'Longhorn Publishers Ltd',
+  price: 2.91,
+  change: 0.13,
+  changePercent: 4.676258992805756,
+  volume: 2328,
+  previousClose: 2.7800000000000002,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'LKL'
+}
+[MarketService] Caching quote for LKL: {
+  ticker: 'LKL',
+  name: 'Longhorn Publishers Ltd',
+  price: 2.91,
+  change: 0.13,
+  changePercent: 4.676258992805756,
+  volume: 2328,
+  previousClose: 2.7800000000000002,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'LKL'
+}
+[MarketService] Caching quote for NBV: {
+  ticker: 'NBV',
+  name: 'Nairobi Business Ventures Ltd',
+  price: 1.23,
+  change: -0.07,
+  changePercent: -5.384615384615385,
+  volume: 91142,
+  previousClose: 1.3,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'NBV'
+}
+[MarketService] Caching quote for NBV: {
+  ticker: 'NBV',
+  name: 'Nairobi Business Ventures Ltd',
+  price: 1.23,
+  change: -0.07,
+  changePercent: -5.384615384615385,
+  volume: 91142,
+  previousClose: 1.3,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'NBV'
+}
+[MarketService] Caching quote for UCHM: {
+  ticker: 'UCHM',
+  name: 'Uchumi Supermarket Ltd',
+  price: 1.45,
+  change: -0.02,
+  changePercent: -1.360544217687075,
+  volume: 345302,
+  previousClose: 1.47,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'UCHM'
+}
+[MarketService] Caching quote for UCHM: {
+  ticker: 'UCHM',
+  name: 'Uchumi Supermarket Ltd',
+  price: 1.45,
+  change: -0.02,
+  changePercent: -1.360544217687075,
+  volume: 345302,
+  previousClose: 1.47,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'UCHM'
+}
+[MarketService] Caching quote for ALP: {
+  ticker: 'ALP',
+  name: 'ALP Real Estate Investment Trust',
+  price: 1.02,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1.02,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'ALP'
+}
+[MarketService] Caching quote for ALP: {
+  ticker: 'ALP',
+  name: 'ALP Real Estate Investment Trust',
+  price: 1.02,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1.02,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'ALP'
+}
+[MarketService] Caching quote for CABL: {
+  ticker: 'CABL',
+  name: 'East African Cables',
+  price: 1.71,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1.71,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'CABL'
+}
+[MarketService] Caching quote for CABL: {
+  ticker: 'CABL',
+  name: 'East African Cables',
+  price: 1.71,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1.71,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'CABL'
+}
+[MarketService] Caching quote for DCON: {
+  ticker: 'DCON',
+  name: 'Deacons East Africa',
+  price: 0.45,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 0.45,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'DCON'
+}
+[MarketService] Caching quote for DCON: {
+  ticker: 'DCON',
+  name: 'Deacons East Africa',
+  price: 0.45,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 0.45,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'DCON'
+}
+[MarketService] Caching quote for GLD: {
+  ticker: 'GLD',
+  name: 'Absa NewGold ETF',
+  price: 5315,
+  change: 0,
+  changePercent: 0,
+  volume: 86,
+  previousClose: 5315,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'GLD'
+}
+[MarketService] Caching quote for GLD: {
+  ticker: 'GLD',
+  name: 'Absa NewGold ETF',
+  price: 5315,
+  change: 0,
+  changePercent: 0,
+  volume: 86,
+  previousClose: 5315,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'GLD'
+}
+[MarketService] Caching quote for HBE: {
+  ticker: 'HBE',
+  name: 'Homeboyz Entertainment',
+  price: 4.66,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 4.66,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'HBE'
+}
+[MarketService] Caching quote for HBE: {
+  ticker: 'HBE',
+  name: 'Homeboyz Entertainment',
+  price: 4.66,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 4.66,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'HBE'
+}
+[MarketService] Caching quote for KPC: {
+  ticker: 'KPC',
+  name: 'Kenya Pipeline Company',
+  price: 9.1,
+  change: 0,
+  changePercent: 0,
+  volume: 354881,
+  previousClose: 9.1,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'KPC'
+}
+[MarketService] Caching quote for KPC: {
+  ticker: 'KPC',
+  name: 'Kenya Pipeline Company',
+  price: 9.1,
+  change: 0,
+  changePercent: 0,
+  volume: 354881,
+  previousClose: 9.1,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'KPC'
+}
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[MarketService] Caching quote for KURV: {
+  ticker: 'KURV',
+  name: 'Kurwitu Ventures Ltd',
+  price: 1500,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1500,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'KURV'
+}
+[MarketService] Caching quote for KURV: {
+  ticker: 'KURV',
+  name: 'Kurwitu Ventures Ltd',
+  price: 1500,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1500,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'KURV'
+}
+[MarketService] Caching quote for LAPR: {
+  ticker: 'LAPR',
+  name: 'Laptrust Imara Income-REIT',
+  price: 20,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 20,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'LAPR'
+}
+[MarketService] Caching quote for LAPR: {
+  ticker: 'LAPR',
+  name: 'Laptrust Imara Income-REIT',
+  price: 20,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 20,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'LAPR'
+}
+[MarketService] Caching quote for SKL: {
+  ticker: 'SKL',
+  name: 'Shri Krishana Overseas Ltd',
+  price: 9.46,
+  change: 0.68,
+  changePercent: 7.744874715261958,
+  volume: 7514,
+  previousClose: 8.780000000000001,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'SKL'
+}
+[MarketService] Caching quote for SKL: {
+  ticker: 'SKL',
+  name: 'Shri Krishana Overseas Ltd',
+  price: 9.46,
+  change: 0.68,
+  changePercent: 7.744874715261958,
+  volume: 7514,
+  previousClose: 8.780000000000001,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'SKL'
+}
+[MarketService] Caching quote for SMWF: {
+  ticker: 'SMWF',
+  name: 'Satrix MSCI World Feeder ETF',
+  price: 948,
+  change: 0,
+  changePercent: 0,
+  volume: 232,
+  previousClose: 948,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'SMWF'
+}
+[MarketService] Caching quote for SMWF: {
+  ticker: 'SMWF',
+  name: 'Satrix MSCI World Feeder ETF',
+  price: 948,
+  change: 0,
+  changePercent: 0,
+  volume: 232,
+  previousClose: 948,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'SMWF'
+}
+[MarketService] Caching quote for TCL: {
+  ticker: 'TCL',
+  name: 'TransCentury Plc',
+  price: 1.12,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1.12,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'TCL'
+}
+[MarketService] Caching quote for TCL: {
+  ticker: 'TCL',
+  name: 'TransCentury Plc',
+  price: 1.12,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1.12,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780859809,
+  symbol: 'TCL'
+}
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[MarketService] Caching quote for XOM: {
+  symbol: 'XOM',
+  company_name: 'Exxon Mobil Corporation',
+  price: 149.92,
+  currency: 'USD',
+  change: -2.12,
+  changePercent: -1.39437,
+  volume: 10739879,
+  dayHigh: 152.13,
+  dayLow: 149.3,
+  previousClose: 152.04,
+  marketCap: 621410451456,
+  timestamp: 1780859916,
+  lastUpdated: '2026-06-07T19:18:36.985Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for XOM: {
+  symbol: 'XOM',
+  company_name: 'Exxon Mobil Corporation',
+  price: 149.92,
+  currency: 'USD',
+  change: -2.12,
+  changePercent: -1.39437,
+  volume: 10739879,
+  dayHigh: 152.13,
+  dayLow: 149.3,
+  previousClose: 152.04,
+  marketCap: 621410451456,
+  timestamp: 1780859917,
+  lastUpdated: '2026-06-07T19:18:37.011Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for V: {
+  symbol: 'V',
+  company_name: 'Visa Inc.',
+  price: 323.57,
+  currency: 'USD',
+  change: 3.39001,
+  changePercent: 1.05878,
+  volume: 4847717,
+  dayHigh: 325.9799,
+  dayLow: 320.99,
+  previousClose: 320.18,
+  marketCap: 615347257344,
+  timestamp: 1780859917,
+  lastUpdated: '2026-06-07T19:18:37.273Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for V: {
+  symbol: 'V',
+  company_name: 'Visa Inc.',
+  price: 323.57,
+  currency: 'USD',
+  change: 3.39001,
+  changePercent: 1.05878,
+  volume: 4847717,
+  dayHigh: 325.9799,
+  dayLow: 320.99,
+  previousClose: 320.18,
+  marketCap: 615347257344,
+  timestamp: 1780859917,
+  lastUpdated: '2026-06-07T19:18:37.281Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for WMT: {
+  symbol: 'WMT',
+  company_name: 'Walmart Inc.',
+  price: 118.88,
+  currency: 'USD',
+  change: 1.1399994,
+  changePercent: 0.9682346,
+  volume: 36638136,
+  dayHigh: 120.88,
+  dayLow: 118.1,
+  previousClose: 117.74,
+  marketCap: 946056396800,
+  timestamp: 1780859929,
+  lastUpdated: '2026-06-07T19:18:49.136Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for WMT: {
+  symbol: 'WMT',
+  company_name: 'Walmart Inc.',
+  price: 118.88,
+  currency: 'USD',
+  change: 1.1399994,
+  changePercent: 0.9682346,
+  volume: 36638136,
+  dayHigh: 120.88,
+  dayLow: 118.1,
+  previousClose: 117.74,
+  marketCap: 946056396800,
+  timestamp: 1780859929,
+  lastUpdated: '2026-06-07T19:18:49.169Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for PG: {
+  symbol: 'PG',
+  company_name: 'Procter & Gamble Company (The)',
+  price: 146.54,
+  currency: 'USD',
+  change: 5.75999,
+  changePercent: 4.09149,
+  volume: 10816786,
+  dayHigh: 148.23,
+  dayLow: 141.8,
+  previousClose: 140.78,
+  marketCap: 341232877568,
+  timestamp: 1780859929,
+  lastUpdated: '2026-06-07T19:18:49.177Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for JNJ: {
+  symbol: 'JNJ',
+  company_name: 'Johnson & Johnson',
+  price: 232.77,
+  currency: 'USD',
+  change: 4.60001,
+  changePercent: 2.01604,
+  volume: 5636649,
+  dayHigh: 235.205,
+  dayLow: 229.0001,
+  previousClose: 228.17,
+  marketCap: 560327884800,
+  timestamp: 1780859929,
+  lastUpdated: '2026-06-07T19:18:49.385Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for PG: {
+  symbol: 'PG',
+  company_name: 'Procter & Gamble Company (The)',
+  price: 146.54,
+  currency: 'USD',
+  change: 5.75999,
+  changePercent: 4.09149,
+  volume: 10816786,
+  dayHigh: 148.23,
+  dayLow: 141.8,
+  previousClose: 140.78,
+  marketCap: 341232877568,
+  timestamp: 1780859929,
+  lastUpdated: '2026-06-07T19:18:49.404Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for JNJ: {
+  symbol: 'JNJ',
+  company_name: 'Johnson & Johnson',
+  price: 232.77,
+  currency: 'USD',
+  change: 4.60001,
+  changePercent: 2.01604,
+  volume: 5636649,
+  dayHigh: 235.205,
+  dayLow: 229.0001,
+  previousClose: 228.17,
+  marketCap: 560327884800,
+  timestamp: 1780859929,
+  lastUpdated: '2026-06-07T19:18:49.495Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[MarketService] Caching quote for HD: {
+  symbol: 'HD',
+  company_name: 'Home Depot, Inc. (The)',
+  price: 310.78,
+  currency: 'USD',
+  change: 0.829987,
+  changePercent: 0.267781,
+  volume: 2989199,
+  dayHigh: 314.05,
+  dayLow: 308.625,
+  previousClose: 309.95,
+  marketCap: 309883928576,
+  timestamp: 1780859940,
+  lastUpdated: '2026-06-07T19:19:00.942Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for HD: {
+  symbol: 'HD',
+  company_name: 'Home Depot, Inc. (The)',
+  price: 310.78,
+  currency: 'USD',
+  change: 0.829987,
+  changePercent: 0.267781,
+  volume: 2989199,
+  dayHigh: 314.05,
+  dayLow: 308.625,
+  previousClose: 309.95,
+  marketCap: 309883928576,
+  timestamp: 1780859940,
+  lastUpdated: '2026-06-07T19:19:00.946Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for ABBV: {
+  symbol: 'ABBV',
+  company_name: 'AbbVie Inc.',
+  price: 227.23,
+  currency: 'USD',
+  change: 2.28999,
+  changePercent: 1.01805,
+  volume: 4818022,
+  dayHigh: 230.47,
+  dayLow: 226,
+  previousClose: 224.94,
+  marketCap: 401468325888,
+  timestamp: 1780859965,
+  lastUpdated: '2026-06-07T19:19:25.072Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for TMO: {
+  symbol: 'TMO',
+  company_name: 'Thermo Fisher Scientific Inc',
+  price: 472.8,
+  currency: 'USD',
+  change: -9.23001,
+  changePercent: -1.91482,
+  volume: 1244342,
+  dayHigh: 486.565,
+  dayLow: 469.62,
+  previousClose: 482.03,
+  marketCap: 175702622208,
+  timestamp: 1780859965,
+  lastUpdated: '2026-06-07T19:19:25.104Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for TMO: {
+  symbol: 'TMO',
+  company_name: 'Thermo Fisher Scientific Inc',
+  price: 472.8,
+  currency: 'USD',
+  change: -9.23001,
+  changePercent: -1.91482,
+  volume: 1244342,
+  dayHigh: 486.565,
+  dayLow: 469.62,
+  previousClose: 482.03,
+  marketCap: 175702622208,
+  timestamp: 1780859965,
+  lastUpdated: '2026-06-07T19:19:25.137Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle

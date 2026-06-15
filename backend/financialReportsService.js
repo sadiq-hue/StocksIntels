@@ -1,31 +1,27 @@
-const { fmp } = require('./apiClient');
+const { fmp, withRetry } = require('./apiClient');
 require('dotenv').config();
 const marketService = require('./marketService');
 const edgarService = require('./edgarService');
 const simfinService = require('./simfinService');
+const yahooFinanceScraper = require('./yahooFinanceFinancialsScraper');
 
 const FMP_API_KEY = process.env.FMP_API_KEY || '';
 const FMP_BASE_URL = 'https://financialmodelingprep.com/stable';
-const FINANCIALS_PROVIDER = process.env.FINANCIALS_PROVIDER || 'default';
+const FINANCIALS_PROVIDER = process.env.FINANCIALS_PROVIDER || 'yahoo-finance';
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 const QUOTE_CACHE_TTL = 5 * 60 * 1000;
+let fmpRateLimited = false;
 
 const NSE_TO_FMP_SYMBOLS = {
-  SCOM: 'SCOM.NR',
-  EQTY: 'EQTY.NR',
-  KCB: 'KCB.NR',
-  EABL: 'EABL.NR',
-  ABSA: 'ABSA.NR',
-  SBIC: 'SBIC.NR',
-  KLG: 'KQ.NR',
-  OLYM: 'OLYM.NR',
-  CRAY: 'CRAY.NR',
-  BAMB: 'BAMB.NR',
-  UMEM: 'UMEM.NR',
-  KPLC: 'KPLC.NR',
-  NMG: 'NMG.NR',
-  TOTL: 'TOTL.NR',
-  BRDR: 'BRDR.NR'
+  KUKZ:'KUKZ.NR',KAPC:'KAPC.NR',LIMT:'LIMT.NR',WTK:'WTK.NR',SASN:'SASN.NR',REA:'REA.NR',EGAD:'EGAD.NR',CGEN:'CGEN.NR',
+  EQTY:'EQTY.NR',KCB:'KCB.NR',COOP:'COOP.NR',ABSA:'ABSA.NR',SBIC:'SBIC.NR',NCBA:'NCBA.NR',IMH:'IMH.NR',DTK:'DTK.NR',
+  SCBK:'SCBK.NR',BKG:'BKG.NR',HFCK:'HFCK.NR',NMG:'NMG.NR',SGL:'SGL.NR',TPSE:'TPSE.NR',SCAN:'SCAN.NR',KQ:'KQ.NR',
+  XPRS:'XPRS.NR',SMER:'SMER.NR',BAMB:'BAMB.NR',PORT:'PORT.NR',CRWN:'CRWN.NR',ARM:'ARM.NR',KPLC:'KPLC.NR',KEGN:'KEGN.NR',
+  TOTL:'TOTL.NR',UMME:'UMME.NR',JUB:'JUB.NR',KNRE:'KNRE.NR',CIC:'CIC.NR',BRIT:'BRIT.NR',LBTY:'LBTY.NR',SLAM:'SLAM.NR',
+  CTUM:'CTUM.NR',OCH:'OCH.NR',HAFR:'HAFR.NR',NSE:'NSE.NR',AMAC:'AMAC.NR',EABL:'EABL.NR',BAT:'BAT.NR',BOC:'BOC.NR',
+  CARB:'CARB.NR',UNGA:'UNGA.NR',MSC:'MSC.NR',FTGH:'FTGH.NR',EVRD:'EVRD.NR',SCOM:'SCOM.NR',
+  LKL:'LKL.NR',NBV:'NBV.NR',UCHM:'UCHM.NR',ALP:'ALP.NR',CABL:'CABL.NR',DCON:'DCON.NR',GLD:'GLD.NR',HBE:'HBE.NR',
+  KPC:'KPC.NR',KURV:'KURV.NR',LAPR:'LAPR.NR',SKL:'SKL.NR',SMWF:'SMWF.NR',TCL:'TCL.NR'
 };
 
 const companyProfiles = {
@@ -162,11 +158,29 @@ function getFmpSymbol(symbol) {
 }
 
 async function fetchFmp(path, params = {}) {
-  const response = await fmp.get(`${FMP_BASE_URL}${path}`, {
-    params: { apikey: FMP_API_KEY, ...params },
-    timeout: 10000
-  });
-  return response.data;
+  if (fmpRateLimited) return null;
+  try {
+    const response = await withRetry(
+      () => fmp.get(`${FMP_BASE_URL}${path}`, {
+        params: { apikey: FMP_API_KEY, ...params },
+        timeout: 10000
+      }),
+      { label: `fmp${path}`, maxRetries: 2, baseDelay: 2000,
+        shouldRetry: e => {
+          if (e?.response?.status === 429) {
+            fmpRateLimited = true;
+            setTimeout(() => { fmpRateLimited = false; }, 120000);
+            console.warn(`[FinancialReports] FMP rate limited (429). Pausing FMP calls for 2min.`);
+            return true;
+          }
+          return !e?.response || e.response.status >= 500;
+        }
+      }
+    );
+    return response.data;
+  } catch {
+    return null;
+  }
 }
 
 function asArray(data) {
@@ -631,91 +645,98 @@ async function getDividendHistory(symbol, limit = 8) {
 async function getFinancialReport(symbol, period = 'annual', limit = 4, providerOverride = null) {
   try {
     const isUs = edgarService.isUsStock(symbol);
-    const activeProvider = providerOverride || FINANCIALS_PROVIDER || 'auto';
+    const isNse = NSE_TO_FMP_SYMBOLS[symbol];
+    const activeProvider = providerOverride || FINANCIALS_PROVIDER;
 
     // available providers for this symbol
-    const availableProviders = ['fmp'];
+    const availableProviders = ['fmp', 'yahoo-finance'];
     if (isUs) availableProviders.push('sec-edgar');
-    availableProviders.push('simfin');
     if (!FMP_API_KEY) availableProviders.push('synthetic');
 
-    const useEdgar = activeProvider === 'sec-edgar' && isUs;
-    const useSimFin = activeProvider === 'simfin';
-    const useFmp = activeProvider === 'fmp' || (activeProvider === 'auto' && !isUs && !isSimFinSupported(symbol));
+    // 1) Yahoo Finance — primary for all stocks
+    if (activeProvider === 'yahoo-finance') {
+      const yahooSymbol = NSE_TO_FMP_SYMBOLS[symbol] || symbol;
+      const yahooReport = await yahooFinanceScraper.getFinancialReport(yahooSymbol, period, limit);
+      if (yahooReport.success && (yahooReport.data.incomeStatementHistory?.length > 0 || yahooReport.data.profile)) {
+        const quote = await getQuote(symbol).catch(() => null);
 
-    if (useEdgar) {
+        return {
+          ...yahooReport,
+          symbol,
+          source: 'yahoo-finance',
+          availableProviders,
+          data: {
+            ...yahooReport.data,
+            quote: quote || { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 },
+            dividendHistory: yahooReport.data.dividendHistory?.length
+              ? yahooReport.data.dividendHistory
+              : (await getDividendHistory(symbol, Math.max(limit * 2, 8)).catch(() => [])),
+          }
+        };
+      }
+      return { success: false, symbol, source: 'yahoo-finance', error: `Yahoo Finance returned no data for ${symbol}` };
+    }
+
+    // 2) SEC EDGAR — US stocks only, no synthetic fallback
+    if (activeProvider === 'sec-edgar' && isUs) {
       const edgarReport = await edgarService.getFinancialReportFromEdgar(symbol, period, limit);
-      if (edgarReport.success) {
-        const [quote, dividends] = await Promise.allSettled([
-          getQuote(symbol),
-          getDividendHistory(symbol, Math.max(limit * 2, 8)),
-        ]);
-
-        const edgarIncHistory = edgarReport.data.incomeStatementHistory || [];
-        const edgarBalHistory = edgarReport.data.balanceSheetHistory || [];
-        const edgarCfHistory = edgarReport.data.cashFlowStatementHistory || [];
-        const edgarKmHistory = edgarReport.data.keyMetricsHistory || [];
-        return {
-          success: true,
-          symbol,
-          source: 'sec-edgar',
-          availableProviders,
-          lastUpdated: new Date().toISOString(),
-          data: {
-            profile: edgarReport.data.profile || getSyntheticProfile(symbol),
-            quote: quote.status === 'fulfilled' ? quote.value : marketService.getSyntheticQuote(symbol),
-            incomeStatement: edgarIncHistory[0] || null,
-            incomeStatementHistory: edgarIncHistory,
-            balanceSheet: edgarBalHistory[0] || null,
-            balanceSheetHistory: edgarBalHistory,
-            cashFlowStatement: edgarCfHistory[0] || null,
-            cashFlowStatementHistory: edgarCfHistory,
-            keyMetrics: edgarKmHistory[0] || null,
-            keyMetricsHistory: edgarKmHistory,
-            dividendHistory: dividends.status === 'fulfilled' ? dividends.value : [],
-            filings: edgarReport.data.filings || [],
-          }
-        };
+      if (!edgarReport.success) {
+        return { success: false, symbol, source: 'sec-edgar', error: edgarReport.error || 'SEC EDGAR data unavailable' };
       }
+      const edgarIncHistory = edgarReport.data.incomeStatementHistory || [];
+      if (edgarIncHistory.length === 0) {
+        return { success: false, symbol, source: 'sec-edgar', error: 'SEC EDGAR returned no financial data for this symbol' };
+      }
+
+      const [quote, dividends] = await Promise.allSettled([
+        getQuote(symbol),
+        getDividendHistory(symbol, Math.max(limit * 2, 8)),
+      ]);
+
+      const edgarBalHistory = edgarReport.data.balanceSheetHistory || [];
+      const edgarCfHistory = edgarReport.data.cashFlowStatementHistory || [];
+      const edgarKmHistory = edgarReport.data.keyMetricsHistory || [];
+      const edgarFilings = edgarReport.data.filings || [];
+
+      const quoteValue = quote.status === 'fulfilled' ? quote.value : null;
+      const price = quoteValue?.price || 0;
+      const marketCap = quoteValue?.marketCap || 0;
+      const enrichedKm = edgarKmHistory.map((km) => {
+        const pe = (price > 0 && km.netIncomePerShare > 0) ? price / km.netIncomePerShare : 0;
+        return {
+          ...km, marketCap: marketCap || km.marketCap,
+          peRatio: pe,
+          priceToSalesRatio: (price > 0 && km.revenuePerShare > 0) ? price / km.revenuePerShare : km.priceToSalesRatio,
+          earningsYield: pe > 0 ? 1 / pe : 0,
+        };
+      });
+      if (enrichedKm.length > 0 && edgarBalHistory.length > 0 && marketCap > 0) {
+        const latestBal = edgarBalHistory[0];
+        const equity = latestBal.totalStockholdersEquity || latestBal.totalEquity || 0;
+        if (equity > 0) enrichedKm[0].pbRatio = marketCap / equity;
+      }
+
+      return {
+        success: true, symbol, source: 'sec-edgar', availableProviders,
+        lastUpdated: new Date().toISOString(),
+        data: {
+          profile: edgarReport.data.profile || { symbol, companyName: symbol, exchange: 'NASDAQ', currency: 'USD' },
+          quote: quoteValue || { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 },
+          incomeStatement: edgarIncHistory[0] || null,
+          incomeStatementHistory: edgarIncHistory,
+          balanceSheet: edgarBalHistory[0] || null,
+          balanceSheetHistory: edgarBalHistory,
+          cashFlowStatement: edgarCfHistory[0] || null,
+          cashFlowStatementHistory: edgarCfHistory,
+          keyMetrics: enrichedKm[0] || null,
+          keyMetricsHistory: enrichedKm,
+          dividendHistory: dividends.status === 'fulfilled' ? dividends.value : [],
+          filings: edgarFilings,
+        }
+      };
     }
 
-    if (useSimFin) {
-      const simFinReport = await simfinService.getFinancialReportFromSimFin(symbol, period, limit);
-      if (simFinReport.success && simFinReport.data.incomeStatementHistory.length > 0) {
-        const [quote, dividends] = await Promise.allSettled([
-          getQuote(symbol),
-          getDividendHistory(symbol, Math.max(limit * 2, 8)),
-        ]);
-
-        const simIncHistory = simFinReport.data.incomeStatementHistory || [];
-        const simBalHistory = simFinReport.data.balanceSheetHistory || [];
-        const simCfHistory = simFinReport.data.cashFlowStatementHistory || [];
-        const simKmHistory = simFinReport.data.keyMetricsHistory || [];
-        return {
-          success: true,
-          symbol,
-          source: 'simfin',
-          availableProviders,
-          lastUpdated: new Date().toISOString(),
-          data: {
-            profile: simFinReport.data.profile || getSyntheticProfile(symbol),
-            quote: quote.status === 'fulfilled' ? quote.value : marketService.getSyntheticQuote(symbol),
-            incomeStatement: simIncHistory[0] || null,
-            incomeStatementHistory: simIncHistory,
-            balanceSheet: simBalHistory[0] || null,
-            balanceSheetHistory: simBalHistory,
-            cashFlowStatement: simCfHistory[0] || null,
-            cashFlowStatementHistory: simCfHistory,
-            keyMetrics: simKmHistory[0] || null,
-            keyMetricsHistory: simKmHistory,
-            dividendHistory: dividends.status === 'fulfilled' ? dividends.value : [],
-            filings: [],
-          }
-        };
-      }
-    }
-
-    // Default/fmp flow: run sequentially with delays to avoid FMP rate limits
+    // FMP / synthetic fallback
     const delay = (ms) => new Promise(r => setTimeout(r, ms));
     const tasks = [
       () => getCompanyProfile(symbol),                            // 0
@@ -742,10 +763,29 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
     const balHistory = getValue(3, []);
     const cfHistory = getValue(4, []);
     const kmHistory = getValue(5, []);
+    // If FMP returned no data and this is a global non-US stock, try Yahoo Finance as fallback
+    let yahooFallbackUsed = false;
+    if (incHistory.length === 0 && balHistory.length === 0 && !isUs && !isNse) {
+      const yahooReport = await yahooFinanceScraper.getFinancialReport(symbol, period, limit).catch(() => null);
+      if (yahooReport?.success && yahooReport.data.incomeStatementHistory?.length > 0) {
+        yahooFallbackUsed = true;
+        return {
+          ...yahooReport,
+          source: 'yahoo-finance',
+          availableProviders,
+          data: {
+            ...yahooReport.data,
+            quote: getValue(1, marketService.getSyntheticQuote(symbol)),
+            dividendHistory: getValue(6, []),
+          }
+        };
+      }
+    }
+
     const report = {
       success: true,
       symbol,
-      source: useFmp ? 'fmp' : 'synthetic',
+      source: yahooFallbackUsed ? 'yahoo-finance' : 'synthetic',
       availableProviders,
       lastUpdated: new Date().toISOString(),
       data: {
@@ -800,5 +840,6 @@ module.exports = {
   getDividendHistory,
   getFinancialReport,
   simfinService,
+  yahooFinanceScraper,
   clearCache,
 };

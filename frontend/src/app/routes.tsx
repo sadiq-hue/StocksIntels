@@ -5,6 +5,7 @@ import { LandingPage } from "./pages/LandingPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { StockAnalysisPage } from "./pages/StockAnalysisPage";
 import { SignalsPage } from "./pages/SignalsPage";
+import { SignalEnginePage } from "./pages/SignalEnginePage";
 import { PortfolioPage } from "./pages/PortfolioPage";
 import { WatchlistPage } from "./pages/WatchlistPage";
 import MarketPage from "./pages/MarketPage";
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
       { path: "sectors", Component: SectorsPage },
       { path: "stock/:ticker", Component: StockAnalysisPage },
       { path: "signals", Component: SignalsPage },
+      { path: "signals/engine", Component: SignalEnginePage },
       { path: "news", Component: NewsPage },
       { path: "financials", Component: FinancialsPage },
       { path: "chat", Component: ChatPage },

@@ -10,7 +10,7 @@ import {
   ArrowUpRight, ArrowDownRight, Users, Building2, Wallet, Clock, Plus, X, Link2, Unlink,
   RefreshCw,   Sparkles, Loader2, Landmark, Database, Check, Search, Filter, Edit3, Trash2,
   BarChartHorizontal, BrainCircuit, ExternalLink, SwitchCamera, Play, RotateCcw, History,
-  ShoppingCart, DollarSign as DollarSignIcon, AlertCircle, Server, ArrowRight, Layers, Newspaper
+  ShoppingCart, DollarSign as DollarSignIcon, AlertCircle, Server, ArrowRight, Layers, Newspaper, Mail
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../components/ui/dialog";
 import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
@@ -116,7 +116,7 @@ interface PortfolioAdvice {
 const SECTORS = ["Technology", "Financial", "Telecom", "Banking", "Manufacturing", "Consumer", "Automobiles", "Energy", "Media", "Utilities", "Other"];
 
 export function PortfolioPage() {
-  const { user } = useAuth();
+  const { user, apiFetch } = useAuth();
   const navigate = useNavigate();
   const [marketFilter, setMarketFilter] = useState<"All" | "NSE" | "Global">("All");
   const [showConnect, setShowConnect] = useState(false);
@@ -137,9 +137,12 @@ export function PortfolioPage() {
     type: "generic", accountName: "", accountId: "", server: "", platform: "", password: "", accountType: "Live", platformType: "mt5"
   });
   const [newHolding, setNewHolding] = useState({ ticker: "", name: "", shares: "", avgCost: "", sector: "Other", market: "NSE" as "NSE" | "Global" });
-  const [stockSuggestions, setStockSuggestions] = useState<{ ticker: string; name: string; sector: string; market: string }[]>([]);
+  const [stockSuggestions, setStockSuggestions] = useState<{ ticker: string; name: string; sector: string; market: string; provider?: string }[]>([]);
   const [searchingStock, setSearchingStock] = useState(false);
+  const [yahooSuggestions, setYahooSuggestions] = useState<{ ticker: string; name: string; sector: string; market: string; provider: string }[]>([]);
+  const [searchingYahoo, setSearchingYahoo] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const yahooSearchRef = useRef<ReturnType<typeof setTimeout>>();
   const [paperMode, setPaperMode] = useState(false);
   const [showFloatingConnect, setShowFloatingConnect] = useState(false);
   const [showRealStatement, setShowRealStatement] = useState(false);
@@ -161,12 +164,25 @@ export function PortfolioPage() {
   const [showStatement, setShowStatement] = useState(false);
   const [statementData, setStatementData] = useState<any>(null);
   const [statementLoading, setStatementLoading] = useState(false);
+  const [emailingStatement, setEmailingStatement] = useState(false);
+  const [statementEmailSent, setStatementEmailSent] = useState(false);
+  const [emailingPaperStatement, setEmailingPaperStatement] = useState(false);
+  const [paperStatementEmailSent, setPaperStatementEmailSent] = useState(false);
   const [paperOrder, setPaperOrder] = useState({ ticker: "", name: "", shares: "", market: "NSE" as "NSE" | "Global", sector: "Other", currentPrice: "" });
-  const [paperSearchResults, setPaperSearchResults] = useState<{ ticker: string; name: string; sector: string; market: string }[]>([]);
+  const [paperSearchResults, setPaperSearchResults] = useState<{ ticker: string; name: string; sector: string; market: string; provider?: string }[]>([]);
   const [paperSearching, setPaperSearching] = useState(false);
+  const [paperYahooResults, setPaperYahooResults] = useState<{ ticker: string; name: string; sector: string; market: string; provider: string }[]>([]);
+  const [paperSearchingYahoo, setPaperSearchingYahoo] = useState(false);
   const paperSearchRef = useRef<HTMLDivElement>(null);
+  const paperYahooSearchRef = useRef<ReturnType<typeof setTimeout>>();
 
   const { account: paperAccount, positions: paperPositions, trades: paperTrades, loading: paperLoading, placingOrder: paperPlacingOrder, marketStatus, refresh: refreshPaper, placeOrder, initAccount, resetAccount, fetchStatement } = usePaperTrading();
+
+  // Refs to store refresh callbacks so intervals don't reset on every render
+  const refreshRef = useRef(refresh);
+  const refreshPaperRef = useRef(refreshPaper);
+  useEffect(() => { refreshRef.current = refresh; }, [refresh]);
+  useEffect(() => { refreshPaperRef.current = refreshPaper; }, [refreshPaper]);
 
   const resetPaperOrder = () => setPaperOrder({ ticker: "", name: "", shares: "", market: "NSE", sector: "Other", currentPrice: "" });
 
@@ -181,9 +197,9 @@ export function PortfolioPage() {
   const [importResult, setImportResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [csvDragOver, setCsvDragOver] = useState(false);
 
-  // Stock ticker search with debounce
+  // Stock ticker search with debounce + Yahoo Finance fallback
   useEffect(() => {
-    if (newHolding.ticker.trim().length < 1) { setStockSuggestions([]); return; }
+    if (newHolding.ticker.trim().length < 1) { setStockSuggestions([]); setYahooSuggestions([]); return; }
     const timer = setTimeout(async () => {
       setSearchingStock(true);
       try {
@@ -191,22 +207,44 @@ export function PortfolioPage() {
         if (res.ok) setStockSuggestions(await res.json());
       } catch {} finally { setSearchingStock(false); }
     }, 200);
-    return () => clearTimeout(timer);
+    // Fallback to Yahoo Finance when curated list has no matches
+    if (yahooSearchRef.current) clearTimeout(yahooSearchRef.current);
+    yahooSearchRef.current = setTimeout(async () => {
+      if (newHolding.ticker.trim().length < 2) { setYahooSuggestions([]); return; }
+      setSearchingYahoo(true);
+      try {
+        const res = await fetch(`${API_URL}/stocks/search/yahoo?q=${encodeURIComponent(newHolding.ticker)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setYahooSuggestions((data || []).slice(0, 6).map((r: any) => ({
+            ticker: r.symbol,
+            name: r.name || r.symbol,
+            sector: 'Other',
+            market: r.quoteType === 'ETF' ? 'Global' : 'Global',
+            provider: 'yahoo',
+          })));
+        }
+      } catch {} finally { setSearchingYahoo(false); }
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      if (yahooSearchRef.current) clearTimeout(yahooSearchRef.current);
+    };
   }, [newHolding.ticker]);
 
   // Close suggestions on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setStockSuggestions([]);
-      if (paperSearchRef.current && !paperSearchRef.current.contains(e.target as Node)) setPaperSearchResults([]);
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) { setStockSuggestions([]); setYahooSuggestions([]); }
+      if (paperSearchRef.current && !paperSearchRef.current.contains(e.target as Node)) { setPaperSearchResults([]); setPaperYahooResults([]); }
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // Paper buy stock search with debounce
+  // Paper buy stock search with debounce + Yahoo Finance fallback
   useEffect(() => {
-    if (paperOrder.ticker.trim().length < 1) { setPaperSearchResults([]); return; }
+    if (paperOrder.ticker.trim().length < 1) { setPaperSearchResults([]); setPaperYahooResults([]); return; }
     const timer = setTimeout(async () => {
       setPaperSearching(true);
       try {
@@ -214,12 +252,52 @@ export function PortfolioPage() {
         if (res.ok) setPaperSearchResults(await res.json());
       } catch {} finally { setPaperSearching(false); }
     }, 200);
-    return () => clearTimeout(timer);
+    if (paperYahooSearchRef.current) clearTimeout(paperYahooSearchRef.current);
+    paperYahooSearchRef.current = setTimeout(async () => {
+      if (paperOrder.ticker.trim().length < 2) { setPaperYahooResults([]); return; }
+      setPaperSearchingYahoo(true);
+      try {
+        const res = await fetch(`${API_URL}/stocks/search/yahoo?q=${encodeURIComponent(paperOrder.ticker)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setPaperYahooResults((data || []).slice(0, 6).map((r: any) => ({
+            ticker: r.symbol,
+            name: r.name || r.symbol,
+            sector: 'Other',
+            market: 'Global',
+            provider: 'yahoo',
+          })));
+        }
+      } catch {} finally { setPaperSearchingYahoo(false); }
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      if (paperYahooSearchRef.current) clearTimeout(paperYahooSearchRef.current);
+    };
   }, [paperOrder.ticker]);
 
   // Load paper trading data when toggled
   useEffect(() => {
     if (paperMode && user) refreshPaper();
+  }, [paperMode, user]);
+
+  // Auto-refresh real portfolio every 15 seconds (with spinner)
+  useEffect(() => {
+    if (paperMode || !user) return;
+    const interval = setInterval(() => {
+      setRefreshing(true);
+      refreshRef.current().finally(() => setRefreshing(false));
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [paperMode, user]);
+
+  // Auto-refresh paper trading portfolio every 15 seconds (with spinner)
+  useEffect(() => {
+    if (!paperMode || !user) return;
+    const interval = setInterval(() => {
+      refreshPaperRef.current();
+    }, 15000);
+    return () => clearInterval(interval);
   }, [paperMode, user]);
 
   // Fetch live FX rate for USD/KES conversion (refreshes every 5 min)
@@ -275,14 +353,36 @@ export function PortfolioPage() {
     }
   }, [user]);
 
-  // Load recommendations + advice
+  // Load recommendations from signal engine
   const loadRecommendations = async () => {
     try {
-      const qs = user?.id ? `?userId=${user.id}` : '';
-      const res = await fetch(`${API_URL}/ai/recommendations${qs}`);
+      const userIdParam = user?.id ? `?userId=${user.id}` : '';
+      const res = await fetch(`${API_URL}/signals${userIdParam}`);
       const data = await res.json();
-      if (data.recommendations) setRecommendations(data.recommendations);
-    } catch {}
+      if (data?.signals && Array.isArray(data.signals)) {
+        const mapped = data.signals
+          .filter((s: any) => {
+            const sig = s.signal?.toLowerCase() || '';
+            return sig.includes('buy') || sig.includes('strong buy') || sig.includes('sell') || sig.includes('strong sell');
+          })
+          .sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0))
+          .map((s: any) => ({
+            symbol: s.ticker || s.symbol,
+            ticker: s.ticker,
+            signal: s.signal,
+            confidence: `${s.confidence || 0}%`,
+            name: s.name || s.company_name || s.ticker,
+            price: s.price?.toString(),
+            target1: s.target1?.toString(),
+            reason: s.reason || s.type || `${s.timeframe} ${s.type} signal`,
+            market: s.market === 'nse' ? 'NSE' : 'Global',
+            currency: s.market === 'nse' ? 'KES' : 'USD',
+          }));
+        setRecommendations(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to load signal recommendations:', err);
+    }
     setLoadingRecs(false);
   };
 
@@ -296,7 +396,7 @@ export function PortfolioPage() {
     setRealStatementLoading(true);
     setStatementError(null);
     try {
-      const r = await fetch(`${API_URL}/portfolio/statement?userId=${user.id}&period=${statementPeriod}`);
+      const r = await apiFetch(`/portfolio/statement?userId=${user.id}&period=${statementPeriod}`);
       if (r.ok) { setRealStatementData(await r.json()); setStatementLastRefreshed(new Date()); }
       else { const errBody = await r.json().catch(() => ({})); setStatementError(`Server ${r.status}: ${errBody.detail || errBody.error || r.statusText}`); }
     } catch (e: any) { setStatementError(e.message || 'Network error'); console.error('Statement fetch error:', e); }
@@ -309,11 +409,55 @@ export function PortfolioPage() {
     setRealStatementLoading(true);
     setStatementError(null);
     try {
-      const r = await fetch(`${API_URL}/portfolio/statement?userId=${user.id}&period=${p}`);
+      const r = await apiFetch(`/portfolio/statement?userId=${user.id}&period=${p}`);
       if (r.ok) { setRealStatementData(await r.json()); setStatementLastRefreshed(new Date()); }
       else { const errBody = await r.json().catch(() => ({})); setStatementError(`Server ${r.status}: ${errBody.detail || errBody.error || r.statusText}`); }
     } catch (e: any) { setStatementError(e.message || 'Network error'); console.error('Statement fetch error:', e); }
     finally { setRealStatementLoading(false); }
+  };
+
+  const handleEmailStatement = async () => {
+    if (!user?.id || !realStatementData) return;
+    setEmailingStatement(true);
+    setStatementEmailSent(false);
+    try {
+      const res = await apiFetch('/user/send-test-portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, email: user.email }),
+      });
+      const data = await res.json();
+      if (data.success) setStatementEmailSent(true);
+      else alert(data.message || 'Failed to send email');
+    } catch { alert('Network error sending email'); }
+    finally { setEmailingStatement(false); }
+  };
+
+  const handleEmailPaperStatement = async () => {
+    if (!user?.id || !statementData) return;
+    setEmailingPaperStatement(true);
+    setPaperStatementEmailSent(false);
+    try {
+      const res = await apiFetch('/user/send-test-paper-portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, email: user.email }),
+      });
+      const data = await res.json();
+      if (data.success) setPaperStatementEmailSent(true);
+      else alert(data.message || 'Failed to send email');
+    } catch { alert('Network error sending email'); }
+    finally { setEmailingPaperStatement(false); }
+  };
+
+  const refreshPaperStatement = async () => {
+    if (!user?.id) return;
+    setStatementLoading(true);
+    try {
+      const d = await fetchStatement();
+      if (d) setStatementData(d);
+    } catch (e) { console.error('Refresh statement error:', e); }
+    finally { setStatementLoading(false); }
   };
 
   // Auto-refresh every 60s while dialog is open
@@ -321,7 +465,7 @@ export function PortfolioPage() {
     if (!showRealStatement) return;
     const id = setInterval(() => {
       if (!user?.id) return;
-      fetch(`${API_URL}/portfolio/statement?userId=${user.id}&period=${statementPeriod}`)
+      apiFetch(`/portfolio/statement?userId=${user.id}&period=${statementPeriod}`)
         .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
         .then(d => { setRealStatementData(d); setStatementLastRefreshed(new Date()); })
         .catch(e => console.error('Statement auto-refresh error:', e));
@@ -683,26 +827,26 @@ export function PortfolioPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-gray-900 text-2xl font-semibold">Portfolio Intelligence</h2>
-          <p className="text-gray-600">{paperMode ? "Simulate trades with virtual cash" : "Track NSE & global investments, AI insights, and broker integrations"}</p>
+          <h2 className="text-foreground text-2xl font-semibold">Portfolio Intelligence</h2>
+          <p className="text-muted-foreground">{paperMode ? "Simulate trades with virtual cash" : "Track NSE & global investments, AI insights, and broker integrations"}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant={paperMode ? "default" : "outline"} onClick={() => { setPaperMode(!paperMode); if (!paperMode) refreshPaper(); }} className={`gap-2 ${paperMode ? "bg-[#0D7490] text-white" : "border-gray-200"}`}>
+          <Button variant={paperMode ? "default" : "outline"} onClick={() => { setPaperMode(!paperMode); if (!paperMode) refreshPaper(); }} className={`gap-2 ${paperMode ? "bg-[#0D7490] text-white" : "border-border"}`}>
             <SwitchCamera className="w-4 h-4" /> {paperMode ? "Real Portfolio" : "Paper Trading"}
           </Button>
-          <Button variant="outline" onClick={() => navigate('/app/stocks')} className="border-gray-200 gap-2">
+          <Button variant="outline" onClick={() => navigate('/app/stocks')} className="border-border gap-2">
             <BarChart3 className="w-4 h-4" /> Screener
           </Button>
           {!paperMode && (
             <>
-              <Button variant="outline" onClick={handleRefresh} disabled={refreshing} className="border-gray-200 gap-2">
+              <Button variant="outline" onClick={handleRefresh} disabled={refreshing} className="border-border gap-2">
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
-              <Button variant="outline" onClick={handleGetAdvice} className="border-gray-200 gap-2">
+              <Button variant="outline" onClick={handleGetAdvice} className="border-border gap-2">
                 <BrainCircuit className="w-4 h-4" /> AI Advice
               </Button>
-              <Button variant="outline" onClick={openStatement} disabled={realStatementLoading} className="border-gray-200 gap-2">
+              <Button variant="outline" onClick={openStatement} disabled={realStatementLoading} className="border-border gap-2">
                 <BarChartHorizontal className="w-4 h-4" /> Statement
               </Button>
               <Button onClick={() => setShowAddHolding(true)} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
@@ -723,14 +867,18 @@ export function PortfolioPage() {
             <div className="flex items-center gap-2">
               {["NSE", "Global"].map(m => (
                 <button key={m} onClick={() => setPaperOrder({ ...paperOrder, market: m as "NSE" | "Global" })}
-                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${paperOrder.market === m ? "bg-[#0D7490] text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${paperOrder.market === m ? "bg-[#0D7490] text-white shadow-sm" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
                   {m === "NSE" ? "NSE Stocks" : "Global Stocks"}
                 </button>
               ))}
             </div>
             <div className="flex items-center gap-2">
-              <Button size="sm" onClick={async () => { setStatementLoading(true); const d = await fetchStatement(); if (d) { setStatementData(d); setShowStatement(true); } setStatementLoading(false); }} className="border-gray-200 gap-1" variant="outline">
+              {paperLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
+              <Button size="sm" onClick={async () => { setStatementLoading(true); const d = await fetchStatement(); if (d) { setStatementData(d); setShowStatement(true); } setStatementLoading(false); }} className="border-border gap-1" variant="outline">
                 <BarChartHorizontal className="w-3.5 h-3.5" /> Statement
+              </Button>
+              <Button size="sm" onClick={() => { refreshPaper(); }} className="border-border gap-1" variant="outline">
+                <RefreshCw className={`w-3.5 h-3.5 ${paperLoading ? 'animate-spin' : ''}`} /> Refresh
               </Button>
               <Button size="sm" onClick={() => { resetPaperOrder(); setShowPaperBuy(true); }} className="bg-green-600 hover:bg-green-700 text-white gap-1">
                 <ShoppingCart className="w-3.5 h-3.5" /> Buy
@@ -743,37 +891,37 @@ export function PortfolioPage() {
 
           {/* Account Overview */}
           {!paperAccount && !paperLoading ? (
-            <Card className="bg-white border-gray-200 p-8 text-center">
-              <Play className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">Start Paper Trading</h3>
-              <p className="text-gray-500 text-sm mb-4">Practice trading with KES 1,000,000 virtual cash. No real money involved.</p>
+            <Card className="bg-card border-border p-8 text-center">
+              <Play className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+              <h3 className="text-lg font-semibold text-foreground mb-1">Start Paper Trading</h3>
+              <p className="text-muted-foreground text-sm mb-4">Practice trading with KES 1,000,000 virtual cash. No real money involved.</p>
               <Button onClick={async () => { const ok = await initAccount(); if (ok) refreshPaper(); }} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
                 <Play className="w-4 h-4" /> Start with KES 1,000,000
               </Button>
             </Card>
           ) : paperLoading ? (
-            <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+            <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
           ) : paperAccount && (
             <>
               {/* Dashboard Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card className="bg-white border-gray-200 p-4">
-                  <div className="text-gray-600 text-xs mb-1">KES Balance (NSE)</div>
-                  <div className="text-gray-900 text-xl font-bold">KES {paperAccount.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  <div className="text-gray-500 text-xs mt-1">Initial: KES {paperAccount.initialCapital.toLocaleString()}</div>
+                <Card className="bg-card border-border p-4">
+                  <div className="text-muted-foreground text-xs mb-1">KES Balance (NSE)</div>
+                  <div className="text-foreground text-xl font-bold">KES {paperAccount.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div className="text-muted-foreground text-xs mt-1">Initial: KES {paperAccount.initialCapital.toLocaleString()}</div>
                 </Card>
-                <Card className="bg-white border-gray-200 p-4">
-                  <div className="text-gray-600 text-xs mb-1">USD Balance (Global)</div>
-                  <div className="text-gray-900 text-xl font-bold">${paperAccount.cashBalanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  <div className="text-gray-500 text-xs mt-1">Initial: ${paperAccount.initialCapitalUsd.toLocaleString()}</div>
+                <Card className="bg-card border-border p-4">
+                  <div className="text-muted-foreground text-xs mb-1">USD Balance (Global)</div>
+                  <div className="text-foreground text-xl font-bold">${paperAccount.cashBalanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div className="text-muted-foreground text-xs mt-1">Initial: ${paperAccount.initialCapitalUsd.toLocaleString()}</div>
                 </Card>
-                <Card className="bg-white border-gray-200 p-4">
-                  <div className="text-gray-600 text-xs mb-1">Portfolio Value (KES)</div>
-                  <div className="text-gray-900 text-xl font-bold">KES {paperAccount.portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  <div className="text-gray-500 text-xs mt-1">Combined (USD at ~{currentFxRate} KES)</div>
+                <Card className="bg-card border-border p-4">
+                  <div className="text-muted-foreground text-xs mb-1">Portfolio Value (KES)</div>
+                  <div className="text-foreground text-xl font-bold">KES {paperAccount.portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div className="text-muted-foreground text-xs mt-1">Combined (USD at ~{currentFxRate} KES)</div>
                 </Card>
-                <Card className="bg-white border-gray-200 p-4">
-                  <div className="text-gray-600 text-xs mb-1">Total Return</div>
+                <Card className="bg-card border-border p-4">
+                  <div className="text-muted-foreground text-xs mb-1">Total Return</div>
                   <div className={`text-xl font-bold flex items-center gap-1 ${paperAccount.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {paperAccount.totalReturn >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
                     KES {Math.abs(paperAccount.totalReturn).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -790,7 +938,7 @@ export function PortfolioPage() {
                   {marketStatus && ["nse", "global"].map((m) => {
                     const s = marketStatus[m as "nse" | "global"];
                     return (
-                      <div key={m} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${s.open ? "bg-green-50 text-green-700 border border-green-200" : "bg-gray-100 text-gray-500 border border-gray-200"}`}>
+                      <div key={m} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${s.open ? "bg-green-50 text-green-700 border border-green-200" : "bg-muted text-muted-foreground border border-border"}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${s.open ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
                         {m.toUpperCase()}: {s.label}
                       </div>
@@ -798,50 +946,50 @@ export function PortfolioPage() {
                   })}
                 </div>
                 {paperAccount.totalFeesPaid > 0 && (
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-muted-foreground">
                     Total fees paid: KES {paperAccount.totalFeesPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </div>
                 )}
               </div>
 
               {/* Positions Table */}
-              <Card className="bg-white border-gray-200 p-6">
-                <h3 className="text-gray-900 font-semibold mb-4">Open Positions</h3>
+              <Card className="bg-card border-border p-6">
+                <h3 className="text-foreground font-semibold mb-4">Open Positions</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left text-gray-600 py-3 px-2 font-medium">Stock</th>
-                        <th className="text-center text-gray-600 py-3 px-2 font-medium">Market</th>
-                        <th className="text-right text-gray-600 py-3 px-2 font-medium">Shares</th>
-                        <th className="text-right text-gray-600 py-3 px-2 font-medium">Avg Cost</th>
-                        <th className="text-right text-gray-600 py-3 px-2 font-medium">Current</th>
-                        <th className="text-right text-gray-600 py-3 px-2 font-medium">Value</th>
-                        <th className="text-right text-gray-600 py-3 px-2 font-medium">P/L</th>
-                        <th className="text-center text-gray-600 py-3 px-2 font-medium w-20">Actions</th>
+                      <tr className="border-b border-border">
+                        <th className="text-left text-muted-foreground py-3 px-2 font-medium">Stock</th>
+                        <th className="text-center text-muted-foreground py-3 px-2 font-medium">Market</th>
+                        <th className="text-right text-muted-foreground py-3 px-2 font-medium">Shares</th>
+                        <th className="text-right text-muted-foreground py-3 px-2 font-medium">Avg Cost</th>
+                        <th className="text-right text-muted-foreground py-3 px-2 font-medium">Current</th>
+                        <th className="text-right text-muted-foreground py-3 px-2 font-medium">Value</th>
+                        <th className="text-right text-muted-foreground py-3 px-2 font-medium">P/L</th>
+                        <th className="text-center text-muted-foreground py-3 px-2 font-medium w-20">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {paperPositions.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="text-center py-8 text-gray-400 text-sm">No open positions. Buy a stock to start paper trading.</td>
+                          <td colSpan={8} className="text-center py-8 text-muted-foreground text-sm">No open positions. Buy a stock to start paper trading.</td>
                         </tr>
                       ) : (
                         paperPositions.map((p) => (
-                          <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <tr key={p.id} className="border-b border-border hover:bg-accent">
                             <td className="py-3 px-2">
                               <button onClick={() => navigate(`/app/stock/${p.ticker}`)} className="text-left hover:text-[#0D7490] transition-colors">
-                                <div className="text-gray-900 font-semibold">{p.ticker}</div>
-                                <div className="text-gray-500 text-xs">{p.name}</div>
+                                <div className="text-foreground font-semibold">{p.ticker}</div>
+                                <div className="text-muted-foreground text-xs">{p.name}</div>
                               </button>
                             </td>
                             <td className="text-center py-3 px-2">
                               <Badge variant="outline" className={`text-[10px] ${p.market === "NSE" ? "border-[#0D7490] text-[#0D7490]" : "border-purple-300 text-purple-600"}`}>{p.market}</Badge>
                             </td>
-                            <td className="text-right text-gray-900 py-3 px-2">{p.shares}</td>
-                            <td className="text-right text-gray-900 py-3 px-2">{p.market === "NSE" ? "KES " : "$"}{p.avgCost}</td>
-                            <td className="text-right text-gray-900 py-3 px-2">{p.market === "NSE" ? "KES " : "$"}{p.currentPrice}</td>
-                            <td className="text-right text-gray-900 py-3 px-2 font-medium">{p.market === "NSE" ? "KES " : "$"}{p.value}</td>
+                            <td className="text-right text-foreground py-3 px-2">{p.shares}</td>
+                            <td className="text-right text-foreground py-3 px-2">{p.market === "NSE" ? "KES " : "$"}{p.avgCost}</td>
+                            <td className="text-right text-foreground py-3 px-2">{p.market === "NSE" ? "KES " : "$"}{p.currentPrice}</td>
+                            <td className="text-right text-foreground py-3 px-2 font-medium">{p.market === "NSE" ? "KES " : "$"}{p.value}</td>
                             <td className="text-right py-3 px-2">
                               <span className={`flex items-center gap-1 justify-end font-medium ${parseFloat(p.pnl) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {parseFloat(p.pnl) >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
@@ -862,44 +1010,44 @@ export function PortfolioPage() {
               </Card>
 
               {/* Trade History */}
-              <Card className="bg-white border-gray-200 p-6">
+              <Card className="bg-card border-border p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <History className="w-5 h-5 text-[#0D7490]" />
-                  <h3 className="text-gray-900 font-semibold">Trade History</h3>
+                  <h3 className="text-foreground font-semibold">Trade History</h3>
                 </div>
                 {paperTrades.length === 0 ? (
-                  <div className="text-center py-6 text-gray-400 text-sm">No trades yet.</div>
+                  <div className="text-center py-6 text-muted-foreground text-sm">No trades yet.</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left text-gray-600 py-2 px-2 font-medium">Date</th>
-                          <th className="text-left text-gray-600 py-2 px-2 font-medium">Stock</th>
-                          <th className="text-center text-gray-600 py-2 px-2 font-medium">Type</th>
-                          <th className="text-right text-gray-600 py-2 px-2 font-medium">Shares</th>
-                          <th className="text-right text-gray-600 py-2 px-2 font-medium">Price</th>
-                          <th className="text-right text-gray-600 py-2 px-2 font-medium">Total</th>
-                          <th className="text-right text-gray-600 py-2 px-2 font-medium">Fees</th>
+                        <tr className="border-b border-border">
+                          <th className="text-left text-muted-foreground py-2 px-2 font-medium">Date</th>
+                          <th className="text-left text-muted-foreground py-2 px-2 font-medium">Stock</th>
+                          <th className="text-center text-muted-foreground py-2 px-2 font-medium">Type</th>
+                          <th className="text-right text-muted-foreground py-2 px-2 font-medium">Shares</th>
+                          <th className="text-right text-muted-foreground py-2 px-2 font-medium">Price</th>
+                          <th className="text-right text-muted-foreground py-2 px-2 font-medium">Total</th>
+                          <th className="text-right text-muted-foreground py-2 px-2 font-medium">Fees</th>
                         </tr>
                       </thead>
                       <tbody>
                         {paperTrades.map((t) => (
-                          <tr key={t.id} className="border-b border-gray-100">
-                            <td className="py-2 px-2 text-gray-500 text-xs">{new Date(t.created_at).toLocaleDateString()} {new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                          <tr key={t.id} className="border-b border-border">
+                            <td className="py-2 px-2 text-muted-foreground text-xs">{new Date(t.created_at).toLocaleDateString()} {new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                             <td className="py-2 px-2">
-                              <span className="text-gray-900 font-medium">{t.ticker}</span>
-                              <span className="text-gray-400 text-xs ml-1">{t.name}</span>
+                              <span className="text-foreground font-medium">{t.ticker}</span>
+                              <span className="text-muted-foreground text-xs ml-1">{t.name}</span>
                             </td>
                             <td className="text-center py-2 px-2">
                               <Badge className={`text-[10px] ${t.type === 'buy' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                 {t.type.toUpperCase()}
                               </Badge>
                             </td>
-                            <td className="text-right text-gray-900 py-2 px-2">{t.shares}</td>
-                            <td className="text-right text-gray-900 py-2 px-2">{t.currency === "USD" ? "$" : "KES "}{parseFloat(t.price).toFixed(2)}</td>
-                            <td className="text-right text-gray-900 py-2 px-2 font-medium">{t.currency === "USD" ? "$" : "KES "}{parseFloat(t.total_value).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td className="text-right text-gray-500 py-2 px-2 text-xs">{t.currency === "USD" ? "$" : "KES "}{(parseFloat(t.commission || "0") + parseFloat(t.fees || "0")).toFixed(2)}</td>
+                            <td className="text-right text-foreground py-2 px-2">{t.shares}</td>
+                            <td className="text-right text-foreground py-2 px-2">{t.currency === "USD" ? "$" : "KES "}{parseFloat(t.price).toFixed(2)}</td>
+                            <td className="text-right text-foreground py-2 px-2 font-medium">{t.currency === "USD" ? "$" : "KES "}{parseFloat(t.total_value).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <td className="text-right text-muted-foreground py-2 px-2 text-xs">{t.currency === "USD" ? "$" : "KES "}{(parseFloat(t.commission || "0") + parseFloat(t.fees || "0")).toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -937,13 +1085,14 @@ export function PortfolioPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div ref={paperSearchRef} className="relative">
-                    <label className="text-sm font-medium text-gray-700 mb-1 block">Ticker *</label>
-                    <Input placeholder="e.g., SCOM" value={paperOrder.ticker} onChange={(e) => setPaperOrder({ ...paperOrder, ticker: e.target.value.toUpperCase() })} className="bg-white border-gray-200" />
-                    {paperSearchResults.length > 0 && (
-                      <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    <label className="text-sm font-medium text-foreground mb-1 block">Ticker *</label>
+                    <Input placeholder="e.g., SCOM" value={paperOrder.ticker} onChange={(e) => setPaperOrder({ ...paperOrder, ticker: e.target.value.toUpperCase() })} className="bg-card border-border" />
+                    {(paperSearchResults.length > 0 || paperYahooResults.length > 0) && (
+                      <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
                         {paperSearchResults.map((s) => (
-                          <button key={s.ticker} type="button" onClick={async () => { 
+                          <button key={`paper-curated-${s.ticker}`} type="button" onClick={async () => {
                             setPaperSearchResults([]);
+                            setPaperYahooResults([]);
                             setPaperOrder(prev => ({ ...prev, ticker: s.ticker, name: s.name, sector: s.sector, market: s.market as "NSE" | "Global" }));
                             try {
                               const marketParam = s.market === "NSE" ? "?market=nse" : "";
@@ -953,22 +1102,47 @@ export function PortfolioPage() {
                                 if (data?.price) setPaperOrder(prev => ({ ...prev, currentPrice: String(data.price) }));
                               }
                             } catch {}
-                          }} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center justify-between">
+                          }} className="w-full text-left px-3 py-2 hover:bg-accent flex items-center justify-between">
                             <div>
-                              <span className="font-medium text-gray-900">{s.ticker}</span>
-                              <span className="text-gray-500 text-sm ml-2">{s.name}</span>
+                              <span className="font-medium text-foreground">{s.ticker}</span>
+                              <span className="text-muted-foreground text-sm ml-2">{s.name}</span>
                             </div>
                             <Badge variant="outline" className={`text-[10px] ${s.market === "NSE" ? "border-[#0D7490] text-[#0D7490]" : "border-purple-300 text-purple-600"}`}>{s.market}</Badge>
                           </button>
                         ))}
+                        {paperYahooResults.length > 0 && (
+                          <>
+                            {paperSearchResults.length > 0 && <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted/50">Yahoo Finance results</div>}
+                            {paperYahooResults.map((s) => (
+                              <button key={`paper-yahoo-${s.ticker}`} type="button" onClick={async () => {
+                                setPaperSearchResults([]);
+                                setPaperYahooResults([]);
+                                setPaperOrder(prev => ({ ...prev, ticker: s.ticker, name: s.name, sector: s.sector, market: s.market as "NSE" | "Global" }));
+                                try {
+                                  const res = await fetch(`${API_URL}/stock/${s.ticker}`);
+                                  if (res.ok) {
+                                    const data = await res.json();
+                                    if (data?.price) setPaperOrder(prev => ({ ...prev, currentPrice: String(data.price) }));
+                                  }
+                                } catch {}
+                              }} className="w-full text-left px-3 py-2 hover:bg-accent flex items-center justify-between">
+                                <div>
+                                  <span className="font-medium text-foreground">{s.ticker}</span>
+                                  <span className="text-muted-foreground text-sm ml-2">{s.name}</span>
+                                </div>
+                                <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600">Yahoo</Badge>
+                              </button>
+                            ))}
+                          </>
+                        )}
                       </div>
                     )}
-                    {paperSearching && <div className="absolute right-3 top-9"><Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" /></div>}
+                    {(paperSearching || paperSearchingYahoo) && <div className="absolute right-3 top-9"><Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /></div>}
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1 block">Market</label>
+                    <label className="text-sm font-medium text-foreground mb-1 block">Market</label>
                     <Select value={paperOrder.market} onValueChange={(v) => setPaperOrder({ ...paperOrder, market: v as "NSE" | "Global" })}>
-                      <SelectTrigger className="bg-white border-gray-200"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="NSE">NSE (KES · 100-share lot)</SelectItem>
                         <SelectItem value="Global">Global (USD · 1-share min)</SelectItem>
@@ -977,15 +1151,15 @@ export function PortfolioPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Company Name</label>
-                  <Input placeholder="e.g., Safaricom PLC" value={paperOrder.name} onChange={(e) => setPaperOrder({ ...paperOrder, name: e.target.value })} className="bg-white border-gray-200" />
+                  <label className="text-sm font-medium text-foreground mb-1 block">Company Name</label>
+                  <Input placeholder="e.g., Safaricom PLC" value={paperOrder.name} onChange={(e) => setPaperOrder({ ...paperOrder, name: e.target.value })} className="bg-card border-border" />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Shares *</label>
+                  <label className="text-sm font-medium text-foreground mb-1 block">Shares *</label>
                   <Input type="number" step={paperOrder.market === "NSE" ? "100" : "1"} min={paperOrder.market === "NSE" ? "100" : "1"}
                     placeholder={paperOrder.market === "NSE" ? "e.g., 100, 200, 500" : "e.g., 10"}
-                    value={paperOrder.shares} onChange={(e) => setPaperOrder({ ...paperOrder, shares: e.target.value })} className="bg-white border-gray-200" />
-                  {paperOrder.market === "NSE" && <p className="text-xs text-gray-400 mt-1">NSE minimum: 100 shares (board lot)</p>}
+                    value={paperOrder.shares} onChange={(e) => setPaperOrder({ ...paperOrder, shares: e.target.value })} className="bg-card border-border" />
+                  {paperOrder.market === "NSE" && <p className="text-xs text-muted-foreground mt-1">NSE minimum: 100 shares (board lot)</p>}
                 </div>
                 {paperOrder.currentPrice && (
                   <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-sm flex items-center justify-between">
@@ -998,21 +1172,21 @@ export function PortfolioPage() {
                   const currencyLabel = paperOrder.market === "NSE" ? "KES" : "USD";
                   const available = paperOrder.market === "NSE" ? paperAccount.cashBalance : paperAccount.cashBalanceUsd;
                   return (
-                    <div className="p-3 rounded-lg bg-gray-50 border text-sm space-y-1">
-                      <div className="flex justify-between text-gray-600">
+                    <div className="p-3 rounded-lg bg-muted border text-sm space-y-1">
+                      <div className="flex justify-between text-muted-foreground">
                         <span>Available {currencyLabel}</span>
-                        <span className="font-medium text-gray-900">{currencyLabel === "KES" ? "KES " : "$"}{available.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="font-medium text-foreground">{currencyLabel === "KES" ? "KES " : "$"}{available.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                       </div>
-                      <div className="flex justify-between text-gray-500">
+                      <div className="flex justify-between text-muted-foreground">
                         <span>Est. commission & fees</span>
-                        <span className="text-gray-700">{currencyLabel === "KES" ? "KES " : "$"}Calculated at execution</span>
+                        <span className="text-foreground">{currencyLabel === "KES" ? "KES " : "$"}Calculated at execution</span>
                       </div>
                     </div>
                   );
                 })()}
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => { setShowPaperBuy(false); resetPaperOrder(); }} className="border-gray-200">Cancel</Button>
+                <Button variant="outline" onClick={() => { setShowPaperBuy(false); resetPaperOrder(); }} className="border-border">Cancel</Button>
                 {orderError && (
                   <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{orderError}</div>
                 )}
@@ -1052,31 +1226,31 @@ export function PortfolioPage() {
                     );
                   })()}
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1 block">Shares to Sell</label>
+                    <label className="text-sm font-medium text-foreground mb-1 block">Shares to Sell</label>
                     <Input type="number" step={showPaperSell.market === "NSE" ? "100" : "1"} min="1" max={showPaperSell.shares} placeholder={`Max ${showPaperSell.shares}`}
-                      value={paperOrder.shares} onChange={(e) => setPaperOrder({ ...paperOrder, shares: e.target.value })} className="bg-white border-gray-200" />
-                    {showPaperSell.market === "NSE" && <p className="text-xs text-gray-400 mt-1">NSE must sell in multiples of 100 shares</p>}
+                      value={paperOrder.shares} onChange={(e) => setPaperOrder({ ...paperOrder, shares: e.target.value })} className="bg-card border-border" />
+                    {showPaperSell.market === "NSE" && <p className="text-xs text-muted-foreground mt-1">NSE must sell in multiples of 100 shares</p>}
                   </div>
                   {showPaperSell && paperOrder.shares && parseFloat(paperOrder.shares) > 0 && (
-                    <div className="p-3 rounded-lg bg-gray-50 border text-sm space-y-1">
-                      <div className="flex justify-between text-gray-600">
+                    <div className="p-3 rounded-lg bg-muted border text-sm space-y-1">
+                      <div className="flex justify-between text-muted-foreground">
                         <span>Position value</span>
-                        <span className="font-medium text-gray-900">{showPaperSell.market === "NSE" ? "KES " : "$"}{showPaperSell.value}</span>
+                        <span className="font-medium text-foreground">{showPaperSell.market === "NSE" ? "KES " : "$"}{showPaperSell.value}</span>
                       </div>
-                      <div className="flex justify-between text-gray-500">
+                      <div className="flex justify-between text-muted-foreground">
                         <span>Avg cost</span>
-                        <span className="text-gray-700">{showPaperSell.market === "NSE" ? "KES " : "$"}{showPaperSell.avgCost}</span>
+                        <span className="text-foreground">{showPaperSell.market === "NSE" ? "KES " : "$"}{showPaperSell.avgCost}</span>
                       </div>
-                      <div className="flex justify-between text-gray-500">
+                      <div className="flex justify-between text-muted-foreground">
                         <span>Est. fees deducted</span>
-                        <span className="text-gray-700">Commission + statutory</span>
+                        <span className="text-foreground">Commission + statutory</span>
                       </div>
                     </div>
                   )}
                 </div>
               )}
               <DialogFooter>
-                <Button variant="outline" onClick={() => { setShowPaperSell(null); setPaperOrder({ ...paperOrder, shares: "" }); }} className="border-gray-200">Cancel</Button>
+                <Button variant="outline" onClick={() => { setShowPaperSell(null); setPaperOrder({ ...paperOrder, shares: "" }); }} className="border-border">Cancel</Button>
                 {orderError && (
                   <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{orderError}</div>
                 )}
@@ -1102,7 +1276,7 @@ export function PortfolioPage() {
                 <DialogDescription>This will delete all positions and trade history, and start with a fresh KES 1,000,000 balance.</DialogDescription>
               </DialogHeader>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setShowPaperReset(false)} className="border-gray-200">Cancel</Button>
+                <Button variant="outline" onClick={() => setShowPaperReset(false)} className="border-border">Cancel</Button>
                 <Button onClick={async () => {
                   await resetAccount();
                   setShowPaperReset(false);
@@ -1115,54 +1289,74 @@ export function PortfolioPage() {
 
           {/* Statement Dialog */}
           <Dialog open={showStatement} onOpenChange={setShowStatement}>
-            <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <BarChartHorizontal className="w-5 h-5 text-[#0D7490]" />
-                  Trading Statement
-                </DialogTitle>
-                <DialogDescription>
-                  {statementData ? `Generated ${new Date(statementData.generatedAt).toLocaleString()}` : 'Loading...'}
-                </DialogDescription>
-              </DialogHeader>
+            <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto p-0 gap-0">
+              <div className="bg-[#0D7490] px-6 py-4 shrink-0">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
+                    <BarChartHorizontal className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-white font-semibold text-lg leading-tight">Trading Statement</h2>
+                    <div className="flex items-center gap-2">
+                      <p className="text-white/70 text-xs">
+                        {statementData ? `Generated ${new Date(statementData.generatedAt).toLocaleString()}` : 'Loading...'}
+                      </p>
+                      {statementData && (
+                        <button
+                          onClick={refreshPaperStatement}
+                          disabled={statementLoading}
+                          className="text-white/70 hover:text-white disabled:opacity-50"
+                          title="Refresh statement"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${statementLoading ? 'animate-spin' : ''}`} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <span className="text-[10px] text-white/50">StocksIntels &bull; Paper Trading</span>
+                </div>
+              </div>
+              <div className="p-6">
               {statementData && (
                 <div className="space-y-6" id="statement-content">
                   {/* Account Summary */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="p-3 rounded-lg border text-center">
-                      <div className="text-xs text-gray-500">KES Balance</div>
-                      <div className="text-lg font-bold text-gray-900">KES {statementData.account.cashBalanceKes.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                      <div className="text-xs text-gray-400">From KES {statementData.account.initialCapitalKes.toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">KES Balance</div>
+                      <div className="text-lg font-bold text-foreground">KES {statementData.account.cashBalanceKes.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                      <div className="text-xs text-muted-foreground">From KES {statementData.account.initialCapitalKes.toLocaleString()}</div>
                     </div>
                     <div className="p-3 rounded-lg border text-center">
-                      <div className="text-xs text-gray-500">USD Balance</div>
-                      <div className="text-lg font-bold text-gray-900">${statementData.account.cashBalanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                      <div className="text-xs text-gray-400">From ${statementData.account.initialCapitalUsd.toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">USD Balance</div>
+                      <div className="text-lg font-bold text-foreground">${statementData.account.cashBalanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                      <div className="text-xs text-muted-foreground">From ${statementData.account.initialCapitalUsd.toLocaleString()}</div>
                     </div>
                     <div className="p-3 rounded-lg border text-center">
-                      <div className="text-xs text-gray-500">Total Trades</div>
-                      <div className="text-lg font-bold text-gray-900">{statementData.summary.totalTrades}</div>
-                      <div className="text-xs text-gray-400">{statementData.summary.buyTrades} buys · {statementData.summary.sellTrades} sells</div>
+                      <div className="text-xs text-muted-foreground">Total Trades</div>
+                      <div className="text-lg font-bold text-foreground">{statementData.summary.totalTrades}</div>
+                      <div className="text-xs text-muted-foreground">{statementData.summary.buyTrades} buys · {statementData.summary.sellTrades} sells</div>
                     </div>
                     <div className="p-3 rounded-lg border text-center">
-                      <div className="text-xs text-gray-500">Open Positions</div>
-                      <div className="text-lg font-bold text-gray-900">{statementData.summary.openPositions}</div>
-                      <div className="text-xs text-gray-400">Currently held</div>
+                      <div className="text-xs text-muted-foreground">Open Positions</div>
+                      <div className="text-lg font-bold text-foreground">{statementData.summary.openPositions}</div>
+                      <div className="text-xs text-muted-foreground">Currently held</div>
                     </div>
                   </div>
 
                   {/* Fees & P&L */}
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <div className="p-3 rounded-lg bg-gray-50 border text-sm">
-                      <div className="text-xs text-gray-500 mb-1">KES Fees Paid</div>
-                      <div className="font-semibold text-gray-900">KES {statementData.summary.totalCommissionKes.toFixed(2)} commission + KES {statementData.summary.totalFeesKes.toFixed(2)} fees</div>
+                    <div className="p-3 rounded-lg bg-muted border text-sm">
+                      <div className="text-xs text-muted-foreground mb-1">KES Fees Paid</div>
+                      <div className="font-semibold text-foreground">KES {statementData.summary.totalCommissionKes.toFixed(2)} commission + KES {statementData.summary.totalFeesKes.toFixed(2)} fees</div>
                     </div>
-                    <div className="p-3 rounded-lg bg-gray-50 border text-sm">
-                      <div className="text-xs text-gray-500 mb-1">USD Fees Paid</div>
-                      <div className="font-semibold text-gray-900">${statementData.summary.totalCommissionUsd.toFixed(2)} commission + ${statementData.summary.totalFeesUsd.toFixed(2)} fees</div>
+                    <div className="p-3 rounded-lg bg-muted border text-sm">
+                      <div className="text-xs text-muted-foreground mb-1">USD Fees Paid</div>
+                      <div className="font-semibold text-foreground">${statementData.summary.totalCommissionUsd.toFixed(2)} commission + ${statementData.summary.totalFeesUsd.toFixed(2)} fees</div>
                     </div>
-                    <div className="p-3 rounded-lg bg-gray-50 border text-sm">
-                      <div className="text-xs text-gray-500 mb-1">Realized P&L</div>
+                    <div className="p-3 rounded-lg bg-muted border text-sm">
+                      <div className="text-xs text-muted-foreground mb-1">Realized P&L</div>
                       <div className={`font-semibold ${statementData.summary.realizedPnlKes >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         KES {statementData.summary.realizedPnlKes.toFixed(2)}
                       </div>
@@ -1174,26 +1368,26 @@ export function PortfolioPage() {
 
                   {/* Trade History */}
                   <div>
-                    <h4 className="font-semibold text-gray-900 mb-2 text-sm">Trade History ({statementData.trades.length} trades)</h4>
+                    <h4 className="font-semibold text-foreground mb-2 text-sm">Trade History ({statementData.trades.length} trades)</h4>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b">
-                            <th className="text-left py-1 px-1 text-gray-500">Date</th>
-                            <th className="text-left py-1 px-1 text-gray-500">Ticker</th>
-                            <th className="text-center py-1 px-1 text-gray-500">Type</th>
-                            <th className="text-right py-1 px-1 text-gray-500">Shares</th>
-                            <th className="text-right py-1 px-1 text-gray-500">Price</th>
-                            <th className="text-right py-1 px-1 text-gray-500">Total</th>
-                            <th className="text-right py-1 px-1 text-gray-500">Commission</th>
-                            <th className="text-right py-1 px-1 text-gray-500">Fees</th>
+                            <th className="text-left py-1 px-1 text-muted-foreground">Date</th>
+                            <th className="text-left py-1 px-1 text-muted-foreground">Ticker</th>
+                            <th className="text-center py-1 px-1 text-muted-foreground">Type</th>
+                            <th className="text-right py-1 px-1 text-muted-foreground">Shares</th>
+                            <th className="text-right py-1 px-1 text-muted-foreground">Price</th>
+                            <th className="text-right py-1 px-1 text-muted-foreground">Total</th>
+                            <th className="text-right py-1 px-1 text-muted-foreground">Commission</th>
+                            <th className="text-right py-1 px-1 text-muted-foreground">Fees</th>
                           </tr>
                         </thead>
                         <tbody>
                           {statementData.trades.map((t: any) => (
-                            <tr key={t.id} className="border-b border-gray-100">
-                              <td className="py-1 px-1 text-gray-500">{new Date(t.date).toLocaleDateString()}</td>
-                              <td className="py-1 px-1 font-medium text-gray-900">{t.ticker}</td>
+                            <tr key={t.id} className="border-b border-border">
+                              <td className="py-1 px-1 text-muted-foreground">{new Date(t.date).toLocaleDateString()}</td>
+                              <td className="py-1 px-1 font-medium text-foreground">{t.ticker}</td>
                               <td className="text-center py-1 px-1">
                                 <span className={`px-1 py-0.5 rounded text-[9px] font-medium ${t.type === 'buy' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                   {t.type.toUpperCase()}
@@ -1202,8 +1396,8 @@ export function PortfolioPage() {
                               <td className="text-right py-1 px-1">{t.shares}</td>
                               <td className="text-right py-1 px-1">{t.currency === 'USD' ? '$' : 'KES '}{t.price.toFixed(2)}</td>
                               <td className="text-right py-1 px-1 font-medium">{t.currency === 'USD' ? '$' : 'KES '}{t.totalValue.toFixed(2)}</td>
-                              <td className="text-right py-1 px-1 text-gray-500">{t.currency === 'USD' ? '$' : 'KES '}{t.commission.toFixed(2)}</td>
-                              <td className="text-right py-1 px-1 text-gray-500">{t.currency === 'USD' ? '$' : 'KES '}{t.fees.toFixed(2)}</td>
+                              <td className="text-right py-1 px-1 text-muted-foreground">{t.currency === 'USD' ? '$' : 'KES '}{t.commission.toFixed(2)}</td>
+                              <td className="text-right py-1 px-1 text-muted-foreground">{t.currency === 'USD' ? '$' : 'KES '}{t.fees.toFixed(2)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1214,24 +1408,24 @@ export function PortfolioPage() {
                   {/* Open Positions */}
                   {statementData.openPositions.length > 0 && (
                     <div>
-                      <h4 className="font-semibold text-gray-900 mb-2 text-sm">Open Positions ({statementData.openPositions.length})</h4>
+                      <h4 className="font-semibold text-foreground mb-2 text-sm">Open Positions ({statementData.openPositions.length})</h4>
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b">
-                              <th className="text-left py-1 px-1 text-gray-500">Ticker</th>
-                              <th className="text-right py-1 px-1 text-gray-500">Shares</th>
-                              <th className="text-right py-1 px-1 text-gray-500">Avg Cost</th>
-                              <th className="text-right py-1 px-1 text-gray-500">Current</th>
-                              <th className="text-right py-1 px-1 text-gray-500">Value</th>
-                              <th className="text-right py-1 px-1 text-gray-500">P&L</th>
-                              <th className="text-right py-1 px-1 text-gray-500">Return</th>
+                              <th className="text-left py-1 px-1 text-muted-foreground">Ticker</th>
+                              <th className="text-right py-1 px-1 text-muted-foreground">Shares</th>
+                              <th className="text-right py-1 px-1 text-muted-foreground">Avg Cost</th>
+                              <th className="text-right py-1 px-1 text-muted-foreground">Current</th>
+                              <th className="text-right py-1 px-1 text-muted-foreground">Value</th>
+                              <th className="text-right py-1 px-1 text-muted-foreground">P&L</th>
+                              <th className="text-right py-1 px-1 text-muted-foreground">Return</th>
                             </tr>
                           </thead>
                           <tbody>
                             {statementData.openPositions.map((p: any, i: number) => (
-                              <tr key={i} className="border-b border-gray-100">
-                                <td className="py-1 px-1 font-medium text-gray-900">{p.ticker}</td>
+                              <tr key={i} className="border-b border-border">
+                                <td className="py-1 px-1 font-medium text-foreground">{p.ticker}</td>
                                 <td className="text-right py-1 px-1">{p.shares}</td>
                                 <td className="text-right py-1 px-1">{p.market === 'NSE' ? 'KES ' : '$'}{p.avgCost.toFixed(2)}</td>
                                 <td className="text-right py-1 px-1">{p.market === 'NSE' ? 'KES ' : '$'}{p.currentPrice.toFixed(2)}</td>
@@ -1248,13 +1442,28 @@ export function PortfolioPage() {
                 </div>
               )}
               {statementLoading && (
-                <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+                <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
               )}
-              <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => window.print()} className="border-gray-200 gap-1">
-                  <BarChartHorizontal className="w-4 h-4" /> Print
-                </Button>
-                <Button variant="outline" onClick={() => setShowStatement(false)} className="border-gray-200">Close</Button>
+              </div>
+              <DialogFooter className="px-6 pb-6 pt-2 shrink-0 gap-2 border-t bg-muted">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="inline-block w-2 h-2 rounded-full bg-gray-300" />
+                  Paper portfolio
+                </div>
+                <div className="flex gap-2">
+                  {paperStatementEmailSent && (
+                    <span className="text-xs text-green-600 bg-green-50 border border-green-200 rounded px-2 py-1 flex items-center gap-1">
+                      <Check className="w-3 h-3" /> Sent to {user?.email}
+                    </span>
+                  )}
+                  <Button variant="outline" onClick={handleEmailPaperStatement} disabled={emailingPaperStatement || !statementData} className="border-border gap-1 text-xs h-8">
+                    {emailingPaperStatement ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />} Email
+                  </Button>
+                  <Button variant="outline" onClick={() => window.print()} className="border-border gap-1">
+                    <BarChartHorizontal className="w-4 h-4" /> Print
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowStatement(false)} className="border-border">Close</Button>
+                </div>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -1280,26 +1489,26 @@ export function PortfolioPage() {
                 <Check className="w-4 h-4 text-green-600" />
               )}
               <span className={b.syncStatus === "error" ? "text-red-700 font-medium" : "text-green-700 font-medium"}>{b.accountName}</span>
-              <span className="text-gray-400 text-[10px]">
+              <span className="text-muted-foreground text-[10px]">
                 {b.accountType && `${b.accountType}`}{b.platform ? ` - ${b.platform}` : ''}{b.server ? ` @ ${b.server}` : ''}
               </span>
               {(b.latestSnapshot || b.accountInfo?.balance != null || b.accountInfo?.positionsCount != null) && (
-                <span className="text-gray-600 text-xs font-medium">
+                <span className="text-muted-foreground text-xs font-medium">
                   Bal: {((b.latestSnapshot?.balance ?? b.accountInfo?.balance) ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   Eq: {((b.latestSnapshot?.equity ?? b.accountInfo?.equity) ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   {b.latestSnapshot?.positions?.length ?? b.accountInfo?.positionsCount ?? 0} pos
                 </span>
               )}
               {b.lastSyncAt && (
-                <span className="text-gray-400 text-[10px]">{new Date(b.lastSyncAt).toLocaleDateString()} {new Date(b.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="text-muted-foreground text-[10px]">{new Date(b.lastSyncAt).toLocaleDateString()} {new Date(b.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               )}
               {b.dbId && (
-                <button onClick={() => handleSyncBroker(b)} disabled={b.syncStatus === "syncing"} className={`p-1 hover:bg-gray-100 rounded ml-1 ${b.syncStatus === "syncing" ? 'opacity-50 cursor-not-allowed' : ''}`} title="Sync now">
-                  <RefreshCw className={`w-3 h-3 text-gray-500 ${b.syncStatus === "syncing" ? 'animate-spin' : ''}`} />
+                <button onClick={() => handleSyncBroker(b)} disabled={b.syncStatus === "syncing"} className={`p-1 hover:bg-accent rounded ml-1 ${b.syncStatus === "syncing" ? 'opacity-50 cursor-not-allowed' : ''}`} title="Sync now">
+                  <RefreshCw className={`w-3 h-3 text-muted-foreground ${b.syncStatus === "syncing" ? 'animate-spin' : ''}`} />
                 </button>
               )}
-              <button onClick={() => { setSelectedBroker(b); setShowBrokerDetail(true); }} className="p-1 hover:bg-gray-100 rounded" title="View details">
-                <BarChart3 className="w-3 h-3 text-gray-500" />
+              <button onClick={() => { setSelectedBroker(b); setShowBrokerDetail(true); }} className="p-1 hover:bg-accent rounded" title="View details">
+                <BarChart3 className="w-3 h-3 text-muted-foreground" />
               </button>
               <button onClick={() => handleDisconnectBroker(b.id, b.dbId)} className="p-1 hover:bg-red-100 rounded" title="Disconnect">
                 <Unlink className="w-3 h-3 text-red-500" />
@@ -1309,31 +1518,44 @@ export function PortfolioPage() {
         </div>
       )}
 
+      {/* Market Status */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {marketStatus && ["nse", "global"].map((m) => {
+          const s = marketStatus[m as "nse" | "global"];
+          return (
+            <div key={m} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${s.open ? "bg-green-50 text-green-700 border border-green-200" : "bg-muted text-muted-foreground border border-border"}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${s.open ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
+              {m.toUpperCase()}: {s.label}
+            </div>
+          );
+        })}
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <Card className="bg-white border-gray-200 p-4">
-          <div className="text-gray-600 text-xs mb-1">Total Value (KES)</div>
-          <div className="text-gray-900 text-xl font-bold">KES {enhancedTotals.combinedKesValue.toLocaleString()}</div>
-          <div className="text-gray-500 text-xs mt-1">NSE: KES {totals.nseValue.toLocaleString()} &middot; Global: ${enhancedTotals.globalValue.toFixed(2)} @ {totals.fxRate.toFixed(2)}</div>
+        <Card className="bg-card border-border p-4">
+          <div className="text-muted-foreground text-xs mb-1">Total Value (KES)</div>
+          <div className="text-foreground text-xl font-bold">KES {enhancedTotals.combinedKesValue.toLocaleString()}</div>
+          <div className="text-muted-foreground text-xs mt-1">NSE: KES {totals.nseValue.toLocaleString()} &middot; Global: ${enhancedTotals.globalValue.toFixed(2)} @ {totals.fxRate.toFixed(2)}</div>
         </Card>
-        <Card className="bg-white border-gray-200 p-4">
-          <div className="text-gray-600 text-xs mb-1">NSE Portfolio</div>
-          <div className="text-gray-900 text-xl font-bold">KES {totals.nseValue.toLocaleString()}</div>
+        <Card className="bg-card border-border p-4">
+          <div className="text-muted-foreground text-xs mb-1">NSE Portfolio</div>
+          <div className="text-foreground text-xl font-bold">KES {totals.nseValue.toLocaleString()}</div>
           <div className={`text-xs mt-1 flex items-center gap-1 ${totals.nsePnLPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {totals.nsePnLPercent >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
             {totals.nsePnLPercent >= 0 ? '+' : ''}{totals.nsePnLPercent}% ({totals.nseCount} holdings)
           </div>
         </Card>
-        <Card className="bg-white border-gray-200 p-4">
-          <div className="text-gray-600 text-xs mb-1">Global Portfolio</div>
-          <div className="text-gray-900 text-xl font-bold">${enhancedTotals.globalValue.toFixed(2)}</div>
+        <Card className="bg-card border-border p-4">
+          <div className="text-muted-foreground text-xs mb-1">Global Portfolio</div>
+          <div className="text-foreground text-xl font-bold">${enhancedTotals.globalValue.toFixed(2)}</div>
           <div className={`text-xs mt-1 flex items-center gap-1 ${enhancedTotals.globalPnLPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {enhancedTotals.globalPnLPercent >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
             {enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}{enhancedTotals.globalPnLPercent}% ({brokerTotals.posCount} pos)
           </div>
         </Card>
-        <Card className="bg-white border-gray-200 p-4">
-          <div className="text-gray-600 text-xs mb-1">Total Return</div>
+        <Card className="bg-card border-border p-4">
+          <div className="text-muted-foreground text-xs mb-1">Total Return</div>
           <div className={`text-xl font-bold flex items-center gap-1 ${enhancedTotals.totalPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {enhancedTotals.totalPnL >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
             {enhancedTotals.totalPnL >= 0 ? '+' : ''}KES {Math.abs(enhancedTotals.totalPnL).toLocaleString()}
@@ -1342,15 +1564,15 @@ export function PortfolioPage() {
             {enhancedTotals.pnlPercent >= 0 ? '+' : ''}{enhancedTotals.pnlPercent}% overall return
           </div>
         </Card>
-        <Card className="bg-white border-gray-200 p-4">
-          <div className="text-gray-600 text-xs mb-1">Holdings</div>
-          <div className="text-gray-900 text-xl font-bold">{mergedHoldings.length}</div>
-          <div className="text-gray-500 text-xs mt-1">{totals.nseCount} NSE · {enhancedTotals.globalCount} Global</div>
+        <Card className="bg-card border-border p-4">
+          <div className="text-muted-foreground text-xs mb-1">Holdings</div>
+          <div className="text-foreground text-xl font-bold">{mergedHoldings.length}</div>
+          <div className="text-muted-foreground text-xs mt-1">{totals.nseCount} NSE · {enhancedTotals.globalCount} Global</div>
         </Card>
-        <Card className="bg-white border-gray-200 p-4">
-          <div className="text-gray-600 text-xs mb-1">Connected</div>
-          <div className="text-gray-900 text-xl font-bold">{brokerTotals.activeBrokerCount}</div>
-          <div className="text-gray-500 text-xs mt-1">{brokerTotals.activeBrokerCount > 0 ? "Accounts linked" : "Not linked"}</div>
+        <Card className="bg-card border-border p-4">
+          <div className="text-muted-foreground text-xs mb-1">Connected</div>
+          <div className="text-foreground text-xl font-bold">{brokerTotals.activeBrokerCount}</div>
+          <div className="text-muted-foreground text-xs mt-1">{brokerTotals.activeBrokerCount > 0 ? "Accounts linked" : "Not linked"}</div>
         </Card>
       </div>
 
@@ -1359,7 +1581,7 @@ export function PortfolioPage() {
         <div className="flex items-center gap-2">
           {["All", "NSE", "Global"].map(m => (
             <button key={m} onClick={() => setMarketFilter(m as any)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${marketFilter === m ? "bg-[#0D7490] text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${marketFilter === m ? "bg-[#0D7490] text-white shadow-sm" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
               {m === "All" ? "All Markets" : m === "NSE" ? "NSE Stocks" : "Global Stocks"}
             </button>
           ))}
@@ -1370,42 +1592,42 @@ export function PortfolioPage() {
       </div>
 
       {/* Holdings Table */}
-      <Card className="bg-white border-gray-200 p-6">
-        <h3 className="text-gray-900 font-semibold mb-4">Holdings</h3>
+      <Card className="bg-card border-border p-6">
+        <h3 className="text-foreground font-semibold mb-4">Holdings</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left text-gray-600 py-3 px-2 font-medium">Stock</th>
-                <th className="text-center text-gray-600 py-3 px-2 font-medium">Market</th>
-                <th className="text-right text-gray-600 py-3 px-2 font-medium">Shares</th>
-                <th className="text-right text-gray-600 py-3 px-2 font-medium">Avg Cost</th>
-                <th className="text-right text-gray-600 py-3 px-2 font-medium">Current</th>
-                <th className="text-right text-gray-600 py-3 px-2 font-medium">Value</th>
-                <th className="text-right text-gray-600 py-3 px-2 font-medium">P/L</th>
-                <th className="text-center text-gray-600 py-3 px-2 font-medium w-20">Actions</th>
+              <tr className="border-b border-border">
+                <th className="text-left text-muted-foreground py-3 px-2 font-medium">Stock</th>
+                <th className="text-center text-muted-foreground py-3 px-2 font-medium">Market</th>
+                <th className="text-right text-muted-foreground py-3 px-2 font-medium">Shares</th>
+                <th className="text-right text-muted-foreground py-3 px-2 font-medium">Avg Cost</th>
+                <th className="text-right text-muted-foreground py-3 px-2 font-medium">Current</th>
+                <th className="text-right text-muted-foreground py-3 px-2 font-medium">Value</th>
+                <th className="text-right text-muted-foreground py-3 px-2 font-medium">P/L</th>
+                <th className="text-center text-muted-foreground py-3 px-2 font-medium w-20">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredHoldings.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-8 text-gray-400 text-sm">No holdings yet. {brokers.length > 0 ? 'Sync your broker accounts to see positions here.' : 'Add your first position or connect a broker account to start tracking.'}</td>
+                  <td colSpan={8} className="text-center py-8 text-muted-foreground text-sm">No holdings yet. {brokers.length > 0 ? 'Sync your broker accounts to see positions here.' : 'Add your first position or connect a broker account to start tracking.'}</td>
                 </tr>
               ) : (
                 filteredHoldings.map((h: any) => (
-                  <tr key={`${h.ticker}-${h._brokerName || h.market}-${h.shares || '0'}-${h.avgCost || '0'}-${h.pnl || '0'}`} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={`${h.ticker}-${h._brokerName || h.market}-${h.shares || '0'}-${h.avgCost || '0'}-${h.pnl || '0'}`} className="border-b border-border hover:bg-accent">
                     <td className="py-3 px-2">
                       {h._brokerName ? (
                         <div className="text-left">
-                          <div className="text-gray-900 font-semibold">{h.ticker}</div>
-                          <div className="text-gray-500 text-xs">{h.name}</div>
+                          <div className="text-foreground font-semibold">{h.ticker}</div>
+                          <div className="text-muted-foreground text-xs">{h.name}</div>
                           <Badge className="bg-blue-100 text-blue-700 text-[9px] px-1 py-0.5 mt-0.5">Synced</Badge>
                         </div>
                       ) : (
                         <button onClick={() => navigate(`/app/stock/${h.ticker}`)} className="text-left hover:text-[#0D7490] transition-colors">
-                          <div className="text-gray-900 font-semibold">{h.ticker}</div>
-                          <div className="text-gray-500 text-xs">{h.name}</div>
-                          <div className="text-gray-400 text-xs">{h.sector}</div>
+                          <div className="text-foreground font-semibold">{h.ticker}</div>
+                          <div className="text-muted-foreground text-xs">{h.name}</div>
+                          <div className="text-muted-foreground text-xs">{h.sector}</div>
                         </button>
                       )}
                     </td>
@@ -1420,10 +1642,10 @@ export function PortfolioPage() {
                         </Badge>
                       )}
                     </td>
-                    <td className="text-right text-gray-900 py-3 px-2">{h.shares}</td>
-                    <td className="text-right text-gray-900 py-3 px-2">{h.market === "NSE" ? "KES " : "$"}{h.avgCost}</td>
-                    <td className="text-right text-gray-900 py-3 px-2">{h.market === "NSE" ? "KES " : "$"}{h.currentPrice || h.avgCost}</td>
-                    <td className="text-right text-gray-900 py-3 px-2 font-medium">{h.market === "NSE" ? "KES " : "$"}{h.value}</td>
+                    <td className="text-right text-foreground py-3 px-2">{h.shares}</td>
+                    <td className="text-right text-foreground py-3 px-2">{h.market === "NSE" ? "KES " : "$"}{h.avgCost}</td>
+                    <td className="text-right text-foreground py-3 px-2">{h.market === "NSE" ? "KES " : "$"}{h.currentPrice || h.avgCost}</td>
+                    <td className="text-right text-foreground py-3 px-2 font-medium">{h.market === "NSE" ? "KES " : "$"}{h.value}</td>
                     <td className="text-right py-3 px-2">
                       <span className={`flex items-center gap-1 justify-end font-medium ${h.isPositive ? 'text-green-600' : 'text-red-600'}`}>
                         {h.isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
@@ -1432,11 +1654,11 @@ export function PortfolioPage() {
                     </td>
                     <td className="text-center py-3 px-2">
                       {h._brokerName ? (
-                        <span className="text-gray-400 text-xs">Auto</span>
+                        <span className="text-muted-foreground text-xs">Auto</span>
                       ) : (
                         <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => setShowEditHolding({ ...h })} className="p-1.5 hover:bg-gray-100 rounded transition-colors" title="Edit">
-                            <Edit3 className="w-3.5 h-3.5 text-gray-500" />
+                          <button onClick={() => setShowEditHolding({ ...h })} className="p-1.5 hover:bg-accent rounded transition-colors" title="Edit">
+                            <Edit3 className="w-3.5 h-3.5 text-muted-foreground" />
                           </button>
                           <button onClick={() => handleDeleteHolding(h)} className="p-1.5 hover:bg-red-50 rounded transition-colors" title="Delete">
                             <Trash2 className="w-3.5 h-3.5 text-red-400" />
@@ -1454,29 +1676,29 @@ export function PortfolioPage() {
 
       {/* Trade History */}
       {brokers.length > 0 && (
-        <Card className="bg-white border-gray-200 p-6">
+        <Card className="bg-card border-border p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-gray-900 font-semibold flex items-center gap-2">
+            <h3 className="text-foreground font-semibold flex items-center gap-2">
               <History className="w-5 h-5 text-[#0D7490]" />
               Trade History
             </h3>
-            <Badge variant="outline" className="text-xs border-gray-300 text-gray-500">
+            <Badge variant="outline" className="text-xs border-gray-300 text-muted-foreground">
               {brokers.reduce((sum, b) => sum + (b.latestSnapshot?.trade_history?.length || 0), 0)} trades
             </Badge>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200">
+                <tr className="border-b border-border">
                   {['Account', 'Time', 'Ticket', 'Type', 'Volume', 'Symbol', 'Price', 'Close', 'Profit', 'Commission'].map(h => (
-                    <th key={h} className={`${h === 'Time' || h === 'Type' || h === 'Account' || h === 'Symbol' ? 'text-left' : 'text-right'} text-gray-600 py-3 px-2 font-medium`}>{h}</th>
+                    <th key={h} className={`${h === 'Time' || h === 'Type' || h === 'Account' || h === 'Symbol' ? 'text-left' : 'text-right'} text-muted-foreground py-3 px-2 font-medium`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {brokers.filter(b => b.latestSnapshot?.trade_history?.length).length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="text-center py-8 text-gray-400 text-sm">No trade history from connected brokers</td>
+                    <td colSpan={10} className="text-center py-8 text-muted-foreground text-sm">No trade history from connected brokers</td>
                   </tr>
                 ) : (
                   [...brokers].flatMap(b =>
@@ -1485,33 +1707,33 @@ export function PortfolioPage() {
                     .map((trade, i) => {
                       const profit = parseFloat(trade.profit || '0');
                       return (
-                        <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                        <tr key={i} className="border-b border-border hover:bg-accent">
                           <td className="py-2.5 px-2">
                             <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-600">{trade._brokerName}</Badge>
                           </td>
-                          <td className="py-2.5 px-2 text-gray-500 whitespace-nowrap text-xs">{trade.time || '-'}</td>
-                          <td className="text-right py-2.5 px-2 text-gray-700 text-xs">{trade.ticket || '-'}</td>
+                          <td className="py-2.5 px-2 text-muted-foreground whitespace-nowrap text-xs">{trade.time || '-'}</td>
+                          <td className="text-right py-2.5 px-2 text-foreground text-xs">{trade.ticket || '-'}</td>
                           <td className="py-2.5 px-2">
                             <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                               (trade.type || '').toLowerCase() === 'buy' ? 'bg-green-100 text-green-700' :
                               (trade.type || '').toLowerCase() === 'sell' ? 'bg-red-100 text-red-700' :
                               (trade.type || '').toLowerCase() === 'balance' ? 'bg-blue-100 text-blue-700' :
-                              'bg-gray-100 text-gray-600'
+                              'bg-muted text-muted-foreground'
                             }`}>
                               {trade.type || '-'}
                             </span>
                           </td>
-                          <td className="text-right py-2.5 px-2 text-gray-900">{trade.volume || '-'}</td>
-                          <td className="py-2.5 px-2 font-medium text-gray-900">{trade.symbol || '-'}</td>
-                          <td className="text-right py-2.5 px-2 text-gray-900">{trade.price || '-'}</td>
-                          <td className="text-right py-2.5 px-2 text-gray-900">{trade.price_2 || '-'}</td>
+                          <td className="text-right py-2.5 px-2 text-foreground">{trade.volume || '-'}</td>
+                          <td className="py-2.5 px-2 font-medium text-foreground">{trade.symbol || '-'}</td>
+                          <td className="text-right py-2.5 px-2 text-foreground">{trade.price || '-'}</td>
+                          <td className="text-right py-2.5 px-2 text-foreground">{trade.price_2 || '-'}</td>
                           <td className="text-right py-2.5 px-2">
                             <span className={`flex items-center gap-1 justify-end font-medium ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                               {profit >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                               {trade.profit || '0'}
                             </span>
                           </td>
-                          <td className="text-right py-2.5 px-2 text-gray-500 text-xs">{trade.commission || '-'}</td>
+                          <td className="text-right py-2.5 px-2 text-muted-foreground text-xs">{trade.commission || '-'}</td>
                         </tr>
                       );
                     })
@@ -1525,20 +1747,20 @@ export function PortfolioPage() {
       {/* AI Recommendations + Charts + Advice */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* AI Recommendations */}
-        <Card className="bg-white border-gray-200 p-6">
+        <Card className="bg-card border-border p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-[#0D7490]" />
-              <h3 className="text-gray-900 font-semibold">AI Recommendations</h3>
+              <h3 className="text-foreground font-semibold">AI Recommendations</h3>
             </div>
-            <button onClick={handleRefresh} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title="Refresh signals">
-              <RefreshCw className={`w-4 h-4 text-gray-400 ${refreshing ? 'animate-spin' : ''}`} />
+            <button onClick={handleRefresh} className="p-1.5 hover:bg-accent rounded-lg transition-colors" title="Refresh signals">
+              <RefreshCw className={`w-4 h-4 text-muted-foreground ${refreshing ? 'animate-spin' : ''}`} />
             </button>
           </div>
           {loadingRecs ? (
-            <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+            <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
           ) : recommendations.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-sm">
+            <div className="text-center py-8 text-muted-foreground text-sm">
               <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
               No AI recommendations available yet.
             </div>
@@ -1559,8 +1781,8 @@ export function PortfolioPage() {
                           sig === "Strong Sell" || sig === "Sell" ? "bg-red-600" :
                           "bg-yellow-500"
                         }`}>{sig}</span>
-                        <span className="text-gray-900 font-semibold">{rec.symbol || rec.ticker}</span>
-                        {rec.name && <span className="text-gray-500 text-xs hidden md:inline">{rec.name}</span>}
+                        <span className="text-foreground font-semibold">{rec.symbol || rec.ticker}</span>
+                        {rec.name && <span className="text-muted-foreground text-xs hidden md:inline">{rec.name}</span>}
                       </div>
                       <div className="flex items-center gap-2">
                         {rec.market && (
@@ -1568,11 +1790,11 @@ export function PortfolioPage() {
                             {rec.market}
                           </Badge>
                         )}
-                        <span className="text-xs text-gray-500">{rec.confidence}</span>
+                        <span className="text-xs text-muted-foreground">{rec.confidence}</span>
                       </div>
                     </div>
-                    {rec.reason && <p className="text-gray-600 text-xs mt-1 line-clamp-2">{rec.reason}</p>}
-                    {rec.target1 && <p className="text-gray-400 text-xs mt-1">Target: {rec.currency === "USD" ? "$" : "KES "}{rec.target1}</p>}
+                    {rec.reason && <p className="text-muted-foreground text-xs mt-1 line-clamp-2">{rec.reason}</p>}
+                    {rec.target1 && <p className="text-muted-foreground text-xs mt-1">Target: {rec.currency === "USD" ? "$" : "KES "}{rec.target1}</p>}
                   </div>
                 );
               })}
@@ -1581,13 +1803,13 @@ export function PortfolioPage() {
         </Card>
 
         {/* Sector Allocation */}
-        <Card className="bg-white border-gray-200 p-6">
+        <Card className="bg-card border-border p-6">
           <div className="flex items-center gap-2 mb-4">
             <PieChart className="w-5 h-5 text-[#0D7490]" />
-            <h3 className="text-gray-900 font-semibold">Sector Allocation</h3>
+            <h3 className="text-foreground font-semibold">Sector Allocation</h3>
           </div>
           {sectorAllocation.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-sm">No holdings to display allocation.</div>
+            <div className="text-center py-8 text-muted-foreground text-sm">No holdings to display allocation.</div>
           ) : (
             <>
               <ResponsiveContainer width="100%" height={200}>
@@ -1604,9 +1826,9 @@ export function PortfolioPage() {
                   <div key={item.sector} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 rounded" style={{ backgroundColor: item.color }}></div>
-                      <span className="text-gray-700 text-sm">{item.sector}</span>
+                      <span className="text-foreground text-sm">{item.sector}</span>
                     </div>
-                    <span className="text-gray-900 text-sm font-medium">{item.pct}%</span>
+                    <span className="text-foreground text-sm font-medium">{item.pct}%</span>
                   </div>
                 ))}
               </div>
@@ -1615,25 +1837,25 @@ export function PortfolioPage() {
         </Card>
 
         {/* AI Portfolio Advice */}
-        <Card className="bg-white border-gray-200 p-6">
+        <Card className="bg-card border-border p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9]">
                 <BrainCircuit className="w-4 h-4 text-white" />
               </div>
-              <h3 className="text-gray-900 font-semibold">AI Portfolio Advice</h3>
+              <h3 className="text-foreground font-semibold">AI Portfolio Advice</h3>
             </div>
-            <Button size="sm" variant="outline" onClick={handleGetAdvice} className="border-gray-200 gap-1">
+            <Button size="sm" variant="outline" onClick={handleGetAdvice} className="border-border gap-1">
               <RefreshCw className={`w-3.5 h-3.5 ${loadingAdvice ? 'animate-spin' : ''}`} />
               Analyze
             </Button>
           </div>
           {!portfolioAdvice ? (
-            <div className="text-center py-8 text-gray-400 text-sm">
+            <div className="text-center py-8 text-muted-foreground text-sm">
               <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 flex items-center justify-center">
                 <BrainCircuit className="w-6 h-6 text-[#0D7490]/40" />
               </div>
-              <p className="font-medium text-gray-500 mb-1">Ready when you are</p>
+              <p className="font-medium text-muted-foreground mb-1">Ready when you are</p>
               <p>Click <span className="text-[#0D7490] font-medium">Analyze</span> for AI-powered rebalancing advice</p>
             </div>
           ) : loadingAdvice ? (
@@ -1644,35 +1866,35 @@ export function PortfolioPage() {
               <div className="bg-gradient-to-r from-[#0D7490]/5 to-[#0EA5E9]/5 rounded-lg p-3 border border-[#0D7490]/10">
                 <div className="flex items-start gap-2">
                   <Sparkles className="w-4 h-4 text-[#0D7490] mt-0.5 shrink-0" />
-                  <p className="text-sm text-gray-700 leading-relaxed">{portfolioAdvice.summary}</p>
+                  <p className="text-sm text-foreground leading-relaxed">{portfolioAdvice.summary}</p>
                 </div>
               </div>
 
               {/* Key Metrics */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="p-3 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
-                  <div className="text-[11px] font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Diversification</div>
+                  <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Diversification</div>
                   <div className={`text-2xl font-bold ${portfolioAdvice.diversification.score >= 70 ? 'text-emerald-600' : portfolioAdvice.diversification.score >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
                     {portfolioAdvice.diversification.score}%
                   </div>
-                  <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${portfolioAdvice.diversification.score >= 70 ? 'bg-emerald-500' : portfolioAdvice.diversification.score >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
                       style={{ width: `${portfolioAdvice.diversification.score}%` }} />
                   </div>
                 </div>
                 <div className="p-3 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
-                  <div className="text-[11px] font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Risk Level</div>
+                  <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Risk Level</div>
                   <div className={`text-lg font-bold ${portfolioAdvice.riskAssessment.startsWith('Low') ? 'text-emerald-600' : portfolioAdvice.riskAssessment.startsWith('Moderate') ? 'text-amber-600' : 'text-red-600'}`}>
                     {portfolioAdvice.riskAssessment.split(' —')[0]}
                   </div>
-                  <div className="mt-1 text-[11px] text-gray-400 leading-tight">
+                  <div className="mt-1 text-[11px] text-muted-foreground leading-tight">
                     {portfolioAdvice.riskAssessment.includes('—') ? portfolioAdvice.riskAssessment.split('— ')[1].substring(0, 40) + '...' : ''}
                   </div>
                 </div>
                 <div className="p-3 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
-                  <div className="text-[11px] font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Positions</div>
-                  <div className="text-2xl font-bold text-gray-900">{portfolioAdvice.recommendations.length}</div>
-                  <div className="mt-1 text-[11px] text-gray-400">
+                  <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Positions</div>
+                  <div className="text-2xl font-bold text-foreground">{portfolioAdvice.recommendations.length}</div>
+                  <div className="mt-1 text-[11px] text-muted-foreground">
                     {portfolioAdvice.recommendations.filter(r => r.action === 'Accumulate').length} buys &middot; {portfolioAdvice.recommendations.filter(r => r.action === 'Reduce' || r.action === 'Trim' || r.action === 'Take Partial Profits').length} sells
                   </div>
                 </div>
@@ -1689,24 +1911,24 @@ export function PortfolioPage() {
                     <div key={i} className={`p-3 rounded-lg border-l-4 text-sm ${
                       isBuy ? 'border-l-emerald-500 border-green-100 bg-green-50/50' :
                       isSell ? 'border-l-red-500 border-red-100 bg-red-50/50' :
-                      'border-l-gray-400 border-gray-200 bg-gray-50/50'
+                      'border-l-gray-400 border-border bg-muted/50'
                     }`}>
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => navigate(`/app/stock/${rec.ticker}`)} className="font-semibold text-gray-900 hover:text-[#0D7490]">{rec.ticker}</button>
+                          <button onClick={() => navigate(`/app/stock/${rec.ticker}`)} className="font-semibold text-foreground hover:text-[#0D7490]">{rec.ticker}</button>
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold text-white ${
-                            isBuy ? 'bg-emerald-600' : isSell ? 'bg-red-600' : 'bg-gray-500'
+                            isBuy ? 'bg-emerald-600' : isSell ? 'bg-red-600' : 'bg-muted0'
                           }`}>{rec.action}</span>
                         </div>
-                        <span className="text-[11px] text-gray-500 font-medium">{rec.allocation} <span className="text-gray-300">→</span> {rec.targetAllocation}</span>
+                        <span className="text-[11px] text-muted-foreground font-medium">{rec.allocation} <span className="text-muted-foreground">→</span> {rec.targetAllocation}</span>
                       </div>
-                      <p className="text-xs text-gray-600 leading-relaxed">{rec.reason}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{rec.reason}</p>
                       <div className="flex items-center gap-4 mt-2">
-                        <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
                           <div className={`h-full rounded-full ${isBuy ? 'bg-emerald-500' : isSell ? 'bg-red-500' : 'bg-gray-400'}`}
                             style={{ width: `${Math.min(100, allocNum)}%` }} />
                         </div>
-                        <span className="text-[11px] text-gray-400 font-medium shrink-0">P/L: {rec.pnlPct}</span>
+                        <span className="text-[11px] text-muted-foreground font-medium shrink-0">P/L: {rec.pnlPct}</span>
                       </div>
                     </div>
                   );
@@ -1727,13 +1949,14 @@ export function PortfolioPage() {
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div ref={searchRef} className="relative">
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Ticker *</label>
-                <Input placeholder="e.g., SCOM" value={newHolding.ticker} onChange={(e) => setNewHolding({ ...newHolding, ticker: e.target.value.toUpperCase() })} className="bg-white border-gray-200" />
-                {stockSuggestions.length > 0 && (
-                  <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                <label className="text-sm font-medium text-foreground mb-1 block">Ticker *</label>
+                <Input placeholder="e.g., SCOM" value={newHolding.ticker} onChange={(e) => setNewHolding({ ...newHolding, ticker: e.target.value.toUpperCase() })} className="bg-card border-border" />
+                {(stockSuggestions.length > 0 || yahooSuggestions.length > 0) && (
+                  <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
                     {stockSuggestions.map((s) => (
-                      <button key={s.ticker} type="button" onClick={async () => { 
+                      <button key={`curated-${s.ticker}`} type="button" onClick={async () => {
                         setStockSuggestions([]);
+                        setYahooSuggestions([]);
                         setNewHolding(prev => ({ ...prev, ticker: s.ticker, name: s.name, sector: s.sector, market: s.market as "NSE" | "Global" }));
                         try {
                           const marketParam = s.market === "NSE" ? "?market=nse" : "";
@@ -1743,22 +1966,47 @@ export function PortfolioPage() {
                             if (data?.price) setNewHolding(prev => ({ ...prev, avgCost: String(data.price) }));
                           }
                         } catch {}
-                      }} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center justify-between">
+                      }} className="w-full text-left px-3 py-2 hover:bg-accent flex items-center justify-between">
                         <div>
-                          <span className="font-medium text-gray-900">{s.ticker}</span>
-                          <span className="text-gray-500 text-sm ml-2">{s.name}</span>
+                          <span className="font-medium text-foreground">{s.ticker}</span>
+                          <span className="text-muted-foreground text-sm ml-2">{s.name}</span>
                         </div>
                         <Badge variant="outline" className={`text-[10px] ${s.market === "NSE" ? "border-[#0D7490] text-[#0D7490]" : "border-purple-300 text-purple-600"}`}>{s.market}</Badge>
                       </button>
                     ))}
+                    {yahooSuggestions.length > 0 && (
+                      <>
+                        {stockSuggestions.length > 0 && <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted/50">Yahoo Finance results</div>}
+                        {yahooSuggestions.map((s) => (
+                          <button key={`yahoo-${s.ticker}`} type="button" onClick={async () => {
+                            setStockSuggestions([]);
+                            setYahooSuggestions([]);
+                            setNewHolding(prev => ({ ...prev, ticker: s.ticker, name: s.name, sector: s.sector, market: s.market as "NSE" | "Global" }));
+                            try {
+                              const res = await fetch(`${API_URL}/stock/${s.ticker}`);
+                              if (res.ok) {
+                                const data = await res.json();
+                                if (data?.price) setNewHolding(prev => ({ ...prev, avgCost: String(data.price) }));
+                              }
+                            } catch {}
+                          }} className="w-full text-left px-3 py-2 hover:bg-accent flex items-center justify-between">
+                            <div>
+                              <span className="font-medium text-foreground">{s.ticker}</span>
+                              <span className="text-muted-foreground text-sm ml-2">{s.name}</span>
+                            </div>
+                            <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600">Yahoo</Badge>
+                          </button>
+                        ))}
+                      </>
+                    )}
                   </div>
                 )}
-                {searchingStock && <div className="absolute right-3 top-9"><Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" /></div>}
+                {(searchingStock || searchingYahoo) && <div className="absolute right-3 top-9"><Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /></div>}
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Market</label>
+                <label className="text-sm font-medium text-foreground mb-1 block">Market</label>
                 <Select value={newHolding.market} onValueChange={(v) => setNewHolding({ ...newHolding, market: v as "NSE" | "Global" })}>
-                  <SelectTrigger className="bg-white border-gray-200"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="NSE">NSE</SelectItem>
                     <SelectItem value="Global">Global</SelectItem>
@@ -1767,23 +2015,23 @@ export function PortfolioPage() {
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Company Name</label>
-              <Input placeholder="e.g., Safaricom PLC" value={newHolding.name} onChange={(e) => setNewHolding({ ...newHolding, name: e.target.value })} className="bg-white border-gray-200" />
+              <label className="text-sm font-medium text-foreground mb-1 block">Company Name</label>
+              <Input placeholder="e.g., Safaricom PLC" value={newHolding.name} onChange={(e) => setNewHolding({ ...newHolding, name: e.target.value })} className="bg-card border-border" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Shares *</label>
-                <Input type="number" step="any" placeholder="e.g., 500" value={newHolding.shares} onChange={(e) => setNewHolding({ ...newHolding, shares: e.target.value })} className="bg-white border-gray-200" />
+                <label className="text-sm font-medium text-foreground mb-1 block">Shares *</label>
+                <Input type="number" step="any" placeholder="e.g., 500" value={newHolding.shares} onChange={(e) => setNewHolding({ ...newHolding, shares: e.target.value })} className="bg-card border-border" />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Avg Cost *</label>
-                <Input type="number" step="any" placeholder="e.g., 24.50" value={newHolding.avgCost} onChange={(e) => setNewHolding({ ...newHolding, avgCost: e.target.value })} className="bg-white border-gray-200" />
+                <label className="text-sm font-medium text-foreground mb-1 block">Avg Cost *</label>
+                <Input type="number" step="any" placeholder="e.g., 24.50" value={newHolding.avgCost} onChange={(e) => setNewHolding({ ...newHolding, avgCost: e.target.value })} className="bg-card border-border" />
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Sector</label>
+              <label className="text-sm font-medium text-foreground mb-1 block">Sector</label>
               <Select value={newHolding.sector} onValueChange={(v) => setNewHolding({ ...newHolding, sector: v })}>
-                <SelectTrigger className="bg-white border-gray-200"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {SECTORS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
@@ -1791,7 +2039,7 @@ export function PortfolioPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowAddHolding(false); resetNewHolding(); }} className="border-gray-200">Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowAddHolding(false); resetNewHolding(); }} className="border-border">Cancel</Button>
             <Button onClick={handleAddHolding} disabled={!newHolding.ticker.trim() || !newHolding.shares || !newHolding.avgCost} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
               <Plus className="w-4 h-4" /> Add
             </Button>
@@ -1810,13 +2058,13 @@ export function PortfolioPage() {
             <div className="space-y-4 py-2">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Ticker</label>
-                  <Input value={showEditHolding.ticker} onChange={(e) => setShowEditHolding({ ...showEditHolding, ticker: e.target.value })} className="bg-white border-gray-200" />
+                  <label className="text-sm font-medium text-foreground mb-1 block">Ticker</label>
+                  <Input value={showEditHolding.ticker} onChange={(e) => setShowEditHolding({ ...showEditHolding, ticker: e.target.value })} className="bg-card border-border" />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Market</label>
+                  <label className="text-sm font-medium text-foreground mb-1 block">Market</label>
                   <Select value={showEditHolding.market} onValueChange={(v) => setShowEditHolding({ ...showEditHolding, market: v as "NSE" | "Global" })}>
-                    <SelectTrigger className="bg-white border-gray-200"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="NSE">NSE</SelectItem>
                       <SelectItem value="Global">Global</SelectItem>
@@ -1825,23 +2073,23 @@ export function PortfolioPage() {
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Company Name</label>
-                <Input value={showEditHolding.name} onChange={(e) => setShowEditHolding({ ...showEditHolding, name: e.target.value })} className="bg-white border-gray-200" />
+                <label className="text-sm font-medium text-foreground mb-1 block">Company Name</label>
+                <Input value={showEditHolding.name} onChange={(e) => setShowEditHolding({ ...showEditHolding, name: e.target.value })} className="bg-card border-border" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Shares</label>
-                  <Input type="number" step="any" value={String(showEditHolding.shares)} onChange={(e) => setShowEditHolding({ ...showEditHolding, shares: parseFloat(e.target.value) || 0 })} className="bg-white border-gray-200" />
+                  <label className="text-sm font-medium text-foreground mb-1 block">Shares</label>
+                  <Input type="number" step="any" value={String(showEditHolding.shares)} onChange={(e) => setShowEditHolding({ ...showEditHolding, shares: parseFloat(e.target.value) || 0 })} className="bg-card border-border" />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Avg Cost</label>
-                  <Input type="number" step="any" value={showEditHolding.avgCost} onChange={(e) => setShowEditHolding({ ...showEditHolding, avgCost: e.target.value })} className="bg-white border-gray-200" />
+                  <label className="text-sm font-medium text-foreground mb-1 block">Avg Cost</label>
+                  <Input type="number" step="any" value={showEditHolding.avgCost} onChange={(e) => setShowEditHolding({ ...showEditHolding, avgCost: e.target.value })} className="bg-card border-border" />
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Sector</label>
+                <label className="text-sm font-medium text-foreground mb-1 block">Sector</label>
                 <Select value={showEditHolding.sector} onValueChange={(v) => setShowEditHolding({ ...showEditHolding, sector: v })}>
-                  <SelectTrigger className="bg-white border-gray-200"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {SECTORS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>
@@ -1850,7 +2098,7 @@ export function PortfolioPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditHolding(null)} className="border-gray-200">Cancel</Button>
+            <Button variant="outline" onClick={() => setShowEditHolding(null)} className="border-border">Cancel</Button>
             <Button onClick={handleEditHolding} disabled={!showEditHolding?.ticker.trim()} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
               <Check className="w-4 h-4" /> Save
             </Button>
@@ -1866,13 +2114,13 @@ export function PortfolioPage() {
             <DialogDescription>Enter your brokerage account credentials to sync holdings.</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-2 space-y-4">
-            <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+            <div className="flex border border-border rounded-lg overflow-hidden">
               <button type="button" onClick={() => setParseMode('manual')}
-                className={`flex-1 py-2 text-sm font-medium transition-colors ${parseMode === 'manual' ? 'bg-[#0D7490] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                className={`flex-1 py-2 text-sm font-medium transition-colors ${parseMode === 'manual' ? 'bg-[#0D7490] text-white' : 'bg-card text-muted-foreground hover:bg-accent'}`}>
                 <Link2 className="w-3.5 h-3.5 inline mr-1.5" />Manual Entry
               </button>
               <button type="button" onClick={() => setParseMode('email')}
-                className={`flex-1 py-2 text-sm font-medium transition-colors ${parseMode === 'email' ? 'bg-[#0D7490] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                className={`flex-1 py-2 text-sm font-medium transition-colors ${parseMode === 'email' ? 'bg-[#0D7490] text-white' : 'bg-card text-muted-foreground hover:bg-accent'}`}>
                 <svg className="w-3.5 h-3.5 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>Paste Email
               </button>
             </div>
@@ -1880,12 +2128,12 @@ export function PortfolioPage() {
             {parseMode === 'email' && (
               <div className="space-y-3">
                 <div className="col-span-2">
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Paste Broker Email</label>
+                  <label className="text-sm font-medium text-foreground mb-1 block">Paste Broker Email</label>
                   <textarea value={emailText} onChange={(e) => setEmailText(e.target.value)}
                     placeholder={`Paste the email from your broker here...\n\nExample:\nLogin: 1000035515\nMaster Password: 39055230Secure!\nServer: IngotKE-Demo2\nPlatform: mt5`}
-                    className="w-full h-36 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#0D7490] font-mono"
+                    className="w-full h-36 rounded-lg border border-border bg-card px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#0D7490] font-mono"
                   />
-                  <p className="text-xs text-gray-400 mt-1">We'll extract Login, Password, Server, Platform, and Account Type automatically.</p>
+                  <p className="text-xs text-muted-foreground mt-1">We'll extract Login, Password, Server, Platform, and Account Type automatically.</p>
                 </div>
                 <Button onClick={async () => {
                   if (!emailText.trim()) return;
@@ -1929,51 +2177,51 @@ export function PortfolioPage() {
             {parseMode === 'manual' && (
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Broker</label>
-                <select value={newBroker.type} onChange={(e) => setNewBroker({ ...newBroker, type: e.target.value })} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D7490]">
+                <label className="text-sm font-medium text-foreground mb-1 block">Broker</label>
+                <select value={newBroker.type} onChange={(e) => setNewBroker({ ...newBroker, type: e.target.value })} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D7490]">
                   {BROKER_OPTIONS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
                 </select>
-                <p className="text-xs text-gray-400 mt-1">{BROKER_OPTIONS.find(b => b.value === newBroker.type)?.description}</p>
+                <p className="text-xs text-muted-foreground mt-1">{BROKER_OPTIONS.find(b => b.value === newBroker.type)?.description}</p>
               </div>
               <div className="col-span-2">
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Account Name <span className="text-red-500">*</span></label>
+                <label className="text-sm font-medium text-foreground mb-1 block">Account Name <span className="text-red-500">*</span></label>
                 <Input placeholder="e.g., My Trading Account" value={newBroker.accountName}
                   onChange={(e) => { setNewBroker({ ...newBroker, accountName: e.target.value }); setConnectErrors(prev => ({ ...prev, accountName: "" })); }}
                   onBlur={() => setConnectErrors(prev => ({ ...prev, accountName: validateBrokerField("accountName", newBroker.accountName) }))}
-                  className={`bg-white ${connectErrors.accountName ? "border-red-400" : "border-gray-200"}`} />
+                  className={`bg-card ${connectErrors.accountName ? "border-red-400" : "border-border"}`} />
                 {connectErrors.accountName && <p className="text-xs text-red-500 mt-1">{connectErrors.accountName}</p>}
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">{newBroker.type === 'alpaca' ? 'API Key ID' : 'Account ID'}</label>
+                <label className="text-sm font-medium text-foreground mb-1 block">{newBroker.type === 'alpaca' ? 'API Key ID' : 'Account ID'}</label>
                 <Input placeholder={newBroker.type === 'alpaca' ? 'e.g., AK123...' : newBroker.type === 'oanda' ? 'e.g., 123-456-789' : 'e.g., U1234567'} value={newBroker.accountId}
                   onChange={(e) => { setNewBroker({ ...newBroker, accountId: e.target.value }); setConnectErrors(prev => ({ ...prev, accountId: "" })); }}
                   onBlur={() => setConnectErrors(prev => ({ ...prev, accountId: validateBrokerField("accountId", newBroker.accountId) }))}
-                  className={`bg-white ${connectErrors.accountId ? "border-red-400" : "border-gray-200"}`} />
+                  className={`bg-card ${connectErrors.accountId ? "border-red-400" : "border-border"}`} />
                 {connectErrors.accountId && <p className="text-xs text-red-500 mt-1">{connectErrors.accountId}</p>}
               </div>
               {['mt5', 'generic'].includes(newBroker.type) && (
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Server <span className="text-red-500">*</span></label>
+                <label className="text-sm font-medium text-foreground mb-1 block">Server <span className="text-red-500">*</span></label>
                 <Input placeholder="e.g., mt5.forex.com" value={newBroker.server}
                   onChange={(e) => { setNewBroker({ ...newBroker, server: e.target.value }); setConnectErrors(prev => ({ ...prev, server: "" })); }}
                   onBlur={() => setConnectErrors(prev => ({ ...prev, server: validateBrokerField("server", newBroker.server) }))}
-                  className={`bg-white ${connectErrors.server ? "border-red-400" : "border-gray-200"}`} />
+                  className={`bg-card ${connectErrors.server ? "border-red-400" : "border-border"}`} />
                 {connectErrors.server && <p className="text-xs text-red-500 mt-1">{connectErrors.server}</p>}
               </div>
               )}
               {['mt5'].includes(newBroker.type) && (
               <>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Platform</label>
+                <label className="text-sm font-medium text-foreground mb-1 block">Platform</label>
                 <Input placeholder="e.g., MetaTrader 5" value={newBroker.platform}
                   onChange={(e) => { setNewBroker({ ...newBroker, platform: e.target.value }); setConnectErrors(prev => ({ ...prev, platform: "" })); }}
                   onBlur={() => setConnectErrors(prev => ({ ...prev, platform: validateBrokerField("platform", newBroker.platform) }))}
-                  className={`bg-white ${connectErrors.platform ? "border-red-400" : "border-gray-200"}`} />
+                  className={`bg-card ${connectErrors.platform ? "border-red-400" : "border-border"}`} />
                 {connectErrors.platform && <p className="text-xs text-red-500 mt-1">{connectErrors.platform}</p>}
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Platform Version</label>
-                <select value={newBroker.platformType} onChange={(e) => setNewBroker({ ...newBroker, platformType: e.target.value })} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D7490]">
+                <label className="text-sm font-medium text-foreground mb-1 block">Platform Version</label>
+                <select value={newBroker.platformType} onChange={(e) => setNewBroker({ ...newBroker, platformType: e.target.value })} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D7490]">
                   <option value="mt5">MT5</option>
                   <option value="mt4">MT4</option>
                 </select>
@@ -1981,8 +2229,8 @@ export function PortfolioPage() {
               </>
               )}
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">Account Type</label>
-                <select value={newBroker.accountType} onChange={(e) => setNewBroker({ ...newBroker, accountType: e.target.value })} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D7490]">
+                <label className="text-sm font-medium text-foreground mb-1 block">Account Type</label>
+                <select value={newBroker.accountType} onChange={(e) => setNewBroker({ ...newBroker, accountType: e.target.value })} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0D7490]">
                   <option value="Live">Live</option>
                   <option value="Demo">Demo</option>
                   <option value="Margin">Margin</option>
@@ -1993,7 +2241,7 @@ export function PortfolioPage() {
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                <label className="text-sm font-medium text-foreground mb-1 block">
                   {newBroker.type === 'alpaca' ? 'API Secret Key' : newBroker.type === 'tradier' || newBroker.type === 'oanda' ? 'Access Token' : 'Password / Secret'} <span className="text-red-500">*</span>
                 </label>
                 <Input type="password" placeholder={
@@ -2004,24 +2252,24 @@ export function PortfolioPage() {
                 } value={newBroker.password}
                   onChange={(e) => { setNewBroker({ ...newBroker, password: e.target.value }); setConnectErrors(prev => ({ ...prev, password: "" })); }}
                   onBlur={() => setConnectErrors(prev => ({ ...prev, password: validateBrokerField("password", newBroker.password) }))}
-                  className={`bg-white ${connectErrors.password ? "border-red-400" : "border-gray-200"}`} />
+                  className={`bg-card ${connectErrors.password ? "border-red-400" : "border-border"}`} />
                 {connectErrors.password && <p className="text-xs text-red-500 mt-1">{connectErrors.password}</p>}
               </div>
               <div className="col-span-2 mt-2">
-                <p className="text-xs text-gray-400">Credentials are encrypted at rest and used only for syncing your portfolio data.</p>
+                <p className="text-xs text-muted-foreground">Credentials are encrypted at rest and used only for syncing your portfolio data.</p>
               </div>
             </div>
             )}
             {parseMode === 'manual' && (
               <div className="col-span-2 text-center">
-                <button type="button" onClick={() => { setShowConnect(false); setShowManualEntry(true); setManualEntryTab("single"); }} className="text-xs text-gray-400 hover:text-gray-600 underline decoration-dotted">
+                <button type="button" onClick={() => { setShowConnect(false); setShowManualEntry(true); setManualEntryTab("single"); }} className="text-xs text-muted-foreground hover:text-muted-foreground underline decoration-dotted">
                   <Database className="w-3 h-3 inline mr-1" />Enter holdings manually instead
                 </button>
               </div>
             )}
           </div>
           <DialogFooter className="px-6 pb-6 pt-2 shrink-0">
-            <Button variant="outline" onClick={() => setShowConnect(false)} className="border-gray-200">Cancel</Button>
+            <Button variant="outline" onClick={() => setShowConnect(false)} className="border-border">Cancel</Button>
             <Button onClick={handleConnectBroker} disabled={isValidating || !newBroker.accountName.trim()} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
               {isValidating ? <><Loader2 className="w-4 h-4 animate-spin" /> Validating...</> : <><Link2 className="w-4 h-4" /> Connect</>}
             </Button>
@@ -2048,7 +2296,7 @@ export function PortfolioPage() {
                   selectedRec.signal === "Strong Sell" || selectedRec.signal === "Sell" ? "bg-red-600" :
                   "bg-yellow-500"
                 }`}>{selectedRec.signal}</span>
-                <span className="text-sm text-gray-500">Confidence: <strong>{selectedRec.confidence}</strong></span>
+                <span className="text-sm text-muted-foreground">Confidence: <strong>{selectedRec.confidence}</strong></span>
                 {selectedRec.market && (
                   <Badge variant="outline" className={`text-xs ${selectedRec.market === "NSE" ? "border-[#0D7490] text-[#0D7490]" : "border-purple-300 text-purple-600"}`}>{selectedRec.market}</Badge>
                 )}
@@ -2056,9 +2304,9 @@ export function PortfolioPage() {
 
               {/* Reason */}
               {selectedRec.reason && (
-                <div className="p-3 rounded-lg bg-gray-50 border">
-                  <div className="text-xs text-gray-500 font-medium mb-1">Analysis</div>
-                  <p className="text-sm text-gray-700">{selectedRec.reason}</p>
+                <div className="p-3 rounded-lg bg-muted border">
+                  <div className="text-xs text-muted-foreground font-medium mb-1">Analysis</div>
+                  <p className="text-sm text-foreground">{selectedRec.reason}</p>
                 </div>
               )}
 
@@ -2066,19 +2314,19 @@ export function PortfolioPage() {
               <div className="grid grid-cols-3 gap-3">
                 {selectedRec.price && (
                   <div className="p-3 rounded-lg border text-center">
-                    <div className="text-xs text-gray-500 mb-1">Current</div>
-                    <div className="text-lg font-bold text-gray-900">{selectedRec.currency === "USD" ? "$" : "KES "}{selectedRec.price}</div>
+                    <div className="text-xs text-muted-foreground mb-1">Current</div>
+                    <div className="text-lg font-bold text-foreground">{selectedRec.currency === "USD" ? "$" : "KES "}{selectedRec.price}</div>
                   </div>
                 )}
                 {selectedRec.target1 && (
                   <div className="p-3 rounded-lg border text-center border-green-200 bg-green-50">
-                    <div className="text-xs text-gray-500 mb-1">Target 1</div>
+                    <div className="text-xs text-muted-foreground mb-1">Target 1</div>
                     <div className="text-lg font-bold text-green-700">{selectedRec.currency === "USD" ? "$" : "KES "}{selectedRec.target1}</div>
                   </div>
                 )}
                 {selectedRec.target2 && (
                   <div className="p-3 rounded-lg border text-center border-emerald-200 bg-emerald-50">
-                    <div className="text-xs text-gray-500 mb-1">Target 2</div>
+                    <div className="text-xs text-muted-foreground mb-1">Target 2</div>
                     <div className="text-lg font-bold text-emerald-700">{selectedRec.currency === "USD" ? "$" : "KES "}{selectedRec.target2}</div>
                   </div>
                 )}
@@ -2086,22 +2334,22 @@ export function PortfolioPage() {
 
               {/* Additional details */}
               <div className="grid grid-cols-2 gap-2 text-sm">
-                {selectedRec.sector && <div className="text-gray-500">Sector: <span className="text-gray-700">{selectedRec.sector}</span></div>}
-                {selectedRec.timeframe && <div className="text-gray-500">Timeframe: <span className="text-gray-700">{selectedRec.timeframe}</span></div>}
-                {selectedRec.riskReward && <div className="text-gray-500">Risk/Reward: <span className="text-gray-700">{selectedRec.riskReward}</span></div>}
-                {selectedRec.volume && <div className="text-gray-500">Volume: <span className="text-gray-700">{selectedRec.volume}</span></div>}
+                {selectedRec.sector && <div className="text-muted-foreground">Sector: <span className="text-foreground">{selectedRec.sector}</span></div>}
+                {selectedRec.timeframe && <div className="text-muted-foreground">Timeframe: <span className="text-foreground">{selectedRec.timeframe}</span></div>}
+                {selectedRec.riskReward && <div className="text-muted-foreground">Risk/Reward: <span className="text-foreground">{selectedRec.riskReward}</span></div>}
+                {selectedRec.volume && <div className="text-muted-foreground">Volume: <span className="text-foreground">{selectedRec.volume}</span></div>}
               </div>
 
               {/* In portfolio indicator */}
               {'inPortfolio' in selectedRec && (
-                <div className={`p-2 rounded-lg text-sm text-center ${selectedRec.inPortfolio ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-50 text-gray-500 border'}`}>
+                <div className={`p-2 rounded-lg text-sm text-center ${selectedRec.inPortfolio ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-muted text-muted-foreground border'}`}>
                   {selectedRec.inPortfolio ? '✓ Already in your portfolio' : 'Not in your portfolio'}
                 </div>
               )}
             </div>
           )}
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => { setShowRecDialog(false); setSelectedRec(null); }} className="border-gray-200">Close</Button>
+            <Button variant="outline" onClick={() => { setShowRecDialog(false); setSelectedRec(null); }} className="border-border">Close</Button>
             <Button onClick={() => {
               if (!selectedRec) return;
               setNewHolding({ ticker: selectedRec.symbol || selectedRec.ticker || "", name: selectedRec.name || "", shares: "", avgCost: selectedRec.price || "", sector: selectedRec.sector || "Other", market: (selectedRec.market === "NSE" ? "NSE" : "Global") as "NSE" | "Global" });
@@ -2128,7 +2376,7 @@ export function PortfolioPage() {
             <div className="flex items-center justify-center py-16">
               <div className="text-center">
                 <Loader2 className="w-8 h-8 animate-spin text-[#0D7490] mx-auto mb-3" />
-                <p className="text-gray-500 text-sm">Analyzing your portfolio with real-time market data...</p>
+                <p className="text-muted-foreground text-sm">Analyzing your portfolio with real-time market data...</p>
               </div>
             </div>
           )}
@@ -2136,7 +2384,7 @@ export function PortfolioPage() {
             <div className="text-center py-12">
               <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-3" />
               <p className="text-red-600 text-sm font-medium mb-1">Failed to get advice</p>
-              <p className="text-gray-400 text-xs">{adviceError}</p>
+              <p className="text-muted-foreground text-xs">{adviceError}</p>
             </div>
           )}
           {portfolioAdvice && (
@@ -2150,20 +2398,20 @@ export function PortfolioPage() {
                     </div>
                     <span className="text-sm font-semibold text-gray-800">Market Pulse</span>
                     <div className="flex gap-1.5 ml-auto">
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${portfolioAdvice.marketContext.direction.nse === 'bullish' ? 'bg-emerald-100 text-emerald-700' : portfolioAdvice.marketContext.direction.nse === 'bearish' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${portfolioAdvice.marketContext.direction.nse === 'bullish' ? 'bg-emerald-100 text-emerald-700' : portfolioAdvice.marketContext.direction.nse === 'bearish' ? 'bg-red-100 text-red-700' : 'bg-muted text-muted-foreground'}`}>
                         NSE {portfolioAdvice.marketContext.direction.nse.toUpperCase()}
                       </span>
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${portfolioAdvice.marketContext.direction.global === 'bullish' ? 'bg-emerald-100 text-emerald-700' : portfolioAdvice.marketContext.direction.global === 'bearish' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${portfolioAdvice.marketContext.direction.global === 'bullish' ? 'bg-emerald-100 text-emerald-700' : portfolioAdvice.marketContext.direction.global === 'bearish' ? 'bg-red-100 text-red-700' : 'bg-muted text-muted-foreground'}`}>
                         Global {portfolioAdvice.marketContext.direction.global.toUpperCase()}
                       </span>
                     </div>
                   </div>
-                  <div className="flex gap-4 text-xs text-gray-500">
-                    <span className="flex items-center gap-1">Volatility <span className="font-semibold text-gray-700">{portfolioAdvice.marketContext.nseVolatility}</span></span>
-                    <span className="w-px bg-gray-200" />
-                    <span className="flex items-center gap-1">FX <span className="font-semibold text-gray-700">KES {portfolioAdvice.marketContext.fxRate.toFixed(2)}</span></span>
-                    <span className="w-px bg-gray-200" />
-                    <span className="flex items-center gap-1">News <span className="font-semibold text-gray-700">{portfolioAdvice.marketContext.relevantNews.length} articles</span></span>
+                  <div className="flex gap-4 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">Volatility <span className="font-semibold text-foreground">{portfolioAdvice.marketContext.nseVolatility}</span></span>
+                    <span className="w-px bg-muted" />
+                    <span className="flex items-center gap-1">FX <span className="font-semibold text-foreground">KES {portfolioAdvice.marketContext.fxRate.toFixed(2)}</span></span>
+                    <span className="w-px bg-muted" />
+                    <span className="flex items-center gap-1">News <span className="font-semibold text-foreground">{portfolioAdvice.marketContext.relevantNews.length} articles</span></span>
                   </div>
                 </div>
               )}
@@ -2177,7 +2425,7 @@ export function PortfolioPage() {
                       <span className="text-xs font-semibold text-emerald-700">Leading Sectors</span>
                     </div>
                     {portfolioAdvice.marketContext.topSectors.slice(0, 3).map((s, i) => (
-                      <div key={i} className="flex justify-between text-xs text-gray-600 py-1 border-b border-emerald-100/50 last:border-0">
+                      <div key={i} className="flex justify-between text-xs text-muted-foreground py-1 border-b border-emerald-100/50 last:border-0">
                         <span>{s.name}</span>
                         <span className={`font-medium ${parseFloat(s.change) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{s.change}%</span>
                       </div>
@@ -2189,7 +2437,7 @@ export function PortfolioPage() {
                       <span className="text-xs font-semibold text-red-600">Lagging Sectors</span>
                     </div>
                     {portfolioAdvice.marketContext.bottomSectors.slice(0, 3).map((s, i) => (
-                      <div key={i} className="flex justify-between text-xs text-gray-600 py-1 border-b border-red-100/50 last:border-0">
+                      <div key={i} className="flex justify-between text-xs text-muted-foreground py-1 border-b border-red-100/50 last:border-0">
                         <span>{s.name}</span>
                         <span className={`font-medium ${parseFloat(s.change) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{s.change}%</span>
                       </div>
@@ -2204,38 +2452,38 @@ export function PortfolioPage() {
                   <div className="p-1 rounded-lg bg-[#0D7490]/10">
                     <Sparkles className="w-4 h-4 text-[#0D7490]" />
                   </div>
-                  <p className="text-sm text-gray-700 leading-relaxed">{portfolioAdvice.summary}</p>
+                  <p className="text-sm text-foreground leading-relaxed">{portfolioAdvice.summary}</p>
                 </div>
               </div>
 
               {/* Key Metrics */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="p-4 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
-                  <div className="text-[11px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Diversification</div>
+                  <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Diversification</div>
                   <div className={`text-3xl font-bold ${portfolioAdvice.diversification.score >= 70 ? 'text-emerald-600' : portfolioAdvice.diversification.score >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
                     {portfolioAdvice.diversification.score}%
                   </div>
-                  <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div className={`h-full rounded-full transition-all ${portfolioAdvice.diversification.score >= 70 ? 'bg-emerald-500' : portfolioAdvice.diversification.score >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
                       style={{ width: `${portfolioAdvice.diversification.score}%` }} />
                   </div>
-                  <div className="text-[11px] text-gray-400 mt-2">{portfolioAdvice.diversification.message}</div>
+                  <div className="text-[11px] text-muted-foreground mt-2">{portfolioAdvice.diversification.message}</div>
                 </div>
                 <div className="p-4 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
-                  <div className="text-[11px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Risk Level</div>
+                  <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Risk Level</div>
                   <div className={`text-2xl font-bold ${portfolioAdvice.riskAssessment.startsWith('Low') ? 'text-emerald-600' : portfolioAdvice.riskAssessment.startsWith('Moderate') ? 'text-amber-600' : 'text-red-600'}`}>
                     {portfolioAdvice.riskAssessment.split(' —')[0]}
                   </div>
-                  <div className="text-[11px] text-gray-400 mt-2 leading-tight">
+                  <div className="text-[11px] text-muted-foreground mt-2 leading-tight">
                     {portfolioAdvice.riskAssessment.includes('—') ? portfolioAdvice.riskAssessment.split('— ')[1] : ''}
                   </div>
                 </div>
                 <div className="p-4 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
-                  <div className="text-[11px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wider">Positions</div>
-                  <div className="text-3xl font-bold text-gray-900">{portfolioAdvice.recommendations.length}</div>
+                  <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Positions</div>
+                  <div className="text-3xl font-bold text-foreground">{portfolioAdvice.recommendations.length}</div>
                   <div className="mt-1 flex items-center justify-center gap-2 text-[11px]">
                     <span className="text-emerald-600 font-medium">{portfolioAdvice.recommendations.filter(r => r.action === 'Accumulate').length} buy</span>
-                    <span className="text-gray-300">&middot;</span>
+                    <span className="text-muted-foreground">&middot;</span>
                     <span className="text-red-500 font-medium">{portfolioAdvice.recommendations.filter(r => r.action === 'Reduce' || r.action === 'Trim' || r.action === 'Take Partial Profits').length} sell</span>
                   </div>
                 </div>
@@ -2243,8 +2491,8 @@ export function PortfolioPage() {
 
               {/* Position Recommendations */}
               <div>
-                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-gray-400" />
+                <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-muted-foreground" />
                   Position Recommendations
                 </h4>
                 <div className="space-y-2.5">
@@ -2253,30 +2501,30 @@ export function PortfolioPage() {
                     const isSell = rec.action === 'Reduce' || rec.action === 'Trim' || rec.action === 'Take Partial Profits';
                     const allocNum = parseInt(rec.allocation);
                     return (
-                      <div key={i} className={`p-3.5 rounded-xl border-l-[5px] ${isBuy ? 'border-l-emerald-500 bg-gradient-to-r from-emerald-50/60 to-white border-emerald-100 border-t border-r border-b' : isSell ? 'border-l-red-500 bg-gradient-to-r from-red-50/60 to-white border-red-100 border-t border-r border-b' : 'border-l-gray-400 bg-gradient-to-r from-gray-50/60 to-white border-gray-200 border-t border-r border-b'}`}>
+                      <div key={i} className={`p-3.5 rounded-xl border-l-[5px] ${isBuy ? 'border-l-emerald-500 bg-gradient-to-r from-emerald-50/60 to-white border-emerald-100 border-t border-r border-b' : isSell ? 'border-l-red-500 bg-gradient-to-r from-red-50/60 to-white border-red-100 border-t border-r border-b' : 'border-l-gray-400 bg-gradient-to-r from-gray-50/60 to-white border-border border-t border-r border-b'}`}>
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <button onClick={() => { setShowAdvice(false); navigate(`/app/stock/${rec.ticker}`); }} className="font-semibold text-gray-900 hover:text-[#0D7490] text-sm">
+                            <button onClick={() => { setShowAdvice(false); navigate(`/app/stock/${rec.ticker}`); }} className="font-semibold text-foreground hover:text-[#0D7490] text-sm">
                               {rec.ticker}
                             </button>
-                            <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold text-white ${isBuy ? 'bg-emerald-600' : isSell ? 'bg-red-600' : 'bg-gray-500'}`}>
+                            <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold text-white ${isBuy ? 'bg-emerald-600' : isSell ? 'bg-red-600' : 'bg-muted0'}`}>
                               {rec.action}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 text-xs">
-                            <span className="text-gray-500">{rec.allocation}</span>
-                            <ArrowRight className="w-3 h-3 text-gray-300" />
-                            <span className="font-semibold text-gray-700">{rec.targetAllocation}</span>
+                            <span className="text-muted-foreground">{rec.allocation}</span>
+                            <ArrowRight className="w-3 h-3 text-muted-foreground" />
+                            <span className="font-semibold text-foreground">{rec.targetAllocation}</span>
                           </div>
                         </div>
-                        <p className="text-sm text-gray-600 leading-relaxed">{rec.reason}</p>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{rec.reason}</p>
                         <div className="flex items-center gap-3 mt-2">
-                          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                             <div className={`h-full rounded-full ${isBuy ? 'bg-emerald-500' : isSell ? 'bg-red-500' : 'bg-gray-400'}`}
                               style={{ width: `${Math.min(100, allocNum)}%` }} />
                           </div>
-                          <span className="text-[11px] font-medium text-gray-400 shrink-0">P/L: {rec.pnlPct}</span>
-                          <span className="text-[11px] font-medium text-gray-400 shrink-0">Target: {rec.targetAllocation}</span>
+                          <span className="text-[11px] font-medium text-muted-foreground shrink-0">P/L: {rec.pnlPct}</span>
+                          <span className="text-[11px] font-medium text-muted-foreground shrink-0">Target: {rec.targetAllocation}</span>
                         </div>
                       </div>
                     );
@@ -2287,17 +2535,17 @@ export function PortfolioPage() {
               {/* Relevant News */}
               {portfolioAdvice.marketContext && portfolioAdvice.marketContext.relevantNews.length > 0 && (
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Newspaper className="w-4 h-4 text-gray-400" />
+                  <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                    <Newspaper className="w-4 h-4 text-muted-foreground" />
                     Recent News Impact
                   </h4>
                   <div className="space-y-1.5">
                     {portfolioAdvice.marketContext.relevantNews.map((a, i) => (
-                      <div key={i} className="text-xs text-gray-600 py-2 px-3 rounded-lg bg-gray-50 border border-gray-100 flex items-start gap-2">
+                      <div key={i} className="text-xs text-muted-foreground py-2 px-3 rounded-lg bg-muted border border-border flex items-start gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-[#0D7490] mt-1.5 shrink-0" />
                         <div>
                           <span className="font-medium text-gray-800">{a.headline}</span>
-                          {a.source && <span className="text-gray-400 ml-1">— {a.source}</span>}
+                          {a.source && <span className="text-muted-foreground ml-1">— {a.source}</span>}
                         </div>
                       </div>
                     ))}
@@ -2307,7 +2555,7 @@ export function PortfolioPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAdvice(false)} className="border-gray-200">Close</Button>
+            <Button variant="outline" onClick={() => setShowAdvice(false)} className="border-border">Close</Button>
             <Button onClick={() => { setPortfolioAdvice(null); handleGetAdvice(); }} disabled={loadingAdvice} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
               {loadingAdvice ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Refresh Analysis
             </Button>
@@ -2325,7 +2573,7 @@ export function PortfolioPage() {
               {(["single", "batch", "csv"] as const).map(tab => (
                 <button key={tab} onClick={() => setManualEntryTab(tab)}
                   className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all capitalize ${
-                    manualEntryTab === tab ? "bg-[#0D7490] text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    manualEntryTab === tab ? "bg-[#0D7490] text-white shadow-sm" : "bg-muted text-muted-foreground hover:bg-accent"
                   }`}>
                   {tab === "single" ? "Single Entry" : tab === "batch" ? "Batch Entry" : "CSV Import"}
                 </button>
@@ -2337,33 +2585,33 @@ export function PortfolioPage() {
             {/* ── Single Entry ── */}
             {manualEntryTab === "single" && (
               <div className="space-y-4">
-                <p className="text-sm text-gray-500">Add one holding at a time. Ticker is required.</p>
+                <p className="text-sm text-muted-foreground">Add one holding at a time. Ticker is required.</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div ref={searchRef} className="relative">
-                    <label className="text-sm font-medium text-gray-700 mb-1 block">Ticker *</label>
-                    <Input placeholder="e.g., SCOM" value={newHolding.ticker} onChange={(e) => setNewHolding({ ...newHolding, ticker: e.target.value.toUpperCase() })} className="bg-white border-gray-200" />
+                    <label className="text-sm font-medium text-foreground mb-1 block">Ticker *</label>
+                    <Input placeholder="e.g., SCOM" value={newHolding.ticker} onChange={(e) => setNewHolding({ ...newHolding, ticker: e.target.value.toUpperCase() })} className="bg-card border-border" />
                     {stockSuggestions.length > 0 && (
-                      <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto">
                         {stockSuggestions.map((s) => (
                           <button key={s.ticker} type="button" onClick={async () => {
                             setStockSuggestions([]);
                             setNewHolding(prev => ({ ...prev, ticker: s.ticker, name: s.name, sector: s.sector, market: s.market as "NSE" | "Global" }));
-                          }} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center justify-between">
+                          }} className="w-full text-left px-3 py-2 hover:bg-accent flex items-center justify-between">
                             <div>
-                              <span className="font-medium text-gray-900">{s.ticker}</span>
-                              <span className="text-gray-500 text-sm ml-2">{s.name}</span>
+                              <span className="font-medium text-foreground">{s.ticker}</span>
+                              <span className="text-muted-foreground text-sm ml-2">{s.name}</span>
                             </div>
                             <Badge variant="outline" className={`text-[10px] ${s.market === "NSE" ? "border-[#0D7490] text-[#0D7490]" : "border-purple-300 text-purple-600"}`}>{s.market}</Badge>
                           </button>
                         ))}
                       </div>
                     )}
-                    {searchingStock && <div className="absolute right-3 top-9"><Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" /></div>}
+                    {searchingStock && <div className="absolute right-3 top-9"><Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /></div>}
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1 block">Market *</label>
+                    <label className="text-sm font-medium text-foreground mb-1 block">Market *</label>
                     <Select value={newHolding.market} onValueChange={(v) => setNewHolding({ ...newHolding, market: v as "NSE" | "Global" })}>
-                      <SelectTrigger className="bg-white border-gray-200"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="NSE">NSE (Kenya)</SelectItem>
                         <SelectItem value="Global">Global (US/Intl)</SelectItem>
@@ -2372,24 +2620,24 @@ export function PortfolioPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Company Name</label>
-                  <Input placeholder="e.g., Safaricom PLC" value={newHolding.name} onChange={(e) => setNewHolding({ ...newHolding, name: e.target.value })} className="bg-white border-gray-200" />
+                  <label className="text-sm font-medium text-foreground mb-1 block">Company Name</label>
+                  <Input placeholder="e.g., Safaricom PLC" value={newHolding.name} onChange={(e) => setNewHolding({ ...newHolding, name: e.target.value })} className="bg-card border-border" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1 block">Shares *</label>
-                    <Input type="number" step="any" placeholder="e.g., 500" value={newHolding.shares} onChange={(e) => setNewHolding({ ...newHolding, shares: e.target.value })} className="bg-white border-gray-200" />
+                    <label className="text-sm font-medium text-foreground mb-1 block">Shares *</label>
+                    <Input type="number" step="any" placeholder="e.g., 500" value={newHolding.shares} onChange={(e) => setNewHolding({ ...newHolding, shares: e.target.value })} className="bg-card border-border" />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1 block">Avg Cost (per share) *</label>
-                    <Input type="number" step="any" placeholder="e.g., 24.50" value={newHolding.avgCost} onChange={(e) => setNewHolding({ ...newHolding, avgCost: e.target.value })} className="bg-white border-gray-200" />
+                    <label className="text-sm font-medium text-foreground mb-1 block">Avg Cost (per share) *</label>
+                    <Input type="number" step="any" placeholder="e.g., 24.50" value={newHolding.avgCost} onChange={(e) => setNewHolding({ ...newHolding, avgCost: e.target.value })} className="bg-card border-border" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-1 block">Sector</label>
+                    <label className="text-sm font-medium text-foreground mb-1 block">Sector</label>
                     <Select value={newHolding.sector} onValueChange={(v) => setNewHolding({ ...newHolding, sector: v })}>
-                      <SelectTrigger className="bg-white border-gray-200"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="bg-card border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {SECTORS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                       </SelectContent>
@@ -2407,35 +2655,35 @@ export function PortfolioPage() {
             {/* ── Batch Entry ── */}
             {manualEntryTab === "batch" && (
               <div className="space-y-4">
-                <p className="text-sm text-gray-500">Add multiple holdings at once. Each row is one holding.</p>
+                <p className="text-sm text-muted-foreground">Add multiple holdings at once. Each row is one holding.</p>
                 <div className="overflow-x-auto border rounded-lg">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-gray-50 border-b">
-                        <th className="text-left p-2 text-gray-600 font-medium">Ticker</th>
-                        <th className="text-left p-2 text-gray-600 font-medium">Name</th>
-                        <th className="text-right p-2 text-gray-600 font-medium">Shares</th>
-                        <th className="text-right p-2 text-gray-600 font-medium">Avg Cost</th>
-                        <th className="text-left p-2 text-gray-600 font-medium">Sector</th>
-                        <th className="text-left p-2 text-gray-600 font-medium">Market</th>
+                      <tr className="bg-muted border-b">
+                        <th className="text-left p-2 text-muted-foreground font-medium">Ticker</th>
+                        <th className="text-left p-2 text-muted-foreground font-medium">Name</th>
+                        <th className="text-right p-2 text-muted-foreground font-medium">Shares</th>
+                        <th className="text-right p-2 text-muted-foreground font-medium">Avg Cost</th>
+                        <th className="text-left p-2 text-muted-foreground font-medium">Sector</th>
+                        <th className="text-left p-2 text-muted-foreground font-medium">Market</th>
                         <th className="w-10 p-2"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {batchRows.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="text-center py-6 text-gray-400 text-sm">No rows added yet. Click "Add Row" below.</td>
+                          <td colSpan={7} className="text-center py-6 text-muted-foreground text-sm">No rows added yet. Click "Add Row" below.</td>
                         </tr>
                       ) : (
                         batchRows.map((row, i) => (
-                          <tr key={i} className="border-b hover:bg-gray-50">
-                            <td className="p-1"><Input size={1} placeholder="SCOM" value={row.ticker} onChange={(e) => { const r = [...batchRows]; r[i] = { ...r[i], ticker: e.target.value.toUpperCase() }; setBatchRows(r); }} className="bg-white border-gray-200 h-8 text-xs" /></td>
-                            <td className="p-1"><Input size={1} placeholder="Safaricom PLC" value={row.name} onChange={(e) => { const r = [...batchRows]; r[i] = { ...r[i], name: e.target.value }; setBatchRows(r); }} className="bg-white border-gray-200 h-8 text-xs" /></td>
-                            <td className="p-1"><Input size={1} type="number" step="any" placeholder="500" value={row.shares} onChange={(e) => { const r = [...batchRows]; r[i] = { ...r[i], shares: e.target.value }; setBatchRows(r); }} className="bg-white border-gray-200 h-8 text-xs text-right" /></td>
-                            <td className="p-1"><Input size={1} type="number" step="any" placeholder="24.50" value={row.avgCost} onChange={(e) => { const r = [...batchRows]; r[i] = { ...r[i], avgCost: e.target.value }; setBatchRows(r); }} className="bg-white border-gray-200 h-8 text-xs text-right" /></td>
+                          <tr key={i} className="border-b hover:bg-accent">
+                            <td className="p-1"><Input size={1} placeholder="SCOM" value={row.ticker} onChange={(e) => { const r = [...batchRows]; r[i] = { ...r[i], ticker: e.target.value.toUpperCase() }; setBatchRows(r); }} className="bg-card border-border h-8 text-xs" /></td>
+                            <td className="p-1"><Input size={1} placeholder="Safaricom PLC" value={row.name} onChange={(e) => { const r = [...batchRows]; r[i] = { ...r[i], name: e.target.value }; setBatchRows(r); }} className="bg-card border-border h-8 text-xs" /></td>
+                            <td className="p-1"><Input size={1} type="number" step="any" placeholder="500" value={row.shares} onChange={(e) => { const r = [...batchRows]; r[i] = { ...r[i], shares: e.target.value }; setBatchRows(r); }} className="bg-card border-border h-8 text-xs text-right" /></td>
+                            <td className="p-1"><Input size={1} type="number" step="any" placeholder="24.50" value={row.avgCost} onChange={(e) => { const r = [...batchRows]; r[i] = { ...r[i], avgCost: e.target.value }; setBatchRows(r); }} className="bg-card border-border h-8 text-xs text-right" /></td>
                             <td className="p-1">
                               <Select value={row.sector} onValueChange={(v) => { const r = [...batchRows]; r[i] = { ...r[i], sector: v }; setBatchRows(r); }}>
-                                <SelectTrigger className="bg-white border-gray-200 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {SECTORS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                                 </SelectContent>
@@ -2443,7 +2691,7 @@ export function PortfolioPage() {
                             </td>
                             <td className="p-1">
                               <Select value={row.market} onValueChange={(v) => { const r = [...batchRows]; r[i] = { ...r[i], market: v as "NSE" | "Global" }; setBatchRows(r); }}>
-                                <SelectTrigger className="bg-white border-gray-200 h-8 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="bg-card border-border h-8 text-xs"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="NSE">NSE</SelectItem>
                                   <SelectItem value="Global">Global</SelectItem>
@@ -2458,7 +2706,7 @@ export function PortfolioPage() {
                   </table>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" onClick={() => setBatchRows([...batchRows, { ticker: "", name: "", shares: "", avgCost: "", sector: "Other", market: "NSE" }])} className="border-gray-200 gap-1">
+                  <Button variant="outline" onClick={() => setBatchRows([...batchRows, { ticker: "", name: "", shares: "", avgCost: "", sector: "Other", market: "NSE" }])} className="border-border gap-1">
                     <Plus className="w-3.5 h-3.5" /> Add Row
                   </Button>
                   {batchRows.length > 0 && (
@@ -2494,7 +2742,7 @@ export function PortfolioPage() {
             {/* ── CSV Import ── */}
             {manualEntryTab === "csv" && (
               <div className="space-y-4">
-                <p className="text-sm text-gray-500">Upload a CSV file with columns: <code className="bg-gray-100 px-1 rounded">ticker, name, shares, avgCost, sector, market</code></p>
+                <p className="text-sm text-muted-foreground">Upload a CSV file with columns: <code className="bg-muted px-1 rounded">ticker, name, shares, avgCost, sector, market</code></p>
 
                 {importResult && (
                   <div className={`px-4 py-3 rounded-lg text-sm flex items-center gap-2 ${importResult.type === "success" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
@@ -2543,9 +2791,9 @@ export function PortfolioPage() {
                 >
                   {!csvFileName ? (
                     <div>
-                      <Database className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-                      <p className="text-sm text-gray-500 mb-1">Drop a CSV file here or click to browse</p>
-                      <p className="text-xs text-gray-400 mb-3">Columns: ticker, shares, avgCost (name, sector, market optional)</p>
+                      <Database className="w-10 h-10 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground mb-1">Drop a CSV file here or click to browse</p>
+                      <p className="text-xs text-muted-foreground mb-3">Columns: ticker, shares, avgCost (name, sector, market optional)</p>
                       <label className="cursor-pointer inline-block">
                         <span className="px-4 py-2 rounded-lg bg-[#0D7490] text-white text-sm font-medium hover:bg-[#0A5F7A]">Choose CSV File</span>
                         <input type="file" accept=".csv" className="hidden" onChange={(e) => {
@@ -2583,31 +2831,31 @@ export function PortfolioPage() {
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <Check className="w-5 h-5 text-green-600" />
-                          <span className="text-sm font-medium text-gray-900">{csvFileName}</span>
-                          <span className="text-xs text-gray-500">({csvData.length} holdings found)</span>
+                          <span className="text-sm font-medium text-foreground">{csvFileName}</span>
+                          <span className="text-xs text-muted-foreground">({csvData.length} holdings found)</span>
                         </div>
                         <button onClick={() => { setCsvData([]); setCsvFileName(""); setImportResult(null); }} className="text-sm text-red-600 hover:underline">Remove</button>
                       </div>
                       <div className="overflow-x-auto border rounded-lg max-h-48 overflow-y-auto">
                         <table className="w-full text-xs">
                           <thead>
-                            <tr className="bg-gray-50 border-b">
-                              <th className="text-left p-2 text-gray-600 font-medium">Ticker</th>
-                              <th className="text-left p-2 text-gray-600 font-medium">Name</th>
-                              <th className="text-right p-2 text-gray-600 font-medium">Shares</th>
-                              <th className="text-right p-2 text-gray-600 font-medium">Avg Cost</th>
-                              <th className="text-left p-2 text-gray-600 font-medium">Sector</th>
-                              <th className="text-left p-2 text-gray-600 font-medium">Market</th>
+                            <tr className="bg-muted border-b">
+                              <th className="text-left p-2 text-muted-foreground font-medium">Ticker</th>
+                              <th className="text-left p-2 text-muted-foreground font-medium">Name</th>
+                              <th className="text-right p-2 text-muted-foreground font-medium">Shares</th>
+                              <th className="text-right p-2 text-muted-foreground font-medium">Avg Cost</th>
+                              <th className="text-left p-2 text-muted-foreground font-medium">Sector</th>
+                              <th className="text-left p-2 text-muted-foreground font-medium">Market</th>
                             </tr>
                           </thead>
                           <tbody>
                             {csvData.map((r, i) => (
-                              <tr key={i} className="border-b hover:bg-gray-50">
-                                <td className="p-2 font-medium text-gray-900">{r.ticker}</td>
-                                <td className="p-2 text-gray-600">{r.name}</td>
-                                <td className="p-2 text-right text-gray-900">{r.shares}</td>
-                                <td className="p-2 text-right text-gray-900">{r.avgCost}</td>
-                                <td className="p-2 text-gray-600">{r.sector}</td>
+                              <tr key={i} className="border-b hover:bg-accent">
+                                <td className="p-2 font-medium text-foreground">{r.ticker}</td>
+                                <td className="p-2 text-muted-foreground">{r.name}</td>
+                                <td className="p-2 text-right text-foreground">{r.shares}</td>
+                                <td className="p-2 text-right text-foreground">{r.avgCost}</td>
+                                <td className="p-2 text-muted-foreground">{r.sector}</td>
                                 <td className="p-2"><Badge variant="outline" className={`text-[10px] ${r.market === "NSE" ? "border-[#0D7490] text-[#0D7490]" : "border-purple-300 text-purple-600"}`}>{r.market}</Badge></td>
                               </tr>
                             ))}
@@ -2650,7 +2898,7 @@ export function PortfolioPage() {
           </div>
 
           <DialogFooter className="px-6 pb-6 pt-2 shrink-0">
-            <Button variant="outline" onClick={() => { setShowManualEntry(false); setBatchRows([]); setCsvData([]); setCsvFileName(""); }} className="border-gray-200">Done</Button>
+            <Button variant="outline" onClick={() => { setShowManualEntry(false); setBatchRows([]); setCsvData([]); setCsvFileName(""); }} className="border-border">Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2658,32 +2906,36 @@ export function PortfolioPage() {
       {/* Real Portfolio Statement Dialog */}
       <Dialog open={showRealStatement} onOpenChange={(open) => setShowRealStatement(open)}>
         <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
-            <DialogTitle className="flex items-center gap-2">
-              <BarChartHorizontal className="w-5 h-5 text-[#0D7490]" />
-              Portfolio Statement
-            </DialogTitle>
-            <DialogDescription className="flex items-center justify-between">
-              <span>
-                {realStatementData
-                  ? <>Snapshot: {new Date(realStatementData.generatedAt).toLocaleString()} {statementLastRefreshed && <span className="text-green-600 font-medium ml-1">&bull; Live</span>}</>
-                  : 'Loading...'}
-              </span>
-              {/* Period Selector */}
+          <div className="bg-[#0D7490] px-6 py-4 shrink-0">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
+                <BarChartHorizontal className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-white font-semibold text-lg leading-tight">Portfolio Statement</h2>
+                <p className="text-white/70 text-xs">
+                  {realStatementData
+                    ? <>Snapshot: {new Date(realStatementData.generatedAt).toLocaleString()} {statementLastRefreshed && <span className="text-green-300 font-medium ml-1">&bull; Live</span>}</>
+                    : 'Loading...'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-[10px] text-white/50">StocksIntels</span>
               <span className="flex gap-1">
                 {["1D", "1W", "1M", "1Y", "ALL"].map(p => (
                   <button key={p} onClick={() => changeStatementPeriod(p)}
-                    className={`px-2 py-0.5 rounded text-xs font-medium transition-all ${statementPeriod === p ? "bg-[#0D7490] text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    className={`px-2 py-0.5 rounded text-xs font-medium transition-all ${statementPeriod === p ? "bg-card text-[#0D7490]" : "bg-white/15 text-white/80 hover:bg-white/25"}`}>
                     {p}
                   </button>
                 ))}
               </span>
-            </DialogDescription>
-          </DialogHeader>
+            </div>
+          </div>
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {realStatementLoading && !realStatementData && (
-              <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+              <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
             )}
             {statementError && !realStatementLoading && (
               <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-2">
@@ -2692,7 +2944,7 @@ export function PortfolioPage() {
               </div>
             )}
             {!realStatementLoading && !realStatementData && !statementError && (
-              <div className="p-4 text-center text-gray-400 text-sm">
+              <div className="p-4 text-center text-muted-foreground text-sm">
                 Click Refresh or change period to load data
               </div>
             )}
@@ -2702,18 +2954,18 @@ export function PortfolioPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="p-3 rounded-lg border bg-gradient-to-br from-white to-gray-50">
                     <div className="flex items-center gap-1.5 mb-1">
-                      <Wallet className="w-3.5 h-3.5 text-gray-400" />
-                      <span className="text-xs text-gray-500">Total Value</span>
+                      <Wallet className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">Total Value</span>
                     </div>
-                    <div className="text-lg font-bold text-gray-900">KES {realStatementData.summary.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">
+                    <div className="text-lg font-bold text-foreground">KES {realStatementData.summary.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
                       Cost: KES {realStatementData.summary.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </div>
                   </div>
                   <div className={`p-3 rounded-lg border ${realStatementData.summary.dailyChange >= 0 ? 'bg-gradient-to-br from-green-50 to-white' : 'bg-gradient-to-br from-red-50 to-white'}`}>
                     <div className="flex items-center gap-1.5 mb-1">
-                      <Activity className="w-3.5 h-3.5 text-gray-400" />
-                      <span className="text-xs text-gray-500">Daily Change</span>
+                      <Activity className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">Daily Change</span>
                     </div>
                     <div className={`text-lg font-bold ${realStatementData.summary.dailyChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {realStatementData.summary.dailyChange >= 0 ? '+' : ''}KES {Math.abs(realStatementData.summary.dailyChange).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -2724,8 +2976,8 @@ export function PortfolioPage() {
                   </div>
                   <div className="p-3 rounded-lg border bg-gradient-to-br from-white to-gray-50">
                     <div className="flex items-center gap-1.5 mb-1">
-                      <TrendingUp className="w-3.5 h-3.5 text-gray-400" />
-                      <span className="text-xs text-gray-500">Unrealized P&L</span>
+                      <TrendingUp className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">Unrealized P&L</span>
                     </div>
                     <div className={`text-lg font-bold ${realStatementData.summary.totalPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {realStatementData.summary.totalPnL >= 0 ? '+' : ''}KES {Math.abs(realStatementData.summary.totalPnL).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -2733,13 +2985,13 @@ export function PortfolioPage() {
                   </div>
                   <div className="p-3 rounded-lg border bg-gradient-to-br from-white to-gray-50">
                     <div className="flex items-center gap-1.5 mb-1">
-                      <Target className="w-3.5 h-3.5 text-gray-400" />
-                      <span className="text-xs text-gray-500">Total Return</span>
+                      <Target className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">Total Return</span>
                     </div>
                     <div className={`text-lg font-bold ${realStatementData.summary.pnlPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {realStatementData.summary.pnlPercent >= 0 ? '+' : ''}{realStatementData.summary.pnlPercent}%
                     </div>
-                    <div className="text-xs text-gray-400 mt-0.5">
+                    <div className="text-xs text-muted-foreground mt-0.5">
                       {realStatementData.summary.holdingsCount} holding{realStatementData.summary.holdingsCount !== 1 ? 's' : ''} &middot; FX: {realStatementData.summary.fxRate}
                     </div>
                   </div>
@@ -2748,7 +3000,7 @@ export function PortfolioPage() {
                 {/* Value History Chart */}
                 {realStatementData.valueHistory?.length > 1 && (
                   <div className="p-3 rounded-lg border">
-                    <h4 className="text-xs font-semibold text-gray-900 mb-2">Portfolio Value ({statementPeriod})</h4>
+                    <h4 className="text-xs font-semibold text-foreground mb-2">Portfolio Value ({statementPeriod})</h4>
                     <div className="h-48">
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={realStatementData.valueHistory}>
@@ -2773,37 +3025,37 @@ export function PortfolioPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="p-3 rounded-lg border bg-gradient-to-br from-[#0D7490]/5 to-white">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-gray-500">NSE Portfolio</span>
+                      <span className="text-xs font-medium text-muted-foreground">NSE Portfolio</span>
                       <Badge variant="outline" className="text-[9px] border-[#0D7490] text-[#0D7490]">{realStatementData.summary.nseCount} holdings</Badge>
                     </div>
-                    <div className="text-lg font-bold text-gray-900">KES {realStatementData.summary.nseValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                    <div className="text-lg font-bold text-foreground">KES {realStatementData.summary.nseValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                     <div className="flex items-center gap-2 mt-1">
                       <span className={`text-xs font-medium ${realStatementData.summary.nsePnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         P&L: {realStatementData.summary.nsePnLPercent}%
                       </span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-muted-foreground">
                         Cost: KES {(realStatementData.summary.nseCost ?? 0).toLocaleString()}
                       </span>
                     </div>
-                    <div className="mt-2 w-full bg-gray-200 rounded-full h-1.5">
+                    <div className="mt-2 w-full bg-muted rounded-full h-1.5">
                       <div className="bg-[#0D7490] h-1.5 rounded-full" style={{ width: `${realStatementData.summary.totalValue > 0 ? Math.round((realStatementData.summary.nseValue / realStatementData.summary.totalValue * realStatementData.summary.fxRate) * 100) : 0}%` }} />
                     </div>
                   </div>
                   <div className="p-3 rounded-lg border bg-gradient-to-br from-purple-50 to-white">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-gray-500">Global Portfolio</span>
+                      <span className="text-xs font-medium text-muted-foreground">Global Portfolio</span>
                       <Badge variant="outline" className="text-[9px] border-purple-300 text-purple-600">{realStatementData.summary.globalCount} holdings</Badge>
                     </div>
-                    <div className="text-lg font-bold text-gray-900">${realStatementData.summary.globalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                    <div className="text-lg font-bold text-foreground">${realStatementData.summary.globalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                     <div className="flex items-center gap-2 mt-1">
                       <span className={`text-xs font-medium ${realStatementData.summary.globalPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         P&L: {realStatementData.summary.globalPnLPercent}%
                       </span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-muted-foreground">
                         Cost: ${realStatementData.summary.globalCost.toLocaleString()}
                       </span>
                     </div>
-                    <div className="mt-2 w-full bg-gray-200 rounded-full h-1.5">
+                    <div className="mt-2 w-full bg-muted rounded-full h-1.5">
                       <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${realStatementData.summary.totalValue > 0 ? Math.round((realStatementData.summary.globalValue * realStatementData.summary.fxRate / realStatementData.summary.totalValue) * 100) : 0}%` }} />
                     </div>
                   </div>
@@ -2819,9 +3071,9 @@ export function PortfolioPage() {
                       <div className="space-y-1.5">
                         {realStatementData.bestPerformers.map((p: any) => (
                           <div key={p.ticker} className="flex items-center justify-between text-xs">
-                            <span className="font-medium text-gray-900">{p.ticker}</span>
+                            <span className="font-medium text-foreground">{p.ticker}</span>
                             <div className="flex items-center gap-2">
-                              <span className="text-gray-500">{p.market === 'NSE' ? 'KES ' : '$'}{p.pnl.toFixed(2)}</span>
+                              <span className="text-muted-foreground">{p.market === 'NSE' ? 'KES ' : '$'}{p.pnl.toFixed(2)}</span>
                               <span className="text-green-600 font-medium">+{p.pnlPercent}%</span>
                             </div>
                           </div>
@@ -2835,9 +3087,9 @@ export function PortfolioPage() {
                       <div className="space-y-1.5">
                         {realStatementData.worstPerformers.map((p: any) => (
                           <div key={p.ticker} className="flex items-center justify-between text-xs">
-                            <span className="font-medium text-gray-900">{p.ticker}</span>
+                            <span className="font-medium text-foreground">{p.ticker}</span>
                             <div className="flex items-center gap-2">
-                              <span className="text-gray-500">{p.market === 'NSE' ? 'KES ' : '$'}{p.pnl.toFixed(2)}</span>
+                              <span className="text-muted-foreground">{p.market === 'NSE' ? 'KES ' : '$'}{p.pnl.toFixed(2)}</span>
                               <span className="text-red-600 font-medium">{p.pnlPercent}%</span>
                             </div>
                           </div>
@@ -2850,15 +3102,15 @@ export function PortfolioPage() {
                 {/* Sector Allocation */}
                 {realStatementData.sectorAllocation.length > 0 && (
                   <div className="p-3 rounded-lg border">
-                    <h4 className="text-xs font-semibold text-gray-900 mb-2">Sector Allocation</h4>
+                    <h4 className="text-xs font-semibold text-foreground mb-2">Sector Allocation</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {realStatementData.sectorAllocation.map((s: any) => (
                         <div key={s.sector} className="flex items-center gap-2">
-                          <span className="text-xs text-gray-600 w-24 truncate">{s.sector}</span>
-                          <div className="flex-1 bg-gray-100 rounded-full h-2">
+                          <span className="text-xs text-muted-foreground w-24 truncate">{s.sector}</span>
+                          <div className="flex-1 bg-muted rounded-full h-2">
                             <div className="bg-[#0D7490] h-2 rounded-full" style={{ width: `${s.pct}%` }} />
                           </div>
-                          <span className="text-xs font-semibold text-gray-900 w-10 text-right">{s.pct}%</span>
+                          <span className="text-xs font-semibold text-foreground w-10 text-right">{s.pct}%</span>
                         </div>
                       ))}
                     </div>
@@ -2867,28 +3119,28 @@ export function PortfolioPage() {
 
                 {/* Holdings Table */}
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-900 mb-2">Positions ({realStatementData.holdings.length})</h4>
+                  <h4 className="text-xs font-semibold text-foreground mb-2">Positions ({realStatementData.holdings.length})</h4>
                   <div className="overflow-x-auto border rounded-lg">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-gray-50 border-b">
-                          <th className="text-left p-2 text-gray-500 font-medium text-[11px]">Ticker</th>
-                          <th className="text-left p-2 text-gray-500 font-medium text-[11px]">Name</th>
-                          <th className="text-right p-2 text-gray-500 font-medium text-[11px]">Shares</th>
-                          <th className="text-right p-2 text-gray-500 font-medium text-[11px]">Avg Cost</th>
-                          <th className="text-right p-2 text-gray-500 font-medium text-[11px]">Current</th>
-                          <th className="text-right p-2 text-gray-500 font-medium text-[11px]">Value</th>
-                          <th className="text-right p-2 text-gray-500 font-medium text-[11px]">P&L</th>
-                          <th className="text-right p-2 text-gray-500 font-medium text-[11px]">Return</th>
-                          <th className="text-left p-2 text-gray-500 font-medium text-[11px]">Sector</th>
+                        <tr className="bg-muted border-b">
+                          <th className="text-left p-2 text-muted-foreground font-medium text-[11px]">Ticker</th>
+                          <th className="text-left p-2 text-muted-foreground font-medium text-[11px]">Name</th>
+                          <th className="text-right p-2 text-muted-foreground font-medium text-[11px]">Shares</th>
+                          <th className="text-right p-2 text-muted-foreground font-medium text-[11px]">Avg Cost</th>
+                          <th className="text-right p-2 text-muted-foreground font-medium text-[11px]">Current</th>
+                          <th className="text-right p-2 text-muted-foreground font-medium text-[11px]">Value</th>
+                          <th className="text-right p-2 text-muted-foreground font-medium text-[11px]">P&L</th>
+                          <th className="text-right p-2 text-muted-foreground font-medium text-[11px]">Return</th>
+                          <th className="text-left p-2 text-muted-foreground font-medium text-[11px]">Sector</th>
                         </tr>
                       </thead>
                       <tbody>
                         {realStatementData.holdings.map((h: any) => (
-                          <tr key={h.id} className="border-b hover:bg-gray-50">
-                            <td className="p-2 font-semibold text-gray-900 text-xs">{h.ticker}</td>
-                            <td className="p-2 text-gray-500 text-[11px] max-w-[120px] truncate">{h.name}</td>
-                            <td className="p-2 text-right text-gray-900 text-xs">{h.shares}</td>
+                          <tr key={h.id} className="border-b hover:bg-accent">
+                            <td className="p-2 font-semibold text-foreground text-xs">{h.ticker}</td>
+                            <td className="p-2 text-muted-foreground text-[11px] max-w-[120px] truncate">{h.name}</td>
+                            <td className="p-2 text-right text-foreground text-xs">{h.shares}</td>
                             <td className="p-2 text-right text-xs">{h.market === 'NSE' ? 'KES ' : '$'}{h.avgCost.toFixed(2)}</td>
                             <td className="p-2 text-right text-xs">{h.market === 'NSE' ? 'KES ' : '$'}{h.currentPrice.toFixed(2)}</td>
                             <td className="p-2 text-right font-medium text-xs">{h.market === 'NSE' ? 'KES ' : '$'}{h.value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
@@ -2907,57 +3159,57 @@ export function PortfolioPage() {
                 {/* Trade History */}
                 {realStatementData.tradeHistory && realStatementData.tradeHistory.length > 0 && (
                   <div>
-                    <h4 className="text-xs font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <h4 className="text-xs font-semibold text-foreground mb-2 flex items-center gap-2">
                       <History className="w-3.5 h-3.5 text-[#0D7490]" />
                       Trade History ({realStatementData.tradeHistory.length})
                     </h4>
                     <div className="overflow-x-auto border rounded-lg">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="bg-gray-50 border-b">
-                            <th className="text-left p-2 text-gray-500 font-medium text-[11px]">Account</th>
-                            <th className="text-left p-2 text-gray-500 font-medium text-[11px]">Time</th>
-                            <th className="text-right p-2 text-gray-500 font-medium text-[11px]">Ticket</th>
-                            <th className="text-left p-2 text-gray-500 font-medium text-[11px]">Type</th>
-                            <th className="text-right p-2 text-gray-500 font-medium text-[11px]">Volume</th>
-                            <th className="text-left p-2 text-gray-500 font-medium text-[11px]">Symbol</th>
-                            <th className="text-right p-2 text-gray-500 font-medium text-[11px]">Price</th>
-                            <th className="text-right p-2 text-gray-500 font-medium text-[11px]">Close</th>
-                            <th className="text-right p-2 text-gray-500 font-medium text-[11px]">Profit</th>
-                            <th className="text-right p-2 text-gray-500 font-medium text-[11px]">Commission</th>
+                          <tr className="bg-muted border-b">
+                            <th className="text-left p-2 text-muted-foreground font-medium text-[11px]">Account</th>
+                            <th className="text-left p-2 text-muted-foreground font-medium text-[11px]">Time</th>
+                            <th className="text-right p-2 text-muted-foreground font-medium text-[11px]">Ticket</th>
+                            <th className="text-left p-2 text-muted-foreground font-medium text-[11px]">Type</th>
+                            <th className="text-right p-2 text-muted-foreground font-medium text-[11px]">Volume</th>
+                            <th className="text-left p-2 text-muted-foreground font-medium text-[11px]">Symbol</th>
+                            <th className="text-right p-2 text-muted-foreground font-medium text-[11px]">Price</th>
+                            <th className="text-right p-2 text-muted-foreground font-medium text-[11px]">Close</th>
+                            <th className="text-right p-2 text-muted-foreground font-medium text-[11px]">Profit</th>
+                            <th className="text-right p-2 text-muted-foreground font-medium text-[11px]">Commission</th>
                           </tr>
                         </thead>
                         <tbody>
                           {realStatementData.tradeHistory.map((trade: any, i: number) => {
                             const profit = parseFloat(trade.profit || '0');
                             return (
-                              <tr key={i} className="border-b hover:bg-gray-50">
+                              <tr key={i} className="border-b hover:bg-accent">
                                 <td className="p-2">
                                   <Badge variant="outline" className="text-[9px] border-blue-300 text-blue-600">{trade._brokerName || 'Broker'}</Badge>
                                 </td>
-                                <td className="p-2 text-gray-500 whitespace-nowrap text-[11px]">{trade.time || '-'}</td>
-                                <td className="p-2 text-right text-gray-700 text-[11px]">{trade.ticket || '-'}</td>
+                                <td className="p-2 text-muted-foreground whitespace-nowrap text-[11px]">{trade.time || '-'}</td>
+                                <td className="p-2 text-right text-foreground text-[11px]">{trade.ticket || '-'}</td>
                                 <td className="p-2">
                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                                     (trade.type || '').toLowerCase() === 'buy' ? 'bg-green-100 text-green-700' :
                                     (trade.type || '').toLowerCase() === 'sell' ? 'bg-red-100 text-red-700' :
                                     (trade.type || '').toLowerCase() === 'balance' ? 'bg-blue-100 text-blue-700' :
-                                    'bg-gray-100 text-gray-600'
+                                    'bg-muted text-muted-foreground'
                                   }`}>
                                     {trade.type || '-'}
                                   </span>
                                 </td>
-                                <td className="p-2 text-right text-gray-900 text-[11px]">{trade.volume || '-'}</td>
-                                <td className="p-2 font-medium text-gray-900 text-[11px]">{trade.symbol || '-'}</td>
-                                <td className="p-2 text-right text-gray-900 text-[11px]">{trade.price || '-'}</td>
-                                <td className="p-2 text-right text-gray-900 text-[11px]">{trade.price_2 || '-'}</td>
+                                <td className="p-2 text-right text-foreground text-[11px]">{trade.volume || '-'}</td>
+                                <td className="p-2 font-medium text-foreground text-[11px]">{trade.symbol || '-'}</td>
+                                <td className="p-2 text-right text-foreground text-[11px]">{trade.price || '-'}</td>
+                                <td className="p-2 text-right text-foreground text-[11px]">{trade.price_2 || '-'}</td>
                                 <td className="p-2 text-right">
                                   <span className={`flex items-center gap-1 justify-end font-medium text-[11px] ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {profit >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                                     {trade.profit || '0'}
                                   </span>
                                 </td>
-                                <td className="p-2 text-right text-gray-500 text-[11px]">{trade.commission || '-'}</td>
+                                <td className="p-2 text-right text-muted-foreground text-[11px]">{trade.commission || '-'}</td>
                               </tr>
                             );
                           })}
@@ -2970,19 +3222,27 @@ export function PortfolioPage() {
             )}
           </div>
 
-          <DialogFooter className="px-6 pb-6 pt-2 shrink-0 gap-2 border-t bg-gray-50">
-            <div className="flex items-center gap-2 text-xs text-gray-400">
+          <DialogFooter className="px-6 pb-6 pt-2 shrink-0 gap-2 border-t bg-muted">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className={`inline-block w-2 h-2 rounded-full ${statementLastRefreshed ? (Date.now() - statementLastRefreshed.getTime() < 70000 ? 'bg-green-500' : 'bg-yellow-500') : 'bg-gray-300'}`} />
               {statementLastRefreshed ? `Updated ${Math.round((Date.now() - statementLastRefreshed.getTime()) / 1000)}s ago` : 'Not yet updated'}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={openStatement} className="border-gray-200 gap-1 text-xs h-8">
+              {statementEmailSent && (
+                <span className="text-xs text-green-600 bg-green-50 border border-green-200 rounded px-2 py-1 flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Sent to {user?.email}
+                </span>
+              )}
+              <Button variant="outline" onClick={handleEmailStatement} disabled={emailingStatement || !realStatementData} className="border-border gap-1 text-xs h-8">
+                {emailingStatement ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />} Email
+              </Button>
+              <Button variant="outline" onClick={openStatement} className="border-border gap-1 text-xs h-8">
                 <RefreshCw className="w-3 h-3" /> Refresh
               </Button>
-              <Button variant="outline" onClick={() => window.print()} className="border-gray-200 gap-1 text-xs h-8">
+              <Button variant="outline" onClick={() => window.print()} className="border-border gap-1 text-xs h-8">
                 <BarChartHorizontal className="w-3 h-3" /> Print
               </Button>
-              <Button variant="outline" onClick={() => setShowRealStatement(false)} className="border-gray-200 text-xs h-8">Close</Button>
+              <Button variant="outline" onClick={() => setShowRealStatement(false)} className="border-border text-xs h-8">Close</Button>
             </div>
           </DialogFooter>
         </DialogContent>
@@ -3010,9 +3270,9 @@ export function PortfolioPage() {
                   { label: 'Free Margin', value: selectedBroker.latestSnapshot?.free_margin ?? selectedBroker.accountInfo?.freeMargin, fmt: (v: number) => Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 }) },
                   { label: 'Level', value: selectedBroker.latestSnapshot?.level ?? selectedBroker.accountInfo?.level, fmt: (v: number) => Number(v).toFixed(2) + '%' },
                 ].map(({ label, value, fmt }) => (
-                  <div key={label} className="p-3 rounded-lg bg-gray-50 border text-center">
-                    <div className="text-xs text-gray-500 mb-1">{label}</div>
-                    <div className="text-lg font-bold text-gray-900">
+                  <div key={label} className="p-3 rounded-lg bg-muted border text-center">
+                    <div className="text-xs text-muted-foreground mb-1">{label}</div>
+                    <div className="text-lg font-bold text-foreground">
                       {value != null ? fmt(Number(value)) : '-'}
                     </div>
                   </div>
@@ -3021,16 +3281,16 @@ export function PortfolioPage() {
 
               {/* Open Positions */}
               <div>
-                <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
                   <Activity className="w-5 h-5 text-[#0D7490]" />
                   Open Positions ({(selectedBroker.latestSnapshot?.positions ?? []).length})
                 </h4>
                 <div className="overflow-x-auto border rounded-lg">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-200">
+                      <tr className="border-b border-border">
                         {['Symbol', 'Volume', 'Price', 'S/L', 'T/P', 'Profit'].map(h => (
-                          <th key={h} className={`${h === 'Symbol' ? 'text-left' : 'text-right'} text-gray-600 py-3 px-3 font-medium`}>{h}</th>
+                          <th key={h} className={`${h === 'Symbol' ? 'text-left' : 'text-right'} text-muted-foreground py-3 px-3 font-medium`}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -3039,14 +3299,14 @@ export function PortfolioPage() {
                         selectedBroker.latestSnapshot.positions.map((pos: any, i: number) => {
                           const profit = parseFloat(pos.profit || '0');
                           return (
-                            <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                            <tr key={i} className="border-b border-border hover:bg-accent">
                               <td className="py-3 px-3">
-                                <div className="text-gray-900 font-semibold">{pos.symbol || '-'}</div>
+                                <div className="text-foreground font-semibold">{pos.symbol || '-'}</div>
                               </td>
-                              <td className="text-right py-3 px-3 text-gray-900">{pos.volume || '-'}</td>
-                              <td className="text-right py-3 px-3 text-gray-900">{pos.price || '-'}</td>
-                              <td className="text-right py-3 px-3 text-gray-500">{pos['s/l'] || pos.sl || '-'}</td>
-                              <td className="text-right py-3 px-3 text-gray-500">{pos['t/p'] || pos.tp || '-'}</td>
+                              <td className="text-right py-3 px-3 text-foreground">{pos.volume || '-'}</td>
+                              <td className="text-right py-3 px-3 text-foreground">{pos.price || '-'}</td>
+                              <td className="text-right py-3 px-3 text-muted-foreground">{pos['s/l'] || pos.sl || '-'}</td>
+                              <td className="text-right py-3 px-3 text-muted-foreground">{pos['t/p'] || pos.tp || '-'}</td>
                               <td className="text-right py-3 px-3">
                                 <span className={`flex items-center gap-1 justify-end font-medium ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                   {profit >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
@@ -3058,7 +3318,7 @@ export function PortfolioPage() {
                         })
                       ) : (
                         <tr>
-                          <td colSpan={6} className="text-center py-8 text-gray-400 text-sm">No open positions</td>
+                          <td colSpan={6} className="text-center py-8 text-muted-foreground text-sm">No open positions</td>
                         </tr>
                       )}
                     </tbody>
@@ -3068,16 +3328,16 @@ export function PortfolioPage() {
 
               {/* Trade History */}
               <div>
-                <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
                   <History className="w-5 h-5 text-[#0D7490]" />
                   Trade History ({(selectedBroker.latestSnapshot?.trade_history ?? []).length})
                 </h4>
                 <div className="overflow-x-auto border rounded-lg">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-200">
+                      <tr className="border-b border-border">
                         {['Time', 'Ticket', 'Type', 'Volume', 'Symbol', 'Price', 'Profit', 'Comment'].map(h => (
-                          <th key={h} className={`${h === 'Time' || h === 'Type' || h === 'Comment' ? 'text-left' : 'text-right'} text-gray-600 py-3 px-3 font-medium`}>{h}</th>
+                          <th key={h} className={`${h === 'Time' || h === 'Type' || h === 'Comment' ? 'text-left' : 'text-right'} text-muted-foreground py-3 px-3 font-medium`}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -3086,35 +3346,35 @@ export function PortfolioPage() {
                         selectedBroker.latestSnapshot.trade_history.map((trade: any, i: number) => {
                           const profit = parseFloat(trade.profit || '0');
                           return (
-                            <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className="py-3 px-3 text-gray-500 whitespace-nowrap">{trade.time || '-'}</td>
-                              <td className="text-right py-3 px-3 text-gray-700">{trade.ticket || '-'}</td>
+                            <tr key={i} className="border-b border-border hover:bg-accent">
+                              <td className="py-3 px-3 text-muted-foreground whitespace-nowrap">{trade.time || '-'}</td>
+                              <td className="text-right py-3 px-3 text-foreground">{trade.ticket || '-'}</td>
                               <td className="py-3 px-3">
                                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                                   (trade.type || '').toLowerCase() === 'buy' ? 'bg-green-100 text-green-700' :
                                   (trade.type || '').toLowerCase() === 'sell' ? 'bg-red-100 text-red-700' :
                                   (trade.type || '').toLowerCase() === 'balance' ? 'bg-blue-100 text-blue-700' :
-                                  'bg-gray-100 text-gray-600'
+                                  'bg-muted text-muted-foreground'
                                 }`}>
                                   {trade.type || '-'}
                                 </span>
                               </td>
-                              <td className="text-right py-3 px-3 text-gray-900">{trade.volume || '-'}</td>
-                              <td className="py-3 px-3 font-medium text-gray-900">{trade.symbol || '-'}</td>
-                              <td className="text-right py-3 px-3 text-gray-900">{trade.price || '-'}</td>
+                              <td className="text-right py-3 px-3 text-foreground">{trade.volume || '-'}</td>
+                              <td className="py-3 px-3 font-medium text-foreground">{trade.symbol || '-'}</td>
+                              <td className="text-right py-3 px-3 text-foreground">{trade.price || '-'}</td>
                               <td className="text-right py-3 px-3">
                                 <span className={`flex items-center gap-1 justify-end font-medium ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                   {profit >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
                                   {trade.profit || '0'}
                                 </span>
                               </td>
-                              <td className="py-3 px-3 text-gray-500 max-w-[200px] truncate" title={trade.comment}>{trade.comment || '-'}</td>
+                              <td className="py-3 px-3 text-muted-foreground max-w-[200px] truncate" title={trade.comment}>{trade.comment || '-'}</td>
                             </tr>
                           );
                         })
                       ) : (
                         <tr>
-                          <td colSpan={8} className="text-center py-8 text-gray-400 text-sm">No trade history available</td>
+                          <td colSpan={8} className="text-center py-8 text-muted-foreground text-sm">No trade history available</td>
                         </tr>
                       )}
                     </tbody>
@@ -3124,7 +3384,7 @@ export function PortfolioPage() {
 
               {/* Last Sync */}
               {selectedBroker.lastSyncAt && (
-                <div className="text-xs text-gray-400 text-right">
+                <div className="text-xs text-muted-foreground text-right">
                   Last synced: {new Date(selectedBroker.lastSyncAt).toLocaleString()}
                 </div>
               )}
@@ -3174,12 +3434,12 @@ export function PortfolioPage() {
                     await refresh();
                   }
                 } catch {}
-              }} className="border-gray-200 gap-2">
+              }} className="border-border gap-2">
                 <RefreshCw className="w-3 h-3" />
                 Sync
               </Button>
             )}
-            <Button variant="outline" onClick={() => setShowBrokerDetail(false)} className="border-gray-200">Close</Button>
+            <Button variant="outline" onClick={() => setShowBrokerDetail(false)} className="border-border">Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

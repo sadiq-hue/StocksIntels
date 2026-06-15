@@ -1,0 +1,2719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StocksIntel Admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f9fafb;height:100vh;color:#111827}
+.scroll{overflow-y:auto}
+.scroll::-webkit-scrollbar{width:4px}
+.scroll::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:8px;cursor:pointer;color:#6b7280;transition:all .15s;font-size:14px;font-weight:500}
+.nav-item:hover{background:#f3f4f6;color:#111827}
+.nav-item.active{background:#eff6ff;color:#0D7490;font-weight:600}
+.bubble-user{background:#0D7490;color:#fff;border-radius:16px 16px 4px 16px}
+.bubble-staff{background:#f3f4f6;color:#374151;border-radius:16px 16px 16px 4px;border:1px solid #e5e7eb}
+.user-row{cursor:pointer;transition:background .1s}
+.user-row:hover{background:#f9fafb}
+.user-row.selected{background:#eff6ff}
+.stat-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px}
+.stat-value{font-size:28px;font-weight:700}
+.stat-label{font-size:13px;color:#6b7280;margin-top:4px}
+th{text-align:left;padding:10px 12px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb}
+td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
+.pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:500}
+.pill-admin{background:#f3e8ff;color:#7c3aed}
+.pill-trader{background:#eff6ff;color:#2563eb}
+.pill-verified{background:#d1fae5;color:#065f46}
+.pill-unverified{background:#fef3c7;color:#92400e}
+.pill-active{background:#d1fae5;color:#065f46}
+.pill-free{background:#f3f4f6;color:#6b7280}
+.tab-btn{padding:8px 20px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;transition:all .15s;color:#6b7280;background:transparent;border:none}
+.tab-btn:hover{color:#111827;background:#f3f4f6}
+.tab-btn.active{background:#eff6ff;color:#0D7490}
+.input-field{background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:8px 12px;color:#111827;font-size:14px;outline:none;width:100%}
+.input-field:focus{border-color:#0D7490;box-shadow:0 0 0 2px rgba(13,116,144,.15)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;border:none}
+.btn-primary{background:#0D7490;color:#fff}
+.btn-primary:hover{background:#0a5f7a}
+.btn-danger{background:#dc2626;color:#fff}
+.btn-danger:hover{background:#b91c1c}
+.btn-secondary{background:#f3f4f6;color:#374151;border:1px solid #d1d5db}
+.btn-secondary:hover{background:#e5e7eb}
+.admin-header{background:#fff;border-bottom:1px solid #e5e7eb;padding:16px 24px}
+.ticket-row{cursor:pointer;transition:background .1s}
+.ticket-row:hover{background:#f9fafb}
+.ticket-row.selected{background:#eff6ff}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.signal-row{cursor:pointer;transition:background .1s}
+.signal-row:hover{background:#f9fafb}
+.signal-row.selected{background:#eff6ff}
+</style>
+</head>
+<body>
+<div id="app" class="flex h-screen">
+  <!-- Loading state shown before auth check -->
+  <div id="loadingScreen" class="flex items-center justify-center h-screen w-full" style="background:#f9fafb">
+    <div class="text-center">
+      <div class="size-8 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin mx-auto mb-3"></div>
+      <p class="text-sm text-gray-500">Loading admin panel...</p>
+    </div>
+  </div>
+
+  <!-- Login form (shown when not authenticated) -->
+  <div id="loginScreen" class="hidden flex items-center justify-center h-screen w-full" style="background:#f9fafb">
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:40px;width:400px;max-width:90vw">
+      <div class="flex items-center gap-2.5 mb-6">
+        <div class="size-9 rounded-lg bg-[#0D7490]/10 flex items-center justify-center">
+          <svg class="size-5 text-[#0D7490]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        </div>
+        <div>
+          <p class="text-lg font-bold text-gray-900">StocksIntel</p>
+          <p class="text-xs text-gray-500">Admin Panel Login</p>
+        </div>
+      </div>
+      <div id="loginError" class="hidden mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700"></div>
+      <div class="space-y-4">
+        <div id="loginEmailGroup">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <input id="loginEmailInput" type="email" class="input-field" placeholder="bathurusadiki01@gmail.com" autocomplete="email" onkeydown="if(event.key==='Enter')handleSendOtp()">
+        </div>
+        <div id="loginOtpGroup" class="hidden">
+          <label class="block text-sm font-medium text-gray-700 mb-1">One-Time Password</label>
+          <input id="loginOtpInput" type="text" class="input-field" placeholder="Enter 6-digit code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" onkeydown="if(event.key==='Enter')handleVerifyOtp()">
+        </div>
+        <button id="loginBtn" class="btn btn-primary w-full justify-center py-2.5 text-sm">
+          Send OTP
+        </button>
+        <button id="loginBackBtn" class="hidden btn w-full justify-center py-2 text-xs text-gray-500 hover:text-gray-700 transition-colors" style="background:none;border:none;cursor:pointer" onclick="resetLoginForm()">
+          &larr; Use different email
+        </button>
+      </div>
+      <div class="mt-4 text-center">
+        <a href="/" class="text-xs text-gray-400 hover:text-gray-600 transition-colors">&larr; Back to main site</a>
+      </div>
+    </div>
+  </div>
+  <!-- Sidebar -->
+  <div id="sidebar" class="w-64 shrink-0 flex flex-col hidden" style="background:#fff;border-right:1px solid #e5e7eb">
+    <div class="p-5 border-b border-gray-200">
+      <div class="flex items-center gap-2.5">
+        <div class="size-8 rounded-lg bg-[#0D7490]/10 flex items-center justify-center">
+          <svg class="size-5 text-[#0D7490]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        </div>
+        <div>
+          <p class="text-sm font-bold text-gray-900">StocksIntel</p>
+          <p class="text-xs text-gray-500">Admin Panel</p>
+        </div>
+      </div>
+    </div>
+    <div class="flex-1 p-3 space-y-1">
+      <div class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" data-tab="users" onclick="switchTab('users')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/></svg>
+        Users
+      </div>
+      <div class="nav-item" data-tab="subscribers" onclick="switchTab('subscribers')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Subscribers
+      </div>
+      <div class="nav-item" data-tab="tickets" onclick="switchTab('tickets')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/></svg>
+        Support Tickets
+      </div>
+      <div class="nav-item" data-tab="signals" onclick="switchTab('signals')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        Signals
+        <span id="signalBadge" class="ml-auto text-xs text-gray-400"></span>
+      </div>
+      <div class="nav-item" data-tab="portfolio-history" onclick="switchTab('portfolio-history')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Portfolio History
+      </div>
+      <div class="nav-item" data-tab="community" onclick="switchTab('community')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        Community
+      </div>
+      <div class="nav-item" data-tab="broker-accounts" onclick="switchTab('broker-accounts')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+        Broker Accounts
+      </div>
+      <div class="nav-item" data-tab="chat" onclick="switchTab('chat')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+        Live Chat
+        <span id="chatBadge" class="ml-auto text-xs text-gray-400">0</span>
+      </div>
+      <div class="nav-item" data-tab="payments" onclick="switchTab('payments')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        Payments
+      </div>
+      <div class="nav-item" data-tab="stocks" onclick="switchTab('stocks')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3zm4 3h.01M12 8h.01M16 6h.01M8 14h.01M12 12h.01M16 10h.01M8 18h.01M12 16h.01M16 14h.01"/></svg>
+        Stocks
+      </div>
+      <div class="nav-item" data-tab="signal-outcomes" onclick="switchTab('signal-outcomes')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Signal Outcomes
+      </div>
+      <div class="nav-item" data-tab="notifications" onclick="switchTab('notifications')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        Notifications
+      </div>
+      <div class="nav-item" data-tab="followers" onclick="switchTab('followers')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        Followers
+      </div>
+      <div class="nav-item" data-tab="user-activity" onclick="switchTab('user-activity')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8V4m0 4a4 4 0 100 8 4 4 0 000-8zm-8 8a4 4 0 014-4h8a4 4 0 014 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2z"/></svg>
+        User Activity
+      </div>
+    </div>
+    <div class="p-3 border-t border-gray-200 space-y-1">
+      <a href="/" class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+        Back to App
+      </a>
+      <button onclick="handleAdminLogout()" class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors w-full" style="background:none;border:none;cursor:pointer">
+        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        Logout
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div id="mainContent" class="flex-1 flex flex-col min-w-0">
+    <!-- Tab: Dashboard -->
+    <div id="tab-dashboard" class="flex-1 min-h-0 scroll p-6 space-y-6">
+      <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-900">Dashboard</h1>
+        <span id="lastUpdated" class="text-xs text-gray-400"></span>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div class="stat-card">
+          <div class="stat-value text-[#0D7490]" id="statTotalUsers">-</div>
+          <div class="stat-label">Total Users</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-emerald-600" id="statNewToday">-</div>
+          <div class="stat-label">New Today</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-amber-600" id="statTotalTrades">-</div>
+          <div class="stat-label">Total Trades</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-violet-600" id="statSubscriptions">-</div>
+          <div class="stat-label">Active Subscriptions</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-cyan-600" id="statPortfolioValue">-</div>
+          <div class="stat-label">Portfolio Value (KES)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-pink-600" id="statChatMessages">-</div>
+          <div class="stat-label">Support Messages</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-orange-600" id="statSubscriptionsTotal">-</div>
+          <div class="stat-label">Subscriptions</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-red-600" id="statTickets">-</div>
+          <div class="stat-label">Support Tickets</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-indigo-600" id="statGroups">-</div>
+          <div class="stat-label">Groups</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-teal-600" id="statMessages">-</div>
+          <div class="stat-label">Messages</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-blue-600" id="statBrokerConnections">-</div>
+          <div class="stat-label">Broker Connections</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-purple-600" id="statPortfolioSnapshots">-</div>
+          <div class="stat-label">Portfolio Snapshots</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-green-600" id="statPredictions">-</div>
+          <div class="stat-label">Predictions</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-yellow-600" id="statWinRate">-</div>
+          <div class="stat-label">Win Rate</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-blue-600" id="statWins">-</div>
+          <div class="stat-label">Wins / Losses</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value text-gray-600" id="statSignalsGenerated">-</div>
+          <div class="stat-label">Signals Generated</div>
+        </div>
+      </div>
+      <div>
+        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Recent Registrations</h2>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+          <table class="w-full">
+            <thead><tr><th>Name</th><th>Email</th><th>Verified</th><th>Date</th></tr></thead>
+            <tbody id="recentRegTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Users -->
+    <div id="tab-users" class="flex-1 hidden overflow-hidden flex-col">
+      <div class="admin-header flex items-center justify-between shrink-0">
+        <h1 class="text-lg font-bold text-gray-900">Users</h1>
+        <div class="flex items-center gap-3">
+          <input id="userSearchInput" class="input-field w-64" placeholder="Search users..." oninput="debounceSearch()">
+          <span id="userCount" class="text-sm text-gray-500"></span>
+        </div>
+      </div>
+      <div class="flex flex-1 min-h-0 relative">
+        <div id="usersLeftPanel" class="w-full border-r border-gray-200" style="overflow-y:auto">
+          <table class="w-full">
+            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Trader Type</th><th>Verified</th><th>Subscription</th></tr></thead>
+            <tbody id="usersTableBody"></tbody>
+          </table>
+          <div id="usersPagination" class="flex items-center justify-center gap-2 p-4"></div>
+        </div>
+        <div id="userDetailPanel" class="hidden" style="position:absolute;top:0;bottom:0;left:50%;right:0;overflow-y:auto;padding:1.25rem">
+          <div id="userDetailContent"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Subscribers -->
+    <div id="tab-subscribers" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-900">Subscribers</h1>
+        <span id="subscriberTotal" class="text-sm text-gray-500"></span>
+      </div>
+      <!-- Plans Section -->
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Subscription Plans</h2>
+          <button class="btn btn-primary" onclick="showAddPlanForm()">+ Add Plan</button>
+        </div>
+        <div id="plansContainer" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+      </div>
+      <!-- Plans form (hidden) -->
+      <div id="planFormContainer" class="hidden" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3" id="planFormTitle">Add Plan</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="planNameInput" class="input-field" placeholder="Plan name">
+          <input id="planPriceKesInput" class="input-field" placeholder="Price KES" type="number">
+          <input id="planPriceUsdInput" class="input-field" placeholder="Price USD" type="number">
+          <select id="planDurationInput" class="input-field">
+            <option value="1">Monthly</option>
+            <option value="12">Yearly</option>
+          </select>
+          <input id="planFeaturesInput" class="input-field" placeholder="Features (comma separated)">
+          <div class="col-span-2"><textarea id="planDescInput" class="input-field" placeholder="Description" rows="2"></textarea></div>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <button class="btn btn-primary" onclick="savePlan()">Save</button>
+          <button class="btn btn-secondary" onclick="cancelPlanForm()">Cancel</button>
+        </div>
+      </div>
+      <!-- Stats -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="subscriberStats"></div>
+      <!-- Subscriptions Table -->
+      <div>
+        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">All Subscriptions</h2>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+          <table class="w-full">
+            <thead><tr><th>User</th><th>Email</th><th>Plan</th><th>Duration</th><th>Status</th><th>Amount</th><th>Start</th><th>End</th></tr></thead>
+            <tbody id="subscriptionsTableBody"></tbody>
+          </table>
+        </div>
+        <div id="subscriptionsPagination" class="flex items-center justify-center gap-2 py-4"></div>
+      </div>
+    </div>
+
+    <!-- Tab: Support Tickets -->
+    <div id="tab-tickets" class="flex-1 hidden overflow-hidden flex-col">
+      <div class="admin-header flex items-center justify-between shrink-0">
+        <h1 class="text-lg font-bold text-gray-900">Support Tickets</h1>
+        <span id="ticketTotalLabel" class="text-sm text-gray-500"></span>
+      </div>
+      <!-- Stats -->
+      <div class="grid grid-cols-4 gap-3 p-4 shrink-0">
+        <div class="stat-card text-center"><div class="stat-value text-[#0D7490]" id="ticketStatTotal">-</div><div class="stat-label">Total</div></div>
+        <div class="stat-card text-center"><div class="stat-value text-amber-600" id="ticketStatOpen">-</div><div class="stat-label">Open</div></div>
+        <div class="stat-card text-center"><div class="stat-value text-blue-600" id="ticketStatInProgress">-</div><div class="stat-label">In Progress</div></div>
+        <div class="stat-card text-center"><div class="stat-value text-emerald-600" id="ticketStatResolved">-</div><div class="stat-label">Resolved/Closed</div></div>
+      </div>
+      <!-- Tickets Table -->
+          <div class="flex flex-1 min-h-0 relative">
+        <div id="ticketsLeftPanel" class="w-full" style="overflow-y:auto">
+          <table class="w-full">
+            <thead><tr><th>Email</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Messages</th><th>Created</th></tr></thead>
+            <tbody id="ticketsTableBody"></tbody>
+          </table>
+          <div id="ticketsPagination" class="flex items-center justify-center gap-2 p-4"></div>
+        </div>
+        <div id="ticketDetailPanel" class="hidden" style="position:absolute;top:0;bottom:0;left:50%;right:0;overflow-y:auto;padding:1.25rem">
+          <div id="ticketDetailContent"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Signals -->
+    <div id="tab-signals" class="flex-1 hidden overflow-hidden flex-col">
+      <div class="admin-header flex items-center justify-between shrink-0">
+        <h1 class="text-lg font-bold text-gray-900">Signals</h1>
+        <div class="flex items-center gap-3">
+          <span id="signalTotalLabel" class="text-sm text-gray-500"></span>
+          <span id="signalLastGen" class="text-xs text-gray-400"></span>
+          <button class="btn btn-primary text-xs" onclick="generateSignals(event)">
+            <svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            Generate Signals
+          </button>
+        </div>
+      </div>
+      <!-- Stats -->
+      <div class="grid grid-cols-5 gap-3 p-4 shrink-0">
+        <div class="stat-card text-center"><div class="stat-value text-[#0D7490]" id="sigTotal">-</div><div class="stat-label">Total Signals</div></div>
+        <div class="stat-card text-center"><div class="stat-value text-emerald-600" id="sigTickers">-</div><div class="stat-label">Tickers</div></div>
+        <div class="stat-card text-center"><div class="stat-value text-amber-600" id="sigBuy">-</div><div class="stat-label">Buy</div></div>
+        <div class="stat-card text-center"><div class="stat-value text-red-600" id="sigSell">-</div><div class="stat-label">Sell</div></div>
+        <div class="stat-card text-center"><div class="stat-value text-gray-600" id="sigHold">-</div><div class="stat-label">Hold</div></div>
+      </div>
+      <!-- Filters -->
+      <div class="px-4 pb-3 flex items-center gap-3 shrink-0 flex-wrap">
+        <input id="sigTickerInput" placeholder="Ticker..." class="input-field w-28" oninput="debounceSigFilter()">
+        <select id="sigSignalSelect" class="input-field w-26" onchange="debounceSigFilter()">
+          <option value="">All Signals</option>
+          <option value="Buy">Buy</option>
+          <option value="Accumulate">Accumulate</option>
+          <option value="Hold">Hold</option>
+          <option value="Sell">Sell</option>
+          <option value="Strong Sell">Strong Sell</option>
+        </select>
+        <select id="sigMarketSelect" class="input-field w-22" onchange="debounceSigFilter()">
+          <option value="">All Markets</option>
+          <option value="NSE">NSE</option>
+          <option value="NASDAQ">NASDAQ</option>
+          <option value="NYSE">NYSE</option>
+        </select>
+        <input id="sigSectorInput" placeholder="Sector..." class="input-field w-32" oninput="debounceSigFilter()">
+        <input id="sigDateFrom" type="date" class="input-field w-36" onchange="debounceSigFilter()">
+        <input id="sigDateTo" type="date" class="input-field w-36" onchange="debounceSigFilter()">
+      </div>
+      <!-- Table + Detail -->
+      <div class="flex flex-1 min-h-0 relative">
+        <div id="signalsLeftPanel" class="w-full min-w-0 min-h-0" style="overflow-y:auto;height:100%">
+          <div style="overflow-x:auto;overflow-y:hidden">
+            <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;width:1600px">
+              <table style="width:1600px">
+              <thead><tr><th>Ticker</th><th>Signal</th><th>Conf.</th><th>Price</th><th>Chg %</th><th>Entry</th><th>Stop</th><th>T1</th><th>T2</th><th>Market</th><th>Timeframe</th><th>Generated</th><th></th></tr></thead>
+              <tbody id="signalsTableBody"></tbody>
+            </table>
+          </div>
+          <div id="signalsPagination" class="flex items-center justify-center gap-2 py-4"></div>
+        </div>
+        <div id="signalDetailPanel" class="hidden" style="position:absolute;top:0;bottom:0;left:50%;right:0;overflow-y:auto;padding:1.25rem">
+          <div id="signalDetailContent"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Signal Edit Modal -->
+    <div id="signalEditModal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,.4)">
+      <div style="background:#fff;border-radius:12px;padding:24px;width:480px;max-width:90vw">
+        <h3 class="text-sm font-semibold text-gray-900 mb-4">Edit Signal</h3>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <div><label class="text-gray-500 text-xs">Signal</label>
+            <select id="editSigSignal" class="input-field mt-1">
+              <option value="Buy">Buy</option><option value="Accumulate">Accumulate</option>
+              <option value="Hold">Hold</option><option value="Sell">Sell</option>
+              <option value="Strong Sell">Strong Sell</option>
+            </select></div>
+          <div><label class="text-gray-500 text-xs">Confidence %</label><input id="editSigConfidence" type="number" class="input-field mt-1"></div>
+          <div><label class="text-gray-500 text-xs">Entry Price</label><input id="editSigEntry" type="number" step="0.01" class="input-field mt-1"></div>
+          <div><label class="text-gray-500 text-xs">Stop Loss</label><input id="editSigStop" type="number" step="0.01" class="input-field mt-1"></div>
+          <div><label class="text-gray-500 text-xs">Target 1</label><input id="editSigT1" type="number" step="0.01" class="input-field mt-1"></div>
+          <div><label class="text-gray-500 text-xs">Target 2</label><input id="editSigT2" type="number" step="0.01" class="input-field mt-1"></div>
+          <div><label class="text-gray-500 text-xs">Risk/Reward</label><input id="editSigRR" type="number" step="0.1" class="input-field mt-1"></div>
+          <div><label class="text-gray-500 text-xs">Timeframe</label>
+            <select id="editSigTimeframe" class="input-field mt-1">
+              <option value="short_term">Short Term</option><option value="medium_term">Medium Term</option>
+              <option value="long_term">Long Term</option>
+            </select></div>
+        </div>
+        <div class="flex gap-2 mt-4">
+          <button class="btn btn-primary" onclick="saveSignalEdit()">Save</button>
+          <button class="btn btn-secondary" onclick="closeSignalEditModal()">Cancel</button>
+          <button class="btn btn-danger ml-auto" onclick="deleteSignal()">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Portfolio History -->
+    <div id="tab-portfolio-history" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-900">Portfolio History</h1>
+        <div class="flex items-center gap-3">
+          <select id="portfolioUserFilter" class="input-field w-48 text-sm" onchange="fetchPortfolioHistory()">
+            <option value="">All Users</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-4">
+        <div class="stat-card"><div class="stat-value text-[#0D7490]" id="portStatTotal">-</div><div class="stat-label">Total Snapshots</div></div>
+        <div class="stat-card"><div class="stat-value text-emerald-600" id="portStatUsers">-</div><div class="stat-label">Distinct Users</div></div>
+        <div class="stat-card"><div class="stat-value text-amber-600" id="portStatRange">-</div><div class="stat-label">Date Range</div></div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+        <table class="w-full">
+          <thead><tr><th>User</th><th>Email</th><th>Total Value</th><th>Cash Balance</th><th>Invested</th><th>Market (KES/USD)</th><th>Snapshot Date</th></tr></thead>
+          <tbody id="portfolioHistoryTableBody"></tbody>
+        </table>
+      </div>
+      <div id="portfolioHistoryPagination" class="flex items-center justify-center gap-2 py-4"></div>
+    </div>
+
+    <!-- Tab: Community -->
+    <div id="tab-community" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <h1 class="text-xl font-bold text-gray-900 mb-4">Community</h1>
+      <!-- Create Group Form -->
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-gray-700">Create Group</h3>
+          <button class="btn btn-secondary" onclick="toggleGroupForm()" id="groupFormToggleBtn">Show</button>
+        </div>
+        <div id="groupFormBody" class="hidden space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <input id="groupSlugInput" class="input-field" placeholder="Group ID (slug - e.g. my-group)">
+            <input id="groupNameInput" class="input-field" placeholder="Group Name">
+            <input id="groupIconInput" class="input-field" placeholder="Icon (emoji or icon name)">
+            <select id="groupTopicSelect" class="input-field">
+              <option value="General">General</option>
+              <option value="Trading">Trading</option>
+              <option value="Finance">Finance</option>
+              <option value="Technology">Technology</option>
+              <option value="Telecom">Telecom</option>
+              <option value="Income">Income</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <textarea id="groupDescInput" class="input-field" placeholder="Description" rows="2"></textarea>
+          <button class="btn btn-primary" onclick="createGroup()">Save Group</button>
+        </div>
+      </div>
+      <!-- Groups Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4" id="groupsContainer"></div>
+      <!-- Messages -->
+      <div class="mt-8">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Recent Messages</h2>
+          <select id="msgGroupFilter" class="input-field w-48 text-xs" onchange="fetchAdminMessages()">
+            <option value="">All Groups</option>
+          </select>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+          <table class="w-full">
+            <thead><tr><th>Sender</th><th>Content</th><th>Group</th><th>Time</th><th></th></tr></thead>
+            <tbody id="adminMessagesTableBody"></tbody>
+          </table>
+        </div>
+        <div id="adminMessagesPagination" class="flex items-center justify-center gap-2 py-4"></div>
+      </div>
+    </div>
+
+    <!-- Tab: Broker Accounts -->
+    <div id="tab-broker-accounts" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <h1 class="text-xl font-bold text-gray-900 mb-4">Broker Accounts</h1>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+        <table class="w-full">
+          <thead><tr><th>User</th><th>Broker</th><th>Account</th><th>Connected</th><th>Sync Status</th><th>Last Sync</th><th>Balance</th><th>Equity</th></tr></thead>
+          <tbody id="brokerAccountsTableBody"></tbody>
+        </table>
+      </div>
+      <!-- Detail panel for selected broker -->
+      <div id="brokerDetailPanel" class="hidden" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+        <h3 class="text-sm font-semibold text-gray-700 mb-3">Snapshot History</h3>
+        <div id="brokerSnapshotsContent" class="text-sm text-gray-500">Select a row to view snapshots</div>
+      </div>
+    </div>
+
+    <!-- Tab: Live Chat -->
+    <div id="tab-chat" class="flex-1 hidden overflow-hidden">
+      <div class="flex h-full">
+        <div class="w-80 shrink-0 border-r border-gray-200 flex flex-col" style="background:#fff">
+          <div class="p-4 border-b border-gray-100">
+            <div class="flex items-center gap-2 text-sm font-bold text-gray-900">
+              <svg class="size-4 text-[#0D7490]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+              Live Chat
+              <span class="text-xs font-normal text-gray-400 ml-auto" id="chatCount">0 active</span>
+            </div>
+            <div class="relative mt-2">
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              <input id="chatSearchInput" oninput="filterChats()" placeholder="Search conversations..." class="w-full pl-8 h-9 text-xs border border-gray-200 rounded-lg outline-none text-gray-700 focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20">
+            </div>
+          </div>
+          <div id="chatList" class="flex-1 scroll min-h-0">
+            <div id="chatLoadingEl" class="flex items-center justify-center py-12">
+              <div class="size-5 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin"></div>
+            </div>
+          </div>
+        </div>
+        <div class="flex-1 flex flex-col min-w-0" style="background:#f9fafb">
+          <div id="chatEmptyState" class="flex-1 flex items-center justify-center text-gray-400">
+            <div class="text-center">
+              <svg class="size-16 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+              <p class="font-semibold text-sm">Select a conversation</p>
+              <p class="text-xs mt-1 text-gray-400">Choose a user from the sidebar to start replying</p>
+            </div>
+          </div>
+          <div id="chatConversationPane" class="hidden flex-1 flex flex-col min-w-0">
+            <div class="px-5 py-3 border-b border-gray-200 shrink-0 flex items-center justify-between" style="background:#fff">
+              <div class="flex items-center gap-3">
+                <div class="size-9 rounded-full bg-[#0D7490]/10 flex items-center justify-center">
+                  <svg class="size-4 text-[#0D7490]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                </div>
+                <div>
+                  <p class="text-sm font-bold text-gray-900" id="chatUserName">User</p>
+                  <p class="text-xs text-gray-500" id="chatUserEmail"></p>
+                </div>
+              </div>
+              <span id="chatTypingIndicator" class="hidden text-xs text-emerald-600 flex items-center gap-1.5">
+                <span class="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span> typing...
+              </span>
+            </div>
+            <div id="messagesArea" class="flex-1 scroll min-h-0 px-5 py-4 space-y-3"></div>
+            <div class="p-4 border-t border-gray-200 shrink-0" style="background:#fff">
+              <div class="flex items-center gap-2">
+                <input id="replyInput" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendReply()}" placeholder="Type your reply..." class="flex-1 h-11 px-4 bg-gray-50 border-2 border-gray-200 rounded-xl outline-none text-gray-700 focus:border-[#0D7490] text-sm">
+                <button id="sendBtn" onclick="sendReply()" class="size-11 bg-[#0D7490] hover:bg-[#0a5f7a] text-white rounded-xl shrink-0 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                  <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Payments -->
+    <div id="tab-payments" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-900">Payments</h1>
+        <span id="paymentTotalLabel" class="text-sm text-gray-500"></span>
+      </div>
+      <div class="grid grid-cols-4 gap-4">
+        <div class="stat-card"><div class="stat-value text-[#0D7490]" id="payStatTotal">-</div><div class="stat-label">Total</div></div>
+        <div class="stat-card"><div class="stat-value text-emerald-600" id="payStatSuccess">-</div><div class="stat-label">Successful</div></div>
+        <div class="stat-card"><div class="stat-value text-red-600" id="payStatFailed">-</div><div class="stat-label">Failed</div></div>
+        <div class="stat-card"><div class="stat-value text-amber-600" id="payStatPending">-</div><div class="stat-label">Pending</div></div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
+        <table class="w-full">
+          <thead><tr><th>ID</th><th>User</th><th>Email</th><th>Amount</th><th>Currency</th><th>Provider</th><th>Phone</th><th>Plan</th><th>Ref</th><th>Status</th><th>Date</th></tr></thead>
+          <tbody id="paymentsTableBody"></tbody>
+        </table>
+      </div>
+      <div id="paymentsPagination" class="flex items-center justify-center gap-2 py-4"></div>
+    </div>
+
+    <!-- Tab: Stocks -->
+    <div id="tab-stocks" class="flex-1 hidden overflow-hidden flex-col">
+      <div class="admin-header flex items-center justify-between shrink-0">
+        <h1 class="text-lg font-bold text-gray-900">Stocks</h1>
+        <div class="flex items-center gap-3">
+          <input id="stockSearchInput" class="input-field w-64" placeholder="Search stocks..." oninput="debounceStockSearch()">
+          <span id="stockTotalLabel" class="text-sm text-gray-500"></span>
+        </div>
+      </div>
+      <div class="flex-1 min-h-0 scroll p-6">
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
+          <table class="w-full">
+            <thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th>Market</th><th>Currency</th><th>Active</th><th></th></tr></thead>
+            <tbody id="stocksTableBody"></tbody>
+          </table>
+        </div>
+        <div id="stocksPagination" class="flex items-center justify-center gap-2 py-4"></div>
+      </div>
+      <!-- Stock Edit Modal -->
+      <div id="stockEditModal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,.4)">
+        <div style="background:#fff;border-radius:12px;padding:24px;width:480px;max-width:90vw">
+          <h3 class="text-sm font-semibold text-gray-900 mb-4">Edit Stock</h3>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div><label class="text-gray-500 text-xs">Ticker</label><input id="editStockTicker" class="input-field mt-1"></div>
+            <div><label class="text-gray-500 text-xs">Name</label><input id="editStockName" class="input-field mt-1"></div>
+            <div><label class="text-gray-500 text-xs">Sector</label><input id="editStockSector" class="input-field mt-1"></div>
+            <div><label class="text-gray-500 text-xs">Market</label><input id="editStockMarket" class="input-field mt-1"></div>
+            <div><label class="text-gray-500 text-xs">Currency</label><input id="editStockCurrency" class="input-field mt-1"></div>
+            <div><label class="text-gray-500 text-xs">Active</label>
+              <select id="editStockActive" class="input-field mt-1">
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex gap-2 mt-4">
+            <button class="btn btn-primary" onclick="saveStockEdit()">Save</button>
+            <button class="btn btn-secondary" onclick="closeStockEditModal()">Cancel</button>
+            <button class="btn btn-danger ml-auto" onclick="deleteStock()">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Signal Outcomes -->
+    <div id="tab-signal-outcomes" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-900">Signal Outcomes</h1>
+        <span id="signalOutcomeTotalLabel" class="text-sm text-gray-500"></span>
+      </div>
+      <div class="grid grid-cols-4 gap-4">
+        <div class="stat-card"><div class="stat-value text-[#0D7490]" id="soStatTotal">-</div><div class="stat-label">Total</div></div>
+        <div class="stat-card"><div class="stat-value text-emerald-600" id="soStatWins">-</div><div class="stat-label">Wins</div></div>
+        <div class="stat-card"><div class="stat-value text-red-600" id="soStatLosses">-</div><div class="stat-label">Losses</div></div>
+        <div class="stat-card"><div class="stat-value text-amber-600" id="soStatWinRate">-</div><div class="stat-label">Win Rate</div></div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
+        <table class="w-full">
+          <thead><tr><th>Ticker</th><th>Signal</th><th>Entry Price</th><th>Exit Price</th><th>Result</th><th>Date</th></tr></thead>
+          <tbody id="signalOutcomesTableBody"></tbody>
+        </table>
+      </div>
+      <div id="signalOutcomesPagination" class="flex items-center justify-center gap-2 py-4"></div>
+    </div>
+
+    <!-- Tab: Notifications -->
+    <div id="tab-notifications" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-900">Notifications</h1>
+        <span id="notificationTotalLabel" class="text-sm text-gray-500"></span>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
+        <table class="w-full">
+          <thead><tr><th>User</th><th>Email</th><th>Title</th><th>Body</th><th>Type</th><th>Read</th><th>Date</th></tr></thead>
+          <tbody id="notificationsTableBody"></tbody>
+        </table>
+      </div>
+      <div id="notificationsPagination" class="flex items-center justify-center gap-2 py-4"></div>
+    </div>
+
+    <!-- Tab: Followers -->
+    <div id="tab-followers" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-900">Followers</h1>
+        <span id="followerTotalLabel" class="text-sm text-gray-500"></span>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
+        <table class="w-full">
+          <thead><tr><th>Follower</th><th>Followee</th><th>Since</th></tr></thead>
+          <tbody id="followersTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- Tab: User Activity -->
+    <div id="tab-user-activity" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-900">User Activity</h1>
+        <div class="flex items-center gap-2">
+          <select id="activityFilter" class="input-field text-sm py-1.5" onchange="fetchUserActivity()">
+            <option value="">All Actions</option>
+            <option value="page_view">Page Views</option>
+            <option value="trade">Trades</option>
+            <option value="login">Logins</option>
+            <option value="signal_view">Signal Views</option>
+            <option value="watchlist_add">Watchlist Add</option>
+            <option value="watchlist_remove">Watchlist Remove</option>
+            <option value="search">Searches</option>
+            <option value="news_read">News Reads</option>
+          </select>
+          <span id="activityTotalLabel" class="text-sm text-gray-500"></span>
+        </div>
+      </div>
+      <div id="realtimeActivityFeed" class="space-y-2">
+        <div class="text-center text-sm text-gray-400 py-8">No activity yet. Waiting for users...</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
+        <table class="w-full">
+          <thead><tr><th>Time</th><th>User</th><th>Email</th><th>Action</th><th>Details</th></tr></thead>
+          <tbody id="activityTableBody"></tbody>
+        </table>
+      </div>
+      <div id="activityPagination" class="flex items-center justify-center gap-2 py-4"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let currentTab = 'dashboard';
+let socket = null;
+
+// ── Inject auth token into all fetch calls ──
+const _origFetch = window.fetch;
+window.fetch = async (input, init) => {
+  const token = localStorage.getItem('stockintel_token');
+  if (token) {
+    init = init || {};
+    init.headers = init.headers || {};
+    if (Array.isArray(init.headers)) {
+      init.headers.push(['Authorization', 'Bearer ' + token]);
+    } else if (init.headers instanceof Headers) {
+      init.headers.set('Authorization', 'Bearer ' + token);
+    } else {
+      init.headers['Authorization'] = 'Bearer ' + token;
+    }
+  }
+  const res = await _origFetch(input, init);
+  // Auto-redirect to login on 401 for admin API calls
+  if (res.status === 401 && typeof input === 'string' && input.includes('/api/admin/')) {
+    localStorage.removeItem('stockintel_token');
+    localStorage.removeItem('stockintel_user');
+    const loginScreen = document.getElementById('loginScreen');
+    if (loginScreen) {
+      loginScreen.classList.remove('hidden');
+      document.getElementById('loadingScreen')?.classList.add('hidden');
+      showAdminLayout(false);
+    }
+  }
+  return res;
+};
+
+// ── Toast Notification ──
+function toast(msg, type) {
+  const el = document.createElement('div');
+  el.className = 'fixed top-4 right-4 z-50 px-4 py-3 rounded-lg text-sm font-medium shadow-lg transition-all duration-300 ' +
+    (type === 'error' ? 'bg-red-500 text-white' : type === 'success' ? 'bg-emerald-500 text-white' : 'bg-gray-800 text-white');
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+
+// ── Socket IO ──
+function initSocket() {
+  socket = io({ transports: ['websocket', 'polling'] });
+  socket.on('connect', () => { socket.emit('staff_join'); });
+  socket.on('support_chat_message', (msg) => {
+    const idx = activeChats.findIndex(c => c.user_id === msg.user_id);
+    if (idx >= 0) {
+      activeChats[idx].last_message = msg.message;
+      activeChats[idx].last_activity = msg.created_at;
+      activeChats[idx].user_name = msg.user_name;
+    } else if (msg.user_id) {
+      activeChats.unshift({ user_id: msg.user_id, user_name: msg.user_name, email: msg.email, last_message: msg.message, last_activity: msg.created_at });
+    }
+    activeChats.sort((a, b) => new Date(b.last_activity) - new Date(a.last_activity));
+    renderChatList();
+    if (msg.user_id === selectedUserIdChat) appendMessage(msg);
+  });
+  socket.on('support_user_typing', (userId) => {
+    currentTypingUserId = userId;
+    if (userId === selectedUserIdChat) document.getElementById('chatTypingIndicator').classList.remove('hidden');
+    const typingEl = document.querySelector(`[data-typing="${userId}"]`);
+    if (typingEl) typingEl.classList.remove('hidden');
+  });
+  socket.on('support_user_stop_typing', () => {
+    currentTypingUserId = null;
+    document.getElementById('chatTypingIndicator').classList.add('hidden');
+    document.querySelectorAll('.typing-badge').forEach(el => el.classList.add('hidden'));
+  });
+  socket.on('user_activity', (activity) => {
+    prependActivity(activity);
+    appendActivityRow(activity);
+  });
+}
+
+// ── Tab Switching ──
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+  document.getElementById('tab-' + tab).classList.remove('hidden');
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelector(`.nav-item[data-tab="${tab}"]`).classList.add('active');
+  if (tab === 'dashboard') fetchDashboard();
+  if (tab === 'users') fetchUsers();
+  if (tab === 'subscribers') { fetchSubscriptionPlans(); fetchSubscribers(); }
+  if (tab === 'tickets') { fetchTickets(); }
+  if (tab === 'signals') { fetchSignalStats(); fetchSignals(); }
+  if (tab === 'portfolio-history') { fetchPortfolioHistory(); fetchPortfolioUsers(); }
+  if (tab === 'community') { fetchGroups(); fetchAdminMessages(); }
+  if (tab === 'broker-accounts') { fetchBrokerAccounts(); }
+  if (tab === 'chat') { fetchActiveChats(); initSocket(); }
+  if (tab === 'payments') fetchPayments();
+  if (tab === 'stocks') fetchStocks();
+  if (tab === 'signal-outcomes') fetchSignalOutcomes();
+  if (tab === 'notifications') fetchNotifications();
+  if (tab === 'followers') fetchFollowers();
+  if (tab === 'user-activity') { fetchUserActivity(); }
+}
+['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','stocks','signal-outcomes','notifications','followers','user-activity'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
+
+// ── Dashboard ──
+async function fetchDashboard() {
+  try {
+    const res = await fetch('/api/admin/dashboard');
+    if (!res.ok) return;
+    const d = await res.json();
+    document.getElementById('statTotalUsers').textContent = d.totalUsers;
+    document.getElementById('statNewToday').textContent = d.newToday;
+    document.getElementById('statTotalTrades').textContent = d.totalTrades;
+    document.getElementById('statSubscriptions').textContent = d.activeSubscriptions;
+    document.getElementById('statPortfolioValue').textContent = Number(d.totalPortfolioValue).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2});
+    document.getElementById('statChatMessages').textContent = d.totalChatMessages;
+    document.getElementById('statSubscriptionsTotal').textContent = d.totalSubscriptions;
+    document.getElementById('statTickets').textContent = d.totalTickets;
+    document.getElementById('statGroups').textContent = d.totalGroups;
+    document.getElementById('statMessages').textContent = d.totalMessages;
+    document.getElementById('statBrokerConnections').textContent = d.totalBrokerConnections;
+    document.getElementById('statPortfolioSnapshots').textContent = d.totalPortfolioSnapshots;
+    document.getElementById('statPredictions').textContent = d.totalPredictions;
+    document.getElementById('statWinRate').textContent = (d.totalPredictions > 0 ? (d.wins / d.totalPredictions * 100).toFixed(1) : '-') + '%';
+    document.getElementById('statWins').textContent = d.wins + ' / ' + d.losses;
+    document.getElementById('statSignalsGenerated').textContent = d.totalSignals;
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    const tbody = document.getElementById('recentRegTable');
+    if (d.recentRegistrations.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-400 py-8">No users registered yet</td></tr>';
+    } else {
+      tbody.innerHTML = d.recentRegistrations.map(u => `
+        <tr class="user-row">
+          <td class="font-medium text-gray-900">${esc(u.full_name)}</td>
+          <td class="text-gray-500">${esc(u.email)}</td>
+          <td><span class="pill ${u.is_verified ? 'pill-verified' : 'pill-unverified'}">${u.is_verified ? 'Verified' : 'Unverified'}</span></td>
+          <td class="text-gray-500">${formatDate(u.created_at)}</td>
+        </tr>
+      `).join('');
+    }
+  } catch {}
+}
+
+// ── Users ──
+let usersPage = 1;
+let usersTotal = 0;
+let usersSearch = '';
+let usersData = [];
+let selectedUserId = null;
+
+function debounceSearch() {
+  clearTimeout(window._userSearchTimer);
+  window._userSearchTimer = setTimeout(() => { usersSearch = document.getElementById('userSearchInput').value; usersPage = 1; fetchUsers(); }, 300);
+}
+
+async function fetchUsers() {
+  closeUserDetail();
+  try {
+    const params = new URLSearchParams({ page: usersPage, limit: 20 });
+    if (usersSearch) params.set('search', usersSearch);
+    const res = await fetch('/api/admin/users?' + params.toString());
+    if (!res.ok) return;
+    const d = await res.json();
+    usersData = d.users;
+    usersTotal = d.total;
+    document.getElementById('userCount').textContent = d.total + ' users';
+    const tbody = document.getElementById('usersTableBody');
+    if (d.users.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">No users found</td></tr>';
+    } else {
+      tbody.innerHTML = d.users.map(u => `
+        <tr class="user-row ${selectedUserId === u.id ? 'selected' : ''}" onclick="selectUser(${u.id})">
+          <td class="font-medium text-gray-900">${esc(u.full_name)}</td>
+          <td class="text-gray-500">${esc(u.email)}</td>
+          <td><span class="pill ${u.role === 'admin' ? 'pill-admin' : 'pill-trader'}">${esc(u.role)}</span></td>
+          <td class="text-gray-500">${esc(u.trader_type)}</td>
+          <td><span class="pill ${u.is_verified ? 'pill-verified' : 'pill-unverified'}">${u.is_verified ? 'Yes' : 'No'}</span></td>
+          <td><span class="pill ${u.subscription_status === 'active' ? 'pill-active' : 'pill-free'}">${esc(u.subscription_tier)}</span></td>
+        </tr>
+      `).join('');
+    }
+    renderUsersPagination(d.total, d.page, d.limit);
+  } catch {}
+}
+
+function renderUsersPagination(total, page, limit) {
+  const totalPages = Math.ceil(total / limit);
+  const el = document.getElementById('usersPagination');
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  if (page > 1) html += `<button class="btn btn-secondary" onclick="usersPage=${page-1};fetchUsers()">Prev</button>`;
+  html += `<span class="text-sm text-gray-500">Page ${page} of ${totalPages}</span>`;
+  if (page < totalPages) html += `<button class="btn btn-secondary" onclick="usersPage=${page+1};fetchUsers()">Next</button>`;
+  el.innerHTML = html;
+}
+
+function closeUserDetail() {
+  selectedUserId = null;
+  document.getElementById('usersLeftPanel').className = 'w-full border-r border-gray-200';
+  document.getElementById('usersLeftPanel').style.overflowY = 'auto';
+  document.getElementById('userDetailPanel').classList.add('hidden');
+  document.querySelectorAll('.user-row').forEach(r => r.classList.remove('selected'));
+}
+
+async function selectUser(id) {
+  if (selectedUserId === id) { closeUserDetail(); return; }
+  selectedUserId = id;
+  document.getElementById('usersLeftPanel').className = 'w-1/2 border-r border-gray-200';
+  document.getElementById('usersLeftPanel').style.overflowY = 'auto';
+  document.getElementById('userDetailPanel').classList.remove('hidden');
+  document.getElementById('userDetailContent').innerHTML = '<div class="flex items-center justify-center py-12"><div class="size-5 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin"></div></div>';
+  document.querySelectorAll('.user-row').forEach(r => r.classList.remove('selected'));
+  const row = document.querySelector(`.user-row[onclick*="selectUser(${id})"]`);
+  if (row) row.classList.add('selected');
+  try {
+    const res = await fetch('/api/admin/users/' + id);
+    if (!res.ok) return;
+    const d = await res.json();
+    const u = d.user;
+    // Fetch broker connections for this user
+    let brokerHtml = '';
+    try {
+      const brokerRes = await fetch('/api/admin/broker-accounts');
+      if (brokerRes.ok) {
+        const brokerData = await brokerRes.json();
+        const userBrokers = brokerData.connections.filter(c => c.user_id === u.id);
+        if (userBrokers.length > 0) {
+          brokerHtml = `
+            <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+              <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Broker Connections (${userBrokers.length})</h3>
+              <div class="space-y-2">${userBrokers.map(b => `
+                <div style="background:#f9fafb;border-radius:8px;padding:10px" class="text-sm">
+                  <p class="font-medium text-gray-900">${esc(b.broker_type)} ${esc(b.account_name ? '- ' + b.account_name : '')}</p>
+                  <p class="text-xs text-gray-500">${b.sync_status || 'N/A'} ${b.last_sync ? '| Last sync: ' + formatDate(b.last_sync) : ''}</p>
+                </div>`).join('')}</div>
+            </div>`;
+        }
+      }
+    } catch {}
+    document.getElementById('userDetailContent').innerHTML = `
+      <div class="space-y-4">
+        <div class="flex items-center gap-2 mb-2">
+          <button onclick="closeUserDetail()" class="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors">
+            <svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Back to list
+          </button>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">User Info</h3>
+          <div id="userInfoDisplay" class="grid grid-cols-2 gap-3 text-sm">
+            <div><span class="text-gray-500">Name</span><p class="font-medium text-gray-900">${esc(u.full_name)}</p></div>
+            <div><span class="text-gray-500">Email</span><p class="font-medium text-gray-900">${esc(u.email)}</p></div>
+            <div><span class="text-gray-500">Role</span><p><span class="pill ${u.role === 'admin' ? 'pill-admin' : 'pill-trader'}">${esc(u.role)}</span></p></div>
+            <div><span class="text-gray-500">Trader Type</span><p class="text-gray-900">${esc(u.trader_type)}</p></div>
+            <div><span class="text-gray-500">Verified</span><p><span class="pill ${u.is_verified ? 'pill-verified' : 'pill-unverified'}">${u.is_verified ? 'Yes' : 'No'}</span></p></div>
+            <div><span class="text-gray-500">Subscription</span><p class="text-gray-900">${esc(u.subscription_tier)} (${esc(u.subscription_status)})</p></div>
+            <div><span class="text-gray-500">Joined</span><p class="text-gray-900">${formatDate(u.created_at)}</p></div>
+            <div><span class="text-gray-500">Notifications</span><p class="text-gray-900">${d.notificationsCount}</p></div>
+          </div>
+          <div id="userEditForm" class="hidden grid grid-cols-2 gap-3 text-sm mt-3">
+            <div><span class="text-gray-500">Name</span><input id="editFullName" class="input-field mt-1" value="${esc(u.full_name)}"></div>
+            <div><span class="text-gray-500">Email</span><input id="editEmail" class="input-field mt-1" value="${esc(u.email)}"></div>
+            <div><span class="text-gray-500">Trader Type</span><select id="editTraderType" class="input-field mt-1">
+              <option value="retail" ${u.trader_type === 'retail' ? 'selected' : ''}>Retail</option>
+              <option value="professional" ${u.trader_type === 'professional' ? 'selected' : ''}>Professional</option>
+              <option value="institutional" ${u.trader_type === 'institutional' ? 'selected' : ''}>Institutional</option>
+            </select></div>
+            <div><span class="text-gray-500">Subscription Tier</span><select id="editSubTier" class="input-field mt-1">
+              <option value="free" ${u.subscription_tier === 'free' ? 'selected' : ''}>Free</option>
+              <option value="pro" ${u.subscription_tier === 'pro' ? 'selected' : ''}>Pro</option>
+              <option value="enterprise" ${u.subscription_tier === 'enterprise' ? 'selected' : ''}>Enterprise</option>
+            </select></div>
+            <div class="col-span-2 flex gap-2 mt-2">
+              <button class="btn btn-primary" onclick="saveUserEdit(${u.id})">Save</button>
+              <button class="btn btn-secondary" onclick="cancelUserEdit()">Cancel</button>
+            </div>
+          </div>
+          <div class="flex gap-2 mt-4">
+            <button class="btn btn-primary" onclick="toggleVerify(${u.id})">${u.is_verified ? 'Unverify' : 'Verify'}</button>
+            <button class="btn btn-secondary" onclick="changeRole(${u.id}, '${u.role === 'admin' ? 'trader' : 'admin'}')">Make ${u.role === 'admin' ? 'Trader' : 'Admin'}</button>
+            <button class="btn btn-secondary" onclick="showUserEdit()">Edit</button>
+            <button class="btn btn-danger" onclick="deleteUser(${u.id})">Delete</button>
+          </div>
+          <div class="mt-2">
+            <button class="btn btn-secondary text-xs" onclick="resetUserPassword(${u.id})">Reset Password</button>
+          </div>
+        </div>
+        ${d.paperAccount ? `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Account</h3>
+          <div class="grid grid-cols-3 gap-3 text-sm">
+            <div><span class="text-gray-500">Cash Balance (KES)</span><p class="font-medium text-gray-900">${Number(d.paperAccount.cash_balance).toLocaleString()}</p></div>
+            <div><span class="text-gray-500">Cash Balance (USD)</span><p class="font-medium text-gray-900">${Number(d.paperAccount.cash_balance_usd).toLocaleString()}</p></div>
+            <div><span class="text-gray-500">Trades</span><p class="font-medium text-gray-900">${d.recentTrades.length}</p></div>
+          </div>
+        </div>` : ''}
+        ${d.recentTrades.length > 0 ? `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Recent Trades</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr><th>Ticker</th><th>Type</th><th>Shares</th><th>Price</th><th>Total</th><th>Date</th></tr></thead>
+              <tbody>${d.recentTrades.map(t => `
+                <tr>
+                  <td class="font-medium text-gray-900">${esc(t.ticker)}</td>
+                  <td><span class="pill ${t.type === 'buy' ? 'pill-verified' : 'pill-unverified'}">${t.type}</span></td>
+                  <td class="text-gray-700">${t.shares}</td>
+                  <td class="text-gray-700">${Number(t.price).toFixed(2)}</td>
+                  <td class="text-gray-700">${Number(t.total_value).toLocaleString()}</td>
+                  <td class="text-gray-500">${formatDate(t.created_at)}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+          </div>
+        </div>` : ''}
+        ${d.portfolioHoldings.length > 0 ? `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Holdings (${d.portfolioHoldings.length})</h3>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2">${d.portfolioHoldings.map(h => `
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <p class="font-medium text-sm text-gray-900">${esc(h.ticker)}</p>
+              <p class="text-xs text-gray-500">${h.shares} shares @ ${Number(h.avg_cost).toFixed(2)}</p>
+            </div>`).join('')}</div>
+        </div>` : ''}
+        ${d.supportMessages.length > 0 ? `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Support Messages (${d.supportMessages.length})</h3>
+          <div class="space-y-2">${d.supportMessages.slice(0,10).map(m => `
+            <div style="background:#f9fafb;border-radius:8px;padding:10px" class="text-sm">
+              <p class="text-gray-900">${esc(m.message)}</p>
+              <p class="text-xs text-gray-500 mt-1">${formatDate(m.created_at)} ${m.is_staff ? '&middot; Staff' : ''}</p>
+            </div>`).join('')}</div>
+        </div>` : ''}
+        ${brokerHtml}
+      </div>
+    `;
+  } catch {}
+}
+
+function showUserEdit() {
+  // Store current values so cancel can restore them
+  window._editOrig = {
+    name: document.getElementById('editFullName').value,
+    email: document.getElementById('editEmail').value,
+    traderType: document.getElementById('editTraderType').value,
+    subTier: document.getElementById('editSubTier').value,
+  };
+  document.getElementById('userInfoDisplay').classList.add('hidden');
+  document.getElementById('userEditForm').classList.remove('hidden');
+}
+
+function cancelUserEdit() {
+  if (window._editOrig) {
+    document.getElementById('editFullName').value = window._editOrig.name;
+    document.getElementById('editEmail').value = window._editOrig.email;
+    document.getElementById('editTraderType').value = window._editOrig.traderType;
+    document.getElementById('editSubTier').value = window._editOrig.subTier;
+  }
+  document.getElementById('userInfoDisplay').classList.remove('hidden');
+  document.getElementById('userEditForm').classList.add('hidden');
+}
+
+async function saveUserEdit(id) {
+  const full_name = document.getElementById('editFullName').value.trim();
+  const email = document.getElementById('editEmail').value.trim();
+  const trader_type = document.getElementById('editTraderType').value;
+  const subscription_tier = document.getElementById('editSubTier').value;
+  if (!full_name) { toast('Name is required', 'error'); return; }
+  if (!email) { toast('Email is required', 'error'); return; }
+  try {
+    const res = await fetch('/api/admin/users/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ full_name, email, trader_type, subscription_tier })
+    });
+    if (res.ok) { toast('User updated', 'success'); selectUser(id); fetchUsers(); }
+    else { const e = await res.json(); toast(e.error || 'Failed to update', 'error'); }
+  } catch { toast('Error updating user', 'error'); }
+}
+
+async function deleteUser(id) {
+  const user = usersData.find(u => u.id === id);
+  if (!confirm('Delete user "' + (user ? user.full_name : id) + '"? This cannot be undone.')) return;
+  try {
+    const res = await fetch('/api/admin/users/' + id, { method: 'DELETE' });
+    if (res.ok) { toast('User deleted', 'success'); closeUserDetail(); fetchUsers(); }
+    else { const e = await res.json(); toast(e.error || 'Failed to delete', 'error'); }
+  } catch { toast('Error deleting user', 'error'); }
+}
+
+async function resetUserPassword(id) {
+  if (!confirm('Send password reset email to this user?')) return;
+  try {
+    const res = await fetch('/api/admin/users/' + id + '/reset-password', { method: 'POST' });
+    if (res.ok) { toast('Password reset email sent', 'success'); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error sending reset', 'error'); }
+}
+
+async function toggleVerify(id) {
+  try {
+    const res = await fetch('/api/admin/users/' + id + '/toggle-verify', { method: 'PUT' });
+    if (res.ok) { selectUser(id); fetchUsers(); }
+    else toast('Failed to toggle verify', 'error');
+  } catch { toast('Error', 'error'); }
+}
+
+async function changeRole(id, role) {
+  if (!confirm('Change role to ' + role + '?')) return;
+  try {
+    const res = await fetch('/api/admin/users/' + id + '/role', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role }) });
+    if (res.ok) { selectUser(id); fetchUsers(); }
+    else toast('Failed to change role', 'error');
+  } catch { toast('Error', 'error'); }
+}
+
+// ── Signals ──
+let sigPage = 1;
+let sigTotal = 0;
+let sigTicker = '';
+let sigSignal = '';
+let sigMarket = '';
+let sigSector = '';
+let sigDateFrom = '';
+let sigDateTo = '';
+let selectedSignalId = null;
+let editingSignalId = null;
+
+function closeSignalDetail() {
+  selectedSignalId = null;
+  document.getElementById('signalsLeftPanel').className = 'w-full min-w-0 min-h-0';
+  document.getElementById('signalDetailPanel').classList.add('hidden');
+  document.querySelectorAll('.signal-row').forEach(r => r.classList.remove('selected'));
+}
+
+function debounceSigFilter() {
+  clearTimeout(window._sigTimer);
+  window._sigTimer = setTimeout(() => {
+    sigTicker = document.getElementById('sigTickerInput').value.trim().toUpperCase();
+    sigSignal = document.getElementById('sigSignalSelect').value;
+    sigMarket = document.getElementById('sigMarketSelect').value;
+    sigSector = document.getElementById('sigSectorInput').value.trim();
+    sigDateFrom = document.getElementById('sigDateFrom').value;
+    sigDateTo = document.getElementById('sigDateTo').value;
+    sigPage = 1;
+    fetchSignals();
+  }, 300);
+}
+
+async function fetchSignalStats() {
+  try {
+    const res = await fetch('/api/admin/signals/stats');
+    if (!res.ok) return;
+    const d = await res.json();
+    document.getElementById('sigTotal').textContent = Number(d.totalSignals).toLocaleString();
+    document.getElementById('sigTickers').textContent = d.distinctTickers;
+    const bySig = {};
+    d.bySignal.forEach(s => bySig[s.signal] = s.cnt);
+    document.getElementById('sigBuy').textContent = bySig['Buy'] ? Number(bySig['Buy']).toLocaleString() : '0';
+    document.getElementById('sigSell').textContent = (bySig['Sell']||0) + (bySig['Strong Sell']||0);
+    document.getElementById('sigHold').textContent = (bySig['Hold']||0) + (bySig['Accumulate']||0);
+    document.getElementById('signalTotalLabel').textContent = Number(d.totalSignals).toLocaleString() + ' signals';
+    document.getElementById('signalBadge').textContent = Number(d.totalSignals).toLocaleString();
+    if (d.lastGenerated) document.getElementById('signalLastGen').textContent = 'Last: ' + new Date(d.lastGenerated).toLocaleString();
+  } catch {}
+}
+
+async function fetchSignals() {
+  closeSignalDetail();
+  try {
+    const params = new URLSearchParams({ page: sigPage, limit: 50 });
+    if (sigTicker) params.set('ticker', sigTicker);
+    if (sigSignal) params.set('signal', sigSignal);
+    if (sigMarket) params.set('market', sigMarket);
+    if (sigSector) params.set('sector', sigSector);
+    if (sigDateFrom) params.set('dateFrom', sigDateFrom);
+    if (sigDateTo) params.set('dateTo', sigDateTo);
+    const res = await fetch('/api/admin/signals?' + params.toString());
+    if (!res.ok) return;
+    const d = await res.json();
+    sigTotal = d.total;
+    const tbody = document.getElementById('signalsTableBody');
+    if (d.signals.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="14" class="text-center text-gray-400 py-8">No signals found</td></tr>';
+    } else {
+      tbody.innerHTML = d.signals.map(s => {
+        const sigClass = s.signal === 'Buy' || s.signal === 'Accumulate' ? 'pill-verified' : s.signal === 'Sell' || s.signal === 'Strong Sell' ? 'pill-unverified' : 'pill-free';
+        const sel = selectedSignalId === s.id ? 'selected' : '';
+        return `<tr class="signal-row ${sel}" onclick="selectSignal(${s.id})">
+          <td class="font-medium text-gray-900 text-xs whitespace-nowrap">${esc(s.ticker)}</td>
+          <td class="whitespace-nowrap"><span class="pill ${sigClass} text-xs">${esc(s.signal)}</span></td>
+          <td class="text-gray-700 text-xs whitespace-nowrap">${s.confidence != null ? s.confidence + '%' : '-'}</td>
+          <td class="text-gray-700 text-xs whitespace-nowrap">${s.price != null ? Number(s.price).toFixed(2) : '-'}</td>
+          <td class="text-xs whitespace-nowrap ${s.change_pct != null ? (s.change_pct >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-gray-400'}">${s.change_pct != null ? (s.change_pct >= 0 ? '+' : '') + Number(s.change_pct).toFixed(2) + '%' : '-'}</td>
+          <td class="text-gray-700 text-xs whitespace-nowrap">${s.entry_price != null ? Number(s.entry_price).toFixed(2) : '-'}</td>
+          <td class="text-gray-700 text-xs whitespace-nowrap">${s.stop_loss != null ? Number(s.stop_loss).toFixed(2) : '-'}</td>
+          <td class="text-gray-700 text-xs whitespace-nowrap">${s.target1 != null ? Number(s.target1).toFixed(2) : '-'}</td>
+          <td class="text-gray-700 text-xs whitespace-nowrap">${s.target2 != null ? Number(s.target2).toFixed(2) : '-'}</td>
+          <td class="text-gray-500 text-xs whitespace-nowrap">${esc(s.market || '-')}</td>
+          <td class="text-gray-500 text-xs whitespace-nowrap">${esc(s.timeframe || '-')}</td>
+          <td class="text-gray-500 text-xs whitespace-nowrap">${formatDate(s.generated_at)}</td>
+          <td class="text-xs whitespace-nowrap">
+            <button onclick="event.stopPropagation();showSignalEdit(${s.id})" class="text-[#0D7490] hover:underline" title="Edit">Edit</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+    const totalPages = Math.ceil(sigTotal / d.limit);
+    const pel = document.getElementById('signalsPagination');
+    if (totalPages <= 1) { pel.innerHTML = ''; return; }
+    let ph = '';
+    if (sigPage > 1) ph += `<button class="btn btn-secondary" onclick="sigPage=${sigPage-1};fetchSignals()">Prev</button>`;
+    ph += `<span class="text-sm text-gray-500">Page ${sigPage} of ${totalPages}</span>`;
+    if (sigPage < totalPages) ph += `<button class="btn btn-secondary" onclick="sigPage=${sigPage+1};fetchSignals()">Next</button>`;
+    pel.innerHTML = ph;
+  } catch {}
+}
+
+// ── Signal Detail & Actions ──
+async function selectSignal(id) {
+  if (selectedSignalId === id) { closeSignalDetail(); return; }
+  selectedSignalId = id;
+  document.getElementById('signalsLeftPanel').className = 'w-1/2 min-w-0 min-h-0';
+  document.getElementById('signalDetailPanel').classList.remove('hidden');
+  document.getElementById('signalDetailContent').innerHTML = '<div class="flex items-center justify-center py-12"><div class="size-5 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin"></div></div>';
+  document.querySelectorAll('.signal-row').forEach(r => r.classList.remove('selected'));
+  const row = document.querySelector(`.signal-row[onclick*="selectSignal(${id})"]`);
+  if (row) row.classList.add('selected');
+  try {
+    const res = await fetch('/api/admin/signals/' + id);
+    if (!res.ok) return;
+    const s = await res.json();
+    const sigClass = s.signal === 'Buy' || s.signal === 'Accumulate' ? 'pill-verified' : s.signal === 'Sell' || s.signal === 'Strong Sell' ? 'pill-unverified' : 'pill-free';
+    document.getElementById('signalDetailContent').innerHTML = `
+      <div class="space-y-4">
+        <div class="flex items-center gap-2 mb-2">
+          <button onclick="closeSignalDetail()" class="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors">
+            <svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Back to list
+          </button>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-3">
+              <span class="text-lg font-bold text-gray-900">${esc(s.ticker)}</span>
+              <span class="pill ${sigClass}">${esc(s.signal)}</span>
+              <span class="text-sm text-gray-500">${s.confidence != null ? s.confidence + '% confidence' : ''}</span>
+            </div>
+            <div class="flex gap-2">
+              <button class="btn btn-secondary text-xs py-1 px-2" onclick="showSignalEdit(${s.id})">Edit</button>
+              <button class="btn btn-danger text-xs py-1 px-2" onclick="deleteSignalConfirm(${s.id})">Delete</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div><span class="text-gray-500 text-xs">Price</span><p class="font-medium text-gray-900">${s.price != null ? Number(s.price).toFixed(2) : '-'}</p></div>
+            <div><span class="text-gray-500 text-xs">Change</span><p class="font-medium ${s.change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'}">${s.change_pct != null ? (s.change_pct >= 0 ? '+' : '') + Number(s.change_pct).toFixed(2) + '%' : '-'}</p></div>
+            <div><span class="text-gray-500 text-xs">Entry Price</span><p class="font-medium text-gray-900">${s.entry_price != null ? Number(s.entry_price).toFixed(2) : '-'}</p></div>
+            <div><span class="text-gray-500 text-xs">Stop Loss</span><p class="font-medium text-red-600">${s.stop_loss != null ? Number(s.stop_loss).toFixed(2) : '-'}</p></div>
+            <div><span class="text-gray-500 text-xs">Target 1</span><p class="font-medium text-emerald-600">${s.target1 != null ? Number(s.target1).toFixed(2) : '-'}</p></div>
+            <div><span class="text-gray-500 text-xs">Target 2</span><p class="font-medium text-emerald-600">${s.target2 != null ? Number(s.target2).toFixed(2) : '-'}</p></div>
+            <div><span class="text-gray-500 text-xs">Risk/Reward</span><p class="font-medium text-gray-900">${s.risk_reward != null ? s.risk_reward + ':1' : '-'}</p></div>
+            <div><span class="text-gray-500 text-xs">Market</span><p class="font-medium text-gray-900">${esc(s.market || '-')}</p></div>
+            <div><span class="text-gray-500 text-xs">Sector</span><p class="font-medium text-gray-900">${esc(s.sector || '-')}</p></div>
+            <div><span class="text-gray-500 text-xs">Timeframe</span><p class="font-medium text-gray-900">${esc(s.timeframe || '-')}</p></div>
+            <div><span class="text-gray-500 text-xs">Trade Type</span><p class="font-medium text-gray-900">${esc(s.trade_type || '-')}</p></div>
+            <div><span class="text-gray-500 text-xs">Generated</span><p class="font-medium text-gray-900">${formatDate(s.generated_at)}</p></div>
+          </div>
+        </div>
+        ${s.reason ? `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Analysis</h3>
+          <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">${esc(s.reason)}</p>
+        </div>` : ''}
+      </div>
+    `;
+  } catch {}
+}
+
+function showSignalEdit(id) {
+  editingSignalId = id;
+  document.getElementById('signalEditModal').classList.remove('hidden');
+  // Fetch current signal data
+  fetch('/api/admin/signals/' + id).then(r => r.json()).then(s => {
+    document.getElementById('editSigSignal').value = s.signal || 'Hold';
+    document.getElementById('editSigConfidence').value = s.confidence || '';
+    document.getElementById('editSigEntry').value = s.entry_price || '';
+    document.getElementById('editSigStop').value = s.stop_loss || '';
+    document.getElementById('editSigT1').value = s.target1 || '';
+    document.getElementById('editSigT2').value = s.target2 || '';
+    document.getElementById('editSigRR').value = s.risk_reward || '';
+    document.getElementById('editSigTimeframe').value = s.timeframe || 'medium_term';
+  }).catch(() => { closeSignalEditModal(); toast('Error loading signal', 'error'); });
+}
+
+function closeSignalEditModal() {
+  editingSignalId = null;
+  document.getElementById('signalEditModal').classList.add('hidden');
+}
+
+async function saveSignalEdit() {
+  if (!editingSignalId) return;
+  const body = {
+    signal: document.getElementById('editSigSignal').value,
+    confidence: parseInt(document.getElementById('editSigConfidence').value) || null,
+    entry_price: parseFloat(document.getElementById('editSigEntry').value) || null,
+    stop_loss: parseFloat(document.getElementById('editSigStop').value) || null,
+    target1: parseFloat(document.getElementById('editSigT1').value) || null,
+    target2: parseFloat(document.getElementById('editSigT2').value) || null,
+    risk_reward: parseFloat(document.getElementById('editSigRR').value) || null,
+    timeframe: document.getElementById('editSigTimeframe').value,
+  };
+  try {
+    const res = await fetch('/api/admin/signals/' + editingSignalId, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    if (res.ok) { toast('Signal updated', 'success'); closeSignalEditModal(); fetchSignals(); fetchSignalStats(); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error updating signal', 'error'); }
+}
+
+async function deleteSignalConfirm(id) {
+  if (!confirm('Delete this signal for ' + document.querySelector(`.signal-row[onclick*="selectSignal(${id})"]`)?.querySelector('td')?.textContent?.trim() + '?')) return;
+  try {
+    const res = await fetch('/api/admin/signals/' + id, { method: 'DELETE' });
+    if (res.ok) { toast('Signal deleted', 'success'); closeSignalDetail(); fetchSignals(); fetchSignalStats(); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error deleting signal', 'error'); }
+}
+
+function deleteSignal() {
+  if (editingSignalId) deleteSignalConfirm(editingSignalId);
+}
+
+async function generateSignals(evt) {
+  const btn = (evt || event).target.closest('button');
+  btn.disabled = true; btn.textContent = 'Generating...';
+  try {
+    const res = await fetch('/api/admin/signals/generate', { method: 'POST' });
+    if (res.ok) { const d = await res.json(); toast(d.count + ' signals generated', 'success'); fetchSignals(); fetchSignalStats(); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error generating signals', 'error'); }
+  finally { btn.disabled = false; btn.innerHTML = '<svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Generate Signals'; }
+}
+
+// ── Subscribers + Plans ──
+let subsPage = 1;
+let subsTotal = 0;
+let editingPlanId = null;
+
+function showAddPlanForm() {
+  editingPlanId = null;
+  document.getElementById('planFormTitle').textContent = 'Add Plan';
+  document.getElementById('planNameInput').value = '';
+  document.getElementById('planPriceKesInput').value = '';
+  document.getElementById('planPriceUsdInput').value = '';
+  document.getElementById('planDurationInput').value = '1';
+  document.getElementById('planFeaturesInput').value = '';
+  document.getElementById('planDescInput').value = '';
+  document.getElementById('planFormContainer').classList.remove('hidden');
+}
+
+function cancelPlanForm() {
+  document.getElementById('planFormContainer').classList.add('hidden');
+  editingPlanId = null;
+}
+
+async function savePlan() {
+  const name = document.getElementById('planNameInput').value;
+  const price_kes = parseFloat(document.getElementById('planPriceKesInput').value) || 0;
+  const price_usd = parseFloat(document.getElementById('planPriceUsdInput').value) || 0;
+  const duration_months = parseInt(document.getElementById('planDurationInput').value) || 1;
+  const featuresStr = document.getElementById('planFeaturesInput').value;
+  const description = document.getElementById('planDescInput').value;
+  const features = featuresStr ? featuresStr.split(',').map(f => f.trim()) : [];
+  if (!name) { toast('Plan name required', 'error'); return; }
+  try {
+    let res;
+    if (editingPlanId) {
+      res = await fetch('/api/admin/subscription-plans/' + editingPlanId, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description, price_kes, price_usd, features, duration_months })
+      });
+    } else {
+      res = await fetch('/api/admin/subscription-plans', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description, price_kes, price_usd, features, duration_months })
+      });
+    }
+    if (res.ok) {
+      toast(editingPlanId ? 'Plan updated' : 'Plan created', 'success');
+      cancelPlanForm();
+      fetchSubscriptionPlans();
+      fetchSubscribers();
+    } else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error saving plan', 'error'); }
+}
+
+async function editPlan(id) {
+  editingPlanId = id;
+  try {
+    const res = await fetch('/api/admin/subscription-plans');
+    if (!res.ok) return;
+    const d = await res.json();
+    const plan = d.plans.find(p => p.id === id);
+    if (!plan) return;
+    document.getElementById('planFormTitle').textContent = 'Edit Plan';
+    document.getElementById('planNameInput').value = plan.name || '';
+    document.getElementById('planPriceKesInput').value = plan.price_kes || '';
+    document.getElementById('planPriceUsdInput').value = plan.price_usd || '';
+    document.getElementById('planDurationInput').value = plan.duration_months || 1;
+    document.getElementById('planFeaturesInput').value = plan.features ? (Array.isArray(plan.features) ? plan.features.join(', ') : plan.features) : '';
+    document.getElementById('planDescInput').value = plan.description || '';
+    document.getElementById('planFormContainer').classList.remove('hidden');
+  } catch { toast('Error loading plan', 'error'); }
+}
+
+async function deletePlan(id) {
+  if (!confirm('Delete this plan?')) return;
+  try {
+    const res = await fetch('/api/admin/subscription-plans/' + id, { method: 'DELETE' });
+    if (res.ok) { toast('Plan deleted', 'success'); fetchSubscriptionPlans(); fetchSubscribers(); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error deleting plan', 'error'); }
+}
+
+async function changeSubscriptionStatus(id, status) {
+  try {
+    const body = { status };
+    // When reactivating, recalculate end_date from now + plan duration
+    if (status === 'active') {
+      body.end_date = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // default 1 month
+    }
+    const res = await fetch('/api/admin/subscriptions/' + id, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (res.ok) { toast('Status updated', 'success'); fetchSubscriptions(); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error updating status', 'error'); }
+}
+
+async function fetchSubscriptionPlans() {
+  try {
+    const res = await fetch('/api/admin/subscription-plans');
+    if (!res.ok) return;
+    const d = await res.json();
+    const container = document.getElementById('plansContainer');
+    if (d.plans.length === 0) {
+      container.innerHTML = '<div class="col-span-full text-center text-gray-400 py-4">No plans created yet</div>';
+    } else {
+      container.innerHTML = d.plans.map(p => `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <p class="font-semibold text-sm text-gray-900">${esc(p.name)}</p>
+          <p class="text-xs text-gray-500 mt-1">KES ${Number(p.price_kes || 0).toLocaleString()} / $${Number(p.price_usd || 0).toFixed(2)}</p>
+          <p class="text-xs text-gray-400 mt-1">${p.duration_months === 12 ? 'Yearly' : 'Monthly'} &middot; ${p.subscriber_count || 0} subscribers</p>
+          ${p.features && Array.isArray(p.features) && p.features.length > 0 ? `<div class="mt-2 text-xs text-gray-500">${p.features.slice(0,3).map(f => '<div>&bull; ' + esc(f) + '</div>').join('')}${p.features.length > 3 ? '<div class="text-gray-400">+' + (p.features.length - 3) + ' more</div>' : ''}</div>` : ''}
+          ${p.description ? `<p class="text-xs text-gray-400 mt-1 line-clamp-2">${esc(p.description)}</p>` : ''}
+          <div class="flex gap-1 mt-3">
+            <button class="btn btn-secondary text-xs py-1 px-2" onclick="editPlan(${p.id})">Edit</button>
+            <button class="btn btn-danger text-xs py-1 px-2" onclick="deletePlan(${p.id})">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch {}
+}
+
+async function fetchSubscribers() {
+  try {
+    const res = await fetch('/api/admin/subscribers');
+    if (!res.ok) return;
+    const d = await res.json();
+    document.getElementById('subscriberTotal').textContent = d.totalSubscribers + ' total subscribers';
+    const statsEl = document.getElementById('subscriberStats');
+    statsEl.innerHTML = `<div class="stat-card"><div class="stat-value text-[#0D7490]">${d.totalSubscribers}</div><div class="stat-label">Total Subscribers</div></div>`
+      + d.plans.map(p => `<div class="stat-card"><div class="stat-value text-emerald-600">${p.subscriber_count}</div><div class="stat-label">${esc(p.name)} (KES ${p.price_kes})</div></div>`).join('');
+  } catch {}
+  fetchSubscriptions();
+}
+
+async function fetchSubscriptions() {
+  try {
+    const params = new URLSearchParams({ page: subsPage, limit: 20 });
+    const res = await fetch('/api/admin/subscriptions?' + params.toString());
+    if (!res.ok) return;
+    const d = await res.json();
+    subsTotal = d.total;
+    const tbody = document.getElementById('subscriptionsTableBody');
+    if (d.subscriptions.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-8">No subscriptions yet</td></tr>';
+    } else {
+      tbody.innerHTML = d.subscriptions.map(s => `
+        <tr>
+          <td class="font-medium text-gray-900 text-xs">${esc(s.full_name || '')}</td>
+          <td class="text-gray-500 text-xs">${esc(s.email || '')}</td>
+          <td class="text-gray-700 text-xs">${esc(s.plan_name || '')}</td>
+          <td class="text-xs text-gray-500">${s.duration_months === 12 ? 'Yearly' : s.duration_months === 1 ? 'Monthly' : s.duration_months + 'mo'}</td>
+          <td>
+            <select class="input-field text-xs py-1 w-28" onchange="changeSubscriptionStatus(${s.id}, this.value)">
+              <option value="active" ${s.status === 'active' ? 'selected' : ''}>Active</option>
+              <option value="cancelled" ${s.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+              <option value="expired" ${s.status === 'expired' ? 'selected' : ''}>Expired</option>
+              <option value="pending" ${s.status === 'pending' ? 'selected' : ''}>Pending</option>
+            </select>
+          </td>
+          <td class="text-gray-700 text-xs">KES ${Number(s.amount || 0).toLocaleString()}</td>
+          <td class="text-gray-500 text-xs">${formatDate(s.start_date || s.created_at)}</td>
+          <td class="text-gray-500 text-xs">${formatDate(s.end_date) || '-'}</td>
+        </tr>
+      `).join('');
+    }
+    renderSubsPagination(d.total, d.page, d.limit);
+  } catch {}
+}
+
+function renderSubsPagination(total, page, limit) {
+  const totalPages = Math.ceil(total / limit);
+  const el = document.getElementById('subscriptionsPagination');
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  if (page > 1) html += `<button class="btn btn-secondary" onclick="subsPage=${page-1};fetchSubscriptions()">Prev</button>`;
+  html += `<span class="text-sm text-gray-500">Page ${page} of ${totalPages}</span>`;
+  if (page < totalPages) html += `<button class="btn btn-secondary" onclick="subsPage=${page+1};fetchSubscriptions()">Next</button>`;
+  el.innerHTML = html;
+}
+
+// ── Support Tickets ──
+let ticketsPage = 1;
+let ticketsTotal = 0;
+let selectedTicketId = null;
+
+function closeTicketDetail() {
+  selectedTicketId = null;
+  document.getElementById('ticketsLeftPanel').className = 'w-full';
+  document.getElementById('ticketsLeftPanel').style.overflowY = 'auto';
+  document.getElementById('ticketDetailPanel').classList.add('hidden');
+  document.querySelectorAll('.ticket-row').forEach(r => r.classList.remove('selected'));
+}
+
+async function fetchTickets() {
+  closeTicketDetail();
+  try {
+    const params = new URLSearchParams({ page: ticketsPage, limit: 20 });
+    const res = await fetch('/api/admin/support-tickets?' + params.toString());
+    if (!res.ok) return;
+    const d = await res.json();
+    ticketsTotal = d.total;
+    document.getElementById('ticketTotalLabel').textContent = d.total + ' tickets';
+    // Stats from backend statusCounts
+    const sc = d.statusCounts || {};
+    document.getElementById('ticketStatTotal').textContent = d.total;
+    document.getElementById('ticketStatOpen').textContent = sc.open || 0;
+    document.getElementById('ticketStatInProgress').textContent = sc.in_progress || 0;
+    document.getElementById('ticketStatResolved').textContent = (sc.resolved || 0) + (sc.closed || 0);
+    // Table
+    const tbody = document.getElementById('ticketsTableBody');
+    const tickets = d.tickets || [];
+    if (tickets.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">No tickets found</td></tr>';
+    } else {
+      tbody.innerHTML = tickets.map(t => {
+        const priorityClass = t.priority === 'urgent' ? 'bg-red-100 text-red-700' : t.priority === 'high' ? 'bg-orange-100 text-orange-700' : t.priority === 'low' ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-700';
+        const statusClass = t.status === 'open' ? 'bg-amber-100 text-amber-700' : t.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : t.status === 'resolved' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600';
+        return `<tr class="ticket-row ${selectedTicketId === t.id ? 'selected' : ''}" onclick="selectTicket(${t.id})">
+          <td class="text-gray-700 text-xs">${esc(t.email || '')}</td>
+          <td class="text-gray-900 font-medium text-xs max-w-[150px] truncate">${esc(t.subject || '')}</td>
+          <td class="text-gray-500 text-xs">${esc(t.category || '-')}</td>
+          <td>
+            <select class="input-field text-xs py-1 w-20" onclick="event.stopPropagation()" onchange="changeTicketPriority(${t.id}, this.value)">
+              <option value="low" ${t.priority === 'low' ? 'selected' : ''}>Low</option>
+              <option value="normal" ${t.priority === 'normal' ? 'selected' : ''}>Normal</option>
+              <option value="high" ${t.priority === 'high' ? 'selected' : ''}>High</option>
+              <option value="urgent" ${t.priority === 'urgent' ? 'selected' : ''}>Urgent</option>
+            </select>
+          </td>
+          <td>
+            <select class="input-field text-xs py-1 w-24" onclick="event.stopPropagation()" onchange="changeTicketStatus(${t.id}, this.value)">
+              <option value="open" ${t.status === 'open' ? 'selected' : ''}>Open</option>
+              <option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+              <option value="resolved" ${t.status === 'resolved' ? 'selected' : ''}>Resolved</option>
+              <option value="closed" ${t.status === 'closed' ? 'selected' : ''}>Closed</option>
+            </select>
+          </td>
+          <td class="text-gray-500 text-xs">${t.message_count || 0}</td>
+          <td class="text-gray-500 text-xs">${formatDate(t.created_at)}</td>
+        </tr>`;
+      }).join('');
+    }
+    renderTicketsPagination(d.total, d.page, d.limit);
+  } catch {}
+}
+
+function renderTicketsPagination(total, page, limit) {
+  const totalPages = Math.ceil(total / limit);
+  const el = document.getElementById('ticketsPagination');
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  if (page > 1) html += `<button class="btn btn-secondary" onclick="ticketsPage=${page-1};fetchTickets()">Prev</button>`;
+  html += `<span class="text-sm text-gray-500">Page ${page} of ${totalPages}</span>`;
+  if (page < totalPages) html += `<button class="btn btn-secondary" onclick="ticketsPage=${page+1};fetchTickets()">Next</button>`;
+  el.innerHTML = html;
+}
+
+async function changeTicketStatus(id, status) {
+  try {
+    const res = await fetch('/api/admin/support-tickets/' + id, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    if (res.ok) { toast('Status updated', 'success'); fetchTickets(); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error updating status', 'error'); }
+}
+
+async function changeTicketPriority(id, priority) {
+  try {
+    const res = await fetch('/api/admin/support-tickets/' + id, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priority })
+    });
+    if (res.ok) { toast('Priority updated', 'success'); fetchTickets(); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error updating priority', 'error'); }
+}
+
+async function selectTicket(id) {
+  if (selectedTicketId === id) { closeTicketDetail(); return; }
+  selectedTicketId = id;
+  document.getElementById('ticketsLeftPanel').className = 'w-1/2';
+  document.getElementById('ticketsLeftPanel').style.overflowY = 'auto';
+  document.getElementById('ticketDetailPanel').classList.remove('hidden');
+  document.getElementById('ticketDetailContent').innerHTML = '<div class="flex items-center justify-center py-12"><div class="size-5 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin"></div></div>';
+  document.querySelectorAll('.ticket-row').forEach(r => r.classList.remove('selected'));
+  const row = document.querySelector(`.ticket-row[onclick*="selectTicket(${id})"]`);
+  if (row) row.classList.add('selected');
+  try {
+    const [ticketRes, msgsRes] = await Promise.all([
+      fetch('/api/admin/support-tickets/' + id + '?limit=1'),
+      fetch('/api/admin/support-tickets/' + id + '/messages')
+    ]);
+    if (!ticketRes.ok && !msgsRes.ok) return;
+    const ticket = ticketRes.ok ? (await ticketRes.json()).ticket || {} : {};
+    const msgs = msgsRes.ok ? (await msgsRes.json()).messages || [] : [];
+    document.getElementById('ticketDetailContent').innerHTML = `
+      <div class="space-y-4">
+        <div class="flex items-center gap-2 mb-2">
+          <button onclick="closeTicketDetail()" class="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors">
+            <svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Back to list
+          </button>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Ticket Info</h3>
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <div><span class="text-gray-500">Email</span><p class="font-medium text-gray-900">${esc(ticket.email || 'N/A')}</p></div>
+            <div><span class="text-gray-500">Subject</span><p class="font-medium text-gray-900">${esc(ticket.subject || 'N/A')}</p></div>
+            <div><span class="text-gray-500">Category</span><p class="text-gray-900">${esc(ticket.category || '-')}</p></div>
+            <div><span class="text-gray-500">Status</span><p class="text-gray-900">${esc(ticket.status || '-')}</p></div>
+            <div><span class="text-gray-500">Priority</span><p class="text-gray-900">${esc(ticket.priority || '-')}</p></div>
+            <div><span class="text-gray-500">Created</span><p class="text-gray-900">${formatDate(ticket.created_at)}</p></div>
+          </div>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Messages (${msgs.length})</h3>
+          <div class="space-y-3 max-h-64 overflow-y-auto mb-3" id="ticketMessagesContainer">
+            ${msgs.length === 0 ? '<div class="text-center text-gray-400 py-4 text-sm">No messages</div>' : msgs.map(m => `
+              <div style="background:${m.is_staff ? '#eff6ff' : '#f9fafb'};border-radius:8px;padding:10px" class="text-sm">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs font-medium ${m.is_staff ? 'text-[#0D7490]' : 'text-gray-700'}">${m.is_staff ? 'Staff' : esc(m.email || m.sender || 'User')}</span>
+                  <span class="text-[10px] text-gray-400">${formatDate(m.created_at)}</span>
+                </div>
+                <p class="text-gray-900">${esc(m.message)}</p>
+              </div>
+            `).join('')}
+          </div>
+          <div class="flex gap-2">
+            <input id="ticketReplyInput" class="input-field flex-1" placeholder="Type your reply..." onkeydown="if(event.key==='Enter'){event.preventDefault();sendTicketReply(${id})}">
+            <button class="btn btn-primary" onclick="sendTicketReply(${id})">Send</button>
+          </div>
+        </div>
+      </div>
+    `;
+  } catch {}
+}
+
+async function sendTicketReply(id) {
+  const input = document.getElementById('ticketReplyInput');
+  const message = input.value.trim();
+  if (!message) return;
+  input.disabled = true;
+  try {
+    const res = await fetch('/api/admin/support-tickets/' + id + '/messages', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message })
+    });
+    if (res.ok) {
+      toast('Reply sent', 'success');
+      input.value = '';
+      selectTicket(id);
+      fetchTickets();
+    } else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error sending reply', 'error'); }
+  input.disabled = false;
+}
+
+// ── Portfolio History ──
+let portPage = 1;
+let portTotal = 0;
+let portUserFilter = '';
+
+async function fetchPortfolioUsers() {
+  try {
+    const res = await fetch('/api/admin/users?limit=200');
+    if (!res.ok) return;
+    const d = await res.json();
+    const select = document.getElementById('portfolioUserFilter');
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">All Users</option>';
+    (d.users || []).forEach(u => {
+      select.innerHTML += `<option value="${u.id}">${esc(u.full_name || 'User ' + u.id)}</option>`;
+    });
+    if (currentVal) select.value = currentVal;
+  } catch {}
+}
+
+async function fetchPortfolioHistory() {
+  portUserFilter = document.getElementById('portfolioUserFilter').value;
+  try {
+    const params = new URLSearchParams({ page: portPage, limit: 50 });
+    const res = await fetch('/api/admin/portfolio-history?' + params.toString());
+    if (!res.ok) return;
+    const d = await res.json();
+    portTotal = d.total;
+    let rows = d.history || [];
+    if (portUserFilter) rows = rows.filter(r => r.user_id == portUserFilter);
+    // Stats
+    document.getElementById('portStatTotal').textContent = rows.length;
+    const distinctUsers = new Set(rows.map(r => r.user_id)).size;
+    document.getElementById('portStatUsers').textContent = distinctUsers;
+    const dates = rows.map(r => new Date(r.snapshot_date)).filter(d => !isNaN(d));
+    const dateRange = dates.length > 1 ? dates[dates.length - 1].toLocaleDateString() + ' - ' + dates[0].toLocaleDateString() : (dates.length === 1 ? dates[0].toLocaleDateString() : '-');
+    document.getElementById('portStatRange').textContent = dateRange;
+    // Table
+    const tbody = document.getElementById('portfolioHistoryTableBody');
+    if (rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">No portfolio history found</td></tr>';
+    } else {
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td class="font-medium text-gray-900 text-sm">${esc(r.full_name || '')}</td>
+          <td class="text-gray-500 text-xs">${esc(r.email || '')}</td>
+          <td class="text-gray-700">${Number(r.total_value || 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+          <td class="text-gray-700">${Number(r.cash_balance || 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+          <td class="text-gray-700">${Number(r.invested_value || 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+          <td class="text-gray-500 text-xs">${r.market || '-'}</td>
+          <td class="text-gray-500 text-xs">${formatDate(r.snapshot_date)}</td>
+        </tr>
+      `).join('');
+    }
+    renderPortPagination(d.total, d.page, d.limit);
+  } catch {}
+}
+
+function renderPortPagination(total, page, limit) {
+  const totalPages = Math.ceil(total / limit);
+  const el = document.getElementById('portfolioHistoryPagination');
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  if (page > 1) html += `<button class="btn btn-secondary" onclick="portPage=${page-1};fetchPortfolioHistory()">Prev</button>`;
+  html += `<span class="text-sm text-gray-500">Page ${page} of ${totalPages}</span>`;
+  if (page < totalPages) html += `<button class="btn btn-secondary" onclick="portPage=${page+1};fetchPortfolioHistory()">Next</button>`;
+  el.innerHTML = html;
+}
+
+// ── Community (Groups + Messages) ──
+let adminMsgPage = 1;
+let adminMsgTotal = 0;
+let adminMsgGroupId = '';
+
+function toggleGroupForm() {
+  const body = document.getElementById('groupFormBody');
+  const btn = document.getElementById('groupFormToggleBtn');
+  if (body.classList.contains('hidden')) {
+    body.classList.remove('hidden');
+    btn.textContent = 'Hide';
+  } else {
+    body.classList.add('hidden');
+    btn.textContent = 'Show';
+  }
+}
+
+async function createGroup() {
+  const id = document.getElementById('groupSlugInput').value.trim();
+  const name = document.getElementById('groupNameInput').value.trim();
+  const description = document.getElementById('groupDescInput').value.trim();
+  const icon = document.getElementById('groupIconInput').value.trim();
+  const topic = document.getElementById('groupTopicSelect').value;
+  if (!id || !name) { toast('Group ID and Name required', 'error'); return; }
+  try {
+    const res = await fetch('/api/admin/groups', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name, description, icon, topic })
+    });
+    if (res.ok) {
+      toast('Group created', 'success');
+      document.getElementById('groupSlugInput').value = '';
+      document.getElementById('groupNameInput').value = '';
+      document.getElementById('groupDescInput').value = '';
+      document.getElementById('groupIconInput').value = '';
+      fetchGroups();
+      toggleGroupForm();
+    } else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error creating group', 'error'); }
+}
+
+async function editGroup(id, currentName, currentDesc, currentIcon, currentTopic) {
+  const newName = prompt('Group name:', currentName);
+  if (!newName) return;
+  const newDesc = prompt('Description:', currentDesc || '');
+  if (newDesc === null) return;
+  const newIcon = prompt('Icon:', currentIcon || '');
+  if (newIcon === null) return;
+  const newTopic = prompt('Topic (General/Trading/Finance/Technology/Telecom/Income/Other):', currentTopic || 'General');
+  if (newTopic === null) return;
+  try {
+    const res = await fetch('/api/admin/groups/' + id, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName, description: newDesc, icon: newIcon, topic: newTopic })
+    });
+    if (res.ok) { toast('Group updated', 'success'); fetchGroups(); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error updating group', 'error'); }
+}
+
+async function deleteGroup(id) {
+  if (!confirm('Delete group ' + id + '? This will also delete all members and messages.')) return;
+  try {
+    const res = await fetch('/api/admin/groups/' + id, { method: 'DELETE' });
+    if (res.ok) { toast('Group deleted', 'success'); fetchGroups(); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error deleting group', 'error'); }
+}
+
+async function deleteAdminMessage(id) {
+  if (!confirm('Delete this message?')) return;
+  try {
+    const res = await fetch('/api/admin/messages/' + id, { method: 'DELETE' });
+    if (res.ok) { toast('Message deleted', 'success'); fetchAdminMessages(); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error deleting message', 'error'); }
+}
+
+async function fetchGroups() {
+  try {
+    const res = await fetch('/api/admin/groups');
+    if (!res.ok) return;
+    const d = await res.json();
+    const container = document.getElementById('groupsContainer');
+    if (d.groups.length === 0) {
+      container.innerHTML = '<div class="col-span-full text-center text-gray-400 py-8">No groups created yet</div>';
+    } else {
+      container.innerHTML = d.groups.map(g => `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="size-8 rounded-lg bg-[#0D7490]/10 flex items-center justify-center">
+              <svg class="size-4 text-[#0D7490]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </div>
+            <div>
+              <p class="font-semibold text-sm text-gray-900">${esc(g.name)}</p>
+              ${g.topic ? `<span class="text-[10px] text-gray-400">${esc(g.topic)}</span>` : ''}
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 mb-3 line-clamp-2">${esc(g.description || '')}</p>
+          <div class="flex gap-3 text-xs text-gray-500 mb-3">
+            <span class="flex items-center gap-1"><svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197"/></svg>${g.member_count} members</span>
+            <span class="flex items-center gap-1"><svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>${g.message_count} messages</span>
+          </div>
+          <div class="flex gap-1">
+            <button class="btn btn-secondary text-xs py-1 px-2" onclick="editGroup('${g.id}','${esc(g.name)}','${esc(g.description || '')}','${esc(g.icon || '')}','${esc(g.topic || '')}')">Edit</button>
+            <button class="btn btn-danger text-xs py-1 px-2" onclick="deleteGroup('${g.id}')">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+    // Populate group filter dropdown
+    const filter = document.getElementById('msgGroupFilter');
+    filter.innerHTML = '<option value="">All Groups</option>' + d.groups.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+  } catch {}
+}
+
+async function fetchAdminMessages() {
+  try {
+    adminMsgGroupId = document.getElementById('msgGroupFilter').value;
+    const params = new URLSearchParams({ page: adminMsgPage, limit: 50 });
+    if (adminMsgGroupId) params.set('groupId', adminMsgGroupId);
+    const res = await fetch('/api/admin/messages?' + params.toString());
+    if (!res.ok) return;
+    const d = await res.json();
+    adminMsgTotal = d.total;
+    const tbody = document.getElementById('adminMessagesTableBody');
+    if (d.messages.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-400 py-8">No messages found</td></tr>';
+    } else {
+      tbody.innerHTML = d.messages.map(m => `
+        <tr>
+          <td class="font-medium text-gray-900">${esc(m.sender_full_name || m.sender_name || 'Anonymous')}</td>
+          <td class="text-gray-700 max-w-xs truncate">${esc(m.content || '')}</td>
+          <td class="text-gray-500 text-xs">${m.group_id || '-'}</td>
+          <td class="text-gray-500 text-xs">${formatDate(m.created_at)}</td>
+          <td><button class="btn btn-danger text-xs py-1 px-1.5" onclick="deleteAdminMessage(${m.id})" title="Delete">&times;</button></td>
+        </tr>
+      `).join('');
+    }
+    renderAdminMsgPagination(d.total, d.page, d.limit);
+  } catch {}
+}
+
+function renderAdminMsgPagination(total, page, limit) {
+  const totalPages = Math.ceil(total / limit);
+  const el = document.getElementById('adminMessagesPagination');
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  if (page > 1) html += `<button class="btn btn-secondary" onclick="adminMsgPage=${page-1};fetchAdminMessages()">Prev</button>`;
+  html += `<span class="text-sm text-gray-500">Page ${page} of ${totalPages}</span>`;
+  if (page < totalPages) html += `<button class="btn btn-secondary" onclick="adminMsgPage=${page+1};fetchAdminMessages()">Next</button>`;
+  el.innerHTML = html;
+}
+
+// ── Broker Accounts ──
+async function fetchBrokerAccounts() {
+  try {
+    const res = await fetch('/api/admin/broker-accounts');
+    if (!res.ok) return;
+    const d = await res.json();
+    const tbody = document.getElementById('brokerAccountsTableBody');
+    if (!d.connections || d.connections.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-8">No broker connections found</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.connections.map(c => `
+      <tr class="cursor-pointer hover:bg-gray-50" onclick="showBrokerSnapshots(${c.id}, this)">
+        <td class="font-medium text-gray-900 text-sm">${esc(c.full_name || '')}</td>
+        <td class="text-gray-700 text-xs">${esc(c.broker_type || '-')}</td>
+        <td class="text-gray-700 text-xs">${esc(c.account_name || '-')}</td>
+        <td><span class="pill ${c.connected ? 'pill-verified' : 'pill-unverified'}">${c.connected ? 'Yes' : 'No'}</span></td>
+        <td class="text-gray-500 text-xs">${esc(c.sync_status || '-')}</td>
+        <td class="text-gray-500 text-xs">${c.last_sync ? formatDate(c.last_sync) : '-'}</td>
+        <td class="text-gray-700">${c.latest_balance != null ? Number(c.latest_balance).toLocaleString() : '-'}</td>
+        <td class="text-gray-700">${c.latest_equity != null ? Number(c.latest_equity).toLocaleString() : '-'}</td>
+      </tr>
+    `).join('');
+  } catch {}
+}
+
+async function showBrokerSnapshots(connId, row) {
+  document.getElementById('brokerDetailPanel').classList.remove('hidden');
+  document.getElementById('brokerSnapshotsContent').innerHTML = '<div class="flex items-center justify-center py-4"><div class="size-4 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin"></div></div>';
+  document.querySelectorAll('#brokerAccountsTableBody tr').forEach(r => r.classList.remove('selected'));
+  if (row) row.classList.add('selected');
+  try {
+    const res = await fetch('/api/admin/broker-accounts/' + connId + '/snapshots');
+    if (!res.ok) return;
+    const d = await res.json();
+    const snaps = d.snapshots || [];
+    if (snaps.length === 0) {
+      document.getElementById('brokerSnapshotsContent').innerHTML = '<div class="text-center text-gray-400 py-4 text-sm">No snapshots available</div>';
+    } else {
+      document.getElementById('brokerSnapshotsContent').innerHTML = `
+        <table class="w-full text-sm">
+          <thead><tr><th>Date</th><th>Balance</th><th>Equity</th></tr></thead>
+          <tbody>${snaps.map(s => `
+            <tr>
+              <td class="text-gray-500 text-xs">${formatDate(s.snapshot_at)}</td>
+              <td class="text-gray-700">${Number(s.balance || 0).toLocaleString()}</td>
+              <td class="text-gray-700">${Number(s.equity || 0).toLocaleString()}</td>
+            </tr>
+          `).join('')}</tbody>
+        </table>`;
+    }
+  } catch {
+    document.getElementById('brokerSnapshotsContent').innerHTML = '<div class="text-center text-gray-400 py-4 text-sm">Error loading snapshots</div>';
+  }
+}
+
+// ── Live Chat ──
+let activeChats = [];
+let selectedUserIdChat = null;
+let typingTimeout = null;
+let currentTypingUserId = null;
+
+function timeAgo(dateStr) {
+  const d = new Date(dateStr);
+  const diff = Date.now() - d.getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'Just now';
+  if (min < 60) return min + 'm ago';
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return hr + 'h ago';
+  return d.toLocaleDateString();
+}
+
+function esc(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+function formatDate(d) {
+  if (!d) return '-';
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+async function fetchActiveChats() {
+  try {
+    const res = await fetch('/api/support/chats/active');
+    if (res.ok) {
+      activeChats = await res.json();
+      renderChatList();
+    }
+  } catch {} finally {
+    const el = document.getElementById('chatLoadingEl');
+    if (el) el.style.display = 'none';
+  }
+}
+
+async function fetchMessages(userId) {
+  const area = document.getElementById('messagesArea');
+  area.innerHTML = '<div class="flex items-center justify-center py-12"><div class="size-5 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin"></div></div>';
+  try {
+    const res = await fetch('/api/support/chats/' + userId + '/messages');
+    if (res.ok) {
+      const msgs = await res.json();
+      area.innerHTML = msgs.length === 0
+        ? '<div class="text-center py-16 text-gray-400"><svg class="size-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg><p class="text-sm">No messages in this conversation</p></div>'
+        : (msgs.forEach(m => appendMessage(m)), undefined);
+    }
+  } catch {}
+  area.scrollTop = area.scrollHeight;
+}
+
+function renderChatList() {
+  const filter = document.getElementById('chatSearchInput').value.toLowerCase();
+  const filtered = activeChats.filter(c => !filter || c.user_name.toLowerCase().includes(filter) || c.email.toLowerCase().includes(filter) || (c.last_message || '').toLowerCase().includes(filter));
+  document.getElementById('chatCount').textContent = filtered.length + ' active';
+  document.getElementById('chatBadge').textContent = filtered.length;
+  const list = document.getElementById('chatList');
+  if (activeChats.length === 0) {
+    list.innerHTML = '<div class="text-center py-12 px-4"><svg class="size-10 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg><p class="text-sm text-gray-400">' + (filter ? 'No matches' : 'No active conversations') + '</p><p class="text-xs text-gray-400 mt-1">Waiting for users to reach out...</p></div>';
+    return;
+  }
+  if (filtered.length === 0) { list.innerHTML = '<div class="text-center py-12 px-4"><p class="text-sm text-gray-400">No matches</p></div>'; return; }
+  list.innerHTML = filtered.map(c => `
+    <div onclick="selectChat(${c.user_id})" class="flex items-start gap-3 px-4 py-3 cursor-pointer sidebar-item ${selectedUserIdChat === c.user_id ? 'active' : ''}" style="${selectedUserIdChat === c.user_id ? 'background:#eff6ff;border-left:2px solid #0D7490' : ''}">
+      <div class="size-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+        <svg class="size-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-sm font-semibold text-gray-900 truncate">${esc(c.user_name)}</span>
+          <span class="text-[10px] text-gray-400 shrink-0">${timeAgo(c.last_activity)}</span>
+        </div>
+        <p class="text-xs text-gray-500 truncate mt-0.5">${esc(c.last_message || '')}</p>
+        <p class="text-[10px] text-gray-400 mt-0.5">${esc(c.email)}</p>
+      </div>
+      <span data-typing="${c.user_id}" class="typing-badge hidden text-[10px] text-emerald-500 shrink-0 animate-pulse">typing...</span>
+    </div>
+  `).join('');
+}
+
+function selectChat(userId) {
+  selectedUserIdChat = userId;
+  document.getElementById('chatEmptyState').classList.add('hidden');
+  document.getElementById('chatConversationPane').classList.remove('hidden');
+  document.getElementById('replyInput').disabled = false;
+  document.getElementById('replyInput').focus();
+  const chat = activeChats.find(c => c.user_id === userId);
+  if (chat) {
+    document.getElementById('chatUserName').textContent = chat.user_name;
+    document.getElementById('chatUserEmail').textContent = chat.email || '';
+  }
+  fetchMessages(userId);
+  renderChatList();
+}
+
+function appendMessage(msg) {
+  const area = document.getElementById('messagesArea');
+  const isStaff = msg.is_staff;
+  const div = document.createElement('div');
+  div.className = 'flex gap-2.5 ' + (isStaff ? '' : 'flex-row-reverse');
+  div.innerHTML = `
+    <div class="size-8 rounded-full flex items-center justify-center shrink-0 ${isStaff ? 'bg-[#0D7490]/10' : 'bg-gray-100'}">
+      <svg class="size-4 ${isStaff ? 'text-[#0D7490]' : 'text-gray-500'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">${isStaff
+        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>'
+        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>'}</svg>
+    </div>
+    <div class="max-w-[75%] ${isStaff ? '' : 'items-end flex flex-col'}">
+      <div class="px-3.5 py-2.5 text-sm leading-relaxed ${isStaff ? 'bubble-staff' : 'bubble-user'}">${esc(msg.message)}</div>
+      <span class="text-[10px] text-gray-400 mt-1 ${isStaff ? '' : 'text-right'}">${isStaff ? 'Staff' : ''} ${timeAgo(msg.created_at)}</span>
+    </div>
+  `;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+}
+
+function sendReply() {
+  const input = document.getElementById('replyInput');
+  const text = input.value.trim();
+  if (!text || !selectedUserIdChat) return;
+  input.value = '';
+  document.getElementById('sendBtn').disabled = true;
+  if (socket && socket.connected) {
+    socket.emit('staff_send_message', { userId: selectedUserIdChat, userName: 'Admin', email: 'admin@stocksintel.com', message: text });
+  }
+  setTimeout(() => { document.getElementById('sendBtn').disabled = false; }, 500);
+}
+
+function filterChats() { renderChatList(); }
+
+// ── Payments ──
+let payPage = 1;
+let payTotal = 0;
+
+async function fetchPayments() {
+  try {
+    const params = new URLSearchParams({ page: payPage, limit: 50 });
+    const res = await fetch('/api/admin/payments?' + params.toString());
+    if (!res.ok) return;
+    const d = await res.json();
+    payTotal = d.total;
+    const rows = d.transactions || [];
+    document.getElementById('paymentTotalLabel').textContent = d.total + ' transactions';
+    document.getElementById('payStatTotal').textContent = d.total;
+    document.getElementById('payStatSuccess').textContent = rows.filter(r => r.status === 'success').length;
+    document.getElementById('payStatFailed').textContent = rows.filter(r => r.status === 'failed').length;
+    document.getElementById('payStatPending').textContent = rows.filter(r => r.status === 'pending' || r.status === 'queued').length;
+    const tbody = document.getElementById('paymentsTableBody');
+    if (rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="11" class="text-center text-gray-400 py-8">No payments found</td></tr>';
+    } else {
+      tbody.innerHTML = rows.map(r => {
+        const sc = r.status === 'success' ? 'pill-verified' : r.status === 'failed' ? 'pill-unverified' : 'pill-free';
+        return `<tr>
+          <td class="text-gray-500 text-xs">${r.id}</td>
+          <td class="font-medium text-gray-900 text-sm whitespace-nowrap">${esc(r.full_name || '-')}</td>
+          <td class="text-gray-500 text-xs">${esc(r.email || '-')}</td>
+          <td class="text-gray-700 whitespace-nowrap">${Number(r.amount || 0).toLocaleString()}</td>
+          <td class="text-gray-500 text-xs">${esc(r.currency)}</td>
+          <td class="text-gray-500 text-xs">${esc(r.provider)}</td>
+          <td class="text-gray-500 text-xs">${esc(r.phone_number || '-')}</td>
+          <td class="text-gray-500 text-xs">${esc(r.plan_name || '-')}</td>
+          <td class="text-gray-500 text-xs" title="${esc(r.external_reference || '')}">${esc((r.external_reference || '').slice(-8) || '-')}</td>
+          <td><span class="pill ${sc} text-xs">${esc(r.status)}</span></td>
+          <td class="text-gray-500 text-xs whitespace-nowrap">${formatDate(r.created_at)}</td>
+        </tr>`;
+      }).join('');
+    }
+    const totalPages = Math.ceil(d.total / d.limit);
+    const pel = document.getElementById('paymentsPagination');
+    if (totalPages <= 1) { pel.innerHTML = ''; return; }
+    let ph = '';
+    if (d.page > 1) ph += `<button class="btn btn-secondary" onclick="payPage=${d.page - 1};fetchPayments()">Prev</button>`;
+    ph += `<span class="text-sm text-gray-500">Page ${d.page} of ${totalPages}</span>`;
+    if (d.page < totalPages) ph += `<button class="btn btn-secondary" onclick="payPage=${d.page + 1};fetchPayments()">Next</button>`;
+    pel.innerHTML = ph;
+  } catch {}
+}
+
+// ── Stocks ──
+let stocksPage = 1;
+let stocksTotal = 0;
+let stocksSearch = '';
+let editingStockId = null;
+
+function debounceStockSearch() {
+  clearTimeout(window._stockSearchTimer);
+  window._stockSearchTimer = setTimeout(() => {
+    stocksSearch = document.getElementById('stockSearchInput').value.trim();
+    stocksPage = 1;
+    fetchStocks();
+  }, 300);
+}
+
+async function fetchStocks() {
+  try {
+    const params = new URLSearchParams({ page: stocksPage, limit: 50 });
+    if (stocksSearch) params.set('search', stocksSearch);
+    const res = await fetch('/api/admin/stocks?' + params.toString());
+    if (!res.ok) return;
+    const d = await res.json();
+    stocksTotal = d.total;
+    document.getElementById('stockTotalLabel').textContent = d.total + ' stocks';
+    const tbody = document.getElementById('stocksTableBody');
+    if (d.stocks.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">No stocks found</td></tr>';
+    } else {
+      tbody.innerHTML = d.stocks.map(s => `
+        <tr>
+          <td class="font-medium text-gray-900 text-xs">${esc(s.ticker || '')}</td>
+          <td class="text-gray-700 text-xs">${esc(s.name || '')}</td>
+          <td class="text-gray-500 text-xs">${esc(s.sector || '-')}</td>
+          <td class="text-gray-500 text-xs">${esc(s.market || '-')}</td>
+          <td class="text-gray-500 text-xs">${esc(s.currency || '-')}</td>
+          <td><span class="pill ${s.is_active ? 'pill-verified' : 'pill-unverified'}">${s.is_active ? 'Yes' : 'No'}</span></td>
+          <td><button class="btn btn-secondary text-xs py-1 px-2" onclick="showStockEdit(${s.id})">Edit</button></td>
+        </tr>
+      `).join('');
+    }
+    renderStocksPagination(d.total, d.page, d.limit);
+  } catch {}
+}
+
+function renderStocksPagination(total, page, limit) {
+  const totalPages = Math.ceil(total / limit);
+  const el = document.getElementById('stocksPagination');
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  if (page > 1) html += `<button class="btn btn-secondary" onclick="stocksPage=${page-1};fetchStocks()">Prev</button>`;
+  html += `<span class="text-sm text-gray-500">Page ${page} of ${totalPages}</span>`;
+  if (page < totalPages) html += `<button class="btn btn-secondary" onclick="stocksPage=${page+1};fetchStocks()">Next</button>`;
+  el.innerHTML = html;
+}
+
+async function showStockEdit(id) {
+  editingStockId = id;
+  document.getElementById('stockEditModal').classList.remove('hidden');
+  try {
+    const res = await fetch('/api/admin/stocks/' + id);
+    if (!res.ok) return;
+    const stock = await res.json();
+    document.getElementById('editStockTicker').value = stock.ticker || '';
+    document.getElementById('editStockName').value = stock.name || '';
+    document.getElementById('editStockSector').value = stock.sector || '';
+    document.getElementById('editStockMarket').value = stock.market || '';
+    document.getElementById('editStockCurrency').value = stock.currency || '';
+    document.getElementById('editStockActive').value = stock.is_active ? 'true' : 'false';
+  } catch { toast('Error loading stock', 'error'); }
+}
+
+function closeStockEditModal() {
+  editingStockId = null;
+  document.getElementById('stockEditModal').classList.add('hidden');
+}
+
+async function saveStockEdit() {
+  if (!editingStockId) return;
+  const body = {
+    ticker: document.getElementById('editStockTicker').value.trim(),
+    name: document.getElementById('editStockName').value.trim(),
+    sector: document.getElementById('editStockSector').value.trim(),
+    market: document.getElementById('editStockMarket').value.trim(),
+    currency: document.getElementById('editStockCurrency').value.trim(),
+    is_active: document.getElementById('editStockActive').value === 'true',
+  };
+  if (!body.ticker) { toast('Ticker is required', 'error'); return; }
+  try {
+    const res = await fetch('/api/admin/stocks/' + editingStockId, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    if (res.ok) { toast('Stock updated', 'success'); closeStockEditModal(); fetchStocks(); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error updating stock', 'error'); }
+}
+
+async function deleteStock() {
+  if (!editingStockId || !confirm('Delete this stock?')) return;
+  try {
+    const res = await fetch('/api/admin/stocks/' + editingStockId, { method: 'DELETE' });
+    if (res.ok) { toast('Stock deleted', 'success'); closeStockEditModal(); fetchStocks(); }
+    else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error deleting stock', 'error'); }
+}
+
+// ── Signal Outcomes ──
+let soPage = 1;
+let soTotal = 0;
+
+async function fetchSignalOutcomes() {
+  try {
+    const params = new URLSearchParams({ page: soPage, limit: 50 });
+    const res = await fetch('/api/admin/signal-outcomes?' + params.toString());
+    if (!res.ok) return;
+    const d = await res.json();
+    soTotal = d.total;
+    document.getElementById('signalOutcomeTotalLabel').textContent = d.total + ' outcomes';
+    const stats = d.stats || {};
+    document.getElementById('soStatTotal').textContent = stats.total || 0;
+    document.getElementById('soStatWins').textContent = stats.wins || 0;
+    document.getElementById('soStatLosses').textContent = stats.losses || 0;
+    const total = (stats.wins || 0) + (stats.losses || 0);
+    document.getElementById('soStatWinRate').textContent = total > 0 ? Math.round((stats.wins / total) * 100) + '%' : '-';
+    const tbody = document.getElementById('signalOutcomesTableBody');
+    if (d.outcomes.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">No outcomes recorded yet</td></tr>';
+    } else {
+      tbody.innerHTML = d.outcomes.map(o => `
+        <tr>
+          <td class="font-medium text-gray-900 text-xs">${esc(o.ticker)}</td>
+          <td class="text-xs"><span class="pill ${o.signal === 'Buy' ? 'pill-verified' : 'pill-unverified'}">${esc(o.signal || '-')}</span></td>
+          <td class="text-gray-700 text-xs">${o.entry_price != null ? Number(o.entry_price).toFixed(2) : '-'}</td>
+          <td class="text-gray-700 text-xs">${o.exit_price != null ? Number(o.exit_price).toFixed(2) : '-'}</td>
+          <td><span class="pill ${o.result === 'win' ? 'pill-verified' : 'pill-unverified'}">${esc(o.result)}</span></td>
+          <td class="text-gray-500 text-xs">${formatDate(o.recorded_at)}</td>
+        </tr>
+      `).join('');
+    }
+    const totalPages = Math.ceil(d.total / d.limit);
+    const pel = document.getElementById('signalOutcomesPagination');
+    if (totalPages <= 1) { pel.innerHTML = ''; return; }
+    let ph = '';
+    if (d.page > 1) ph += `<button class="btn btn-secondary" onclick="soPage=${d.page - 1};fetchSignalOutcomes()">Prev</button>`;
+    ph += `<span class="text-sm text-gray-500">Page ${d.page} of ${totalPages}</span>`;
+    if (d.page < totalPages) ph += `<button class="btn btn-secondary" onclick="soPage=${d.page + 1};fetchSignalOutcomes()">Next</button>`;
+    pel.innerHTML = ph;
+  } catch {}
+}
+
+// ── Notifications ──
+let notifPage = 1;
+let notifTotal = 0;
+
+async function fetchNotifications() {
+  try {
+    const params = new URLSearchParams({ page: notifPage, limit: 50 });
+    const res = await fetch('/api/admin/notifications?' + params.toString());
+    if (!res.ok) return;
+    const d = await res.json();
+    notifTotal = d.total;
+    document.getElementById('notificationTotalLabel').textContent = d.total + ' notifications';
+    const tbody = document.getElementById('notificationsTableBody');
+    if (d.notifications.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">No notifications found</td></tr>';
+    } else {
+      tbody.innerHTML = d.notifications.map(n => `
+        <tr>
+          <td class="font-medium text-gray-900 text-xs">${esc(n.full_name || 'User ' + n.user_id)}</td>
+          <td class="text-gray-500 text-xs">${esc(n.email || '')}</td>
+          <td class="text-gray-700 text-xs">${esc(n.title || '')}</td>
+          <td class="text-gray-500 text-xs max-w-xs truncate">${esc(n.body || '')}</td>
+          <td class="text-xs"><span class="pill ${n.type === 'message' ? 'pill-verified' : 'pill-free'}">${esc(n.type || 'info')}</span></td>
+          <td><span class="pill ${n.read ? 'pill-verified' : 'pill-unverified'}">${n.read ? 'Read' : 'Unread'}</span></td>
+          <td class="text-gray-500 text-xs">${formatDate(n.created_at)}</td>
+        </tr>
+      `).join('');
+    }
+    const totalPages = Math.ceil(d.total / d.limit);
+    const pel = document.getElementById('notificationsPagination');
+    if (totalPages <= 1) { pel.innerHTML = ''; return; }
+    let ph = '';
+    if (d.page > 1) ph += `<button class="btn btn-secondary" onclick="notifPage=${d.page - 1};fetchNotifications()">Prev</button>`;
+    ph += `<span class="text-sm text-gray-500">Page ${d.page} of ${totalPages}</span>`;
+    if (d.page < totalPages) ph += `<button class="btn btn-secondary" onclick="notifPage=${d.page + 1};fetchNotifications()">Next</button>`;
+    pel.innerHTML = ph;
+  } catch {}
+}
+
+// ── Followers ──
+async function fetchFollowers() {
+  try {
+    const res = await fetch('/api/admin/followers');
+    if (!res.ok) return;
+    const d = await res.json();
+    document.getElementById('followerTotalLabel').textContent = (d.followers || []).length + ' follower relationships';
+    const tbody = document.getElementById('followersTableBody');
+    if (!d.followers || d.followers.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-400 py-8">No follower relationships found</td></tr>';
+    } else {
+      tbody.innerHTML = d.followers.map(f => `
+        <tr>
+          <td class="font-medium text-gray-900 text-sm">${esc(f.follower_name)}</td>
+          <td class="font-medium text-gray-900 text-sm">${esc(f.followee_name)}</td>
+          <td class="text-gray-500 text-xs">${formatDate(f.created_at)}</td>
+        </tr>
+      `).join('');
+    }
+  } catch {}
+}
+
+// ── Auth Check & Login (OTP-based) ──
+let _loginOtpTimer = null;
+let _loginOtpEmail = '';
+
+function showAdminLayout(show) {
+  document.getElementById('sidebar').classList.toggle('hidden', !show);
+  document.getElementById('mainContent').classList.toggle('hidden', !show);
+}
+
+async function checkAuth() {
+  try {
+    const res = await fetch('/api/admin/dashboard');
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('stockintel_token');
+      localStorage.removeItem('stockintel_user');
+      document.getElementById('loadingScreen').classList.add('hidden');
+      document.getElementById('loginScreen').classList.remove('hidden');
+      showAdminLayout(false);
+      return false;
+    }
+    document.getElementById('loadingScreen').classList.add('hidden');
+    return res.ok;
+  } catch {
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('loginScreen').classList.remove('hidden');
+    showAdminLayout(false);
+    return false;
+  }
+}
+
+function resetLoginForm() {
+  if (_loginOtpTimer) { clearTimeout(_loginOtpTimer); _loginOtpTimer = null; }
+  document.getElementById('loginEmailGroup').classList.remove('hidden');
+  document.getElementById('loginOtpGroup').classList.add('hidden');
+  document.getElementById('loginBackBtn').classList.add('hidden');
+  document.getElementById('loginOtpInput').value = '';
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = false;
+  btn.textContent = 'Send OTP';
+  btn.onclick = handleSendOtp;
+  const errorEl = document.getElementById('loginError');
+  errorEl.classList.add('hidden');
+}
+
+async function handleSendOtp() {
+  const email = document.getElementById('loginEmailInput').value.trim();
+  const errorEl = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  if (!email) { showLoginError('Please enter your email'); return; }
+  btn.disabled = true; btn.textContent = 'Sending OTP...';
+  errorEl.classList.add('hidden');
+  try {
+    const res = await fetch('/api/admin/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (res.status === 429) {
+      showCountdown(data.banExpires || (Date.now() + 900000));
+      return;
+    }
+    if (!res.ok) {
+      showLoginError(data.error || 'Failed to send OTP');
+      btn.disabled = false; btn.textContent = 'Send OTP';
+      return;
+    }
+    _loginOtpEmail = email;
+    document.getElementById('loginEmailGroup').classList.add('hidden');
+    document.getElementById('loginOtpGroup').classList.remove('hidden');
+    document.getElementById('loginBackBtn').classList.remove('hidden');
+    btn.disabled = false;
+    btn.textContent = 'Verify & Sign In';
+    btn.onclick = handleVerifyOtp;
+    document.getElementById('loginOtpInput').focus();
+    showLoginError('OTP sent to ' + email + ' (expires in 10 min)');
+    document.getElementById('loginError').className = 'mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-700';
+  } catch (e) {
+    showLoginError('Network error. Is the server running?');
+    btn.disabled = false; btn.textContent = 'Send OTP';
+  }
+}
+
+async function handleVerifyOtp() {
+  const code = document.getElementById('loginOtpInput').value.trim();
+  const errorEl = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  if (!code || code.length !== 6) { showLoginError('Please enter the 6-digit code'); return; }
+  btn.disabled = true; btn.textContent = 'Verifying...';
+  errorEl.classList.add('hidden');
+  try {
+    const res = await fetch('/api/admin/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: _loginOtpEmail, code })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showLoginError(data.error || 'Verification failed');
+      btn.disabled = false; btn.textContent = 'Verify & Sign In';
+      document.getElementById('loginOtpInput').value = '';
+      document.getElementById('loginOtpInput').focus();
+      return;
+    }
+    if (data.user && data.user.role !== 'admin') {
+      showLoginError('Access denied. Admin privileges required.');
+      btn.disabled = false; btn.textContent = 'Verify & Sign In';
+      document.getElementById('loginOtpInput').value = '';
+      return;
+    }
+    if (_loginOtpTimer) { clearTimeout(_loginOtpTimer); _loginOtpTimer = null; }
+    localStorage.setItem('stockintel_token', data.token);
+    localStorage.setItem('stockintel_user', JSON.stringify(data.user));
+    document.getElementById('loginScreen').classList.add('hidden');
+    showAdminLayout(true);
+    toast('Welcome back, ' + (data.user.full_name || 'Admin'), 'success');
+    switchTab('dashboard');
+    initSocket();
+    await fetchDashboard();
+    setInterval(fetchDashboard, 30000);
+    setInterval(fetchActiveChats, 15000);
+    setInterval(fetchSignalOutcomes, 30000);
+    setInterval(fetchSignalStats, 30000);
+    setInterval(fetchNotifications, 30000);
+    setInterval(fetchStocks, 60000);
+  } catch (e) {
+    showLoginError('Network error. Is the server running?');
+    btn.disabled = false; btn.textContent = 'Verify & Sign In';
+  }
+}
+
+function showCountdown(banExpires) {
+  const btn = document.getElementById('loginBtn');
+  const startCountdown = (exp) => {
+    const secs = Math.max(0, Math.ceil((exp - Date.now()) / 1000));
+    if (secs <= 0) { showLoginError('Lockout expired. Try again.'); btn.disabled = false; btn.textContent = 'Send OTP'; resetLoginForm(); return; }
+    showLoginError('Too many attempts. Try again in ' + secs + 's');
+    btn.disabled = true; btn.textContent = 'Locked (' + secs + 's)';
+    _loginOtpTimer = setTimeout(() => startCountdown(exp), 1000);
+  };
+  startCountdown(banExpires);
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.className = 'mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700';
+}
+
+async function handleAdminLogout() {
+  try { await fetch('/api/admin/logout', { method: 'POST' }); } catch {}
+  localStorage.removeItem('stockintel_token');
+  localStorage.removeItem('stockintel_user');
+  location.reload();
+}
+
+// ── User Activity ──
+let _activityPage = 0;
+const ACTIVITY_PAGE_SIZE = 50;
+
+function actionBadge(action) {
+  const colors = { page_view: 'bg-blue-50 text-blue-700', trade: 'bg-green-50 text-green-700', login: 'bg-purple-50 text-purple-700', signal_view: 'bg-amber-50 text-amber-700', watchlist_add: 'bg-teal-50 text-teal-700', watchlist_remove: 'bg-red-50 text-red-700', search: 'bg-gray-50 text-gray-700', news_read: 'bg-indigo-50 text-indigo-700', logout: 'bg-orange-50 text-orange-700' };
+  const labels = { page_view: 'Page View', trade: 'Trade', login: 'Login', signal_view: 'Signal View', watchlist_add: 'Add Watchlist', watchlist_remove: 'Remove Watchlist', search: 'Search', news_read: 'News Read', logout: 'Logout' };
+  return `<span class="pill ${colors[action] || 'bg-gray-50 text-gray-700'}">${labels[action] || action}</span>`;
+}
+
+function actionIcon(action) {
+  const icons = { page_view: '👁️', trade: '💹', login: '🔑', signal_view: '📡', watchlist_add: '➕', watchlist_remove: '➖', search: '🔍', news_read: '📰', logout: '🚪' };
+  return icons[action] || '•';
+}
+
+function formatActivityTime(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffSec = Math.floor((now - d) / 1000);
+  if (diffSec < 60) return 'just now';
+  if (diffSec < 3600) return Math.floor(diffSec / 60) + 'm ago';
+  if (diffSec < 86400) return Math.floor(diffSec / 3600) + 'h ago';
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function activityDetailsText(activity) {
+  if (!activity.details) return '-';
+  const d = typeof activity.details === 'string' ? JSON.parse(activity.details) : activity.details;
+  if (activity.action === 'page_view') return d.path || '-';
+  if (activity.action === 'trade') return (d.ticker || '') + ' ' + (d.type || '') + ' ' + (d.shares || '') + ' @ ' + (d.price || '');
+  if (activity.action === 'login') return '-';
+  return d.path || d.ticker || d.query || JSON.stringify(d).slice(0, 40) || '-';
+}
+
+function prependActivity(activity) {
+  const feed = document.getElementById('realtimeActivityFeed');
+  const empty = feed.querySelector('.text-gray-400.py-8');
+  if (empty) empty.remove();
+  const el = document.createElement('div');
+  el.className = 'flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-100 shadow-sm animate-fadeIn';
+  el.style.animation = 'fadeIn 0.3s ease';
+  el.innerHTML = `<div class="size-8 rounded-full bg-gray-100 flex items-center justify-center text-sm">${actionIcon(activity.action)}</div>
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-medium text-gray-900">${activity.full_name || activity.email || 'Unknown'}</span>
+        ${actionBadge(activity.action)}
+        <span class="text-xs text-gray-400 ml-auto">${formatActivityTime(activity.created_at)}</span>
+      </div>
+      <div class="text-xs text-gray-500 truncate mt-0.5">${activityDetailsText(activity)}</div>
+    </div>`;
+  feed.prepend(el);
+  // Keep feed at max 20 items
+  while (feed.children.length > 20) feed.removeChild(feed.lastChild);
+}
+
+function appendActivityRow(activity) {
+  const tbody = document.getElementById('activityTableBody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td class="text-xs text-gray-400 whitespace-nowrap">${formatActivityTime(activity.created_at)}</td>
+    <td class="text-sm font-medium">${activity.full_name || '-'}</td>
+    <td class="text-sm text-gray-500">${activity.email || '-'}</td>
+    <td>${actionBadge(activity.action)}</td>
+    <td class="text-sm text-gray-600 max-w-[200px] truncate">${activityDetailsText(activity)}</td>`;
+  tbody.prepend(tr);
+  // Update total label
+  const totalLabel = document.getElementById('activityTotalLabel');
+  const current = parseInt(totalLabel.dataset.total || '0');
+  totalLabel.dataset.total = current + 1;
+  totalLabel.textContent = (current + 1) + ' total';
+}
+
+async function fetchUserActivity(page) {
+  _activityPage = page !== undefined ? page : _activityPage;
+  const offset = _activityPage * ACTIVITY_PAGE_SIZE;
+  const action = document.getElementById('activityFilter').value;
+  let url = '/api/admin/activity/recent?limit=' + ACTIVITY_PAGE_SIZE + '&offset=' + offset;
+  if (action) url += '&action=' + encodeURIComponent(action);
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) return;
+    const tbody = document.getElementById('activityTableBody');
+    tbody.innerHTML = data.activities.map(a => `<tr>
+      <td class="text-xs text-gray-400 whitespace-nowrap">${formatActivityTime(a.created_at)}</td>
+      <td class="text-sm font-medium">${a.full_name || '-'}</td>
+      <td class="text-sm text-gray-500">${a.email || '-'}</td>
+      <td>${actionBadge(a.action)}</td>
+      <td class="text-sm text-gray-600 max-w-[200px] truncate">${activityDetailsText(a)}</td>
+    </tr>`).join('');
+    document.getElementById('activityTotalLabel').textContent = data.total + ' total';
+    document.getElementById('activityTotalLabel').dataset.total = data.total;
+    // Pagination
+    const totalPages = Math.ceil(data.total / ACTIVITY_PAGE_SIZE);
+    const pagination = document.getElementById('activityPagination');
+    let html = '';
+    if (_activityPage > 0) html += '<button class="btn btn-secondary py-1 px-3 text-xs" onclick="fetchUserActivity(' + (_activityPage - 1) + ')">Prev</button>';
+    html += '<span class="text-xs text-gray-500">Page ' + (_activityPage + 1) + ' of ' + Math.max(totalPages, 1) + '</span>';
+    if (_activityPage + 1 < totalPages) html += '<button class="btn btn-secondary py-1 px-3 text-xs" onclick="fetchUserActivity(' + (_activityPage + 1) + ')">Next</button>';
+    pagination.innerHTML = html;
+  } catch { /* ignore */ }
+}
+
+// ── Init ──
+(async () => {
+  // Set initial login button handler
+  document.getElementById('loginBtn').onclick = handleSendOtp;
+  // Check if already logged in from localStorage
+  const existingToken = localStorage.getItem('stockintel_token');
+  if (!existingToken) {
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('loginScreen').classList.remove('hidden');
+    showAdminLayout(false);
+    return;
+  }
+  const authed = await checkAuth();
+  if (authed) {
+    showAdminLayout(true);
+    initSocket();
+    fetchDashboard();
+    setInterval(fetchDashboard, 30000);
+    setInterval(fetchActiveChats, 15000);
+    setInterval(fetchSignalOutcomes, 30000);
+    setInterval(fetchSignalStats, 30000);
+    setInterval(fetchNotifications, 30000);
+    setInterval(fetchStocks, 60000);
+  }
+})();
+</script>
+</body>
+</html>

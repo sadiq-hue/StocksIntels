@@ -2,7 +2,12 @@ const crypto = require('crypto');
 const { pool } = require('../db');
 
 const ALGORITHM = 'aes-256-gcm';
-const ENCRYPTION_KEY = process.env.BROKER_ENCRYPTION_KEY || crypto.createHash('sha256').update('stockintel-broker-key-2024').digest('hex').slice(0, 32);
+const ENCRYPTION_KEY = process.env.BROKER_ENCRYPTION_KEY;
+
+if (!ENCRYPTION_KEY) {
+  console.error('[BROKER] FATAL: BROKER_ENCRYPTION_KEY is not set. Broker credential encryption will fail.');
+  console.error('[BROKER] Generate a key with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+}
 
 function encrypt(text) {
   if (!text) return null;
@@ -284,7 +289,10 @@ async function syncPositionsToHoldings(pool, userId, connectionId, positions) {
     if (!ticker) continue;
 
     const volume = parseFloat(String(pos.volume || '0').replace(/[,\s]/g, ''));
-    const price = parseFloat(String(pos.price || '0').replace(/[,\s]/g, ''));
+    const avgCost = parseFloat(String(pos.price || '0').replace(/[,\s]/g, ''));
+    // Try to find current market price from broker data (Price 2, Current Price, etc.)
+    const currentPriceRaw = pos.price_2 || pos.current_price || pos.current || pos.market_price || pos.last_price || null;
+    const currentPrice = currentPriceRaw ? parseFloat(String(currentPriceRaw).replace(/[,\s]/g, '')) : null;
     const type = (pos.type || '').toLowerCase();
 
     if (!volume || volume <= 0) continue;
@@ -301,8 +309,8 @@ async function syncPositionsToHoldings(pool, userId, connectionId, positions) {
         ticker,
         type ? `${type.toUpperCase()} ${ticker}` : ticker,
         volume,
-        price || 0,
-        price || 0,
+        avgCost || 0,
+        currentPrice && currentPrice > 0 ? currentPrice : null,
         sector,
         'Global',
         connectionId,

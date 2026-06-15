@@ -60,8 +60,8 @@ export function ProfilePage() {
   if (!user) {
     return (
       <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
-        <Card className="bg-white border-gray-200 p-8 text-center">
-          <p className="text-gray-500">Please log in to view your profile.</p>
+        <Card className="bg-card border-border p-8 text-center">
+          <p className="text-muted-foreground">Please log in to view your profile.</p>
         </Card>
       </div>
     );
@@ -79,36 +79,36 @@ export function ProfilePage() {
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
       <div className="mb-6">
-        <h2 className="text-gray-900 text-2xl mb-1">Profile</h2>
-        <p className="text-gray-600">Manage your account details and preferences</p>
+        <h2 className="text-foreground text-2xl mb-1">Profile</h2>
+        <p className="text-muted-foreground">Manage your account details and preferences</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <Card className="bg-white border-gray-200 p-6">
-            <h3 className="text-gray-900 font-semibold mb-4 flex items-center gap-2">
+          <Card className="bg-card border-border p-6">
+            <h3 className="text-foreground font-semibold mb-4 flex items-center gap-2">
               <User className="w-5 h-5 text-[#0D7490]" />
               Personal Information
             </h3>
             <div className="space-y-4 max-w-md">
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Full Name</label>
+                <label className="block text-sm text-muted-foreground mb-1">Full Name</label>
                 <Input value={fullName} onChange={e => setFullName(e.target.value)} />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Email</label>
+                <label className="block text-sm text-muted-foreground mb-1">Email</label>
                 <Input value={email} onChange={e => setEmail(e.target.value)} type="email" />
               </div>
             </div>
           </Card>
 
-          <Card className="bg-white border-gray-200 p-6">
-            <h3 className="text-gray-900 font-semibold mb-4 flex items-center gap-2">
+          <Card className="bg-card border-border p-6">
+            <h3 className="text-foreground font-semibold mb-4 flex items-center gap-2">
               <Lock className="w-5 h-5 text-[#0D7490]" />
               Change Password
             </h3>
             <div className="max-w-md">
-              <label className="block text-sm text-gray-600 mb-1">New Password (min 8 chars)</label>
+              <label className="block text-sm text-muted-foreground mb-1">New Password (min 8 chars)</label>
               <Input value={password} onChange={e => setPassword(e.target.value)} type="password" placeholder="Leave blank to keep current" />
             </div>
           </Card>
@@ -126,17 +126,17 @@ export function ProfilePage() {
         </div>
 
         <div className="space-y-6">
-          <Card className="bg-white border-gray-200 p-6">
+          <Card className="bg-card border-border p-6">
             <div className="flex flex-col items-center text-center">
               <div className="w-20 h-20 rounded-full bg-[#0D7490]/10 flex items-center justify-center mb-3">
                 <User className="w-10 h-10 text-[#0D7490]" />
               </div>
-              <h3 className="text-gray-900 font-semibold text-lg">{user.full_name}</h3>
-              <p className="text-gray-500 text-sm flex items-center gap-1 mt-1">
+              <h3 className="text-foreground font-semibold text-lg">{user.full_name}</h3>
+              <p className="text-muted-foreground text-sm flex items-center gap-1 mt-1">
                 <Mail className="w-3 h-3" />
                 {user.email}
               </p>
-              {memberSince && <p className="text-gray-400 text-xs mt-2">Member since {memberSince}</p>}
+              {memberSince && <p className="text-muted-foreground text-xs mt-2">Member since {memberSince}</p>}
               <div className="flex flex-wrap justify-center gap-2 mt-4">
                 {user.is_verified && (
                   <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
@@ -155,7 +155,7 @@ export function ProfilePage() {
             </div>
           </Card>
 
-          <Card className="bg-white border-gray-200 p-6">
+          <Card className="bg-card border-border p-6">
             <Button onClick={logout} variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50">
               Sign Out
             </Button>

@@ -63,9 +63,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         setUnread(prev => prev + 1);
       }
       const isSignal = notification.type === "signal";
+      const isMessage = notification.type === "message";
       const isStrong = notification.title?.includes("Strong Buy") || notification.title?.includes("Strong Sell");
-      if (isSignal) {
-        toast(notification.title, {
+      if (isSignal || isMessage) {
+        toast(isMessage ? `💬 ${notification.title}` : notification.title, {
           description: `${notification.body} — ${formatNotificationTime(notification.created_at)}`,
           action: notification.link ? {
             label: "View",

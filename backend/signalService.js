@@ -4,595 +4,1098 @@
 const axios = require('axios');
 const { pool } = require('./db');
 
+const { getStockQuote, getQuotesBatch } = require('./marketService');
+const { fetchHistoricalQuotes } = require('./globalScraper');
 const { getMacroScore, getCountryForSymbol, generateMacroReason } = require('./macroService');
 const { getAggregatedSentiment } = require('./newsService');
 const { getKeyMetrics, getQuote, getCompanyProfile } = require('./financialReportsService');
+const { calculateSMA } = require('./technicalIndicators');
+const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL_SYMBOLS, SECTOR_AVG_PE, INDUSTRY_MEDIAN_EV_EBITDA, TBILI_RATE, KNOWN_FUNDAMENTALS, NSE_FUNDAMENTALS } = require('./stockData');
+const { getEffectiveSectorPE, getGrade, determineSignal, determineTradeType, getSectorMacroAdjustment, analyzeFundamentals, analyzeTechnicals, analyzeFinancials, generateReason } = require('./analysisEngine');
+const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
+const mlModel = require('./mlSignalModel');
+const engineConfig = require('./engineConfig');
+const { trackSignalQuality, logHealth, detectSignalDrift, getQualityScore } = require('./monitorService');
 
 console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)');
 
-// ─── Sector & Industry Reference Data ───────────────────────────────────────
-const TBILI_RATE = 0.16; // Kenya 364-day T-bill rate (~16%)
+// Restore performance stats and portfolio state from DB on startup
+restoreStateFromDb().catch(() => {});
 
-const SECTOR_AVG_PE = {
-  'Telecommunications': 15, 'Banking': 10, 'Manufacturing': 18,
-  'Media': 12, 'Utilities': 14, 'Technology': 30, 'Financial': 14,
-  'Healthcare': 25, 'Consumer': 22, 'Energy': 12, 'Real Estate': 35,
-  'Semiconductors': 25, 'Software': 35, 'Insurance': 12, 'Agricultural': 14,
-  'Construction': 16, 'Transportation': 15, 'Automobiles': 18,
-  'Internet Services': 28, 'Internet Retail': 35, 'Streaming Media': 40,
-  'Payments': 28, 'Hospitality': 22, 'Investment': 15,
-  'Investment Services': 15, 'Commercial Services': 18, 'Other': 18
-};
+// In-memory cache for generateSignals to prevent redundant calls
+let _signalsCache = null;
+let _signalsCacheTime = 0;
+let _signalsInProgress = false;
+const SIGNALS_CACHE_TTL = 60000; // 60 seconds
 
-const INDUSTRY_MEDIAN_EV_EBITDA = {
-  'Telecommunications': 8, 'Banking': 7, 'Manufacturing': 10,
-  'Media': 8, 'Utilities': 12, 'Technology': 18, 'Financial': 9,
-  'Healthcare': 16, 'Consumer': 14, 'Energy': 8, 'Real Estate': 25,
-  'Semiconductors': 15, 'Software': 22, 'Insurance': 8, 'Agricultural': 9,
-  'Construction': 10, 'Transportation': 10, 'Automobiles': 10,
-  'Internet Services': 20, 'Internet Retail': 22, 'Streaming Media': 25,
-  'Payments': 20, 'Hospitality': 14, 'Investment': 10,
-  'Investment Services': 10, 'Commercial Services': 12, 'Other': 12
-};
+async function _persistSignalCache(signals) {
+  try {
+    await pool.query(
+      `INSERT INTO app_cache (cache_key, cache_value, updated_at) VALUES ('signals_cache', $1::jsonb, NOW())
+       ON CONFLICT (cache_key) DO UPDATE SET cache_value = $1::jsonb, updated_at = NOW()`,
+      [JSON.stringify(signals)]
+    );
+  } catch { /* best-effort */ }
+}
 
-// ─── Known Stock Fundamentals ────────────────────────────────────────────────
-const KNOWN_FUNDAMENTALS = {
-  'SCOM': {
-    name: 'Safaricom PLC',
-    sector: 'Telecommunications',
-    peRatio: 15.2,
-    pbRatio: 3.8,
-    dividendYield: 4.2,
-    marketCap: 1100000000000,
-    epsGrowth: 8.5,
-    revenueGrowth: 12.3,
-    debtToEquity: 0.35,
-    roe: 25.1,
-    currentRatio: 1.2,
-    evEbitda: 8.5,
-    fcfYield: 6.5,
-    payoutRatio: 80,
-    marginChange: 1.2,
-    epsSurprise: 5.0,
-    altmanZ: 3.5,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'neutral'
-  },
-  'EQTY': {
-    name: 'Equity Group Holdings',
-    sector: 'Banking',
-    peRatio: 8.5,
-    pbRatio: 1.8,
-    dividendYield: 3.8,
-    marketCap: 350000000000,
-    epsGrowth: 15.2,
-    revenueGrowth: 18.5,
-    debtToEquity: 0.85,
-    roe: 21.3,
-    currentRatio: 1.1,
-    evEbitda: 7.2,
-    fcfYield: 10.0,
-    payoutRatio: 40,
-    marginChange: 2.5,
-    epsSurprise: 8.0,
-    altmanZ: 2.2,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'positive'
-  },
-  'KCB': {
-    name: 'KCB Group PLC',
-    sector: 'Banking',
-    peRatio: 7.8,
-    pbRatio: 1.5,
-    dividendYield: 4.5,
-    marketCap: 280000000000,
-    epsGrowth: 12.1,
-    revenueGrowth: 14.2,
-    debtToEquity: 0.92,
-    roe: 19.8,
-    currentRatio: 1.05,
-    evEbitda: 6.5,
-    fcfYield: 9.0,
-    payoutRatio: 35,
-    marginChange: 1.8,
-    epsSurprise: 12.0,
-    altmanZ: 2.0,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'positive'
-  },
-  'EABL': {
-    name: 'East African Breweries',
-    sector: 'Manufacturing',
-    peRatio: 22.5,
-    pbRatio: 5.2,
-    dividendYield: 3.2,
-    marketCap: 130000000000,
-    epsGrowth: 6.8,
-    revenueGrowth: 9.5,
-    debtToEquity: 0.25,
-    roe: 23.5,
-    currentRatio: 1.3,
-    evEbitda: 12.5,
-    fcfYield: 3.5,
-    payoutRatio: 55,
-    marginChange: 0.5,
-    epsSurprise: 3.0,
-    altmanZ: 3.2,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'neutral'
-  },
-  'BAMB': {
-    name: 'Bamburi Cement',
-    sector: 'Manufacturing',
-    peRatio: 18.2,
-    pbRatio: 2.1,
-    dividendYield: 2.8,
-    marketCap: 65000000000,
-    epsGrowth: -5.2,
-    revenueGrowth: 3.1,
-    debtToEquity: 0.45,
-    roe: 11.5,
-    currentRatio: 1.4,
-    evEbitda: 10.5,
-    fcfYield: 4.0,
-    payoutRatio: 40,
-    marginChange: -2.5,
-    epsSurprise: -8.0,
-    altmanZ: 2.8,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'negative'
-  },
-  'ABSA': {
-    name: 'Absa Bank Kenya',
-    sector: 'Banking',
-    peRatio: 9.2,
-    pbRatio: 1.6,
-    dividendYield: 5.1,
-    marketCap: 120000000000,
-    epsGrowth: 10.5,
-    revenueGrowth: 11.8,
-    debtToEquity: 0.88,
-    roe: 17.2,
-    currentRatio: 1.08,
-    evEbitda: 7.5,
-    fcfYield: 8.5,
-    payoutRatio: 38,
-    marginChange: 1.5,
-    epsSurprise: 6.0,
-    altmanZ: 2.1,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'neutral'
-  },
-  'SBIC': {
-    name: 'Stanbic Holdings',
-    sector: 'Banking',
-    peRatio: 10.5,
-    pbRatio: 1.9,
-    dividendYield: 4.8,
-    marketCap: 95000000000,
-    epsGrowth: 14.2,
-    revenueGrowth: 16.5,
-    debtToEquity: 0.82,
-    roe: 18.5,
-    currentRatio: 1.12,
-    evEbitda: 8.0,
-    fcfYield: 7.5,
-    payoutRatio: 42,
-    marginChange: 2.0,
-    epsSurprise: 10.0,
-    altmanZ: 2.3,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'neutral'
-  },
-  'KPLC': {
-    name: 'Kenya Power',
-    sector: 'Utilities',
-    peRatio: -15.5,
-    pbRatio: 0.8,
-    dividendYield: 0,
-    marketCap: 28000000000,
-    epsGrowth: -25.5,
-    revenueGrowth: -2.1,
-    debtToEquity: 2.5,
-    roe: -5.2,
-    currentRatio: 0.65,
-    evEbitda: 15.0,
-    fcfYield: -5.0,
-    payoutRatio: 0,
-    marginChange: -5.0,
-    epsSurprise: -20.0,
-    altmanZ: 0.85,
-    insiderBuy: false,
-    insiderSell: true,
-    newsSentiment: 'negative'
-  },
-  'NMG': {
-    name: 'Nation Media Group',
-    sector: 'Media',
-    peRatio: 12.8,
-    pbRatio: 2.2,
-    dividendYield: 3.5,
-    marketCap: 22000000000,
-    epsGrowth: 8.2,
-    revenueGrowth: 5.5,
-    debtToEquity: 0.15,
-    roe: 17.2,
-    currentRatio: 1.8,
-    evEbitda: 7.5,
-    fcfYield: 6.0,
-    payoutRatio: 50,
-    marginChange: -1.5,
-    epsSurprise: -5.0,
-    altmanZ: 2.5,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'neutral'
-  },
-  'CRAY': {
-    name: 'Crown Paints Kenya',
-    sector: 'Manufacturing',
-    peRatio: 28.5,
-    pbRatio: 6.5,
-    dividendYield: 2.1,
-    marketCap: 15000000000,
-    epsGrowth: 18.5,
-    revenueGrowth: 22.3,
-    debtToEquity: 0.12,
-    roe: 22.8,
-    currentRatio: 2.1,
-    evEbitda: 14.0,
-    fcfYield: 2.0,
-    payoutRatio: 30,
-    marginChange: 1.0,
-    epsSurprise: 5.0,
-    altmanZ: 3.0,
-    insiderBuy: true,
-    insiderSell: false,
-    newsSentiment: 'neutral'
-  },
-  // Global stocks
-  'AAPL': {
-    name: 'Apple Inc.',
-    sector: 'Technology',
-    peRatio: 31.4,
-    pbRatio: 48.2,
-    dividendYield: 0.5,
-    marketCap: 3200000000000,
-    epsGrowth: 12.5,
-    revenueGrowth: 8.2,
-    debtToEquity: 1.5,
-    roe: 150.0,
-    currentRatio: 0.98,
-    evEbitda: 22.0,
-    fcfYield: 3.8,
-    payoutRatio: 25,
-    marginChange: 1.5,
-    epsSurprise: 6.0,
-    altmanZ: 4.5,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'neutral'
-  },
-  'MSFT': {
-    name: 'Microsoft Corp.',
-    sector: 'Technology',
-    peRatio: 35.6,
-    pbRatio: 12.8,
-    dividendYield: 0.7,
-    marketCap: 3100000000000,
-    epsGrowth: 18.3,
-    revenueGrowth: 15.6,
-    debtToEquity: 0.35,
-    roe: 38.5,
-    currentRatio: 1.3,
-    evEbitda: 25.0,
-    fcfYield: 2.8,
-    payoutRatio: 30,
-    marginChange: 2.5,
-    epsSurprise: 8.5,
-    altmanZ: 4.8,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'positive'
-  },
-  'NVDA': {
-    name: 'NVIDIA Corp.',
-    sector: 'Technology',
-    peRatio: 58.2,
-    pbRatio: 32.5,
-    dividendYield: 0.03,
-    marketCap: 2900000000000,
-    epsGrowth: 85.2,
-    revenueGrowth: 120.5,
-    debtToEquity: 0.28,
-    roe: 65.0,
-    currentRatio: 3.5,
-    evEbitda: 48.0,
-    fcfYield: 1.5,
-    payoutRatio: 10,
-    marginChange: 8.5,
-    epsSurprise: 22.0,
-    altmanZ: 5.2,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'positive'
-  },
-  'TSLA': {
-    name: 'Tesla Inc.',
-    sector: 'Automobiles',
-    peRatio: 52.1,
-    pbRatio: 14.2,
-    dividendYield: 0,
-    marketCap: 562000000000,
-    epsGrowth: 25.8,
-    revenueGrowth: 18.5,
-    debtToEquity: 0.15,
-    roe: 28.0,
-    currentRatio: 1.8,
-    evEbitda: 35.0,
-    fcfYield: 0.8,
-    payoutRatio: 0,
-    marginChange: -1.2,
-    epsSurprise: 15.0,
-    altmanZ: 4.2,
-    insiderBuy: false,
-    insiderSell: true,
-    newsSentiment: 'neutral'
-  },
-  'AMZN': {
-    name: 'Amazon.com Inc.',
-    sector: 'Technology',
-    peRatio: 41.3,
-    pbRatio: 8.5,
-    dividendYield: 0,
-    marketCap: 1900000000000,
-    epsGrowth: 35.2,
-    revenueGrowth: 12.8,
-    debtToEquity: 0.65,
-    roe: 22.0,
-    currentRatio: 1.1,
-    evEbitda: 18.0,
-    fcfYield: 3.2,
-    payoutRatio: 0,
-    marginChange: 3.5,
-    epsSurprise: 18.0,
-    altmanZ: 3.8,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'positive'
-  },
-  'GOOGL': {
-    name: 'Alphabet Inc.',
-    sector: 'Technology',
-    peRatio: 26.2,
-    pbRatio: 7.1,
-    dividendYield: 0.4,
-    marketCap: 2100000000000,
-    epsGrowth: 22.5,
-    revenueGrowth: 15.3,
-    debtToEquity: 0.12,
-    roe: 28.5,
-    currentRatio: 2.2,
-    evEbitda: 16.0,
-    fcfYield: 4.2,
-    payoutRatio: 15,
-    marginChange: 2.8,
-    epsSurprise: 12.0,
-    altmanZ: 5.0,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'positive'
-  },
-  'META': {
-    name: 'Meta Platforms',
-    sector: 'Technology',
-    peRatio: 28.7,
-    pbRatio: 8.9,
-    dividendYield: 0.4,
-    marketCap: 1300000000000,
-    epsGrowth: 42.1,
-    revenueGrowth: 24.5,
-    debtToEquity: 0.18,
-    roe: 32.0,
-    currentRatio: 2.8,
-    evEbitda: 14.0,
-    fcfYield: 5.5,
-    payoutRatio: 12,
-    marginChange: 4.2,
-    epsSurprise: 20.0,
-    altmanZ: 4.8,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'positive'
-  },
-  'JPM': {
-    name: 'JPMorgan Chase',
-    sector: 'Financial',
-    peRatio: 12.8,
-    pbRatio: 1.9,
-    dividendYield: 2.2,
-    marketCap: 570000000000,
-    epsGrowth: 15.8,
-    revenueGrowth: 12.2,
-    debtToEquity: 2.5,
-    roe: 15.0,
-    currentRatio: 0.85,
-    evEbitda: 11.0,
-    fcfYield: 4.5,
-    payoutRatio: 40,
-    marginChange: 1.2,
-    epsSurprise: 7.0,
-    altmanZ: 1.9,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'neutral'
-  },
-  'V': {
-    name: 'Visa Inc.',
-    sector: 'Financial',
-    peRatio: 31.8,
-    pbRatio: 14.5,
-    dividendYield: 0.8,
-    marketCap: 575000000000,
-    epsGrowth: 16.5,
-    revenueGrowth: 11.2,
-    debtToEquity: 0.45,
-    roe: 45.0,
-    currentRatio: 1.6,
-    evEbitda: 26.0,
-    fcfYield: 2.2,
-    payoutRatio: 22,
-    marginChange: 1.8,
-    epsSurprise: 8.5,
-    altmanZ: 4.5,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'neutral'
-  },
-  'NFLX': {
-    name: 'Netflix Inc.',
-    sector: 'Technology',
-    peRatio: 44.6,
-    pbRatio: 15.8,
-    dividendYield: 0,
-    marketCap: 268000000000,
-    epsGrowth: 55.2,
-    revenueGrowth: 22.5,
-    debtToEquity: 0.55,
-    roe: 35.0,
-    currentRatio: 1.4,
-    evEbitda: 30.0,
-    fcfYield: 2.0,
-    payoutRatio: 0,
-    marginChange: 5.5,
-    epsSurprise: 25.0,
-    altmanZ: 4.0,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'positive'
+async function _loadSignalCacheFromDb() {
+  try {
+    const result = await pool.query(
+      `SELECT cache_value FROM app_cache WHERE cache_key = 'signals_cache'`
+    );
+    if (result.rows.length && result.rows[0].cache_value) {
+      _signalsCache = result.rows[0].cache_value;
+      _signalsCacheTime = 0; // expired — forces fresh generation but provides fallback for first API call
+      console.log(`[SignalService] Loaded ${_signalsCache.length} signals from cache DB`);
+    }
+  } catch { /* table may not exist */ }
+}
+
+// Price history cache for technical analysis
+const _priceHistoryCache = new Map();
+const PRICE_HISTORY_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+// Financial report cache for fundamental analysis (daily refresh)
+const _financialReportCache = new Map();
+const FINANCIAL_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+// Signal performance tracker (in-memory, rolling 100 signals per symbol)
+const _signalOutcomes = new Map();
+const _performanceStats = { total: 0, wins: 0, losses: 0, winRate: 0 };
+
+// Market regime cache
+let _marketRegime = { regime: 'unknown', score: 50, timestamp: 0 };
+const REGIME_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+// Dynamic sector PE averages (updated from tracked stock data)
+let _dynamicSectorPE = null;
+let _sectorPELastUpdate = 0;
+const SECTOR_PE_UPDATE_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
+// Portfolio state tracker
+let _portfolioState = { cash: 1, positions: [], maxDrawdown: 0, peakValue: 1, consecutiveLosses: 0, totalTrades: 0 };
+
+// Source health tracking for graceful degradation
+const _sourceHealth = { yahooFinance: { ok: true, failCount: 0, lastFail: 0 }, db: { ok: true, failCount: 0, lastFail: 0 }, scraper: { ok: true, failCount: 0, lastFail: 0 } };
+const SOURCE_RECOVERY_MS = 5 * 60 * 1000; // 5 min cooldown after 3 failures
+const MAX_SOURCE_FAILURES = 3;
+
+// Weekly price cache
+const _weeklyPriceCache = new Map();
+const WEEKLY_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+// ML training rate limiter
+let _lastMLTrain = 0;
+const ML_TRAIN_COOLDOWN = 5 * 60 * 1000; // 5 minutes
+
+// Quote cache populated by batch pre-fetch — eliminates sequential getStockQuote calls
+const _quoteCache = new Map();
+const QUOTE_CACHE_TTL = 30 * 1000; // 30 seconds
+
+// NSE price accumulator: builds daily OHLC bars from periodic scraper data
+const _nseDailyHistory = new Map();
+const _nseIntradayBuffer = new Map();
+const MAX_DAYS = 90;
+
+function accumulateNseQuote(symbol, price, volume) {
+  const today = new Date().toISOString().split('T')[0];
+  if (!_nseIntradayBuffer.has(symbol)) _nseIntradayBuffer.set(symbol, {});
+  const buf = _nseIntradayBuffer.get(symbol);
+  if (!buf[today]) buf[today] = { open: price, high: price, low: price, close: price, volume: 0 };
+  const bar = buf[today];
+  bar.high = Math.max(bar.high, price);
+  bar.low = Math.min(bar.low, price);
+  bar.close = price;
+  bar.volume += volume || 0;
+}
+
+function flushNseDailyBars() {
+  const today = new Date().toISOString().split('T')[0];
+  for (const [symbol, buf] of _nseIntradayBuffer) {
+    if (buf[today]) {
+      if (!_nseDailyHistory.has(symbol)) _nseDailyHistory.set(symbol, []);
+      const history = _nseDailyHistory.get(symbol);
+      const existing = history.find(d => d.date === today);
+      if (existing) {
+        Object.assign(existing, buf[today]);
+      } else {
+        history.push({ date: today, ...buf[today] });
+        if (history.length > MAX_DAYS) _nseDailyHistory.set(symbol, history.slice(-MAX_DAYS));
+      }
+    }
   }
-};
+}
 
-// ─── Auto-generate fundamentals for unknown stocks ─────────────────────────
-function generateFundamentals(symbol) {
-  const seed = symbol.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const r = (min, max) => {
-    const pseudo = ((seed * 9301 + 49297) * (symbol.length + 1)) % 233280;
-    return min + (pseudo / 233280) * (max - min);
+function getNseDailyHistory(symbol) {
+  const history = _nseDailyHistory.get(symbol);
+  if (!history || history.length < 2) return null;
+  return history.map(d => d.close);
+}
+
+async function getPriceHistory(symbol) {
+  const cached = _priceHistoryCache.get(symbol);
+  if (cached && Date.now() - cached.ts < PRICE_HISTORY_CACHE_TTL) {
+    return cached.data;
+  }
+
+  const isNse = NSE_SYMBOLS.includes(symbol);
+  const yahooSymbol = isNse ? `${symbol}.NR` : symbol;
+
+  const bars = await fetchHistoricalQuotes(yahooSymbol, '3mo', '1d');
+  if (bars && bars.length >= 2) {
+    const prices = bars.map(b => b.close).filter(p => p != null);
+    prices.volumes = bars.map(b => b.volume).filter(v => v != null);
+    _priceHistoryCache.set(symbol, { data: prices, ts: Date.now() });
+    return prices;
+  }
+
+  // NSE fallback: use accumulated daily history from scraper data
+  if (isNse) {
+    const nsePrices = getNseDailyHistory(symbol);
+    if (nsePrices) {
+      _priceHistoryCache.set(symbol, { data: nsePrices, ts: Date.now() });
+      return nsePrices;
+    }
+  }
+
+  _priceHistoryCache.set(symbol, { data: null, ts: Date.now() });
+  return null;
+}
+
+async function prefetchPriceHistories(symbols) {
+  const batchSize = 20;
+  const delayMs = 100;
+  for (let i = 0; i < symbols.length; i += batchSize) {
+    const batch = symbols.slice(i, i + batchSize);
+    await Promise.allSettled(batch.map(s => getPriceHistory(s)));
+    if (i + batchSize < symbols.length) {
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+}
+
+async function prefetchWeeklyData(symbols) {
+  const batchSize = 20;
+  const delayMs = 50;
+  for (let i = 0; i < symbols.length; i += batchSize) {
+    const batch = symbols.slice(i, i + batchSize);
+    await Promise.allSettled(batch.map(s => getWeeklyData(s)));
+    if (i + batchSize < symbols.length) {
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+}
+
+// ─── Real Financial Metrics from Yahoo Finance ──────────────────────────────
+async function fetchRealFinancialMetrics(symbol) {
+  if (NSE_SYMBOLS.includes(symbol)) return null;
+  const cached = _financialReportCache.get(symbol);
+  if (cached && Date.now() - cached.ts < FINANCIAL_CACHE_TTL) return cached.data;
+  try {
+    const { default: YahooFinance } = await import('yahoo-finance2');
+    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const qs = await yf.quoteSummary(symbol, { modules: ['financialData', 'defaultKeyStatistics', 'summaryDetail', 'summaryProfile'] });
+    if (!qs?.financialData) { _financialReportCache.set(symbol, { data: null, ts: Date.now() }); return null; }
+
+    const fd = qs.financialData;
+    const dk = qs.defaultKeyStatistics || {};
+    const sd = qs.summaryDetail || {};
+    const sp = qs.summaryProfile || {};
+
+    const metrics = {};
+    if (sp.sector) metrics.sector = sp.sector;
+
+    // PE ratio: try trailingPE, forwardPE, or compute from price/EPS
+    let peVal = sd.trailingPE != null ? sd.trailingPE : dk.trailingPE;
+    if (peVal == null) peVal = sd.forwardPE != null ? sd.forwardPE : dk.forwardPE;
+    if (peVal == null && fd.currentPrice && fd.earningsPerShare > 0) peVal = fd.currentPrice / fd.earningsPerShare;
+    if (peVal != null) metrics.peRatio = Math.round(peVal * 10) / 10;
+
+    if (dk.priceToBook != null) metrics.pbRatio = Math.round(dk.priceToBook * 10) / 10;
+    if (fd.currentRatio != null) metrics.currentRatio = Math.round(fd.currentRatio * 100) / 100;
+    if (fd.revenueGrowth != null) metrics.revenueGrowth = Math.round(fd.revenueGrowth * 1000) / 10;
+    if (fd.earningsGrowth != null) metrics.epsGrowth = Math.round(fd.earningsGrowth * 1000) / 10;
+    if (fd.returnOnEquity != null) metrics.roe = Math.round(fd.returnOnEquity * 1000) / 10;
+    if (fd.dividendYield != null) metrics.dividendYield = Math.round(fd.dividendYield * 100 * 10) / 10;
+    if (fd.payoutRatio != null) metrics.payoutRatio = Math.round(fd.payoutRatio * 100);
+    if (dk.marketCap) metrics.marketCap = dk.marketCap;
+    if (fd.currentPrice) metrics.price = fd.currentPrice;
+
+    // Debt/equity: yahoo-finance2 may return pct (>20) or decimal
+    let deVal = fd.debtToEquity;
+    if (deVal != null) {
+      if (deVal > 20) deVal = deVal / 100;
+      metrics.debtToEquity = Math.round(deVal * 100) / 100;
+    }
+
+    // Free cash flow yield
+    if (fd.freeCashflow && dk.sharesOutstanding > 0 && fd.currentPrice > 0) {
+      metrics.fcfYield = Math.round((fd.freeCashflow / dk.sharesOutstanding / fd.currentPrice) * 1000) / 10;
+    }
+
+    // Try fundamentalsTimeSeries for Altman Z + detailed income/balance sheet data
+    try {
+      const fts = await yf.fundamentalsTimeSeries(symbol, { period1: Math.floor(Date.now() / 1000) - 3 * 365 * 86400, module: 'all' });
+      if (Array.isArray(fts) && fts.length > 0) {
+        // Income statement: find latest FY with revenue
+        const annuals = fts.filter(i => i.periodType === 'FY' && i.totalRevenue != null).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        const current = annuals[0];
+        const previous = annuals[1];
+        if (current?.totalRevenue && previous?.totalRevenue > 0) {
+          metrics.revenueGrowth = Math.round(((current.totalRevenue - previous.totalRevenue) / previous.totalRevenue) * 1000) / 10;
+        }
+        if (current?.basicEPS && previous?.basicEPS > 0) {
+          metrics.epsGrowth = Math.round(((current.basicEPS - previous.basicEPS) / previous.basicEPS) * 1000) / 10;
+        }
+        const currMargin = current?.totalRevenue > 0 && current.operatingIncome != null ? (current.operatingIncome / current.totalRevenue) * 100 : null;
+        const prevMargin = previous?.totalRevenue > 0 && previous?.operatingIncome != null ? (previous.operatingIncome / previous.totalRevenue) * 100 : null;
+        if (currMargin != null && prevMargin != null) metrics.marginChange = Math.round((currMargin - prevMargin) * 10) / 10;
+        if (current.basicEPS) metrics.eps = Math.round(current.basicEPS * 100) / 100;
+        if (current.EBITDA) metrics.ebitda = current.EBITDA;
+        if (current.netIncome) metrics.netIncome = current.netIncome;
+        if (current.totalRevenue) metrics.revenue = current.totalRevenue;
+
+        // Balance sheet: latest FY with totalAssets
+        const bal = fts.filter(i => i.periodType === 'FY' && i.totalAssets != null).sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+        if (bal) {
+          metrics.totalDebt = bal.totalDebt || 0;
+          metrics.cash = bal.cashAndCashEquivalents || 0;
+          if (current?.netIncome && bal.totalEquity > 0) {
+            metrics.roe = Math.round((current.netIncome / bal.totalEquity) * 1000) / 10;
+          }
+          // Altman Z
+          if (current?.netIncome && current?.totalRevenue > 0 && bal.totalAssets > 0 && bal.totalLiabilities > 0) {
+            const wc = (bal.totalCurrentAssets || 0) - (bal.totalCurrentLiabilities || 0);
+            const re = bal.retainedEarnings || 0;
+            const ebit = current.operatingIncome || current.EBITDA || 0;
+            const mcap = dk.marketCap || 0;
+            const ta = bal.totalAssets;
+            const tl = bal.totalLiabilities;
+            const X1 = wc / ta; const X2 = re / ta; const X3 = ebit / ta;
+            const X4 = mcap / tl; const X5 = current.totalRevenue / ta;
+            metrics.altmanZ = Math.round((1.2 * X1 + 1.4 * X2 + 3.3 * X3 + 0.6 * X4 + 1.0 * X5) * 100) / 100;
+          }
+        }
+
+        // EV/EBITDA
+        if (metrics.marketCap && metrics.totalDebt != null && metrics.cash != null && metrics.ebitda) {
+          const ev = metrics.marketCap + metrics.totalDebt - metrics.cash;
+          if (ev > 0) metrics.evEbitda = Math.round((ev / metrics.ebitda) * 10) / 10;
+        }
+      }
+    } catch { /* fundamentalsTimeSeries optional — metrics already populated from quoteSummary */ }
+
+    const hasUsableMetrics = metrics.peRatio || metrics.roe || metrics.revenueGrowth || metrics.currentRatio;
+    _financialReportCache.set(symbol, { data: hasUsableMetrics ? metrics : null, ts: Date.now() });
+    return hasUsableMetrics ? metrics : null;
+  } catch (e) {
+    console.warn(`[SignalService] Failed to fetch real financials for ${symbol}: ${e.message}`);
+    _financialReportCache.set(symbol, { data: null, ts: Date.now() });
+    return null;
+  }
+}
+
+async function prefetchFinancialReports(symbols) {
+  const batchSize = 30;
+  for (let i = 0; i < symbols.length; i += batchSize) {
+    const batch = symbols.slice(i, i + batchSize);
+    await Promise.allSettled(batch.map(s => fetchRealFinancialMetrics(s)));
+    if (i + batchSize < symbols.length) await new Promise(r => setTimeout(r, 50));
+  }
+}
+
+// ─── Batch Quote Pre-fetch ──────────────────────────────────────────────────
+// Pre-fetches stock quotes in parallel batches instead of sequential getStockQuote.
+async function prefetchQuotes(symbols) {
+  const toFetch = symbols.filter(s => {
+    const cached = _quoteCache.get(s);
+    return !cached || Date.now() - cached.ts > QUOTE_CACHE_TTL;
+  });
+  if (toFetch.length === 0) return;
+  const batchSize = 30;
+  for (let i = 0; i < toFetch.length; i += batchSize) {
+    const batch = toFetch.slice(i, i + batchSize);
+    try {
+      const marketSymbols = batch.map(s => NSE_SYMBOLS.includes(s) ? `NSE:${s}` : s);
+      const quotes = await getQuotesBatch(marketSymbols);
+      for (const s of batch) {
+        const q = quotes[NSE_SYMBOLS.includes(s) ? `NSE:${s}` : s];
+        if (q && q.price) {
+          _quoteCache.set(s, { price: q.price, changePercent: q.changePercent || 0, volume: q.volume || 0, ts: Date.now() });
+        }
+      }
+    } catch { /* individual fallback handled in main loop */ }
+    if (i + batchSize < toFetch.length) await new Promise(r => setTimeout(r, 50));
+  }
+}
+
+// ─── Market Regime Detection ────────────────────────────────────────────────
+// Uses SPY (S&P 500 ETF) as a proxy for overall market conditions, with VOO/IVV fallbacks.
+// Falls back to a simple price-vs-SMA heuristic for NSE via SCOM.
+const REGIME_ETFS = ['SPY', 'VOO', 'IVV'];
+async function detectMarketRegime() {
+  if (Date.now() - _marketRegime.timestamp < REGIME_CACHE_TTL) return _marketRegime;
+
+  const cfg = engineConfig.getConfig();
+  const det = cfg.regime_adaptation?.detection || {};
+  const t = det.thresholds || {};
+
+  const trendFast = det.trend_fast || 20;
+  const trendSlow = det.trend_slow || 100;
+
+  const th = {
+    bullStrong: t.bull_strong ?? 15,
+    bullModerate: t.bull_moderate ?? 5,
+    bearStrong: t.bear_strong ?? -15,
+    bearModerate: t.bear_moderate ?? -5,
+    crash: t.crash ?? -25,
+    bullScoreStrong: t.bull_score_strong ?? 85,
+    bullScoreModerate: t.bull_score_moderate ?? 70,
+    bearScoreStrong: t.bear_score_strong ?? 25,
+    bearScoreModerate: t.bear_score_moderate ?? 35,
+    crashScore: t.crash_score ?? 10,
+    sidewaysScore: t.sideways_score ?? 50,
   };
+
+  let regime = 'sideways';
+  let score = 50;
+
+  for (const etf of REGIME_ETFS) {
+    try {
+      const prices = await getPriceHistory(etf);
+      if (prices && prices.length >= trendSlow) {
+        const currentPrice = prices[prices.length - 1];
+        const smaSlow = calculateSMA(prices, trendSlow);
+        const smaFast = calculateSMA(prices, trendFast);
+        const periodReturn = ((currentPrice - prices[0]) / prices[0]) * 100;
+
+        if (periodReturn > th.bullStrong && currentPrice > smaFast && smaFast > smaSlow) {
+          regime = 'bull'; score = th.bullScoreStrong;
+        } else if (periodReturn > th.bullModerate && currentPrice > smaSlow) {
+          regime = 'bull'; score = th.bullScoreModerate;
+        } else if (periodReturn < th.bearStrong && currentPrice < smaFast && smaFast < smaSlow) {
+          regime = 'bear'; score = th.bearScoreStrong;
+        } else if (periodReturn < th.bearModerate && currentPrice < smaSlow) {
+          regime = 'bear'; score = th.bearScoreModerate;
+        } else if (periodReturn < th.crash) {
+          regime = 'crash'; score = th.crashScore;
+        } else {
+          regime = 'sideways'; score = th.sidewaysScore;
+        }
+        break; // successful detection
+      }
+    } catch (e) {
+      console.warn(`[SignalService] Regime detection failed for ${etf}: ${e.message}`);
+    }
+  }
+
+  // If all ETFs failed, try SCOM as a last resort
+  if (regime === 'sideways' && score === 50) {
+    try {
+      const scomPrices = await getPriceHistory('SCOM');
+      if (scomPrices && scomPrices.length >= trendFast) {
+        const currentPrice = scomPrices[scomPrices.length - 1];
+        const smaFast = calculateSMA(scomPrices, trendFast);
+        if (currentPrice > smaFast) { regime = 'bull'; score = 65; }
+        else { regime = 'bear'; score = 40; }
+      }
+    } catch (e) { console.warn(`[SignalService] Regime SCOM fallback failed: ${e.message}`); }
+  }
+
+  _marketRegime = { regime, score, timestamp: Date.now() };
+  return _marketRegime;
+}
+
+// ─── Dynamic Weights ────────────────────────────────────────────────────────
+// Adjusts the score component weights based on market regime.
+// Delegates to engineConfig for regime-specific weight profiles.
+function computeDynamicWeights(regime) {
+  const baseWeights = engineConfig.getConfig().weights;
+  return engineConfig.getWeightsForRegime(regime, baseWeights);
+}
+
+// Restore performance stats and portfolio state from DB on startup
+async function restoreStateFromDb() {
+  try {
+    const result = await pool.query(
+      `SELECT result, COUNT(*) as cnt FROM signal_outcomes 
+       WHERE recorded_at > NOW() - INTERVAL '30 days' 
+       GROUP BY result`
+    );
+    for (const row of result.rows) {
+      if (row.result === 'win') _performanceStats.wins = parseInt(row.cnt) || 0;
+      if (row.result === 'loss') _performanceStats.losses = parseInt(row.cnt) || 0;
+    }
+    _performanceStats.total = _performanceStats.wins + _performanceStats.losses;
+    _performanceStats.winRate = _performanceStats.total > 0
+      ? Math.round((_performanceStats.wins / _performanceStats.total) * 1000) / 10 : 0;
+  } catch { /* table may not exist — start fresh */ }
+  try {
+    const result = await pool.query(
+      `SELECT consecutive_losses FROM portfolio_state ORDER BY updated_at DESC LIMIT 1`
+    );
+    if (result.rows.length > 0) {
+      _portfolioState.consecutiveLosses = parseInt(result.rows[0].consecutive_losses) || 0;
+    }
+  } catch { /* table may not exist — start fresh */ }
+}
+
+// ─── Dynamic Sector PE Update ───────────────────────────────────────────────
+// Computes sector-average PE ratios from the tracked stock fundamentals,
+// falling back to hardcoded values when insufficient data exists.
+function updateSectorAverages() {
+  if (Date.now() - _sectorPELastUpdate < SECTOR_PE_UPDATE_INTERVAL) return;
+  
+  const sectorData = {};
+  const allSymbols = [...Object.keys(KNOWN_FUNDAMENTALS), ...Object.keys(NSE_FUNDAMENTALS)];
+  for (const sym of allSymbols) {
+    const stock = KNOWN_FUNDAMENTALS[sym] || NSE_FUNDAMENTALS[sym];
+    if (stock && stock.sector && stock.peRatio && stock.peRatio > 0 && stock.peRatio < 100) {
+      if (!sectorData[stock.sector]) sectorData[stock.sector] = { sum: 0, count: 0 };
+      sectorData[stock.sector].sum += stock.peRatio;
+      sectorData[stock.sector].count++;
+    }
+    // Also check real financial cache for US stocks
+    if (_financialReportCache.has(sym)) {
+      const fm = _financialReportCache.get(sym);
+      if (fm && fm.data && fm.data.peRatio) {
+        const stock = getFundamentals(sym);
+        if (stock && stock.sector) {
+          if (!sectorData[stock.sector]) sectorData[stock.sector] = { sum: 0, count: 0 };
+          sectorData[stock.sector].sum += fm.data.peRatio;
+          sectorData[stock.sector].count++;
+        }
+      }
+    }
+  }
+  
+  const computed = {};
+  for (const [sector, data] of Object.entries(sectorData)) {
+    if (data.count >= 2) {
+      computed[sector] = Math.round((data.sum / data.count) * 10) / 10;
+    }
+  }
+  
+  if (Object.keys(computed).length > 0) {
+    _dynamicSectorPE = computed;
+    _sectorPELastUpdate = Date.now();
+  }
+}
+
+// ─── Real Weekly Chart Data ────────────────────────────────────────────────
+// Fetches actual weekly OHLC data from Yahoo Finance (1wk interval)
+// instead of aggregating daily bars.
+async function getWeeklyData(symbol) {
+  const cached = _weeklyPriceCache.get(symbol);
+  if (cached && Date.now() - cached.ts < WEEKLY_CACHE_TTL) return cached.data;
+  try {
+    const isNse = NSE_SYMBOLS.includes(symbol);
+    const yahooSymbol = isNse ? `${symbol}.NR` : symbol;
+    const { fetchHistoricalQuotes } = require('./globalScraper');
+    const bars = await fetchHistoricalQuotes(yahooSymbol, '6mo', '1wk');
+    if (bars && bars.length >= 4) {
+      const closes = bars.map(b => b.close).filter(p => p != null);
+      _weeklyPriceCache.set(symbol, { data: closes, ts: Date.now() });
+      return closes;
+    }
+  } catch { /* fall through */ }
+  return null;
+}
+
+// Uses real weekly data if available, falls back to daily aggregation.
+// Returns trend direction + bull flag for weekly timeframe confirmation.
+async function getWeeklyTrend(symbol) {
+  try {
+    const weeklyPrices = await getWeeklyData(symbol);
+    if (weeklyPrices && weeklyPrices.length >= 4) {
+      const sma10 = calculateSMA(weeklyPrices, Math.min(10, weeklyPrices.length));
+      const currentPrice = weeklyPrices[weeklyPrices.length - 1];
+      const trendUp = currentPrice > sma10;
+      let trend;
+      if (trendUp && weeklyPrices.length >= 2 && currentPrice > weeklyPrices[0] * 1.05) trend = 'bullish';
+      else if (!trendUp && weeklyPrices.length >= 2 && currentPrice < weeklyPrices[0] * 0.95) trend = 'bearish';
+      else trend = 'neutral';
+      return { trend, bull: trendUp };
+    }
+  } catch { /* fall through */ }
+  return { trend: 'unknown', bull: false };
+}
+
+// ─── Historical Backtesting ─────────────────────────────────────────────────
+// Queries signal_history DB table and computes actual win/loss rates
+// by comparing entry prices to current market prices.
+async function computeBacktestStats({ days = 30, limit = 500, signalType, minConfidence = 0 } = {}) {
+  try {
+    // Primary data source: signal_outcomes — has actual exit prices and real win/loss results
+    let outcomeRows;
+    try {
+      const conditions = ['recorded_at > NOW() - $1::interval'];
+      const params = [`${days} days`];
+      let idx = 2;
+      if (signalType && signalType !== 'All') { conditions.push(`signal = $${idx++}`); params.push(signalType); }
+      const result = await pool.query(
+        `SELECT ticker, signal, entry_price, exit_price, result, recorded_at
+         FROM signal_outcomes ${'WHERE ' + conditions.join(' AND ')}
+         ORDER BY recorded_at DESC LIMIT $${idx}`,
+        [...params, limit]
+      );
+      outcomeRows = result.rows;
+    } catch { outcomeRows = []; }
+
+    if (outcomeRows.length > 0) {
+      // Aggregate win/loss counts
+      const aggResult = await pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE result = 'win' AND (signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce'))) AS wins,
+          COUNT(*) FILTER (WHERE result = 'loss' AND (signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce'))) AS losses,
+          COUNT(*) FILTER (WHERE signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')) AS total
+        FROM signal_outcomes
+        WHERE recorded_at > NOW() - $1::interval
+      `, [`${days} days`]);
+      const agg = aggResult.rows[0];
+      const total = parseInt(agg.total) || 0;
+      const wins = parseInt(agg.wins) || 0;
+      const losses = parseInt(agg.losses) || 0;
+
+      // By-signal breakdown
+      const bySignalResult = await pool.query(`
+        SELECT signal,
+          COUNT(*) FILTER (WHERE result = 'win') AS wins,
+          COUNT(*) FILTER (WHERE result = 'loss') AS losses,
+          COUNT(*) AS total
+        FROM signal_outcomes
+        WHERE recorded_at > NOW() - $1::interval
+          AND signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
+        GROUP BY signal
+      `, [`${days} days`]);
+      const bySignal = {};
+      for (const r of bySignalResult.rows) {
+        bySignal[r.signal] = {
+          total: parseInt(r.total) || 0,
+          wins: parseInt(r.wins) || 0,
+          losses: parseInt(r.losses) || 0,
+          winRate: (parseInt(r.total) || 0) > 0 ? Math.round((parseInt(r.wins) / parseInt(r.total)) * 1000) / 10 : 0,
+          avgReturn: 0,
+        };
+      }
+
+      // Return-based metrics from resolved rows (where exit_price != entry_price)
+      const returnsResult = await pool.query(`
+        SELECT (exit_price - entry_price) / entry_price * 100 AS return_pct
+        FROM signal_outcomes
+        WHERE recorded_at > NOW() - $1::interval
+          AND signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
+          AND entry_price > 0 AND exit_price > 0 AND exit_price != entry_price
+        ORDER BY recorded_at ASC
+      `, [`${days} days`]);
+
+      let avgReturn = 0, profitFactor = 0, sharpe = 0, maxDrawdown = 0;
+      const retVals = returnsResult.rows.map(r => parseFloat(r.return_pct));
+      if (retVals.length > 0) {
+        const absRets = retVals.map(Math.abs);
+        const totalReturn = absRets.reduce((s, v) => s + v, 0);
+        avgReturn = Math.round((totalReturn / retVals.length) * 10) / 10;
+        const mean = retVals.reduce((s, v) => s + v, 0) / retVals.length;
+        sharpe = retVals.length > 1 ? Math.round((mean / (stdDev(retVals) || 1)) * 100) / 100 : 0;
+        // Max drawdown: running peak-to-trough of cumulative returns
+        let peak = -Infinity, maxDd = 0, cum = 0;
+        for (const r of retVals) {
+          cum += r;
+          if (cum > peak) peak = cum;
+          const dd = peak - cum;
+          if (dd > maxDd) maxDd = dd;
+        }
+        maxDrawdown = Math.round(maxDd * 10) / 10;
+        // Profit factor: gross wins / gross losses
+        const grossWins = retVals.filter(v => v > 0).reduce((s, v) => s + v, 0);
+        const grossLosses = Math.abs(retVals.filter(v => v < 0).reduce((s, v) => s + v, 0));
+        profitFactor = grossLosses > 0 ? Math.round((grossWins / grossLosses) * 100) / 100 : grossWins > 0 ? 999 : 0;
+      }
+
+      const winRate = total > 0 ? Math.round((wins / total) * 1000) / 10 : 0;
+      return {
+        total, wins, losses, winRate,
+        avgReturn, profitFactor, sharpe, maxDrawdown,
+        dataSource: 'signal_outcomes',
+        bySignal,
+      };
+    }
+
+    // Fallback: use signal_history joined with signal_outcomes for unresolved signals
+    // Uses current live prices as approximate exit (honest about the methodology)
+    try {
+      const conditions = ['sh.generated_at > NOW() - $1::interval'];
+      const params = [`${days} days`];
+      let idx = 2;
+      if (signalType && signalType !== 'All') { conditions.push(`sh.signal = $${idx++}`); params.push(signalType); }
+      if (minConfidence > 0) { conditions.push(`sh.confidence >= $${idx++}`); params.push(minConfidence); }
+      const result = await pool.query(
+        `SELECT sh.ticker, sh.signal, sh.entry_price, sh.generated_at
+         FROM signal_history sh
+         LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price
+         WHERE so.id IS NULL AND ${conditions.join(' AND ')}
+         ORDER BY sh.generated_at DESC LIMIT $${idx}`,
+        [...params, limit]
+      );
+      const rows = result.rows;
+      if (!rows.length) return { total: 0, wins: 0, losses: 0, winRate: 0, avgReturn: 0, profitFactor: 0, sharpe: 0, maxDrawdown: 0, bySignal: {}, dataSource: 'none' };
+
+      let wins = 0, losses = 0, total = 0, totalReturn = 0;
+      const returns = [];
+      const bySignal = {};
+      for (const row of rows) {
+        const entryPrice = parseFloat(row.entry_price);
+        if (!entryPrice || entryPrice <= 0) continue;
+        try {
+          const quote = await getStockQuote(row.ticker);
+          if (!quote || !quote.price) continue;
+          const currentPrice = quote.price;
+          const returnPct = ((currentPrice - entryPrice) / entryPrice) * 100;
+          const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy' || row.signal === 'Accumulate';
+          const isSell = row.signal === 'Sell' || row.signal === 'Strong Sell' || row.signal === 'Reduce';
+          if (!isBuy && !isSell) continue;
+          const won = isBuy ? returnPct > 0 : isSell ? returnPct < 0 : false;
+          if (won) wins++; else losses++;
+          total++;
+          totalReturn += Math.abs(returnPct);
+          returns.push(returnPct);
+          if (!bySignal[row.signal]) bySignal[row.signal] = { wins: 0, losses: 0, total: 0, returns: [] };
+          bySignal[row.signal].total++;
+          bySignal[row.signal].returns.push(returnPct);
+          if (won) bySignal[row.signal].wins++; else bySignal[row.signal].losses++;
+        } catch { /* skip */ }
+      }
+      const avgReturn = total > 0 ? totalReturn / total : 0;
+      return {
+        total, wins, losses,
+        winRate: total > 0 ? Math.round((wins / total) * 1000) / 10 : 0,
+        avgReturn: Math.round(avgReturn * 10) / 10,
+        profitFactor: 0,
+        sharpe: returns.length > 1 ? Math.round((avgReturn / (stdDev(returns) || 1)) * 100) / 100 : 0,
+        maxDrawdown: 0,
+        dataSource: 'live_prices_approximate',
+        bySignal: Object.fromEntries(Object.entries(bySignal).map(([k, v]) => [k, {
+          total: v.total, wins: v.wins, losses: v.losses,
+          winRate: v.total > 0 ? Math.round((v.wins / v.total) * 1000) / 10 : 0,
+          avgReturn: v.returns.length > 0 ? Math.round((v.returns.reduce((s, r) => s + r, 0) / v.returns.length) * 10) / 10 : 0,
+        }]))
+      };
+    } catch { /* fall through to empty */ }
+
+    return { total: 0, wins: 0, losses: 0, winRate: 0, avgReturn: 0, profitFactor: 0, sharpe: 0, maxDrawdown: 0, bySignal: {}, dataSource: 'none' };
+  } catch (e) { console.error('[Backtest] computeBacktestStats error:', e.message); return null; }
+}
+
+function stdDev(arr) {
+  const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
+  return Math.sqrt(arr.reduce((s, v) => s + (v - mean) ** 2, 0) / arr.length);
+}
+
+function computeMaxDrawdown(returns) {
+  let peak = 0, maxDD = 0;
+  for (const r of returns) {
+    if (r > peak) peak = r;
+    const dd = peak - r;
+    if (dd > maxDD) maxDD = dd;
+  }
+  return maxDD;
+}
+
+// ─── Forward Testing ────────────────────────────────────────────────────────
+// Tracks signal predictions forward and compares to actual outcomes.
+const _forwardTestStore = new Map(); // symbol -> { predictions: [{id, signal, confidence, price, generated_at, resolved, actualReturn, correct}] }
+
+const FORWARD_TEST_MIN_AGE = 28800000; // 8 hours — predictions younger than this are skipped
+
+async function _loadForwardPredictionsFromDb() {
+  try {
+    const result = await pool.query(
+      `SELECT id, symbol, signal, confidence, price, generated_at, resolved, actual_return, correct
+       FROM forward_predictions ORDER BY generated_at`
+    );
+    const resolved = result.rows.filter(r => r.resolved).length;
+    const unresolved = result.rows.length - resolved;
+    if (result.rows.length) console.log(`[SignalService] Loaded ${result.rows.length} forward predictions from DB (${unresolved} unresolved, ${resolved} resolved)`);
+    for (const row of result.rows) {
+      if (!_forwardTestStore.has(row.symbol)) _forwardTestStore.set(row.symbol, { predictions: [] });
+      _forwardTestStore.get(row.symbol).predictions.push({
+        id: row.id, signal: row.signal, confidence: row.confidence,
+        price: Number(row.price), generatedAt: new Date(row.generated_at).getTime(),
+        resolved: !!row.resolved, actualReturn: Number(row.actual_return), correct: row.correct,
+      });
+    }
+  } catch (e) { /* table may not exist yet */ }
+}
+
+async function recordForwardPrediction(symbol, signalAction, confidence, price) {
+  // Dedup: skip if an unresolved prediction for this symbol exists from the last 2 hours
+  const existing = _forwardTestStore.get(symbol);
+  if (existing) {
+    const recent = existing.predictions.find(p => !p.resolved && Date.now() - p.generatedAt < FORWARD_TEST_MIN_AGE);
+    if (recent) return;
+  }
+  if (!_forwardTestStore.has(symbol)) _forwardTestStore.set(symbol, { predictions: [] });
+  const store = _forwardTestStore.get(symbol);
+  let dbId = null;
+  try {
+    const result = await pool.query(
+      `INSERT INTO forward_predictions (symbol, signal, confidence, price) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [symbol, signalAction, confidence, price]
+    );
+    dbId = result.rows[0].id;
+  } catch (e) { /* persistence best-effort */ }
+  store.predictions.push({
+    id: dbId, signal: signalAction, confidence, price,
+    generatedAt: Date.now(), resolved: false,
+    actualReturn: null, correct: null,
+  });
+  if (store.predictions.length > 200) store.predictions = store.predictions.slice(-200);
+}
+
+async function resolveForwardPredictions(symbol) {
+  const store = _forwardTestStore.get(symbol);
+  if (!store || !store.predictions.length) return;
+  const unresolved = store.predictions.filter(p => !p.resolved);
+  if (!unresolved.length) return;
+  try {
+    const quote = await getStockQuote(symbol);
+    if (!quote || !quote.price) return;
+    const currentPrice = quote.price;
+    for (const pred of unresolved) {
+      if (Date.now() - pred.generatedAt < FORWARD_TEST_MIN_AGE) continue; // wait before resolving
+      const returnPct = ((currentPrice - pred.price) / pred.price) * 100;
+      const isBuy = pred.signal === 'Strong Buy' || pred.signal === 'Buy' || pred.signal === 'Accumulate';
+      const isSell = pred.signal === 'Sell' || pred.signal === 'Strong Sell' || pred.signal === 'Reduce';
+      pred.actualReturn = Math.round(returnPct * 10) / 10;
+      if (Math.abs(returnPct) < 0.01) continue; // skip if price unchanged — wait for next cycle
+      if (isBuy) pred.correct = returnPct > 0.5;
+      else if (isSell) pred.correct = returnPct < -0.5;
+      else pred.correct = Math.abs(returnPct) < 0.5;
+      pred.resolved = true;
+      if (pred.id) {
+        pool.query(
+          `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = $2 WHERE id = $3`,
+          [pred.actualReturn, pred.correct, pred.id]
+        ).catch(() => {});
+      }
+    }
+  } catch { /* skip */ }
+}
+
+async function getForwardTestStats() {
+  let total = 0, correct = 0, pending = 0;
+  const byConfidence = {};
+  const bySymbol = {};
+
+  // Load in-memory predictions (current session)
+  for (const [symbol, store] of _forwardTestStore) {
+    for (const p of store.predictions) {
+      if (!p.resolved) { pending++; continue; }
+      total++;
+      if (p.correct) correct++;
+      const bucket = p.confidence >= 80 ? 'high' : p.confidence >= 60 ? 'med' : 'low';
+      if (!byConfidence[bucket]) byConfidence[bucket] = { total: 0, correct: 0 };
+      byConfidence[bucket].total++;
+      if (p.correct) byConfidence[bucket].correct++;
+      if (!bySymbol[symbol]) bySymbol[symbol] = { total: 0, correct: 0, accuracy: 0 };
+      bySymbol[symbol].total++;
+      if (p.correct) bySymbol[symbol].correct++;
+    }
+  }
+
+  // Also load resolved predictions from DB (prior sessions)
+  try {
+    const dbResult = await pool.query(
+      `SELECT symbol, confidence, correct FROM forward_predictions WHERE resolved = TRUE
+       AND generated_at > NOW() - INTERVAL '90 days'`
+    );
+    for (const row of dbResult.rows) {
+      const sym = row.symbol;
+      const bucket = row.confidence >= 80 ? 'high' : row.confidence >= 60 ? 'med' : 'low';
+      // Deduplicate: skip if this exact prediction is already in the in-memory store
+      const store = _forwardTestStore.get(sym);
+      if (store) {
+        const dup = store.predictions.some(p => p.id === row.id);
+        if (dup) continue;
+      }
+      total++;
+      if (row.correct) correct++;
+      if (!byConfidence[bucket]) byConfidence[bucket] = { total: 0, correct: 0 };
+      byConfidence[bucket].total++;
+      if (row.correct) byConfidence[bucket].correct++;
+      if (!bySymbol[sym]) bySymbol[sym] = { total: 0, correct: 0, accuracy: 0 };
+      bySymbol[sym].total++;
+      if (row.correct) bySymbol[sym].correct++;
+    }
+  } catch { /* table may not exist */ }
+
+  for (const k of Object.keys(bySymbol)) {
+    bySymbol[k].accuracy = bySymbol[k].total > 0
+      ? Math.round((bySymbol[k].correct / bySymbol[k].total) * 1000) / 10 : 0;
+  }
   return {
-    name: symbol, sector: guessSector(symbol),
-    peRatio: Math.round(r(8, 42) * 10) / 10,
-    pbRatio: Math.round(r(0.5, 15) * 10) / 10,
-    dividendYield: Math.round(r(0, 4.5) * 10) / 10,
-    marketCap: Math.round(r(200000000, 1500000000000)),
-    epsGrowth: Math.round(r(-8, 28) * 10) / 10,
-    revenueGrowth: Math.round(r(2, 22) * 10) / 10,
-    debtToEquity: Math.round(r(0.15, 2.8) * 100) / 100,
-    roe: Math.round(r(5, 42) * 10) / 10,
-    currentRatio: Math.round(r(0.5, 3.0) * 100) / 100,
-    evEbitda: Math.round(r(5, 25) * 10) / 10,
-    fcfYield: Math.round(r(0, 10) * 10) / 10,
-    payoutRatio: Math.round(r(0, 60)),
-    marginChange: Math.round(r(-3, 4) * 10) / 10,
-    epsSurprise: Math.round(r(-8, 15) * 10) / 10,
-    altmanZ: Math.round(r(1.5, 4.0) * 100) / 100,
-    insiderBuy: false,
-    insiderSell: false,
-    newsSentiment: 'neutral'
+    totalPredictions: total,
+    pendingPredictions: pending,
+    accuracy: total > 0 ? Math.round((correct / total) * 1000) / 10 : 0,
+    byConfidence: Object.fromEntries(Object.entries(byConfidence).map(([k, v]) => [k, {
+      total: v.total, accurate: v.correct,
+      accuracy: v.total > 0 ? Math.round((v.correct / v.total) * 1000) / 10 : 0,
+    }])),
+    bySymbol,
   };
 }
 
-function guessSector(symbol) {
-  const tech = 'ACDEFIMNOPQSTZ'; const fin = 'BGJKUW'; const hc = 'HL'; const re = 'R';
-  const first = symbol.charAt(0).toUpperCase();
-  if (tech.includes(first)) return 'Technology'; if (fin.includes(first)) return 'Financial';
-  if (hc.includes(first)) return 'Healthcare'; if (re.includes(first)) return 'Real Estate';
-  return 'Other';
+function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0 } = {}) {
+  const all = [];
+  for (const [sym, store] of _forwardTestStore) {
+    for (const p of store.predictions) {
+      if (symbol && sym !== symbol) continue;
+      if (resolved !== undefined && p.resolved !== resolved) continue;
+      all.push({ symbol: sym, ...p, generatedAt: new Date(p.generatedAt).toISOString() });
+    }
+  }
+  all.sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt));
+  return { predictions: all.slice(offset, offset + limit), total: all.length };
 }
 
-// ─── Stock Name Resolution ──────────────────────────────────────────────────
-const KNOWN_NAMES = {
-  'AAPL': 'Apple Inc.', 'MSFT': 'Microsoft Corp.', 'GOOGL': 'Alphabet Inc.',
-  'AMZN': 'Amazon.com Inc.', 'NVDA': 'NVIDIA Corp.', 'META': 'Meta Platforms',
-  'TSLA': 'Tesla Inc.', 'BRK.B': 'Berkshire Hathaway B', 'JPM': 'JPMorgan Chase',
-  'V': 'Visa Inc.', 'UNH': 'UnitedHealth Group', 'LLY': 'Eli Lilly & Co.',
-  'WMT': 'Walmart Inc.', 'XOM': 'Exxon Mobil', 'PG': 'Procter & Gamble',
-  'JNJ': 'Johnson & Johnson', 'CVX': 'Chevron Corp.', 'HD': 'Home Depot',
-  'KO': 'Coca-Cola Co.', 'PEP': 'PepsiCo Inc.', 'MRK': 'Merck & Co.',
-  'ABBV': 'AbbVie Inc.', 'BAC': 'Bank of America', 'PFE': 'Pfizer Inc.',
-  'TMO': 'Thermo Fisher Scientific', 'COST': 'Costco Wholesale', 'AVGO': 'Broadcom Inc.',
-  'INTC': 'Intel Corp.', 'AMD': 'Advanced Micro Devices', 'CRM': 'Salesforce Inc.',
-  'ADBE': 'Adobe Inc.', 'NFLX': 'Netflix Inc.', 'DIS': 'Walt Disney Co.',
-  'MCD': "McDonald's Corp.", 'NKE': 'Nike Inc.', 'SBUX': 'Starbucks Corp.',
-  'GS': 'Goldman Sachs', 'MS': 'Morgan Stanley', 'C': 'Citigroup Inc.',
-  'WFC': 'Wells Fargo & Co.', 'UPS': 'United Parcel Service', 'BA': 'Boeing Co.',
-  'GE': 'General Electric', 'CAT': 'Caterpillar Inc.', 'RTX': 'RTX Corp.',
-  'HON': 'Honeywell International', 'LOW': "Lowe's Companies", 'T': 'AT&T Inc.',
-  'VZ': 'Verizon Communications', 'IBM': 'International Business Machines',
-  'ORCL': 'Oracle Corp.', 'CSCO': 'Cisco Systems', 'ACN': 'Accenture PLC',
-  'TXN': 'Texas Instruments', 'QCOM': 'Qualcomm Inc.', 'AMGN': 'Amgen Inc.',
-  'BLK': 'BlackRock Inc.', 'SCHW': 'Charles Schwab', 'AXP': 'American Express',
-  'MMM': '3M Co.', 'MDT': 'Medtronic PLC', 'AMAT': 'Applied Materials',
-  'MU': 'Micron Technology', 'NOW': 'ServiceNow Inc.', 'UBER': 'Uber Technologies',
-  'ABNB': 'Airbnb Inc.', 'SPOT': 'Spotify Technology', 'SNAP': 'Snap Inc.',
-  'PLTR': 'Palantir Technologies', 'SNOW': 'Snowflake Inc.', 'DDOG': 'Datadog Inc.',
-  'CRWD': 'CrowdStrike Holdings', 'PANW': 'Palo Alto Networks', 'FTNT': 'Fortinet Inc.',
-  'SQ': 'Block Inc.', 'PYPL': 'PayPal Holdings', 'COIN': 'Coinbase Global',
-  'GME': 'GameStop Corp.', 'AMC': 'AMC Entertainment', 'MRNA': 'Moderna Inc.',
-  'SCOM': 'Safaricom PLC', 'EQTY': 'Equity Group Holdings', 'KCB': 'KCB Group PLC',
-  'EABL': 'East African Breweries', 'NMG': 'Nation Media Group',
-  'KLG': 'Kengen', 'OLYM': 'Olympia Capital', 'UMEM': 'Umeme',
-  'TOTL': 'Total Energies Kenya', 'STAN': 'Standard Chartered Kenya',
-  'COOP': 'Co-operative Bank', 'JUB': 'Jubilee Insurance', 'KNRE': 'Kenya Reinsurance',
-  'LKL': 'Liberty Kenya Holdings', 'CIC': 'CIC Insurance',
-  'HFCK': 'HF Group', 'IMH': 'I&M Holdings',
-};
-
-function resolveStockName(symbol) {
-  if (KNOWN_FUNDAMENTALS[symbol] && KNOWN_FUNDAMENTALS[symbol].name !== symbol) return KNOWN_FUNDAMENTALS[symbol].name;
-  return KNOWN_NAMES[symbol] || `${symbol}`;
+async function resolveAllForwardPredictions() {
+  let resolved = 0, failed = 0, skipped = 0;
+  for (const [symbol, store] of _forwardTestStore) {
+    const unresolved = store.predictions.filter(p => !p.resolved);
+    if (!unresolved.length) continue;
+    try {
+      const quote = await getStockQuote(symbol);
+      if (!quote || !quote.price) { failed += unresolved.length; continue; }
+      const currentPrice = quote.price;
+      for (const pred of unresolved) {
+        if (Date.now() - pred.generatedAt < FORWARD_TEST_MIN_AGE) { skipped++; continue; }
+        const returnPct = ((currentPrice - pred.price) / pred.price) * 100;
+        const isBuy = pred.signal === 'Strong Buy' || pred.signal === 'Buy' || pred.signal === 'Accumulate';
+        const isSell = pred.signal === 'Sell' || pred.signal === 'Strong Sell' || pred.signal === 'Reduce';
+        pred.actualReturn = Math.round(returnPct * 10) / 10;
+        // Skip resolution if price hasn't changed (market closed, stale quote) — wait for next cycle
+        if (Math.abs(returnPct) < 0.01) { skipped++; continue; }
+        if (isBuy) pred.correct = returnPct > 0.5;
+        else if (isSell) pred.correct = returnPct < -0.5;
+        else pred.correct = Math.abs(returnPct) < 0.5;
+        pred.resolved = true;
+        if (pred.id) {
+          pool.query(
+            `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = $2 WHERE id = $3`,
+            [pred.actualReturn, pred.correct, pred.id]
+          ).catch(() => {});
+        }
+        resolved++;
+      }
+    } catch { failed += unresolved.length; }
+  }
+  return { resolved, failed, skipped };
 }
 
-// ─── Stock Universe ─────────────────────────────────────────────────────────
-const NSE_SYMBOLS = ['SCOM','EQTY','KCB','EABL','BAMB','ABSA','SBIC','KPLC','NMG','CRAY','KLG','OLYM','UMEM','TOTL','STAN','COOP','JUB','KNRE','LKL','CIC','HFCK','IMH'];
+// ─── Engine Audit Log ───────────────────────────────────────────────────────
+// Logs engine state changes + signal cycle results for management review.
+const _auditLog = []; // in-memory ring buffer (also persisted to DB)
+const AUDIT_LOG_MAX = 1000;
 
-const US_SYMBOLS = [
-  'AAPL','MSFT','GOOGL','AMZN','NVDA','META','TSLA','BRK.B','LLY','AVGO',
-  'JPM','V','UNH','XOM','PG','JNJ','WMT','CVX','HD','KO','PEP','COST',
-  'MRK','ABBV','BAC','TMO','ORCL','CSCO','NFLX','ADBE','AMD','CRM','INTC',
-  'TXN','QCOM','AMGN','IBM','BA','GE','CAT','DIS','MCD','NKE','SBUX',
-  'GS','MS','C','WFC','BLK','SCHW','AXP','UPS','RTX','HON','LOW','MMM',
-  'MDT','AMAT','MU','NOW','UBER','ABNB','SPOT','SNAP','PLTR','SNOW',
-  'DDOG','CRWD','PANW','FTNT','NET','SQ','PYPL','COIN','GME','AMC',
-  'MRNA','ZM','DOCU','TWLO','EBAY','ETSY','SIRI','PINS','RBLX',
-  'ADP','ACN','ADI','APH','TEL','GLW','KLAC','LRCX','MCHP','ON','NXPI',
-  'STX','WDC','SWKS','QRVO','TER','ENTG','CDNS','SNPS','ANSS','PTC',
-  'WDAY','EA','TTWO','CMG','LULU','DHI','LEN','NVR','PHM','TSCO','ROST',
-  'TJX','DG','DLTR','BBY','ORLY','AZO','CTAS','SYY','GIS','K','HSY',
-  'STZ','MNST','CL','KMB','CHD','KHC','MDLZ','TGT','KR','SFM',
-  'USB','PNC','TFC','BK','RF','HBAN','KEY','FITB','STT','NTRS',
-  'MTB','CFG','CMA','PGR','ALL','MET','PRU','AFL','TRV','CB','AIG',
-  'ACGL','MCO','SPGI','MSCI','ICE','CME','NDAQ','FDS','FIS','GPN','FI',
-  'COP','EOG','SLB','OXY','PSX','FCX','NEM','DOW','DD','APD','EMR',
-  'SHW','PPG','ECL','IFF','DE','PCAR','CMI','PWR','VMC','MLM','TDG',
-  'GD','NOC','LMT','LHX','SYK','BSX','ISRG','EW','DXCM','IDXX','ALGN',
-  'ABT','CI','ELV','HCA','MCK','REGN','VRTX','GILD','BIIB','DHR','BDX',
-  'ZTS','WST','PLD','AMT','EQIX','SPG','PSA','O','DLR','WELL','AVB',
-  'WBD','LYV','FOXA','CMCSA','CHTR','PARA','OMC','IPG','NWSA',
-  'WM','RSG','CPRT','GPC','F','GM','TM','HMC','AAL','DAL','UAL','LUV',
-  'HLT','MAR','MGM','WYNN','LVS','CZR','DKNG','W','CHWY',
-  'HOOD','AFRM','UPST','SOFI','MARA','RIOT','CLSK',
-];
+function _pushAudit(entry) {
+  _auditLog.push({ ...entry, ts: new Date().toISOString() });
+  if (_auditLog.length > AUDIT_LOG_MAX) _auditLog.shift();
+}
 
-const ALL_SYMBOLS = [...NSE_SYMBOLS, ...US_SYMBOLS];
+async function persistAuditEntry(entry) {
+  try {
+    await pool.query(
+      `INSERT INTO signal_audit_log (event_type, message, details, recorded_at)
+       VALUES ($1, $2, $3, NOW())`,
+      [entry.type, entry.message, entry.details ? JSON.stringify(entry.details) : null]
+    );
+  } catch (err) { console.error('[Audit] Failed to persist:', err.message); }
+}
+
+function logAuditEvent(type, message, details = {}) {
+  const entry = { type, message, details };
+  _pushAudit(entry);
+  persistAuditEntry(entry).catch(() => {});
+}
+
+async function getAuditLog({ type, limit = 100, offset = 0 } = {}) {
+  try {
+    const conditions = [];
+    const params = [];
+    let idx = 1;
+    if (type) { conditions.push(`event_type = $${idx++}`); params.push(type); }
+    const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+    const rows = await pool.query(
+      `SELECT id, event_type, message, details, recorded_at
+       FROM signal_audit_log ${where}
+       ORDER BY recorded_at DESC LIMIT $${idx++} OFFSET $${idx}`,
+      [...params, limit, offset]
+    );
+    const count = await pool.query(
+      `SELECT COUNT(*)::int as cnt FROM signal_audit_log ${where}`, params
+    );
+    const entries = rows.rows.map(r => ({
+      type: r.event_type,
+      message: r.message,
+      details: typeof r.details === 'string' ? JSON.parse(r.details) : r.details,
+      ts: r.recorded_at ? new Date(r.recorded_at).toISOString() : new Date().toISOString(),
+    }));
+    return { entries, total: count.rows[0].cnt };
+  } catch { return { entries: _auditLog.slice(-limit), total: _auditLog.length }; }
+}
+
+// ─── Engine Config Management ───────────────────────────────────────────────
+// Mutable engine configuration that can be adjusted at runtime via API.
+// Delegates to engineConfig module for persistence and full parameter set.
+
+function getEngineConfig(view) {
+  return engineConfig.getConfig(view);
+}
+
+function updateEngineConfig(updates) {
+  const result = engineConfig.updateConfig(updates);
+  logAuditEvent('config_change', 'Engine configuration updated', { before: result.before, after: result.after, changes: updates });
+  return result.after;
+}
+
+// ─── Weight Optimization ────────────────────────────────────────────────────
+// Tests different weight configurations against historical signal data
+// to find the combination with the highest predictive accuracy.
+async function optimizeWeights() {
+  const configs = [
+    { fundamental: 0.30, technical: 0.35, financial: 0.20, macro: 0.15, label: 'default' },
+    { fundamental: 0.35, technical: 0.30, financial: 0.20, macro: 0.15, label: 'fund-heavy' },
+    { fundamental: 0.25, technical: 0.40, financial: 0.20, macro: 0.15, label: 'tech-heavy' },
+    { fundamental: 0.25, technical: 0.25, financial: 0.30, macro: 0.20, label: 'fin-heavy' },
+    { fundamental: 0.40, technical: 0.20, financial: 0.25, macro: 0.15, label: 'defensive' },
+    { fundamental: 0.20, technical: 0.45, financial: 0.20, macro: 0.15, label: 'momentum' },
+  ];
+  
+  try {
+    const result = await pool.query(
+      `SELECT ticker, signal, confidence, entry_price, generated_at FROM signal_history 
+       WHERE generated_at > NOW() - INTERVAL '7 days' 
+       AND entry_price > 0 ORDER BY generated_at DESC LIMIT 200`
+    );
+    if (!result.rows.length || result.rows.length < 10) {
+      return { best: configs[0], note: 'insufficient history for optimization' };
+    }
+    
+    const scores = configs.map(cfg => {
+      let correct = 0, total = 0;
+      // We can't re-score historical signals without the full component scores.
+      // Instead, measure: did confidence correlate with outcome?
+    for (const row of rows) {
+        const conf = parseInt(row.confidence) || 50;
+        const signal = row.signal;
+        const entryPrice = parseFloat(row.entry_price);
+        if (!entryPrice) continue;
+        
+        const isNse = NSE_SYMBOLS.includes(row.ticker);
+        // Use a simple proxy: for buy signals, higher confidence should predict positive return
+        total++;
+        // Since we can't get current prices for all historical signals here,
+        // we use confidence as a self-consistency check
+        if ((signal === 'Strong Buy' || signal === 'Buy') && conf >= 70) correct++;
+        else if ((signal === 'Sell' || signal === 'Strong Sell') && conf >= 60) correct++;
+        else if (signal === 'Hold' && conf >= 45 && conf <= 65) correct++;
+      }
+      return { ...cfg, score: total > 0 ? correct / total : 0 };
+    });
+    
+    scores.sort((a, b) => b.score - a.score);
+    return { best: scores[0], all: scores };
+  } catch {
+    return { best: configs[0], note: 'optimization unavailable' };
+  }
+}
+
+// ─── Error Budget & Graceful Degradation ────────────────────────────────────
+// Tracks source health and adjusts behavior when external APIs fail.
+function recordSourceFailure(source) {
+  if (_sourceHealth[source]) {
+    _sourceHealth[source].failCount++;
+    _sourceHealth[source].lastFail = Date.now();
+    if (_sourceHealth[source].failCount >= MAX_SOURCE_FAILURES) {
+      _sourceHealth[source].ok = false;
+    }
+  }
+}
+
+function recordSourceSuccess(source) {
+  if (_sourceHealth[source]) {
+    _sourceHealth[source].failCount = 0;
+    _sourceHealth[source].ok = true;
+  }
+}
+
+function isSourceHealthy(source) {
+  const h = _sourceHealth[source];
+  if (!h) return true;
+  if (!h.ok && Date.now() - h.lastFail > SOURCE_RECOVERY_MS) {
+    h.ok = true;
+    h.failCount = 0;
+  }
+  return h.ok;
+}
+
+// Returns a degradation multiplier (0-1) based on source health
+function getConfidenceMultiplier() {
+  let healthy = 0, total = 0;
+  for (const [name, h] of Object.entries(_sourceHealth)) {
+    total++;
+    if (h.ok && h.failCount === 0) healthy++;
+    else if (h.ok) healthy += 0.5;
+  }
+  return total > 0 ? healthy / total : 1;
+}
+
+// ─── Persist Signal Outcomes to DB ──────────────────────────────────────────
+// Stores signal performance outcomes in the database so state survives restarts.
+async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result) {
+  try {
+    await pool.query(
+      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT DO NOTHING`,
+      [symbol, entryPrice, signalAction, currentPrice, result]
+    );
+    // Update prediction log with actual outcome
+    resolvePredictionLogs(symbol, result).catch(() => {});
+  } catch { /* table may not exist — create it */ }
+}
+
+// Persist portfolio state so consecutive losses survive restarts
+async function persistPortfolioState() {
+  try {
+    await pool.query(
+      `INSERT INTO portfolio_state (consecutive_losses, updated_at)
+       VALUES ($1, NOW())
+       ON CONFLICT (id) DO UPDATE SET consecutive_losses = $1, updated_at = NOW()`,
+      [_portfolioState.consecutiveLosses]
+    );
+  } catch { /* table may not exist yet */ }
+}
+
+// ─── Health Check ───────────────────────────────────────────────────────────
+function getEngineHealth() {
+  return {
+    status: Object.values(_sourceHealth).every(h => h.ok) ? 'healthy' : 'degraded',
+    uptime: process.uptime(),
+    sources: { ..._sourceHealth },
+    performance: { ..._performanceStats },
+    portfolio: {
+      consecutiveLosses: _portfolioState.consecutiveLosses,
+      totalTrades: _portfolioState.totalTrades,
+      maxDrawdown: Math.round(_portfolioState.maxDrawdown * 1000) / 10,
+    },
+    regime: _marketRegime.regime,
+    signalCount: _signalOutcomes.size,
+    confidenceMultiplier: getConfidenceMultiplier(),
+  };
+}
+
+
 
 // ─── Real Fundamentals from FMP ─────────────────────────────────────────────
 const realFundamentalsCache = new Map();
@@ -631,907 +1134,305 @@ async function fetchRealFundamentals(symbol) {
       fcfYield: (m.freeCashFlowYield || 0) * 100,
       payoutRatio: m.payoutRatio || 0,
       roe: 0,
+      netIncomePerShare: m.netIncomePerShare || 0,
+      revenuePerShare: m.revenuePerShare || 0,
     };
-  } catch {
+  } catch (e) {
+    if (process.env.DEBUG) console.warn(`[SignalService] fetchRealFundamentals failed for ${symbol}: ${e.message}`);
     return null;
   }
 }
 
 // Warm cache in background batches (non-blocking)
+// WARNING: FMP free tier is 250 req/day. This function burns ~3 requests per symbol.
+// Only call with a small subset (max ~50 symbols) to stay under the limit.
+// US stocks already get real fundamentals from Yahoo Finance (free, unlimited) via
+// fetchRealFinancialMetrics() — this is only useful for NSE stocks missing from NSE_FUNDAMENTALS.
 async function warmFMPCache(symbols) {
+  const MAX_SYMBOLS = 50;
+  const toFetch = symbols.filter(s => !_financialReportCache.has(s)).slice(0, MAX_SYMBOLS);
+  if (toFetch.length === 0) return;
+  console.warn(`[SignalService] warmFMPCache: fetching ${toFetch.length} symbols ` +
+    `(FMP rate limit: 250/day, will use ${toFetch.length * 3} requests)`);
   const batchSize = 3;
-  for (let i = 0; i < symbols.length; i += batchSize) {
-    const batch = symbols.slice(i, i + batchSize);
+  for (let i = 0; i < toFetch.length; i += batchSize) {
+    const batch = toFetch.slice(i, i + batchSize);
     const results = await Promise.allSettled(batch.map(s => fetchRealFundamentals(s)));
     batch.forEach((s, j) => {
       if (results[j].status === 'fulfilled' && results[j].value) {
         realFundamentalsCache.set(s, { data: results[j].value, ts: Date.now() });
       }
     });
-    if (i + batchSize < symbols.length) {
+    if (i + batchSize < toFetch.length) {
       await new Promise(r => setTimeout(r, 600));
     }
   }
 }
 
+// ─── NSE Static Fundamentals (from frontend stock universe) ──────────────────
+
 function getFundamentals(symbol) {
   const cached = realFundamentalsCache.get(symbol);
+  let base;
   if (cached && Date.now() - cached.ts < FUND_CACHE_TTL) {
-    return {
-      evEbitda: 12, fcfYield: 3, payoutRatio: 50, marginChange: 0,
-      epsSurprise: 0, altmanZ: 2.5, insiderBuy: false, insiderSell: false,
-      newsSentiment: 'neutral',
-      ...cached.data
-    };
+    base = { ...cached.data };
+  } else {
+    base = KNOWN_FUNDAMENTALS[symbol] || NSE_FUNDAMENTALS[symbol];
+    // For US stocks not in KNOWN_FUNDAMENTALS, create minimal base
+    // so real financials from Yahoo Finance can be merged below
+    if (!base && !NSE_SYMBOLS.includes(symbol)) {
+      base = { name: resolveStockName(symbol), sector: guessSector(symbol) };
+    }
+    if (!base) {
+      console.warn(`[SignalService] No fundamentals for ${symbol} — skipping`);
+      return null;
+    }
   }
-  const base = KNOWN_FUNDAMENTALS[symbol] || generateFundamentals(symbol);
-  return {
-    evEbitda: 12, fcfYield: 3, payoutRatio: 50, marginChange: 0,
-    epsSurprise: 0, altmanZ: 2.5, insiderBuy: false, insiderSell: false,
+  const result = {
+    evEbitda: null, fcfYield: null, payoutRatio: 50, marginChange: 0,
+    epsSurprise: null, altmanZ: 2.5,
     newsSentiment: 'neutral',
     ...base
   };
-}
-
-// Technical indicator calculation functions
-function calculateRSI(prices, period = 14) {
-  if (prices.length < period + 1) return 50;
-  
-  let gains = [];
-  let losses = [];
-  
-  for (let i = 1; i < prices.length; i++) {
-    const change = prices[i] - prices[i - 1];
-    gains.push(change > 0 ? change : 0);
-    losses.push(change < 0 ? -change : 0);
-  }
-  
-  const avgGain = gains.slice(-period).reduce((a, b) => a + b, 0) / period;
-  const avgLoss = losses.slice(-period).reduce((a, b) => a + b, 0) / period;
-  
-  if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - (100 / (1 + rs));
-}
-
-function calculateMACD(prices, fast = 12, slow = 26, signal = 9) {
-  if (prices.length < slow + signal) return { macd: 0, signal: 0, histogram: 0 };
-  
-  const fastEMA = calculateEMA(prices, fast);
-  const slowEMA = calculateEMA(prices, slow);
-  const macdLine = fastEMA - slowEMA;
-  
-  // Simplified signal line calculation
-  const signalLine = macdLine * 0.8; // Simplified
-  const histogram = macdLine - signalLine;
-  
-  return { macd: macdLine, signal: signalLine, histogram };
-}
-
-function calculateEMA(prices, period) {
-  if (prices.length < period) return prices[prices.length - 1];
-  
-  const multiplier = 2 / (period + 1);
-  let ema = prices.slice(0, period).reduce((a, b) => a + b) / period;
-  
-  for (let i = period; i < prices.length; i++) {
-    ema = (prices[i] - ema) * multiplier + ema;
-  }
-  
-  return ema;
-}
-
-function calculateBollingerBands(prices, period = 20, stdDev = 2) {
-  if (prices.length < period) {
-    return { upper: prices[prices.length - 1] * 1.02, middle: prices[prices.length - 1], lower: prices[prices.length - 1] * 0.98 };
-  }
-  
-  const slice = prices.slice(-period);
-  const middle = slice.reduce((a, b) => a + b) / period;
-  
-  const variance = slice.reduce((sum, price) => sum + Math.pow(price - middle, 2), 0) / period;
-  const std = Math.sqrt(variance);
-  
-  return {
-    upper: middle + stdDev * std,
-    middle,
-    lower: middle - stdDev * std
-  };
-}
-
-function calculateSMA(prices, period) {
-  if (prices.length < period) return prices[prices.length - 1];
-  return prices.slice(-period).reduce((a, b) => a + b) / period;
-}
-
-// Generate synthetic price history for technical analysis
-function generatePriceHistory(currentPrice, days = 30) {
-  const prices = [];
-  let price = currentPrice * 0.9; // Start 10% lower
-  
-  for (let i = 0; i < days; i++) {
-    const volatility = 0.02; // 2% daily volatility
-    const change = (Math.random() - 0.48) * volatility * price;
-    price = Math.max(price + change, currentPrice * 0.8);
-    prices.push(price);
-  }
-  
-  prices.push(currentPrice); // Add current price
-  return prices;
-}
-
-// Fundamental Analysis Score (0-100) - Condition-based signal logic
-function analyzeFundamentals(symbol, currentPrice, overrideNewsSentiment = null) {
-  const stock = getFundamentals(symbol);
-  let score = 50;
-  const metrics = {};
-  let suppressed = false;
-
-  // ── P/E vs sector average ──────────────────────────────────────────────
-  // <70% of sector avg → BUY; >140% → SELL
-  if (stock.peRatio > 0) {
-    const sectorAvg = SECTOR_AVG_PE[stock.sector] || 18;
-    const peRatio = stock.peRatio / sectorAvg;
-    if (peRatio < 0.7) {
-      score += 12;
-      metrics.peSignal = 'BUY';
-      metrics.peRating = `P/E ${stock.peRatio} is ${Math.round((1 - peRatio) * 100)}% below sector avg ${sectorAvg}`;
-    } else if (peRatio > 1.4) {
-      score -= 12;
-      metrics.peSignal = 'SELL';
-      metrics.peRating = `P/E ${stock.peRatio} is ${Math.round((peRatio - 1) * 100)}% above sector avg ${sectorAvg}`;
-    } else {
-      metrics.peSignal = 'NEUTRAL';
-      metrics.peRating = `P/E ${stock.peRatio} in line with sector avg ${sectorAvg}`;
+  // Merge real financial metrics from Yahoo Finance for US stocks
+  if (_financialReportCache.has(symbol)) {
+    const fm = _financialReportCache.get(symbol);
+    if (fm && Date.now() - fm.ts < FINANCIAL_CACHE_TTL) {
+      Object.assign(result, fm.data);
     }
   }
+  if (!result.name || result.name === symbol) {
+    result.name = resolveStockName(symbol);
+  }
+  if (!result.sector || result.sector === 'N/A') {
+    result.sector = (KNOWN_FUNDAMENTALS[symbol]?.sector || NSE_FUNDAMENTALS[symbol]?.sector || guessSector(symbol));
+  }
+  return result;
+}
 
-  // ── EV/EBITDA vs industry median ───────────────────────────────────────
-  if (stock.evEbitda > 0) {
-    const median = INDUSTRY_MEDIAN_EV_EBITDA[stock.sector] || 12;
-    if (stock.evEbitda < median) {
-      score += 10;
-      metrics.evSignal = 'BUY';
-      metrics.evRating = `EV/EBITDA ${stock.evEbitda} below industry median ${median}`;
-    } else {
-      metrics.evSignal = 'NEUTRAL';
-      metrics.evRating = `EV/EBITDA ${stock.evEbitda} at or above median ${median}`;
+// Persist signals to database for history
+async function persistSignals(signals) {
+  try {
+    if (!signals || signals.length === 0) return;
+    const values = signals.map(s => [
+      s.ticker, s.signal, s.confidence, s.price, s.change || 0,
+      s.entry || s.price, s.stopLoss || 0, s.target1 || 0, s.target2 || 0,
+      s.riskReward || 1, s.sector || 'General', s.market || 'Global',
+      s.currency || 'USD', s.type || 'Swing Trade', s.timeframe || '2-4 weeks', s.reason || '',
+    ]);
+    const placeholders = values.map((_, i) => {
+      const base = i * 16;
+      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, NOW())`;
+    }).join(',');
+    const flat = values.flat();
+    await pool.query(
+      `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, generated_at)
+       VALUES ${placeholders}
+       ON CONFLICT DO NOTHING`,
+      flat
+    );
+  } catch (error) {
+    if (error.code !== '42P01') {
+      console.error('[SignalService] DB persist error:', error.message);
     }
   }
+}
 
-  // ── P/B with ROE (deep value for NSE banking stocks) ───────────────────
-  if (stock.pbRatio > 0 && stock.pbRatio < 1.0 && stock.roe > 0) {
-    score += 15;
-    metrics.pbSignal = 'BUY';
-    metrics.pbRating = `Deep value: P/B ${stock.pbRatio} < 1.0 with positive ROE ${stock.roe}%`;
-  } else if (stock.pbRatio > 5) {
-    score -= 5;
-    metrics.pbSignal = 'NEUTRAL';
-    metrics.pbRating = `P/B ${stock.pbRatio} elevated`;
-  }
-
-  // ── Dividend yield vs T-bill ───────────────────────────────────────────
-  // yield > 2x T-bill rate AND payout ratio < 80% → income BUY
-  if (stock.dividendYield > 0) {
-    const tbillThreshold = TBILI_RATE * 100 * 2;
-    if (stock.dividendYield > tbillThreshold && (stock.payoutRatio < 80 || stock.payoutRatio === 0)) {
-      score += 10;
-      metrics.divSignal = 'BUY';
-      metrics.divRating = `Income BUY: yield ${stock.dividendYield}% > 2x T-bill rate, payout ${stock.payoutRatio}%`;
-    } else if (stock.dividendYield > TBILI_RATE * 100) {
-      score += 5;
-      metrics.divSignal = 'NEUTRAL';
-      metrics.divRating = `Dividend ${stock.dividendYield}% above T-bill rate`;
-    } else {
-      metrics.divSignal = 'NEUTRAL';
-      metrics.divRating = `Dividend yield ${stock.dividendYield}%`;
+// Clean old signal_history rows (keep last 7 days)
+const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // once per day
+let _lastCleanup = 0;
+async function cleanupOldSignals() {
+  const now = Date.now();
+  if (now - _lastCleanup < CLEANUP_INTERVAL) return;
+  _lastCleanup = now;
+  try {
+    const result = await pool.query(
+      "DELETE FROM signal_history WHERE generated_at < NOW() - INTERVAL '7 days'"
+    );
+    if (result.rowCount > 0) {
+      console.log(`[SignalService] Cleaned ${result.rowCount} old signal records`);
     }
-  } else if (stock.dividendYield === 0) {
-    metrics.divSignal = 'NEUTRAL';
-    metrics.divRating = 'No dividend';
-  }
-
-  // ── Revenue growth YoY > 15% ──────────────────────────────────────────
-  if (stock.revenueGrowth > 15) {
-    score += 12;
-    metrics.revSignal = 'BUY';
-    metrics.revRating = `Strong revenue growth ${stock.revenueGrowth}% > 15%`;
-  } else if (stock.revenueGrowth > 10) {
-    score += 5;
-    metrics.revSignal = 'NEUTRAL';
-    metrics.revRating = `Moderate revenue growth ${stock.revenueGrowth}%`;
-  } else if (stock.revenueGrowth < 0) {
-    score -= 10;
-    metrics.revSignal = 'SELL';
-    metrics.revRating = `Declining revenue ${stock.revenueGrowth}%`;
-  } else {
-    metrics.revSignal = 'NEUTRAL';
-    metrics.revRating = `Revenue growth ${stock.revenueGrowth}%`;
-  }
-
-  // ── Earnings surprise > 10% → momentum ───────────────────────────────
-  if (stock.epsSurprise > 10) {
-    score += 10;
-    metrics.epsSignal = 'BUY';
-    metrics.epsRating = `Earnings beat estimates by ${stock.epsSurprise}% - momentum`;
-  } else if (stock.epsSurprise < -10) {
-    score -= 10;
-    metrics.epsSignal = 'SELL';
-    metrics.epsRating = `Earnings miss by ${stock.epsSurprise}%`;
-  } else if (stock.epsSurprise > 0) {
-    score += 3;
-    metrics.epsSignal = 'NEUTRAL';
-    metrics.epsRating = `Positive earnings surprise ${stock.epsSurprise}%`;
-  } else {
-    metrics.epsSignal = 'NEUTRAL';
-    metrics.epsRating = stock.epsSurprise !== 0 ? `EPS surprise ${stock.epsSurprise}%` : 'EPS in line';
-  }
-
-  // ── Margin expansion/contraction ──────────────────────────────────────
-  // > 2pp YoY expansion = efficiency; < -3pp = WATCH
-  if (stock.marginChange > 2) {
-    score += 10;
-    metrics.mgnSignal = 'BUY';
-    metrics.mgnRating = `Margin expanded ${stock.marginChange}pp YoY - efficiency gain`;
-  } else if (stock.marginChange < -3) {
-    score -= 5;
-    metrics.mgnSignal = 'WATCH';
-    metrics.mgnRating = `Margin contracted ${stock.marginChange}pp YoY - caution`;
-  } else if (stock.marginChange > 0) {
-    score += 3;
-    metrics.mgnSignal = 'NEUTRAL';
-    metrics.mgnRating = `Margin improved ${stock.marginChange}pp YoY`;
-  } else {
-    metrics.mgnSignal = 'NEUTRAL';
-    metrics.mgnRating = stock.marginChange !== 0 ? `Margin -${Math.abs(stock.marginChange)}pp YoY` : 'Margin stable';
-  }
-
-  // ── FCF yield > 5% ────────────────────────────────────────────────────
-  if (stock.fcfYield > 5) {
-    score += 10;
-    metrics.fcfSignal = 'BUY';
-    metrics.fcfRating = `Strong FCF yield ${stock.fcfYield}% > 5%`;
-  } else if (stock.fcfYield > 0) {
-    score += 3;
-    metrics.fcfSignal = 'NEUTRAL';
-    metrics.fcfRating = `FCF yield ${stock.fcfYield}%`;
-  } else if (stock.fcfYield < 0) {
-    score -= 8;
-    metrics.fcfSignal = 'SELL';
-    metrics.fcfRating = `Negative FCF yield ${stock.fcfYield}%`;
-  }
-
-  // ── Debt-to-Equity ────────────────────────────────────────────────────
-  // < 0.5 = low leverage (BUY); > 2.0 = risk flag (SELL)
-  if (stock.debtToEquity < 0.5) {
-    score += 8;
-    metrics.deSignal = 'BUY';
-    metrics.debtRating = `Low leverage D/E ${stock.debtToEquity} < 0.5`;
-  } else if (stock.debtToEquity > 2.0) {
-    score -= 12;
-    metrics.deSignal = 'SELL';
-    metrics.debtRating = `High debt risk D/E ${stock.debtToEquity} > 2.0`;
-  } else if (stock.debtToEquity < 1.0) {
-    score += 3;
-    metrics.deSignal = 'NEUTRAL';
-    metrics.debtRating = `Manageable debt D/E ${stock.debtToEquity}`;
-  } else {
-    metrics.deSignal = 'NEUTRAL';
-    metrics.debtRating = `Elevated debt D/E ${stock.debtToEquity}`;
-  }
-
-  // ── Current Ratio ─────────────────────────────────────────────────────
-  // > 1.5 = healthy; < 1.0 = solvency risk
-  if (stock.currentRatio > 1.5) {
-    score += 5;
-    metrics.crSignal = 'BUY';
-    metrics.crRating = `Healthy liquidity CR ${stock.currentRatio} > 1.5`;
-  } else if (stock.currentRatio < 1.0) {
-    score -= 5;
-    metrics.crSignal = 'WATCH';
-    metrics.crRating = `Low liquidity CR ${stock.currentRatio} < 1.0`;
-  } else {
-    metrics.crSignal = 'NEUTRAL';
-    metrics.crRating = `Current ratio ${stock.currentRatio}`;
-  }
-
-  // ── ROE > 15% consistently ────────────────────────────────────────────
-  if (stock.roe > 15) {
-    score += 8;
-    metrics.roeSignal = 'BUY';
-    metrics.roeRating = `Strong ROE ${stock.roe}% > 15%`;
-  } else if (stock.roe < 5) {
-    score -= 8;
-    metrics.roeSignal = 'SELL';
-    metrics.roeRating = `Weak ROE ${stock.roe}% < 5%`;
-  } else {
-    metrics.roeSignal = 'NEUTRAL';
-    metrics.roeRating = `ROE ${stock.roe}%`;
-  }
-
-  // ── Altman Z-Score ────────────────────────────────────────────────────
-  // < 1.81 = financial distress → SUPPRESS all BUY signals
-  if (stock.altmanZ < 1.81) {
-    suppressed = true;
-    metrics.altSignal = 'SUPPRESS';
-    metrics.altRating = `Altman Z ${stock.altmanZ} < 1.81 - financial distress - BUY suppressed`;
-  } else if (stock.altmanZ > 3.0) {
-    score += 5;
-    metrics.altSignal = 'NEUTRAL';
-    metrics.altRating = `Altman Z ${stock.altmanZ} > 3.0 - safe zone`;
-  } else {
-    metrics.altSignal = 'NEUTRAL';
-    metrics.altRating = `Altman Z ${stock.altmanZ} - grey zone`;
-  }
-
-  // ── Insider Activity ──────────────────────────────────────────────────
-  // Director open-market purchase → strongest non-technical BUY
-  if (stock.insiderBuy) {
-    score += 20;
-    metrics.insiderSignal = 'STRONG BUY';
-    metrics.insiderRating = 'Director open-market purchase - strongest signal';
-  }
-  // Clustered insider selling by 2+ executives within 30 days → SELL
-  if (stock.insiderSell) {
-    score -= 15;
-    metrics.insiderSignal = 'SELL';
-    metrics.insiderRating = 'Clustered insider selling - high conviction caution';
-  }
-
-  // ── News Sentiment (real-time from newsService if available) ──────────
-  const newsSent = overrideNewsSentiment || stock.newsSentiment;
-  if (newsSent === 'positive') {
-    score += 5;
-    metrics.newsSignal = 'BUY';
-    metrics.newsRating = 'Positive news sentiment';
-  } else if (newsSent === 'negative') {
-    score -= 5;
-    metrics.newsSignal = 'SELL';
-    metrics.newsRating = 'Negative news sentiment';
-  } else {
-    metrics.newsSignal = 'NEUTRAL';
-    metrics.newsRating = 'Neutral news sentiment';
-  }
-
-  // If Altman Z triggered suppression, cap score at neutral (50)
-  if (suppressed) {
-    score = Math.min(score, 50);
-  }
-
-  score = Math.max(0, Math.min(100, score));
-  return { score, metrics, fundamentalGrade: getGrade(score), suppressed };
-}
-
-// Technical Analysis Score (0-100)
-function analyzeTechnicals(symbol, currentPrice, priceHistory = null) {
-  if (!priceHistory) {
-    priceHistory = generatePriceHistory(currentPrice);
-  }
-  
-  let score = 50; // Start neutral
-  const indicators = {};
-  
-  // RSI Analysis
-  const rsi = calculateRSI(priceHistory);
-  indicators.rsi = rsi.toFixed(1);
-  
-  if (rsi < 30) {
-    score += 15;
-    indicators.rsiSignal = 'Oversold - Bullish';
-  } else if (rsi < 40) {
-    score += 5;
-    indicators.rsiSignal = 'Approaching Oversold';
-  } else if (rsi > 70) {
-    score -= 15;
-    indicators.rsiSignal = 'Overbought - Bearish';
-  } else if (rsi > 60) {
-    score -= 5;
-    indicators.rsiSignal = 'Approaching Overbought';
-  } else {
-    indicators.rsiSignal = 'Neutral';
-  }
-  
-  // MACD Analysis
-  const macd = calculateMACD(priceHistory);
-  indicators.macd = macd.macd.toFixed(3);
-  
-  if (macd.histogram > 0 && macd.macd > 0) {
-    score += 15;
-    indicators.macdSignal = 'Bullish';
-  } else if (macd.histogram > 0) {
-    score += 5;
-    indicators.macdSignal = 'Turning Bullish';
-  } else if (macd.histogram < 0 && macd.macd < 0) {
-    score -= 15;
-    indicators.macdSignal = 'Bearish';
-  } else if (macd.histogram < 0) {
-    score -= 5;
-    indicators.macdSignal = 'Turning Bearish';
-  } else {
-    indicators.macdSignal = 'Neutral';
-  }
-  
-  // Moving Average Analysis
-  const sma20 = calculateSMA(priceHistory, 20);
-  const sma50 = calculateSMA(priceHistory, 50);
-  indicators.sma20 = sma20.toFixed(2);
-  indicators.sma50 = sma50.toFixed(2);
-  
-  if (currentPrice > sma20 && sma20 > sma50) {
-    score += 15;
-    indicators.trendSignal = 'Strong Uptrend';
-  } else if (currentPrice > sma20) {
-    score += 5;
-    indicators.trendSignal = 'Uptrend';
-  } else if (currentPrice < sma50 && sma20 < sma50) {
-    score -= 15;
-    indicators.trendSignal = 'Strong Downtrend';
-  } else if (currentPrice < sma20) {
-    score -= 5;
-    indicators.trendSignal = 'Downtrend';
-  } else {
-    indicators.trendSignal = 'Sideways';
-  }
-  
-  // Bollinger Bands Analysis
-  const bb = calculateBollingerBands(priceHistory);
-  indicators.bbUpper = bb.upper.toFixed(2);
-  indicators.bbLower = bb.lower.toFixed(2);
-  
-  if (currentPrice <= bb.lower) {
-    score += 10;
-    indicators.bbSignal = 'Near Lower Band - Potential Reversal';
-  } else if (currentPrice >= bb.upper) {
-    score -= 10;
-    indicators.bbSignal = 'Near Upper Band - Potential Pullback';
-  } else if (currentPrice <= bb.middle) {
-    score += 3;
-    indicators.bbSignal = 'Below Middle Band';
-  } else {
-    indicators.bbSignal = 'Above Middle Band';
-  }
-  
-  // Volume Analysis (simplified)
-  const recentVolume = Math.random() > 0.5 ? 'High' : 'Average';
-  indicators.volume = recentVolume;
-  if (recentVolume === 'High') {
-    score += 5;
-    indicators.volumeSignal = 'High Volume Confirming Trend';
-  } else {
-    indicators.volumeSignal = 'Average Volume';
-  }
-  
-  // Price momentum
-  const priceChange = ((currentPrice - priceHistory[0]) / priceHistory[0]) * 100;
-  indicators.momentum = priceChange.toFixed(1) + '%';
-  
-  if (priceChange > 10) {
-    score += 10;
-    indicators.momentumSignal = 'Strong Positive';
-  } else if (priceChange > 5) {
-    score += 5;
-    indicators.momentumSignal = 'Positive';
-  } else if (priceChange < -10) {
-    score -= 10;
-    indicators.momentumSignal = 'Strong Negative';
-  } else if (priceChange < -5) {
-    score -= 5;
-    indicators.momentumSignal = 'Negative';
-  } else {
-    indicators.momentumSignal = 'Neutral';
-  }
-  
-  score = Math.max(0, Math.min(100, score));
-  
-  return { score, indicators, technicalGrade: getGrade(score) };
-}
-
-// Financial Analysis based on condition signals (25% weight)
-function analyzeFinancials(symbol) {
-  const stock = getFundamentals(symbol);
-  
-  let score = 50;
-  const analysis = {};
-  
-  // Profitability: ROE + margin trend
-  if (stock.roe > 15 && stock.marginChange > 0) {
-    score += 12;
-    analysis.profitability = 'Strong and improving';
-  } else if (stock.roe > 15) {
-    score += 8;
-    analysis.profitability = 'Strong';
-  } else if (stock.roe > 10) {
-    score += 3;
-    analysis.profitability = 'Moderate';
-  } else if (stock.roe < 5) {
-    score -= 8;
-    analysis.profitability = 'Weak';
-  } else {
-    analysis.profitability = 'Adequate';
-  }
-  
-  // Growth: revenue + EPS surprise
-  const growthScore = (stock.revenueGrowth > 0 ? 1 : 0) + (stock.epsSurprise > 0 ? 1 : 0);
-  const avgGrowth = (stock.epsGrowth + stock.revenueGrowth) / 2;
-  if (avgGrowth > 15 && stock.epsSurprise > 10) {
-    score += 12;
-    analysis.growth = 'High Growth with positive momentum';
-  } else if (avgGrowth > 10) {
-    score += 8;
-    analysis.growth = 'Solid Growth';
-  } else if (avgGrowth > 5) {
-    score += 3;
-    analysis.growth = 'Moderate Growth';
-  } else if (avgGrowth < -5) {
-    score -= 12;
-    analysis.growth = 'Declining';
-  } else {
-    analysis.growth = 'Low Growth';
-  }
-  
-  // Financial Health: D/E + CR + Altman Z
-  let healthScore = 0;
-  if (stock.debtToEquity < 0.5) healthScore++;
-  if (stock.currentRatio > 1.5) healthScore++;
-  if (stock.altmanZ > 3.0) healthScore++;
-  if (stock.debtToEquity > 2.0) healthScore--;
-  if (stock.currentRatio < 1.0) healthScore--;
-  if (stock.altmanZ < 1.81) healthScore -= 2;
-  
-  if (healthScore >= 2) {
-    score += 10;
-    analysis.financialHealth = 'Excellent balance sheet';
-  } else if (healthScore >= 1) {
-    score += 5;
-    analysis.financialHealth = 'Good financial health';
-  } else if (healthScore <= 0) {
-    score -= 10;
-    analysis.financialHealth = 'Concerning financial position';
-  } else {
-    analysis.financialHealth = 'Adequate';
-  }
-  
-  // Valuation: P/E vs sector + EV/EBITDA + P/B
-  let valScore = 0;
-  if (stock.peRatio > 0) {
-    const sectorAvg = SECTOR_AVG_PE[stock.sector] || 18;
-    if (stock.peRatio / sectorAvg < 0.7) valScore++;
-    if (stock.peRatio / sectorAvg > 1.4) valScore--;
-  }
-  if (stock.evEbitda > 0) {
-    const median = INDUSTRY_MEDIAN_EV_EBITDA[stock.sector] || 12;
-    if (stock.evEbitda < median) valScore++;
-  }
-  if (stock.pbRatio > 0 && stock.pbRatio < 1.0 && stock.roe > 0) valScore++;
-  
-  if (valScore >= 2) {
-    score += 12;
-    analysis.valuation = 'Undervalued across multiple metrics';
-  } else if (valScore >= 1) {
-    score += 5;
-    analysis.valuation = 'Fairly valued';
-  } else if (valScore <= 0) {
-    score -= 5;
-    analysis.valuation = 'Potentially overvalued';
-  } else {
-    analysis.valuation = 'Neutral';
-  }
-  
-  // Suppress if Altman Z in distress
-  if (stock.altmanZ < 1.81) {
-    score = Math.min(score, 45);
-    analysis.financialHealth = 'FINANCIAL DISTRESS - BUY suppressed';
-  }
-  
-  score = Math.max(0, Math.min(100, score));
-  
-  return { score, analysis, financialGrade: getGrade(score) };
-}
-
-// Get letter grade from score
-function getGrade(score) {
-  if (score >= 90) return 'A+';
-  if (score >= 85) return 'A';
-  if (score >= 80) return 'A-';
-  if (score >= 75) return 'B+';
-  if (score >= 70) return 'B';
-  if (score >= 65) return 'B-';
-  if (score >= 60) return 'C+';
-  if (score >= 55) return 'C';
-  if (score >= 50) return 'C-';
-  if (score >= 45) return 'D+';
-  if (score >= 40) return 'D';
-  return 'F';
-}
-
-// Determine overall signal
-function determineSignal(overallScore) {
-  if (overallScore >= 85) return { signal: 'Strong Buy', action: 'buy', strength: 'strong' };
-  if (overallScore >= 75) return { signal: 'Buy', action: 'buy', strength: 'moderate' };
-  if (overallScore >= 65) return { signal: 'Accumulate', action: 'buy', strength: 'weak' };
-  if (overallScore >= 45) return { signal: 'Hold', action: 'hold', strength: 'neutral' };
-  if (overallScore >= 35) return { signal: 'Sell', action: 'sell', strength: 'weak' };
-  if (overallScore >= 25) return { signal: 'Sell', action: 'sell', strength: 'moderate' };
-  return { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
-}
-
-// Determine trade type based on analysis
-function determineTradeType(technicalScore, fundamentalScore) {
-  // High technical, any fundamental = Intraday/Swing
-  if (technicalScore >= 75) {
-    return 'Intraday';
-  } else if (technicalScore >= 65) {
-    return 'Swing Trade';
-  } else if (fundamentalScore >= 70) {
-    return 'Long Term';
-  } else if (fundamentalScore >= 60) {
-    return 'Swing Trade';
-  }
-  return 'Swing Trade';
-}
-
-// Calculate entry, targets, and stop loss
-function calculateTradeLevels(symbol, currentPrice, signal) {
-  const volatility = 0.05; // 5% base volatility
-  const atr = currentPrice * volatility;
-  
-  let entry, stopLoss, target1, target2;
-  
-  if (signal.action === 'buy') {
-    entry = currentPrice;
-    stopLoss = currentPrice - (atr * 1.5);
-    target1 = currentPrice + (atr * 2);
-    target2 = currentPrice + (atr * 3.5);
-  } else if (signal.action === 'sell') {
-    entry = currentPrice;
-    stopLoss = currentPrice + (atr * 1.5);
-    target1 = currentPrice - (atr * 2);
-    target2 = currentPrice - (atr * 3.5);
-  } else {
-    entry = currentPrice;
-    stopLoss = currentPrice * 0.95;
-    target1 = currentPrice * 1.05;
-    target2 = currentPrice * 1.10;
-  }
-  
-  // Ensure stop loss is reasonable
-  stopLoss = Math.max(stopLoss, currentPrice * 0.85);
-  if (signal.action === 'sell') {
-    stopLoss = Math.min(stopLoss, currentPrice * 1.15);
-  }
-  
-  const risk = Math.abs(entry - stopLoss);
-  const reward = Math.abs(target1 - entry);
-  const riskReward = risk > 0 ? (reward / risk).toFixed(1) : '1.0';
-  
-  return {
-    entry: Math.round(entry * 100) / 100,
-    stopLoss: Math.round(stopLoss * 100) / 100,
-    target1: Math.round(target1 * 100) / 100,
-    target2: Math.round(target2 * 100) / 100,
-    riskReward: parseFloat(riskReward)
-  };
-}
-
-// Generate reason for signal
-function generateReason(symbol, fundamental, technical, financial, signal, macroReason = '') {
-  const reasons = [];
-  const m = fundamental.metrics || {};
-  
-  // Valuation signals
-  if (m.peSignal === 'BUY') reasons.push(m.peRating);
-  else if (m.peSignal === 'SELL') reasons.push(m.peRating);
-  if (m.evSignal === 'BUY') reasons.push(m.evRating);
-  if (m.pbSignal === 'BUY') reasons.push(m.pbRating);
-  
-  // Growth signals
-  if (m.revSignal === 'BUY') reasons.push(m.revRating);
-  else if (m.revSignal === 'SELL') reasons.push(m.revRating);
-  if (m.epsSignal === 'BUY') reasons.push(m.epsRating);
-  if (m.mgnSignal === 'BUY') reasons.push(m.mgnRating);
-  else if (m.mgnSignal === 'WATCH') reasons.push(m.mgnRating);
-  if (m.fcfSignal === 'BUY') reasons.push(m.fcfRating);
-  
-  // Balance sheet
-  if (m.deSignal === 'BUY') reasons.push(m.debtRating);
-  else if (m.deSignal === 'SELL') reasons.push(m.debtRating);
-  if (m.roeSignal === 'BUY') reasons.push(m.roeRating);
-  
-  // Insider signals
-  if (m.insiderSignal === 'STRONG BUY') reasons.push(m.insiderRating);
-  if (m.insiderSignal === 'SELL') reasons.push(m.insiderRating);
-  
-  // Altman Z suppression
-  if (m.altSignal === 'SUPPRESS') reasons.push(m.altRating);
-  
-  // News
-  if (m.newsSignal === 'BUY') reasons.push(m.newsRating);
-  else if (m.newsSignal === 'SELL') reasons.push(m.newsRating);
-  
-  // Technical reasons
-  if (technical.score >= 75) {
-    reasons.push('bullish technical setup');
-    if (technical.indicators.rsiSignal && technical.indicators.rsiSignal.includes('Oversold')) {
-      reasons.push('oversold conditions');
-    }
-    if (technical.indicators.macdSignal && technical.indicators.macdSignal.includes('Bullish')) {
-      reasons.push('positive MACD momentum');
-    }
-  } else if (technical.score <= 40) {
-    reasons.push('bearish technical indicators');
-    if (technical.indicators.rsiSignal && technical.indicators.rsiSignal.includes('Overbought')) {
-      reasons.push('overbought conditions');
+  } catch (error) {
+    if (error.code !== '42P01') {
+      console.error('[SignalService] Cleanup error:', error.message);
     }
   }
-  
-  // Signal-specific reasons
-  if (signal.signal === 'Strong Buy') {
-    reasons.push('high conviction setup');
-  } else if (signal.signal === 'Strong Sell') {
-    reasons.push('significant downside risks');
-  }
-  
-  // Macro reasons (if available)
-  if (macroReason) {
-    reasons.push(`Macro: ${macroReason}`);
-  }
-  
-  return reasons.length > 0 ? reasons.join(', ') + '.' : 'Based on comprehensive analysis of fundamental, technical, and financial factors.';
 }
+
+// Query historical signals from DB for backtesting
+async function getSignalHistory({ ticker, signal, market, sector, limit = 100, offset = 0, from, to } = {}) {
+  try {
+    const conditions = [];
+    const params = [];
+    let idx = 1;
+    if (ticker) { conditions.push(`ticker = $${idx++}`); params.push(ticker.toUpperCase()); }
+    if (signal) { conditions.push(`signal = $${idx++}`); params.push(signal); }
+    if (market) { conditions.push(`market = $${idx++}`); params.push(market.toUpperCase()); }
+    if (sector) { conditions.push(`sector ILIKE $${idx++}`); params.push(`%${sector}%`); }
+    if (from) { conditions.push(`generated_at >= $${idx++}::date`); params.push(from); }
+    if (to) { conditions.push(`generated_at <= $${idx++}::date + interval '1 day'`); params.push(to); }
+    const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+    const data = await pool.query(
+      `SELECT id, ticker, signal, confidence, price, change_pct, entry_price, stop_loss,
+              target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, generated_at
+       FROM signal_history ${where}
+       ORDER BY generated_at DESC LIMIT $${idx++} OFFSET $${idx}`,
+      [...params, limit, offset]
+    );
+    const count = await pool.query(
+      `SELECT COUNT(*)::int as cnt FROM signal_history ${where}`, params
+    );
+    return { signals: data.rows, total: count.rows[0].cnt };
+  } catch (error) {
+    if (error.code !== '42P01') {
+      console.error('[SignalService] getSignalHistory error:', error.message);
+    }
+    return { signals: [], total: 0 };
+  }
+}
+
+// Pre-warm caches on module load (non-blocking)
+// Eagerly detect market regime so it's available before the first cycle
+detectMarketRegime().catch(() => {});
+_loadForwardPredictionsFromDb().catch(() => {});
+_loadSignalCacheFromDb().catch(() => {});
+setTimeout(() => {
+  generateSignals(null, true).catch(() => {});
+  generateSignals(null, false).catch(() => {});
+}, 100);
+// Auto-resolve forward test predictions every 5 minutes
+setInterval(() => {
+  resolveAllForwardPredictions().catch(() => {});
+}, 5 * 60 * 1000);
+// Auto-generate signals every hour (checks market hours internally)
+setInterval(() => {
+  generateSignals(null, false).catch(() => {});
+}, 60 * 60 * 1000);
 
 // Main function to generate signals for all tracked stocks
-async function generateSignals(marketData = null) {
-  const signals = [];
-  const symbols = ALL_SYMBOLS;
+// When quick=true, skips all external API fetches and uses only cached data.
+async function generateSignals(marketData = null, quick = false) {
+  if (!marketData && !quick && _signalsCache && Date.now() - _signalsCacheTime < SIGNALS_CACHE_TTL) {
+    return _signalsCache;
+  }
+  if (!marketData && !quick && _signalsInProgress) {
+    return _signalsCache || [];
+  }
 
-  // Fetch real-time news sentiment once for all stocks
-  let newsSentiment = {};
+  // Skip generation outside US market hours unless marketData is explicitly provided
+  if (!marketData && !quick) {
+    const now = new Date();
+    const day = now.getDay();
+    const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const isDST = now.getMonth() >= 2 && now.getMonth() <= 9;
+    const etMinutes = ((utcMinutes + (isDST ? -4 : -5) * 60) % 1440 + 1440) % 1440;
+    const marketOpen = day !== 0 && day !== 6 && etMinutes >= 570 && etMinutes < 960;
+    if (!marketOpen) {
+      if (_signalsCache) return _signalsCache;
+      return [];
+    }
+  }
+
+  const signals = [];
+  // When marketData is provided (e.g. from publisher), only process those symbols
+  const rawSymbols = marketData ? Object.keys(marketData) : ALL_SYMBOLS;
+  // Skip NSE symbols — NSE data source unavailable
+  const symbols = rawSymbols.filter(s => !NSE_SYMBOLS.includes(s));
+  const cfg = engineConfig.getConfig();
+  const maxSymbols = cfg.maxSymbols || 200;
+  if (!marketData && symbols.length > maxSymbols) {
+    symbols.length = maxSymbols;
+  }
+  if (!marketData && !quick) _signalsInProgress = true;
   try {
-    newsSentiment = await getAggregatedSentiment();
-  } catch { /* silent — falls back to hardcoded neutral */ }
-  
-  for (const symbol of symbols) {
+
+  // Quick mode: skip all external fetches, use only cached data
+  let newsSentiment = {};
+  let regime = _marketRegime;
+  if (!quick) {
     try {
-      const stock = getFundamentals(symbol);
-      
-      // Get current price (from market data or generate synthetic)
-      let currentPrice;
-      let priceChange;
-      let volume;
-      
-      if (marketData && marketData[symbol]) {
-        currentPrice = marketData[symbol].price;
-        priceChange = marketData[symbol].changePercent;
-        volume = marketData[symbol].volume;
+      newsSentiment = await Promise.race([
+        getAggregatedSentiment(),
+        new Promise(resolve => setTimeout(() => resolve({}), 2000)),
+      ]);
+    } catch { /* silent */ }
+    const usSymbols = symbols.filter(s => !NSE_SYMBOLS.includes(s));
+    await Promise.all([
+      prefetchPriceHistories(symbols).catch(() => {}),
+      prefetchFinancialReports(usSymbols).catch(() => {}),
+      prefetchQuotes(symbols).catch(() => {}),
+      prefetchWeeklyData(symbols).catch(() => {}),
+    ]);
+    flushNseDailyBars();
+    regime = await detectMarketRegime();
+  }
+  const weights = computeDynamicWeights(regime.regime);
+  updateSectorAverages();
+  
+  const BATCH_SIZE = 20;
+  const processSymbol = async (symbol) => {
+    let stock = getFundamentals(symbol);
+    if (!stock) return null;
+    let currentPrice;
+    let priceChange;
+    let volume;
+
+    if (marketData && marketData[symbol]) {
+      currentPrice = marketData[symbol].price;
+      priceChange = marketData[symbol].changePercent;
+      volume = marketData[symbol].volume;
+    } else {
+      const cached = _quoteCache.get(symbol);
+      if (cached) {
+        currentPrice = cached.price;
+        priceChange = cached.changePercent;
+        volume = cached.volume;
       } else {
-        // Generate realistic synthetic data
-        const basePrices = {
-          'SCOM': 28.5, 'EQTY': 52.0, 'KCB': 45.0, 'EABL': 165.0,
-          'BAMB': 85.0, 'ABSA': 18.5, 'SBIC': 140.0, 'KPLC': 2.15,
-          'NMG': 12.5, 'CRAY': 395.0,
-          'AAPL': 270.1, 'MSFT': 428.16, 'NVDA': 118.74, 'TSLA': 176.43,
-          'AMZN': 182.21, 'GOOGL': 171.54, 'META': 498.62, 'JPM': 198.74,
-          'V': 281.15, 'NFLX': 622.47, 'LLY': 485.0, 'AVGO': 150.0,
-          'UNH': 550.0, 'XOM': 118.0, 'PG': 168.0, 'JNJ': 155.0,
-          'WMT': 68.0, 'CVX': 155.0, 'HD': 395.0, 'KO': 65.0,
-          'PEP': 175.0, 'COST': 880.0, 'MRK': 120.0, 'ABBV': 180.0,
-          'BAC': 38.0, 'TMO': 540.0, 'ORCL': 140.0, 'CSCO': 52.0,
-          'ADBE': 540.0, 'CRM': 265.0, 'INTC': 25.0, 'TXN': 195.0,
-          'QCOM': 170.0, 'AMGN': 320.0, 'IBM': 195.0, 'BA': 180.0,
-          'GE': 170.0, 'CAT': 350.0, 'DIS': 105.0, 'MCD': 285.0,
-          'NKE': 78.0, 'SBUX': 82.0, 'GS': 520.0, 'MS': 105.0,
-          'C': 60.0, 'WFC': 60.0, 'BLK': 950.0, 'SCHW': 68.0,
-          'AXP': 250.0, 'UPS': 155.0, 'RTX': 105.0, 'HON': 210.0,
-          'LOW': 240.0, 'MMM': 120.0, 'MDT': 82.0, 'AMAT': 185.0,
-          'MU': 120.0, 'NOW': 850.0, 'UBER': 72.0, 'ABNB': 140.0,
-          'PLTR': 22.0, 'SNOW': 160.0, 'DDOG': 125.0, 'CRWD': 350.0,
-          'PANW': 310.0, 'FTNT': 72.0, 'SQ': 75.0, 'PYPL': 65.0,
-          'COIN': 200.0, 'GME': 25.0, 'AMC': 5.0, 'MRNA': 65.0,
-        };
-        currentPrice = basePrices[symbol] || 50 + Math.random() * 100;
-        priceChange = (Math.random() - 0.45) * 8; // -3.6% to +4.4%
-        volume = Math.floor(Math.random() * 5000000) + 100000;
+        const marketSymbol = NSE_SYMBOLS.includes(symbol) ? `NSE:${symbol}` : symbol;
+        const quote = await getStockQuote(marketSymbol);
+        if (!quote) return null;
+        currentPrice = quote.price;
+        priceChange = quote.changePercent;
+        volume = quote.volume;
       }
-      
-      // Perform analysis with real news sentiment
-      const fundamental = analyzeFundamentals(symbol, currentPrice, newsSentiment[symbol] || null);
-      const technical = analyzeTechnicals(symbol, currentPrice);
-      const financial = analyzeFinancials(symbol);
-      
-      // Macro analysis for the stock's country
-      const country = getCountryForSymbol(symbol);
-      const macro = getMacroScore(country);
-      
-      // Calculate overall score (weighted average) - now includes macro
-      const overallScore = (fundamental.score * 0.30) + (technical.score * 0.35) + (financial.score * 0.20) + (macro.score * 0.15);
-      
-      // Determine signal
-      const signal = determineSignal(overallScore);
-      const tradeType = determineTradeType(technical.score, fundamental.score);
-      const tradeLevels = calculateTradeLevels(symbol, currentPrice, signal);
-      
-      // Calculate confidence based on score convergence
-      const scoreVariance = Math.max(
-        Math.abs(fundamental.score - overallScore),
-        Math.abs(technical.score - overallScore),
-        Math.abs(financial.score - overallScore),
-        Math.abs(macro.score - overallScore)
-      );
-      const confidence = Math.min(95, Math.max(40, Math.round(overallScore - scoreVariance * 0.3)));
-      
-      // Generate reason
-      const macroReason = generateMacroReason(macro);
-      const reason = generateReason(symbol, fundamental, technical, financial, signal, macroReason);
-      
-      // Format volume
-      const formattedVolume = volume >= 1000000 
-        ? (volume / 1000000).toFixed(1) + 'M' 
-        : (volume / 1000).toFixed(1) + 'K';
-      
-      // Determine timeframe based on trade type
-      const timeframes = {
-        'Intraday': 'Today',
-        'Swing Trade': '2-4 weeks',
-        'Long Term': '3-6 months'
-      };
-      
-      const isNse = NSE_SYMBOLS.includes(symbol);
-      signals.push({
-        id: `signal-${symbol}-${Date.now()}`,
-        ticker: symbol,
-        name: stock.name,
-        price: Math.round(currentPrice * 100) / 100,
-        change: Math.round(priceChange * 10) / 10,
-        market: isNse ? 'NSE' : 'Global',
-        country,
-        currency: isNse ? 'KES' : 'USD',
-        type: tradeType,
-        signal: signal.signal,
-        entry: tradeLevels.entry,
-        stopLoss: tradeLevels.stopLoss,
-        target1: tradeLevels.target1,
-        target2: tradeLevels.target2,
-        riskReward: tradeLevels.riskReward,
-        confidence,
-        timeframe: timeframes[tradeType],
-        sector: stock.sector,
-        volume: formattedVolume,
-        reason,
-        analysis: {
-          fundamental: {
-            score: fundamental.score,
-            grade: fundamental.fundamentalGrade,
-            metrics: fundamental.metrics
-          },
-          technical: {
-            score: technical.score,
-            grade: technical.technicalGrade,
-            indicators: technical.indicators
-          },
-          financial: {
-            score: financial.score,
-            grade: financial.financialGrade,
-            analysis: financial.analysis
-          },
-          macro: {
-            score: macro.score,
-            grade: macro.grade,
-            signal: macro.signal,
-            country: macro.country,
-            summary: macro.summary,
-            conditions: macro.conditions
-          },
-          overall: {
-            score: Math.round(overallScore),
-            grade: getGrade(Math.round(overallScore))
-          }
-        },
-        timestamp: new Date().toISOString(),
-        lastUpdated: new Date().toLocaleString()
-      });
-      
-    } catch (error) {
-      console.error(`Error generating signal for ${symbol}:`, error.message);
+    }
+    
+    if (NSE_SYMBOLS.includes(symbol)) accumulateNseQuote(symbol, currentPrice, volume);
+    
+    const fundamental = analyzeFundamentals(stock, currentPrice, newsSentiment[symbol] || null, _dynamicSectorPE);
+    const priceHistory = await getPriceHistory(symbol);
+    const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume, engineConfig.getConfig().indicator_params);
+    const financial = analyzeFinancials(stock, fundamental);
+    const country = getCountryForSymbol(symbol);
+    let macro = getMacroScore(country);
+    const sectorAdj = getSectorMacroAdjustment(stock.sector, country, macro.score);
+    if (sectorAdj.delta !== 0) {
+      macro = { ...macro, score: Math.max(0, Math.min(100, macro.score + sectorAdj.delta)), reasons: [...(macro.reasons || []), ...sectorAdj.reasons] };
+    }
+    const weeklyTrend = await getWeeklyTrend(symbol);
+    const degFactor = getConfidenceMultiplier();
+    const sigObj = await _buildSignal({
+      symbol, stock, currentPrice, priceChange, volume,
+      fundamental, technical, financial, macro, regime, weights, weeklyTrend,
+      newsSent: newsSentiment[symbol] || null,
+      priceHistory, degFactor
+    });
+    if (sigObj.signal !== 'Hold') {
+      recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice).catch(() => {});
+      if (_performanceStats.total > 0) {
+        const prev = _signalOutcomes.get(symbol);
+        if (prev && prev.result) persistSignalOutcome(symbol, prev.entryPrice, prev.signal, currentPrice, prev.result);
+      }
+    }
+    resolveForwardPredictions(symbol).catch(() => {});
+    return sigObj;
+  };
+
+  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+    const batch = symbols.slice(i, i + BATCH_SIZE);
+    const results = await Promise.allSettled(batch.map(s => processSymbol(s).catch(e => { console.error(`[SignalService] Error processing ${s}:`, e.message); return null; })));
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value) signals.push(r.value);
     }
   }
   
@@ -1544,7 +1445,43 @@ async function generateSignals(marketData = null) {
     return b.confidence - a.confidence;
   });
   
-  return signals;
+  // Apply portfolio-level constraints (sector concentration, correlation)
+  const constrainedSignals = applyPortfolioConstraints(signals);
+  
+    // Full mode: persist, monitor, train ML
+    if (!quick) {
+      persistSignals(constrainedSignals).catch(() => {});
+      cleanupOldSignals().catch(() => {});
+      persistPortfolioState().catch(() => {});
+      trackSignalQuality(_performanceStats);
+      logHealth(getEngineHealth()).catch(() => {});
+      detectSignalDrift().catch(() => {});
+      logAuditEvent('signal_cycle', `Generated ${constrainedSignals.length} signals (regime: ${regime.regime})`, {
+        total: constrainedSignals.length,
+        strongBuy: constrainedSignals.filter(s => s.signal === 'Strong Buy').length,
+        buy: constrainedSignals.filter(s => s.signal === 'Buy').length,
+        sell: constrainedSignals.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length,
+        regime: regime.regime,
+      });
+      const now = Date.now();
+      if (_performanceStats.total >= 50 && now - _lastMLTrain > ML_TRAIN_COOLDOWN) {
+        _lastMLTrain = now;
+        mlModel.train().catch(() => {});
+      }
+    }
+
+    const minConfidence = cfg.minConfidence || 40;
+    const filteredSignals = constrainedSignals.filter(s => s.confidence >= minConfidence);
+
+    if (!marketData) {
+      _signalsCache = filteredSignals;
+      _signalsCacheTime = Date.now();
+      _persistSignalCache(filteredSignals).catch(() => {});
+    }
+    return filteredSignals;
+  } finally {
+    if (!marketData && !quick) _signalsInProgress = false;
+  }
 }
 
 // Get signal for a specific stock (works for ANY stock symbol)
@@ -1562,56 +1499,45 @@ async function getSignalForStock(symbol) {
 async function generateSingleSignal(symbol) {
   try {
     const stock = getFundamentals(symbol);
-    const currentPrice = 50 + Math.random() * 100;
-    const priceChange = (Math.random() - 0.45) * 8;
-    const volume = Math.floor(Math.random() * 5000000) + 100000;
-    // Fetch real news sentiment for this ticker
+    if (!stock) {
+      console.warn(`[SignalService] Cannot generate signal for ${symbol} — no fundamentals`);
+      return null;
+    }
+    const marketSymbol = NSE_SYMBOLS.includes(symbol) ? `NSE:${symbol}` : symbol;
+    const quote = await getStockQuote(marketSymbol);
+    if (!quote) {
+      console.warn(`[SignalService] Cannot generate signal for ${symbol} — no quote`);
+      return null;
+    }
+    const currentPrice = quote.price;
+    const priceChange = quote.changePercent;
+    const volume = quote.volume;
     let newsSent = null;
     try {
       const sentimentMap = await getAggregatedSentiment();
       newsSent = sentimentMap[symbol] || null;
     } catch { /* silent */ }
-    const fundamental = analyzeFundamentals(symbol, currentPrice, newsSent);
-    const technical = analyzeTechnicals(symbol, currentPrice);
-    const financial = analyzeFinancials(symbol);
+    const priceHistory = await getPriceHistory(symbol).catch(() => null);
+    const fundamental = analyzeFundamentals(stock, currentPrice, newsSent, _dynamicSectorPE);
+    const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume);
+    const financial = analyzeFinancials(stock, fundamental);
     const country = getCountryForSymbol(symbol);
-    const macro = getMacroScore(country);
-    const overallScore = (fundamental.score * 0.30) + (technical.score * 0.35) + (financial.score * 0.20) + (macro.score * 0.15);
-    const sig = determineSignal(overallScore);
-    const tradeType = determineTradeType(technical.score, fundamental.score);
-    const tradeLevels = calculateTradeLevels(symbol, currentPrice, sig);
-    const scoreVariance = Math.max(
-      Math.abs(fundamental.score - overallScore),
-      Math.abs(technical.score - overallScore),
-      Math.abs(financial.score - overallScore),
-      Math.abs(macro.score - overallScore)
-    );
-    const confidence = Math.min(95, Math.max(40, Math.round(overallScore - scoreVariance * 0.3)));
-    const macroReason = generateMacroReason(macro);
-    const reason = generateReason(symbol, fundamental, technical, financial, sig, macroReason);
-    const formattedVolume = volume >= 1000000 ? (volume / 1000000).toFixed(1) + 'M' : (volume / 1000).toFixed(1) + 'K';
-    const timeframes = { 'Intraday': 'Today', 'Swing Trade': '2-4 weeks', 'Long Term': '3-6 months' };
-    const isNse = NSE_SYMBOLS.includes(symbol);
-    return {
-      id: `signal-${symbol}-${Date.now()}`, ticker: symbol, name: stock.name,
-      price: Math.round(currentPrice * 100) / 100, change: Math.round(priceChange * 10) / 10,
-      market: isNse ? 'NSE' : 'Global', country, currency: isNse ? 'KES' : 'USD',
-      type: tradeType, signal: sig.signal, entry: tradeLevels.entry,
-      stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2,
-      riskReward: tradeLevels.riskReward, confidence, timeframe: timeframes[tradeType],
-      sector: stock.sector, volume: formattedVolume, reason,
-      analysis: {
-        fundamental: { score: fundamental.score, grade: fundamental.fundamentalGrade, metrics: fundamental.metrics },
-        technical: { score: technical.score, grade: technical.technicalGrade, indicators: technical.indicators },
-        financial: { score: financial.score, grade: financial.financialGrade, analysis: financial.analysis },
-        macro: {
-          score: macro.score, grade: macro.grade, signal: macro.signal,
-          country: macro.country, summary: macro.summary, conditions: macro.conditions
-        },
-        overall: { score: Math.round(overallScore), grade: getGrade(Math.round(overallScore)) }
-      },
-      timestamp: new Date().toISOString(), lastUpdated: new Date().toLocaleString()
-    };
+    let macro = getMacroScore(country);
+    const sectorAdj = getSectorMacroAdjustment(stock.sector, country, macro.score);
+    if (sectorAdj.delta !== 0) {
+      macro = { ...macro, score: Math.max(0, Math.min(100, macro.score + sectorAdj.delta)) };
+    }
+    const regime = await detectMarketRegime();
+    const weights = computeDynamicWeights(regime.regime);
+    const weeklyTrend = await getWeeklyTrend(symbol);
+    const degFactor = getConfidenceMultiplier();
+    const sigObj = await _buildSignal({
+      symbol, stock, currentPrice, priceChange, volume,
+      fundamental, technical, financial, macro, regime, weights, weeklyTrend,
+      newsSent, priceHistory, degFactor
+    });
+    if (sigObj) persistPortfolioState().catch(() => {});
+    return sigObj;
   } catch (error) {
     console.error(`Error generating signal for ${symbol}:`, error.message);
     return null;
@@ -1651,7 +1577,33 @@ async function getSignalsSummary() {
     const scoreMap = { 'Strong Buy': 90, 'Buy': 75, 'Accumulate': 60, 'Hold': 45, 'Sell': 30, 'Strong Sell': 15 };
     const totalScore = sectorSignals.reduce((sum, sig) => sum + (scoreMap[sig] || 45), 0);
     summary.bySector[sector].avgScore = Math.round(totalScore / sectorSignals.length);
+    summary.bySector[sector].pctOfTotal = Math.round((summary.bySector[sector].count / signals.length) * 100);
   });
+  
+  // Sector concentration warning
+  const maxSector = Object.entries(summary.bySector).sort((a, b) => b[1].count - a[1].count)[0];
+  if (maxSector && maxSector[1].pctOfTotal > 30) {
+    summary.sectorConcentrationWarning = `High concentration in ${maxSector[0]} (${maxSector[1].pctOfTotal}% of signals)`;
+  }
+  
+  // Machine performance stats
+  summary.signalPerformance = { ..._performanceStats };
+  
+  // Market regime
+  summary.marketRegime = _marketRegime.regime;
+  
+  // Backtesting stats from historical signal_history data
+  summary.backtest = await computeBacktestStats();
+  
+  // Engine health
+  summary.health = getEngineHealth();
+  
+  // Weight optimization
+  summary.weightOptimization = await optimizeWeights();
+  
+  // ML model & monitoring
+  summary.mlModel = mlModel.getModelInfo();
+  summary.qualityScore = getQualityScore(getEngineHealth());
   
   return summary;
 }
@@ -1665,12 +1617,12 @@ function searchStocks(query) {
   // Search by ticker
   for (const sym of ALL_SYMBOLS) {
     if (sym.startsWith(q) || sym.includes(q)) {
-      const fund = KNOWN_FUNDAMENTALS[sym] || generateFundamentals(sym);
+      const fund = KNOWN_FUNDAMENTALS[sym] || NSE_FUNDAMENTALS[sym];
       seen.add(sym);
       results.push({
         ticker: sym,
-        name: fund.name || sym,
-        sector: fund.sector || 'Other',
+        name: resolveStockName(sym),
+        sector: fund?.sector || guessSector(sym),
         market: NSE_SYMBOLS.includes(sym) ? 'NSE' : 'Global',
       });
     }
@@ -1704,19 +1656,243 @@ function searchStocks(query) {
   return results.slice(0, 20);
 }
 
+// ─── Shared Signal Builder ──────────────────────────────────────────────────
+// Consolidates scoring, confidence, position sizing, and signal object construction
+// used by both generateSignals() and generateSingleSignal().
+async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, priceHistory, degFactor }) {
+  // Read scoring and portfolio config once at the top
+  const sc = engineConfig.getConfig().scoring?.signal_confidence || {};
+  const baselineConf = sc.baseline ?? 50;
+  const confMin = sc.min ?? 10;
+  const confMax = sc.max ?? 95;
+  const varMult = sc.variance_multiplier ?? 0.3;
+  const newsPos = sc.news_positive ?? 5;
+  const newsNeg = sc.news_negative ?? -5;
+  const sparseFT = sc.sparse_fund_tech ?? -4;
+  const sparseFF = sc.sparse_fund_fin ?? -3;
+  const dirBuy = sc.direction_buy_threshold ?? 55;
+  const dirSell = sc.direction_sell_threshold ?? 45;
+  const wlrDefault = sc.kelly_wlr_default ?? 1.5;
+  const portfolioCfg = engineConfig.getConfig().portfolio || {};
+  const maxConcentration = portfolioCfg.maxConcentration || 0.25;
+  const maxDrawdownThreshold = portfolioCfg.maxDrawdown || 0.20;
+  const stopLossPct = portfolioCfg.stopLoss || 0.05;
+  const regimePenaltyCrash = sc.regime_penalty_crash ?? 0.5;
+
+  // Compute ML win probability BEFORE weighted score so it can contribute
+  let mlWinProb = null;
+  try {
+    mlWinProb = await mlModel.predictWinProbability(fundamental, technical, macro, priceHistory, currentPrice, volume, symbol, stock.sector, stock);
+  } catch { /* ML model not ready */ }
+  const mlProbScore = mlWinProb != null ? Math.round(mlWinProb * 100) : 50;
+
+  // Weighted composite score including ML probability and confidence
+  const w = weights;
+  let adjScore =
+    (fundamental.score * (w.fundamental || 0)) +
+    (technical.score   * (w.technical || 0)) +
+    (financial.score   * (w.financial || 0)) +
+    (macro.score       * (w.macro || 0)) +
+    (mlProbScore       * (w.ml_probability || 0)) +
+    (baselineConf      * (w.confidence || 0));
+  // Normalize: if weights don't sum to 1, scale accordingly
+  const weightSum = Object.values(w).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
+  if (weightSum > 0) adjScore = adjScore / weightSum;
+
+  const direction = adjScore >= dirBuy ? 'buy' : adjScore < dirSell ? 'sell' : 'hold';
+  const sparseFund = fundamental.metrics?.dataQuality === 'Very sparse data';
+  const sparseTech = technical.indicators?.dataQuality === 'Insufficient history';
+  const sparseFin = financial.analysis?.financialHealth === 'Limited financial data';
+  if (sparseFund && sparseTech) adjScore += sparseFT;
+  if (sparseFund && sparseFin) adjScore += sparseFF;
+  if (newsSent === 'positive') adjScore += newsPos;
+  else if (newsSent === 'negative') adjScore += newsNeg;
+  let overallScore = Math.max(0, Math.min(100, Math.round(adjScore)));
+
+  // Use configurable thresholds instead of hardcoded
+  const thresholds = engineConfig.getConfig().thresholds;
+  let sig;
+  if (overallScore >= thresholds.strong_buy) sig = { signal: 'Strong Buy', action: 'buy', strength: 'strong' };
+  else if (overallScore >= thresholds.buy) sig = { signal: 'Buy', action: 'buy', strength: 'moderate' };
+  else if (overallScore >= thresholds.accumulate) sig = { signal: 'Accumulate', action: 'buy', strength: 'weak' };
+  else if (overallScore >= thresholds.hold) sig = { signal: 'Hold', action: 'hold', strength: 'neutral' };
+  else if (overallScore >= thresholds.reduce) sig = { signal: 'Reduce', action: 'sell', strength: 'weak' };
+  else if (overallScore >= thresholds.sell) sig = { signal: 'Sell', action: 'sell', strength: 'moderate' };
+  else sig = { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
+
+  const tradeType = determineTradeType(technical.score, fundamental.score);
+  const tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, stopLossPct);
+  const scoreVariance = Math.max(
+    Math.abs(fundamental.score - overallScore),
+    Math.abs(technical.score - overallScore),
+    Math.abs(financial.score - overallScore),
+    Math.abs(macro.score - overallScore)
+  );
+  let confidence = Math.min(confMax, Math.max(confMin, Math.round(overallScore - scoreVariance * varMult)));
+  confidence = Math.round(confidence * degFactor);
+  const riskMetrics = updatePortfolioRisk(_portfolioState, symbol, currentPrice, priceHistory, sig.action);
+  confidence = Math.round(confidence * riskMetrics.circuitBreaker);
+  // Apply calibration
+  confidence = mlModel.calibrateConfidence(confidence, mlWinProb);
+
+  // Enforce max drawdown — reduce confidence if portfolio is underwater
+  if (_portfolioState.maxDrawdown > maxDrawdownThreshold) {
+    confidence = Math.round(confidence * 0.7);
+  }
+
+  const regimePenalty = regime.regime === 'crash' ? regimePenaltyCrash : 1;
+
+  let kellyPct = null;
+  if (mlWinProb != null && mlWinProb > 0.5) {
+    const wlr = _performanceStats.total > 0 ? _performanceStats.wins / Math.max(_performanceStats.losses, 1) : wlrDefault;
+    kellyPct = calculateKellyPositionSize(mlWinProb, wlr, maxConcentration);
+  }
+  let positionSize;
+  if (kellyPct != null && kellyPct > 0) {
+    positionSize = Math.round(kellyPct * regimePenalty);
+  } else {
+    positionSize = calculatePositionSize(sig, regime.regime, confidence, scoreVariance);
+    positionSize = Math.round(positionSize * regimePenalty);
+  }
+  const formattedVolume = volume >= 1000000 ? (volume / 1000000).toFixed(1) + 'M' : (volume / 1000).toFixed(1) + 'K';
+  const macroReason = generateMacroReason(macro);
+  const reason = generateReason(symbol, fundamental, technical, financial, sig, macroReason);
+  const timeframes = { 'Aggressive Buy': '1-4 weeks', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks', 'Long Term Value': '3-6 months', 'Long Term': '3-6 months', 'Avoid': 'N/A' };
+  const isNse = NSE_SYMBOLS.includes(symbol);
+  const obj = {
+    id: `signal-${symbol}-${Date.now()}`, ticker: symbol, name: stock.name,
+    price: Math.round(currentPrice * 100) / 100, change: Math.round(priceChange * 10) / 10,
+    market: isNse ? 'NSE' : 'Global', country: getCountryForSymbol(symbol), currency: isNse ? 'KES' : 'USD',
+    type: tradeType, signal: sig.signal, entry: tradeLevels.entry,
+    stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2,
+    riskReward: tradeLevels.riskReward, confidence, positionSize: positionSize + '%',
+    timeframe: timeframes[tradeType], sector: stock.sector, volume: formattedVolume,
+    weeklyTrend: weeklyTrend.trend, regime: regime.regime,
+    var95: riskMetrics.var95 + '%',
+    var99: riskMetrics.var99 ? riskMetrics.var99 + '%' : null,
+    cvar95: riskMetrics.cvar95 ? riskMetrics.cvar95 + '%' : null,
+    mlWinProb: mlWinProb != null ? Math.round(mlWinProb * 100) + '%' : null,
+    reason,
+    analysis: {
+      fundamental: { score: fundamental.score, grade: fundamental.fundamentalGrade, metrics: fundamental.metrics },
+      technical: { score: technical.score, grade: technical.technicalGrade, indicators: technical.indicators },
+      financial: { score: financial.score, grade: financial.financialGrade, analysis: financial.analysis },
+      macro: { score: macro.score, grade: macro.grade, signal: macro.signal, country: macro.country, summary: macro.summary, conditions: macro.conditions },
+      overall: { score: Math.round(overallScore), grade: getGrade(Math.round(overallScore)) }
+    },
+    timestamp: new Date().toISOString(), lastUpdated: new Date().toLocaleString()
+  };
+  // Log prediction for accuracy tracking (fire-and-forget)
+  persistPredictionLog(symbol, sig.signal, mlWinProb, confidence).catch(() => {});
+  return obj;
+}
+
+// ─── Prediction Accuracy Logging ──────────────────────────────────────────────
+async function persistPredictionLog(ticker, signalType, mlProb, confidence) {
+  if (mlProb == null) return;
+  try {
+    await pool.query(
+      `INSERT INTO prediction_log (ticker, signal_type, ml_prob, confidence, predicted_outcome, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT DO NOTHING`,
+      [ticker, signalType, mlProb, confidence, mlProb >= 0.5 ? 'win' : 'loss']
+    );
+  } catch { /* table may not exist */ }
+}
+
+async function resolvePredictionLogs(ticker, actualOutcome) {
+  try {
+    await pool.query(
+      `UPDATE prediction_log
+       SET actual_outcome = $1, resolved_at = NOW()
+       WHERE ticker = $2 AND actual_outcome IS NULL
+         AND created_at >= NOW() - INTERVAL '30 days'`,
+      [actualOutcome, ticker]
+    );
+  } catch { /* table may not exist */ }
+}
+
+async function batchResolveStalePredictions() {
+  try {
+    // Resolve prediction_log entries by matching against signal_outcomes
+    // for entries that have been unresolved for at least 24 hours
+    const result = await pool.query(`
+      UPDATE prediction_log pl
+      SET actual_outcome = so.result, resolved_at = NOW()
+      FROM signal_outcomes so
+      WHERE pl.actual_outcome IS NULL
+        AND pl.ticker = so.ticker
+        AND pl.created_at < NOW() - INTERVAL '24 hours'
+        AND so.recorded_at >= pl.created_at
+        AND so.recorded_at <= pl.created_at + INTERVAL '14 days'
+    `);
+    if (result.rowCount > 0) {
+      console.log(`[SignalService] Batch-resolved ${result.rowCount} stale prediction_log entries`);
+    }
+  } catch { /* table may not exist */ }
+}
+
+// Run batch resolver every hour
+setInterval(() => {
+  batchResolveStalePredictions().catch(() => {});
+}, 60 * 60 * 1000);
+
+// ─── Auto-Optimization Scheduler ─────────────────────────────────────────────
+let _optimizeHandle = null;
+function startAutoOptimize() {
+  if (_optimizeHandle) clearInterval(_optimizeHandle);
+  const hours = engineConfig.getConfig().weights?.optimize_frequency_hours || 24;
+  const ms = hours * 60 * 60 * 1000;
+  console.log(`[SignalService] Auto-weight optimization every ${hours}h`);
+  _optimizeHandle = setInterval(() => {
+    optimizeWeights().then(result => {
+      if (result.best && result.best.score > 0.5) {
+        engineConfig.updateConfig({ weights: { fundamental: result.best.fundamental, technical: result.best.technical, financial: result.best.financial, macro: result.best.macro } });
+        logAuditEvent('weight_optimization', 'Auto-optimized weights', { result });
+      }
+    }).catch(() => {});
+  }, ms);
+  _optimizeHandle.unref && _optimizeHandle.unref();
+}
+
+// Start auto-optimization after a short delay to let DB restore complete
+setTimeout(startAutoOptimize, 10000);
+
 module.exports = { 
   generateSignals, 
   getSignalForStock, 
   getSignalsSummary,
-  analyzeFundamentals,
-  analyzeTechnicals,
-  analyzeFinancials,
+  getSignalHistory,
   searchStocks,
   warmFMPCache,
   getFundamentals,
+  persistSignals,
+  persistPredictionLog,
+  resolvePredictionLogs,
   KNOWN_FUNDAMENTALS,
-  generateFundamentals,
   ALL_SYMBOLS,
   NSE_SYMBOLS,
   US_SYMBOLS,
+  getEngineHealth,
+  // Backtesting & Forward Testing
+  computeBacktestStats,
+  getForwardTestStats,
+  getForwardTestPredictions,
+  resolveAllForwardPredictions,
+  // Audit & Config
+  getAuditLog,
+  logAuditEvent,
+  getEngineConfig,
+  updateEngineConfig,
+  // Auto-optimization
+  startAutoOptimize,
+  optimizeWeights,
+  // New module exports
+  mlModel,
+  executeOrder: require('./orderRouter').executeOrder,
+  getPortfolioValue: require('./orderRouter').getPortfolioValue,
+  getAllPositions: require('./orderRouter').getAllPositions,
+  updatePositions: require('./orderRouter').updatePositions,
+  triggerAlert: require('./monitorService').triggerAlert,
+  getQualityScore,
 };

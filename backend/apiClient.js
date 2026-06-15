@@ -47,4 +47,25 @@ const generic = createRateLimitedClient('generic', 1000, 2);
 const broker = createRateLimitedClient('broker', 500, 2);
 const payd = createRateLimitedClient('payd', 500, 2);
 
-module.exports = { fmp, eodhd, polygon, finnhub, newsapi, rapidapi, generic, broker, payd };
+// Exponential backoff retry wrapper for transient failures
+async function withRetry(fn, { label = 'api', maxRetries = 3, baseDelay = 1000, shouldRetry } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      const status = err?.response?.status;
+      const isRetryable = shouldRetry
+        ? shouldRetry(err)
+        : !status || (status >= 500 || status === 429);
+      if (!isRetryable || attempt >= maxRetries) break;
+      const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500;
+      console.warn(`[apiClient:${label}] Attempt ${attempt + 1}/${maxRetries} failed (${status || err.code}), retrying in ${delay.toFixed(0)}ms`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastError;
+}
+
+module.exports = { fmp, eodhd, polygon, finnhub, newsapi, rapidapi, generic, broker, payd, withRetry };

@@ -111,6 +111,8 @@ export function StockDataProvider({ children }: { children: ReactNode }) {
         price: liveQuote.price ?? stock.price,
         changePercent: liveQuote.changePercent ?? stock.changePercent,
         volume: liveQuote.volume ?? stock.volume,
+        change: liveQuote.change ?? stock.change,
+        provider: liveQuote.provider ?? stock.provider,
       };
     });
   }, [allStocks, realtimeQuotes]);
@@ -124,7 +126,7 @@ export function StockDataProvider({ children }: { children: ReactNode }) {
   const getRealtimeQuote = useMemo(() => (symbol: string) => {
     const q = realtimeQuotes[symbol];
     if (!q) return null;
-    return { price: q.price, changePercent: q.changePercent, volume: q.volume };
+    return { price: q.price, changePercent: q.changePercent, volume: q.volume, provider: q.provider };
   }, [realtimeQuotes]);
 
   const refresh = async () => {

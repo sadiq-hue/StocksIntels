@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { 
   TrendingUp, 
   ArrowLeft, 
@@ -25,41 +25,108 @@ import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
+import { kenyanStocks, globalStocks } from "../data/stockUniverses";
+import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
+
+interface SectorData {
+  name: string;
+  displayName: string;
+  change: number;
+  volume: number;
+  volumeLabel: string;
+  leading: string;
+  leadingTicker: string;
+  sentiment: string;
+  market: "NSE" | "Global";
+  stockCount: number;
+}
+
+function formatVolume(num: number): string {
+  if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1) + "B";
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
+  if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
+  return num.toString();
+}
+
+function parseVolume(volume: string): number {
+  const clean = volume.replace(/[^0-9.]/g, '');
+  const num = parseFloat(clean);
+  if (volume.includes("B")) return num * 1_000_000_000;
+  if (volume.includes("M")) return num * 1_000_000;
+  if (volume.includes("K")) return num * 1_000;
+  return num || 0;
+}
+
+function computeSentiment(change: number): string {
+  if (change > 3) return "Strong Bullish";
+  if (change > 1) return "Bullish";
+  if (change > -1) return "Neutral";
+  if (change > -3) return "Bearish";
+  return "Strong Bearish";
+}
 
 export const SectorsPage: React.FC = () => {
   const [marketFilter, setMarketFilter] = useState<"all" | "NSE" | "Global">("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const { getQuote, quotes } = useRealtimeQuotes();
 
-  const allSectors = useMemo(() => [
-    { name: "NSE Banking", change: 2.1, market: "NSE", volume: "12.4M", leading: "Equity Group", sentiment: "Bullish", trend: "Up" },
-    { name: "Global Tech", change: 3.4, market: "Global", volume: "1.2B", leading: "NVIDIA", sentiment: "Bullish", trend: "Up" },
-    { name: "NSE Telecom", change: 5.2, market: "NSE", volume: "31.2M", leading: "Safaricom", sentiment: "Strong Bullish", trend: "Up" },
-    { name: "Global Energy", change: -0.8, market: "Global", volume: "450M", leading: "ExxonMobil", sentiment: "Neutral", trend: "Down" },
-    { name: "NSE Manufacturing", change: 1.5, market: "NSE", volume: "2.1M", leading: "EABL", sentiment: "Bullish", trend: "Up" },
-    { name: "Global Finance", change: 0.4, market: "Global", volume: "890M", leading: "JP Morgan", sentiment: "Neutral", trend: "Stable" },
-    { name: "NSE Insurance", change: -0.2, market: "NSE", volume: "450K", leading: "Britam", sentiment: "Neutral", trend: "Stable" },
-    { name: "Global Health", change: 1.2, market: "Global", volume: "320M", leading: "Eli Lilly", sentiment: "Bullish", trend: "Up" },
-  ], []);
+  const allSectors = useMemo(() => {
+    const map = new Map<string, {
+      changes: number[];
+      totalVolume: number;
+      stocks: { name: string; ticker: string; change: number }[];
+      market: "NSE" | "Global";
+    }>();
 
-  const parseVolumeString = (volumeStr: string): number => {
-    const num = parseFloat(volumeStr.replace(/[MK]/, ""));
-    if (volumeStr.includes("B")) return num * 1_000_000_000;
-    if (volumeStr.includes("M")) return num * 1_000_000;
-    if (volumeStr.includes("K")) return num * 1_000;
-    return num;
-  };
+    for (const stock of kenyanStocks) {
+      const live = getQuote(`NSE:${stock.ticker}`);
+      const change = live?.changePercent ?? stock.change;
+      const volume = live?.volume ?? parseVolume(stock.volume);
+      const key = `NSE ${stock.sector}`;
+      if (!map.has(key)) map.set(key, { changes: [], totalVolume: 0, stocks: [], market: "NSE" });
+      const entry = map.get(key)!;
+      entry.changes.push(change);
+      entry.totalVolume += volume;
+      entry.stocks.push({ name: stock.name, ticker: stock.ticker, change });
+    }
 
-  const formatVolumeNumber = (num: number): string => {
-    if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1) + "B";
-    if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
-    if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
-    return num.toString();
-  };
+    for (const stock of globalStocks) {
+      const live = getQuote(stock.ticker);
+      const change = live?.changePercent ?? stock.change;
+      const volume = live?.volume ?? parseVolume(stock.volume);
+      const key = stock.sector;
+      if (!map.has(key)) map.set(key, { changes: [], totalVolume: 0, stocks: [], market: "Global" });
+      const entry = map.get(key)!;
+      entry.changes.push(change);
+      entry.totalVolume += volume;
+      entry.stocks.push({ name: stock.name, ticker: stock.ticker, change });
+    }
+
+    return Array.from(map.entries())
+      .filter(([_, v]) => v.stocks.length > 0)
+      .map(([name, data]): SectorData => {
+        const avgChange = data.changes.reduce((a, b) => a + b, 0) / data.changes.length;
+        const leading = data.stocks.sort((a, b) => Math.abs(b.change) - Math.abs(a.change))[0];
+        return {
+          name,
+          displayName: name.replace("NSE ", ""),
+          change: Math.round(avgChange * 10) / 10,
+          volume: data.totalVolume,
+          volumeLabel: formatVolume(data.totalVolume),
+          leading: leading?.name || "",
+          leadingTicker: leading?.ticker || "",
+          sentiment: computeSentiment(avgChange),
+          market: data.market,
+          stockCount: data.stocks.length,
+        };
+      })
+      .sort((a, b) => b.change - a.change);
+  }, [quotes]);
 
   const filteredSectors = useMemo(() => {
     return allSectors.filter(s => {
       const matchesMarket = marketFilter === "all" || s.market === marketFilter;
-      const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchesSearch = s.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             s.leading.toLowerCase().includes(searchTerm.toLowerCase());
       return matchesMarket && matchesSearch;
     });
@@ -67,7 +134,7 @@ export const SectorsPage: React.FC = () => {
 
   const chartData = useMemo(() => {
     return filteredSectors.map(s => ({
-      name: s.name.replace("Global ", "").replace("NSE ", ""),
+      name: s.displayName,
       val: s.change,
       fullName: s.name
     })).sort((a, b) => b.val - a.val);
@@ -75,20 +142,19 @@ export const SectorsPage: React.FC = () => {
 
   const nseLeader = filteredSectors.filter(s => s.market === "NSE")
     .sort((a, b) => b.change - a.change)[0];
-  
+
   const globalLeader = filteredSectors.filter(s => s.market === "Global")
     .sort((a, b) => b.change - a.change)[0];
 
   const highestVolumeSector = useMemo(() => {
-    if (filteredSectors.length === 0) return { name: "N/A", volume: "0" };
+    if (filteredSectors.length === 0) return { name: "N/A", volumeLabel: "0" };
     return filteredSectors.reduce((prev, current) => {
-      return parseVolumeString(prev.volume) > parseVolumeString(current.volume) ? prev : current;
+      return prev.volume > current.volume ? prev : current;
     });
   }, [filteredSectors]);
 
   return (
     <div className="p-4 md:p-8 max-w-[1400px] mx-auto space-y-6">
-      {/* Header */}
       <div className="space-y-4">
         <Link to="/app/markets" className="text-[#0D7490] text-sm font-bold flex items-center gap-2 hover:underline">
           <ArrowLeft size={14} /> Back to Market Intelligence
@@ -106,20 +172,19 @@ export const SectorsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Top Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-5 border-gray-200 flex items-center gap-4">
           <div className="w-12 h-12 bg-cyan-50 text-cyan-600 rounded-xl flex items-center justify-center"><Landmark size={24} /></div>
           <div>
             <p className="text-[10px] font-black uppercase text-gray-400 tracking-wider">NSE Top Performer</p>
-            <p className="text-lg font-bold text-gray-900">{nseLeader?.name.split(" ")[1] || "N/A"} (+{nseLeader?.change || 0}%)</p>
+            <p className="text-lg font-bold text-gray-900">{nseLeader?.displayName || "N/A"} ({nseLeader ? (nseLeader.change >= 0 ? "+" : "") + nseLeader.change + "%" : "—"})</p>
           </div>
         </Card>
         <Card className="p-5 border-gray-200 flex items-center gap-4">
           <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center"><Globe size={24} /></div>
           <div>
             <p className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Global Top Performer</p>
-            <p className="text-lg font-bold text-gray-900">{globalLeader?.name.split(" ")[1] || "N/A"} (+{globalLeader?.change || 0}%)</p>
+            <p className="text-lg font-bold text-gray-900">{globalLeader?.displayName || "N/A"} ({globalLeader ? (globalLeader.change >= 0 ? "+" : "") + globalLeader.change + "%" : "—"})</p>
           </div>
         </Card>
         <Card className="p-5 border-gray-200 flex items-center gap-4">
@@ -127,13 +192,12 @@ export const SectorsPage: React.FC = () => {
           <div>
             <p className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Highest Volume</p>
             <p className="text-lg font-bold text-gray-900">
-              {highestVolumeSector.name.replace("Global ", "").replace("NSE ", "")} ({formatVolumeNumber(parseVolumeString(highestVolumeSector.volume))})
+              {highestVolumeSector.name !== "N/A" ? highestVolumeSector.displayName + " (" + highestVolumeSector.volumeLabel + ")" : "N/A"}
             </p>
           </div>
         </Card>
       </div>
 
-      {/* Toolbar */}
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between pb-2">
         <div className="relative w-full md:w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -166,7 +230,6 @@ export const SectorsPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Table */}
         <Card className="lg:col-span-2 border-gray-200 overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-gray-50 border-b border-gray-100">
@@ -183,7 +246,7 @@ export const SectorsPage: React.FC = () => {
                 <tr key={sector.name} className="hover:bg-gray-50/50 transition-colors cursor-pointer group">
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
-                      <span className="font-bold text-gray-900 group-hover:text-[#0D7490] transition-colors">{sector.name}</span>
+                      <span className="font-bold text-gray-900 group-hover:text-[#0D7490] transition-colors">{sector.displayName}</span>
                       <span className="text-[10px] text-gray-400 font-bold uppercase">Leader: {sector.leading}</span>
                     </div>
                   </td>
@@ -196,7 +259,7 @@ export const SectorsPage: React.FC = () => {
                     {sector.change >= 0 ? "+" : ""}{sector.change}%
                   </td>
                   <td className="px-6 py-4 text-right text-gray-600 font-medium text-sm">
-                    {sector.volume}
+                    {sector.volumeLabel}
                   </td>
                   <td className="px-6 py-4">
                     <div className={`text-[10px] font-black uppercase px-2 py-1 rounded inline-flex items-center gap-1 ${
@@ -212,7 +275,6 @@ export const SectorsPage: React.FC = () => {
           </table>
         </Card>
 
-        {/* Charts Sidebar */}
         <div className="space-y-6">
           <Card className="p-6 border-gray-200">
             <div className="flex items-center justify-between mb-6">
@@ -226,7 +288,7 @@ export const SectorsPage: React.FC = () => {
                 <BarChart data={chartData} layout="vertical" margin={{ left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                   <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: "#64748b" }} width={60} />
+                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: "#64748b" }} width={80} />
                   <Tooltip 
                     cursor={{ fill: "#f8fafc" }}
                     contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)", fontSize: "10px", fontWeight: "bold" }}

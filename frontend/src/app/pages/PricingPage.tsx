@@ -82,7 +82,7 @@ const faqs = [
   },
   {
     question: "Is there a free trial for paid plans?",
-    answer: "Absolutely. Both Pro and Enterprise plans come with a 14-day free trial. No credit card required to start.",
+    answer: "Absolutely. Both Pro and Enterprise plans come with a 7-day free trial. No credit card required to start.",
   },
   {
     question: "What payment methods do you accept?",
@@ -118,7 +118,7 @@ export function PricingPage() {
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center gap-2">
               <div className="w-9 h-9 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
-                <img src="/favicon.svg" alt="StocksIntels" className="w-5 h-5" />
+                <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
               </div>
               <span className="text-xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
             </Link>
@@ -139,7 +139,7 @@ export function PricingPage() {
             Simple, transparent pricing
           </h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-10">
-            Choose the plan that fits your trading style. All plans include a 14-day free trial.
+            Choose the plan that fits your trading style. All plans include a 7-day free trial.
           </p>
 
           {/* Billing Toggle */}
@@ -224,10 +224,11 @@ export function PricingPage() {
 
                   <Button
                     onClick={() => {
+                      const period = isYearly ? "yearly" : "monthly";
                       if (user) {
-                        navigate(`/subscribe/${plan.name.toLowerCase()}`);
+                        navigate(`/subscribe/${plan.name.toLowerCase()}?period=${period}`);
                       } else {
-                        navigate(`/login?redirect=/subscribe/${plan.name.toLowerCase()}`);
+                        navigate(`/login?redirect=/subscribe/${plan.name.toLowerCase()}%3Fperiod=${period}`);
                       }
                     }}
                     className={`w-full py-6 text-base font-semibold mb-8 transition-all hover:-translate-y-0.5 ${
@@ -390,7 +391,7 @@ export function PricingPage() {
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-lg flex items-center justify-center">
-                <img src="/favicon.svg" alt="StocksIntels" className="w-5 h-5" />
+                <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
               </div>
               <span className="text-lg font-bold">StocksIntels</span>
             </div>

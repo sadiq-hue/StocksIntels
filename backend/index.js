@@ -7,15 +7,15 @@ const cors = require('cors');
 const axios = require('axios');
 const bcrypt = require('bcryptjs');
 const { Server } = require('socket.io');
-const { getAllNews, KENYAN_STOCKS } = require('./newsService');
-const { getBonds, getBondById, getBondSummary } = require('./bondsService');
+const { getAllNews, getNewsSummary, getAggregatedSentiment, KENYAN_STOCKS, STOCK_SYMBOLS } = require('./newsService');
+const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
-const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks } = require('./signalService');
+const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions, getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats, getForwardTestPredictions, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName, getSyntheticQuote } = require('./marketService');
 const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
 const signalPublisher = require('./signalPublisher');
-const { sendResetCode, sendOtpEmail, sendPortfolioReportEmail } = require('./mailer');
+const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail } = require('./mailer');
 const cron = require('node-cron');
 const {
   getCompanyProfile, getQuote, getIncomeStatement, getBalanceSheet,
@@ -23,21 +23,90 @@ const {
   simfinService, clearCache: clearFinancialCache
 } = require('./financialReportsService');
 const brokerService = require('./services/brokerService');
+const { fetchAnalystData } = require('./analystService');
 const fxService = require('./fxService');
 const payheroService = require('./payheroService');
-const paydService = require('./paydService');
+let paydService;
+try {
+  paydService = require('./paydService');
+} catch (e) {
+  console.warn('[Payd] Service not available:', e.message);
+  paydService = null;
+}
 const indicesService = require('./indicesService');
 const { generalLimiter, authLimiter, marketDataLimiter, aiLimiter } = require('./rateLimiter');
+const path = require('path');
+const helmet = require('helmet');
+const { JSDOM } = require('jsdom');
+const createDOMPurify = require('dompurify');
+const { authenticateToken, requireAdmin, requireOwnership, generateToken } = require('./auth');
+const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const crypto = require('crypto');
+
+const uploadStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, path.join(__dirname, 'uploads')),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, crypto.randomUUID() + ext);
+  },
+});
+const upload = multer({
+  storage: uploadStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = /\.(png|jpg|jpeg|gif|webp|svg|pdf|doc|docx|xlsx|csv|txt|mp4|mov|avi)$/i;
+    if (allowed.test(path.extname(file.originalname))) return cb(null, true);
+    cb(new Error('File type not allowed'));
+  },
+});
 
 const app = express();
 const server = http.createServer(app);
+
+// Support single origin or comma-separated list (e.g. "https://app.netlify.app,http://localhost:5173")
+const rawCorsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
+const allowedOrigins = rawCorsOrigin.split(',').map(o => o.trim()).filter(Boolean);
+const corsOrigin = allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins;
+
 const io = new Server(server, {
-  cors: { origin: process.env.CORS_ORIGIN || "http://localhost:5173", methods: ["GET", "POST"] }
+  cors: { origin: corsOrigin, methods: ["GET", "POST", "PATCH"] }
 });
 
+// ── Liveness & Readiness Probes ──────────────────────────────────
+// Used by Kubernetes, Docker health checks, and load balancers
+app.get('/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));
+app.get('/readyz', async (_req, res) => {
+  const checks = {};
+  try { await pool.query('SELECT 1'); checks.db = 'ok'; } catch { checks.db = 'fail'; }
+  try {
+    const pyBridge = require('./pythonBridge');
+    const breaker = pyBridge.getCircuitBreakerStatus();
+    checks.ml = breaker.cooldown ? 'degraded' : 'ok';
+  } catch { checks.ml = 'unknown'; }
+  const allOk = Object.values(checks).every(v => v === 'ok' || v === 'unknown');
+  res.status(allOk ? 200 : 503).json({ status: allOk ? 'ok' : 'degraded', checks, uptime: process.uptime() });
+});
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https:"],
+      fontSrc: ["'self'", "https:", "data:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || "http://localhost:5173",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  origin: corsOrigin,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
 app.use(express.json());
@@ -45,8 +114,958 @@ app.use(express.urlencoded({ extended: true }));
 app.use(generalLimiter);
 app.use('/api/auth', authLimiter);
 app.use('/api/ai', aiLimiter);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Structured request logging
+const logger = require('./logger');
+if (process.env.NODE_ENV !== 'production' || process.env.LOG_REQUESTS) {
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const ms = Date.now() - start;
+      logger.info(`${req.method} ${req.originalUrl} ${res.statusCode} ${ms}ms`);
+    });
+    next();
+  });
+}
+
+// DOMPurify setup for server-side sanitization
+const window = new JSDOM('').window;
+const DOMPurify = createDOMPurify(window);
+function sanitizeText(text) {
+  if (!text || typeof text !== 'string') return '';
+  return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+}
+
+// ── Frontend Static Serving ───────────────────────────────────────
+const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
+app.use(express.static(frontendDist));
+
+// ── Admin API Routes ─────────────────────────────────────────────
+// Extra security headers for admin endpoints
+app.use('/api/admin', (req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  next();
+});
+// Admin OTP login routes (no auth required)
+app.post('/api/admin/send-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email required' });
+    const ip = getClientIp(req);
+    const ua = req.headers['user-agent'] || '';
+    const limit = checkLoginRateLimit(email, ip);
+    if (limit.blocked) {
+      const banSecs = Math.ceil((limit.banExpires - Date.now()) / 1000);
+      await logAdminAction(null, email, 'otp_blocked', ip, ua, { reason: 'rate_limit' }, false);
+      return res.status(429).json({ error: `Too many attempts. Try again in ${banSecs}s.`, code: 'RATE_LIMITED', banExpires: limit.banExpires });
+    }
+    const user = await pool.query('SELECT id, role FROM users WHERE email = $1', [email]);
+    if (user.rows.length === 0) {
+      await logAdminAction(null, email, 'otp_failed', ip, ua, { reason: 'user_not_found' }, false);
+      return res.status(401).json({ error: 'No account found with this email' });
+    }
+    if (user.rows[0].role !== 'admin') {
+      await logAdminAction(user.rows[0].id, email, 'otp_denied', ip, ua, { reason: 'not_admin' }, false);
+      return res.status(403).json({ error: 'Admin access required.' });
+    }
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'admin_login']);
+    await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'admin_login', expiresAt]);
+    await sendOtpEmail(email, code).catch(e => console.error('[MAILER] admin send-otp failed:', e.message));
+    await logAdminAction(user.rows[0].id, email, 'otp_sent', ip, ua, null, true);
+    res.json({ message: 'OTP sent to email', expiresIn: 600 });
+  } catch (error) {
+    console.error('admin send-otp error:', error.message);
+    res.status(500).json({ error: 'Failed to send OTP' });
+  }
+});
+
+app.post('/api/admin/verify-otp', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) return res.status(400).json({ error: 'Email and code required' });
+    const ip = getClientIp(req);
+    const ua = req.headers['user-agent'] || '';
+    const result = await pool.query(
+      'SELECT * FROM otp_codes WHERE email = $1 AND code = $2 AND type = $3 AND used = FALSE AND expires_at > NOW()',
+      [email, code, 'admin_login']
+    );
+    if (result.rows.length === 0) {
+      await logAdminAction(null, email, 'otp_verify_failed', ip, ua, { reason: 'invalid_or_expired' }, false);
+      return res.status(401).json({ error: 'Invalid or expired OTP' });
+    }
+    await pool.query('UPDATE otp_codes SET used = TRUE WHERE id = $1', [result.rows[0].id]);
+    const userResult = await pool.query(
+      'SELECT id, full_name, email, role, is_verified, created_at, subscription_tier, subscription_status, trial_start_date FROM users WHERE email = $1',
+      [email]
+    );
+    if (userResult.rows.length === 0 || userResult.rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required.' });
+    }
+    const user = userResult.rows[0];
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '24h', algorithm: 'HS256' });
+    await logAdminAction(user.id, email, 'login_success', ip, ua, null, true);
+    loginAttempts.delete(email.toLowerCase());
+    res.json({ user, token });
+  } catch (error) {
+    console.error('admin verify-otp error:', error.message);
+    res.status(500).json({ error: 'OTP verification failed' });
+  }
+});
+
+// All admin routes require authentication + admin role
+app.use('/api/admin', authenticateToken, requireAdmin);
+
+app.get('/api/admin/dashboard', async (req, res) => {
+  try {
+    const [totalUsers, newToday, totalTrades, activeSubs, chatCount, recentReg, totalSubs, totalTickets, totalGroups, totalMessages, totalBrokerConns, totalPortSnaps, signalPredictions, signalHistory, signalTotal] = await Promise.all([
+      pool.query('SELECT COUNT(*)::int as cnt FROM users'),
+      pool.query("SELECT COUNT(*)::int as cnt FROM users WHERE created_at >= CURRENT_DATE"),
+      pool.query('SELECT COUNT(*)::int as cnt FROM paper_trades'),
+      pool.query("SELECT COUNT(*)::int as cnt FROM users WHERE subscription_status = 'active'"),
+      pool.query('SELECT COUNT(*)::int as cnt FROM support_chat_messages'),
+      pool.query('SELECT id, full_name, email, is_verified, created_at FROM users ORDER BY created_at DESC LIMIT 10'),
+      pool.query(`SELECT COUNT(*)::int as cnt FROM (
+        SELECT id FROM subscriptions
+        UNION ALL
+        SELECT u.id FROM users u
+        WHERE u.subscription_status = 'active' AND u.subscription_tier != 'free'
+          AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id)
+      ) combined`),
+      pool.query('SELECT COUNT(*)::int as cnt FROM support_tickets'),
+      pool.query('SELECT COUNT(*)::int as cnt FROM trading_groups'),
+      pool.query('SELECT COUNT(*)::int as cnt FROM messages'),
+      pool.query('SELECT COUNT(*)::int as cnt FROM broker_connections'),
+      pool.query('SELECT COUNT(*)::int as cnt FROM portfolio_value_history'),
+      pool.query(`SELECT COUNT(*)::int as total,
+        COALESCE(SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END), 0)::int as wins,
+        COALESCE(SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END), 0)::int as losses
+        FROM signal_outcomes`),
+      pool.query('SELECT COUNT(*)::int as cnt FROM signal_history'),
+      pool.query('SELECT COUNT(*)::int as cnt FROM signal_outcomes'),
+    ]);
+    const paperAccts = await pool.query('SELECT COALESCE(SUM(cash_balance),0) as kes, COALESCE(SUM(cash_balance_usd),0) as usd FROM paper_accounts');
+    const fx = await getFxRate();
+    const totalPortfolioValue = parseFloat(paperAccts.rows[0].kes) + parseFloat(paperAccts.rows[0].usd) * fx;
+    res.json({
+      totalUsers: totalUsers.rows[0].cnt,
+      newToday: newToday.rows[0].cnt,
+      totalTrades: totalTrades.rows[0].cnt,
+      activeSubscriptions: activeSubs.rows[0].cnt,
+      totalPortfolioValue: Math.round(totalPortfolioValue * 100) / 100,
+      totalChatMessages: chatCount.rows[0].cnt,
+      recentRegistrations: recentReg.rows,
+      totalSubscriptions: totalSubs.rows[0].cnt,
+      totalTickets: totalTickets.rows[0].cnt,
+      totalGroups: totalGroups.rows[0].cnt,
+      totalMessages: totalMessages.rows[0].cnt,
+      totalBrokerConnections: totalBrokerConns.rows[0].cnt,
+      totalPortfolioSnapshots: totalPortSnaps.rows[0].cnt,
+      totalPredictions: signalPredictions.rows[0].total,
+      wins: signalPredictions.rows[0].wins,
+      losses: signalPredictions.rows[0].losses,
+      totalSignals: signalHistory.rows[0].cnt,
+    });
+  } catch (err) { console.error('Admin dashboard error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const search = (req.query.search || '').trim();
+    const offset = (page - 1) * limit;
+    let whereClause = '';
+    const params = [];
+    if (search) {
+      whereClause = 'WHERE (u.full_name ILIKE $1 OR u.email ILIKE $1)';
+      params.push(`%${search}%`);
+    }
+    const countResult = await pool.query(`SELECT COUNT(*)::int as cnt FROM users u ${whereClause}`, params);
+    const total = countResult.rows[0].cnt;
+    const userParams = [...params, limit, offset];
+    const userResult = await pool.query(`
+      SELECT u.id, u.full_name, u.email, u.role, u.trader_type, u.is_verified, u.created_at,
+             u.subscription_tier, u.subscription_status,
+             COALESCE(pa.cash_balance,0) as cash_balance,
+             COALESCE(pt.trades_count,0) as trades_count,
+             COALESCE(ph.holdings_count,0) as holdings_count,
+             COALESCE(wl.watchlist_count,0) as watchlist_count
+      FROM users u
+      LEFT JOIN paper_accounts pa ON pa.user_id = u.id
+      LEFT JOIN (SELECT user_id, COUNT(*)::int as trades_count FROM paper_trades GROUP BY user_id) pt ON pt.user_id = u.id
+      LEFT JOIN (SELECT user_id, COUNT(*)::int as holdings_count FROM portfolio_holdings GROUP BY user_id) ph ON ph.user_id = u.id
+      LEFT JOIN (SELECT user_id, COUNT(*)::int as watchlist_count FROM watchlists GROUP BY user_id) wl ON wl.user_id = u.id
+      ${whereClause}
+      ORDER BY u.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `, userParams);
+    res.json({ users: userResult.rows, total, page, limit });
+  } catch (err) { console.error('Admin users error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/admin/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [userRes, accountRes, tradesRes, holdingsRes, chatRes, notifRes, subRes] = await Promise.all([
+      pool.query('SELECT * FROM users WHERE id = $1', [id]),
+      pool.query('SELECT * FROM paper_accounts WHERE user_id = $1', [id]),
+      pool.query('SELECT * FROM paper_trades WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20', [id]),
+      pool.query('SELECT * FROM portfolio_holdings WHERE user_id = $1 ORDER BY ticker', [id]),
+      pool.query("SELECT * FROM support_chat_messages WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20", [id]),
+      pool.query('SELECT COUNT(*)::int as cnt FROM notifications WHERE user_id = $1', [id]),
+      pool.query('SELECT * FROM subscriptions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1', [id]),
+    ]);
+    if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({
+      user: userRes.rows[0],
+      paperAccount: accountRes.rows[0] || null,
+      recentTrades: tradesRes.rows,
+      portfolioHoldings: holdingsRes.rows,
+      supportMessages: chatRes.rows,
+      notificationsCount: notifRes.rows[0].cnt,
+      subscription: subRes.rows[0] || null,
+    });
+  } catch (err) { console.error('Admin user detail error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/admin/users/:id/role', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+    if (!role || !['admin', 'trader'].includes(role)) return res.status(400).json({ error: 'Role must be "admin" or "trader"' });
+    const result = await pool.query('UPDATE users SET role = $1 WHERE id = $2 RETURNING id, full_name, email, role, trader_type, is_verified', [role, id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error('Admin set role error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/admin/users/:id/toggle-verify', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('UPDATE users SET is_verified = NOT is_verified WHERE id = $1 RETURNING id, full_name, email, role, is_verified', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error('Admin toggle verify error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Signals API ──
+app.get('/api/admin/signals/stats', async (req, res) => {
+  try {
+    const [total, bySignal, bySector, latest, tickerCount] = await Promise.all([
+      pool.query('SELECT COUNT(*)::int as cnt FROM signal_history'),
+      pool.query('SELECT signal, COUNT(*)::int as cnt FROM signal_history GROUP BY signal ORDER BY cnt DESC'),
+      pool.query('SELECT sector, COUNT(*)::int as cnt FROM signal_history WHERE sector IS NOT NULL GROUP BY sector ORDER BY cnt DESC LIMIT 20'),
+      pool.query('SELECT MAX(generated_at) as last_generated FROM signal_history'),
+      pool.query('SELECT COUNT(DISTINCT ticker)::int as cnt FROM signal_history'),
+    ]);
+    res.json({
+      totalSignals: total.rows[0].cnt,
+      distinctTickers: tickerCount.rows[0].cnt,
+      bySignal: bySignal.rows,
+      bySector: bySector.rows,
+      lastGenerated: latest.rows[0].last_generated,
+    });
+  } catch (err) { console.error('Admin signals stats error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/admin/signals', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 50));
+    const ticker = (req.query.ticker || '').trim().toUpperCase();
+    const signal = (req.query.signal || '').trim();
+    const sector = (req.query.sector || '').trim();
+    const market = (req.query.market || '').trim().toUpperCase();
+    const dateFrom = req.query.dateFrom || '';
+    const dateTo = req.query.dateTo || '';
+    const offset = (page - 1) * limit;
+    const conditions = [];
+    const params = [];
+    let idx = 1;
+    if (ticker) { conditions.push(`ticker = $${idx++}`); params.push(ticker); }
+    if (signal) { conditions.push(`signal = $${idx++}`); params.push(signal); }
+    if (sector) { conditions.push(`sector ILIKE $${idx++}`); params.push(`%${sector}%`); }
+    if (market) { conditions.push(`market = $${idx++}`); params.push(market); }
+    if (dateFrom) { conditions.push(`generated_at >= $${idx++}::date`); params.push(dateFrom); }
+    if (dateTo) { conditions.push(`generated_at <= $${idx++}::date + interval '1 day'`); params.push(dateTo); }
+    const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+    const countResult = await pool.query(`SELECT COUNT(*)::int as cnt FROM signal_history ${whereClause}`, params);
+    const dataParams = [...params, limit, offset];
+    const dataResult = await pool.query(`
+      SELECT id, ticker, signal, confidence, price, change_pct, entry_price, stop_loss,
+             target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, generated_at
+      FROM signal_history ${whereClause}
+      ORDER BY generated_at DESC
+      LIMIT $${idx++} OFFSET $${idx}
+    `, dataParams);
+    res.json({ signals: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
+  } catch (err) { console.error('Admin signals error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Signal Detail ──
+app.get('/api/admin/signals/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('SELECT * FROM signal_history WHERE id = $1', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Signal not found' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error('Admin signal detail error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Signal Update ──
+app.put('/api/admin/signals/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { signal, confidence, entry_price, stop_loss, target1, target2, risk_reward, timeframe } = req.body;
+    const fields = []; const params = []; let idx = 1;
+    if (signal !== undefined) { fields.push(`signal = $${idx++}`); params.push(signal); }
+    if (confidence !== undefined) { fields.push(`confidence = $${idx++}`); params.push(confidence); }
+    if (entry_price !== undefined) { fields.push(`entry_price = $${idx++}`); params.push(entry_price); }
+    if (stop_loss !== undefined) { fields.push(`stop_loss = $${idx++}`); params.push(stop_loss); }
+    if (target1 !== undefined) { fields.push(`target1 = $${idx++}`); params.push(target1); }
+    if (target2 !== undefined) { fields.push(`target2 = $${idx++}`); params.push(target2); }
+    if (risk_reward !== undefined) { fields.push(`risk_reward = $${idx++}`); params.push(risk_reward); }
+    if (timeframe !== undefined) { fields.push(`timeframe = $${idx++}`); params.push(timeframe); }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    params.push(id);
+    const result = await pool.query(`UPDATE signal_history SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Signal not found' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error('Admin signal update error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Signal Delete ──
+app.delete('/api/admin/signals/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM signal_history WHERE id = $1 RETURNING id', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Signal not found' });
+    res.json({ success: true });
+  } catch (err) { console.error('Admin signal delete error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Generate Signals ──
+app.post('/api/admin/signals/generate', async (req, res) => {
+  try {
+    const signals = await generateSignals();
+    res.json({ success: true, count: signals.length });
+  } catch (err) { console.error('Admin generate signals error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Subscribers ──
+app.get('/api/admin/subscribers', async (req, res) => {
+  try {
+    const plansResult = await pool.query(`
+      SELECT sp.id, sp.name, sp.price_kes, sp.price_usd, sp.duration_months,
+        COALESCE((SELECT COUNT(*)::int FROM subscriptions s WHERE s.plan_id = sp.id), 0) +
+        COALESCE((SELECT COUNT(*)::int FROM users u WHERE u.subscription_status = 'active' AND LOWER(u.subscription_tier) = LOWER(sp.name)), 0) as subscriber_count
+      FROM subscription_plans sp ORDER BY sp.id
+    `);
+    const totalResult = await pool.query(`
+      SELECT COUNT(*)::int as cnt FROM (
+        SELECT id FROM subscriptions WHERE status IN ('active', 'pending')
+        UNION ALL
+        SELECT id FROM users WHERE subscription_status = 'active' AND subscription_tier != 'free'
+      ) combined
+    `);
+    res.json({ plans: plansResult.rows, totalSubscribers: totalResult.rows[0].cnt });
+  } catch (err) { console.error('Admin subscribers error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/admin/subscriptions', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+    // Count: subscriptions table + users with active non-free subscription not in subscriptions
+    const countResult = await pool.query(`
+      SELECT COUNT(*)::int as cnt FROM (
+        SELECT id FROM subscriptions
+        UNION ALL
+        SELECT u.id FROM users u
+        WHERE u.subscription_status = 'active' AND u.subscription_tier != 'free'
+          AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id)
+      ) combined
+    `);
+    const dataResult = await pool.query(`
+      SELECT * FROM (
+        SELECT s.id, s.user_id, s.plan_id, s.status, s.start_date, s.end_date, s.created_at, s.updated_at,
+               u.full_name, u.email, sp.name as plan_name, sp.price_kes as amount, sp.duration_months
+        FROM subscriptions s
+        JOIN users u ON u.id = s.user_id
+        JOIN subscription_plans sp ON sp.id = s.plan_id
+        UNION ALL
+        SELECT (-u.id)::int as id, u.id as user_id, NULL::int as plan_id,
+               u.subscription_status as status, u.created_at as start_date,
+               u.subscription_end_date as end_date,
+               u.created_at, u.updated_at,
+               u.full_name, u.email,
+               COALESCE(sp.name, u.subscription_tier) as plan_name, sp.price_kes as amount, sp.duration_months
+        FROM users u
+        LEFT JOIN subscription_plans sp ON LOWER(sp.name) = LOWER(u.subscription_tier)
+        WHERE u.subscription_status = 'active' AND u.subscription_tier != 'free'
+          AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id)
+      ) combined
+      ORDER BY created_at DESC LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+    res.json({ subscriptions: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
+  } catch (err) { console.error('Admin subscriptions error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Portfolio History ──
+app.get('/api/admin/portfolio-history', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+    const countResult = await pool.query('SELECT COUNT(*)::int as cnt FROM portfolio_value_history');
+    const dataResult = await pool.query(`
+      SELECT p.*, u.full_name, u.email
+      FROM portfolio_value_history p
+      JOIN users u ON u.id = p.user_id
+      ORDER BY p.snapshot_date DESC LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+    res.json({ history: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
+  } catch (err) { console.error('Admin portfolio-history error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Payments ──
+app.get('/api/admin/payments', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+    const countResult = await pool.query('SELECT COUNT(*)::int as cnt FROM payment_transactions');
+    const dataResult = await pool.query(`
+      SELECT p.*, u.full_name, u.email
+      FROM payment_transactions p
+      LEFT JOIN users u ON u.id = p.user_id
+      ORDER BY p.created_at DESC LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+    res.json({ transactions: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
+  } catch (err) { console.error('Admin payments error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Support Tickets ──
+app.get('/api/admin/support-tickets', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+    const countResult = await pool.query('SELECT COUNT(*)::int as cnt FROM support_tickets');
+    const dataResult = await pool.query(`
+      SELECT t.*, (SELECT COUNT(*)::int FROM support_messages sm WHERE sm.ticket_id = t.id) as message_count
+      FROM support_tickets t
+      ORDER BY t.created_at DESC LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+    const statusCounts = await pool.query(`
+      SELECT status, COUNT(*)::int as cnt FROM support_tickets GROUP BY status
+    `);
+    const counts = { open: 0, in_progress: 0, resolved: 0, closed: 0 };
+    statusCounts.rows.forEach(r => { if (counts[r.status] !== undefined) counts[r.status] = r.cnt; });
+    res.json({ tickets: dataResult.rows, total: countResult.rows[0].cnt, page, limit, statusCounts: counts });
+  } catch (err) { console.error('Admin tickets error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Groups ──
+app.get('/api/admin/groups', async (req, res) => {
+  try {
+    const dataResult = await pool.query(`
+      SELECT g.*,
+        (SELECT COUNT(*)::int FROM group_members gm WHERE gm.group_id = g.id) as member_count,
+        (SELECT COUNT(*)::int FROM messages m WHERE m.group_id = g.id) as message_count
+      FROM trading_groups g ORDER BY g.name
+    `);
+    res.json({ groups: dataResult.rows });
+  } catch (err) { console.error('Admin groups error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Messages ──
+app.get('/api/admin/messages', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 50));
+    const groupId = req.query.groupId ? parseInt(req.query.groupId) : null;
+    const offset = (page - 1) * limit;
+    let whereClause = '';
+    const params = [];
+    if (groupId) {
+      whereClause = 'WHERE m.group_id = $1';
+      params.push(groupId);
+    }
+    const countResult = await pool.query(`SELECT COUNT(*)::int as cnt FROM messages m ${whereClause}`, params);
+    const dataParams = [...params, limit, offset];
+    const idx = params.length + 1;
+    const dataResult = await pool.query(`
+      SELECT m.*, u.full_name as sender_full_name
+      FROM messages m
+      LEFT JOIN users u ON u.id = m.sender_id
+      ${whereClause}
+      ORDER BY m.created_at DESC LIMIT $${idx} OFFSET $${idx + 1}
+    `, dataParams);
+    res.json({ messages: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
+  } catch (err) { console.error('Admin messages error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Broker Accounts ──
+app.get('/api/admin/broker-accounts', async (req, res) => {
+  try {
+    const dataResult = await pool.query(`
+      SELECT bc.*, u.full_name, u.email,
+        (SELECT balance FROM broker_account_snapshots WHERE broker_connection_id = bc.id ORDER BY snapshot_at DESC LIMIT 1) as latest_balance,
+        (SELECT equity FROM broker_account_snapshots WHERE broker_connection_id = bc.id ORDER BY snapshot_at DESC LIMIT 1) as latest_equity
+      FROM broker_connections bc
+      JOIN users u ON u.id = bc.user_id
+      ORDER BY bc.created_at DESC
+    `);
+    res.json({ connections: dataResult.rows });
+  } catch (err) { console.error('Admin broker-accounts error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin User Activity ──
+app.get('/api/admin/activity/recent', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = parseInt(req.query.offset) || 0;
+    const action = req.query.action;
+    let where = '';
+    const params = [];
+    if (action) { where = 'WHERE action = $1'; params.push(action); }
+    const countResult = await pool.query(`SELECT COUNT(*)::int as cnt FROM user_activity_log ${where}`, params);
+    const dataParams = [...params, limit, offset];
+    const idx = params.length + 1;
+    const dataResult = await pool.query(
+      `SELECT * FROM user_activity_log ${where} ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+      dataParams
+    );
+    res.json({ activities: dataResult.rows, total: countResult.rows[0].cnt });
+  } catch (err) { console.error('Admin activity error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Followers ──
+app.get('/api/admin/followers', async (req, res) => {
+  try {
+    const dataResult = await pool.query(`
+      SELECT f.follower_id, fu.full_name as follower_name, f.followee_id, eu.full_name as followee_name, f.created_at
+      FROM followers f
+      JOIN users fu ON fu.id = f.follower_id
+      JOIN users eu ON eu.id = f.followee_id
+      ORDER BY f.created_at DESC
+    `);
+    res.json({ followers: dataResult.rows });
+  } catch (err) { console.error('Admin followers error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin User Update ──
+app.put('/api/admin/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { full_name, email, trader_type, subscription_tier } = req.body;
+    const fields = []; const params = []; let idx = 1;
+    if (full_name !== undefined) { fields.push(`full_name = $${idx++}`); params.push(full_name); }
+    if (email !== undefined) { fields.push(`email = $${idx++}`); params.push(email); }
+    if (trader_type !== undefined) { fields.push(`trader_type = $${idx++}`); params.push(trader_type); }
+    if (subscription_tier !== undefined) { fields.push(`subscription_tier = $${idx++}`); params.push(subscription_tier); }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    params.push(id);
+    const result = await pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error('Admin update user error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Delete User ──
+app.delete('/api/admin/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM paper_accounts WHERE user_id = $1', [id]);
+    await pool.query('DELETE FROM paper_trades WHERE user_id = $1', [id]);
+    await pool.query('DELETE FROM paper_positions WHERE user_id = $1', [id]);
+    await pool.query('DELETE FROM portfolio_holdings WHERE user_id = $1', [id]);
+    await pool.query('DELETE FROM portfolio_value_history WHERE user_id = $1', [id]);
+    await pool.query('DELETE FROM notifications WHERE user_id = $1', [id]);
+    await pool.query('DELETE FROM broker_connections WHERE user_id = $1', [id]);
+    await pool.query('DELETE FROM subscriptions WHERE user_id = $1', [id]);
+    await pool.query('DELETE FROM support_chat_messages WHERE user_id = $1', [id]);
+    await pool.query('DELETE FROM group_members WHERE user_id = $1', [id]);
+    await pool.query('DELETE FROM followers WHERE follower_id = $1 OR followee_id = $1', [id]);
+    await pool.query('DELETE FROM messages WHERE sender_id = $1 OR recipient_id = $1', [id]);
+    await pool.query('DELETE FROM payment_transactions WHERE user_id = $1', [id]);
+    const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ success: true });
+  } catch (err) { console.error('Admin delete user error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Reset Password ──
+app.post('/api/admin/users/:id/reset-password', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await pool.query('SELECT id, email FROM users WHERE id = $1', [id]);
+    if (user.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const { email } = user.rows[0];
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'password_reset']);
+    await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'password_reset', expiresAt]);
+    await sendResetCode(email, code).catch(e => console.error('[MAILER] admin reset-password failed:', e.message));
+    res.json({ message: 'Password reset email sent' });
+  } catch (err) { console.error('Admin reset password error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Subscription Plans CRUD ──
+app.get('/api/admin/subscription-plans', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT sp.*, (SELECT COUNT(*)::int FROM subscriptions s WHERE s.plan_id = sp.id) as subscriber_count
+      FROM subscription_plans sp ORDER BY sp.id
+    `);
+    res.json({ plans: result.rows });
+  } catch (err) { console.error('Admin subscription-plans error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/admin/subscription-plans', async (req, res) => {
+  try {
+    const { name, description, price_kes, price_usd, features, duration_months } = req.body;
+    if (!name || price_kes === undefined) return res.status(400).json({ error: 'Name and price_kes required' });
+    const result = await pool.query(
+      'INSERT INTO subscription_plans (name, description, price_kes, price_usd, features, duration_months) VALUES ($1, $2, $3, $4, $5::jsonb, $6) RETURNING *',
+      [name, description || '', price_kes, price_usd || 0, features ? JSON.stringify(features) : '[]', duration_months || 1]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) { console.error('Admin create plan error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/admin/subscription-plans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, price_kes, price_usd, features, duration_months } = req.body;
+    const fields = []; const params = []; let idx = 1;
+    if (name !== undefined) { fields.push(`name = $${idx++}`); params.push(name); }
+    if (description !== undefined) { fields.push(`description = $${idx++}`); params.push(description); }
+    if (price_kes !== undefined) { fields.push(`price_kes = $${idx++}`); params.push(price_kes); }
+    if (price_usd !== undefined) { fields.push(`price_usd = $${idx++}`); params.push(price_usd); }
+    if (features !== undefined) { fields.push(`features = $${idx++}`); params.push(JSON.stringify(features)); }
+    if (duration_months !== undefined) { fields.push(`duration_months = $${idx++}`); params.push(duration_months); }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    params.push(id);
+    const result = await pool.query(`UPDATE subscription_plans SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Plan not found' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error('Admin update plan error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/admin/subscription-plans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM subscription_plans WHERE id = $1 RETURNING id', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Plan not found' });
+    res.json({ success: true });
+  } catch (err) { console.error('Admin delete plan error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Subscription Management ──
+app.put('/api/admin/subscriptions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, start_date, end_date, duration_months } = req.body;
+    const idNum = parseInt(id);
+    // Negative id means it's a virtual subscription from the users table
+    if (idNum < 0) {
+      const userId = -idNum;
+      const fields = []; const params = []; let idx = 1;
+      if (status && ['active', 'cancelled', 'expired', 'pending'].includes(status)) {
+        fields.push(`subscription_status = $${idx++}`); params.push(status);
+      }
+      if (start_date !== undefined) { fields.push(`subscription_start_date = $${idx++}`); params.push(start_date); }
+      if (end_date !== undefined) { fields.push(`subscription_end_date = $${idx++}`); params.push(end_date); }
+      if (duration_months !== undefined) { fields.push(`subscription_tier = CONCAT(subscription_tier, '')`); /* no-op for virtual */ }
+      if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+      params.push(userId);
+      const result = await pool.query(
+        `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} RETURNING id, subscription_status, subscription_tier, subscription_start_date, subscription_end_date`,
+        params
+      );
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      return res.json(result.rows[0]);
+    }
+    // Real subscription record
+    const fields = []; const params = []; let idx = 1;
+    if (status && ['active', 'cancelled', 'expired', 'pending'].includes(status)) {
+      fields.push(`status = $${idx++}`); params.push(status);
+    }
+    if (start_date !== undefined) { fields.push(`start_date = $${idx++}`); params.push(start_date); }
+    if (end_date !== undefined) { fields.push(`end_date = $${idx++}`); params.push(end_date); }
+    if (duration_months !== undefined) {
+      fields.push(`end_date = start_date + interval '1 month' * $${idx}`);
+      params.push(duration_months);
+      idx++;
+    }
+    fields.push(`updated_at = CURRENT_TIMESTAMP`);
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    params.push(id);
+    const result = await pool.query(
+      `UPDATE subscriptions SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+      params
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Subscription not found' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error('Admin update subscription error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Support Tickets Update ──
+app.put('/api/admin/support-tickets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, priority } = req.body;
+    const validStatuses = ['open', 'in_progress', 'resolved', 'closed'];
+    const validPriorities = ['low', 'normal', 'high', 'urgent'];
+    const sets = []; const params = []; let idx = 1;
+    if (status) {
+      if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+      sets.push(`status = $${idx++}`); params.push(status);
+    }
+    if (priority) {
+      if (!validPriorities.includes(priority)) return res.status(400).json({ error: 'Invalid priority' });
+      sets.push(`priority = $${idx++}`); params.push(priority);
+    }
+    if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    sets.push('updated_at = CURRENT_TIMESTAMP');
+    params.push(id);
+    const result = await pool.query(`UPDATE support_tickets SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Ticket not found' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error('Admin update ticket error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/admin/support-tickets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('SELECT * FROM support_tickets WHERE id = $1', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Ticket not found' });
+    res.json({ ticket: result.rows[0] });
+  } catch (err) { console.error('Admin ticket detail error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/admin/support-tickets/:id/messages', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const messages = await pool.query('SELECT * FROM support_messages WHERE ticket_id = $1 ORDER BY created_at ASC', [id]);
+    res.json({ messages: messages.rows });
+  } catch (err) { console.error('Admin ticket messages error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/admin/support-tickets/:id/messages', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message is required' });
+    const clean = sanitizeText(message.trim());
+    if (!clean) return res.status(400).json({ error: 'Message is required' });
+    const ticket = await pool.query('SELECT * FROM support_tickets WHERE id = $1', [id]);
+    if (ticket.rows.length === 0) return res.status(404).json({ error: 'Ticket not found' });
+    const staffName = sanitizeText(req.user.full_name || req.user.email || 'Admin');
+    const result = await pool.query(
+      'INSERT INTO support_messages (ticket_id, sender, message, is_staff) VALUES ($1, $2, $3, $4) RETURNING *',
+      [id, staffName, clean, true]
+    );
+    await pool.query('UPDATE support_tickets SET updated_at = CURRENT_TIMESTAMP, status = $1 WHERE id = $2', ['in_progress', id]);
+    res.status(201).json(result.rows[0]);
+  } catch (err) { console.error('Admin ticket reply error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Groups Management ──
+app.post('/api/admin/groups', async (req, res) => {
+  try {
+    const { id, name, description, icon, topic } = req.body;
+    if (!id || !name) return res.status(400).json({ error: 'Group id and name required' });
+    const result = await pool.query(
+      'INSERT INTO trading_groups (id, name, description, icon, topic) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [id, name, description || '', icon || '', topic || 'General']
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) { console.error('Admin create group error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/admin/groups/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, icon, topic } = req.body;
+    const fields = []; const params = []; let idx = 1;
+    if (name !== undefined) { fields.push(`name = $${idx++}`); params.push(name); }
+    if (description !== undefined) { fields.push(`description = $${idx++}`); params.push(description); }
+    if (icon !== undefined) { fields.push(`icon = $${idx++}`); params.push(icon); }
+    if (topic !== undefined) { fields.push(`topic = $${idx++}`); params.push(topic); }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    params.push(id);
+    const result = await pool.query(`UPDATE trading_groups SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Group not found' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error('Admin update group error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/admin/groups/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM trading_groups WHERE id = $1 RETURNING id', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Group not found' });
+    res.json({ success: true });
+  } catch (err) { console.error('Admin delete group error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/admin/groups/:id/members', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(`
+      SELECT gm.*, u.full_name, u.email, u.trader_type
+      FROM group_members gm
+      JOIN users u ON u.id = gm.user_id
+      WHERE gm.group_id = $1
+      ORDER BY gm.joined_at DESC
+    `, [id]);
+    res.json({ members: result.rows });
+  } catch (err) { console.error('Admin group members error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Delete Message ──
+app.delete('/api/admin/messages/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const msg = await pool.query('SELECT * FROM messages WHERE id = $1', [id]);
+    if (msg.rows.length === 0) return res.status(404).json({ error: 'Message not found' });
+    const message = msg.rows[0];
+    await pool.query('DELETE FROM messages WHERE id = $1', [id]);
+    try { io.emit('message_deleted', { messageId: id, groupId: message.group_id }); } catch {}
+    res.json({ success: true });
+  } catch (err) { console.error('Admin delete message error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Broker Snapshots ──
+app.get('/api/admin/broker-accounts/:id/snapshots', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      'SELECT * FROM broker_account_snapshots WHERE broker_connection_id = $1 ORDER BY snapshot_at DESC LIMIT 50',
+      [id]
+    );
+    res.json({ snapshots: result.rows });
+  } catch (err) { console.error('Admin broker snapshots error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Stocks ──
+app.get('/api/admin/stocks', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 50));
+    const search = (req.query.search || '').trim();
+    const offset = (page - 1) * limit;
+    let whereClause = '';
+    const params = [];
+    let idx = 1;
+    if (search) {
+      whereClause = `WHERE (ticker ILIKE $${idx} OR name ILIKE $${idx} OR sector ILIKE $${idx} OR market ILIKE $${idx})`;
+      params.push(`%${search}%`);
+      idx++;
+    }
+    const countResult = await pool.query(`SELECT COUNT(*)::int as cnt FROM stocks ${whereClause}`, params);
+    const dataResult = await pool.query(
+      `SELECT * FROM stocks ${whereClause} ORDER BY ticker ASC LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...params, limit, offset]
+    );
+    res.json({ stocks: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
+  } catch (err) { console.error('Admin stocks error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/admin/stocks/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('SELECT * FROM stocks WHERE id = $1', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Stock not found' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error('Admin stock detail error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/admin/stocks/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { ticker, name, sector, industry, market, currency, is_active } = req.body;
+    const fields = []; const params = []; let idx = 1;
+    if (ticker !== undefined) { fields.push(`ticker = $${idx++}`); params.push(ticker); }
+    if (name !== undefined) { fields.push(`name = $${idx++}`); params.push(name); }
+    if (sector !== undefined) { fields.push(`sector = $${idx++}`); params.push(sector); }
+    if (market !== undefined) { fields.push(`market = $${idx++}`); params.push(market); }
+    if (currency !== undefined) { fields.push(`currency = $${idx++}`); params.push(currency); }
+    if (is_active !== undefined) { fields.push(`is_active = $${idx++}`); params.push(is_active); }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    params.push(id);
+    const result = await pool.query(`UPDATE stocks SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Stock not found' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error('Admin update stock error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/admin/stocks/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM stocks WHERE id = $1 RETURNING id', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Stock not found' });
+    res.json({ success: true });
+  } catch (err) { console.error('Admin delete stock error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Notifications ──
+app.get('/api/admin/notifications', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
+    const countResult = await pool.query('SELECT COUNT(*)::int as cnt FROM notifications');
+    const dataResult = await pool.query(`
+      SELECT n.*, u.full_name, u.email
+      FROM notifications n
+      LEFT JOIN users u ON u.id = n.user_id
+      ORDER BY n.created_at DESC LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+    res.json({ notifications: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
+  } catch (err) { console.error('Admin notifications error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// ── Admin Signal Outcomes ──
+app.get('/api/admin/signal-outcomes', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
+    const countResult = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_outcomes');
+    const dataResult = await pool.query(
+      `SELECT id, ticker, signal, entry_price, exit_price, result, recorded_at
+       FROM signal_outcomes
+       ORDER BY recorded_at DESC LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    const statsResult = await pool.query(
+      `SELECT COUNT(*)::int as total,
+              COALESCE(SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END), 0)::int as wins,
+              COALESCE(SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END), 0)::int as losses
+       FROM signal_outcomes`
+    );
+    res.json({ outcomes: dataResult.rows, total: countResult.rows[0].cnt, page, limit, stats: statsResult.rows[0] });
+  } catch (err) { console.error('Admin signal outcomes error:', err.message); res.status(500).json({ error: err.message }); }
+});
 
 const port = process.env.PORT || 3001;
+app.get(['/admin', '/admin/*'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
 const onlineUsers = new Map();
 const lastSeen = new Map();
 
@@ -117,15 +1136,16 @@ io.on('connection', (socket) => {
   // ── Send Message ──────────────────────────────────────────────────
   socket.on('send_message', async (data) => {
     try {
-      const { senderId, senderName, content, groupId, recipientId, messageType } = data;
-      if (!content || !content.trim()) return;
+      const { senderId, senderName, content, groupId, recipientId, messageType, imageUrl, fileName } = data;
+      if ((!content || !content.trim()) && !imageUrl) return;
+      const cleanContent = content ? sanitizeText(content.trim()) : '';
 
       if (senderId) lastSeen.set(Number(senderId), new Date());
       const result = await pool.query(
-        `INSERT INTO messages (sender_id, sender_name, content, message_type, group_id, recipient_id)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, sender_id, sender_name, content, message_type, group_id, recipient_id, created_at`,
-        [senderId || null, senderName || 'Anonymous', content.trim(), messageType || 'user', groupId || null, recipientId || null]
+        `INSERT INTO messages (sender_id, sender_name, content, message_type, group_id, recipient_id, image_url, file_name)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, sender_id, sender_name, content, message_type, group_id, recipient_id, image_url, file_name, created_at`,
+        [senderId || null, sanitizeText(senderName || 'Anonymous'), cleanContent, messageType || 'user', groupId || null, recipientId || null, imageUrl || null, fileName || null]
       );
       const msg = result.rows[0];
 
@@ -137,8 +1157,35 @@ io.on('connection', (socket) => {
         io.to(room).emit('receive_message', msg);
       }
 
+      // ── Message Notifications ────────────────────────────────────────
+      try {
+        if (groupId) {
+          const groupResult = await pool.query('SELECT user_id, (SELECT name FROM trading_groups WHERE id = $1) as group_name FROM group_members WHERE group_id = $1', [groupId]);
+          const preview = cleanContent.length > 100 ? cleanContent.substring(0, 100) + '…' : cleanContent;
+          for (const member of groupResult.rows) {
+            if (Number(member.user_id) === Number(senderId)) continue;
+            const n = await pool.query(
+              `INSERT INTO notifications (user_id, title, body, type, link) VALUES ($1, $2, $3, 'message', $4)
+               RETURNING id, user_id, title, body, type, read, link, created_at`,
+              [member.user_id, `${sanitizeText(senderName)} in ${member.group_name}`, sanitizeText(preview), `/app/chat?group=${groupId}`]
+            );
+            io.to(`user:${member.user_id}`).emit('notification', n.rows[0]);
+          }
+        } else if (recipientId) {
+          const preview = cleanContent.length > 100 ? cleanContent.substring(0, 100) + '…' : cleanContent;
+          const n = await pool.query(
+            `INSERT INTO notifications (user_id, title, body, type, link) VALUES ($1, $2, $3, 'message', $4)
+             RETURNING id, user_id, title, body, type, read, link, created_at`,
+            [recipientId, sanitizeText(senderName), sanitizeText(preview), `/app/chat?person=${senderId}`]
+          );
+          io.to(`user:${recipientId}`).emit('notification', n.rows[0]);
+        }
+      } catch (err) {
+        console.error('message notification error:', err.message);
+      }
+
       // Stock mention → AI assistant response
-      const stockMatch = content.match(/\b(SCOM|EQTY|KCB|EABL|ABSA|SBIC|KLG|BAMB|KPLC|NMG|TOTL|COOP|IMH|LKL|KNRE|CIC|HFCK|STAN|JUB|UMEM|CRAY|OLYM)\b/i);
+      const stockMatch = content.match(/\b(SCOM|EQTY|KCB|EABL|ABSA|SBIC|KLG|BAMB|KPLC|NMG|TOTL|COOP|IMH|LKL|KNRE|CIC|HFCK|STAN|JUB|UMEM|CRAY|OLYM|BAT|KUKZ|NCBA|BOC|CARB|SCBK|DTK|BKG|KEGN|UMME|BRIT|LBTY|SLAM|CTUM|NSE|EVRD|FTGH|UNGA|ARM|PORT|CRWN|TPSE|SCAN|SGL|CGEN|AMAC)\b/i);
       if (stockMatch && groupId) {
         const ticker = stockMatch[0].toUpperCase();
         setTimeout(async () => {
@@ -166,6 +1213,81 @@ io.on('connection', (socket) => {
       }
     } catch (err) {
       console.error('send_message error:', err.message);
+    }
+  });
+
+  // ── Support Live Chat (User + Staff) ──────────────────────────────
+  socket.on('join_support_chat', () => {
+    socket.join('support:live');
+  });
+
+  socket.on('leave_support_chat', () => {
+    socket.leave('support:live');
+  });
+
+  // Staff joins their own room to receive all user messages
+  socket.on('staff_join', () => {
+    socket.join('support:staff');
+  });
+  socket.on('staff_leave', () => {
+    socket.leave('support:staff');
+  });
+
+  // User is typing → staff see it
+  socket.on('support_typing', () => {
+    socket.to('support:staff').emit('support_user_typing', socket.data?.userId || null);
+  });
+  socket.on('support_stop_typing', () => {
+    socket.to('support:staff').emit('support_user_stop_typing', socket.data?.userId || null);
+  });
+
+  // Staff is typing → user sees it
+  socket.on('staff_typing', ({ userId }) => {
+    io.to(`user:${userId}`).emit('support_staff_typing');
+  });
+  socket.on('staff_stop_typing', ({ userId }) => {
+    io.to(`user:${userId}`).emit('support_staff_stop_typing');
+  });
+
+  // User sends a support message → staff room gets it, user's own display gets it
+  socket.on('send_support_message', async (data) => {
+    try {
+      const { userId, userName, email, message, isStaff } = data;
+      if (!message || !message.trim()) return;
+      const cleanMessage = sanitizeText(message.trim());
+      if (!cleanMessage) return;
+      const result = await pool.query(
+        `INSERT INTO support_chat_messages (user_id, user_name, email, message, is_staff)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, user_id, user_name, email, message, is_staff, created_at`,
+        [userId || null, sanitizeText(userName || 'Anonymous'), sanitizeText(email || ''), cleanMessage, isStaff || false]
+      );
+      const msg = result.rows[0];
+      if (userId) io.to(`user:${userId}`).emit('support_chat_message', msg);
+      io.to('support:staff').emit('support_chat_message', msg);
+    } catch (err) {
+      console.error('send_support_message error:', err.message);
+    }
+  });
+
+  // Staff sends a reply → user's room gets it
+  socket.on('staff_send_message', async (data) => {
+    try {
+      const { userId, userName, email, message } = data;
+      if (!message || !message.trim() || !userId) return;
+      const cleanMessage = sanitizeText(message.trim());
+      if (!cleanMessage) return;
+      const result = await pool.query(
+        `INSERT INTO support_chat_messages (user_id, user_name, email, message, is_staff)
+         VALUES ($1, $2, $3, $4, true)
+         RETURNING id, user_id, user_name, email, message, is_staff, created_at`,
+        [userId, sanitizeText(userName || 'Support Agent'), sanitizeText(email || ''), cleanMessage]
+      );
+      const msg = result.rows[0];
+      io.to(`user:${userId}`).emit('support_chat_message', msg);
+      io.to('support:staff').emit('support_chat_message', msg);
+    } catch (err) {
+      console.error('staff_send_message error:', err.message);
     }
   });
 });
@@ -237,17 +1359,16 @@ async function snapshotPortfolioValue(userId) {
 }
 
 async function getMarketSnapshot() {
-  const NSE_TICKERS = ['SCOM', 'EQTY', 'KCB', 'EABL', 'ABSA', 'SBIC', 'KLG', 'OLYM', 'CRAY', 'BAMB', 'UMEM', 'KPLC', 'NMG', 'TOTL', 'STAN', 'COOP', 'JUB', 'KNRE', 'LKL', 'CIC', 'HFCK', 'IMH'];
-  const GLOBAL_TICKERS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META'];
-  const indexSymbols = ['NSE:NSE20', 'NSE:NSEASI', 'NSE:NSE25', 'NSE:NSE15'];
-  const stockSymbols = [...NSE_TICKERS.map(t => 'NSE:' + t), ...GLOBAL_TICKERS];
+  const NSE_TICKERS = ['SCOM', 'EQTY', 'KCB', 'EABL', 'ABSA', 'SBIC', 'KLG', 'OLYM', 'CRAY', 'BAMB', 'UMEM', 'KPLC', 'NMG', 'TOTL', 'STAN', 'COOP', 'JUB', 'KNRE', 'LKL', 'CIC', 'HFCK', 'IMH', 'NCBA', 'BAT', 'KUKZ', 'SASN', 'SCBK', 'KEGN', 'CTUM', 'BRIT', 'CARB', 'KQ', 'PORT', 'WTK', 'KAPC', 'CGEN', 'CABL', 'UMME', 'REA', 'EGAD', 'LBTY', 'SLAM', 'BOC', 'MSC', 'UNGA', 'FTGH', 'TPS', 'HAFR', 'EVRD'];
+  const GLOBAL_TICKERS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'NFLX', 'JPM', 'V', 'WMT', 'JNJ', 'PG', 'XOM', 'BAC', 'HD', 'DIS', 'CSCO', 'ADBE', 'CRM', 'INTC', 'AMD', 'PYPL', 'UBER', 'SQ', 'MA', 'UNH', 'COST', 'ABBV', 'CVX', 'PFE', 'TMO', 'ORCL', 'IBM', 'QCOM', 'AVGO', 'NKE', 'MRK', 'KO', 'PEP', 'MCD', 'BA', 'C', 'GS', 'MS', 'BK', 'AXP', 'CAT', 'GE', 'HON', 'LMT'];
+  const indexSymbols = ['NSE:NSE20', 'NSE:NSEASI', 'NSE:NSE25', 'NSE:NSE10'];  const stockSymbols = [...NSE_TICKERS.map(t => 'NSE:' + t), ...GLOBAL_TICKERS];
   const allQuotes = await getQuotesBatch([...indexSymbols, ...stockSymbols]);
   const indices = indexSymbols.map(symbol => {
     const data = allQuotes[symbol] || { symbol, price: 0, change: 0, changePercent: 0, volume: 0 };
     return {
       name: symbol === 'NSE:NSE20' ? 'NSE 20 Share Index'
         : symbol === 'NSE:NSEASI' ? 'NSE All Share Index'
-        : symbol === 'NSE:NSE25' ? 'NSE 25 Share Index' : 'NSE 15 Index',
+        : symbol === 'NSE:NSE25' ? 'NSE 25 Share Index' : 'NSE 10 Share Index',
       symbol, currency: 'KES',
       value: (data.price || 0).toFixed(2),
       change: (data.change >= 0 ? '+' : '') + (data.changePercent || 0).toFixed(2) + '%',
@@ -265,6 +1386,7 @@ async function getMarketSnapshot() {
       price: (data.price || 0).toFixed(2),
       currency: data.currency || (symbol.startsWith('NSE:') ? 'KES' : 'USD'),
       change: (data.change >= 0 ? '+' : '') + (data.changePercent || 0).toFixed(2) + '%',
+      changePercent: data.changePercent || 0,
       isPositive: data.change >= 0,
       volume: formatVolume(data.volume),
       trades: Math.floor((data.volume || 0) / 100).toLocaleString(),
@@ -288,77 +1410,245 @@ async function getMarketSnapshot() {
 }
 
 async function getLivePrice(market, ticker) {
-  const { getStockQuote } = require('./marketService');
+  const { getStockQuote, getSyntheticQuote } = require('./marketService');
+  const sym = market === 'NSE' ? 'NSE:' + ticker : ticker;
   try {
-    const sym = market === 'NSE' ? 'NSE:' + ticker : ticker;
-    const quote = await getStockQuote(sym).catch(() => null);
+    const quote = await Promise.race([
+      getStockQuote(sym),
+      new Promise(resolve => setTimeout(() => resolve(null), 3000)),
+    ]);
     if (quote && quote.price) return quote.price;
   } catch {}
-  return null;
+  return getSyntheticQuote(sym).price || null;
+}
+
+async function getLiveQuote(market, ticker) {
+  const { getStockQuote, getSyntheticQuote } = require('./marketService');
+  const sym = market === 'NSE' ? 'NSE:' + ticker : ticker;
+  try {
+    const quote = await Promise.race([
+      getStockQuote(sym),
+      new Promise(resolve => setTimeout(() => resolve(null), 3000)),
+    ]);
+    if (quote && quote.price != null) return { price: quote.price, previousClose: quote.previousClose ?? quote.price };
+  } catch {}
+  const fallback = getSyntheticQuote(sym);
+  return { price: fallback.price ?? 0, previousClose: fallback.previousClose ?? fallback.price ?? 0 };
+}
+
+function formatMinutes(minutes) {
+  if (minutes == null || minutes <= 0) return '';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function isMarketOpen(market) {
+  const now = new Date();
+  const day = now.getDay();
+  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const month = now.getMonth();
+  const isWeekend = day === 0 || day === 6;
+
+  let currentMinutes, openStart, openEnd, nextOpen, nextClose;
+
+  if (market === 'NSE') {
+    // NSE: Mon-Fri 9:30 AM - 3:30 PM EAT (UTC+3)
+    currentMinutes = utcMinutes + 180;
+    openStart = 570;
+    openEnd = 930;
+  } else {
+    // US Markets (Global): Mon-Fri 9:30 AM - 4:00 PM ET
+    const isDST = month >= 2 && month <= 9;
+    const etOffset = isDST ? -4 : -5;
+    currentMinutes = ((utcMinutes + etOffset * 60) % 1440 + 1440) % 1440;
+    openStart = 570;
+    openEnd = 960;
+  }
+
+  const isOpen = !isWeekend && currentMinutes >= openStart && currentMinutes < openEnd;
+
+  // Calculate time to next event
+  if (isOpen) {
+    nextClose = openEnd - currentMinutes;
+    nextOpen = null;
+  } else if (isWeekend) {
+    // Next Monday open (Saturday=6 has 1 intervening day, Sunday=0 has 0)
+    nextOpen = (1440 - currentMinutes) + (day === 6 ? 1440 : 0) + openStart;
+    nextClose = null;
+  } else if (currentMinutes < openStart) {
+    // Before market opens today
+    nextOpen = openStart - currentMinutes;
+    nextClose = null;
+  } else {
+    // After market closed today, next open is tomorrow (or Monday)
+    const daysUntilNext = day === 5 ? 3 : 1;
+    nextOpen = (1440 - currentMinutes) + (daysUntilNext - 1) * 1440 + openStart;
+    nextClose = null;
+  }
+
+  const openLabel = isOpen ? 'Open' : 'Closed';
+  const eventLabel = isOpen
+    ? `Closes ${formatMinutes(nextClose)}`
+    : `Opens ${formatMinutes(nextOpen)}`;
+
+  return {
+    open: isOpen,
+    label: openLabel,
+    eventLabel,
+    timeToClose: isOpen ? nextClose : null,
+    timeToOpen: isOpen ? null : nextOpen,
+    openTime: '9:30 AM',
+    closeTime: market === 'NSE' ? '3:30 PM' : '4:00 PM',
+  };
 }
 
 // ===================== API ROUTES =====================
 
 // --- Auth Routes ---
+
+app.post('/api/auth/send-verification-code', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email required' });
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existing.rows.length > 0) return res.status(409).json({ error: 'Email already registered' });
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'email_verify']);
+    await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'email_verify', expiresAt]);
+    await sendVerificationEmail(email, code).catch(e => console.error('[MAILER] send-verification-code failed:', e.message));
+    res.json({ message: 'Verification code sent to email', expiresIn: 600 });
+  } catch (error) {
+    console.error('send-verification-code error:', error.message);
+    res.status(500).json({ error: 'Failed to send verification code' });
+  }
+});
+
+app.post('/api/auth/verify-email-and-register', async (req, res) => {
+  try {
+    const { fullName, email, password, code } = req.body;
+    if (!fullName || !email || !password || !code) return res.status(400).json({ error: 'All fields required' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existing.rows.length > 0) return res.status(409).json({ error: 'Email already registered' });
+    const otpResult = await pool.query(
+      'SELECT * FROM otp_codes WHERE email = $1 AND code = $2 AND type = $3 AND used = FALSE AND expires_at > NOW()',
+      [email, code, 'email_verify']
+    );
+    if (otpResult.rows.length === 0) return res.status(401).json({ error: 'Invalid or expired verification code' });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date) VALUES ($1, $2, $3, TRUE, NOW()) RETURNING id, full_name, email, role, is_verified, trader_type, created_at, subscription_tier, subscription_status, trial_start_date',
+      [fullName, email, hashedPassword]
+    );
+    await pool.query('UPDATE otp_codes SET used = TRUE WHERE id = $1', [otpResult.rows[0].id]);
+    await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [result.rows[0].id]);
+    sendWelcomeEmail(email, fullName).catch(err => console.error('[MAILER] Welcome email failed:', err.message));
+    const token = generateToken(result.rows[0].id);
+    res.status(201).json({ user: result.rows[0], token });
+  } catch (error) {
+    console.error('verify-email-and-register error:', error.message);
+    res.status(500).json({ error: 'Verification or registration failed' });
+  }
+});
+
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { fullName, email, password } = req.body;
     if (!fullName || !email || !password) return res.status(400).json({ error: 'All fields required' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length > 0) return res.status(409).json({ error: 'Email already registered' });
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      'INSERT INTO users (full_name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, full_name, email, role, created_at',
+      'INSERT INTO users (full_name, email, password_hash, trial_start_date) VALUES ($1, $2, $3, NOW()) RETURNING id, full_name, email, role, created_at, subscription_tier, subscription_status, trial_start_date',
       [fullName, email, hashedPassword]
     );
     await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [result.rows[0].id]);
-    res.status(201).json({ user: result.rows[0] });
+    sendWelcomeEmail(email, fullName).catch(err => console.error('[MAILER] Welcome email failed:', err.message));
+    const token = generateToken(result.rows[0].id);
+    res.status(201).json({ user: result.rows[0], token });
   } catch (error) {
-    console.error('Register error:', error.message);
+    console.error('Register error:', error && error.stack ? error.stack : error);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
-    const user = result.rows[0];
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-    const { password_hash, ...safeUser } = user;
-    res.json({ user: safeUser });
-  } catch (error) {
-    console.error('Login error:', error.message);
-    res.status(500).json({ error: 'Login failed' });
+// ─── Rate limiting for login ───
+const loginAttempts = new Map();
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_WINDOW_MS = 60 * 1000; // 1 minute
+const LOGIN_BAN_MS = 15 * 60 * 1000; // 15 minute lockout
+function getClientIp(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress || 'unknown';
+}
+function checkLoginRateLimit(email, ip) {
+  const key = email.toLowerCase();
+  const now = Date.now();
+  let entry = loginAttempts.get(key);
+  if (!entry) { entry = { ip, count: 0, firstAttempt: now, bannedUntil: 0 }; loginAttempts.set(key, entry); }
+  // Cleanup old entries periodically
+  if (loginAttempts.size > 10000) {
+    for (const [k, v] of loginAttempts) {
+      if (now - v.firstAttempt > LOGIN_BAN_MS) loginAttempts.delete(k);
+    }
   }
-});
-
-app.get('/api/auth/me', async (req, res) => {
-  try {
-    const userId = req.query.userId;
-    if (!userId) return res.status(401).json({ error: 'Not authenticated' });
-    const result = await pool.query('SELECT id, full_name, email, role, trader_type, is_verified, created_at FROM users WHERE id = $1', [userId]);
-    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    res.json({ user: result.rows[0] });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  if (entry.bannedUntil > now) return { blocked: true, remaining: 0, banExpires: entry.bannedUntil };
+  // Reset window if past window
+  if (now - entry.firstAttempt > LOGIN_WINDOW_MS) { entry.count = 0; entry.firstAttempt = now; }
+  entry.count++;
+  const remaining = LOGIN_MAX_ATTEMPTS - entry.count;
+  if (entry.count > LOGIN_MAX_ATTEMPTS) {
+    entry.bannedUntil = now + LOGIN_BAN_MS;
+    return { blocked: true, remaining: 0, banExpires: entry.bannedUntil };
   }
-});
+  return { blocked: false, remaining, banExpires: 0 };
+}
+async function logAdminAction(adminId, email, action, ip, userAgent, details, success) {
+  try {
+    await pool.query(
+      `INSERT INTO admin_audit_log (admin_id, email, action, ip_address, user_agent, details, success)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [adminId, email, action, ip, userAgent, details ? JSON.stringify(details) : null, success]
+    );
+  } catch {}
+}
 
-// --- OTP & Password Reset ---
+async function logUserActivity(userId, email, fullName, action, details, ip) {
+  try {
+    const r = await pool.query(
+      `INSERT INTO user_activity_log (user_id, email, full_name, action, details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`,
+      [userId, email, fullName, action, details ? JSON.stringify(details) : null, ip]
+    );
+    const row = r.rows[0];
+    io.to('support:staff').emit('user_activity', {
+      id: row.id,
+      user_id: userId,
+      email,
+      full_name: fullName,
+      action,
+      details: details || null,
+      created_at: row.created_at
+    });
+  } catch {}
+}
+
+// General OTP login (for React frontend)
 app.post('/api/auth/send-otp', async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email required' });
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email required' });
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'login']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'login', expiresAt]);
-    await sendOtpEmail(email, code).catch(e => console.error('[MAILER] send-otp failed:', e.message));
-    console.log(`[OTP] Login code for ${email}: ${code}`);
+    // Send email in the background so the UI responds immediately even if the mailer is slow/fails
+    sendOtpEmail(email, code).catch(e => console.error('[MAILER] send-otp failed:', e.message));
     res.json({ message: 'OTP sent to email', expiresIn: 600 });
   } catch (error) {
     console.error('send-otp error:', error.message);
@@ -376,25 +1666,158 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     );
     if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid or expired OTP' });
     await pool.query('UPDATE otp_codes SET used = TRUE WHERE id = $1', [result.rows[0].id]);
-    let userResult = await pool.query('SELECT id, full_name, email, role, trader_type, is_verified, created_at FROM users WHERE email = $1', [email]);
+    let userResult = await pool.query('SELECT id, full_name, email, role, trader_type, is_verified, created_at, subscription_tier, subscription_status, trial_start_date FROM users WHERE email = $1', [email]);
     if (userResult.rows.length === 0) {
       userResult = await pool.query(
-        'INSERT INTO users (full_name, email, password_hash, is_verified) VALUES ($1, $2, $3, TRUE) RETURNING id, full_name, email, role, trader_type, is_verified, created_at',
-        [email, email, 'otp_only', email]
+        'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date) VALUES ($1, $2, $3, TRUE, NOW()) RETURNING id, full_name, email, role, trader_type, is_verified, created_at, trial_start_date',
+        [email, email, 'otp_only']
       );
       await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [userResult.rows[0].id]);
     }
-    res.json({ user: userResult.rows[0] });
+    const user = userResult.rows[0];
+    const token = generateToken(user.id);
+    logUserActivity(user.id, email, user.full_name, 'login', null, req.ip);
+    res.json({ user, token });
   } catch (error) {
     console.error('verify-otp error:', error.message);
     res.status(500).json({ error: 'OTP verification failed' });
   }
 });
 
+// Password-verified OTP login (frontend default): verify credentials, then email OTP
+app.post('/api/auth/login-request-otp', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    const ip = getClientIp(req);
+    const ua = req.headers['user-agent'] || '';
+    const limit = checkLoginRateLimit(email, ip);
+    if (limit.blocked) {
+      const banSecs = Math.ceil((limit.banExpires - Date.now()) / 1000);
+      await logAdminAction(null, email, 'login_blocked', ip, ua, { reason: 'rate_limit', banSecs }, false);
+      return res.status(429).json({ error: `Too many attempts. Try again in ${banSecs}s.`, code: 'RATE_LIMITED', banExpires: limit.banExpires });
+    }
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      await logAdminAction(null, email, 'login_failed', ip, ua, { reason: 'user_not_found' }, false);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const user = result.rows[0];
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      await logAdminAction(user.id, email, 'login_failed', ip, ua, { reason: 'wrong_password', remaining: limit.remaining - 1 }, false);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'login_password']);
+    await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'login_password', expiresAt]);
+    // Send email in the background so the UI responds immediately even if the mailer is slow/fails
+    sendOtpEmail(email, code).catch(e => console.error('[MAILER] login-request-otp failed:', e.message));
+    res.json({ message: 'OTP sent to email', expiresIn: 600 });
+  } catch (error) {
+    console.error('login-request-otp error:', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: 'Failed to send login OTP' });
+  }
+});
+
+app.post('/api/auth/login-verify-otp', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) return res.status(400).json({ error: 'Email and code required' });
+    const result = await pool.query(
+      'SELECT * FROM otp_codes WHERE email = $1 AND code = $2 AND type = $3 AND used = FALSE AND expires_at > NOW()',
+      [email, code, 'login_password']
+    );
+    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid or expired OTP' });
+    await pool.query('UPDATE otp_codes SET used = TRUE WHERE id = $1', [result.rows[0].id]);
+    const userResult = await pool.query(
+      'SELECT id, full_name, email, role, trader_type, is_verified, created_at, subscription_tier, subscription_status, trial_start_date FROM users WHERE email = $1',
+      [email]
+    );
+    if (userResult.rows.length === 0) return res.status(401).json({ error: 'User not found' });
+    const user = userResult.rows[0];
+    if (!user.subscription_tier) user.subscription_tier = 'free';
+    if (!user.subscription_status) user.subscription_status = 'active';
+    if (!user.trial_start_date) user.trial_start_date = user.created_at;
+    const token = generateToken(user.id);
+    const ip = getClientIp(req);
+    await logUserActivity(user.id, email, user.full_name, 'login', null, ip);
+    loginAttempts.delete(email.toLowerCase());
+    res.json({ user, token });
+  } catch (error) {
+    console.error('login-verify-otp error:', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: 'OTP verification failed' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    const ip = getClientIp(req);
+    const ua = req.headers['user-agent'] || '';
+    // Rate limit check
+    const limit = checkLoginRateLimit(email, ip);
+    if (limit.blocked) {
+      const banSecs = Math.ceil((limit.banExpires - Date.now()) / 1000);
+      await logAdminAction(null, email, 'login_blocked', ip, ua, { reason: 'rate_limit', banSecs }, false);
+      return res.status(429).json({ error: `Too many attempts. Try again in ${banSecs}s.`, code: 'RATE_LIMITED', banExpires: limit.banExpires });
+    }
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      await logAdminAction(null, email, 'login_failed', ip, ua, { reason: 'user_not_found' }, false);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const user = result.rows[0];
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      await logAdminAction(user.id, email, 'login_failed', ip, ua, { reason: 'wrong_password', remaining: limit.remaining - 1 }, false);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+const { password_hash, ...safeUser } = user;
+    if (!safeUser.subscription_tier) safeUser.subscription_tier = 'free';
+    if (!safeUser.subscription_status) safeUser.subscription_status = 'active';
+    if (!safeUser.trial_start_date) safeUser.trial_start_date = safeUser.created_at;
+    // Admin logins via OTP only; this endpoint is for regular app users
+    const token = generateToken(user.id);
+    // Log successful login
+    if (user.role === 'admin') {
+      await logAdminAction(user.id, email, 'login_success', ip, ua, null, true);
+    }
+    await logUserActivity(user.id, email, user.full_name, 'login', null, ip);
+    // Reset rate limit on success
+    loginAttempts.delete(email.toLowerCase());
+    res.json({ user: safeUser, token });
+  } catch (error) {
+    console.error('Login error:', error && error.stack ? error.stack : error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Admin logout — blacklists token client-side, logs the action
+app.post('/api/admin/logout', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const ip = getClientIp(req);
+    const ua = req.headers['user-agent'] || '';
+    await logAdminAction(req.user.id, req.user.email, 'logout', ip, ua, null, true);
+    res.json({ message: 'Logged out' });
+  } catch { res.json({ message: 'Logged out' }); }
+});
+
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    res.json({ user: req.user });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- OTP & Password Reset ---
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email required' });
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email required' });
     const exists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (exists.rows.length === 0) return res.status(404).json({ error: 'No account with this email' });
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -402,7 +1825,6 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'password_reset']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'password_reset', expiresAt]);
     await sendResetCode(email, code).catch(e => console.error('[MAILER] forgot-password failed:', e.message));
-    console.log(`[RESET] Password reset code for ${email}: ${code}`);
     res.json({ message: 'Reset code sent to email', expiresIn: 900 });
   } catch (error) {
     console.error('forgot-password error:', error.message);
@@ -429,6 +1851,67 @@ app.post('/api/auth/reset-password', async (req, res) => {
     res.status(500).json({ error: 'Password reset failed' });
   }
 });
+
+// --- Subscription Check Middleware ---
+async function requireActiveSubscription(req, res, next) {
+  try {
+    // If JWT auth is present, use req.user.id
+    let userId = req.user?.id;
+    // Fallback for legacy requests (should be removed once frontend uses JWT everywhere)
+    if (!userId) {
+      userId = req.query.userId || req.body.userId || req.headers['x-user-id'];
+      if (!userId) {
+        const fullPath = req.originalUrl || req.url || req.path;
+        const pathMatch = fullPath.match(/\/users\/(\d+)/);
+        if (pathMatch) userId = pathMatch[1];
+      }
+    }
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required', code: 'NO_USER_ID' });
+    }
+    const result = await pool.query(
+      'SELECT subscription_tier, subscription_status, trial_start_date FROM users WHERE id = $1',
+      [userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
+    }
+    const { subscription_tier, subscription_status, trial_start_date } = result.rows[0];
+    const hasPaid = subscription_status === 'active' && subscription_tier !== 'free' && subscription_tier !== null;
+    const inTrial = trial_start_date && (Date.now() - new Date(trial_start_date).getTime()) < 7 * 24 * 60 * 60 * 1000;
+    if (!hasPaid && !inTrial) {
+      return res.status(403).json({
+        error: 'Active subscription required. Please subscribe to continue using the app.',
+        code: 'SUBSCRIPTION_REQUIRED',
+        subscription_tier: subscription_tier || 'free',
+        subscription_status: subscription_status || 'inactive'
+      });
+    }
+    next();
+  } catch (error) {
+    console.error('requireActiveSubscription error:', error.message);
+    res.status(500).json({ error: 'Failed to verify subscription status' });
+  }
+}
+
+// --- Activity Logging ---
+
+app.post('/api/activity/log', async (req, res) => {
+  try {
+    const { userId, action, details } = req.body;
+    if (!userId || !action) return res.status(400).json({ error: 'userId and action required' });
+    if (!['page_view', 'signal_view', 'watchlist_add', 'watchlist_remove', 'search', 'news_read', 'portfolio_view', 'settings_change', 'logout'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid action type' });
+    }
+    const user = await pool.query('SELECT email, full_name FROM users WHERE id = $1', [userId]);
+    if (!user.rows.length) return res.status(404).json({ error: 'User not found' });
+    await logUserActivity(userId, user.rows[0].email, user.rows[0].full_name, action, details, req.ip);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- Support Routes ---
 
 const FAQ_ITEMS = [
@@ -440,6 +1923,51 @@ const FAQ_ITEMS = [
   { question: "Can I connect a real brokerage account?", answer: "Go to Settings > Brokers to connect supported brokers. Currently we support interactive brokers integration. More brokers coming soon.", category: "account" },
   { question: "How do I create and join groups?", answer: "Go to the Chat & Groups page and click 'Create Group' or browse existing groups. Groups allow you to share signals, discuss trades, and collaborate.", category: "social" },
   { question: "Why does the screener show different results?", answer: "The screener filters stocks based on your selected criteria (market cap, sector, price, technical signals). Broader criteria return more results.", category: "data" },
+  { question: "How does the dashboard work?", answer: "Your **Dashboard** shows your portfolio value, market indices (NSE 20, S&P 500), sector performance, top gainers/losers, watchlist stocks, AI signals distribution, market sentiment pulse bars, and a news ticker. It's your command center for everything happening in the markets.", category: "dashboard" },
+  { question: "How do I use the portfolio page?", answer: "The **Portfolio** page displays all your holdings across NSE and global markets with real-time valuations. You'll see allocation pie charts, performance vs benchmarks (NSE 20, S&P 500), realized/unrealized P&L, trade history, portfolio statements, and AI-powered rebalancing recommendations.", category: "portfolio" },
+  { question: "How do paper trading orders work?", answer: "On the **Portfolio** page, use the Trade panel to place buy/sell orders. You get KES 1,000,000 in virtual funds. You can set market or limit prices, track open positions, view your trade history, and even reset the account to start over. Perfect for practicing without real money!", category: "trading" },
+  { question: "How do I use the watchlist?", answer: "Go to **Watchlist** from the sidebar. Type a stock name or ticker in the search bar to add it. Your watchlist shows live prices, price changes, and signal overlays. You can set target prices and remove stocks anytime.", category: "dashboard" },
+  { question: "What is the stock screener?", answer: "The **Stock Screener** (in Markets > Stocks) lets you filter stocks by market (NSE, NYSE, NASDAQ), sector, price range, change %, volume, P/E ratio, dividend yield, AI score, and signal type. Results update in real-time with table and grid views.", category: "markets" },
+  { question: "What exchanges do you cover?", answer: "We cover **NSE** (Nairobi Securities Exchange), **NYSE** (New York Stock Exchange), **NASDAQ**, **LSE** (London), **JSE** (Johannesburg), **GSE** (Ghana), **NGX** (Nigeria), **TSE** (Tokyo), and **HKEX** (Hong Kong). Browse them under Markets > Stocks > Exchanges.", category: "markets" },
+  { question: "How do I read trading signals?", answer: "Each signal shows: **Type** (Intraday, Swing, Long Term), **Rating** (Strong Buy to Strong Sell), **Confidence** (0-100%), **Entry price**, **Stop-loss**, **Target 1 & 2**, and **Risk/Reward** ratio. The signal also includes fundamental, technical, growth, and balance sheet analysis plus news sentiment.", category: "signals" },
+  { question: "What are the signal types?", answer: "We have **Intraday** (same-day trades), **Swing Trade** (multi-day to weeks), and **Long Term** (months to years) signals. Each is rated Strong Buy, Buy, Accumulate, Hold, Sell, or Strong Sell with a confidence percentage.", category: "signals" },
+  { question: "How does the AI signal engine work?", answer: "Our engine scores stocks on multiple dimensions: **Technical** (RSI, MACD, SMA trends), **Fundamental** (PE vs sector, EV/EBITDA, dividend yield), **Growth** (revenue, EPS, margins, FCF), **Balance Sheet** (D/E ratio, current ratio, ROE, Altman Z-score), **Insider Activity**, and **News Sentiment** via NLP. All combined into a final recommendation.", category: "signals" },
+  { question: "How do I use the chat and groups feature?", answer: "Go to **Chat & Groups** from the sidebar. You'll find public group chat rooms like 'nse-traders', 'safaricom', 'banking', 'tech-picks', and more. Join a room to discuss trades with others. You can also send direct messages to other users and create your own trading groups.", category: "social" },
+  { question: "How do I create a group?", answer: "On the **Groups** page, click 'Create Group'. Give it a name, description, and topic (General, Trading, Finance, Technology, Telecom, Income). Other users can find and join your group.", category: "social" },
+  { question: "How do I find and follow people?", answer: "The **People** page lets you browse all traders. View profiles with trader type (Value, Growth, Day Trader, Analyst), expertise, top picks, and follower counts. Click 'Follow' to get updates. You can also start a direct message from their profile.", category: "social" },
+  { question: "How do I view a stock's detailed analysis?", answer: "Click on any stock symbol or search for it. The **Stock Analysis** page shows interactive price charts (1D to ALL), real-time quote, AI signal with scores, technical indicators (RSI, MACD, SMA, ATR, Bollinger Bands), and fundamental details (market cap, PE ratio, dividend yield, day range, volume).", category: "stocks" },
+  { question: "What bonds are available?", answer: "We track **Government bonds** (Kenya & US), **Infrastructure bonds**, **Corporate bonds**, and **Treasury Bills** (91, 182, 364-day). Each shows coupon rate, YTM, maturity date, price, and credit rating. The **Bonds** page also shows a yield curve comparing Kenya vs US.", category: "markets" },
+  { question: "What ETFs do you cover?", answer: "Browse **ETFs** by category. Each shows expense ratio, AUM, dividend yield, price, and change. The page highlights top gainers/losers and largest AUM funds. Filter by market and category.", category: "markets" },
+  { question: "How does the news section work?", answer: "The **News** page aggregates financial news from multiple sources with sentiment analysis (positive/negative/neutral). Filter by All, NSE, Global, Positive, or Negative. News auto-refreshes every 60 seconds. Each article shows related stock mentions.", category: "news" },
+  { question: "How do I view financial reports?", answer: "The **Financials** page lets you search any company to view their **Income Statement**, **Balance Sheet**, **Cash Flow Statement**, **Key Metrics** (PE, PB, ROE, EPS), and **Dividend History**. Data comes from SimFin, Yahoo Finance, and SEC Edgar filings.", category: "stocks" },
+  { question: "What settings can I change?", answer: "In **Settings** you can: edit your profile (name, email, phone, bio, location, trader type, experience level), manage notification preferences (price alerts, signals, news, portfolio, chat), toggle appearance (dark mode, compact view), change your password, and set privacy controls.", category: "account" },
+  { question: "How do notifications work?", answer: "You'll receive notifications for new trading signals, price alerts, and system updates. The bell icon in the header shows unread count. Click to view all, mark individual as read, or mark all read. Real-time updates arrive via WebSocket.", category: "account" },
+  { question: "How do I connect a broker?", answer: "Go to **Settings > Brokers** to connect real brokerage accounts. Supported: Alpaca, Interactive Brokers (IBKR), MetaTrader 5, OANDA, Tradier, and manual entry for African brokers like AIB-AXYS and Hisa. Credentials are encrypted with AES-256-GCM.", category: "account" },
+  { question: "What subscription plans are available?", answer: "We offer **Starter** ($1/month) for basic access, **Pro** ($29/month) for full features including AI signals and advanced analytics, and **Enterprise** ($99/month) for professional traders with priority support. Pay via M-Pesa (mobile money) or card.", category: "account" },
+  { question: "How do M-Pesa payments work?", answer: "On the subscription page, select M-Pesa as your payment method. Enter your M-Pesa phone number and you'll receive an STK push prompt on your phone. Confirm the payment and your subscription activates immediately.", category: "account" },
+  { question: "What is the AI Insights page?", answer: "**AI Insights** is a conversational AI analyst. Ask questions like 'Analyze Safaricom trend', 'Best NSE momentum stocks', or 'Outlook for banking sector'. It responds with data-driven market analysis.", category: "signals" },
+  { question: "How does sector analysis work?", answer: "The **Sectors** page shows performance by sector/industry with bar charts. Filter by NSE or Global markets. Each sector shows leading stocks, sentiment indicators, and volume analysis.", category: "markets" },
+  { question: "What is the earnings calendar?", answer: "The **Earnings Calendar** shows upcoming earnings reports with dates, estimated vs actual EPS, surprise percentage, and market cap. Navigate by month to see what's coming up.", category: "stocks" },
+  { question: "How do I view analyst ratings?", answer: "The **Top Analysts** page lists analyst firms with their stock ratings and target prices. See rating distribution (Strong Buy through Sell) for each stock. Track historical recommendation performance.", category: "signals" },
+  { question: "What technical indicators are available?", answer: "Each stock's analysis page includes **RSI** (Relative Strength Index), **MACD** (Moving Average Convergence Divergence), **SMA** (Simple Moving Average), **ATR** (Average True Range), and **Bollinger Bands**. These help identify trends, momentum, and volatility.", category: "stocks" },
+  { question: "How do I use the support ticket system?", answer: "On the **Support Center** page, go to the 'Contact Us' tab and fill out the ticket form with your email, subject, category, priority, and message. Track your ticket status in the 'My Tickets' tab. You'll get updates as staff responds.", category: "support" },
+  { question: "How do I browse stocks by industry?", answer: "Go to **Markets > Stocks > Industries**. Stocks are grouped by industry/sector showing average change, volume, and AI score per industry. Searchable and sortable.", category: "markets" },
+  { question: "What are top stocks?", answer: "The **Top Stocks** page ranks stocks by AI score, volume, and other performance metrics. Visual indicators show top performers with trophy/award badges. Great for discovering the best opportunities.", category: "signals" },
+  { question: "How do I use the market movers?", answer: "The **Markets** page shows top gainers and losers for both NSE and Global markets. Each mover shows the stock name, price, change percentage, and volume. Updated in real-time during market hours.", category: "markets" },
+  { question: "How do I track my portfolio performance?", answer: "Your **Portfolio** page shows an interactive area chart comparing your performance against NSE 20 and S&P 500 benchmarks. Below that, your holdings table shows each position with current value, P&L, and allocation percentage.", category: "portfolio" },
+  { question: "What is the market pulse?", answer: "The **Market Pulse** shows AI-generated sentiment scores for NSE and Global markets. You'll see bearish/neutral/bullish indicators, leading sectors, and an AI market summary with confidence scores. Visible on both the Dashboard and Markets pages.", category: "markets" },
+  { question: "How does portfolio rebalancing work?", answer: "Our AI analyzes your current holdings and suggests rebalancing trades to optimize your allocation. Access this from your Portfolio page via the 'AI Advice & Rebalancing' section. It considers your risk profile and current market conditions.", category: "portfolio" },
+  { question: "Can I export my portfolio data?", answer: "The **Portfolio** page offers statements including trade history, account summary, and performance reports. You can view detailed breakdowns of realized/unrealized gains, fees, and allocation.", category: "portfolio" },
+  { question: "How do I update notification preferences?", answer: "Go to **Settings > Notifications**. Toggle alerts for: price alerts, trading signals, market news, portfolio updates, and chat messages. Changes apply immediately.", category: "account" },
+  { question: "How do I change my password?", answer: "Go to **Settings > Security**. Enter your current password and new password. Must be at least 8 characters. You'll also receive a confirmation email.", category: "account" },
+  { question: "Is dark mode available?", answer: "Yes! Go to **Settings > Appearance** and toggle Dark Mode. You can also enable Compact View for a denser layout. Your preference is saved across sessions.", category: "account" },
+  { question: "How do I see what other traders are doing?", answer: "The **People** page shows trader profiles with their trader type, expertise, and top picks. Follow traders to track their activity. You can also see online status and start direct conversations.", category: "social" },
+  { question: "How do I start a direct message?", answer: "Go to **Chat & Groups** and search for a user, or go to **People** and click on a trader's profile. From there you can send a direct message. You can also click the chat icon next to their name anywhere in the app.", category: "social" },
+  { question: "What is the NSE market schedule?", answer: "The **NSE** trades Monday to Friday, 9:30 AM to 3:30 PM East Africa Time (EAT). Closed on weekends and Kenyan public holidays. The **Dashboard** shows live market status (Open/Closed).", category: "markets" },
+  { question: "What is the US market schedule?", answer: "**US markets** (NYSE, NASDAQ) trade Monday to Friday, 9:30 AM to 4:00 PM Eastern Time (ET). Pre-market 4:00-9:30 AM, after-hours 4:00-8:00 PM. Closed on US public holidays.", category: "markets" },
+  { question: "How does the AI chat assistant work?", answer: "The **AI Chat Assistant** on the AI Insights page uses natural language understanding to answer your market questions. Try asking 'Analyze Safaricom trend', 'Best NSE momentum stocks', or 'What is the outlook for the banking sector?'", category: "signals" },
+  { question: "How do I register an account?", answer: "Click 'Sign Up' on the login page, enter your name, email, and password. You'll receive a verification email. Once verified, you can start using the app with a free trial.", category: "account" },
+  { question: "What is the forex rate?", answer: "The app uses real-time KES/USD exchange rates for cross-currency portfolio valuation. You can check current rates on the Markets page. FX data updates throughout the day.", category: "markets" },
 ];
 
 app.get('/api/support/faq', (req, res) => {
@@ -531,6 +2059,564 @@ app.patch('/api/support/tickets/:id/status', async (req, res) => {
   }
 });
 
+// --- Support Chat Routes ---
+app.get('/api/support/chat/messages', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const userId = req.query.userId;
+    if (userId && !isNaN(parseInt(userId))) {
+      const result = await pool.query(
+        'SELECT * FROM support_chat_messages WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2',
+        [parseInt(userId), limit]
+      );
+      res.json(result.rows.reverse());
+    } else {
+      const result = await pool.query(
+        'SELECT * FROM support_chat_messages ORDER BY created_at DESC LIMIT $1',
+        [limit]
+      );
+      res.json(result.rows.reverse());
+    }
+  } catch (error) {
+    console.error('support-chat-messages error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+app.post('/api/support/chat/messages', async (req, res) => {
+  try {
+    const { userId, userName, email, message } = req.body;
+    if (!message || !message.trim()) return res.status(400).json({ error: 'Message required' });
+    const result = await pool.query(
+      `INSERT INTO support_chat_messages (user_id, user_name, email, message, is_staff)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, user_id, user_name, email, message, is_staff, created_at`,
+      [userId || null, userName || 'Anonymous', email || '', message.trim(), false]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('support-chat-post error:', error.message);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// --- Support Chat: Active conversations & per-user messages ---
+app.get('/api/support/chats/active', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT ON (scm.user_id)
+        scm.user_id, scm.user_name, scm.email,
+        scm.message AS last_message,
+        scm.created_at AS last_activity
+      FROM support_chat_messages scm
+      WHERE scm.user_id IS NOT NULL
+        AND scm.created_at > NOW() - INTERVAL '24 hours'
+      ORDER BY scm.user_id, scm.created_at DESC
+    `);
+    const active = result.rows.sort((a, b) => new Date(b.last_activity) - new Date(a.last_activity));
+    res.json(active);
+  } catch (error) {
+    console.error('active-chats error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch active chats' });
+  }
+});
+
+app.get('/api/support/chats/:userId/messages', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const limit = parseInt(req.query.limit) || 50;
+    const result = await pool.query(
+      `SELECT * FROM support_chat_messages
+       WHERE user_id = $1
+       ORDER BY created_at ASC
+       LIMIT $2`,
+      [userId, limit]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('user-chat-messages error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+// ── Support Chatbot ──────────────────────────────────────────────────────
+
+/** Knowledge base entries: { keywords[], answer, category } */
+const KNOWLEDGE_BASE = [
+  {
+    keywords: ['password', 'reset', 'forgot', 'change password', 'lost password', 'can\'t login', 'can\'t sign in'],
+    answer: 'Click **"Forgot password?"** on the login page, enter your email, and follow the reset link sent to your inbox. The code expires in **15 minutes**. If you don\'t see it, check your spam folder.',
+    category: 'account',
+  },
+  {
+    keywords: ['register', 'sign up', 'create account', 'new account', 'join'],
+    answer: 'Click **"Sign Up"** on the login page, enter your name, email, and password. After submitting, check your email for a verification link. Once verified, you can log in and start exploring the platform.',
+    category: 'account',
+  },
+  {
+    keywords: ['login', 'sign in', 'log in', 'can\'t login', 'can\'t sign in'],
+    answer: 'Enter your email and password on the **Login** page. If you forgot your password, click "Forgot password?" to reset it. Still having trouble? Clear your browser cache and try again.',
+    category: 'account',
+  },
+  {
+    keywords: ['profile', 'edit profile', 'update profile', 'change name', 'change email', 'bio', 'avatar', 'trader type'],
+    answer: 'Go to **Settings** to update your profile: name, email, phone, bio, location, trader type (Value, Growth, Day Trader, Analyst), and experience level. Changes save instantly.',
+    category: 'account',
+  },
+  {
+    keywords: ['settings', 'preferences', 'appearance', 'dark mode', 'compact view', 'theme'],
+    answer: '**Settings** lets you: edit your profile, manage notification preferences, toggle **Dark Mode** or **Compact View**, change your password, and control privacy settings. Go to Settings from the sidebar.',
+    category: 'account',
+  },
+  {
+    keywords: ['notification', 'alert', 'bell', 'price alert', 'signal alert', 'mark read', 'unread'],
+    answer: 'The **bell icon** in the header shows your unread notifications. You get alerts for new signals, price movements, and system updates. Click any notification to go to the relevant page. Go to **Settings > Notifications** to customize which alerts you receive.',
+    category: 'account',
+  },
+  {
+    keywords: ['subscription', 'plan', 'pricing', 'upgrade', 'downgrade', 'starter', 'pro', 'enterprise', 'premium', 'cost', 'price', 'monthly', 'free'],
+    answer: 'We offer **Starter** ($1/mo) for basic access, **Pro** ($29/mo) for full features including AI signals and advanced analytics, and **Enterprise** ($99/mo) with priority support. Compare plans on the **Pricing** page. Pay via **M-Pesa** or **card**.',
+    category: 'account',
+  },
+  {
+    keywords: ['mpesa', 'm-pesa', 'mobile money', 'payment', 'pay', 'stk push', 'phone payment'],
+    answer: 'To pay with **M-Pesa**: go to the subscription page, select M-Pesa, enter your phone number. You\'ll receive an **STK push prompt** on your phone. Confirm the payment and your subscription activates instantly. M-Pesa is available for Kenyan users.',
+    category: 'account',
+  },
+  {
+    keywords: ['card payment', 'credit card', 'debit card', 'payd', 'visa', 'mastercard'],
+    answer: 'Pay with **card** via our secure Payd integration. Enter your card details on the payment page. Your information is processed securely and not stored on our servers.',
+    category: 'account',
+  },
+  {
+    keywords: ['paper trading', 'virtual trading', 'practice trading', 'demo account', 'paper account', 'start trading', 'virtual money', 'fake money', 'simulation'],
+    answer: 'Go to **Portfolio** to access your paper trading account with **KES 1,000,000** (or USD 10,000) in virtual funds. Use the **Trade panel** to buy and sell stocks at market prices. Track open positions, trade history, and realized P&L. You can **reset** the account anytime to start fresh.',
+    category: 'trading',
+  },
+  {
+    keywords: ['paper buy', 'paper sell', 'place order', 'paper order', 'market order', 'limit order', 'paper trade'],
+    answer: 'On the **Portfolio** page, use the Trade panel: select Buy or Sell, enter the stock symbol, quantity, and order type (Market or Limit). Market orders execute at the current price. Limit orders execute only at your specified price. Your paper account starts with KES 1,000,000.',
+    category: 'trading',
+  },
+  {
+    keywords: ['paper reset', 'reset paper account', 'start over', 'reset portfolio', 'reset trading'],
+    answer: 'On the **Portfolio** page, there\'s a "Reset Account" button for your paper trading account. This resets your balance to the initial KES 1,000,000 (or USD 10,000), closes all positions, and clears trade history. Use it to start fresh.',
+    category: 'trading',
+  },
+  {
+    keywords: ['market hours', 'trading hours', 'market open', 'market close', 'when does market open', 'when does market close', 'nse hours', 'nse schedule', 'us market hours'],
+    answer: '**NSE:** Mon-Fri, 9:30 AM - 3:30 PM EAT\n**US Markets (NYSE/NASDAQ):** Mon-Fri, 9:30 AM - 4:00 PM ET\n**Pre-market:** 4:00-9:30 AM ET\n**After-hours:** 4:00-8:00 PM ET\nBoth closed on weekends and public holidays. Check the **Dashboard** for live market status.',
+    category: 'markets',
+  },
+  {
+    keywords: ['signal', 'trading signal', 'ai signal', 'buy signal', 'sell signal', 'how do signals work', 'signal type', 'signal confidence'],
+    answer: 'Our **AI signal engine** scores stocks on: **Technical** (RSI, MACD, SMA trends), **Fundamental** (PE, EV/EBITDA, dividend yield), **Growth** (revenue, EPS, margins), **Balance Sheet** (D/E, ROE, Altman Z), **Insider Activity**, and **News Sentiment**. Each signal shows: Type (Intraday/Swing/Long Term), Rating (Strong Buy to Strong Sell), Confidence (0-100%), Entry, Stop-loss, Targets 1 & 2, and Risk/Reward ratio. View all on the **Signals** page.',
+    category: 'signals',
+  },
+  {
+    keywords: ['signal types', 'intraday', 'swing trade', 'long term', 'strong buy', 'accumulate', 'strong sell', 'hold'],
+    answer: 'Signals are categorized by **timeframe**: Intraday (same day), Swing Trade (days to weeks), Long Term (months to years). Each has a **rating**: Strong Buy, Buy, Accumulate, Hold, Sell, or Strong Sell, plus a **confidence percentage** (0-100%).',
+    category: 'signals',
+  },
+  {
+    keywords: ['ai insights', 'ai chat', 'ai analyst', 'ask ai', 'chat with ai', 'ai assistant', 'conversation ai'],
+    answer: '**AI Insights** is a conversational AI that answers your market questions in natural language. Try: "Analyze Safaricom trend", "Best NSE momentum stocks", "Outlook for banking sector", or "What stocks are trending today?" Access it from the sidebar.',
+    category: 'signals',
+  },
+  {
+    keywords: ['group', 'chat group', 'trading group', 'create group', 'join group', 'leave group', 'room', 'channel'],
+    answer: 'Go to **Chat & Groups** to browse public trading rooms like nse-traders, safaricom, banking, tech-picks, dividend-hunters, and day-traders. Click "Create Group" to start your own. Set a topic (General, Trading, Finance, etc.) so others can find you.',
+    category: 'social',
+  },
+  {
+    keywords: ['direct message', 'dm', 'private message', 'pm', 'chat user', 'message trader'],
+    answer: 'Start a **direct message** by going to a user\'s profile on the **People** page and clicking "Send Message". Or use the Chat page to search for a user. Real-time messaging with typing indicators and online status.',
+    category: 'social',
+  },
+  {
+    keywords: ['people', 'trader', 'follow', 'unfollow', 'trader directory', 'find traders', 'top traders', 'expert'],
+    answer: 'The **People** page lists all traders with their profile type (Value, Growth, Day Trader, Analyst), expertise, top picks, and follower count. Click **Follow** to track someone\'s activity. You can also see who\'s online and start conversations.',
+    category: 'social',
+  },
+  {
+    keywords: ['broker', 'connect broker', 'real account', 'brokerage', 'interactive brokers', 'ibkr', 'alpaca', 'oanda', 'tradier', 'mt5', 'metatrader', 'aib', 'axys', 'hisa'],
+    answer: 'Connect real brokerage accounts in **Settings > Brokers**. Supported: **Alpaca** (US API trading), **Interactive Brokers**, **MetaTrader 5**, **OANDA** (forex/CFDs), **Tradier**, and **manual entry** for African brokers like AIB-AXYS and Hisa. Credentials are encrypted with **AES-256-GCM** for security. You can sync positions, balances, and trade history.',
+    category: 'account',
+  },
+  {
+    keywords: ['stock', 'stocks', 'ticker', 'symbol', 'price', 'quote', 'company', 'search stock', 'find stock'],
+    answer: 'Search any stock by **ticker** (e.g., SCOM, AAPL, NSE:EQTY) or **company name**. The **Stock Analysis** page shows: interactive price charts, real-time quote, AI signal, technical indicators (RSI, MACD, SMA, ATR, Bollinger Bands), and fundamentals (market cap, PE, dividend yield). Browse all stocks on the **Markets** or **Stocks** pages.',
+    category: 'stocks',
+  },
+  {
+    keywords: ['technical analysis', 'rsi', 'macd', 'sma', 'moving average', 'atr', 'bollinger', 'indicator', 'chart'],
+    answer: 'Each stock\'s **Analysis** page includes: **RSI** (Relative Strength Index) for overbought/oversold, **MACD** for trend direction, **SMA** (Simple Moving Average), **ATR** (Average True Range) for volatility, and **Bollinger Bands** for price ranges. Charts are interactive with 1D/1W/1M/3M/6M/1Y/5Y/ALL timeframes.',
+    category: 'stocks',
+  },
+  {
+    keywords: ['financials', 'income statement', 'balance sheet', 'cash flow', 'key metrics', 'pe ratio', 'pb ratio', 'roe', 'eps', 'dividend history', 'financial report'],
+    answer: 'The **Financials** page gives you access to: **Income Statement**, **Balance Sheet**, **Cash Flow Statement**, **Key Metrics** (P/E, P/B, ROE, EPS, EV/EBITDA), and **Dividend History** with frequency and yield. Data from SimFin, Yahoo Finance, and SEC Edgar filings.',
+    category: 'stocks',
+  },
+  {
+    keywords: ['earnings', 'earnings calendar', 'upcoming earnings', 'eps', 'earnings report', 'quarterly', 'surprise'],
+    answer: 'The **Earnings Calendar** shows upcoming earnings reports with dates, estimated vs actual EPS, surprise percentage, market cap, and revenue. Navigate by month to see what\'s coming up.',
+    category: 'stocks',
+  },
+  {
+    keywords: ['analyst', 'analyst rating', 'analyst target', 'top analysts', 'rating', 'target price', 'strong buy', 'outperform'],
+    answer: 'The **Top Analysts** page lists analyst firms with their stock ratings (Strong Buy through Sell) and target prices. See rating distribution and historical performance for each firm.',
+    category: 'signals',
+  },
+  {
+    keywords: ['data', 'price not loading', 'stale data', 'rate limit', 'refresh', 'not updating', 'delayed'],
+    answer: 'Market data comes from **third-party APIs** with rate limits. If data appears stale, wait a few minutes and refresh the page. NSE stocks update during market hours (9:30 AM - 3:30 PM EAT). US stocks update during US hours. The system caches data for 60 seconds to reduce API calls.',
+    category: 'data',
+  },
+  {
+    keywords: ['portfolio', 'holdings', 'pnl', 'performance', 'return', 'balance', 'portfolio value', 'my stocks', 'allocation'],
+    answer: 'Your **Portfolio** page is your command center: view all holdings with real-time values, allocation pie chart, performance vs NSE 20 and S&P 500 benchmarks, realized/unrealized P&L, trade history, portfolio statements, and **AI-powered rebalancing** recommendations. Values in KES with live FX conversion.',
+    category: 'portfolio',
+  },
+  {
+    keywords: ['portfolio rebalance', 'ai advice', 'rebalance', 'ai portfolio', 'portfolio advice'],
+    answer: 'The **AI Portfolio Advice & Rebalancing** section on your Portfolio page analyzes your current holdings and suggests optimization trades. It considers your risk profile, current allocation, and market conditions to recommend better diversification.',
+    category: 'portfolio',
+  },
+  {
+    keywords: ['portfolio statement', 'portfolio report', 'trade history', 'statement', 'report'],
+    answer: 'Your **Portfolio** page includes statements showing: complete trade history, account summary, realized/unrealized gains breakdown, fees, and performance metrics over time.',
+    category: 'portfolio',
+  },
+  {
+    keywords: ['screener', 'stock screener', 'filter stocks', 'screen stocks', 'filter', 'criteria'],
+    answer: 'The **Stock Screener** (Markets > Stocks > Screener) filters by: market (NSE, NYSE, NASDAQ), sector, price range, change %, volume, P/E ratio, dividend yield, AI score, and signal type. Results in table or grid view with real-time updates.',
+    category: 'markets',
+  },
+  {
+    keywords: ['dashboard', 'home', 'overview', 'main page', 'command center'],
+    answer: 'Your **Dashboard** is your command center. It shows: portfolio value summary, NSE & global indices, sector performance, portfolio vs benchmarks chart, top gainers/losers, watchlist stocks, AI signal distribution bar, market sentiment pulse, and a news ticker. Real-time updates via WebSocket.',
+    category: 'dashboard',
+  },
+  {
+    keywords: ['watchlist', 'track stock', 'follow stock', 'add to watchlist', 'remove from watchlist', 'target price'],
+    answer: 'Go to **Watchlist** from the sidebar. Search for stocks to add. Each shows: live price, change %, and signal overlay. You can set target prices and remove stocks anytime. Your watchlist also appears on the Dashboard.',
+    category: 'dashboard',
+  },
+  {
+    keywords: ['market', 'markets', 'market activity', 'market overview', 'market summary', 'market status', 'market movers', 'gainers', 'losers'],
+    answer: 'The **Markets** page shows real-time activity for NSE and Global markets: market status (open/closed), total turnover, volume, share indices, top gainers/losers, sector performance, AI market summary, and sentiment. Dual-pane view for NSE + US/Global.',
+    category: 'markets',
+  },
+  {
+    keywords: ['nse', 'nairobi', 'kenya', 'nse market', 'nse stocks', 'nairobi securities exchange'],
+    answer: 'The **NSE** (Nairobi Securities Exchange) section tracks 22+ Kenyan stocks including Safaricom, Equity Bank, KCB, and more. See real-time prices, market status, turnover, top movers, sector performance, and AI market summary. NSE trades Mon-Fri, 9:30 AM - 3:30 PM EAT.',
+    category: 'markets',
+  },
+  {
+    keywords: ['global market', 'us market', 'nyse', 'nasdaq', 'sp500', 's&p', 'dow', 'ftse', 'international'],
+    answer: '**Global markets** covered: NYSE, NASDAQ, LSE, JSE, GSE, NGX, TSE, HKEX. Real-time quotes, indices (S&P 500, NASDAQ, FTSE 100, etc.), and market status for US markets with pre-market and after-hours data.',
+    category: 'markets',
+  },
+  {
+    keywords: ['sector', 'industry', 'sector performance', 'sector analysis', 'sector breakdown'],
+    answer: 'The **Sectors** page shows performance by sector/industry with bar charts. Filter by NSE or Global. Each sector displays leading stocks, sentiment indicators, and volume analysis. Great for spotting which industries are hot.',
+    category: 'markets',
+  },
+  {
+    keywords: ['market pulse', 'sentiment', 'market sentiment', 'bullish', 'bearish', 'market mood'],
+    answer: '**Market Pulse** shows AI-generated sentiment scores (bearish/neutral/bullish) for NSE and Global markets. Includes leading sector identification, confidence scores, and an AI-generated market summary text. Visible on Dashboard and Markets pages.',
+    category: 'markets',
+  },
+  {
+    keywords: ['bonds', 'treasury', 'government bond', 'corporate bond', 'infrastructure bond', 'tbill', 't-bill', 'yield', 'ytm', 'coupon'],
+    answer: 'The **Bonds** page covers: **Government bonds** (Kenya & US), **Infrastructure bonds**, **Corporate bonds**, and **Treasury Bills** (91, 182, 364-day). Each shows coupon rate, YTM, maturity date, price, and credit rating. View the **yield curve** comparing Kenya vs US 10-year. Market access info included.',
+    category: 'markets',
+  },
+  {
+    keywords: ['etf', 'exchange traded fund', 'etf categories', 'expense ratio', 'aum', 'etf browser'],
+    answer: 'Browse **ETFs** by category on the ETFs page. Each ETF shows: expense ratio, AUM, dividend yield, price, and change %. Top gainers/losers and largest AUM funds highlighted.',
+    category: 'markets',
+  },
+  {
+    keywords: ['news', 'financial news', 'market news', 'stock news', 'news sentiment', 'breaking news', 'headlines'],
+    answer: 'The **News** page aggregates financial news from multiple sources. Filter by: All, NSE, Global, Positive, or Negative sentiment. Articles show headline, excerpt, source, timestamp, sentiment badge, and related stocks. Auto-refresh every 60 seconds. Search within news too.',
+    category: 'news',
+  },
+  {
+    keywords: ['support', 'help', 'support center', 'faq', 'question', 'help page'],
+    answer: 'The **Support Center** has everything you need: **FAQ** with common questions, **Ticket System** to submit and track support requests, **Live Chat** to talk to support staff in real-time, and me — your **AI Assistant**! I can answer most questions instantly.',
+    category: 'support',
+  },
+  {
+    keywords: ['ticket', 'support ticket', 'submit ticket', 'create ticket', 'my tickets', 'track ticket'],
+    answer: 'On the **Support Center > Contact Us** tab, fill in your email, subject, category, priority, and message to create a ticket. Track its status in **My Tickets** tab. Staff will respond and update the status as they work on your issue.',
+    category: 'support',
+  },
+  {
+    keywords: ['exchange', 'stock exchange', 'listings', 'nse listing', 'nyse listing', 'nasdaq listing', 'lse'],
+    answer: 'Browse stocks by exchange under **Markets > Stocks > Exchanges**. Covered exchanges: **NSE** (Nairobi), **NYSE**, **NASDAQ**, **LSE** (London), **JSE** (Johannesburg), **GSE** (Ghana), **NGX** (Nigeria), **TSE** (Tokyo), **HKEX** (Hong Kong). Each shows listed companies, trading status, and market cap.',
+    category: 'markets',
+  },
+  {
+    keywords: ['industries', 'industry performance', 'stock sectors', 'group by industry'],
+    answer: 'Under **Markets > Stocks > Industries**, stocks are grouped by industry/sector. Each group shows average change, volume, and AI score. Searchable and sortable to find the best performing industries.',
+    category: 'markets',
+  },
+  {
+    keywords: ['top stocks', 'best stocks', 'top rated', 'top performers', 'award', 'ranking'],
+    answer: 'The **Top Stocks** page ranks stocks by AI score, volume, and performance metrics. Trophy/award badges highlight top performers. Great for discovering the best investment opportunities.',
+    category: 'signals',
+  },
+  {
+    keywords: ['portfolio broker', 'broker connection', 'sync broker', 'broker sync', 'import holdings'],
+    answer: 'Connect your real brokerage accounts in **Settings > Brokers** to automatically sync holdings, positions, balances, and trade history. Supported: Alpaca, IBKR, MT5, OANDA, Tradier, plus manual entry. Data encrypted with AES-256-GCM.',
+    category: 'portfolio',
+  },
+  {
+    keywords: ['security', 'password', 'change password', 'privacy', 'data', 'encryption', 'safe', 'secure'],
+    answer: 'Your security matters. Passwords are **bcrypt-hashed**, broker credentials are **AES-256-GCM encrypted**, and all API communication uses JWT authentication. Rate limiting protects against abuse. You can control data visibility in **Settings > Privacy**.',
+    category: 'account',
+  },
+  {
+    keywords: ['forex', 'fx', 'currency', 'exchange rate', 'kes usd', 'dollar rate', 'shilling rate'],
+    answer: 'The app uses real-time **KES/USD** exchange rates for cross-currency portfolio valuation. Check current rates on the **Markets** page. FX data updates throughout the day from multiple providers.',
+    category: 'markets',
+  },
+  {
+    keywords: ['top gainers', 'top losers', 'movers', 'gainers', 'losers', 'biggest movers', 'active stocks'],
+    answer: 'The **Markets** page shows top gainers and losers for both NSE and Global markets. Each stock shows name, price, change %, and volume. Updated in real-time during market hours.',
+    category: 'markets',
+  },
+  {
+    keywords: ['indices', 'nse 20', 'nse 25', 'sp500', 's&p 500', 'nasdaq', 'dow jones', 'ftse 100', 'market index'],
+    answer: 'Track major indices: **NSE 20**, **NSE 25**, **S&P 500**, **NASDAQ Composite**, **Dow Jones**, **FTSE 100**, and more. All visible on the **Dashboard** and **Markets** pages with real-time values and changes.',
+    category: 'markets',
+  },
+  {
+    keywords: ['indices all', 'all indices', 'nse index', 'global index', 'index values'],
+    answer: 'We track indices across all covered markets. View them grouped by NSE and Global on the Dashboard and Markets pages. Each shows current value, change, and change percentage.',
+    category: 'markets',
+  },
+  {
+    keywords: ['health', 'status', 'is it working', 'server status', 'api status'],
+    answer: 'The system is operational. Market data updates in real-time during trading hours. If you notice any issues, check your internet connection or try refreshing the page. For persistent problems, submit a support ticket.',
+    category: 'data',
+  },
+  {
+    keywords: ['dark mode', 'theme', 'appearance', 'light mode', 'compact view', 'display settings'],
+    answer: 'Go to **Settings > Appearance** to toggle **Dark Mode** on/off. You can also enable **Compact View** for a denser layout that shows more information on screen. Your preference is saved across sessions.',
+    category: 'account',
+  },
+  {
+    keywords: ['privacy', 'private', 'visibility', 'share data', 'personal info', 'data control'],
+    answer: 'Manage your privacy in **Settings > Privacy**. Control: profile visibility, portfolio visibility, analytics sharing, and data usage preferences. Your broker credentials are always encrypted.',
+    category: 'account',
+  },
+  {
+    keywords: ['forgot password', 'cannot login', 'can\'t sign in', 'lost access'],
+    answer: 'Click **"Forgot password?"** on the login page. Enter your registered email and you\'ll receive a password reset link. The link expires in **15 minutes**. If you still can\'t access your account, contact support.',
+    category: 'account',
+  },
+  {
+    keywords: ['guide', 'how to', 'how do i', 'tutorial', 'walkthrough', 'getting started', 'beginner'],
+    answer: 'I\'m here to help! You can ask me about any feature. Try:\n• "How do I use the stock screener?"\n• "How do I track my portfolio?"\n• "How do trading signals work?"\n• "How do I connect a broker?"\n• "How does paper trading work?"\n\nOr navigate the sidebar to explore the app at your own pace.',
+    category: 'general',
+  },
+];
+
+const ESCALATE_KEYWORDS = ['human', 'agent', 'talk to human', 'talk to person', 'speak to human', 'real person', 'support staff', 'escalate', 'transfer to', 'representative'];
+
+/** Score a query against a knowledge entry — strict whole-word matching only */
+function scoreQuery(q, entry) {
+  const qWords = new Set(q.split(/\s+/).filter(w => w.length > 2));
+  let score = 0;
+  for (const keyword of entry.keywords) {
+    if (q.includes(keyword)) {
+      // Full phrase match = high score
+      score += keyword.length * 4;
+    } else {
+      // Whole-word exact matches only
+      const kwWords = keyword.split(/\s+/);
+      for (const w of kwWords) {
+        if (w.length > 2 && qWords.has(w)) {
+          score += w.length * 2;
+        }
+      }
+    }
+  }
+  return score;
+}
+
+app.post('/api/support/chatbot', async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message || !message.trim()) {
+      return res.json({ answer: 'Hi! How can I help you today?', escalated: false });
+    }
+    const q = message.toLowerCase().trim();
+
+    // Check escalation (phrase or whole-word match)
+    if (ESCALATE_KEYWORDS.some(k => {
+      if (k.includes(' ')) return q.includes(k);
+      return new RegExp('\\b' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(q);
+    })) {
+      return res.json({ answer: 'Sure! Let me connect you with a human support agent.', escalated: true });
+    }
+
+    // Greetings & general conversation
+    const greetings = ['hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening', 'sup', 'yo', 'howdy'];
+    if (greetings.some(g => q.includes(g) && !q.includes('trading'))) {
+      return res.json({
+        answer: 'Hello! 👋 How can I help you today? You can ask me about:\n\n• **Stocks** — "What is Safaricom stock price?"\n• **Market** — "Market overview" or "NSE status"\n• **Account** — "How to reset my password?"\n• **Trading** — "What are trading signals?"\n\nOr type **"talk to human"** to speak with a support agent.',
+        escalated: false,
+      });
+    }
+    if (q.includes('thanks') || q.includes('thank you') || q.includes('thanks!') || q === 'ok' || q === 'okay' || q === 'great' || q === 'cool' || q.includes('thank')) {
+      return res.json({ answer: 'You\'re welcome! 😊 Is there anything else I can help you with?', escalated: false });
+    }
+    if (q.includes('bye') || q.includes('goodbye') || q.includes('see you')) {
+      return res.json({ answer: 'Goodbye! 👋 Feel free to come back anytime you need help. Happy trading! 🚀', escalated: false });
+    }
+    if (q.includes('who are you') || q.includes('what are you') || q.includes('what can you do') || q.includes('help me') || q === 'help') {
+      return res.json({
+        answer: 'I\'m the **StocksIntel Support Assistant** 🤖. I can help you with:\n\n' +
+          '• **Stock info** — real-time prices, signals, and company data\n' +
+          '• **Market data** — market status, overview, top movers\n' +
+          '• **Account help** — password reset, settings, billing\n' +
+          '• **Trading** — paper trading, signals, screener, groups\n' +
+          '• **Platform** — features, navigation, how-to guides\n\n' +
+          'Just ask me anything! Or type **"talk to human"** for a live agent.',
+        escalated: false,
+      });
+    }
+
+    // Knowledge base scoring
+    let bestScore = 0;
+    let bestAnswer = null;
+    for (const entry of KNOWLEDGE_BASE) {
+      const score = scoreQuery(q, entry);
+      if (score > bestScore) {
+        bestScore = score;
+        bestAnswer = entry.answer;
+      }
+    }
+    if (bestScore >= 12) {
+      return res.json({ answer: bestAnswer, escalated: false });
+    }
+
+    // Fallback to FAQ direct matching
+    for (const faq of FAQ_ITEMS) {
+      if (q.includes(faq.question.toLowerCase().slice(0, 15)) ||
+          faq.answer.toLowerCase().includes(q.split(' ').filter(w => w.length > 3).slice(0, 3).join(' '))) {
+        return res.json({ answer: faq.answer, escalated: false });
+      }
+    }
+
+    // Stock/ticker query
+    const stockKey = Object.keys(STOCK_NAMES).find(k => q.includes(k) || q.includes(STOCK_NAMES[k].toLowerCase()));
+    if (stockKey) {
+      const symbol = STOCK_NAMES[stockKey];
+      const isNse = symbol.startsWith('NSE') || KENYAN_STOCKS[symbol];
+      const fullSymbol = isNse ? `NSE:${symbol}` : symbol;
+      try {
+        const [signal, quote] = await Promise.all([
+          getSignalForStock(symbol).catch(() => null),
+          getStockQuote(fullSymbol).catch(() => null),
+        ]);
+        const price = quote?.price || signal?.price || 'N/A';
+        const change = quote?.changePercent ?? signal?.change ?? 0;
+        const vol = quote?.volume || signal?.volume || 'N/A';
+        const curr = isNse ? 'KES' : 'USD';
+        let ans = `**${signal?.name || symbol} (${symbol})**\n\n`;
+        ans += `**Price:** ${curr} ${typeof price === 'number' ? price.toFixed(2) : price}\n`;
+        ans += `**Change:** ${typeof change === 'number' ? change.toFixed(2) + '%' : change}\n`;
+        ans += `**Volume:** ${vol}\n`;
+        if (signal) {
+          ans += `**Signal:** ${signal.signal} (${signal.confidence}% confidence)\n`;
+          ans += `**Target:** ${curr} ${signal.target1 || 'N/A'}`;
+          if (signal.stopLoss) ans += ` | **Stop:** ${curr} ${signal.stopLoss}`;
+          ans += `\n\n${signal.reason || ''}`;
+        }
+        return res.json({ answer: ans, escalated: false });
+      } catch {
+        return res.json({ answer: `I found **${symbol}** in our database. Use the stock detail page for the latest data.`, escalated: false });
+      }
+    }
+
+    // Market status
+    if (q.includes('market') && (q.includes('open') || q.includes('close') || q.includes('status') || q.includes('hours'))) {
+      try {
+        const statusRes = await fetch(`http://localhost:${port}/api/market/status`).then(r => r.json()).catch(() => null);
+        if (statusRes) {
+          let ans = '**📊 Market Status**\n\n';
+          if (statusRes.nse) ans += `**NSE:** ${statusRes.nse.label} — ${statusRes.nse.eventLabel}\n`;
+          if (statusRes.global) ans += `**Global:** ${statusRes.global.label} — ${statusRes.global.eventLabel}\n`;
+          return res.json({ answer: ans, escalated: false });
+        }
+      } catch {}
+    }
+
+    // Market overview
+    if (q.includes('market') || q.includes('overview') || q.includes('summary') || q.includes('sentiment')) {
+      try {
+        const signals = await generateSignals().catch(() => []);
+        const buys = signals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
+        const total = signals.length;
+        if (total > 0) {
+          const sectors = [...new Set(signals.map(s => s.sector).filter(Boolean))];
+          let ans = `**📈 Market Overview**\n\nTracking **${total}** stocks across **${sectors.length}** sectors.\n`;
+          ans += `**${buys}** stocks have buy ratings (${Math.round(buys/total*100)}% bullish).\n`;
+          return res.json({ answer: ans, escalated: false });
+        }
+      } catch {}
+    }
+
+    // NSE-specific
+    if (q.includes('nse') || q.includes('nairobi') || q.includes('kenya')) {
+      const signals = await generateSignals().catch(() => []);
+      const nseSignals = signals.filter(s => s.market === 'NSE' || s.currency === 'KES');
+      if (nseSignals.length > 0) {
+        const buys = nseSignals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
+        let ans = `**🇰🇪 NSE Market**\n\nTracking **${nseSignals.length}** stocks. **${buys}** buy signals.\n`;
+        const tops = nseSignals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').slice(0, 5);
+        if (tops.length > 0) {
+          ans += '\n**Top Picks:**\n';
+          tops.forEach(s => { ans += `• **${s.ticker || s.symbol}** — ${s.signal} at KES ${s.price}\n`; });
+        }
+        return res.json({ answer: ans, escalated: false });
+      }
+    }
+
+    // Momentum/top stocks
+    if (q.includes('momentum') || q.includes('gainers') || q.includes('hot') || q.includes('top stock') || q.includes('best stock')) {
+      const signals = await generateSignals().catch(() => []);
+      const top = signals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').slice(0, 5);
+      if (top.length > 0) {
+        let ans = '**🔥 Top Stocks**\n\n';
+        top.forEach((s, i) => {
+          ans += `${i + 1}. **${s.symbol || s.ticker}** — ${s.signal} (${s.confidence}% confidence)\n`;
+        });
+        return res.json({ answer: ans, escalated: false });
+      }
+    }
+
+    // Fallback
+    res.json({
+      answer: 'I\'m not sure I understood that. Could you try rephrasing? I can help with:\n\n' +
+        '• **Stocks** — "What is the price of SCOM?" or "Analyze Safaricom"\n' +
+        '• **Market** — "Market overview" or "NSE market today"\n' +
+        '• **Account** — "How do I reset my password?" or "Paper trading"\n' +
+        '• **Signals** — "Top stocks to buy" or "Trading signals explained"\n\n' +
+        'Or type **"talk to human"** to speak with a support agent.',
+      escalated: false,
+    });
+  } catch (err) {
+    console.error('chatbot error:', err.message);
+    res.json({ answer: 'Sorry, I encountered an error. Please try again or type "talk to human" for assistance.', escalated: true });
+  }
+});
+
 // --- Market Data Routes ---
 app.get('/api/quote/:symbol', async (req, res) => {
   try {
@@ -554,10 +2640,100 @@ app.get('/api/quotes', async (req, res) => {
   }
 });
 
+// --- File Upload ---
+app.post('/api/upload', authenticateToken, (req, res) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError) return res.status(400).json({ error: err.message });
+      return res.status(400).json({ error: err.message });
+    }
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+    res.json({ url: `/uploads/${req.file.filename}`, filename: req.file.originalname, size: req.file.size });
+  });
+});
+
+// --- Message Edit / Delete ---
+app.put('/api/messages/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content } = req.body;
+    if (!content || !content.trim()) return res.status(400).json({ error: 'Content is required' });
+    const cleanContent = sanitizeText(content.trim());
+    const result = await pool.query(
+      `UPDATE messages SET content = $1, edited_at = CURRENT_TIMESTAMP WHERE id = $2 AND sender_id = $3
+       RETURNING id, sender_id, sender_name, content, message_type, group_id, recipient_id, image_url, file_name, edited_at, created_at`,
+      [cleanContent, id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Message not found or not authorized' });
+    const msg = result.rows[0];
+    if (msg.group_id) io.to(`group:${msg.group_id}`).emit('message_edited', msg);
+    else if (msg.recipient_id) {
+      const room = [String(msg.sender_id), String(msg.recipient_id)].sort().join(':pm');
+      io.to(room).emit('message_edited', msg);
+    }
+    res.json(msg);
+  } catch (err) { console.error('Edit message error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/messages/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      'DELETE FROM messages WHERE id = $1 AND sender_id = $2 RETURNING id, group_id, sender_id, recipient_id',
+      [id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Message not found or not authorized' });
+    const msg = result.rows[0];
+    if (msg.group_id) io.to(`group:${msg.group_id}`).emit('message_deleted', { id: Number(id), group_id: msg.group_id });
+    else if (msg.recipient_id) {
+      const room = [String(msg.sender_id), String(msg.recipient_id)].sort().join(':pm');
+      io.to(room).emit('message_deleted', { id: Number(id) });
+    }
+    res.json({ success: true });
+  } catch (err) { console.error('Delete message error:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// --- Authentication & Subscription Enforcement Middleware ---
+// Apply to all app feature routes. Public/market data routes are defined before this.
+const authSubs = [authenticateToken, requireActiveSubscription];
+const authOwnSubs = [authenticateToken, requireOwnership, requireActiveSubscription];
+app.use('/api/signals', ...authSubs);
+app.use('/api/signal', ...authSubs);
+app.use('/api/watchlist', ...authSubs);
+app.use('/api/portfolio', ...authSubs);
+app.use('/api/trade', ...authSubs);
+app.use('/api/trades', ...authSubs);
+app.use('/api/broker-connections', ...authSubs);
+app.use('/api/groups', ...authSubs);
+app.use('/api/chat', ...authSubs);
+app.use('/api/conversations', ...authSubs);
+app.use('/api/notifications', ...authSubs);
+app.use('/api/financials', ...authSubs);
+app.use('/api/user', ...authSubs);
+app.use('/api/users', ...authSubs);
+app.use('/api/people', ...authSubs);
+app.use('/api/holdings', ...authSubs);
+app.use('/api/paper', ...authSubs);
+app.use('/api/ai/insights', ...authSubs);
+app.use('/api/ai/market-summary', ...authSubs);
+app.use('/api/ai/portfolio-advice', ...authSubs);
+app.use('/api/ai/portfolio-rebalance', ...authSubs);
+app.use('/api/ai/recommendations', ...authSubs);
+app.use('/api/company', ...authSubs);
+app.use('/api/orders', ...authSubs);
+app.use('/api/positions', ...authSubs);
+app.use('/api/ml', ...authSubs);
+app.use('/api/monitor', ...authSubs);
+app.use('/api/portfolio/optimize', ...authSubs);
+app.use('/api/portfolio/var', ...authSubs);
+app.use('/api/support/chat', ...authSubs);
+app.use('/api/support/chats', ...authSubs);
+
 app.get('/api/signals', async (req, res) => {
   try {
-    const signals = await generateSignals();
+    const signals = await generateSignals(null, true);
     res.json({ success: true, signals });
+    generateSignals(null, false).catch(() => {});
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -578,6 +2754,89 @@ app.get('/api/signal/:symbol', async (req, res) => {
     const signal = await getSignalForStock(symbol);
     if (!signal) return res.status(404).json({ error: 'No signal found' });
     res.json(signal);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Signal Engine Management Routes ────────────────────────────────────
+app.get('/api/signals/backtest', async (req, res) => {
+  try {
+    const stats = await computeBacktestStats({
+      days: parseInt(req.query.days) || 30,
+      limit: parseInt(req.query.limit) || 500,
+      signalType: req.query.signal || null,
+      minConfidence: parseInt(req.query.minConfidence) || 0,
+    });
+    res.json({ success: true, stats });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/signals/forward-test', async (req, res) => {
+  try {
+    const { symbol, resolved, limit, offset } = req.query;
+    if (symbol || resolved !== undefined || req.query.limit) {
+      const result = getForwardTestPredictions({
+        symbol: symbol || undefined,
+        resolved: resolved !== undefined ? resolved === 'true' : undefined,
+        limit: parseInt(limit) || 50,
+        offset: parseInt(offset) || 0,
+      });
+      return res.json({ success: true, ...result });
+    }
+    const stats = await getForwardTestStats();
+    res.json({ success: true, stats });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/signals/forward-test/resolve', async (req, res) => {
+  try {
+    const result = await resolveAllForwardPredictions();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/signals/audit', async (req, res) => {
+  try {
+    const result = await getAuditLog({
+      type: req.query.type || null,
+      limit: parseInt(req.query.limit) || 100,
+      offset: parseInt(req.query.offset) || 0,
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/signals/engine/config', async (req, res) => {
+  try {
+    const view = req.query.view || 'full';
+    res.json({ success: true, config: getEngineConfig(view) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/signals/engine/config', async (req, res) => {
+  try {
+    const config = updateEngineConfig(req.body);
+    res.json({ success: true, config });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/signals/engine/health', async (req, res) => {
+  try {
+    const health = getEngineHealth();
+    res.json({ success: true, health });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -610,9 +2869,19 @@ app.get('/api/company/:symbol/financials', async (req, res) => {
 // --- News Routes ---
 app.get('/api/news', async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 20;
-    const news = await getAllNews(limit);
+    const limit = parseInt(req.query.limit) || 50;
+    const category = req.query.category || 'all';
+    const news = await getAllNews(limit, category);
     res.json(news);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/news/summary', async (req, res) => {
+  try {
+    const summary = await getNewsSummary();
+    res.json(summary);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -626,46 +2895,102 @@ app.get('/api/news/kenyan', async (req, res) => {
   }
 });
 
-// --- Watchlist Routes ---
+app.get('/api/news/hot', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const news = await getAllNews(200);
+    const hotNews = news.filter(a => a.hot).slice(0, limit);
+    res.json(hotNews);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Watchlist Routes (with in-memory fallback when DB unavailable) ---
+const _watchlistMemory = {};
+
+const WATCHLIST_DB_UNAVAILABLE = { code: 'DB_UNAVAILABLE' };
+function isDbError(err) {
+  return err && (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.message?.includes('connect ECONNREFUSED') || err.message?.includes('does not exist') || err.message?.includes('relation') || err.code === '42P01');
+}
+
+function getMemoryWatchlist(userId) { return _watchlistMemory[userId] || []; }
+function setMemoryWatchlist(userId, items) { _watchlistMemory[userId] = items; }
+
 app.get('/api/watchlist', async (req, res) => {
   try {
     const userId = req.query.userId;
     if (!userId) return res.status(400).json({ error: 'userId required' });
-    const result = await pool.query('SELECT * FROM watchlist_items ORDER BY created_at DESC');
-    res.json(result.rows);
+    const result = await pool.query('SELECT * FROM watchlist_items WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
+    const memItems = getMemoryWatchlist(userId);
+    // Merge: DB results take priority, append any in-memory items not in DB
+    const dbSymbols = new Set(result.rows.map(r => r.symbol));
+    const extra = memItems.filter(m => !dbSymbols.has(m.symbol));
+    const merged = [...result.rows, ...extra];
+    setMemoryWatchlist(userId, merged);
+    res.json(merged);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    const userId = req.query.userId;
+    console.warn('[Watchlist] DB query failed, using in-memory:', error.message);
+    if (userId) {
+      const items = getMemoryWatchlist(userId);
+      return res.json(items.map((r, i) => ({ ...r, id: r.id || `mem_${i}` })));
+    }
+    res.json([]);
   }
 });
 
 app.post('/api/watchlist', async (req, res) => {
   try {
-    const { symbol, company_name, notes, target_price } = req.body;
+    const { symbol, company_name, notes, target_price, userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
     const result = await pool.query(
-      `INSERT INTO watchlist_items (symbol, company_name, notes, target_price)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (symbol) DO UPDATE SET company_name = $2, notes = $3, target_price = $4
+      `INSERT INTO watchlist_items (symbol, company_name, notes, target_price, user_id)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (symbol, user_id) DO UPDATE SET company_name = $2, notes = $3, target_price = $4
        RETURNING *`,
-      [symbol?.toUpperCase(), company_name, notes, target_price]
+      [symbol?.toUpperCase(), company_name, notes, target_price, userId]
     );
+    setMemoryWatchlist(userId, [...getMemoryWatchlist(userId).filter(i => i.symbol !== symbol?.toUpperCase()), result.rows[0]]);
     res.status(201).json(result.rows[0]);
   } catch (error) {
+    const { symbol, company_name, notes, target_price, userId } = req.body;
+    console.warn('[Watchlist] DB insert failed, using in-memory:', error.message);
+    if (symbol && userId) {
+      const items = getMemoryWatchlist(userId);
+      const exists = items.find(i => i.symbol === symbol?.toUpperCase());
+      const entry = { id: `mem_${Date.now()}`, symbol: symbol?.toUpperCase(), company_name: company_name || symbol, notes: notes || null, target_price: target_price || null, user_id: userId, created_at: new Date().toISOString() };
+      if (exists) Object.assign(exists, entry);
+      else items.push(entry);
+      setMemoryWatchlist(userId, items);
+      return res.status(201).json(entry);
+    }
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/watchlist/:symbol', async (req, res) => {
+app.delete('/api/watchlist/:id', async (req, res) => {
   try {
-    const symbol = req.params.symbol.toUpperCase();
-    await pool.query('DELETE FROM watchlist_items WHERE symbol = $1', [symbol]);
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+    await pool.query('DELETE FROM watchlist_items WHERE id = $1', [id]);
+    // Also clean memory for all users
+    Object.keys(_watchlistMemory).forEach(uid => {
+      _watchlistMemory[uid] = _watchlistMemory[uid].filter(i => i.id !== id && i.id !== `mem_${id}`);
+    });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.warn('[Watchlist] DB delete failed, cleaning in-memory:', error.message);
+    const id = req.params.id;
+    Object.keys(_watchlistMemory).forEach(uid => {
+      _watchlistMemory[uid] = _watchlistMemory[uid].filter(i => i.id !== parseInt(id) && i.id !== `mem_${id}`);
+    });
+    res.json({ success: true });
   }
 });
 
 // ── Portfolio Statement (must be BEFORE :userId param route) ──
-app.get('/api/portfolio/statement', async (req, res) => {
+app.get('/api/portfolio/statement', requireOwnership, async (req, res) => {
   try {
     const userId = parseInt(req.query.userId);
     const period = (req.query.period || '1M').toUpperCase();
@@ -700,7 +3025,7 @@ app.get('/api/portfolio/statement', async (req, res) => {
     }
 
     // Fetch value history (gracefully handle missing table/column)
-    let historyRes, prevDay;
+    let historyRes;
     try {
       historyRes = await pool.query(
         `SELECT total_value, invested_value, snapshot_date FROM portfolio_value_history
@@ -709,16 +3034,6 @@ app.get('/api/portfolio/statement', async (req, res) => {
       );
     } catch {
       historyRes = { rows: [] };
-    }
-
-    try {
-      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      prevDay = await pool.query(
-        `SELECT total_value, snapshot_date FROM portfolio_value_history WHERE user_id = $1 AND snapshot_date <= $2 ORDER BY snapshot_date DESC LIMIT 1`,
-        [userId, yesterday]
-      );
-    } catch {
-      prevDay = { rows: [] };
     }
 
     // Fetch broker trade history + open positions (before early return so broker-only users get data)
@@ -793,17 +3108,26 @@ app.get('/api/portfolio/statement', async (req, res) => {
     if (rows.length === 0 && brokerHoldings.length === 0) return res.json({ ...emptyResponse, tradeHistory, brokerEquity, brokerBalance });
 
     const fxRate = await getFxRate();
+
+    // Fetch live quotes (price + previousClose) in parallel
+    const liveQuotes = await Promise.all(rows.map(r =>
+      getLiveQuote(r.market, r.ticker).then(q => q || { price: parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0, previousClose: 0 })
+    ));
+
     const holdings = [];
     let nseValue = 0, globalValue = 0, nseCost = 0, globalCost = 0;
+    let dailyChange = 0;
 
-    for (const r of rows) {
-      const livePrice = await getLivePrice(r.market, r.ticker) || parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const { price: livePrice, previousClose } = liveQuotes[i];
       const avgC = parseFloat(r.avg_cost) || 0;
       const shares = parseFloat(r.shares) || 0;
       const val = livePrice * shares;
       const cost = avgC * shares;
       const pnlVal = val - cost;
       const pnlPctVal = cost > 0 ? ((val - cost) / cost * 100) : 0;
+      dailyChange += (livePrice - previousClose) * shares;
 
       if (r.market === 'NSE') { nseValue += val; nseCost += cost; }
       else { globalValue += val; globalCost += cost; }
@@ -831,18 +3155,8 @@ app.get('/api/portfolio/statement', async (req, res) => {
     const totalCost = nseCost + globalCostTotal * fxRate;
     const totalPnL = totalValue - totalCost;
 
-    // Daily change — only compute from a snapshot within the last 2 days
-    let dailyChange = 0;
-    let dailyChangePercent = 0;
-    if (prevDay.rows.length > 0) {
-      const prevTotal = parseFloat(prevDay.rows[0].total_value);
-      const prevDate = prevDay.rows[0].snapshot_date ? new Date(prevDay.rows[0].snapshot_date) : null;
-      const daysDiff = prevDate ? (now - prevDate) / (24 * 60 * 60 * 1000) : Infinity;
-      if (daysDiff <= 2) {
-        dailyChange = totalValue - prevTotal;
-        dailyChangePercent = prevTotal > 0 ? (dailyChange / prevTotal) * 100 : 0;
-      }
-    }
+    // Daily change computed from live (price - previousClose) * shares for each holding
+    let dailyChangePercent = totalValue > 0 ? (dailyChange / (totalValue - dailyChange)) * 100 : 0;
 
     // Sector allocation (skip broker positions)
     const sectorMap = {};
@@ -903,7 +3217,7 @@ app.get('/api/portfolio/statement', async (req, res) => {
     });
   } catch (err) {
     console.error('Error generating portfolio statement:', err);
-    res.status(500).json({ error: 'Failed to generate portfolio statement', detail: err.message, stack: err.stack?.split('\n').slice(0, 5).join('; ') });
+    res.status(500).json({ error: 'Failed to generate portfolio statement' });
   }
 });
 
@@ -917,7 +3231,6 @@ app.get('/api/portfolio/performance', async (req, res) => {
     const periodMap = { '1D': 1, '1W': 7, '1M': 30, '3M': 90, '6M': 180, '1Y': 365, 'ALL': 9999 };
     const days = periodMap[period] || 180;
 
-    // Fetch portfolio value history
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const { rows: snapshots } = await pool.query(
       `SELECT total_value, snapshot_date FROM portfolio_value_history
@@ -925,7 +3238,6 @@ app.get('/api/portfolio/performance', async (req, res) => {
       [userId, cutoff]
     );
 
-    // Get current portfolio value and account info
     const { rows: accountRows } = await pool.query(
       'SELECT initial_capital, initial_capital_usd FROM paper_accounts WHERE user_id = $1', [userId]
     );
@@ -936,40 +3248,73 @@ app.get('/api/portfolio/performance', async (req, res) => {
       ? parseFloat(accountRows[0].initial_capital) + parseFloat(accountRows[0].initial_capital_usd) * fxRate
       : 1000000;
 
-    const numPeriods = snapshots.length;
-    const allPeriods = ['1D', '1W', '1M', '3M', '6M', '1Y', 'ALL'];
-    const performance = {};
-    for (const p of allPeriods) {
-      const pd = periodMap[p];
-      const cutoffP = new Date(Date.now() - pd * 24 * 60 * 60 * 1000);
-      const filtered = snapshots.filter(s => new Date(s.snapshot_date) >= cutoffP);
-      const startVal = filtered.length > 0 ? parseFloat(filtered[0].total_value) : initialCapital;
-      const endVal = filtered.length > 0 ? parseFloat(filtered[filtered.length - 1].total_value) : currentValue;
-      performance[p] = {
-        startValue: startVal,
-        endValue: endVal,
-        return: endVal - startVal,
-        returnPercent: startVal > 0 ? ((endVal - startVal) / startVal) * 100 : 0,
-      };
+    // Fetch live NSE 20 and S&P 500 index values for benchmark comparison
+    const allIndices = await indicesService.getAllIndices().catch(() => ({}));
+    const nse20Idx = allIndices['NSE:NSE20'];
+    const sp500Idx = allIndices['^GSPC'];
+    const nseCurrent = nse20Idx ? parseFloat(nse20Idx.value) : 1847.56;
+    const spCurrent = sp500Idx ? parseFloat(sp500Idx.value) : 7553.68;
+
+    const benchmarkHistory = generateBenchmarkHistory(nseCurrent, spCurrent, days);
+
+    const hasHistory = snapshots.length > 0;
+    const numPoints = Math.min(hasHistory ? snapshots.length : 12, benchmarkHistory.length);
+    const data = [];
+
+    if (hasHistory) {
+      const firstValue = parseFloat(snapshots[0].total_value);
+      const firstNse = benchmarkHistory[0]?.nse || nseCurrent;
+      const firstSp = benchmarkHistory[0]?.sp || spCurrent;
+
+      for (let i = 0; i < numPoints; i++) {
+        const snap = snapshots[i] || snapshots[snapshots.length - 1];
+        const portfolioVal = parseFloat(snap.total_value);
+        const bench = benchmarkHistory[i] || benchmarkHistory[benchmarkHistory.length - 1];
+
+        data.push({
+          month: formatDateLabel(new Date(snap.snapshot_date), days),
+          portfolio: firstValue > 0 ? ((portfolioVal - firstValue) / firstValue) * 100 : 0,
+          nse20: firstNse > 0 ? ((bench.nse - firstNse) / firstNse) * 100 : 0,
+          sp500: firstSp > 0 ? ((bench.sp - firstSp) / firstSp) * 100 : 0,
+          portfolioRaw: portfolioVal,
+          nse20Raw: bench.nse,
+          sp500Raw: bench.sp,
+        });
+      }
+    } else {
+      const firstNse = benchmarkHistory[0]?.nse || nseCurrent;
+      const firstSp = benchmarkHistory[0]?.sp || spCurrent;
+
+      for (let i = 0; i < numPoints; i++) {
+        const bench = benchmarkHistory[i];
+        const d = new Date(Date.now() - (numPoints - i) * (days / numPoints) * 24 * 60 * 60 * 1000);
+
+        data.push({
+          month: formatDateLabel(d, days),
+          portfolio: 0,
+          nse20: firstNse > 0 ? ((bench.nse - firstNse) / firstNse) * 100 : 0,
+          sp500: firstSp > 0 ? ((bench.sp - firstSp) / firstSp) * 100 : 0,
+          portfolioRaw: 0,
+          nse20Raw: bench.nse,
+          sp500Raw: bench.sp,
+        });
+      }
     }
 
+    const totalReturn = currentValue - initialCapital;
+    const totalReturnPercent = initialCapital > 0 ? ((currentValue - initialCapital) / initialCapital) * 100 : 0;
+
     res.json({
-      generatedAt: new Date().toISOString(),
-      summary: {
-        currentValue: Math.round(currentValue * 100) / 100,
-        initialCapital: Math.round(initialCapital * 100) / 100,
-        totalReturn: Math.round((currentValue - initialCapital) * 100) / 100,
-        totalReturnPercent: initialCapital > 0 ? Math.round(((currentValue - initialCapital) / initialCapital) * 1000) / 10 : 0,
-        numPeriods,
-      },
-      performance,
-      history: snapshots.map(s => ({
-        date: s.snapshot_date.toISOString(),
-        value: parseFloat(s.total_value),
-      })),
+      data,
+      period,
+      hasHistory,
+      currentValue: Math.round(currentValue * 100) / 100,
+      totalReturn: Math.round(totalReturn * 100) / 100,
+      totalReturnPercent: Math.round(totalReturnPercent * 10) / 10,
+      fxRate,
     });
   } catch (err) {
-    console.error('Error generating portfolio performance:', err);
+    console.error('Error in portfolio performance:', err);
     res.status(500).json({ error: 'Failed to generate performance data' });
   }
 });
@@ -1055,6 +3400,9 @@ app.post('/api/trade', async (req, res) => {
       [user_id, ticker, name, shares, price, type, market || 'NSE', sector || 'Other', tradeCurrency, totalValue, commission, fees]
     );
     snapshotPortfolioValue(user_id).catch(() => {});
+    pool.query('SELECT email, full_name FROM users WHERE id = $1', [user_id]).then(u => {
+      if (u.rows.length) logUserActivity(user_id, u.rows[0].email, u.rows[0].full_name, 'trade', { ticker, type, shares, price, market }, req.ip);
+    });
     res.status(201).json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1252,7 +3600,7 @@ app.get('/api/groups', async (req, res) => {
   try {
     const userId = req.query.userId;
     const result = await pool.query(`
-      SELECT g.id, g.name, g.description, g.icon, g.topic,
+      SELECT g.id, g.name, g.description, g.icon, g.topic, g.created_by,
              COUNT(DISTINCT gm.user_id)::int as members,
              COUNT(DISTINCT m.id)::int as message_count,
              COUNT(DISTINCT CASE WHEN m.created_at > NOW() - INTERVAL '1 hour' THEN m.id END)::int as activity_last_hour
@@ -1285,6 +3633,7 @@ app.get('/api/groups', async (req, res) => {
       return {
         ...g,
         isJoined: userGroupIds.has(g.id),
+        isAdmin: userId && g.created_by && String(g.created_by) === String(userId),
         online_members: onlineCount,
         trending: g.activity_last_hour > 0 && g.activity_last_hour >= g.members * 0.1,
       };
@@ -1294,7 +3643,7 @@ app.get('/api/groups', async (req, res) => {
     console.error('Error fetching groups:', error.message);
     try {
       const result = await pool.query('SELECT * FROM trading_groups ORDER BY name');
-      const groups = result.rows.map(g => ({ ...g, members: 0, message_count: 0, activity_last_hour: 0, isJoined: false, online_members: 0, trending: false, createdAt: 0 }));
+      const groups = result.rows.map(g => ({ ...g, members: 0, message_count: 0, activity_last_hour: 0, isJoined: false, isAdmin: false, online_members: 0, trending: false, createdAt: 0 }));
       res.json(groups);
     } catch {
       res.json([]);
@@ -1304,14 +3653,14 @@ app.get('/api/groups', async (req, res) => {
 
 app.post('/api/groups', async (req, res) => {
   try {
-    const { id, name, description, icon, topic } = req.body;
+    const { id, name, description, icon, topic, created_by } = req.body;
     if (!id || !name) return res.status(400).json({ error: 'id and name are required' });
     const result = await pool.query(
-      `INSERT INTO trading_groups (id, name, description, icon, topic)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (id) DO UPDATE SET name = $2, description = $3, icon = $4, topic = $5
+      `INSERT INTO trading_groups (id, name, description, icon, topic, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (id) DO UPDATE SET name = $2, description = $3, icon = $4, topic = $5, created_by = COALESCE(trading_groups.created_by, $6)
        RETURNING *`,
-      [id, name, description || '', icon || '📊', topic || 'General']
+      [id, name, description || '', icon || '📊', topic || 'General', created_by || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
@@ -1501,7 +3850,8 @@ app.get('/api/financials/status', async (req, res) => {
       edgarApiKeyConfigured: edgarStatus.edgarApiKeyConfigured,
       simfinConfigured: simfinStatus.simfinConfigured,
       simfinApiKeyConfigured: simfinStatus.simfinApiKeyConfigured,
-      message: 'Financial data providers: FMP, SEC EDGAR, SimFin',
+      yahooFinanceConfigured: true,
+      message: 'Financial data providers: Yahoo Finance, FMP, SEC EDGAR, SimFin',
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1575,7 +3925,7 @@ app.get('/api/financials/:symbol/dividends', async (req, res) => {
 // --- Bond Routes ---
 app.get('/api/bonds', async (req, res) => {
   try {
-    const bonds = await getBonds();
+    const bonds = await getBonds(req.query.market || 'kenya');
     res.json(bonds);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1601,10 +3951,20 @@ app.get('/api/bonds/:id', async (req, res) => {
   }
 });
 
+app.get('/api/bonds/:type/access', async (req, res) => {
+  try {
+    const market = req.query.market || 'kenya';
+    const access = await getMarketAccess(req.params.type, market);
+    res.json({ type: req.params.type, market, methods: access || [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- ETF Routes ---
 app.get('/api/etfs', async (req, res) => {
   try {
-    const etfs = await getETFs();
+    const etfs = await getETFs(req.query.market || 'all');
     res.json(etfs);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1650,10 +4010,18 @@ app.get('/api/fx/convert', async (req, res) => {
   }
 });
 
+// --- Market Status ---
+app.get('/api/market/status', async (req, res) => {
+  res.json({
+    nse: isMarketOpen('NSE'),
+    global: isMarketOpen('Global'),
+  });
+});
+
 // --- NSE Market Data Routes ---
 app.get('/api/market/nse', async (req, res) => {
   try {
-    const symbols = KENYAN_STOCKS.map(s => s.symbol);
+    const symbols = STOCK_SYMBOLS;
     const quotes = await Promise.all(symbols.map(s => getStockQuote(s).catch(() => null)));
     const filtered = quotes.filter(Boolean).map(q => ({
       ...q,
@@ -1672,6 +4040,194 @@ app.get('/api/market/us', async (req, res) => {
     const quotes = await Promise.all(symbols.map(s => getStockQuote(s).catch(() => null)));
     res.json(quotes.filter(Boolean));
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Sentiment Email Preference ---
+app.get('/api/user/sentiment-preference', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const result = await pool.query('SELECT sentiment_opt_in FROM users WHERE id = $1', [userId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ optedIn: result.rows[0].sentiment_opt_in || false });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/user/send-test-portfolio', requireOwnership, async (req, res) => {
+  try {
+    let { userId, email } = req.body;
+    let fullName = 'Trader';
+    if (userId) {
+      const result = await pool.query('SELECT id, full_name, email FROM users WHERE id = $1', [userId]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      email = result.rows[0].email;
+      fullName = result.rows[0].full_name;
+    }
+    if (!email) return res.status(400).json({ error: 'email or userId required' });
+    const userIdNum = userId ? parseInt(userId) : null;
+    if (!userIdNum) return res.status(400).json({ error: 'userId required' });
+    const sent = await sendPortfolioReportToUser(userIdNum, email, fullName);
+    if (sent) {
+      res.json({ success: true, message: `Real portfolio report sent to ${email}` });
+    } else {
+      res.json({ success: false, message: `User ${email} has no real portfolio holdings` });
+    }
+  } catch (error) {
+    console.error('send-test-portfolio error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/user/send-test-paper-portfolio', requireOwnership, async (req, res) => {
+  try {
+    let { userId, email } = req.body;
+    let fullName = 'Trader';
+    if (userId) {
+      const result = await pool.query('SELECT id, full_name, email FROM users WHERE id = $1', [userId]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      email = result.rows[0].email;
+      fullName = result.rows[0].full_name;
+    }
+    if (!email) return res.status(400).json({ error: 'email or userId required' });
+    const userIdNum = userId ? parseInt(userId) : null;
+    if (!userIdNum) return res.status(400).json({ error: 'userId required' });
+    const sent = await sendPaperTradingReportToUser(userIdNum, email, fullName);
+    if (sent) {
+      res.json({ success: true, message: `Paper trading portfolio report sent to ${email}` });
+    } else {
+      res.json({ success: false, message: `User ${email} has no paper trading positions` });
+    }
+  } catch (error) {
+    console.error('send-test-paper-portfolio error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/user/sentiment-preference', async (req, res) => {
+  try {
+    const { userId, optedIn } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    await pool.query('UPDATE users SET sentiment_opt_in = $1 WHERE id = $2', [optedIn, userId]);
+    res.json({ success: true, optedIn: !!optedIn });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/user/send-test-sentiment', async (req, res) => {
+  try {
+    let { userId, email, fullName } = req.body;
+    if (userId) {
+      const result = await pool.query('SELECT id, full_name, email FROM users WHERE id = $1', [userId]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      email = result.rows[0].email;
+      fullName = result.rows[0].full_name;
+    }
+    if (!email) return res.status(400).json({ error: 'email or userId required' });
+    const summaryRes = await axios.get(`http://localhost:${port}/api/ai/market-summary`).then(r => r.data).catch(() => null);
+    const moversRes = await axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({}));
+    const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    await sendDailySentimentEmail(email, {
+      userName: fullName || 'Trader',
+      summary: summaryRes?.summary || 'Markets showing mixed activity today.',
+      sentiment: summaryRes?.sentiment || 'Neutral',
+      confidence: summaryRes?.confidence || '65%',
+      dateStr,
+      nseGainers: moversRes?.nse?.gainers?.slice(0, 8) || [],
+      nseLosers: moversRes?.nse?.losers?.slice(0, 8) || [],
+      globalGainers: moversRes?.global?.gainers?.slice(0, 8) || [],
+      globalLosers: moversRes?.global?.losers?.slice(0, 8) || [],
+      signals: summaryRes?.signals || { total: 0, strongBuys: 0, buys: 0, sells: 0 },
+    });
+    res.json({ success: true, message: 'Test sentiment email sent' });
+  } catch (error) {
+    console.error('send-test-sentiment error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Hot News Email ---
+app.post('/api/user/send-test-hot-news', async (req, res) => {
+  try {
+    let { userId, email, fullName } = req.body;
+    if (userId) {
+      const result = await pool.query('SELECT id, full_name, email FROM users WHERE id = $1', [userId]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      email = result.rows[0].email;
+      fullName = result.rows[0].full_name;
+    }
+    if (!email) return res.status(400).json({ error: 'email or userId required' });
+    const sent = await sendHotNewsReportToUser(userId ? parseInt(userId) : null, email, fullName);
+    if (sent) {
+      res.json({ success: true, message: 'Hot news report sent to ' + email });
+    } else {
+      res.json({ success: false, message: 'No hot news found to send' });
+    }
+  } catch (error) {
+    console.error('send-test-hot-news error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Test Receipt Email ---
+app.post('/api/test/send-receipt', async (req, res) => {
+  try {
+    const { email, userName } = req.body;
+    if (!email) return res.status(400).json({ error: 'email required' });
+    await sendPaymentReceiptEmail(email, {
+      userName: userName || 'Test User',
+      planName: 'Pro',
+      amount: 3770,
+      currency: 'KES',
+      period: 'yearly',
+      durationMonths: 12,
+      paymentMethod: 'M-Pesa',
+      transactionRef: 'TEST-REF-' + Date.now(),
+      paidAt: new Date(),
+      startDate: new Date(),
+      endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+    });
+    res.json({ success: true, message: `Test receipt sent to ${email}` });
+  } catch (error) {
+    console.error('send-test-receipt error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Test Expiry Reminder Email ---
+app.post('/api/test/send-expiry-reminder', async (req, res) => {
+  try {
+    const { email, userName, daysLeft, planName } = req.body;
+    if (!email) return res.status(400).json({ error: 'email required' });
+    await sendSubscriptionExpiryReminder(email, {
+      userName: userName || 'Test User',
+      planName: planName || 'Pro',
+      daysLeft: daysLeft || 3,
+      expiryDate: new Date(Date.now() + (daysLeft || 3) * 24 * 60 * 60 * 1000),
+    });
+    res.json({ success: true, message: `Test expiry reminder sent to ${email}` });
+  } catch (error) {
+    console.error('send-test-expiry-reminder error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- Test Expired Email ---
+app.post('/api/test/send-expired', async (req, res) => {
+  try {
+    const { email, userName, planName } = req.body;
+    if (!email) return res.status(400).json({ error: 'email required' });
+    await sendSubscriptionExpiredEmail(email, {
+      userName: userName || 'Test User',
+      planName: planName || 'Pro',
+    });
+    res.json({ success: true, message: `Test expired notice sent to ${email}` });
+  } catch (error) {
+    console.error('send-test-expired error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1761,6 +4317,28 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { full_name, email, trader_type } = req.body;
+    const fields = []; const params = []; let idx = 1;
+    if (full_name !== undefined) { fields.push(`full_name = $${idx++}`); params.push(full_name); }
+    if (email !== undefined) { fields.push(`email = $${idx++}`); params.push(email); }
+    if (trader_type !== undefined) { fields.push(`trader_type = $${idx++}`); params.push(trader_type); }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    params.push(id);
+    const result = await pool.query(
+      `UPDATE users SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${idx} RETURNING id, full_name, email, trader_type, created_at, updated_at`,
+      params
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating user:', error.message);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
 // --- People / Community Directory ---
 app.post('/api/people/:id/follow', async (req, res) => {
   try {
@@ -1825,10 +4403,79 @@ app.get('/api/people', async (req, res) => {
 });
 
 // --- All stocks list & search ---
+// Returns quote for a single stock (used by StockAnalysisPage)
+app.get('/api/stock/:symbol', async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    const { market } = req.query;
+    const upper = symbol.toUpperCase();
+    const lookup = market === 'nse' ? `NSE:${upper}` : upper;
+    const quote = await getStockQuote(lookup);
+    if (!quote) return res.status(404).json({ error: 'Stock not found' });
+    res.json({
+      symbol: quote.symbol || upper,
+      company_name: quote.company_name || upper,
+      price: quote.price || quote.close || 0,
+      change: quote.change || 0,
+      changePercent: quote.changePercent || quote.change_pct || 0,
+      changesPercentage: quote.changesPercentage || quote.changePercent || 0,
+      volume: quote.volume || 0,
+      dayHigh: quote.dayHigh || quote.high || 0,
+      dayLow: quote.dayLow || quote.low || 0,
+      previousClose: quote.previousClose || quote.previous_close || 0,
+      currency: quote.currency || (lookup.startsWith('NSE:') ? 'KES' : 'USD'),
+      provider: quote.provider || 'synthetic',
+      exchange: quote.exchange || (lookup.startsWith('NSE:') ? 'NSE' : 'Global'),
+      timestamp: quote.timestamp ? (typeof quote.timestamp === 'number' ? quote.timestamp : Math.floor(new Date(quote.timestamp).getTime() / 1000)) : Math.floor(Date.now() / 1000),
+      lastUpdated: quote.lastUpdated || new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error(`Error fetching stock ${req.params.symbol}:`, error.message);
+    res.status(500).json({ error: 'Failed to fetch stock quote' });
+  }
+});
+
+app.get('/api/stock/:symbol/history', async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    const { range, interval } = req.query;
+    const { fetchHistoricalQuotes } = require('./globalScraper');
+    const bars = await Promise.race([
+      fetchHistoricalQuotes(symbol.toUpperCase(), range || '6mo', interval || '1d'),
+      new Promise(resolve => setTimeout(() => resolve(null), 15000)),
+    ]);
+    if (!bars || bars.length === 0) {
+      return res.status(404).json({ error: 'No historical data found' });
+    }
+    res.json({ symbol: symbol.toUpperCase(), bars, count: bars.length });
+  } catch (error) {
+    console.error(`Error fetching history for ${req.params.symbol}:`, error.message);
+    res.status(500).json({ error: 'Failed to fetch price history' });
+  }
+});
+
 app.get('/api/stocks', async (req, res) => {
   try {
+    const brief = req.query.brief === 'true';
+    const now = Date.now();
+    // For full response, use serialized string cache to avoid JSON.stringify overhead
+    if (!brief && _stocksSerializedCache && (now - _stocksSerializedTime) < STOCKS_SERIALIZED_TTL) {
+      return res.type('json').send(_stocksSerializedCache);
+    }
     const allSignals = await generateSignals();
-    res.json(allSignals);
+    if (brief) {
+      // Trimmed response: only essential fields
+      const trimmed = allSignals.map(s => ({
+        ticker: s.ticker, name: s.name, price: s.price, change: s.change,
+        signal: s.signal, confidence: s.confidence, market: s.market,
+        sector: s.sector, currency: s.currency, volume: s.volume,
+      }));
+      return res.json(trimmed);
+    }
+    const serialized = JSON.stringify(allSignals);
+    _stocksSerializedCache = serialized;
+    _stocksSerializedTime = now;
+    res.type('json').send(serialized);
   } catch (error) {
     console.error('Error fetching all stocks:', error);
     res.status(500).json({ error: 'Failed to fetch stocks list' });
@@ -1849,7 +4496,8 @@ app.get('/api/stocks/list', async (req, res) => {
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
-    console.error('Error fetching stocks list:', error.message);
+    // Log full error stack to aid debugging
+    console.error('Error fetching stocks list:', error && error.stack ? error.stack : error);
     res.status(500).json({ error: 'Failed to fetch stocks list' });
   }
 });
@@ -1873,6 +4521,35 @@ app.get('/api/stocks/search', async (req, res) => {
     console.error('Error searching stocks:', error.message);
     // Fallback to in-memory search
     try { res.json(searchStocks(q)); } catch { res.json([]); }
+  }
+});
+
+app.get('/api/stocks/search/yahoo', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (q.length < 1) return res.json([]);
+    const https = require('https');
+    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=8&newsCount=0`;
+    const data = await new Promise((resolve, reject) => {
+      https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (resp) => {
+        let body = '';
+        resp.on('data', chunk => body += chunk);
+        resp.on('end', () => resolve(body));
+      }).on('error', reject);
+    });
+    const parsed = JSON.parse(data);
+    const quotes = (parsed.quotes || [])
+      .filter(r => r.quoteType === 'EQUITY' || r.quoteType === 'ETF')
+      .map(r => ({
+        symbol: r.symbol,
+        name: r.shortname || r.longname || r.symbol,
+        exchange: r.exchange,
+        quoteType: r.quoteType,
+      }));
+    res.json(quotes);
+  } catch (error) {
+    console.error('Error searching Yahoo stocks:', error.message);
+    res.json([]);
   }
 });
 
@@ -2003,6 +4680,17 @@ app.get('/api/screener', async (req, res) => {
   }
 });
 
+app.get('/api/analysts', async (req, res) => {
+  try {
+    const { fetchAnalystData } = require('./analystService');
+    const data = await fetchAnalystData();
+    res.json(data);
+  } catch (error) {
+    console.error('Error in analysts:', error.message);
+    res.status(500).json({ error: 'Failed to fetch analyst data' });
+  }
+});
+
 app.get('/api/top-stocks', async (req, res) => {
   try {
     const signals = await generateSignals();
@@ -2037,12 +4725,87 @@ app.get('/api/top-stocks', async (req, res) => {
 app.get('/api/market/movers', async (req, res) => {
   try {
     const snapshot = await getMarketSnapshot();
-    res.json({ nse: snapshot.nse.movers, global: snapshot.global.movers, combined: snapshot.movers });
+    res.json({ nse: snapshot.nse.movers, global: snapshot.global.movers, combined: snapshot.movers, active: snapshot.active });
   } catch (error) {
     console.error('Error fetching movers:', error);
     res.status(500).json({ error: 'Failed to fetch top movers' });
   }
 });
+
+// Real-time total turnover by market (price * volume) — uses direct Yahoo chart API for global, BASE_QUOTES for NSE
+let turnoverCache = { nse: 0, global: 0, nseVolume: 0, globalVolume: 0, nse: { turnover: 0, volume: 0, count: 0 }, global: { turnover: 0, volume: 0, count: 0 } };
+let turnoverCacheTime = 0;
+const TURNOVER_CACHE_TTL = 30000; // 30s
+
+const NSE_TURNOVER_TICKERS = ['SCOM', 'EQTY', 'KCB', 'EABL', 'ABSA', 'SBIC', 'KLG', 'BAMB', 'UMEM', 'KPLC', 'NMG', 'TOTL', 'STAN', 'COOP', 'JUB', 'KNRE', 'LKL', 'CIC', 'HFCK', 'IMH', 'NCBA', 'BAT', 'BOC', 'CARB', 'SCBK', 'DTK', 'BKG', 'KUKZ', 'KAPC', 'WTK', 'SASN', 'KEGN', 'UMME', 'BRIT', 'LBTY', 'SLAM', 'CTUM', 'NSE', 'EVRD', 'FTGH', 'UNGA', 'ARM', 'PORT', 'CRWN', 'TPSE', 'SCAN', 'SGL', 'CGEN', 'AMAC', 'ALP', 'CABL', 'DCON', 'GLD', 'HBE', 'KPC', 'KURV', 'LAPR', 'SKL', 'SMWF', 'TCL'];
+const GLOBAL_TURNOVER_TICKERS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'JPM', 'V', 'LLY', 'AVGO', 'WMT', 'XOM', 'UNH', 'PG', 'COST', 'KO', 'PEP', 'AMD', 'CRM', 'ADBE', 'PLTR', 'SNOW', 'UBER', 'ORCL', 'NFLX', 'DIS', 'BAC', 'INTC', 'CSCO', 'QCOM', 'TXN', 'IBM', 'GS', 'MS', 'GE', 'BA', 'CAT', 'MCD', 'NKE', 'SBUX', 'PYPL', 'GME', 'AMC'];
+
+async function fetchYahooStockQuote(symbol) {
+  try {
+    const { data } = await axios.get(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1d&interval=1m`,
+      { timeout: 5000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    const meta = data?.chart?.result?.[0]?.meta;
+    const quotes = data?.chart?.result?.[0]?.indicators?.quote?.[0];
+    if (!meta) return null;
+    const closes = quotes?.close?.filter(c => c != null);
+    const volumes = quotes?.volume?.filter(v => v != null);
+    return {
+      price: meta.regularMarketPrice || closes?.[closes.length - 1] || 0,
+      volume: meta.regularMarketVolume || (volumes ? volumes.reduce((a, b) => a + b, 0) : 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+app.get('/api/market/turnover', async (req, res) => {
+  const now = Date.now();
+  if (turnoverCacheTime && now - turnoverCacheTime < TURNOVER_CACHE_TTL) {
+    return res.json(turnoverCache);
+  }
+  try {
+    // NSE: from AFX scraper (free, real-time, 60s cache)
+    let nseTurnover = 0, nseVolume = 0;
+    const { fetchNseQuotes, getQuoteForSymbol } = require('./nseAfxScraper');
+    await fetchNseQuotes();
+    for (const t of NSE_TURNOVER_TICKERS) {
+      const q = getQuoteForSymbol('NSE:' + t) || getSyntheticQuote('NSE:' + t);
+      if (q) { nseTurnover += (q.price || 0) * (q.volume || 0); nseVolume += q.volume || 0; }
+    }
+
+    // Global: parallel Yahoo chart API calls
+    const globalResults = await Promise.allSettled(
+      GLOBAL_TURNOVER_TICKERS.map(s =>
+        Promise.race([
+          fetchYahooStockQuote(s),
+          new Promise(resolve => setTimeout(() => resolve(null), 4000)),
+        ])
+      )
+    );
+    let globalTurnover = 0, globalVolume = 0;
+    for (let i = 0; i < GLOBAL_TURNOVER_TICKERS.length; i++) {
+      const r = globalResults[i];
+      if (r.status === 'fulfilled' && r.value) {
+        globalTurnover += (r.value.price || 0) * (r.value.volume || 0);
+        globalVolume += r.value.volume || 0;
+      }
+    }
+
+    turnoverCache = {
+      nse: { turnover: nseTurnover, volume: nseVolume, count: NSE_TURNOVER_TICKERS.length },
+      global: { turnover: globalTurnover, volume: globalVolume, count: GLOBAL_TURNOVER_TICKERS.length },
+    };
+    turnoverCacheTime = now;
+    res.json(turnoverCache);
+  } catch (error) {
+    console.error('Error computing turnover:', error.message);
+    if (turnoverCacheTime) return res.json(turnoverCache);
+    res.json({ nse: { turnover: 0, volume: 0, count: 0 }, global: { turnover: 0, volume: 0, count: 0 } });
+  }
+});
+
 
 app.get('/api/earnings/criteria', async (req, res) => {
   try {
@@ -2333,6 +5096,613 @@ app.get('/api/ai/market-summary', async (req, res) => {
   } catch (err) {
     console.error('Error generating AI market summary:', err.message);
     res.json({ summary: 'Markets are showing mixed signals with selective opportunities in blue-chip stocks. Monitor key resistance levels for breakout confirmation.', sentiment: 'Neutral', confidence: '65%', timestamp: new Date().toISOString() });
+  }
+});
+
+// Pre-serialized JSON cache for the heavy /api/stocks endpoint
+let _stocksSerializedCache = null;
+let _stocksSerializedTime = 0;
+const STOCKS_SERIALIZED_TTL = 30000; // 30 seconds
+
+// ── AI Insights Chat ──
+const STOCK_NAMES = {
+  scom: 'SCOM', safaricom: 'SCOM', equity: 'EQTY', eqty: 'EQTY', kcb: 'KCB',
+  'kenya commercial': 'KCB', 'co-op': 'COOP', coop: 'COOP', absa: 'ABSA',
+  eabl: 'EABL', bat: 'BAT', bamburi: 'BAMB', bamb: 'BAMB', kplc: 'KPLC',
+  nmg: 'NMG', totl: 'TOTL', jubilee: 'JUB', jub: 'JUB', 'kenya airways': 'KQ',
+  saf: 'SCOM',
+  apple: 'AAPL', microsoft: 'MSFT', nvidia: 'NVDA', tesla: 'TSLA',
+  amazon: 'AMZN', amzn: 'AMZN', google: 'GOOGL', meta: 'META', netflix: 'NFLX',
+  jpm: 'JPM', 'jp morgan': 'JPM', 'jpmorgan': 'JPM',
+  visa: 'V', mastercard: 'MA', 'berkshire': 'BRK.B', 'brk.b': 'BRK.B',
+  'johnson & johnson': 'JNJ', 'johnson and johnson': 'JNJ', jnj: 'JNJ',
+  walmart: 'WMT', wmt: 'WMT', costco: 'COST', cost: 'COST',
+  oracle: 'ORCL', orcl: 'ORCL', cisco: 'CSCO', csco: 'CSCO',
+  sap: 'SAP', ibm: 'IBM', adobe: 'ADBE', adbe: 'ADBE', salesforce: 'CRM', crm: 'CRM',
+  intel: 'INTC', intc: 'INTC', amd: 'AMD', qualcomm: 'QCOM', qcom: 'QCOM',
+  broadcom: 'AVGO', avgo: 'AVGO', texas: 'TXN', txn: 'TXN',
+  palantir: 'PLTR', pltr: 'PLTR', crowdstrike: 'CRWD', crwd: 'CRWD',
+  'advanced micro': 'AMD',
+  'united health': 'UNH', unh: 'UNH', eli: 'LLY', lly: 'LLY', pfizer: 'PFE', pfe: 'PFE',
+  merck: 'MRK', mrk: 'MRK', moderna: 'MRNA', mrna: 'MRNA',
+  boeing: 'BA', ba: 'BA', caterpillar: 'CAT', cat: 'CAT', honeywell: 'HON', hon: 'HON',
+  disney: 'DIS', dis: 'DIS', 'walt disney': 'DIS',
+  mcdonalds: 'MCD', mcd: 'MCD', 'starbucks': 'SBUX', sbux: 'SBUX',
+  nike: 'NKE', nke: 'NKE', 'exxon': 'XOM', 'exxon mobil': 'XOM', xom: 'XOM',
+  chevron: 'CVX', cvx: 'CVX', shell: 'SHEL', shel: 'SHEL',
+  'bank of america': 'BAC', bac: 'BAC', 'goldman': 'GS', 'goldman sachs': 'GS',
+  morgan: 'MS', 'morgan stanley': 'MS', wells: 'WFC', wfc: 'WFC',
+  citigroup: 'C', citi: 'C', 'american express': 'AXP', axp: 'AXP',
+  paypal: 'PYPL', pypl: 'PYPL', square: 'SQ', block: 'SQ',
+  uber: 'UBER', coinbase: 'COIN', coin: 'COIN',
+  nio: 'NIO', rivian: 'RIVN', rivn: 'RIVN', lucid: 'LCID', lcid: 'LCID',
+  kukz: 'KUKZ', kakuzi: 'KUKZ', kapc: 'KAPC', kapchorua: 'KAPC',
+  limt: 'LIMT', 'limuru tea': 'LIMT', wtk: 'WTK', 'williamson tea': 'WTK',
+  sasn: 'SASN', sasini: 'SASN', rea: 'REA', 'rea vipingo': 'REA',
+  egad: 'EGAD', eaagads: 'EGAD', cgen: 'CGEN', 'car & general': 'CGEN',
+  ncba: 'NCBA', imh: 'IMH', 'i&m': 'IMH', dtk: 'DTK', 'diamond trust': 'DTK',
+  scbk: 'SCBK', 'standard chartered': 'SCBK', bkg: 'BKG', 'bk group': 'BKG',
+  hfck: 'HFCK', 'hf group': 'HFCK', sgl: 'SGL', 'standard group': 'SGL',
+  tpse: 'TPSE', 'tps eastern africa': 'TPSE', scan: 'SCAN', scangroup: 'SCAN',
+  kq: 'KQ', xprs: 'XPRS', 'express kenya': 'XPRS', smer: 'SMER', 'sameer africa': 'SMER',
+  port: 'PORT', 'portland cement': 'PORT', crwn: 'CRWN', 'crown paints': 'CRWN',
+  arm: 'ARM', 'arm cement': 'ARM', kegn: 'KEGN', kengen: 'KEGN',
+  umme: 'UMME', umeme: 'UMME', knre: 'KNRE', 'kenya re': 'KNRE', cic: 'CIC',
+  brit: 'BRIT', britam: 'BRIT', lbty: 'LBTY', 'liberty kenya': 'LBTY',
+  slam: 'SLAM', sanlam: 'SLAM', ctum: 'CTUM', centum: 'CTUM',
+  och: 'OCH', 'olympia capital': 'OCH', hafr: 'HAFR', 'home afrika': 'HAFR',
+  nse: 'NSE', 'nairobi securities exchange': 'NSE', amac: 'AMAC', 'africa mega agricorp': 'AMAC',
+  boc: 'BOC', 'b.o.c kenya': 'BOC', carb: 'CARB', carbacid: 'CARB',
+  unga: 'UNGA', msc: 'MSC', 'mumias sugar': 'MSC', ftgh: 'FTGH', 'flame tree': 'FTGH',
+  evrd: 'EVRD', eveready: 'EVRD', lkl: 'LKL', longhorn: 'LKL',
+  nbv: 'NBV', 'nairobi business ventures': 'NBV', uchim: 'UCHM', uchumi: 'UCHM',
+  alp: 'ALP', 'alp real estate': 'ALP', cabl: 'CABL', 'east african cables': 'CABL',
+  dcon: 'DCON', 'deacons east africa': 'DCON', gld: 'GLD', 'newgold etf': 'GLD',
+  hbe: 'HBE', homeboyz: 'HBE', kpc: 'KPC', 'kenya pipeline': 'KPC',
+  kurv: 'KURV', kurwitu: 'KURV', lapr: 'LAPR', 'laptrust imara': 'LAPR',
+  skl: 'SKL', 'shri krishana': 'SKL', smwf: 'SMWF', 'satrix msci world': 'SMWF',
+  tcl: 'TCL', transcentury: 'TCL',
+};
+// Auto-map all known tickers so any symbol in the universe works directly
+ALL_SYMBOLS.forEach(t => { const l = t.toLowerCase().replace('.', ''); if (!STOCK_NAMES[l]) STOCK_NAMES[l] = t; });
+
+app.post('/api/ai/insights', async (req, res) => {
+  try {
+    const { question } = req.body;
+    if (!question || !question.trim()) {
+      return res.status(400).json({ error: 'Question is required' });
+    }
+    const q = question.toLowerCase().trim();
+    let answer = '';
+
+    // ── Helpers ──
+    const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const word = w => new RegExp('\\b' + esc(w.toLowerCase()) + '\\b');
+    const anyWord = (...words) => words.some(w => word(w).test(q));
+
+    // ── Comprehensive stock detection ──
+    const foundSymbols = [];
+    const seen = new Set();
+    for (const [key, sym] of Object.entries(STOCK_NAMES)) {
+      if ((word(key).test(q) || word(sym.toLowerCase()).test(q)) && !seen.has(sym)) {
+        seen.add(sym);
+        foundSymbols.push(sym);
+      }
+    }
+    foundSymbols.sort((a, b) => {
+      const ka = Object.keys(STOCK_NAMES).find(k => STOCK_NAMES[k] === a) || '';
+      const kb = Object.keys(STOCK_NAMES).find(k => STOCK_NAMES[k] === b) || '';
+      return kb.length - ka.length;
+    });
+
+    // ── Intent detection ──
+    const isMomentum  = anyWord('momentum', 'hot', 'top', 'gainers', 'best', 'trending', 'rising', 'breakout', 'surge', 'movers');
+    const isSector    = anyWord('sector', 'banking', 'telecom', 'technology', 'energy', 'insurance', 'industrial', 'healthcare', 'transportation', 'agricultural', 'construction', 'manufacturing');
+    const isMarket    = anyWord('market', 'overview', 'summary', 'general', 'sentiment', 'outlook', 'broad');
+    const isNse       = anyWord('nse', 'kenya', 'nairobi');
+    const isCompare   = anyWord('compare', 'versus', 'vs', 'difference', 'better', 'which');
+    const isNews      = anyWord('news', 'headlines', 'latest', 'happening', 'trending');
+    const isBonds     = anyWord('bond', 'treasury', 'yield', 'fixed income');
+    const isETFs      = anyWord('etf', 'exchange traded fund');
+    const isFinancials = anyWord('fundamental', 'financial', 'earnings', 'revenue', 'profit', 'pe', 'ratio', 'balance sheet', 'cash flow', 'income');
+
+    // ── Format helpers ──
+    const fmt = (v, d = 'N/A') => (v !== null && v !== undefined && v !== 'N/A') ? v : d;
+    const fmtPrice = (v, c) => typeof v === 'number' ? v.toFixed(2) : fmt(v);
+    const fmtChange = (v) => {
+      if (typeof v !== 'number') return fmt(v);
+      return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+    };
+    const fmtCurrency = (nse) => nse ? 'KES' : 'USD';
+
+    // ── Handler: stock analysis (1-3 stocks) ──
+    if (foundSymbols.length > 0 && foundSymbols.length <= 3) {
+      const [allSignals, newsSummary, analystData, allIndices, sectorPerf] = await Promise.all([
+        generateSignals().catch(() => null),
+        getNewsSummary().catch(() => null),
+        fetchAnalystData().catch(() => null),
+        indicesService.getAllIndices().catch(() => null),
+        indicesService.getSectorPerformance().catch(() => null),
+      ]);
+      const newsItems = newsSummary?.trending || [];
+      const analystFirms = analystData?.firms || [];
+
+      const results = await Promise.all(foundSymbols.map(async (symbol) => {
+        const nse = !!KENYAN_STOCKS[symbol];
+        const [signal, liveQuote, financialReport] = await Promise.all([
+          getSignalForStock(symbol).catch(() => null),
+          getStockQuote(nse ? `NSE:${symbol}` : symbol).catch(() => null),
+          getFinancialReport(symbol).catch(() => null),
+        ]);
+        const fr = financialReport?.data;
+        const stockNews = newsItems.filter(n => n.relatedStocks?.includes(symbol)).slice(0, 3);
+        const firmPicks = analystFirms.filter(f => f.picks?.some(p => p.symbol === symbol)).slice(0, 3);
+        return { symbol, nse, signal, liveQuote, fr, stockNews, firmPicks };
+      }));
+
+      if (results.length === 1) {
+        const { symbol, nse, signal, liveQuote, fr, stockNews, firmPicks } = results[0];
+        const profile = fr?.profile;
+        const quote = fr?.quote;
+        const price = liveQuote?.price || signal?.price || quote?.price || 'N/A';
+        const change = liveQuote?.changePercent ?? signal?.change ?? quote?.changesPercentage ?? 0;
+        const vol = liveQuote?.volume || signal?.volume || 'N/A';
+        const curr = fmtCurrency(nse);
+        const income = fr?.incomeStatement;
+        const balance = fr?.balanceSheet;
+        const cashflow = fr?.cashFlowStatement;
+        const metrics = fr?.keyMetrics;
+        const dividends = fr?.dividendHistory;
+
+        answer = `**${signal?.name || profile?.companyName || symbol} (${symbol})**`;
+        if (profile?.sector) answer += ` — ${profile.sector}`;
+        if (profile?.industry) answer += ` | ${profile.industry}`;
+        answer += '\n\n';
+
+        answer += `**Current Price:** ${curr} ${fmtPrice(price)} (${fmtChange(change)})\n`;
+        answer += `**Volume:** ${vol}\n`;
+
+        if (profile) {
+          answer += `**Market Cap:** ${profile.marketCap ? (curr === 'KES' ? 'KES ' : '$') + (profile.marketCap / 1e9).toFixed(1) + 'B' : 'N/A'}`;
+          if (profile.ceo) answer += ` | **CEO:** ${profile.ceo}`;
+          if (profile.employees) answer += ` | **Employees:** ${(profile.employees / 1000).toFixed(0)}K`;
+          if (profile.website) answer += ` | [${profile.website}]`;
+          answer += '\n';
+        }
+
+        if (signal) {
+          answer += `\n**Signal:** ${signal.signal} (${signal.confidence}% confidence)\n`;
+          answer += `**Entry Zone:** ${curr} ${fmtPrice(signal.entry)} | **Targets:** ${curr} ${fmtPrice(signal.target1)} / ${curr} ${fmtPrice(signal.target2)}\n`;
+          answer += `**Stop Loss:** ${curr} ${fmtPrice(signal.stopLoss)}\n`;
+          answer += `**Trade Type:** ${signal.type} | **Risk/Reward:** ${fmt(signal.riskReward)}\n`;
+          if (signal.weeklyTrend) answer += `**Weekly Trend:** ${signal.weeklyTrend}`;
+          if (signal.mlWinProb) answer += ` | **ML Win Prob:** ${signal.mlWinProb}`;
+          answer += '\n';
+        }
+
+        // Key Financials from financial report (income statement + metrics)
+        if (income || metrics || balance) {
+          answer += `\n**📊 Financial Statements**\n`;
+
+          // Income statement highlights
+          if (income) {
+            answer += `\n**Income Statement (${income.date || 'Latest'})**\n`;
+            if (income.revenue != null) answer += `Revenue: $${(income.revenue / 1e9).toFixed(2)}B`;
+            if (income.grossProfit != null) answer += ` | Gross Profit: $${(income.grossProfit / 1e9).toFixed(2)}B`;
+            if (income.operatingIncome != null) answer += ` | Op Income: $${(income.operatingIncome / 1e9).toFixed(2)}B`;
+            if (income.netIncome != null) answer += `\nNet Income: $${(income.netIncome / 1e9).toFixed(2)}B`;
+            if (income.ebitda != null) answer += ` | EBITDA: $${(income.ebitda / 1e9).toFixed(2)}B`;
+            if (income.eps != null) answer += ` | EPS: $${income.eps.toFixed(2)}`;
+            if (income.revenue != null && income.netIncome != null) {
+              answer += `\nMargin: ${(income.netIncome / income.revenue * 100).toFixed(1)}% net`;
+            }
+            answer += '\n';
+          }
+
+          // Balance sheet highlights
+          if (balance) {
+            answer += `\n**Balance Sheet (${balance.date || 'Latest'})**\n`;
+            if (balance.cashAndCashEquivalents != null) answer += `Cash: $${(balance.cashAndCashEquivalents / 1e9).toFixed(2)}B`;
+            if (balance.totalCurrentAssets != null) answer += ` | Current Assets: $${(balance.totalCurrentAssets / 1e9).toFixed(2)}B`;
+            if (balance.totalAssets != null) answer += `\nTotal Assets: $${(balance.totalAssets / 1e9).toFixed(2)}B`;
+            if (balance.totalLiabilities != null) answer += ` | Liabilities: $${(balance.totalLiabilities / 1e9).toFixed(2)}B`;
+            if (balance.totalStockholdersEquity != null) answer += ` | Equity: $${(balance.totalStockholdersEquity / 1e9).toFixed(2)}B`;
+            if (balance.totalDebt != null && balance.totalStockholdersEquity != null) {
+              answer += `\nD/E: ${(balance.totalDebt / balance.totalStockholdersEquity).toFixed(2)}`;
+            }
+            answer += '\n';
+          }
+
+          // Cash flow highlights
+          if (cashflow) {
+            answer += `\n**Cash Flow (${cashflow.date || 'Latest'})**\n`;
+            if (cashflow.operatingCashFlow != null) answer += `Op Cash Flow: $${(cashflow.operatingCashFlow / 1e9).toFixed(2)}B`;
+            if (cashflow.freeCashFlow != null) answer += ` | Free Cash Flow: $${(cashflow.freeCashFlow / 1e9).toFixed(2)}B`;
+            if (cashflow.capitalExpenditure != null) answer += `\nCapEx: $${(Math.abs(cashflow.capitalExpenditure) / 1e9).toFixed(2)}B`;
+            if (cashflow.dividendsPaid != null) answer += ` | Dividends Paid: $${(Math.abs(cashflow.dividendsPaid) / 1e9).toFixed(2)}B`;
+            answer += '\n';
+          }
+
+          // Key metrics
+          if (metrics) {
+            answer += `\n**Key Ratios**\n`;
+            const parts = [];
+            if (metrics.peRatio != null) parts.push(`P/E: ${metrics.peRatio.toFixed(1)}`);
+            if (metrics.pbRatio != null) parts.push(`P/B: ${metrics.pbRatio.toFixed(1)}`);
+            if (metrics.debtToEquity != null) parts.push(`D/E: ${metrics.debtToEquity.toFixed(1)}`);
+            if (metrics.currentRatio != null) parts.push(`Current: ${metrics.currentRatio.toFixed(1)}`);
+            if (metrics.dividendYieldPercentage != null) parts.push(`Div Yield: ${metrics.dividendYieldPercentage.toFixed(1)}%`);
+            if (metrics.payoutRatio != null) parts.push(`Payout: ${(metrics.payoutRatio * 100).toFixed(0)}%`);
+            if (metrics.freeCashFlowYield != null) parts.push(`FCF Yield: ${(metrics.freeCashFlowYield * 100).toFixed(1)}%`);
+            if (metrics.revenuePerShare != null) parts.push(`Rev/Sh: $${metrics.revenuePerShare.toFixed(2)}`);
+            if (metrics.netIncomePerShare != null) parts.push(`EPS: $${metrics.netIncomePerShare.toFixed(2)}`);
+            answer += parts.join(' | ') + '\n';
+          }
+
+          // Dividend history
+          if (dividends && dividends.length > 0) {
+            const lastDiv = dividends[0];
+            answer += `\n**Dividends** — Latest: $${lastDiv.dividend?.toFixed(2) || 'N/A'} per share`;
+            if (lastDiv.paymentDate) answer += ` | Pay Date: ${lastDiv.paymentDate}`;
+            if (dividends.length > 1) {
+              const trailing = dividends.slice(0, 4);
+              answer += `\nTrailing: ${trailing.map(d => '$' + (d.dividend?.toFixed(2) || '?')).join(' → ')}`;
+            }
+            answer += '\n';
+          }
+
+          if (!income && !balance && !cashflow) {
+            answer += `\n_Detailed financial statements not available for this symbol._\n`;
+          }
+        }
+
+        if (signal?.reason) {
+          answer += `\n**Analysis:** ${signal.reason}\n`;
+        }
+
+        if (stockNews.length > 0) {
+          answer += `\n**📰 Recent News**\n`;
+          stockNews.forEach(n => {
+            answer += `• ${n.headline} (_${n.source}_, ${n.timestamp})\n`;
+          });
+        }
+
+        if (firmPicks.length > 0) {
+          answer += `\n**🏦 Analyst Ratings**\n`;
+          firmPicks.forEach(f => {
+            const pick = f.picks.find(p => p.symbol === symbol);
+            if (pick) answer += `• **${f.name}**: ${pick.rating}${pick.targetPrice ? `, PT $${pick.targetPrice}` : ''}\n`;
+          });
+        }
+
+        if (!signal && !profile && !fr) {
+          answer += `\nReal-time market data is available. Use the stock detail page for in-depth analysis.`;
+        }
+
+      } else {
+        // Multi-stock comparison
+        answer += `**📊 Multi-Stock Comparison**\n\n`;
+        results.forEach(({ symbol, nse, signal, liveQuote, fr, stockNews, firmPicks }) => {
+          const price = liveQuote?.price || signal?.price || fr?.quote?.price || 'N/A';
+          const change = liveQuote?.changePercent ?? signal?.change ?? fr?.quote?.changesPercentage ?? 0;
+          const curr = fmtCurrency(nse);
+          const profile = fr?.profile;
+          const metrics = fr?.keyMetrics;
+          answer += `**${profile?.companyName || signal?.name || symbol} (${symbol})** — `;
+          answer += `${curr} ${fmtPrice(price)} (${fmtChange(change)})`;
+          if (signal) answer += ` → **${signal.signal}** (${signal.confidence}%)`;
+          answer += '\n';
+          if (profile?.sector) answer += `   Sector: ${profile.sector}`;
+          if (signal?.type) answer += ` | Type: ${signal.type}`;
+          if (liveQuote?.volume) answer += ` | Vol: ${(liveQuote.volume / 1e6).toFixed(1)}M`;
+          if (metrics?.peRatio != null) answer += ` | P/E: ${metrics.peRatio.toFixed(1)}`;
+          if (metrics?.dividendYieldPercentage != null) answer += ` | Div Yield: ${metrics.dividendYieldPercentage.toFixed(1)}%`;
+          answer += '\n';
+          if (stockNews.length > 0) {
+            answer += `   📰 ${stockNews[0].headline}\n`;
+          }
+        });
+        if (isCompare) {
+          const best = results.reduce((a, b) =>
+            ((a.signal?.confidence || 0) >= (b.signal?.confidence || 0)) ? a : b
+          );
+          answer += `\n_Recommendation: **${best.symbol}** has the strongest signal._`;
+        }
+      }
+
+    // ── Handler: too many stocks matched ──
+    } else if (foundSymbols.length > 3) {
+      answer = `I found **${foundSymbols.length}** stocks: ${foundSymbols.join(', ')}.\nPlease ask about one or two at a time for detailed analysis.`;
+
+    // ── Handler: market overview ──
+    } else if (isMarket || (foundSymbols.length === 0 && !isMomentum && !isSector && !isNse && !isNews && !isBonds && !isETFs && !isFinancials)) {
+      const [signals, indices, sectorPerf, turnoverRes, newsSum, analystData, bondSum, etfSum] = await Promise.all([
+        generateSignals().catch(() => null),
+        indicesService.getAllIndices().catch(() => null),
+        indicesService.getSectorPerformance().catch(() => null),
+        axios.get('http://localhost:' + port + '/api/market/turnover').then(r => r.data).catch(() => null),
+        getNewsSummary().catch(() => null),
+        fetchAnalystData().catch(() => null),
+        getBondSummary().catch(() => null),
+        getETFSummary().catch(() => null),
+      ]);
+      const total = signals?.length || 0;
+      const buys = signals ? signals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length : 0;
+      const sectors = signals ? [...new Set(signals.map(s => s.sector).filter(Boolean))] : [];
+
+      answer = `**📈 Market Overview**\n\n`;
+
+      // Indices
+      if (indices) {
+        const nseIdx = Object.values(indices).filter(i => i.market === 'NSE').slice(0, 3);
+        const globalIdx = Object.values(indices).filter(i => i.market === 'Global').slice(0, 4);
+        answer += `**Global Indices**\n`;
+        globalIdx.forEach(i => answer += `• ${i.name}: ${i.value} (${i.change})\n`);
+        if (nseIdx.length > 0) {
+          answer += `\n**NSE Indices**\n`;
+          nseIdx.forEach(i => answer += `• ${i.name}: ${i.value} (${i.change})\n`);
+        }
+        answer += '\n';
+      }
+
+      // Signal overview
+      if (signals) {
+        answer += `**Signal Overview** — Tracking **${total}** stocks across **${sectors.length}** sectors\n`;
+        answer += `**${buys}** (${Math.round(buys/total*100)}%) have buy ratings`;
+        if (signals.filter(s => s.signal === 'Strong Sell' || s.signal === 'Sell').length > 0) {
+          answer += ` | **${signals.filter(s => s.signal === 'Strong Sell' || s.signal === 'Sell').length}** sell ratings`;
+        }
+        answer += '\n\n';
+      }
+
+      // Turnover
+      if (turnoverRes?.nse) {
+        answer += `**NSE Turnover:** KES ${(turnoverRes.nse.turnover / 1e9).toFixed(1)}B | Volume: ${(turnoverRes.nse.volume / 1e6).toFixed(1)}M\n`;
+      }
+      if (turnoverRes?.global) {
+        answer += `**Global Turnover:** $${(turnoverRes.global.turnover / 1e9).toFixed(1)}B | Volume: ${(turnoverRes.global.volume / 1e6).toFixed(1)}M\n`;
+      }
+      if (turnoverRes?.nse || turnoverRes?.global) answer += '\n';
+
+      // Sector performance
+      if (sectorPerf && sectorPerf.length > 0) {
+        answer += `**🏭 Sector Performance**\n`;
+        sectorPerf.slice(0, 6).forEach(s => {
+          answer += `• ${s.sector}: ${s.change >= 0 ? '+' : ''}${typeof s.change === 'number' ? s.change.toFixed(1) : '0'}% (${s.upCount || 0}/${s.count || 0} up)\n`;
+        });
+        answer += '\n';
+      }
+
+      // Top momentum
+      if (signals) {
+        const top = signals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').sort((a, b) => b.confidence - a.confidence).slice(0, 3);
+        if (top.length > 0) {
+          answer += `**🔥 Top Picks**\n`;
+          top.forEach((s, i) => {
+            answer += `${i + 1}. **${s.ticker}** (${s.name}) — ${s.signal}, ${s.confidence}% confidence`;
+            if (s.price) answer += ` at ${s.currency || 'USD'} ${s.price}`;
+            answer += '\n';
+          });
+          answer += '\n';
+        }
+      }
+
+      // Analyst consensus
+      if (analystData?.firms) {
+        const buyFirms = analystData.firms.filter(f => f.rating === 'Strong Buy' || f.rating === 'Buy');
+        const totalFirms = analystData.firms.length;
+        if (buyFirms.length > 0) {
+          answer += `**🏦 Analyst Consensus:** ${buyFirms.length}/${totalFirms} firms bullish\n`;
+        }
+      }
+
+      // Top news
+      if (newsSum?.trending && newsSum.trending.length > 0) {
+        answer += `\n**📰 Top Headlines**\n`;
+        newsSum.trending.slice(0, 4).forEach(n => {
+          answer += `• ${n.headline} (_${n.source}_, ${n.timestamp})\n`;
+        });
+      }
+
+      if (bondSum) {
+        answer += `\n**Bond Yields:** Kenya 10Y: ${bondSum.kenya10Y || 'N/A'}% | US 10Y: ${bondSum.us10Y || 'N/A'}%\n`;
+      }
+
+      answer += `\nOverall sentiment is **${buys/total > 0.5 ? 'Bullish 📈' : 'Cautious ⚖️'}** with ${buys/total > 0.5 ? 'broad-based buying interest' : 'selective opportunities in fundamentally strong stocks'}.`;
+
+    // ── Handler: momentum stocks ──
+    } else if (isMomentum) {
+      const [signals, sectorPerf] = await Promise.all([
+        generateSignals().catch(() => null),
+        indicesService.getSectorPerformance().catch(() => null),
+      ]);
+      if (signals) {
+        const top = signals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').sort((a, b) => b.confidence - a.confidence).slice(0, 5);
+        if (top.length > 0) {
+          answer = '**🔥 Top Momentum Stocks**\n\n';
+          top.forEach((s, i) => {
+            answer += `${i + 1}. **${s.ticker}** (${s.name})\n`;
+            answer += `   ${s.signal} — ${s.confidence}% confidence`;
+            if (s.price) answer += ` | Price: ${s.currency || 'KES'} ${typeof s.price === 'number' ? s.price.toFixed(2) : s.price}`;
+            if (s.target1) answer += ` | Target: ${s.currency || 'KES'} ${typeof s.target1 === 'number' ? s.target1.toFixed(2) : s.target1}`;
+            if (s.sector) answer += ` | Sector: ${s.sector}`;
+            answer += '\n';
+          });
+          if (sectorPerf && sectorPerf.length > 0) {
+            const topSector = sectorPerf.sort((a, b) => b.avgChange - a.avgChange)[0];
+            answer += `\n_Leading sector: **${topSector.sector}** (${topSector.avgChange >= 0 ? '+' : ''}${topSector.avgChange.toFixed(1)}%)_`;
+          }
+        } else {
+          answer = 'No strong momentum stocks detected. The market is showing cautious movement.';
+        }
+      } else {
+        answer = 'Market data is being refreshed. Please try again shortly.';
+      }
+
+    // ── Handler: sector analysis ──
+    } else if (isSector) {
+      const [signals, sectorPerf] = await Promise.all([
+        generateSignals().catch(() => null),
+        indicesService.getSectorPerformance().catch(() => null),
+      ]);
+      if (signals) {
+        const sectors = [...new Set(signals.map(s => s.sector).filter(Boolean))];
+        answer = '**📊 Sector Analysis**\n\n';
+
+        if (sectorPerf && sectorPerf.length > 0) {
+          answer += `**Performance**\n`;
+          sectorPerf.slice(0, 8).forEach(s => {
+            answer += `• **${s.sector}:** ${s.avgChange >= 0 ? '+' : ''}${typeof s.avgChange === 'number' ? s.avgChange.toFixed(1) : '0'}%`;
+            if (s.upCount != null) answer += ` (${s.upCount}/${s.count} up)`;
+            answer += '\n';
+          });
+          answer += '\n';
+        }
+
+        answer += `**Signal Breakdown**\n`;
+        sectors.forEach(sec => {
+          const secSignals = signals.filter(s => s.sector === sec);
+          const avgConf = Math.round(secSignals.reduce((a, s) => a + (parseInt(s.confidence) || 0), 0) / secSignals.length);
+          const buys = secSignals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
+          const sells = secSignals.filter(s => s.signal === 'Strong Sell' || s.signal === 'Sell').length;
+          answer += `• **${sec}:** ${buys}/${secSignals.length} buy, ${sells} sell — avg ${avgConf}% confidence\n`;
+        });
+      } else {
+        answer = 'Sector data is being refreshed. Please try again shortly.';
+      }
+
+    // ── Handler: NSE focus ──
+    } else if (isNse) {
+      const [signals, indices, bondSum] = await Promise.all([
+        generateSignals().catch(() => null),
+        indicesService.getAllIndices().catch(() => null),
+        getBondSummary().catch(() => null),
+      ]);
+      if (signals) {
+        const nseSignals = signals.filter(s => s.market === 'NSE' || s.currency === 'KES');
+        if (nseSignals.length > 0) {
+          const buys = nseSignals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
+          const sectors = [...new Set(nseSignals.map(s => s.sector).filter(Boolean))];
+          answer = `**🇰🇪 NSE Market Analysis**\n\n`;
+
+          if (indices) {
+            const nseIdx = Object.values(indices).filter(i => i.market === 'NSE');
+            nseIdx.forEach(i => answer += `• **${i.name}:** ${i.value} (${i.change})\n`);
+            answer += '\n';
+          }
+
+          answer += `Tracking **${nseSignals.length}** NSE stocks across **${sectors.length}** sectors.\n`;
+          answer += `**${buys}** buy signals (${Math.round(buys/nseSignals.length*100)}% bullish).\n\n`;
+
+          if (bondSum?.kenya10Y) {
+            answer += `**Kenya 10Y Bond Yield:** ${bondSum.kenya10Y}%\n\n`;
+          }
+
+          answer += `**Sectors:** ${sectors.join(', ')}\n\n`;
+
+          const topNse = nseSignals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').slice(0, 4);
+          if (topNse.length > 0) {
+            answer += '**Top Picks:**\n';
+            topNse.forEach(s => {
+              answer += `• **${s.ticker}** (${s.name}) — ${s.signal} at KES ${typeof s.price === 'number' ? s.price.toFixed(2) : s.price}`;
+              if (s.target1) answer += ` → target KES ${typeof s.target1 === 'number' ? s.target1.toFixed(2) : s.target1}`;
+              answer += '\n';
+            });
+          }
+        } else {
+          answer = 'NSE data is being refreshed. Please try again shortly.';
+        }
+      } else {
+        answer = 'NSE data is being refreshed. Please try again shortly.';
+      }
+
+    // ── Handler: news / headlines ──
+    } else if (isNews) {
+      const newsSum = await getNewsSummary().catch(() => null);
+      if (newsSum && newsSum.trending && newsSum.trending.length > 0) {
+        answer = `**📰 Latest Market News**\n\n`;
+        answer += `Found **${newsSum.total}** articles (${newsSum.nseCount} NSE, ${newsSum.globalCount} global)\n`;
+        if (newsSum.hotCount > 0) answer += `**${newsSum.hotCount}** hot stories\n`;
+        answer += '\n';
+        newsSum.trending.slice(0, 8).forEach(n => {
+          answer += `• **${n.headline}**\n`;
+          answer += `  ${n.source} — ${n.timestamp}`;
+          if (n.relatedStocks?.length > 0) answer += ` | Stocks: ${n.relatedStocks.join(', ')}`;
+          if (n.sentiment) answer += ` | Sentiment: ${n.sentiment}`;
+          answer += '\n';
+        });
+      } else {
+        answer = 'News data is being refreshed. Please try again shortly.';
+      }
+
+    // ── Handler: bonds ──
+    } else if (isBonds) {
+      const [bondSum, bonds] = await Promise.all([
+        getBondSummary().catch(() => null),
+        getBonds('kenya').catch(() => null),
+      ]);
+      if (bondSum) {
+        answer = `**📊 Bond Market**\n\n`;
+        answer += `**Kenya 10-Year:** ${bondSum.kenya10Y || 'N/A'}% (${bondSum.kenya10YChange >= 0 ? '+' : ''}${bondSum.kenya10YChange?.toFixed(2) || '0'}%)\n`;
+        answer += `**US 10-Year:** ${bondSum.us10Y || 'N/A'}% (${bondSum.us10YChange >= 0 ? '+' : ''}${bondSum.us10YChange?.toFixed(2) || '0'}%)\n`;
+        answer += `**Kenya 91-Day T-Bill:** ${bondSum.kenyaTbill91D || 'N/A'}%\n\n`;
+        if (bondSum.yieldCurve?.length > 0) {
+          answer += `**Yield Curve**\n`;
+          bondSum.yieldCurve.forEach(y => {
+            answer += `• ${y.term}: Kenya ${y.kenya}% | US ${y.us}%\n`;
+          });
+        }
+        if (bonds && bonds.length > 0) {
+          answer += `\n**Available Bonds**\n`;
+          bonds.slice(0, 6).forEach(b => {
+            answer += `• **${b.name}** — Yield: ${b.ytm || b.coupon}% | Maturity: ${b.maturity || 'N/A'}\n`;
+          });
+        }
+      } else {
+        answer = 'Bond data is being refreshed. Please try again shortly.';
+      }
+
+    // ── Handler: ETFs (only if explicitly asked) ──
+    } else if (isETFs) {
+      const etfSum = await getETFSummary().catch(() => null);
+      if (etfSum) {
+        answer = `**📊 ETF Market**\n\n`;
+        answer += `Tracking **${etfSum.totalETFs}** ETFs\n`;
+        answer += `**${etfSum.advancing}** advancing, **${etfSum.declining}** declining\n`;
+        if (etfSum.totalVolume) answer += `**Total Volume:** ${(etfSum.totalVolume / 1e6).toFixed(0)}M\n`;
+        answer += '\n';
+        if (etfSum.topGainers?.length > 0) {
+          answer += `**Top Gainers**\n`;
+          etfSum.topGainers.forEach(e => {
+            answer += `• **${e.ticker}** — ${e.changePercent >= 0 ? '+' : ''}${e.changePercent?.toFixed(2)}% at $${e.price?.toFixed(2)}\n`;
+          });
+          answer += '\n';
+        }
+        if (etfSum.categories?.length > 0) {
+          answer += `**Categories**\n`;
+          etfSum.categories.forEach(c => answer += `• ${c.name}: ${c.count} ETFs\n`);
+        }
+      } else {
+        answer = 'ETF data is being refreshed. Please try again shortly.';
+      }
+
+    // ── Fallback: help message ──
+    } else {
+      answer = '**🤖 AI Analyst**\n\nI can help you with:\n\n' +
+        '• **Stock analysis** — "Analyze Safaricom" or "What about AAPL?"\n' +
+        '• **Momentum stocks** — "Top momentum stocks right now"\n' +
+        '• **Sector outlook** — "Banking sector performance"\n' +
+        '• **Market overview** — "Give me a market summary"\n' +
+        '• **NSE focus** — "NSE market analysis"\n' +
+        '• **News** — "Latest market news"\n' +
+        '• **Bonds** — "Bond market yields"\n' +
+        '• **ETFs** — "ETF market overview"\n\n' +
+        'What would you like to explore?';
+    }
+    res.json({ answer, timestamp: new Date().toISOString() });
+  } catch (err) {
+    console.error('Error generating AI insight:', err.message);
+    res.json({ answer: 'I encountered an error processing your request. Please try again.', timestamp: new Date().toISOString() });
   }
 });
 
@@ -2687,15 +6057,31 @@ app.get('/api/holdings', async (req, res) => {
     );
     const fxRate = await getFxRate();
     let nseValue = 0, globalValue = 0;
-    for (const r of rows) {
-      const price = parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0;
+    const enrichedRows = [];
+    // Deduplicate: if broker-synced holding exists for a ticker, exclude manual one
+    const brokerTickers = new Set(rows.filter(r => r.broker_connection_id > 0).map(r => r.ticker));
+    const deduplicatedRows = rows.filter(r => r.broker_connection_id > 0 || !brokerTickers.has(r.ticker));
+    for (const r of deduplicatedRows) {
+      const livePrice = await getLivePrice(r.market, r.ticker) || parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0;
+      const avgC = parseFloat(r.avg_cost) || 0;
       const shares = parseFloat(r.shares) || 0;
-      const val = price * shares;
+      const val = livePrice * shares;
+      const pnl = val - (avgC * shares);
+      const pnlPct = avgC > 0 ? ((livePrice - avgC) / avgC * 100) : 0;
       if (r.market === 'NSE') nseValue += val;
       else globalValue += val;
+      enrichedRows.push({
+        ...r,
+        current_price: String(livePrice.toFixed(2)),
+        live_price: String(livePrice.toFixed(2)),
+        value: String(val.toFixed(2)),
+        pnl: String(pnl.toFixed(2)),
+        pnl_percent: String(pnlPct.toFixed(1)),
+        is_positive: pnl >= 0,
+      });
     }
     const combinedValueKes = nseValue + globalValue * fxRate;
-    res.json({ holdings: rows, fxRate, combinedValueKes: Math.round(combinedValueKes * 100) / 100 });
+    res.json({ holdings: enrichedRows, fxRate, combinedValueKes: Math.round(combinedValueKes * 100) / 100 });
   } catch (err) {
     console.error('Error fetching holdings:', err.message);
     res.status(500).json({ error: 'Failed to fetch holdings' });
@@ -2794,7 +6180,7 @@ app.get('/api/notifications', async (req, res) => {
   }
 });
 
-app.post('/api/market/quotes', async (req, res) => {
+app.post('/api/market/quotes', marketDataLimiter, async (req, res) => {
   try {
     const { symbols } = req.body;
     if (!symbols || !Array.isArray(symbols) || symbols.length === 0) {
@@ -2829,11 +6215,19 @@ app.get('/api/paper/account', async (req, res) => {
       [userId]
     );
     const positions = pos.rows;
+    const fxRate = await getFxRate();
+
+    // Fetch live prices in parallel
+    const livePrices = await Promise.all(positions.map(p =>
+      getLivePrice(p.market, p.ticker).then(price => price || parseFloat(p.avg_cost))
+    ));
+
     let nsePortfolioValue = parseFloat(account.cash_balance);
     let usdPortfolioValue = parseFloat(account.cash_balance_usd);
     const enrichedPositions = [];
-    for (const p of positions) {
-      const livePrice = await getLivePrice(p.market, p.ticker) || parseFloat(p.avg_cost);
+    for (let i = 0; i < positions.length; i++) {
+      const p = positions[i];
+      const livePrice = livePrices[i];
       const val = livePrice * parseFloat(p.shares);
       const cost = parseFloat(p.avg_cost) * parseFloat(p.shares);
       const pnl = val - cost;
@@ -2851,7 +6245,6 @@ app.get('/api/paper/account', async (req, res) => {
         market: p.market, sector: p.sector,
       });
     }
-    const fxRate = await getFxRate();
     const combinedValue = nsePortfolioValue + usdPortfolioValue * fxRate;
     const initialCombined = parseFloat(account.initial_capital) + parseFloat(account.initial_capital_usd) * fxRate;
     const totalReturn = combinedValue - initialCombined;
@@ -2876,6 +6269,10 @@ app.get('/api/paper/account', async (req, res) => {
         fxRate,
       },
       positions: enrichedPositions,
+      marketStatus: {
+        nse: isMarketOpen('NSE'),
+        global: isMarketOpen('Global'),
+      },
     });
   } catch (err) {
     console.error('Error fetching paper account:', err.message);
@@ -2937,13 +6334,19 @@ function formatDateLabel(date, days) {
 }
 
 function normalizeTrade(t) {
+  const price = parseFloat(t.price) || 0;
+  const shares = parseFloat(t.shares) || 0;
+  const commission = parseFloat(t.commission) || 0;
+  const fees = parseFloat(t.fees) || 0;
+  const totalValue = parseFloat(t.total_value) || (price * shares);
   return {
     id: t.id, ticker: t.ticker, name: t.name,
-    shares: parseFloat(t.shares) || 0, price: parseFloat(t.price) || 0,
-    type: t.type, market: t.market, currency: t.currency,
-    totalValue: parseFloat(t.total_value) || 0,
-    commission: parseFloat(t.commission) || 0, fees: parseFloat(t.fees) || 0,
-    date: t.created_at,
+    shares, price,
+    type: t.type, market: t.market, currency: t.currency || 'KES',
+    total_value: totalValue, totalValue,
+    commission, fees,
+    date: t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : '',
+    created_at: t.created_at,
   };
 }
 
@@ -2967,8 +6370,17 @@ app.post('/api/paper/orders', async (req, res) => {
       return res.status(400).json({ error: 'userId, ticker, shares, and type are required' });
     }
 
-    // Look up live price
-    const livePrice = await getLivePrice(market || 'NSE', ticker);
+    const marketKey = (market || 'NSE') === 'NSE' ? 'NSE' : 'Global';
+    const status = isMarketOpen(marketKey === 'NSE' ? 'NSE' : 'Global');
+    if (!status.open) {
+      return res.status(400).json({ error: `${marketKey} market is currently ${status.label}. Trading is only allowed during market hours (${status.openTime} - ${status.closeTime}).` });
+    }
+
+    // Look up live price (fast timeout — synthetic fallback is fine for paper trading)
+    const livePrice = await Promise.race([
+      getLivePrice(market || 'NSE', ticker),
+      new Promise(resolve => setTimeout(() => resolve(null), 1000)),
+    ]);
     if (!livePrice || livePrice <= 0) {
       return res.status(400).json({ error: 'Could not fetch current price for ' + ticker });
     }
@@ -3084,7 +6496,7 @@ app.post('/api/paper/orders', async (req, res) => {
   }
 });
 
-app.get('/api/paper/statement', async (req, res) => {
+app.get('/api/paper/statement', requireOwnership, async (req, res) => {
   try {
     const userId = req.query.userId;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
@@ -3098,17 +6510,32 @@ app.get('/api/paper/statement', async (req, res) => {
     const totalTrades = trades.rows.length;
     const buyTrades = trades.rows.filter(t => t.type === 'buy').length;
     const sellTrades = trades.rows.filter(t => t.type === 'sell').length;
-    const totalCommission = trades.rows.reduce((s, t) => s + parseFloat(t.commission || 0), 0);
-    const totalFees = trades.rows.reduce((s, t) => s + parseFloat(t.fees || 0), 0);
-    const totalCommissionUsd = trades.rows.filter(t => t.currency === 'USD').reduce((s, t) => s + parseFloat(t.commission || 0), 0);
-    const totalFeesUsd = trades.rows.filter(t => t.currency === 'USD').reduce((s, t) => s + parseFloat(t.fees || 0), 0);
-    let realizedPnl = 0, realizedPnlUsd = 0;
+    const kesTrades = trades.rows.filter(t => t.currency === 'KES' || t.market === 'NSE');
+    const usdTrades = trades.rows.filter(t => t.currency === 'USD' || t.market !== 'NSE');
+    const totalCommissionKes = kesTrades.reduce((s, t) => s + parseFloat(t.commission || 0), 0);
+    const totalFeesKes = kesTrades.reduce((s, t) => s + parseFloat(t.fees || 0), 0);
+    const totalCommissionUsd = usdTrades.reduce((s, t) => s + parseFloat(t.commission || 0), 0);
+    const totalFeesUsd = usdTrades.reduce((s, t) => s + parseFloat(t.fees || 0), 0);
+    // FIFO realized P&L: match sold shares against earliest open lots
+    const lots = {};
+    let realizedPnlKes = 0, realizedPnlUsd = 0;
     for (const t of trades.rows) {
-      if (t.type === 'sell') {
-        const purchase = trades.rows.find(t2 => t2.ticker === t.ticker && t2.type === 'buy' && t2.created_at < t.created_at);
-        if (purchase) {
-          const pnl = (parseFloat(t.price) - parseFloat(purchase.price)) * parseFloat(t.shares);
-          if (t.currency === 'USD') realizedPnlUsd += pnl; else realizedPnl += pnl;
+      const market = t.market || (t.currency === 'KES' ? 'NSE' : 'Global');
+      const key = `${t.ticker}:${market}`;
+      if (t.type === 'buy') {
+        lots[key] = lots[key] || [];
+        lots[key].push({ shares: parseFloat(t.shares), price: parseFloat(t.price) });
+      } else if (t.type === 'sell') {
+        let remaining = parseFloat(t.shares);
+        const queue = lots[key] || [];
+        while (remaining > 1e-9 && queue.length > 0) {
+          const lot = queue[0];
+          const use = Math.min(remaining, lot.shares);
+          const pnl = (parseFloat(t.price) - lot.price) * use;
+          if (t.currency === 'USD') realizedPnlUsd += pnl; else realizedPnlKes += pnl;
+          lot.shares -= use;
+          remaining -= use;
+          if (lot.shares <= 1e-9) queue.shift();
         }
       }
     }
@@ -3147,11 +6574,12 @@ app.get('/api/paper/statement', async (req, res) => {
       },
       summary: {
         totalTrades, buyTrades, sellTrades, openPositions: openPositions.length,
-        totalCommission, totalFees, totalCommissionUsd, totalFeesUsd,
-        realizedPnl, realizedPnlUsd,
-        totalCommissionKes: totalCommission,
-        totalFeesKes: totalFees,
-        realizedPnlKes: realizedPnl,
+        totalCommissionKes: Math.round(totalCommissionKes * 100) / 100,
+        totalFeesKes: Math.round(totalFeesKes * 100) / 100,
+        totalCommissionUsd: Math.round(totalCommissionUsd * 100) / 100,
+        totalFeesUsd: Math.round(totalFeesUsd * 100) / 100,
+        realizedPnlKes: Math.round(realizedPnlKes * 100) / 100,
+        realizedPnlUsd: Math.round(realizedPnlUsd * 100) / 100,
         nsePositionValue: Math.round(nsePositionValue * 100) / 100,
         usdPositionValue: Math.round(usdPositionValue * 100) / 100,
         fxRate,
@@ -3228,7 +6656,7 @@ app.get('/api/financials/:symbol/edgar', async (req, res) => {
 // --- Payment Routes ---
 app.post('/api/payments/mpesa-push', async (req, res) => {
   try {
-    const { phoneNumber, amount, plan, customerName, userId } = req.body;
+    const { phoneNumber, amount, plan, customerName, userId, durationMonths } = req.body;
     if (!phoneNumber || !amount) {
       return res.status(400).json({ error: 'Phone number and amount required' });
     }
@@ -3247,9 +6675,9 @@ app.post('/api/payments/mpesa-push', async (req, res) => {
       customerName: customerName || 'StocksIntels User',
     });
     await pool.query(
-      `INSERT INTO payment_transactions (user_id, amount, currency, provider, phone_number, external_reference, payhero_reference, status, plan_name)
-       VALUES ($1, $2, 'KES', 'm-pesa', $3, $4, $5, $6, $7)`,
-      [userId || null, amount, formattedPhone, result.externalReference, result.reference, result.status.toLowerCase(), plan || null]
+      `INSERT INTO payment_transactions (user_id, amount, currency, provider, phone_number, external_reference, payhero_reference, status, plan_name, duration_months)
+       VALUES ($1, $2, 'KES', 'm-pesa', $3, $4, $5, $6, $7, $8)`,
+      [userId || null, amount, formattedPhone, result.externalReference, result.reference, result.status.toLowerCase(), plan || null, durationMonths || 1]
     );
     res.json({
       success: true,
@@ -3282,11 +6710,11 @@ app.post('/api/payments/callback', async (req, res) => {
       );
       if (status === 'success') {
         const tx = await pool.query(
-          'SELECT id, user_id, phone_number, plan_name FROM payment_transactions WHERE payhero_reference = $1 OR external_reference = $1',
+          'SELECT id, user_id, phone_number, plan_name, duration_months FROM payment_transactions WHERE payhero_reference = $1 OR external_reference = $1',
           [reference]
         );
         if (tx.rows.length > 0) {
-          const { id, user_id, phone_number, plan_name } = tx.rows[0];
+          const { id, user_id, phone_number, plan_name, duration_months } = tx.rows[0];
           let targetUserId = user_id;
           if (!targetUserId && phone_number) {
             try {
@@ -3299,11 +6727,59 @@ app.post('/api/payments/callback', async (req, res) => {
           }
           if (targetUserId) {
             const tier = (plan_name || 'pro').toLowerCase();
-            await pool.query(
-              `UPDATE users SET subscription_tier = $1, subscription_status = 'active' WHERE id = $2`,
-              [tier, targetUserId]
+            const months = parseInt(duration_months) || 1;
+            // Find plan_id
+            const planRes = await pool.query(
+              'SELECT id FROM subscription_plans WHERE LOWER(name) = $1 LIMIT 1',
+              [tier]
             );
-            console.log(`Subscription activated: user=${targetUserId} tier=${tier}`);
+            const planId = planRes.rows[0]?.id || null;
+            const startDate = new Date();
+            const endDate = new Date(startDate);
+            endDate.setMonth(endDate.getMonth() + months);
+            // Create subscription record
+            const subRes = await pool.query(
+              `INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)
+               VALUES ($1, $2, 'active', $3, $4)
+               RETURNING id`,
+              [targetUserId, planId, startDate, endDate]
+            );
+            const subscriptionId = subRes.rows[0]?.id || null;
+            // Update user
+            await pool.query(
+              `UPDATE users SET subscription_tier = $1, subscription_status = 'active', subscription_start_date = $2, subscription_end_date = $3 WHERE id = $4`,
+              [tier, startDate, endDate, targetUserId]
+            );
+            // Link transaction to subscription
+            if (subscriptionId) {
+              await pool.query(
+                'UPDATE payment_transactions SET subscription_id = $1 WHERE id = $2',
+                [subscriptionId, id]
+              );
+            }
+            console.log(`Subscription activated: user=${targetUserId} tier=${tier} months=${months} end=${endDate.toISOString()}`);
+            // Send receipt email
+            try {
+              const userRes = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [targetUserId]);
+              const { full_name: uName, email: uEmail } = userRes.rows[0] || {};
+              if (uEmail) {
+                await sendPaymentReceiptEmail(uEmail, {
+                  userName: uName,
+                  planName: plan_name || 'Pro',
+                  amount: tx.rows[0].amount,
+                  currency: 'KES',
+                  period: months === 12 ? 'yearly' : 'monthly',
+                  durationMonths: months,
+                  paymentMethod: 'M-Pesa',
+                  transactionRef: reference,
+                  paidAt: new Date(),
+                  startDate,
+                  endDate,
+                });
+              }
+            } catch (mailErr) {
+              console.error('[RECEIPT] Failed to send receipt email:', mailErr.message);
+            }
           }
         }
       }
@@ -3396,7 +6872,7 @@ app.get('/api/payments/plans', async (req, res) => {
 // --- Payd Card Payment Routes ---
 app.post('/api/payments/payd-card', async (req, res) => {
   try {
-    const { phoneNumber, amount, narration } = req.body;
+    const { phoneNumber, amount, narration, plan, userId, durationMonths } = req.body;
     if (!phoneNumber || !amount) {
       return res.status(400).json({ error: 'Phone number and amount required' });
     }
@@ -3408,6 +6884,13 @@ app.post('/api/payments/payd-card', async (req, res) => {
       phoneNumber,
       narration: narration || 'StocksIntels Subscription',
     });
+    // Store transaction record for linking on callback
+    await pool.query(
+      `INSERT INTO payment_transactions (user_id, amount, currency, provider, phone_number, external_reference, status, plan_name, duration_months)
+       VALUES ($1, $2, 'KES', 'payd-card', $3, $4, 'pending', $5, $6)
+       ON CONFLICT (external_reference) DO NOTHING`,
+      [userId || null, amount, phoneNumber, result.reference || result.checkoutId, plan || null, durationMonths || 1]
+    );
     res.json({
       success: true,
       checkoutUrl: result.checkoutUrl,
@@ -3441,14 +6924,61 @@ app.post('/api/payments/payd-callback', async (req, res) => {
       );
       if (status === 'success') {
         const tx = await pool.query(
-          'SELECT user_id FROM payment_transactions WHERE external_reference = $1',
+          'SELECT id, user_id, plan_name, duration_months FROM payment_transactions WHERE external_reference = $1',
           [reference]
         );
         if (tx.rows.length > 0 && tx.rows[0].user_id) {
-          await pool.query(
-            `UPDATE users SET subscription_tier = 'pro', subscription_status = 'active' WHERE id = $1`,
-            [tx.rows[0].user_id]
+          const { id: txId, user_id: targetUserId, plan_name, duration_months } = tx.rows[0];
+          const tier = (plan_name || 'pro').toLowerCase();
+          const months = parseInt(duration_months) || 1;
+          const planRes = await pool.query(
+            'SELECT id FROM subscription_plans WHERE LOWER(name) = $1 LIMIT 1',
+            [tier]
           );
+          const planId = planRes.rows[0]?.id || null;
+          const startDate = new Date();
+          const endDate = new Date(startDate);
+          endDate.setMonth(endDate.getMonth() + months);
+          const subRes = await pool.query(
+            `INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)
+             VALUES ($1, $2, 'active', $3, $4)
+             RETURNING id`,
+            [targetUserId, planId, startDate, endDate]
+          );
+          const subscriptionId = subRes.rows[0]?.id || null;
+          await pool.query(
+            `UPDATE users SET subscription_tier = $1, subscription_status = 'active', subscription_start_date = $2, subscription_end_date = $3 WHERE id = $4`,
+            [tier, startDate, endDate, targetUserId]
+          );
+          if (subscriptionId) {
+            await pool.query(
+              'UPDATE payment_transactions SET subscription_id = $1 WHERE id = $2',
+              [subscriptionId, txId]
+            );
+          }
+          console.log(`Payd subscription activated: user=${targetUserId} tier=${tier} months=${months} end=${endDate.toISOString()}`);
+          // Send receipt email
+          try {
+            const userRes = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [targetUserId]);
+            const { full_name: uName, email: uEmail } = userRes.rows[0] || {};
+            if (uEmail) {
+              await sendPaymentReceiptEmail(uEmail, {
+                userName: uName,
+                planName: plan_name || 'Pro',
+                amount: tx.rows[0].amount,
+                currency: 'KES',
+                period: months === 12 ? 'yearly' : 'monthly',
+                durationMonths: months,
+                paymentMethod: 'Card',
+                transactionRef: reference,
+                paidAt: new Date(),
+                startDate,
+                endDate,
+              });
+            }
+          } catch (mailErr) {
+            console.error('[RECEIPT] Failed to send receipt email:', mailErr.message);
+          }
         }
       }
     }
@@ -3456,6 +6986,115 @@ app.post('/api/payments/payd-callback', async (req, res) => {
   } catch (error) {
     console.error('Payd callback error:', error.message);
     res.json({ received: true });
+  }
+});
+
+// --- ML Model Routes ---
+app.get('/api/ml/info', async (req, res) => {
+  res.json(await mlModel.getModelInfo());
+});
+
+app.get('/api/ml/circuit-breaker', (req, res) => {
+  res.json(mlModel.pyBridge.getCircuitBreakerStatus());
+});
+
+app.post('/api/ml/train', async (req, res) => {
+  try {
+    const result = await mlModel.train();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/ml/predict', (req, res) => {
+  try {
+    const { fundamental, technical, macro } = req.body;
+    const prob = mlModel.predictWinProbability(fundamental, technical, macro);
+    res.json({ winProbability: prob });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// --- Order Router / Position Routes ---
+app.get('/api/orders/positions', (req, res) => {
+  try {
+    const positions = getAllPositions();
+    const value = getOrderPortfolioValue();
+    res.json({ positions, portfolio: value });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/orders/execute', async (req, res) => {
+  try {
+    const result = await executeOrder(req.body);
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/positions/update', (req, res) => {
+  try {
+    const { prices } = req.body;
+    const totalPnl = updatePositions(prices || {});
+    const value = getOrderPortfolioValue();
+    res.json({ totalPnl, portfolio: value });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Monitor / Health Routes ---
+app.get('/api/monitor/quality', (req, res) => {
+  try {
+    const health = require('./signalService').getEngineHealth();
+    const score = getQualityScore(health);
+    res.json({ qualityScore: score, health });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/monitor/drift', async (req, res) => {
+  try {
+    const { detectSignalDrift } = require('./monitorService');
+    const distribution = await detectSignalDrift();
+    res.json({ distribution });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Portfolio Optimization Routes ---
+app.post('/api/portfolio/optimize', (req, res) => {
+  try {
+    const { returns, expectedReturns, riskFreeRate } = req.body;
+    const { meanVarianceOptimize, computeCovarianceMatrix } = require('./portfolioOptimizer');
+    if (returns) {
+      const cov = computeCovarianceMatrix(returns);
+      const opt = meanVarianceOptimize(returns, expectedReturns, riskFreeRate || 0.02);
+      res.json({ covariance: cov, optimization: opt });
+    } else {
+      res.status(400).json({ error: 'returns array required' });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/portfolio/var', (req, res) => {
+  try {
+    const { returns, confidence } = req.body;
+    if (!returns) return res.status(400).json({ error: 'returns array required' });
+    const { monteCarloVaR } = require('./portfolioOptimizer');
+    const varResult = monteCarloVaR(returns, 1, 5000);
+    res.json(varResult);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -3468,18 +7107,7 @@ app.get('/api/health', (req, res) => {
 
 async function initDatabase() {
   try {
-    await pool.query('DROP TABLE IF EXISTS watchlist_items CASCADE;');
-    await pool.query(`CREATE TABLE IF NOT EXISTS watchlist_items (
-      id SERIAL PRIMARY KEY, symbol VARCHAR(20) UNIQUE NOT NULL,
-      company_name VARCHAR(255) NOT NULL, notes TEXT,
-      target_price NUMERIC(15,2),
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    );`);
-    await pool.query(`ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS company_name VARCHAR(255) DEFAULT 'Unknown'`);
-    await pool.query(`ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS target_price NUMERIC(15,2)`);
-    await pool.query(`ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS notes TEXT`);
-
+    // Create users first (referenced by watchlist_items and other tables)
     await pool.query(`CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY, full_name VARCHAR(255) NOT NULL,
       email VARCHAR(255) UNIQUE NOT NULL, password_hash TEXT NOT NULL,
@@ -3489,10 +7117,35 @@ async function initDatabase() {
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );`);
 
+    // Sentiment email opt-in column
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sentiment_opt_in BOOLEAN DEFAULT false`);
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS watchlist_items (
+      id SERIAL PRIMARY KEY, symbol VARCHAR(20) NOT NULL,
+      company_name VARCHAR(255) NOT NULL, notes TEXT,
+      target_price NUMERIC(15,2),
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(symbol, user_id)
+    );`);
+    await pool.query(`ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS company_name VARCHAR(255) DEFAULT 'Unknown'`);
+    await pool.query(`ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS target_price NUMERIC(15,2)`);
+    await pool.query(`ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS notes TEXT`);
+    await pool.query(`ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+    await pool.query(`ALTER TABLE watchlist_items DROP CONSTRAINT IF EXISTS watchlist_items_symbol_key`);
+    try {
+      await pool.query(`ALTER TABLE watchlist_items ADD CONSTRAINT IF NOT EXISTS unique_symbol_user UNIQUE (symbol, user_id)`);
+    } catch (e) {
+      // PostgreSQL < 9.5 doesn't support IF NOT EXISTS for ADD CONSTRAINT;
+      // the UNIQUE constraint is already defined in CREATE TABLE for new tables.
+    }
+
     await pool.query(`CREATE TABLE IF NOT EXISTS trading_groups (
       id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
-      icon TEXT DEFAULT '📊', topic TEXT DEFAULT 'General'
+      icon TEXT DEFAULT '📊', topic TEXT DEFAULT 'General', created_by INTEGER REFERENCES users(id)
     );`);
+    await pool.query(`ALTER TABLE trading_groups ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)`);
 
     await pool.query(`CREATE TABLE IF NOT EXISTS group_members (
       group_id TEXT REFERENCES trading_groups(id) ON DELETE CASCADE,
@@ -3508,6 +7161,10 @@ async function initDatabase() {
       recipient_id INTEGER REFERENCES users(id),
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );`);
+    await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS image_url TEXT`);
+    await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_url TEXT`);
+    await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT`);
+    await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP WITH TIME ZONE`);
     await pool.query('CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_id, created_at)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_messages_private ON messages(sender_id, recipient_id, created_at)');
 
@@ -3592,6 +7249,15 @@ async function initDatabase() {
       }
     }
 
+    await pool.query(`CREATE TABLE IF NOT EXISTS broker_account_snapshots (
+      id SERIAL PRIMARY KEY, broker_connection_id INTEGER REFERENCES broker_connections(id) ON DELETE CASCADE,
+      balance NUMERIC(15,2), equity NUMERIC(15,2), margin NUMERIC(15,2),
+      free_margin NUMERIC(15,2), level NUMERIC(15,2),
+      positions JSONB DEFAULT '[]', trade_history JSONB DEFAULT '[]',
+      snapshot_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+    await pool.query(`ALTER TABLE broker_connections ADD COLUMN IF NOT EXISTS account_info JSONB DEFAULT '{}'`);
+
     await pool.query(`CREATE TABLE IF NOT EXISTS paper_accounts (
       id SERIAL PRIMARY KEY, user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
       cash_balance NUMERIC(15,2) DEFAULT 1000000.00,
@@ -3645,6 +7311,13 @@ async function initDatabase() {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );`);
 
+    await pool.query(`CREATE TABLE IF NOT EXISTS support_chat_messages (
+      id SERIAL PRIMARY KEY, user_id INT REFERENCES users(id) ON DELETE SET NULL,
+      user_name VARCHAR(255) NOT NULL, email VARCHAR(255) NOT NULL,
+      message TEXT NOT NULL, is_staff BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+
     await pool.query(`CREATE TABLE IF NOT EXISTS portfolio_value_history (
       id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
       total_value NUMERIC(15,2) NOT NULL, cash_balance NUMERIC(15,2) NOT NULL,
@@ -3664,6 +7337,36 @@ async function initDatabase() {
       is_active BOOLEAN DEFAULT true,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );`);
+
+    // Admin audit log for security tracking
+    await pool.query(`CREATE TABLE IF NOT EXISTS admin_audit_log (
+      id SERIAL PRIMARY KEY,
+      admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      email VARCHAR(255),
+      action VARCHAR(100) NOT NULL,
+      ip_address VARCHAR(45),
+      user_agent TEXT,
+      details JSONB,
+      success BOOLEAN DEFAULT true,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+    try { await pool.query(`CREATE INDEX IF NOT EXISTS idx_admin_audit_log_admin_id ON admin_audit_log(admin_id)`); } catch(e) {}
+    try { await pool.query(`CREATE INDEX IF NOT EXISTS idx_admin_audit_log_action ON admin_audit_log(action)`); } catch(e) {}
+    try { await pool.query(`CREATE INDEX IF NOT EXISTS idx_admin_audit_log_created_at ON admin_audit_log(created_at)`); } catch(e) {}
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS user_activity_log (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      email VARCHAR(255),
+      full_name VARCHAR(255),
+      action VARCHAR(50) NOT NULL,
+      details JSONB,
+      ip_address VARCHAR(45),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+    try { await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_activity_created_at ON user_activity_log(created_at DESC)`); } catch(e) {}
+    try { await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_activity_user_id ON user_activity_log(user_id)`); } catch(e) {}
+    try { await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_activity_action ON user_activity_log(action)`); } catch(e) {}
 
     // Seed stocks (only if table is empty)
     const stockCount = await pool.query('SELECT COUNT(*) FROM stocks');
@@ -4148,6 +7851,8 @@ async function initDatabase() {
     );`);
 
     await pool.query(`ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS plan_name VARCHAR(50)`);
+    await pool.query(`ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS duration_months INTEGER DEFAULT 1`);
+    const planCount = await pool.query('SELECT COUNT(*) FROM subscription_plans');
     if (parseInt(planCount.rows[0].count) === 0) {
       await pool.query(`INSERT INTO subscription_plans (name, description, price_kes, price_usd, features) VALUES
         ('Starter', 'Perfect for beginners exploring the markets', 130, 1.00, '["Real-time NSE data", "3 AI signals per day", "Basic portfolio tracking", "Email support"]'),
@@ -4160,6 +7865,29 @@ async function initDatabase() {
 
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR(50) DEFAULT 'free'`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20) DEFAULT 'active'`);
+    await pool.query(`ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS duration_months INTEGER DEFAULT 1`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_start_date TIMESTAMP WITH TIME ZONE`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_end_date TIMESTAMP WITH TIME ZONE`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_start_date TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
+    // Grant existing free users a trial from their signup date
+    await pool.query(`UPDATE users SET trial_start_date = created_at WHERE trial_start_date IS NULL AND subscription_tier = 'free'`);
+    // Set default duration_months for existing plans that don't have it
+    await pool.query(`UPDATE subscription_plans SET duration_months = 1 WHERE duration_months IS NULL`);
+
+    // Seed subscription records for existing users with non-free tiers missing from subscriptions table
+    await pool.query(`
+      INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)
+      SELECT u.id, sp.id, u.subscription_status, COALESCE(u.subscription_start_date, u.created_at),
+        COALESCE(u.subscription_end_date,
+          CASE WHEN sp.duration_months = 12
+            THEN COALESCE(u.subscription_start_date, u.created_at) + INTERVAL '12 months'
+            ELSE COALESCE(u.subscription_start_date, u.created_at) + INTERVAL '1 month'
+          END)
+      FROM users u
+      JOIN subscription_plans sp ON LOWER(sp.name) = LOWER(u.subscription_tier)
+      WHERE u.subscription_tier != 'free'
+        AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id)
+    `);
 
     console.log('Database schema verified');
   } catch (err) {
@@ -4178,23 +7906,27 @@ async function sendDailyPortfolioReports() {
     for (const user of users) {
       try {
         const { rows } = await pool.query(
-          `SELECT id, ticker, name, shares, avg_cost, current_price, sector, market FROM portfolio_holdings WHERE user_id = $1 ORDER BY ticker`,
+          `SELECT id, ticker, name, shares, avg_cost, current_price, sector, market, broker_connection_id FROM portfolio_holdings WHERE user_id = $1 ORDER BY ticker`,
           [user.id]
         );
         if (rows.length === 0) continue;
         const fxRate = await getFxRate();
         const holdings = [];
         let nseValue = 0, globalValue = 0, nseCost = 0, globalCost = 0;
-        for (const r of rows) {
+        // Deduplicate: if broker-synced holding exists for a ticker, exclude manual one
+        const brokerTickers = new Set(rows.filter(r => r.broker_connection_id > 0).map(r => r.ticker));
+        const deduplicatedRows = rows.filter(r => r.broker_connection_id > 0 || !brokerTickers.has(r.ticker));
+        for (const r of deduplicatedRows) {
           const lp = await getLivePrice(r.market, r.ticker) || parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0;
           const ac = parseFloat(r.avg_cost) || 0;
           const sh = parseFloat(r.shares) || 0;
           const val = lp * sh, cost = ac * sh;
           if (r.market === 'NSE') { nseValue += val; nseCost += cost; } else { globalValue += val; globalCost += cost; }
+          const currency = r.market === 'NSE' ? 'KES' : 'USD';
           holdings.push({
             ticker: r.ticker, name: r.name || r.ticker, shares: sh, currentPrice: lp,
             value: val, pnl: val - cost, pnlPercent: cost > 0 ? Math.round(((val - cost) / cost * 100) * 10) / 10 : 0,
-            sector: r.sector || 'Other', market: r.market || 'NSE',
+            sector: r.sector || 'Other', market: r.market || 'NSE', currency,
           });
         }
         const tv = nseValue + globalValue * fxRate, tc = nseCost + globalCost * fxRate;
@@ -4205,7 +7937,7 @@ async function sendDailyPortfolioReports() {
         await sendPortfolioReportEmail(user.email, {
           userName: user.full_name, generatedAt: new Date().toISOString(),
           summary: { totalValue: Math.round(tv * 100) / 100, totalCost: Math.round(tc * 100) / 100, totalPnL: Math.round((tv - tc) * 100) / 100, pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0 },
-          holdings, sectorAllocation: sa, bestPerformers: sp.slice(0, 5), worstPerformers: sp.slice(-5).reverse(),
+          holdings, sectorAllocation: sa, bestPerformers: sp.slice(0, 5), worstPerformers: sp.slice(-5).reverse(), fxRate,
         });
         console.log(`[DAILY REPORT] Report sent to ${user.email}`);
       } catch (e) { console.error(`[DAILY REPORT] Error for user ${user.id}:`, e.message); }
@@ -4214,12 +7946,290 @@ async function sendDailyPortfolioReports() {
   } catch (e) { console.error('[DAILY REPORT] Error:', e.message); }
 }
 
+// ── Daily Paper Trading Portfolio Report Scheduler ──
+async function sendDailyPaperTradingReports() {
+  try {
+    const { rows: users } = await pool.query(
+      `SELECT DISTINCT u.id, u.full_name, u.email FROM users u INNER JOIN paper_positions pp ON pp.user_id = u.id`
+    );
+    if (users.length === 0) { console.log('[PAPER DAILY REPORT] No users with paper trading holdings'); return; }
+    console.log(`[PAPER DAILY REPORT] Generating reports for ${users.length} users...`);
+    for (const user of users) {
+      try {
+        const { rows } = await pool.query(
+          `SELECT id, ticker, name, shares, avg_cost, market, sector FROM paper_positions WHERE user_id = $1 ORDER BY ticker`,
+          [user.id]
+        );
+        if (rows.length === 0) continue;
+        const fxRate = await getFxRate();
+        const holdings = [];
+        let nseValue = 0, globalValue = 0, nseCost = 0, globalCost = 0;
+        for (const r of rows) {
+          const lp = await getLivePrice(r.market, r.ticker) || parseFloat(r.avg_cost) || 0;
+          const ac = parseFloat(r.avg_cost) || 0;
+          const sh = parseFloat(r.shares) || 0;
+          const val = lp * sh, cost = ac * sh;
+          if (r.market === 'NSE') { nseValue += val; nseCost += cost; } else { globalValue += val; globalCost += cost; }
+          const currency = r.market === 'NSE' ? 'KES' : 'USD';
+          holdings.push({
+            ticker: r.ticker, name: r.name || r.ticker, shares: sh, currentPrice: lp,
+            value: val, pnl: val - cost, pnlPercent: cost > 0 ? Math.round(((val - cost) / cost * 100) * 10) / 10 : 0,
+            sector: r.sector || 'Other', market: r.market || 'NSE', currency,
+          });
+        }
+        const tv = nseValue + globalValue * fxRate, tc = nseCost + globalCost * fxRate;
+        const sectorMap = {};
+        for (const h of holdings) { const vk = h.market === 'NSE' ? h.value : h.value * fxRate; sectorMap[h.sector] = (sectorMap[h.sector] || 0) + vk; }
+        const sa = Object.entries(sectorMap).map(([s, v]) => ({ sector: s, value: v, pct: tv > 0 ? Math.round((v / tv) * 100) : 0 })).sort((a, b) => b.value - a.value);
+        const sp = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent).filter(h => h.pnlPercent !== 0);
+
+        // Fetch account summary for cash
+        const { rows: acctRows } = await pool.query('SELECT cash_balance, cash_balance_usd FROM paper_accounts WHERE user_id = $1', [user.id]);
+        const cashKes = acctRows.length > 0 ? parseFloat(acctRows[0].cash_balance) || 0 : 0;
+        const cashUsd = acctRows.length > 0 ? parseFloat(acctRows[0].cash_balance_usd) || 0 : 0;
+        const cashTotal = cashKes + cashUsd * fxRate;
+
+        await sendPortfolioReportEmail(user.email, {
+          userName: user.full_name + ' (Paper Trading)',
+          generatedAt: new Date().toISOString(),
+          summary: {
+            totalValue: Math.round((tv + cashTotal) * 100) / 100,
+            totalCost: Math.round((tc + cashTotal) * 100) / 100,
+            totalPnL: Math.round((tv - tc) * 100) / 100,
+            pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0,
+          },
+          holdings, sectorAllocation: sa, bestPerformers: sp.slice(0, 5), worstPerformers: sp.slice(-5).reverse(), fxRate,
+        });
+        console.log(`[PAPER DAILY REPORT] Report sent to ${user.email}`);
+      } catch (e) { console.error(`[PAPER DAILY REPORT] Error for user ${user.id}:`, e.message); }
+    }
+    console.log('[PAPER DAILY REPORT] Finished');
+  } catch (e) { console.error('[PAPER DAILY REPORT] Error:', e.message); }
+}
+
+// ── Send single portfolio report to a specific user ──
+async function sendPortfolioReportToUser(userId, email, fullName) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, ticker, name, shares, avg_cost, current_price, sector, market, broker_connection_id FROM portfolio_holdings WHERE user_id = $1 ORDER BY ticker`,
+      [userId]
+    );
+    if (rows.length === 0) {
+      console.log(`[SINGLE REPORT] User ${userId} has no real portfolio holdings`);
+      return false;
+    }
+        const fxRate = await getFxRate();
+        const holdings = [];
+        let nseValue = 0, globalValue = 0, nseCost = 0, globalCost = 0;
+        // Deduplicate: if broker-synced holding exists for a ticker, exclude manual one
+        const brokerTickers = new Set(rows.filter(r => r.broker_connection_id > 0).map(r => r.ticker));
+        const deduplicatedRows = rows.filter(r => r.broker_connection_id > 0 || !brokerTickers.has(r.ticker));
+        for (const r of deduplicatedRows) {
+          const lp = await getLivePrice(r.market, r.ticker) || parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0;
+          const ac = parseFloat(r.avg_cost) || 0;
+          const sh = parseFloat(r.shares) || 0;
+          const val = lp * sh, cost = ac * sh;
+          if (r.market === 'NSE') { nseValue += val; nseCost += cost; } else { globalValue += val; globalCost += cost; }
+          const currency = r.market === 'NSE' ? 'KES' : 'USD';
+          holdings.push({
+            ticker: r.ticker, name: r.name || r.ticker, shares: sh, currentPrice: lp,
+            value: val, pnl: val - cost, pnlPercent: cost > 0 ? Math.round(((val - cost) / cost * 100) * 10) / 10 : 0,
+            sector: r.sector || 'Other', market: r.market || 'NSE', currency,
+          });
+        }
+        const tv = nseValue + globalValue * fxRate, tc = nseCost + globalCost * fxRate;
+        const sectorMap = {};
+        for (const h of holdings) { const vk = h.market === 'NSE' ? h.value : h.value * fxRate; sectorMap[h.sector] = (sectorMap[h.sector] || 0) + vk; }
+        const sa = Object.entries(sectorMap).map(([s, v]) => ({ sector: s, value: v, pct: tv > 0 ? Math.round((v / tv) * 100) : 0 })).sort((a, b) => b.value - a.value);
+        const sp = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent).filter(h => h.pnlPercent !== 0);
+        await sendPortfolioReportEmail(email, {
+          userName: fullName, generatedAt: new Date().toISOString(),
+          summary: { totalValue: Math.round(tv * 100) / 100, totalCost: Math.round(tc * 100) / 100, totalPnL: Math.round((tv - tc) * 100) / 100, pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0 },
+          holdings, sectorAllocation: sa, bestPerformers: sp.slice(0, 5), worstPerformers: sp.slice(-5).reverse(), fxRate,
+        });
+    console.log(`[SINGLE REPORT] Real portfolio report sent to ${email}`);
+    return true;
+  } catch (e) {
+    console.error(`[SINGLE REPORT] Error for user ${userId}:`, e.message);
+    return false;
+  }
+}
+
+// ── Send single paper trading portfolio report to a specific user ──
+async function sendPaperTradingReportToUser(userId, email, fullName) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, ticker, name, shares, avg_cost, market, sector FROM paper_positions WHERE user_id = $1 ORDER BY ticker`,
+      [userId]
+    );
+    if (rows.length === 0) {
+      console.log(`[SINGLE REPORT] User ${userId} has no paper trading positions`);
+      return false;
+    }
+    const fxRate = await getFxRate();
+    const holdings = [];
+    let nseValue = 0, globalValue = 0, nseCost = 0, globalCost = 0;
+    for (const r of rows) {
+      const lp = await getLivePrice(r.market, r.ticker) || parseFloat(r.avg_cost) || 0;
+      const ac = parseFloat(r.avg_cost) || 0;
+      const sh = parseFloat(r.shares) || 0;
+      const val = lp * sh, cost = ac * sh;
+      if (r.market === 'NSE') { nseValue += val; nseCost += cost; } else { globalValue += val; globalCost += cost; }
+      const currency = r.market === 'NSE' ? 'KES' : 'USD';
+      holdings.push({
+        ticker: r.ticker, name: r.name || r.ticker, shares: sh, currentPrice: lp,
+        value: val, pnl: val - cost, pnlPercent: cost > 0 ? Math.round(((val - cost) / cost * 100) * 10) / 10 : 0,
+        sector: r.sector || 'Other', market: r.market || 'NSE', currency,
+      });
+    }
+    const tv = nseValue + globalValue * fxRate, tc = nseCost + globalCost * fxRate;
+    const sectorMap = {};
+    for (const h of holdings) { const vk = h.market === 'NSE' ? h.value : h.value * fxRate; sectorMap[h.sector] = (sectorMap[h.sector] || 0) + vk; }
+    const sa = Object.entries(sectorMap).map(([s, v]) => ({ sector: s, value: v, pct: tv > 0 ? Math.round((v / tv) * 100) : 0 })).sort((a, b) => b.value - a.value);
+    const sp = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent).filter(h => h.pnlPercent !== 0);
+
+    const { rows: acctRows } = await pool.query('SELECT cash_balance, cash_balance_usd FROM paper_accounts WHERE user_id = $1', [userId]);
+    const cashKes = acctRows.length > 0 ? parseFloat(acctRows[0].cash_balance) || 0 : 0;
+    const cashUsd = acctRows.length > 0 ? parseFloat(acctRows[0].cash_balance_usd) || 0 : 0;
+    const cashTotal = cashKes + cashUsd * fxRate;
+
+    await sendPortfolioReportEmail(email, {
+      userName: fullName + ' (Paper Trading)',
+      generatedAt: new Date().toISOString(),
+      summary: {
+        totalValue: Math.round((tv + cashTotal) * 100) / 100,
+        totalCost: Math.round((tc + cashTotal) * 100) / 100,
+        totalPnL: Math.round((tv - tc) * 100) / 100,
+        pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0,
+      },
+      holdings, sectorAllocation: sa, bestPerformers: sp.slice(0, 5), worstPerformers: sp.slice(-5).reverse(), fxRate,
+    });
+    console.log(`[SINGLE REPORT] Paper trading report sent to ${email}`);
+    return true;
+  } catch (e) {
+    console.error(`[SINGLE REPORT] Error for user ${userId}:`, e.message);
+    return false;
+  }
+}
+
+async function sendHotNewsReportToUser(userId, email, fullName) {
+  try {
+    const { getAllNews } = require('./newsService');
+    const news = await getAllNews(200);
+    const hotNews = news.filter(a => a.hot).slice(0, 15);
+    if (hotNews.length === 0) {
+      console.log(`[HOT NEWS] No hot news found for ${email}`);
+      return false;
+    }
+    const dateStr = new Date().toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    const hotNewsData = hotNews.map(a => ({
+      headline: a.headline,
+      source: a.source,
+      excerpt: a.excerpt || '',
+      hotType: a.hotType,
+      sentiment: a.sentiment,
+      relatedStocks: a.relatedStocks || [],
+      timestamp: a.timestamp,
+      url: a.url,
+    }));
+    await sendHotNewsEmail(email, {
+      userName: fullName || 'Trader',
+      dateStr,
+      hotNews: hotNewsData,
+    });
+    console.log(`[HOT NEWS] Report sent to ${email}`);
+    return true;
+  } catch (e) {
+    console.error(`[HOT NEWS] Error for ${email}:`, e.message);
+    return false;
+  }
+}
+
+async function sendDailyHotNewsReports() {
+  try {
+    const { rows: users } = await pool.query(
+      `SELECT id, full_name, email FROM users WHERE sentiment_opt_in = true`
+    );
+    if (users.length === 0) { console.log('[HOT NEWS CRON] No opted-in users'); return; }
+    console.log(`[HOT NEWS CRON] Sending reports to ${users.length} users...`);
+    for (const user of users) {
+      try {
+        await sendHotNewsReportToUser(user.id, user.email, user.full_name);
+      } catch (e) {
+        console.error(`[HOT NEWS CRON] Error for user ${user.id}:`, e.message);
+      }
+    }
+    console.log('[HOT NEWS CRON] Finished');
+  } catch (e) {
+    console.error('[HOT NEWS CRON] Error:', e.message);
+  }
+}
+
+async function sendDailySentimentReports() {
+  try {
+    const { rows: users } = await pool.query(
+      `SELECT id, full_name, email FROM users WHERE sentiment_opt_in = true`
+    );
+    if (users.length === 0) { console.log('[SENTIMENT] No opted-in users'); return; }
+    console.log(`[SENTIMENT] Sending reports to ${users.length} users...`);
+
+    // Fetch market summary data once, reuse for all users
+    const summaryRes = await axios.get(`http://localhost:${port}/api/ai/market-summary`).then(r => r.data).catch(() => null);
+    const moversRes = await axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({}));
+
+    const summary = summaryRes?.summary || 'Markets showing mixed activity today.';
+    const sentiment = summaryRes?.sentiment || 'Neutral';
+    const confidence = summaryRes?.confidence || '65%';
+    const signals = summaryRes?.signals || { total: 0, strongBuys: 0, buys: 0, sells: 0 };
+    const nseGainers = moversRes?.nse?.gainers?.slice(0, 8) || [];
+    const nseLosers = moversRes?.nse?.losers?.slice(0, 8) || [];
+    const globalGainers = moversRes?.global?.gainers?.slice(0, 8) || [];
+    const globalLosers = moversRes?.global?.losers?.slice(0, 8) || [];
+
+    const dateStr = new Date().toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    for (const user of users) {
+      try {
+        await sendDailySentimentEmail(user.email, {
+          userName: user.full_name,
+          summary, sentiment, confidence, dateStr,
+          nseGainers, nseLosers, globalGainers, globalLosers, signals,
+        });
+        console.log(`[SENTIMENT] Report sent to ${user.email}`);
+      } catch (e) {
+        console.error(`[SENTIMENT] Error for user ${user.id}:`, e.message);
+      }
+    }
+    console.log('[SENTIMENT] Finished');
+  } catch (e) {
+    console.error('[SENTIMENT] Error:', e.message);
+  }
+}
+
+// ── SPA fallback: serve index.html for all non-API routes ────────
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  res.sendFile(path.join(frontendDist, 'index.html'));
+});
+
 // ===================== START SERVER =====================
+
+let startRetries = 0;
+const MAX_START_RETRIES = 5;
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(`Port ${port} is in use. Retrying in 3s...`);
-    setTimeout(() => server.close(() => server.listen(port, '0.0.0.0')), 3000);
+    startRetries++;
+    if (startRetries > MAX_START_RETRIES) {
+      console.error(`Port ${port} is still in use after ${MAX_START_RETRIES} retries. Exiting.`);
+      process.exit(1);
+    }
+    console.error(`Port ${port} is in use. Retrying in 3s... (attempt ${startRetries}/${MAX_START_RETRIES})`);
+    setTimeout(() => server.listen(port, '0.0.0.0'), 3000);
   } else {
     console.error('Server error:', err.message);
   }
@@ -4227,10 +8237,16 @@ server.on('error', (err) => {
 
 process.on('uncaughtException', (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(`Port ${port} is in use. Retrying in 3s...`);
-    setTimeout(() => server.close(() => server.listen(port, '0.0.0.0')), 3000);
+    startRetries++;
+    if (startRetries > MAX_START_RETRIES) {
+      console.error(`Port ${port} is still in use after ${MAX_START_RETRIES} retries. Exiting.`);
+      process.exit(1);
+    }
+    console.error(`Port ${port} is in use. Retrying in 3s... (attempt ${startRetries}/${MAX_START_RETRIES})`);
+    setTimeout(() => server.listen(port, '0.0.0.0'), 3000);
   } else {
     console.error('Uncaught exception:', err.message);
+    process.exit(1);
   }
 });
 
@@ -4298,11 +8314,143 @@ initDatabase().then(() => {
       console.warn('Signal generation will happen on-demand via REST endpoints.');
     }
 
-    // Schedule daily portfolio report (outside Redis try-catch so it always runs)
+    // Schedule daily portfolio report (real holdings) at midnight EAT (00:00 EAT)
     cron.schedule('0 0 * * 1-5', () => {
-      console.log('[CRON] Running daily portfolio report...');
+      console.log('[CRON] Running daily real portfolio report...');
       sendDailyPortfolioReports();
     });
-    console.log('[CRON] Daily portfolio report scheduled Mon-Fri every 5 min');
+    console.log('[CRON] Daily real portfolio report scheduled Mon-Fri at midnight EAT (00:00 EAT)');
+
+    // Schedule daily paper trading portfolio report at midnight EAT (00:00 EAT)
+    cron.schedule('0 0 * * 1-5', () => {
+      console.log('[CRON] Running daily paper trading portfolio report...');
+      sendDailyPaperTradingReports();
+    });
+    console.log('[CRON] Daily paper trading portfolio report scheduled Mon-Fri at midnight EAT (00:00 EAT)');
+
+    // Schedule daily sentiment email at midnight EAT (00:00 EAT)
+    cron.schedule('0 0 * * 1-5', () => {
+      console.log('[SENTIMENT CRON] Running daily sentiment report...');
+      sendDailySentimentReports();
+    });
+    console.log('[SENTIMENT CRON] Daily sentiment email scheduled Mon-Fri at midnight EAT (00:00 EAT)');
+
+    // Schedule ML model retraining check every 2 hours
+    // The actual retrain frequency is controlled by engineConfig.training.retrain_frequency_hours (default 24)
+    // maybeRetrain() will no-op if the interval hasn't elapsed yet
+    cron.schedule('0 */2 * * *', async () => {
+      console.log('[ML CRON] Checking if retraining is due...');
+      try {
+        const result = await mlModel.maybeRetrain();
+        if (result && result.status === 'started') {
+          console.log('[ML CRON] Retraining started in background');
+        } else if (result && result.status === 'in_progress') {
+          console.log('[ML CRON] Retraining already in progress, skipped');
+        }
+      } catch (err) {
+        console.error('[ML CRON] Error:', err.message);
+      }
+    });
+    console.log('[ML CRON] Retrain checker scheduled every 2 hours, actual interval from engineConfig.training.retrain_frequency_hours');
+
+    // Schedule hot news email every 6 hours (Mon-Fri)
+    cron.schedule('0 */6 * * 1-5', () => {
+      console.log('[HOT NEWS CRON] Running hot news report...');
+      sendDailyHotNewsReports();
+    });
+    console.log('[HOT NEWS CRON] Hot news email scheduled every 6 hours Mon-Fri');
+
+    // Schedule daily subscription expiry reminders at 9 AM EAT (06:00 UTC)
+    cron.schedule('0 6 * * *', async () => {
+      console.log('[SUBSCRIPTION CRON] Sending expiry reminders...');
+      try {
+        const reminderDays = [7, 3, 1];
+        for (const days of reminderDays) {
+          const { rows: subs } = await pool.query(`
+            SELECT s.id, s.user_id, s.end_date, sp.name as plan_name, u.full_name, u.email
+            FROM subscriptions s
+            JOIN users u ON u.id = s.user_id
+            JOIN subscription_plans sp ON sp.id = s.plan_id
+            WHERE s.status = 'active'
+              AND s.end_date IS NOT NULL
+              AND s.end_date BETWEEN CURRENT_TIMESTAMP + INTERVAL '${days - 1} days'
+                                   AND CURRENT_TIMESTAMP + INTERVAL '${days} days'
+          `);
+          for (const sub of subs) {
+            try {
+              await sendSubscriptionExpiryReminder(sub.email, {
+                userName: sub.full_name,
+                planName: sub.plan_name,
+                daysLeft: days,
+                expiryDate: sub.end_date,
+              });
+              console.log(`[SUBSCRIPTION CRON] Sent ${days}-day reminder to ${sub.email}`);
+            } catch (e) {
+              console.error(`[SUBSCRIPTION CRON] Failed to send reminder to ${sub.email}:`, e.message);
+            }
+          }
+        }
+      } catch (err) { console.error('[SUBSCRIPTION CRON] Reminder error:', err.message); }
+    });
+    console.log('[SUBSCRIPTION CRON] Daily expiry reminders scheduled at 9 AM EAT (06:00 UTC)');
+
+    // Schedule subscription expiry check every hour
+    cron.schedule('0 * * * *', async () => {
+      console.log('[SUBSCRIPTION CRON] Checking expired subscriptions...');
+      try {
+        const { rows: expired } = await pool.query(`
+          UPDATE subscriptions SET status = 'expired', updated_at = CURRENT_TIMESTAMP
+          WHERE status = 'active' AND end_date IS NOT NULL AND end_date < CURRENT_TIMESTAMP
+          RETURNING id, user_id
+        `);
+        if (expired.length > 0) {
+          console.log(`[SUBSCRIPTION CRON] Expired ${expired.length} subscription(s)`);
+          for (const sub of expired) {
+            await pool.query(
+              `UPDATE users SET subscription_status = 'expired', subscription_tier = 'free' WHERE id = $1 AND subscription_status = 'active'`,
+              [sub.user_id]
+            );
+            // Send expired email
+            try {
+              const userRes = await pool.query('SELECT full_name, email, subscription_tier FROM users WHERE id = $1', [sub.user_id]);
+              const { full_name, email, subscription_tier } = userRes.rows[0] || {};
+              if (email) {
+                await sendSubscriptionExpiredEmail(email, {
+                  userName: full_name,
+                  planName: subscription_tier || 'Pro',
+                });
+                console.log(`[SUBSCRIPTION CRON] Expired email sent to ${email}`);
+              }
+            } catch (e) {
+              console.error(`[SUBSCRIPTION CRON] Failed to send expired email to user ${sub.user_id}:`, e.message);
+            }
+          }
+        }
+        // Also catch users with expired end_date on the users table directly
+        const { rows: expiredUsers } = await pool.query(`
+          UPDATE users SET subscription_status = 'expired', subscription_tier = 'free'
+          WHERE subscription_status = 'active' AND subscription_tier != 'free'
+            AND subscription_end_date IS NOT NULL AND subscription_end_date < CURRENT_TIMESTAMP
+          RETURNING id, full_name, email, subscription_tier
+        `);
+        if (expiredUsers.length > 0) {
+          console.log(`[SUBSCRIPTION CRON] Expired ${expiredUsers.length} user(s) via users table`);
+          for (const user of expiredUsers) {
+            try {
+              if (user.email) {
+                await sendSubscriptionExpiredEmail(user.email, {
+                  userName: user.full_name,
+                  planName: user.subscription_tier || 'Pro',
+                });
+                console.log(`[SUBSCRIPTION CRON] Expired email sent to ${user.email}`);
+              }
+            } catch (e) {
+              console.error(`[SUBSCRIPTION CRON] Failed to send expired email to ${user.email}:`, e.message);
+            }
+          }
+        }
+      } catch (err) { console.error('[SUBSCRIPTION CRON] Error:', err.message); }
+    });
+    console.log('[SUBSCRIPTION CRON] Expiry check scheduled every hour');
   });
 });

@@ -1,0 +1,14 @@
+node_modules
+.git
+.gitignore
+*.log
+.env*
+dist
+node-err.txt
+node-out.txt
+node-log*.txt
+frontend/node_modules
+frontend/src
+.vscode
+.qodo
+load-test

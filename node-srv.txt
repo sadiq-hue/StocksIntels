@@ -1,0 +1,3422 @@
+◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+📰 News Service Loaded
+◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
+[Payd] Service not available: apiUsername and apiPassword are required to create a PaydClient.
+Stocks table already contains data, skipping seed
+Database schema verified
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Port 3001 is in use. Retrying in 3s...
+Backend server running at http://localhost:3001
+[QueueService] Connected to Redis
+[SignalPublisher] Starting background worker (interval: 30000ms)
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+Redis pub/sub and signal publisher initialized
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KUKZ.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KAPC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LIMT.
+[CRON] Daily portfolio report scheduled Mon-Fri at midnight UTC
+[SENTIMENT CRON] Daily sentiment email scheduled Mon-Fri at 16:00 UTC
+[SUBSCRIPTION CRON] Expiry check scheduled every hour
+[QueueService] Subscribed to signal:updates
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for KUKZ: {
+  ticker: 'KUKZ',
+  name: 'Kakuzi Ltd',
+  price: 439.25,
+  change: -4.5,
+  changePercent: -1.0140845070422535,
+  volume: 609,
+  previousClose: 443.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862626,
+  symbol: 'KUKZ'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for LIMT: {
+  ticker: 'LIMT',
+  name: 'Limuru Tea Company Ltd',
+  price: 446.75,
+  change: 0,
+  changePercent: 0,
+  volume: 11,
+  previousClose: 446.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862627,
+  symbol: 'LIMT'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for KAPC: {
+  ticker: 'KAPC',
+  name: 'Kapchorua Tea Company Ltd',
+  price: 275.5,
+  change: 0.5,
+  changePercent: 0.18181818181818182,
+  volume: 1176,
+  previousClose: 275,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862627,
+  symbol: 'KAPC'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for KUKZ: {
+  ticker: 'KUKZ',
+  name: 'Kakuzi Ltd',
+  price: 439.25,
+  change: -4.5,
+  changePercent: -1.0140845070422535,
+  volume: 609,
+  previousClose: 443.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862627,
+  symbol: 'KUKZ'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for KAPC: {
+  ticker: 'KAPC',
+  name: 'Kapchorua Tea Company Ltd',
+  price: 275.5,
+  change: 0.5,
+  changePercent: 0.18181818181818182,
+  volume: 1176,
+  previousClose: 275,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KAPC'
+}
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[MarketService] Caching quote for LIMT: {
+  ticker: 'LIMT',
+  name: 'Limuru Tea Company Ltd',
+  price: 446.75,
+  change: 0,
+  changePercent: 0,
+  volume: 11,
+  previousClose: 446.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'LIMT'
+}
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for WTK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SASN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for REA.
+[MarketService] Caching quote for WTK: {
+  ticker: 'WTK',
+  name: 'Williamson Tea Kenya Ltd',
+  price: 132.25,
+  change: -1,
+  changePercent: -0.7504690431519699,
+  volume: 15585,
+  previousClose: 133.25,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'WTK'
+}
+[MarketService] Caching quote for WTK: {
+  ticker: 'WTK',
+  name: 'Williamson Tea Kenya Ltd',
+  price: 132.25,
+  change: -1,
+  changePercent: -0.7504690431519699,
+  volume: 15585,
+  previousClose: 133.25,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'WTK'
+}
+[MarketService] Caching quote for SASN: {
+  ticker: 'SASN',
+  name: 'Sasini Tea and Coffee Ltd',
+  price: 21.95,
+  change: 0,
+  changePercent: 0,
+  volume: 30803,
+  previousClose: 21.95,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SASN'
+}
+[MarketService] Caching quote for SASN: {
+  ticker: 'SASN',
+  name: 'Sasini Tea and Coffee Ltd',
+  price: 21.95,
+  change: 0,
+  changePercent: 0,
+  volume: 30803,
+  previousClose: 21.95,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SASN'
+}
+[MarketService] Caching quote for REA: {
+  symbol: 'REA',
+  company_name: 'Rare Earths Americas, Inc.',
+  price: 19.35,
+  currency: 'USD',
+  change: -1.24,
+  changePercent: -6.02234,
+  volume: 213383,
+  dayHigh: 21.49,
+  dayLow: 19.35,
+  previousClose: 20.59,
+  marketCap: 391580640,
+  timestamp: 1780862631,
+  lastUpdated: '2026-06-07T20:03:51.223Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[MarketService] Caching quote for REA: {
+  symbol: 'REA',
+  company_name: 'Rare Earths Americas, Inc.',
+  price: 19.35,
+  currency: 'USD',
+  change: -1.24,
+  changePercent: -6.02234,
+  volume: 213383,
+  dayHigh: 21.49,
+  dayLow: 19.35,
+  previousClose: 20.59,
+  marketCap: 391580640,
+  timestamp: 1780862631,
+  lastUpdated: '2026-06-07T20:03:51.590Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EGAD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CGEN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EQTY.
+[MarketService] Caching quote for EGAD: {
+  ticker: 'EGAD',
+  name: 'Eaagads Ltd',
+  price: 33.4,
+  change: 0.7,
+  changePercent: 2.140672782874618,
+  volume: 386,
+  previousClose: 32.699999999999996,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'EGAD'
+}
+[MarketService] Caching quote for EGAD: {
+  ticker: 'EGAD',
+  name: 'Eaagads Ltd',
+  price: 33.4,
+  change: 0.7,
+  changePercent: 2.140672782874618,
+  volume: 386,
+  previousClose: 32.699999999999996,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'EGAD'
+}
+[MarketService] Caching quote for CGEN: {
+  ticker: 'CGEN',
+  name: 'Car and General Kenya Ltd',
+  price: 80,
+  change: 0.25,
+  changePercent: 0.3134796238244514,
+  volume: 5807,
+  previousClose: 79.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'CGEN'
+}
+[MarketService] Caching quote for CGEN: {
+  ticker: 'CGEN',
+  name: 'Car and General Kenya Ltd',
+  price: 80,
+  change: 0.25,
+  changePercent: 0.3134796238244514,
+  volume: 5807,
+  previousClose: 79.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'CGEN'
+}
+[MarketService] Caching quote for EQTY: {
+  ticker: 'EQTY',
+  name: 'Equity Group Holdings Ltd',
+  price: 77.25,
+  change: -0.25,
+  changePercent: -0.3225806451612903,
+  volume: 3162767,
+  previousClose: 77.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'EQTY'
+}
+[MarketService] Caching quote for EQTY: {
+  ticker: 'EQTY',
+  name: 'Equity Group Holdings Ltd',
+  price: 77.25,
+  change: -0.25,
+  changePercent: -0.3225806451612903,
+  volume: 3162767,
+  previousClose: 77.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'EQTY'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KCB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for COOP.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ABSA.
+[MarketService] Caching quote for KCB: {
+  ticker: 'KCB',
+  name: 'KCB Group',
+  price: 70.75,
+  change: 1.25,
+  changePercent: 1.7985611510791366,
+  volume: 1629749,
+  previousClose: 69.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KCB'
+}
+[MarketService] Caching quote for KCB: {
+  ticker: 'KCB',
+  name: 'KCB Group',
+  price: 70.75,
+  change: 1.25,
+  changePercent: 1.7985611510791366,
+  volume: 1629749,
+  previousClose: 69.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KCB'
+}
+[MarketService] Caching quote for COOP: {
+  ticker: 'COOP',
+  name: 'Co-operative Bank of Kenya',
+  price: 31.95,
+  change: 0.15,
+  changePercent: 0.4716981132075472,
+  volume: 387226,
+  previousClose: 31.8,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'COOP'
+}
+[MarketService] Caching quote for COOP: {
+  ticker: 'COOP',
+  name: 'Co-operative Bank of Kenya',
+  price: 31.95,
+  change: 0.15,
+  changePercent: 0.4716981132075472,
+  volume: 387226,
+  previousClose: 31.8,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'COOP'
+}
+[MarketService] Caching quote for ABSA: {
+  ticker: 'ABSA',
+  name: 'Absa Bank Kenya Plc',
+  price: 29.05,
+  change: 0,
+  changePercent: 0,
+  volume: 828311,
+  previousClose: 29.05,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'ABSA'
+}
+[MarketService] Caching quote for ABSA: {
+  ticker: 'ABSA',
+  name: 'Absa Bank Kenya Plc',
+  price: 29.05,
+  change: 0,
+  changePercent: 0,
+  volume: 828311,
+  previousClose: 29.05,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'ABSA'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SBIC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NCBA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for IMH.
+[MarketService] Caching quote for SBIC: {
+  ticker: 'SBIC',
+  name: 'Stanbic Holdings Ltd',
+  price: 285,
+  change: 14.5,
+  changePercent: 5.360443622920517,
+  volume: 148576,
+  previousClose: 270.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SBIC'
+}
+[MarketService] Caching quote for SBIC: {
+  ticker: 'SBIC',
+  name: 'Stanbic Holdings Ltd',
+  price: 285,
+  change: 14.5,
+  changePercent: 5.360443622920517,
+  volume: 148576,
+  previousClose: 270.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SBIC'
+}
+[MarketService] Caching quote for NCBA: {
+  ticker: 'NCBA',
+  name: 'NCBA Group Plc',
+  price: 88.25,
+  change: -0.5,
+  changePercent: -0.5633802816901409,
+  volume: 421495,
+  previousClose: 88.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'NCBA'
+}
+[MarketService] Caching quote for NCBA: {
+  ticker: 'NCBA',
+  name: 'NCBA Group Plc',
+  price: 88.25,
+  change: -0.5,
+  changePercent: -0.5633802816901409,
+  volume: 421495,
+  previousClose: 88.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'NCBA'
+}
+[MarketService] Caching quote for IMH: {
+  ticker: 'IMH',
+  name: 'I&M Holdings Plc',
+  price: 52.5,
+  change: 1,
+  changePercent: 1.9417475728155338,
+  volume: 39604,
+  previousClose: 51.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'IMH'
+}
+[MarketService] Caching quote for IMH: {
+  ticker: 'IMH',
+  name: 'I&M Holdings Plc',
+  price: 52.5,
+  change: 1,
+  changePercent: 1.9417475728155338,
+  volume: 39604,
+  previousClose: 51.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'IMH'
+}
+(node:25736) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DTK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SCBK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BKG.
+[MarketService] Caching quote for DTK: {
+  ticker: 'DTK',
+  name: 'Diamond Trust Bank Kenya Ltd',
+  price: 143,
+  change: 0,
+  changePercent: 0,
+  volume: 29418,
+  previousClose: 143,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'DTK'
+}
+[MarketService] Caching quote for DTK: {
+  ticker: 'DTK',
+  name: 'Diamond Trust Bank Kenya Ltd',
+  price: 143,
+  change: 0,
+  changePercent: 0,
+  volume: 29418,
+  previousClose: 143,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'DTK'
+}
+[MarketService] Caching quote for SCBK: {
+  ticker: 'SCBK',
+  name: 'Standard Chartered Bank Ltd',
+  price: 331.75,
+  change: 0.75,
+  changePercent: 0.22658610271903326,
+  volume: 15604,
+  previousClose: 331,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SCBK'
+}
+[MarketService] Caching quote for SCBK: {
+  ticker: 'SCBK',
+  name: 'Standard Chartered Bank Ltd',
+  price: 331.75,
+  change: 0.75,
+  changePercent: 0.22658610271903326,
+  volume: 15604,
+  previousClose: 331,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SCBK'
+}
+[MarketService] Caching quote for BKG: {
+  ticker: 'BKG',
+  name: 'BK Group Plc',
+  price: 53.5,
+  change: 0.5,
+  changePercent: 0.9433962264150944,
+  volume: 8688,
+  previousClose: 53,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'BKG'
+}
+[MarketService] Caching quote for BKG: {
+  ticker: 'BKG',
+  name: 'BK Group Plc',
+  price: 53.5,
+  change: 0.5,
+  changePercent: 0.9433962264150944,
+  volume: 8688,
+  previousClose: 53,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'BKG'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HFCK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NMG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SGL.
+[MarketService] Caching quote for HFCK: {
+  ticker: 'HFCK',
+  name: 'HF Group Ltd',
+  price: 9.64,
+  change: 0.02,
+  changePercent: 0.20790020790020786,
+  volume: 160976,
+  previousClose: 9.620000000000001,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'HFCK'
+}
+[MarketService] Caching quote for HFCK: {
+  ticker: 'HFCK',
+  name: 'HF Group Ltd',
+  price: 9.64,
+  change: 0.02,
+  changePercent: 0.20790020790020786,
+  volume: 160976,
+  previousClose: 9.620000000000001,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'HFCK'
+}
+[MarketService] Caching quote for NMG: {
+  ticker: 'NMG',
+  name: 'Nation Media Group',
+  price: 12.85,
+  change: 0.05,
+  changePercent: 0.3906250000000001,
+  volume: 16214,
+  previousClose: 12.799999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'NMG'
+}
+[MarketService] Caching quote for NMG: {
+  ticker: 'NMG',
+  name: 'Nation Media Group',
+  price: 12.85,
+  change: 0.05,
+  changePercent: 0.3906250000000001,
+  volume: 16214,
+  previousClose: 12.799999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'NMG'
+}
+[MarketService] Caching quote for SGL: {
+  ticker: 'SGL',
+  name: 'Standard Group Ltd',
+  price: 5.9,
+  change: 0.04,
+  changePercent: 0.6825938566552902,
+  volume: 359,
+  previousClose: 5.86,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SGL'
+}
+[MarketService] Caching quote for SGL: {
+  ticker: 'SGL',
+  name: 'Standard Group Ltd',
+  price: 5.9,
+  change: 0.04,
+  changePercent: 0.6825938566552902,
+  volume: 359,
+  previousClose: 5.86,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SGL'
+}
+✅ Fetched 40 articles from global RSS feeds
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TPSE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SCAN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KQ.
+[MarketService] Caching quote for TPSE: {
+  ticker: 'TPSE',
+  name: 'TPS Eastern Africa Serena Ltd',
+  price: 15.3,
+  change: -0.45,
+  changePercent: -2.857142857142857,
+  volume: 2473,
+  previousClose: 15.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'TPSE'
+}
+[MarketService] Caching quote for TPSE: {
+  ticker: 'TPSE',
+  name: 'TPS Eastern Africa Serena Ltd',
+  price: 15.3,
+  change: -0.45,
+  changePercent: -2.857142857142857,
+  volume: 2473,
+  previousClose: 15.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'TPSE'
+}
+[MarketService] Caching quote for SCAN: {
+  ticker: 'SCAN',
+  name: 'ScanGroup Ltd',
+  price: 2.12,
+  change: -0.01,
+  changePercent: -0.4694835680751174,
+  volume: 139901,
+  previousClose: 2.13,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SCAN'
+}
+[MarketService] Caching quote for SCAN: {
+  ticker: 'SCAN',
+  name: 'ScanGroup Ltd',
+  price: 2.12,
+  change: -0.01,
+  changePercent: -0.4694835680751174,
+  volume: 139901,
+  previousClose: 2.13,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SCAN'
+}
+[MarketService] Caching quote for KQ: {
+  ticker: 'KQ',
+  name: 'Kenya Airways Ltd',
+  price: 5.64,
+  change: -0.02,
+  changePercent: -0.35335689045936397,
+  volume: 233004,
+  previousClose: 5.659999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KQ'
+}
+[MarketService] Caching quote for KQ: {
+  ticker: 'KQ',
+  name: 'Kenya Airways Ltd',
+  price: 5.64,
+  change: -0.02,
+  changePercent: -0.35335689045936397,
+  volume: 233004,
+  previousClose: 5.659999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KQ'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for XPRS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SMER.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BAMB.
+[MarketService] Caching quote for XPRS: {
+  ticker: 'XPRS',
+  name: 'Express Kenya Ltd',
+  price: 6.8,
+  change: -0.02,
+  changePercent: -0.2932551319648094,
+  volume: 874,
+  previousClose: 6.819999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'XPRS'
+}
+[MarketService] Caching quote for XPRS: {
+  ticker: 'XPRS',
+  name: 'Express Kenya Ltd',
+  price: 6.8,
+  change: -0.02,
+  changePercent: -0.2932551319648094,
+  volume: 874,
+  previousClose: 6.819999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'XPRS'
+}
+[MarketService] Caching quote for SMER: {
+  ticker: 'SMER',
+  name: 'Sameer Africa Plc',
+  price: 14.65,
+  change: -0.1,
+  changePercent: -0.6779661016949153,
+  volume: 10753,
+  previousClose: 14.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SMER'
+}
+[MarketService] Caching quote for SMER: {
+  ticker: 'SMER',
+  name: 'Sameer Africa Plc',
+  price: 14.65,
+  change: -0.1,
+  changePercent: -0.6779661016949153,
+  volume: 10753,
+  previousClose: 14.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SMER'
+}
+[MarketService] Caching quote for BAMB: {
+  ticker: 'BAMB',
+  name: 'Bamburi Cement Ltd',
+  price: 54,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 54,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'BAMB'
+}
+[MarketService] Caching quote for BAMB: {
+  ticker: 'BAMB',
+  name: 'Bamburi Cement Ltd',
+  price: 54,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 54,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'BAMB'
+}
+Socket connected: ir1KToZj1Y2KK0hKAAAB
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PORT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CRWN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ARM.
+[MarketService] Caching quote for PORT: {
+  ticker: 'PORT',
+  name: 'East African Portland Cement',
+  price: 74.5,
+  change: -1,
+  changePercent: -1.3245033112582782,
+  volume: 846,
+  previousClose: 75.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'PORT'
+}
+[MarketService] Caching quote for PORT: {
+  ticker: 'PORT',
+  name: 'East African Portland Cement',
+  price: 74.5,
+  change: -1,
+  changePercent: -1.3245033112582782,
+  volume: 846,
+  previousClose: 75.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'PORT'
+}
+[MarketService] Caching quote for CRWN: {
+  ticker: 'CRWN',
+  name: 'Crown Paints Kenya Ltd',
+  price: 58.5,
+  change: -1.25,
+  changePercent: -2.092050209205021,
+  volume: 3370,
+  previousClose: 59.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'CRWN'
+}
+[MarketService] Caching quote for CRWN: {
+  ticker: 'CRWN',
+  name: 'Crown Paints Kenya Ltd',
+  price: 58.5,
+  change: -1.25,
+  changePercent: -2.092050209205021,
+  volume: 3370,
+  previousClose: 59.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'CRWN'
+}
+[MarketService] Caching quote for ARM: {
+  ticker: 'ARM',
+  name: 'ARM Cement Ltd',
+  price: 5.5,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 5.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'ARM'
+}
+[MarketService] Caching quote for ARM: {
+  ticker: 'ARM',
+  name: 'ARM Cement Ltd',
+  price: 5.5,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 5.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'ARM'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KPLC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KEGN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TOTL.
+[MarketService] Caching quote for KPLC: {
+  ticker: 'KPLC',
+  name: 'Kenya Power & Lighting Company',
+  price: 15.7,
+  change: 0,
+  changePercent: 0,
+  volume: 657427,
+  previousClose: 15.7,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KPLC'
+}
+[MarketService] Caching quote for KPLC: {
+  ticker: 'KPLC',
+  name: 'Kenya Power & Lighting Company',
+  price: 15.7,
+  change: 0,
+  changePercent: 0,
+  volume: 657427,
+  previousClose: 15.7,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KPLC'
+}
+[MarketService] Caching quote for KEGN: {
+  ticker: 'KEGN',
+  name: 'KenGen Plc',
+  price: 9.1,
+  change: 0,
+  changePercent: 0,
+  volume: 894500,
+  previousClose: 9.1,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KEGN'
+}
+[MarketService] Caching quote for KEGN: {
+  ticker: 'KEGN',
+  name: 'KenGen Plc',
+  price: 9.1,
+  change: 0,
+  changePercent: 0,
+  volume: 894500,
+  previousClose: 9.1,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KEGN'
+}
+[MarketService] Caching quote for TOTL: {
+  ticker: 'TOTL',
+  name: 'Total Kenya Ltd',
+  price: 47.7,
+  change: -0.4,
+  changePercent: -0.8316008316008316,
+  volume: 70820,
+  previousClose: 48.1,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'TOTL'
+}
+[MarketService] Caching quote for TOTL: {
+  ticker: 'TOTL',
+  name: 'Total Kenya Ltd',
+  price: 47.7,
+  change: -0.4,
+  changePercent: -0.8316008316008316,
+  volume: 70820,
+  previousClose: 48.1,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'TOTL'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for UMME.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for JUB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KNRE.
+[MarketService] Caching quote for UMME: {
+  ticker: 'UMME',
+  name: 'Umeme Ltd',
+  price: 7.84,
+  change: -0.08,
+  changePercent: -1.0101010101010102,
+  volume: 17490,
+  previousClose: 7.92,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'UMME'
+}
+[MarketService] Caching quote for UMME: {
+  ticker: 'UMME',
+  name: 'Umeme Ltd',
+  price: 7.84,
+  change: -0.08,
+  changePercent: -1.0101010101010102,
+  volume: 17490,
+  previousClose: 7.92,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'UMME'
+}
+[MarketService] Caching quote for JUB: {
+  ticker: 'JUB',
+  name: 'Jubilee Holdings Ltd',
+  price: 397,
+  change: 25.5,
+  changePercent: 6.864064602960969,
+  volume: 6175,
+  previousClose: 371.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'JUB'
+}
+[MarketService] Caching quote for JUB: {
+  ticker: 'JUB',
+  name: 'Jubilee Holdings Ltd',
+  price: 397,
+  change: 25.5,
+  changePercent: 6.864064602960969,
+  volume: 6175,
+  previousClose: 371.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'JUB'
+}
+[MarketService] Caching quote for KNRE: {
+  ticker: 'KNRE',
+  name: 'Kenya Re-Insurance Corporation',
+  price: 3.49,
+  change: 0.05,
+  changePercent: 1.4534883720930232,
+  volume: 1403696,
+  previousClose: 3.4400000000000004,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KNRE'
+}
+[MarketService] Caching quote for KNRE: {
+  ticker: 'KNRE',
+  name: 'Kenya Re-Insurance Corporation',
+  price: 3.49,
+  change: 0.05,
+  changePercent: 1.4534883720930232,
+  volume: 1403696,
+  previousClose: 3.4400000000000004,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KNRE'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CIC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BRIT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LBTY.
+[MarketService] Caching quote for CIC: {
+  ticker: 'CIC',
+  name: 'CIC Insurance Group Ltd',
+  price: 4.2,
+  change: 0.01,
+  changePercent: 0.23866348448687347,
+  volume: 286667,
+  previousClose: 4.19,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'CIC'
+}
+[MarketService] Caching quote for CIC: {
+  ticker: 'CIC',
+  name: 'CIC Insurance Group Ltd',
+  price: 4.2,
+  change: 0.01,
+  changePercent: 0.23866348448687347,
+  volume: 286667,
+  previousClose: 4.19,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'CIC'
+}
+[MarketService] Caching quote for BRIT: {
+  ticker: 'BRIT',
+  name: 'Britam Holdings Ltd',
+  price: 12.65,
+  change: 0.2,
+  changePercent: 1.6064257028112447,
+  volume: 8611,
+  previousClose: 12.450000000000001,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'BRIT'
+}
+[MarketService] Caching quote for BRIT: {
+  ticker: 'BRIT',
+  name: 'Britam Holdings Ltd',
+  price: 12.65,
+  change: 0.2,
+  changePercent: 1.6064257028112447,
+  volume: 8611,
+  previousClose: 12.450000000000001,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'BRIT'
+}
+[MarketService] Caching quote for LBTY: {
+  ticker: 'LBTY',
+  name: 'Liberty Kenya Holdings Ltd',
+  price: 10,
+  change: 0.02,
+  changePercent: 0.2004008016032064,
+  volume: 18375,
+  previousClose: 9.98,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'LBTY'
+}
+[MarketService] Caching quote for LBTY: {
+  ticker: 'LBTY',
+  name: 'Liberty Kenya Holdings Ltd',
+  price: 10,
+  change: 0.02,
+  changePercent: 0.2004008016032064,
+  volume: 18375,
+  previousClose: 9.98,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'LBTY'
+}
+  KWS sitemap: 6000 dates cached
+  Fetched 18 articles from Kenyan Wall Street
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SLAM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CTUM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for OCH.
+[MarketService] Caching quote for SLAM: {
+  ticker: 'SLAM',
+  name: 'Sanlam Kenya Plc',
+  price: 8.48,
+  change: -0.02,
+  changePercent: -0.23529411764705885,
+  volume: 5257,
+  previousClose: 8.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SLAM'
+}
+[MarketService] Caching quote for SLAM: {
+  ticker: 'SLAM',
+  name: 'Sanlam Kenya Plc',
+  price: 8.48,
+  change: -0.02,
+  changePercent: -0.23529411764705885,
+  volume: 5257,
+  previousClose: 8.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SLAM'
+}
+[MarketService] Caching quote for CTUM: {
+  ticker: 'CTUM',
+  name: 'Centum Investment Company',
+  price: 13.85,
+  change: 0.05,
+  changePercent: 0.3623188405797102,
+  volume: 30218,
+  previousClose: 13.799999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'CTUM'
+}
+[MarketService] Caching quote for CTUM: {
+  ticker: 'CTUM',
+  name: 'Centum Investment Company',
+  price: 13.85,
+  change: 0.05,
+  changePercent: 0.3623188405797102,
+  volume: 30218,
+  previousClose: 13.799999999999999,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'CTUM'
+}
+[MarketService] Caching quote for OCH: {
+  ticker: 'OCH',
+  name: 'Olympia Capital Holdings Ltd',
+  price: 6.62,
+  change: 0.02,
+  changePercent: 0.30303030303030304,
+  volume: 679,
+  previousClose: 6.6000000000000005,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'OCH'
+}
+[MarketService] Caching quote for OCH: {
+  ticker: 'OCH',
+  name: 'Olympia Capital Holdings Ltd',
+  price: 6.62,
+  change: 0.02,
+  changePercent: 0.30303030303030304,
+  volume: 679,
+  previousClose: 6.6000000000000005,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'OCH'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HAFR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NSE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AMAC.
+[MarketService] Caching quote for HAFR: {
+  ticker: 'HAFR',
+  name: 'Home Afrika Ltd',
+  price: 1.25,
+  change: 0.04,
+  changePercent: 3.3057851239669422,
+  volume: 226084,
+  previousClose: 1.21,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'HAFR'
+}
+[MarketService] Caching quote for HAFR: {
+  ticker: 'HAFR',
+  name: 'Home Afrika Ltd',
+  price: 1.25,
+  change: 0.04,
+  changePercent: 3.3057851239669422,
+  volume: 226084,
+  previousClose: 1.21,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'HAFR'
+}
+[MarketService] Caching quote for NSE: {
+  ticker: 'NSE',
+  name: 'Nairobi Securities Exchange Ltd',
+  price: 19.05,
+  change: 0.3,
+  changePercent: 1.6,
+  volume: 67533,
+  previousClose: 18.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'NSE'
+}
+[MarketService] Caching quote for NSE: {
+  ticker: 'NSE',
+  name: 'Nairobi Securities Exchange Ltd',
+  price: 19.05,
+  change: 0.3,
+  changePercent: 1.6,
+  volume: 67533,
+  previousClose: 18.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'NSE'
+}
+[MarketService] Caching quote for AMAC: {
+  ticker: 'AMAC',
+  name: 'Africa Mega Agricorp',
+  price: 111,
+  change: 0,
+  changePercent: 0,
+  volume: 81,
+  previousClose: 111,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'AMAC'
+}
+[MarketService] Caching quote for AMAC: {
+  ticker: 'AMAC',
+  name: 'Africa Mega Agricorp',
+  price: 111,
+  change: 0,
+  changePercent: 0,
+  volume: 81,
+  previousClose: 111,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'AMAC'
+}
+✅ Fetched 76 news articles
+[MarketService] Caching quote for BRK.B: {
+  symbol: 'BRK-B',
+  company_name: 'Berkshire Hathaway Inc. New',
+  price: 488.13,
+  currency: 'USD',
+  change: 9.5,
+  changePercent: 1.98483,
+  volume: 8445257,
+  dayHigh: 490.99,
+  dayLow: 479.35,
+  previousClose: 478.63,
+  marketCap: 1052825026560,
+  timestamp: 1780862641,
+  lastUpdated: '2026-06-07T20:04:01.179Z',
+  exchange: 'Global',
+  provider: 'yahoo'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EABL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BAT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BOC.
+[MarketService] Caching quote for EABL: {
+  ticker: 'EABL',
+  name: 'East African Breweries Ltd',
+  price: 240.5,
+  change: -7.25,
+  changePercent: -2.9263370332996974,
+  volume: 123849,
+  previousClose: 247.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'EABL'
+}
+[MarketService] Caching quote for EABL: {
+  ticker: 'EABL',
+  name: 'East African Breweries Ltd',
+  price: 240.5,
+  change: -7.25,
+  changePercent: -2.9263370332996974,
+  volume: 123849,
+  previousClose: 247.75,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'EABL'
+}
+[MarketService] Caching quote for BAT: {
+  ticker: 'BAT',
+  name: 'British American Tobacco Kenya',
+  price: 520,
+  change: 0,
+  changePercent: 0,
+  volume: 13216,
+  previousClose: 520,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'BAT'
+}
+[MarketService] Caching quote for BAT: {
+  ticker: 'BAT',
+  name: 'British American Tobacco Kenya',
+  price: 520,
+  change: 0,
+  changePercent: 0,
+  volume: 13216,
+  previousClose: 520,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'BAT'
+}
+[MarketService] Caching quote for BOC: {
+  ticker: 'BOC',
+  name: 'BOC Kenya Ltd',
+  price: 161.75,
+  change: -3.75,
+  changePercent: -2.2658610271903323,
+  volume: 2826,
+  previousClose: 165.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'BOC'
+}
+[MarketService] Caching quote for BOC: {
+  ticker: 'BOC',
+  name: 'BOC Kenya Ltd',
+  price: 161.75,
+  change: -3.75,
+  changePercent: -2.2658610271903323,
+  volume: 2826,
+  previousClose: 165.5,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'BOC'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CARB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for UNGA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MSC.
+[MarketService] Caching quote for CARB: {
+  ticker: 'CARB',
+  name: 'Carbacid Investments',
+  price: 29.6,
+  change: -0.05,
+  changePercent: -0.16863406408094433,
+  volume: 22024,
+  previousClose: 29.650000000000002,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'CARB'
+}
+[MarketService] Caching quote for CARB: {
+  ticker: 'CARB',
+  name: 'Carbacid Investments',
+  price: 29.6,
+  change: -0.05,
+  changePercent: -0.16863406408094433,
+  volume: 22024,
+  previousClose: 29.650000000000002,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'CARB'
+}
+[MarketService] Caching quote for UNGA: {
+  ticker: 'UNGA',
+  name: 'Unga Group Ltd',
+  price: 25.2,
+  change: -1.1,
+  changePercent: -4.182509505703423,
+  volume: 4361,
+  previousClose: 26.3,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'UNGA'
+}
+[MarketService] Caching quote for UNGA: {
+  ticker: 'UNGA',
+  name: 'Unga Group Ltd',
+  price: 25.2,
+  change: -1.1,
+  changePercent: -4.182509505703423,
+  volume: 4361,
+  previousClose: 26.3,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'UNGA'
+}
+[MarketService] Caching quote for MSC: {
+  ticker: 'MSC',
+  name: 'Mumias Sugar Company Ltd',
+  price: 0.28,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 0.28,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'MSC'
+}
+[MarketService] Caching quote for MSC: {
+  ticker: 'MSC',
+  name: 'Mumias Sugar Company Ltd',
+  price: 0.28,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 0.28,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'MSC'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for FTGH.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EVRD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SCOM.
+[MarketService] Caching quote for FTGH: {
+  ticker: 'FTGH',
+  name: 'Flame Tree Group Holdings',
+  price: 1.92,
+  change: -0.01,
+  changePercent: -0.5181347150259068,
+  volume: 90161,
+  previousClose: 1.93,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'FTGH'
+}
+[MarketService] Caching quote for FTGH: {
+  ticker: 'FTGH',
+  name: 'Flame Tree Group Holdings',
+  price: 1.92,
+  change: -0.01,
+  changePercent: -0.5181347150259068,
+  volume: 90161,
+  previousClose: 1.93,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'FTGH'
+}
+[MarketService] Caching quote for EVRD: {
+  ticker: 'EVRD',
+  name: 'Eveready East Africa Ltd',
+  price: 1.05,
+  change: 0,
+  changePercent: 0,
+  volume: 79310,
+  previousClose: 1.05,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'EVRD'
+}
+[MarketService] Caching quote for EVRD: {
+  ticker: 'EVRD',
+  name: 'Eveready East Africa Ltd',
+  price: 1.05,
+  change: 0,
+  changePercent: 0,
+  volume: 79310,
+  previousClose: 1.05,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'EVRD'
+}
+[MarketService] Caching quote for SCOM: {
+  ticker: 'SCOM',
+  name: 'Safaricom Plc',
+  price: 31.75,
+  change: 0.3,
+  changePercent: 0.9538950715421303,
+  volume: 13812903,
+  previousClose: 31.45,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SCOM'
+}
+[MarketService] Caching quote for SCOM: {
+  ticker: 'SCOM',
+  name: 'Safaricom Plc',
+  price: 31.75,
+  change: 0.3,
+  changePercent: 0.9538950715421303,
+  volume: 13812903,
+  previousClose: 31.45,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SCOM'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LKL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NBV.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for UCHM.
+[MarketService] Caching quote for LKL: {
+  ticker: 'LKL',
+  name: 'Longhorn Publishers Ltd',
+  price: 2.91,
+  change: 0.13,
+  changePercent: 4.676258992805756,
+  volume: 2328,
+  previousClose: 2.7800000000000002,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'LKL'
+}
+[MarketService] Caching quote for LKL: {
+  ticker: 'LKL',
+  name: 'Longhorn Publishers Ltd',
+  price: 2.91,
+  change: 0.13,
+  changePercent: 4.676258992805756,
+  volume: 2328,
+  previousClose: 2.7800000000000002,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'LKL'
+}
+[MarketService] Caching quote for NBV: {
+  ticker: 'NBV',
+  name: 'Nairobi Business Ventures Ltd',
+  price: 1.23,
+  change: -0.07,
+  changePercent: -5.384615384615385,
+  volume: 91142,
+  previousClose: 1.3,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'NBV'
+}
+[MarketService] Caching quote for NBV: {
+  ticker: 'NBV',
+  name: 'Nairobi Business Ventures Ltd',
+  price: 1.23,
+  change: -0.07,
+  changePercent: -5.384615384615385,
+  volume: 91142,
+  previousClose: 1.3,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'NBV'
+}
+[MarketService] Caching quote for UCHM: {
+  ticker: 'UCHM',
+  name: 'Uchumi Supermarket Ltd',
+  price: 1.45,
+  change: -0.02,
+  changePercent: -1.360544217687075,
+  volume: 345302,
+  previousClose: 1.47,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'UCHM'
+}
+[MarketService] Caching quote for UCHM: {
+  ticker: 'UCHM',
+  name: 'Uchumi Supermarket Ltd',
+  price: 1.45,
+  change: -0.02,
+  changePercent: -1.360544217687075,
+  volume: 345302,
+  previousClose: 1.47,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'UCHM'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ALP.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CABL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DCON.
+[MarketService] Caching quote for ALP: {
+  ticker: 'ALP',
+  name: 'ALP Real Estate Investment Trust',
+  price: 1.02,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1.02,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'ALP'
+}
+[MarketService] Caching quote for ALP: {
+  ticker: 'ALP',
+  name: 'ALP Real Estate Investment Trust',
+  price: 1.02,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1.02,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'ALP'
+}
+[MarketService] Caching quote for CABL: {
+  ticker: 'CABL',
+  name: 'East African Cables',
+  price: 1.71,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1.71,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'CABL'
+}
+[MarketService] Caching quote for CABL: {
+  ticker: 'CABL',
+  name: 'East African Cables',
+  price: 1.71,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1.71,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'CABL'
+}
+[MarketService] Caching quote for DCON: {
+  ticker: 'DCON',
+  name: 'Deacons East Africa',
+  price: 0.45,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 0.45,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'DCON'
+}
+[MarketService] Caching quote for DCON: {
+  ticker: 'DCON',
+  name: 'Deacons East Africa',
+  price: 0.45,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 0.45,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'DCON'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GLD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HBE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KPC.
+[MarketService] Caching quote for GLD: {
+  ticker: 'GLD',
+  name: 'Absa NewGold ETF',
+  price: 5315,
+  change: 0,
+  changePercent: 0,
+  volume: 86,
+  previousClose: 5315,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'GLD'
+}
+[MarketService] Caching quote for GLD: {
+  ticker: 'GLD',
+  name: 'Absa NewGold ETF',
+  price: 5315,
+  change: 0,
+  changePercent: 0,
+  volume: 86,
+  previousClose: 5315,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'GLD'
+}
+[MarketService] Caching quote for HBE: {
+  ticker: 'HBE',
+  name: 'Homeboyz Entertainment',
+  price: 4.66,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 4.66,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'HBE'
+}
+[MarketService] Caching quote for HBE: {
+  ticker: 'HBE',
+  name: 'Homeboyz Entertainment',
+  price: 4.66,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 4.66,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'HBE'
+}
+[MarketService] Caching quote for KPC: {
+  ticker: 'KPC',
+  name: 'Kenya Pipeline Company',
+  price: 9.1,
+  change: 0,
+  changePercent: 0,
+  volume: 354881,
+  previousClose: 9.1,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KPC'
+}
+[MarketService] Caching quote for KPC: {
+  ticker: 'KPC',
+  name: 'Kenya Pipeline Company',
+  price: 9.1,
+  change: 0,
+  changePercent: 0,
+  volume: 354881,
+  previousClose: 9.1,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KPC'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KURV.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LAPR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SKL.
+[MarketService] Caching quote for KURV: {
+  ticker: 'KURV',
+  name: 'Kurwitu Ventures Ltd',
+  price: 1500,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1500,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KURV'
+}
+[MarketService] Caching quote for KURV: {
+  ticker: 'KURV',
+  name: 'Kurwitu Ventures Ltd',
+  price: 1500,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1500,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'KURV'
+}
+[MarketService] Caching quote for LAPR: {
+  ticker: 'LAPR',
+  name: 'Laptrust Imara Income-REIT',
+  price: 20,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 20,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'LAPR'
+}
+[MarketService] Caching quote for LAPR: {
+  ticker: 'LAPR',
+  name: 'Laptrust Imara Income-REIT',
+  price: 20,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 20,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'LAPR'
+}
+[MarketService] Caching quote for SKL: {
+  ticker: 'SKL',
+  name: 'Shri Krishana Overseas Ltd',
+  price: 9.46,
+  change: 0.68,
+  changePercent: 7.744874715261958,
+  volume: 7514,
+  previousClose: 8.780000000000001,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SKL'
+}
+[MarketService] Caching quote for SKL: {
+  ticker: 'SKL',
+  name: 'Shri Krishana Overseas Ltd',
+  price: 9.46,
+  change: 0.68,
+  changePercent: 7.744874715261958,
+  volume: 7514,
+  previousClose: 8.780000000000001,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SKL'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SMWF.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TCL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AAPL.
+[MarketService] Caching quote for SMWF: {
+  ticker: 'SMWF',
+  name: 'Satrix MSCI World Feeder ETF',
+  price: 948,
+  change: 0,
+  changePercent: 0,
+  volume: 232,
+  previousClose: 948,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SMWF'
+}
+[MarketService] Caching quote for SMWF: {
+  ticker: 'SMWF',
+  name: 'Satrix MSCI World Feeder ETF',
+  price: 948,
+  change: 0,
+  changePercent: 0,
+  volume: 232,
+  previousClose: 948,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'SMWF'
+}
+[MarketService] Caching quote for TCL: {
+  ticker: 'TCL',
+  name: 'TransCentury Plc',
+  price: 1.12,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1.12,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'TCL'
+}
+[MarketService] Caching quote for TCL: {
+  ticker: 'TCL',
+  name: 'TransCentury Plc',
+  price: 1.12,
+  change: 0,
+  changePercent: 0,
+  volume: 0,
+  previousClose: 1.12,
+  currency: 'KES',
+  market: 'NSE',
+  provider: 'afx',
+  timestamp: 1780862629,
+  symbol: 'TCL'
+}
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MSFT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NVDA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GOOGL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AMZN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for META.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TSLA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LLY.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AVGO.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for JPM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for V.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for UNH.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for XOM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for WMT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for JNJ.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CVX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KO.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PEP.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for COST.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MRK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ABBV.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BAC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TMO.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ORCL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CSCO.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NFLX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ADBE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CRM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AMD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for INTC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TXN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for QCOM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AMGN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for IBM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CAT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DIS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MCD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NKE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SBUX.
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for C.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for WFC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BLK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AXP.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for UPS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for RTX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HON.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LOW.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MMM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MDT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AMAT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MU.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NOW.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for UBER.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ABNB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PLTR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SNOW.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DDOG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CRWD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PANW.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for FTNT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SQ.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PYPL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for COIN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PFE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for T.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for VZ.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SYK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BSX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ISRG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ABT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GILD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for REGN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for VRTX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DHR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ZTS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MDLZ.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TGT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TJX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ROST.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LULU.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MRNA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GME.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AMC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SIRI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ETSY.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EBAY.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SNAP.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PINS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for RBLX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ZM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DOCU.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TWLO.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SPOT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for WBD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CMCSA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CHTR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for FOXA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NWSA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TTWO.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LYV.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DHI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LEN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NVR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PHM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TSCO.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BBY.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DLTR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ACI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for COP.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EOG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SLB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for OXY.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PSX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for FCX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NEM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DOW.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for APD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SHW.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PPG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ECL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CMI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PCAR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for WM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for RSG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PLD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AMT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EQIX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SPG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PSA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for O.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for WELL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AVB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for USB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PNC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TFC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for F.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AAL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DAL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for UAL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LUV.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MAR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HLT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MGM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for WYNN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LVS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CZR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DKNG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HOOD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SOFI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AFRM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for UPST.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MARA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for RIOT.
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CLSK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for W.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CHWY.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ACN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ADP.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ADI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for APH.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ANSS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CDNS.
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SNPS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KLAC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LRCX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MCHP.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NXPI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GLW.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TEL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for STX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for WDC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KEYS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TRMB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ZBRA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NET.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MDB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ZS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DASH.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PTC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MPWR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ENTG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TER.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for WDAY.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ELV.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HCA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MCK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BDX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EW.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DXCM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for IDXX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ALGN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BIIB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for RMD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HOLX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for WST.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SCHW.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MCO.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SPGI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MSCI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ICE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CME.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NDAQ.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for FIS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for FI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GPN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PGR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ALL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MET.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PRU.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AFL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TRV.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AIG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MPC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for VLO.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HAL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BKR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DVN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HES.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for WMB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for OKE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KMI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NEE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DUK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SO.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AEP.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EXC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SRE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PEG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ED.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for XEL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EIX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DLR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SBAC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CCI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EQR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LMT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NOC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LHX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TDG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for EMR.
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ETN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ITW.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PWR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for VMC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MLM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for IFF.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KMB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CMG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SYY.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GIS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for K.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HSY.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for STZ.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MNST.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KHC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CHD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ORLY.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AZO.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CTAS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for FDX.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for RIVN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for LCID.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for BRK.B.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PH.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ROK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for AME.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for OTIS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CARR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for JCI.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for IR.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for FANG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GWW.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for FAST.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for DOV.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NDSN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SNA.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SWK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MAS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for XYL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for WAB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for IP.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ALB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CF.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MOS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NUE.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for STLD.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MHK.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SEDG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ENPH.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for PLUG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CHPT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ACGL.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CFG.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for CPRT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for FDS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for FITB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for GPC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HBAN.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for HMC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for KEY.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for MTB.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for NTRS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for OMC.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for ON.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for QRVO.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for RF.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SFM.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for STT.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for SWKS.
+[FinancialReportsService] FMP_API_KEY is missing. Using synthetic key metrics for TM.
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+  Fetched 18 articles from Kenyan Wall Street
+✅ Fetched 40 articles from global RSS feeds
+✅ Fetched 76 news articles
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[AFX] Scraped 69 NSE stocks from afx.kwayisi.org
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke
+[NSE-Index] Scraped 4 indices from nse.co.ke

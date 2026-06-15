@@ -1,0 +1,8 @@
+{
+  "watch": ["index.js", "auth.js", "mailer.js", "signalService.js"],
+  "ext": "js,json",
+  "ignore": ["node_modules", "server.log", "server.err", "*.tmp"],
+  "delay": 2500,
+  "exec": "node index.js",
+  "signal": "SIGTERM"
+}

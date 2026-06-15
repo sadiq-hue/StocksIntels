@@ -1,7 +1,8 @@
-import { createBrowserRouter, RouterProvider, Link } from "react-router";
+import { createBrowserRouter, RouterProvider, Link, Navigate, Outlet } from "react-router";
 import { MainLayout } from "./layouts/MainLayout";
 import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
+import { useAuth, getTrialInfo } from "./auth/AuthContext";
 import { DashboardPage } from "./pages/DashboardPage";
 import MarketPage from "./pages/MarketPage";
 import { WatchlistPage } from "./pages/WatchlistPage";
@@ -24,6 +25,40 @@ import { BondsPage } from "./pages/BondsPage";
 import { ETFsPage } from "./pages/ETFsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SupportCenterPage } from "./pages/SupportCenterPage";
+import { SignalEnginePage } from "./pages/SignalEnginePage";
+import { AboutPage } from "./pages/AboutPage";
+import { BlogPage } from "./pages/BlogPage";
+import { CareersPage } from "./pages/CareersPage";
+import { PrivacyPage } from "./pages/PrivacyPage";
+import { TermsPage } from "./pages/TermsPage";
+import { SecurityPage } from "./pages/SecurityPage";
+import { DisclaimerPage } from "./pages/DisclaimerPage";
+
+
+function ProtectedRoute() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0D7490]" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Check active subscription (paid) or within 7-day trial
+  const hasPaid = user.subscription_status === 'active' && user.subscription_tier !== 'free' && user.subscription_tier !== null && user.subscription_tier !== undefined;
+  const trialInfo = getTrialInfo(user);
+  if (!hasPaid && !trialInfo.isWithinTrial) {
+    return <Navigate to="/pricing" replace />;
+  }
+
+  return <Outlet />;
+}
 
 function NotFoundPage() {
   return (
@@ -61,17 +96,28 @@ const router = createBrowserRouter([
     element: <SubscriptionPage />,
     errorElement: <NotFoundPage />,
   },
+  { path: "/about", element: <AboutPage />, errorElement: <NotFoundPage /> },
+  { path: "/blog", element: <BlogPage />, errorElement: <NotFoundPage /> },
+  { path: "/careers", element: <CareersPage />, errorElement: <NotFoundPage /> },
+  { path: "/privacy", element: <PrivacyPage />, errorElement: <NotFoundPage /> },
+  { path: "/terms", element: <TermsPage />, errorElement: <NotFoundPage /> },
+  { path: "/security", element: <SecurityPage />, errorElement: <NotFoundPage /> },
+  { path: "/disclaimer", element: <DisclaimerPage />, errorElement: <NotFoundPage /> },
   {
     path: "/app",
-    element: <MainLayout />,
+    element: <ProtectedRoute />,
     errorElement: <NotFoundPage />,
     children: [
+      {
+        element: <MainLayout />,
+        children: [
       { index: true, element: <DashboardPage /> },
       { path: "dashboard", element: <DashboardPage /> },
       { path: "markets", element: <MarketPage /> },
       { path: "stocks", element: <StocksPage /> },
       { path: "watchlist", element: <WatchlistPage /> },
       { path: "signals", element: <SignalsPage /> },
+      { path: "signals/engine", element: <SignalEnginePage /> },
       { path: "ai-insights", element: <AIInsightsPage /> },
       { path: "people", element: <PeoplePage /> },
       { path: "groups", element: <GroupPage /> },
@@ -87,7 +133,10 @@ const router = createBrowserRouter([
       { path: "etfs", element: <ETFsPage /> },
       { path: "profile", element: <ProfilePage /> },
       { path: "support", element: <SupportCenterPage /> },
+
       { path: "*", element: <NotFoundPage /> },
+        ],
+      },
     ],
   },
   {

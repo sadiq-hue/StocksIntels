@@ -120,11 +120,12 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
         if (data.fxRate) setFxRate(data.fxRate);
         if (holdingsArr.length > 0) {
           const enriched = holdingsArr.map((h: any) => {
-            const livePrice = stockPriceMap.get(h.ticker) || parseFloat(h.current_price) || parseFloat(h.avg_cost) || 0;
+            const livePrice = h.live_price || h.current_price || parseFloat(h.current_price) || parseFloat(h.avg_cost) || 0;
             const avgC = parseFloat(h.avg_cost) || 0;
             const shares = parseFloat(h.shares) || 0;
-            const val = livePrice * shares;
-            const pnlPct = avgC > 0 ? ((livePrice - avgC) / avgC * 100) : 0;
+            const val = parseFloat(h.value) || (livePrice * shares);
+            const pnl = parseFloat(h.pnl) || (val - (avgC * shares));
+            const pnlPct = parseFloat(h.pnl_percent) || (avgC > 0 ? ((livePrice - avgC) / avgC * 100) : 0);
             return {
               id: h.id,
               ticker: h.ticker,
@@ -134,7 +135,7 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
               currentPrice: String(livePrice),
               value: val.toFixed(2),
               pnl: (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(1) + "%",
-              isPositive: pnlPct >= 0,
+              isPositive: h.is_positive !== undefined ? h.is_positive : pnl >= 0,
               sector: h.sector || "Other",
               market: (h.market || "NSE") as "NSE" | "Global",
               brokerConnectionId: h.broker_connection_id || 0,

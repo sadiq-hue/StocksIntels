@@ -1,6 +1,6 @@
-const API_BASE = "http://localhost:3001/api";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
-export type DataProvider = "auto" | "sec-edgar" | "simfin" | "fmp" | "synthetic";
+export type DataProvider = "auto" | "sec-edgar" | "simfin" | "fmp" | "yahoo-finance" | "synthetic";
 
 export interface EdgarFiling {
   form: string;
@@ -27,6 +27,7 @@ export interface FinancialsStatus {
   edgarApiKeyConfigured: boolean;
   simfinConfigured: boolean;
   simfinApiKeyConfigured: boolean;
+  yahooFinanceConfigured: boolean;
   message: string;
 }
 
@@ -173,8 +174,26 @@ export interface FinancialReport {
   error?: string;
 }
 
+function getUserId(): string | null {
+  try {
+    const stored = localStorage.getItem("stockintel_user");
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.id ? String(parsed.id) : null;
+    }
+  } catch {}
+  return null;
+}
+
+function appendUserId(url: string): string {
+  const userId = getUserId();
+  if (!userId) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}userId=${userId}`;
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+  const response = await fetch(appendUserId(url));
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Request failed with status ${response.status}`);

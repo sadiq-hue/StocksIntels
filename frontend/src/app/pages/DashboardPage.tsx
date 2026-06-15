@@ -16,18 +16,9 @@ import { useAuth } from "../auth/AuthContext";
 import { usePortfolioData } from "../contexts/PortfolioDataContext";
 import { kenyanStocks, globalStocks } from "../data/stockUniverses";
 import { fetchAllNews, type NewsArticle } from "../services/newsService";
+import type { Signal } from "../types/signals";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
-
-interface Signal {
-  ticker: string; name: string; price: number; change: number;
-  signal: "Strong Buy" | "Buy" | "Accumulate" | "Hold" | "Sell" | "Strong Sell";
-  confidence: number; sector: string; market: string; reason: string;
-  analysis?: {
-    fundamental: { score: number; grade: string; metrics: Record<string, string> };
-    overall: { score: number; grade: string };
-  };
-}
 
 function AnimatedCounter({ end, duration = 2000, prefix = "", suffix = "" }: { end: number; duration?: number; prefix?: string; suffix?: string }) {
   const [count, setCount] = useState(0);
@@ -126,6 +117,13 @@ interface PerformanceResponse {
   fxRate: number;
 }
 
+interface PerformanceMeta {
+  totalReturn: number;
+  totalReturnPercent: number;
+  currentValue: number;
+  hasHistory: boolean;
+}
+
 interface MarketPulseData {
   nse: { label: string; score: number; idxPositive: number; idxTotal: number };
   global: { label: string; score: number; idxPositive: number; idxTotal: number };
@@ -150,9 +148,11 @@ export function DashboardPage() {
   const [selectedTimeRange, setSelectedTimeRange] = useState("6M");
   const [perfData, setPerfData] = useState<PerformanceDataPoint[]>([]);
   const [perfLoading, setPerfLoading] = useState(false);
-  const [perfMeta, setPerfMeta] = useState({ totalReturn: 0, totalReturnPercent: 0, currentValue: 0 });
+  const [perfMeta, setPerfMeta] = useState({ totalReturn: 0, totalReturnPercent: 0, currentValue: 0, hasHistory: false });
   const [pulse, setPulse] = useState<MarketPulseData | null>(null);
   const [movers, setMovers] = useState<{ gainers: any[]; losers: any[] }>({ gainers: [], losers: [] });
+  const [activeStocks, setActiveStocks] = useState<any[]>([]);
+  const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
 
   const fetchPerformance = useCallback(async (period: string) => {
     if (!user?.id) return;
@@ -162,7 +162,7 @@ export function DashboardPage() {
       const json: PerformanceResponse = await res.json();
       if (json.data?.length) {
         setPerfData(json.data);
-        setPerfMeta({ totalReturn: json.totalReturn, totalReturnPercent: json.totalReturnPercent, currentValue: json.currentValue });
+        setPerfMeta({ totalReturn: json.totalReturn, totalReturnPercent: json.totalReturnPercent, currentValue: json.currentValue, hasHistory: json.hasHistory });
       }
     } catch {} finally {
       setPerfLoading(false);
@@ -199,12 +199,23 @@ export function DashboardPage() {
           gainers: (combined.gainers || []).slice(0, 5).map(s => normalizeMover(s)),
           losers: (combined.losers || []).slice(0, 5).map(s => normalizeMover(s)),
         });
+        setActiveStocks((data.active || []).slice(0, 6));
       } catch {}
     };
     fetchMovers();
     const interval = setInterval(fetchMovers, 30000);
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    fetch(`${API_BASE}/watchlist?userId=${user.id}`)
+      .then(r => r.json())
+      .then(items => { if (!cancelled) setWatchlistItems(items || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -242,21 +253,67 @@ export function DashboardPage() {
   }, []);
 
 
-  const watchlist = useMemo(() =>
-    allStocks
-      .sort((a, b) => parseVolume(b.volume) - parseVolume(a.volume))
-      .slice(0, 6)
-      .map(s => ({
-        ticker: s.ticker,
-        price: s.price.toFixed(2),
-        change: `${s.change > 0 ? "+" : ""}${s.change}%`,
-        isPositive: s.change >= 0,
-        alert: Math.abs(s.change) > 5,
-        market: s.market,
-        currency: s.currency || "KES",
-      })),
-    []
-  );
+  const watchlist = useMemo(() => {
+    const activeMap = new Map(activeStocks.map(s => [s.ticker, s]));
+    const built: any[] = [];
+
+    // Show user's watchlist items first (with live data if available)
+    if (watchlistItems.length > 0) {
+      for (const item of watchlistItems) {
+        const live = activeMap.get(item.symbol);
+        built.push({
+          ticker: item.symbol,
+          name: item.company_name || live?.name || item.symbol,
+          price: live?.price || '-',
+          change: live?.change || '-',
+          isPositive: live ? live.isPositive : true,
+          alert: live ? Math.abs(parseFloat(live.change)) > 5 : false,
+          market: live?.symbol?.startsWith('NSE:') ? 'nse' : 'global',
+          currency: live?.currency || 'KES',
+          volume: live?.volume || '0',
+        });
+      }
+    }
+
+    // Fill remaining slots with most active stocks (avoid duplicates)
+    if (activeStocks.length > 0) {
+      const seen = new Set(built.map(s => s.ticker));
+      for (const s of activeStocks) {
+        if (seen.has(s.ticker)) continue;
+        built.push({
+          ticker: s.ticker,
+          name: s.name || s.ticker,
+          price: s.price,
+          change: s.change,
+          isPositive: s.isPositive,
+          alert: Math.abs(parseFloat(s.change)) > 5,
+          market: s.symbol?.startsWith('NSE:') ? 'nse' : 'global',
+          currency: s.currency || 'KES',
+          volume: s.volume || '0',
+        });
+        if (built.length >= 6) break;
+      }
+    }
+
+    // Fall back to static universe data
+    if (built.length === 0) {
+      return allStocks
+        .sort((a, b) => parseVolume(b.volume) - parseVolume(a.volume))
+        .slice(0, 6)
+        .map(s => ({
+          ticker: s.ticker,
+          name: s.name,
+          price: s.price.toFixed(2),
+          change: `${s.change > 0 ? "+" : ""}${s.change}%`,
+          isPositive: s.change >= 0,
+          alert: Math.abs(s.change) > 5,
+          market: s.market,
+          currency: s.currency || "KES",
+        }));
+    }
+
+    return built;
+  }, [activeStocks, watchlistItems]);
 
   const nseIndices = indices.filter(i => i.market === "NSE");
   const globalIndices = indices.filter(i => i.market === "Global");
@@ -289,11 +346,12 @@ export function DashboardPage() {
   }, []);
 
   const fetchSignals = useCallback(() => {
-    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3001/api"}/signals`)
+    const userIdParam = user?.id ? `?userId=${user.id}` : '';
+    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3001/api"}/signals${userIdParam}`)
       .then(r => r.json())
       .then(data => { if (data.success) setSignals(data.signals); })
       .catch(() => {});
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -462,7 +520,7 @@ export function DashboardPage() {
           { icon: Globe, color: "bg-indigo-100 text-indigo-600", label: "Global Portfolio", value: `$${enhancedTotals.globalValue.toLocaleString()}`, sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${brokerTotals.posCount} pos)`, valColor: "text-foreground" },
           { icon: PieChart, color: "bg-purple-100 text-purple-600", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} NSE · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
           { icon: Sparkles, color: "bg-yellow-100 text-yellow-600", label: "AI Signals", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · ${signalSummary.highConf} high conf`, valColor: "text-foreground" },
-          { icon: BarChart3, color: "bg-blue-100 text-blue-600", label: "vs Benchmarks", value: `${benchmarkMetrics.alpha >= 0 ? '+' : ''}${benchmarkMetrics.alpha.toFixed(1)}%`, sub: `Portfolio ${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}% · NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%`, valColor: benchmarkMetrics.alpha >= 0 ? "text-emerald-600" : "text-red-500" },
+          { icon: BarChart3, color: "bg-blue-100 text-blue-600", label: "vs Benchmarks", value: perfMeta.hasHistory ? `${benchmarkMetrics.alpha >= 0 ? '+' : ''}${benchmarkMetrics.alpha.toFixed(1)}%` : '—', sub: perfMeta.hasHistory ? `Portfolio ${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}% · NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%` : `NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%`, valColor: perfMeta.hasHistory ? (benchmarkMetrics.alpha >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
         ].map((m, i) => (
           <Card key={i} className="border shadow-sm p-5">
             <div className="flex items-center gap-2 mb-3">
@@ -601,7 +659,7 @@ export function DashboardPage() {
           {perfLoading && perfData.length === 0 ? (
             <div className="flex items-center justify-center h-[220px] text-sm text-muted-foreground">Loading performance data...</div>
           ) : perfData.length === 0 ? (
-            <div className="flex items-center justify-center h-[220px] text-sm text-muted-foreground">No portfolio data yet. Start trading to see your performance.</div>
+            <div className="flex items-center justify-center h-[220px] text-sm text-muted-foreground">No data available</div>
           ) : (
             <>
               <ResponsiveContainer width="100%" height={220}>
@@ -632,7 +690,7 @@ export function DashboardPage() {
               <div className="flex items-center justify-center gap-6 mt-3 pt-3 border-t border-border">
                 <div className="flex items-center gap-2">
                   <div className="size-3 rounded-full bg-emerald-500"></div>
-                  <span className="text-xs text-muted-foreground">Portfolio {perfMeta.totalReturnPercent >= 0 ? '+' : ''}{perfMeta.totalReturnPercent.toFixed(1)}%</span>
+                  <span className="text-xs text-muted-foreground">Portfolio {perfMeta.hasHistory ? `${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}%` : 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="size-3 rounded-full bg-indigo-400"></div>
@@ -721,7 +779,7 @@ export function DashboardPage() {
                     <div>
                       <div className="text-sm font-semibold text-foreground">{stock.name}</div>
                       <div className="text-[11px] text-muted-foreground">
-                        {stock.currency === "USD" ? "$" : "KES "}{stock.price.toFixed(2)} &middot; Vol: {stock.volume}
+                        {stock.currency === "USD" ? "$" : "KES "}{stock.price} &middot; Vol: {stock.volume}
                         <span className={`ml-1.5 text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
                           {stock.market === "nse" ? "NSE" : "Global"}
                         </span>
@@ -756,7 +814,7 @@ export function DashboardPage() {
                   change: stock.change, volume: stock.volume,
                   market: stock.market === 'nse' ? 'nse' : 'global',
                   currency: stock.currency || 'KES', signal: sig,
-                })} className="flex items-center justify-between p-3 rounded-lg hover:bg-red-50/50 transition-all border border-transparent hover:border-red-200 cursor-pointer">
+                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-red-50/50 transition-all border border-transparent hover:border-red-200 cursor-pointer">
                   <div className="flex items-center gap-3">
                     <div className="size-9 rounded-lg bg-gradient-to-br from-red-100 to-rose-100 flex items-center justify-center">
                       <span className="text-red-700 font-bold text-xs">{stock.ticker}</span>
@@ -764,7 +822,7 @@ export function DashboardPage() {
                     <div>
                       <div className="text-sm font-semibold text-foreground">{stock.name}</div>
                       <div className="text-[11px] text-muted-foreground">
-                        {stock.currency === "USD" ? "$" : "KES "}{stock.price.toFixed(2)} &middot; Vol: {stock.volume}
+                        {stock.currency === "USD" ? "$" : "KES "}{stock.price} &middot; Vol: {stock.volume}
                         <span className={`ml-1.5 text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
                           {stock.market === "nse" ? "NSE" : "Global"}
                         </span>
@@ -798,37 +856,40 @@ export function DashboardPage() {
               const fullStock = allStocks.find(s => s.ticker === stock.ticker);
               const sig = signals.find(s => s.ticker === stock.ticker);
               return (
-                <div key={stock.ticker} onClick={() => setSelectedStock({
-                  ticker: stock.ticker,
-                  name: fullStock?.name || stock.ticker,
-                  price: parseFloat(stock.price),
-                  change: parseFloat(stock.change),
-                  volume: fullStock?.volume || '0',
-                  market: stock.market === 'nse' ? 'nse' : 'global',
-                  currency: stock.currency || 'KES',
-                  signal: sig,
-                })} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-all border border-transparent hover:border-border cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <div className="size-9 rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 flex items-center justify-center relative">
-                      <span className="text-[#0D7490] font-bold text-xs">{stock.ticker}</span>
-                      {stock.alert && (
-                        <span className="absolute -top-0.5 -right-0.5 size-2.5 bg-red-500 rounded-full border-2 border-card" />
-                      )}
+                  <div key={stock.ticker} onClick={() => setSelectedStock({
+                    ticker: stock.ticker,
+                    name: stock.name || fullStock?.name || stock.ticker,
+                    price: parseFloat(stock.price),
+                    change: parseFloat(stock.change),
+                    volume: stock.volume || fullStock?.volume || '0',
+                    market: stock.market === 'nse' ? 'nse' : 'global',
+                    currency: stock.currency || 'KES',
+                    signal: sig,
+                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-all border border-transparent hover:border-border cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <div className="size-9 rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 flex items-center justify-center relative">
+                        <span className="text-[#0D7490] font-bold text-xs">{stock.ticker}</span>
+                        {stock.alert && (
+                          <span className="absolute -top-0.5 -right-0.5 size-2.5 bg-red-500 rounded-full border-2 border-card" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">{stock.name || stock.ticker}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {stock.currency === "USD" ? "$" : "KES "}{stock.price}
+                          {stock.volume && stock.volume !== '0' && <span className="ml-1.5">· Vol: {stock.volume}</span>}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-sm font-semibold text-foreground">{stock.ticker}</div>
-                      <div className="text-[11px] text-muted-foreground">{stock.currency === "USD" ? "$" : "KES "}{stock.price}</div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 rounded-md text-xs font-semibold ${stock.isPositive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                        {stock.change}
+                      </span>
+                      <span className={`text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
+                        {stock.market === "nse" ? "NSE" : "Global"}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded-md text-xs font-semibold ${stock.isPositive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                      {stock.change}
-                    </span>
-                    <span className={`text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
-                      {stock.market === "nse" ? "NSE" : "Global"}
-                    </span>
-                  </div>
-                </div>
               );
             })}
           </div>
@@ -885,7 +946,7 @@ export function DashboardPage() {
                       })}
                     </div>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-white/60">
-                      {(["Strong Buy", "Buy", "Accumulate", "Hold", "Sell", "Strong Sell"] as const).map(type => {
+                      {(["Strong Buy", "Buy", "Accumulate", "Hold", "Reduce", "Sell", "Strong Sell"] as const).map(type => {
                         const count = signalSummary.counts[type];
                         if (!count) return null;
                         return <span key={type}>{type}: {count}</span>;
@@ -905,6 +966,8 @@ export function DashboardPage() {
                             <Badge className={
                               signal.signal === "Strong Buy" ? "bg-emerald-400 text-emerald-900 border-0 text-[11px] font-semibold" :
                               signal.signal === "Buy" ? "bg-emerald-300 text-emerald-800 border-0 text-[11px] font-semibold" :
+                              signal.signal === "Accumulate" ? "bg-teal-300 text-teal-800 border-0 text-[11px] font-semibold" :
+                              signal.signal === "Reduce" ? "bg-orange-300 text-orange-800 border-0 text-[11px] font-semibold" :
                               signal.signal === "Sell" ? "bg-red-300 text-red-800 border-0 text-[11px] font-semibold" :
                               signal.signal === "Strong Sell" ? "bg-red-400 text-red-900 border-0 text-[11px] font-semibold" :
                               "bg-blue-300 text-blue-800 border-0 text-[11px] font-semibold"
@@ -922,6 +985,11 @@ export function DashboardPage() {
                             <div className={`h-full rounded-full ${signal.confidence >= 80 ? 'bg-emerald-400' : signal.confidence >= 60 ? 'bg-yellow-400' : 'bg-red-400'}`} style={{ width: `${signal.confidence}%` }}></div>
                           </div>
                           <span className="text-xs text-white/70">{signal.confidence}% confidence</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          {signal.mlWinProb && <span className="text-[10px] px-1 py-0.5 rounded bg-blue-500/20 text-blue-300">ML: {signal.mlWinProb}</span>}
+                          {signal.regime && <span className="text-[10px] px-1 py-0.5 rounded bg-white/10 text-white/60">{signal.regime}</span>}
+                          {signal.weeklyTrend && <span className={`text-[10px] px-1 py-0.5 rounded font-medium ${signal.weeklyTrend === "Bullish" ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"}`}>{signal.weeklyTrend}</span>}
                         </div>
                       </div>
                     </Link>

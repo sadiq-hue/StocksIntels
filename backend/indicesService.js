@@ -1,5 +1,7 @@
 const { fmp, eodhd } = require('./apiClient');
 const { getQuotesBatch } = require('./marketService');
+const axios = require('axios');
+const { fetchNseIndicesFromSite } = require('./nseIndexScraper');
 
 const FMP_API_KEY = process.env.FMP_API_KEY;
 const FMP_BASE_URL = 'https://financialmodelingprep.com/stable';
@@ -10,10 +12,10 @@ const CACHE_TTL_MS = 60 * 1000;
 const cache = { indices: {}, sectors: {}, lastFetch: 0 };
 
 const NSE_INDICES = {
-  'NSE:NSE20': { name: 'NSE 20 Share Index', symbol: 'NSE:NSE20', market: 'NSE', currency: 'KES' },
-  'NSE:NSEASI': { name: 'NSE All Share Index', symbol: 'NSE:NSEASI', market: 'NSE', currency: 'KES' },
-  'NSE:NSE25': { name: 'NSE 25 Share Index', symbol: 'NSE:NSE25', market: 'NSE', currency: 'KES' },
-  'NSE:NSE15': { name: 'NSE 15 Index', symbol: 'NSE:NSE15', market: 'NSE', currency: 'KES' },
+  'NSE:NSE20': { name: 'NSE 20 Share Index', symbol: 'NSE:NSE20', market: 'NSE', currency: 'KES', yahooSymbol: null },
+  'NSE:NSEASI': { name: 'NSE All Share Index', symbol: 'NSE:NSEASI', market: 'NSE', currency: 'KES', yahooSymbol: null },
+  'NSE:NSE25': { name: 'NSE 25 Share Index', symbol: 'NSE:NSE25', market: 'NSE', currency: 'KES', yahooSymbol: null },
+  'NSE:NSE10': { name: 'NSE 10 Share Index', symbol: 'NSE:NSE10', market: 'NSE', currency: 'KES', yahooSymbol: null },
 };
 
 const GLOBAL_INDICES = {
@@ -37,10 +39,10 @@ const SECTORS = [
 ];
 
 const BASE_INDEX_VALUES = {
-  'NSE:NSE20': 1847.56, 'NSE:NSEASI': 112.45, 'NSE:NSE25': 3450.00, 'NSE:NSE15': 2100.00,
-  '^GSPC': 5204.34, '^IXIC': 16332.24, '^DJI': 38790.00, '^NYA': 17842.15,
-  '^FTSE': 8245.60, '^N225': 39500.00, '^GDAXI': 18200.00, '^HSI': 17200.00,
-  '^STOXX50E': 4980.00,
+  'NSE:NSE20': 1847.56, 'NSE:NSEASI': 112.45, 'NSE:NSE25': 3450.00, 'NSE:NSE10': 2150.00,
+  '^GSPC': 7553.68, '^IXIC': 26853.98, '^DJI': 50687.07, '^NYA': 23276.49,
+  '^FTSE': 10284.49, '^N225': 67470.69, '^GDAXI': 24867.45, '^HSI': 25253.40,
+  '^STOXX50E': 6058.17,
 };
 
 function getSyntheticIndexValue(symbol) {
@@ -148,9 +150,60 @@ async function fetchIndexFromEODHD(symbol) {
   }
 }
 
+async function fetchIndexFromYahoo(symbol) {
+  if (symbol.startsWith('NSE:')) return null; // Yahoo doesn't cover NSE indices
+  try {
+    const cleanSymbol = symbol.includes('.') ? symbol : symbol.replace('^', '%5E');
+    const { data } = await axios.get(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}?range=1d&interval=1m`,
+      { timeout: 5000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    const result = data?.chart?.result?.[0];
+    if (!result) return null;
+    const meta = result.meta;
+    const quotes = result.indicators?.quote?.[0];
+    if (!meta || !quotes) return null;
+    const closes = quotes.close?.filter(c => c != null);
+    const opens = quotes.open?.filter(o => o != null);
+    const highs = quotes.high?.filter(h => h != null);
+    const lows = quotes.low?.filter(l => l != null);
+    const volumes = quotes.volume?.filter(v => v != null);
+    const currentPrice = meta.regularMarketPrice || closes?.[closes.length - 1] || meta.previousClose || 0;
+    const prevClose = meta.previousClose || currentPrice;
+    const openPrice = meta.regularMarketOpen || opens?.[0] || prevClose;
+    return {
+      price: currentPrice,
+      change: currentPrice - prevClose,
+      changePercent: prevClose ? ((currentPrice - prevClose) / prevClose) * 100 : 0,
+      previousClose: prevClose,
+      open: openPrice,
+      dayHigh: meta.regularMarketDayHigh || Math.max(...(highs || [currentPrice])),
+      dayLow: meta.regularMarketDayLow || Math.min(...(lows || [currentPrice])),
+      volume: meta.regularMarketVolume || (volumes ? volumes.reduce((a, b) => a + b, 0) : 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchIndexLive(symbol) {
   let data = null;
-  if (FMP_API_KEY) data = await fetchIndexFromFMP(symbol);
+  // For NSE indices, scrape NSE website directly (free, real-time)
+  if (symbol.startsWith('NSE:')) {
+    const nseData = await fetchNseIndicesFromSite().catch(() => null);
+    if (nseData && nseData[symbol]) {
+      return nseData[symbol];
+    }
+    // If scraper didn't return data for this symbol, try Yahoo with mapped symbol
+    const meta = ALL_INDICES[symbol];
+    if (meta?.yahooSymbol) {
+      data = await fetchIndexFromYahoo(meta.yahooSymbol);
+      if (data) return data;
+    }
+  }
+  // Yahoo first for global indices (free, real-time)
+  data = await fetchIndexFromYahoo(symbol);
+  if (!data && FMP_API_KEY) data = await fetchIndexFromFMP(symbol);
   if (!data && EODHD_API_KEY) data = await fetchIndexFromEODHD(symbol);
   return data || getSyntheticIndexValue(symbol);
 }

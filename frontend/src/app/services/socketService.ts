@@ -52,6 +52,8 @@ export function sendMessage(data: {
   groupId?: string;
   recipientId?: number | string;
   messageType?: string;
+  imageUrl?: string;
+  fileName?: string;
 }): void {
   getSocket().emit("send_message", data);
 }

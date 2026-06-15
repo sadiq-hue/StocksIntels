@@ -1,0 +1,7 @@
+﻿Γùç injected env (0) from .env // tip: Γîÿ multiple files { path: ['.env.local', '.env'] }
+≡ƒô░ News Service Loaded
+Γùç injected env (0) from .env // tip: Γîü auth for agents [www.vestauth.com]
+Γùç injected env (0) from .env // tip: Γîÿ custom filepath { path: '/custom/path/.env' }
+Γùç injected env (0) from .env // tip: Γîÿ suppress logs { quiet: true }
+≡ƒôè Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
+node : 

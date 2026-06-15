@@ -1,239 +1,306 @@
-const { getIncomeStatement, getQuote } = require('./financialReportsService');
+const signalService = require('./signalService');
+const nseAfxScraper = require('./nseAfxScraper');
 
-const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-const NSE_SYMBOLS = ['SCOM','EQTY','KCB','EABL','BAMB','ABSA','SBIC','KPLC','NMG','CRAY','KLG','OLYM','UMEM','TOTL','STAN','COOP','JUB','KNRE','LKL','CIC','HFCK','IMH'];
-const US_SYMBOLS = [
-  'AAPL','MSFT','GOOGL','AMZN','NVDA','META','TSLA','JPM','V','NFLX','LLY','AVGO',
-  'UNH','XOM','PG','JNJ','WMT','CVX','HD','KO','PEP','COST','MRK','ABBV','BAC',
-  'TMO','ORCL','CSCO','ADBE','CRM','AMD','INTC','TXN','QCOM','AMGN','IBM','BA',
-  'GE','CAT','DIS','MCD','NKE','SBUX','GS','BLK','UPS','RTX','HON','LOW','MMM',
-  'MDT','AMAT','MU','NOW','UBER','ABNB','PLTR','SNOW','DDOG','CRWD','PANW','FTNT',
-  'SQ','PYPL','COIN','GME','AMC','MRNA','ZM','DOCU','TWLO','EBAY','PINS','RBLX',
-  'ADP','ACN','ADI','KLAC','LRCX','CDNS','SNPS','WDAY','EA','CMG','LULU',
-  'TJX','DG','BBY','ORLY','AZO','SYY','GIS','K','STZ','MNST','CL','KMB',
-  'MDLZ','TGT','USB','PNC','TFC','BK','PGR','ALL','MET','PRU','AFL','TRV',
-  'MCO','SPGI','MSCI','ICE','CME','COP','EOG','SLB','OXY','FCX','NEM',
-  'DE','CAT','GD','NOC','LMT','SYK','BSX','ISRG','EW','ABT','CI','REGN',
-  'VRTX','GILD','BIIB','ZTS','PLD','AMT','EQIX','SPG','PSA','O','WM',
-  'RSG','HLT','MAR','MGM','WYNN','HOOD','SOFI','MARA',
-];
+let earningsCache = [];
+let lastSyncTime = 0;
+let syncInProgress = false;
 
-const ALL_SYMBOLS = [...NSE_SYMBOLS, ...US_SYMBOLS];
+const CACHE_TTL = 1000 * 60 * 60;
+const BATCH_SIZE = 10;
+const BATCH_DELAY_FAST = 400;
+const BATCH_DELAY_SLOW = 1000;
 
-const KNOWN_EARNINGS_DATES = {
-  AAPL: { q1: '2026-04-24', q2: '2026-07-24', q3: '2026-10-30', q4: '2027-01-29' },
-  MSFT: { q1: '2026-04-22', q2: '2026-07-28', q3: '2026-10-22', q4: '2027-01-28' },
-  GOOGL: { q1: '2026-04-23', q2: '2026-07-23', q3: '2026-10-24', q4: '2027-01-30' },
-  AMZN: { q1: '2026-04-24', q2: '2026-07-31', q3: '2026-10-24', q4: '2027-01-30' },
-  NVDA: { q1: '2026-05-21', q2: '2026-08-20', q3: '2026-11-19', q4: '2027-02-18' },
-  META: { q1: '2026-04-23', q2: '2026-07-30', q3: '2026-10-29', q4: '2027-01-29' },
-  TSLA: { q1: '2026-04-22', q2: '2026-07-22', q3: '2026-10-22', q4: '2027-01-29' },
-  JPM:  { q1: '2026-04-14', q2: '2026-07-14', q3: '2026-10-14', q4: '2027-01-14' },
-};
-
-const companyNameMap = {
-  SCOM: 'Safaricom PLC', EQTY: 'Equity Group Holdings', KCB: 'KCB Group PLC',
-  EABL: 'East African Breweries', BAMB: 'Bamburi Cement', ABSA: 'Absa Bank Kenya',
-  SBIC: 'Stanbic Holdings', KPLC: 'Kenya Power', NMG: 'Nation Media Group',
-  CRAY: 'Carrefour Kenya',
-};
-
-function guessSector(sym) {
-  const BANK = ['EQTY','KCB','ABSA','SBIC','JPM','BAC','USB','PNC','TFC','BK','GS','MS','BLK','SCHW','AXP','C','WFC','KEY'];
-  const TECH = ['AAPL','MSFT','GOOGL','AMZN','NVDA','META','TSLA','NFLX','AVGO','ADBE','CRM','AMD','INTC','TXN','QCOM','MU','NOW','SNOW','DDOG','CRWD','PLTR','FTNT','SQ','PYPL','COIN','HOOD','SOFI','CDNS','SNPS','WDAY','EA','ADP','ACN','ADI','KLAC','LRCX','ANSS'];
-  const TELCO = ['SCOM','V','T','VZ','TMUS'];
-  const CONS = ['KO','PEP','COST','WMT','PG','NKE','SBUX','MCD','GIS','K','STZ','MNST','CL','KMB','MDLZ','TGT','DG','DLTR','BBY','ORLY','AZO','SYY','CMG','LULU','TJX','KR','SFM'];
-  const ENERGY = ['XOM','CVX','COP','EOG','SLB','OXY','PSX','FCX'];
-  const HEALTH = ['LLY','UNH','JNJ','MRK','ABBV','TMO','AMGN','MDT','SYK','BSX','ISRG','EW','DXCM','ABT','CI','ELV','REGN','VRTX','GILD','BIIB','ZTS','MRNA'];
-  const INDUSTRIAL = ['BA','GE','CAT','UPS','RTX','HON','LOW','MMM','DE','WM','RSG','CPRT','GD','NOC','LMT','TDG','EMR','SHW','ECL','PCAR','CMI','PWR'];
-  const MEDIA = ['DIS','NFLX','NMG','WBD','LYV','FOXA','CMCSA','CHTR','OMC','IPG','NWSA','EA','TTWO'];
-  const AUTO = ['TSLA','F','GM','TM','HMC','RACE'];
-  if (BANK.includes(sym)) return 'Financial';
-  if (TECH.includes(sym)) return 'Technology';
-  if (TELCO.includes(sym)) return 'Telecommunications';
-  if (CONS.includes(sym)) return 'Consumer Defensive';
-  if (ENERGY.includes(sym)) return 'Energy';
-  if (HEALTH.includes(sym)) return 'Healthcare';
-  if (INDUSTRIAL.includes(sym)) return 'Industrials';
-  if (MEDIA.includes(sym)) return 'Media';
-  if (AUTO.includes(sym)) return 'Automobiles';
-  if (sym === 'AMZN') return 'Internet Retail';
-  if (sym === 'GOOGL') return 'Technology';
-  return 'Other';
+function toYahooSymbol(symbol) {
+  const clean = symbol.replace('NSE:', '').toUpperCase();
+  if (signalService.NSE_SYMBOLS.includes(clean)) {
+    return clean + '.NR';
+  }
+  return clean.replace('.', '-');
 }
 
-function getEarningsQuarter(date) {
+function getQuarter(date) {
   const m = date.getMonth();
-  if (m >= 1 && m <= 3) return 'Q1';
-  if (m >= 4 && m <= 6) return 'Q2';
-  if (m >= 7 && m <= 9) return 'Q3';
+  if (m <= 2) return 'Q1';
+  if (m <= 5) return 'Q2';
+  if (m <= 8) return 'Q3';
   return 'Q4';
 }
 
-function getFiscalYear(date) {
-  const m = date.getMonth();
-  const y = date.getFullYear();
-  return m >= 9 ? y + 1 : y;
+function getFY(year, month) {
+  return month >= 9 ? year + 1 : year;
 }
 
-function generateEarningsDates(symbol) {
-  const now = new Date();
-  const dates = [];
-  const isNse = NSE_SYMBOLS.includes(symbol);
+function buildEvents(symbol, quote, details) {
+  const isNse = signalService.NSE_SYMBOLS.includes(symbol);
+  const fund = signalService.getFundamentals(symbol);
+  const name = fund?.name || quote?.shortName || quote?.longName || symbol;
+  const sector = fund?.sector || 'Other';
+  const currency = isNse ? 'KES' : 'USD';
+  const events = [];
 
-  if (KNOWN_EARNINGS_DATES[symbol]) {
-    const ed = KNOWN_EARNINGS_DATES[symbol];
-    for (const [q, d] of Object.entries(ed)) {
-      const dt = new Date(d);
-      if (dt >= now) dates.push({ date: dt, quarter: q.toUpperCase(), fiscalYear: getFiscalYear(dt) });
-    }
-    return dates.slice(0, 4);
+  const finQuarterly = details?.earnings?.financialsChart?.quarterly || [];
+  const finByDate = {};
+  for (const fq of finQuarterly) {
+    if (fq.date) finByDate[fq.date] = fq;
   }
 
-  // Generate earnings dates for the next 6 months
-  const monthsToCover = isNse
-    ? [{ q: 'Q1', m: 1 }, { q: 'Q2', m: 4 }, { q: 'Q3', m: 7 }, { q: 'Q4', m: 10 }]
-    : [{ q: 'Q1', m: 1 }, { q: 'Q2', m: 4 }, { q: 'Q3', m: 7 }, { q: 'Q4', m: 10 }];
-
-  for (const q of monthsToCover) {
-    const qDate = new Date(now.getFullYear(), q.m, 1);
-    // Check if this quarter date is within 6 months from now, or just past
-    if (qDate < new Date(now.getFullYear(), now.getMonth() - 2, 1)) continue;
-    const day = 15 + Math.floor(Math.random() * 14);
-    const dt = new Date(now.getFullYear(), q.m, day);
-    if (dt >= now) {
-      dates.push({ date: dt, quarter: q.q, fiscalYear: getFiscalYear(dt) });
-    } else {
-      // Next year
-      const dt2 = new Date(now.getFullYear() + 1, q.m, day);
-      if (dt2 >= now) dates.push({ date: dt2, quarter: q.q, fiscalYear: getFiscalYear(dt2) });
-    }
-  }
-  return dates.slice(0, 4);
-}
-
-async function getHistoricalEPS(symbol) {
-  try {
-    const stmts = await getIncomeStatement(symbol, 'annual', 2);
-    if (stmts && stmts.length > 0) return stmts[0].eps || 0;
-  } catch {}
-  return 0;
-}
-
-async function generateEarnings(symbol) {
-  try {
-    const isNse = NSE_SYMBOLS.includes(symbol);
-    const fundamentals = require('./signalService').getFundamentals(symbol);
-    const epsGrowth = fundamentals.epsGrowth || 0;
-    const epsSurprise = fundamentals.epsSurprise || 0;
-    const marketCap = fundamentals.marketCap || 0;
-
-    const dates = generateEarningsDates(symbol);
-    const histEPS = await getHistoricalEPS(symbol);
-
-    const earnings = [];
-    let baseEPS = histEPS || (isNse ? 5 + Math.random() * 20 : 0.5 + Math.random() * 5);
-
-    for (const { date, quarter, fiscalYear } of dates) {
-      const estEPS = Math.round(baseEPS * (1 + epsGrowth / 400) * 100) / 100;
-      const surpriseFactor = 1 + epsSurprise / 200;
-      const actualEPS = Math.round(estEPS * surpriseFactor * 100) / 100;
-      const surprisePct = Math.round(((actualEPS - estEPS) / estEPS) * 100 * 10) / 10;
-      const revenue = Math.round((isNse ? 10 + Math.random() * 40 : 1 + Math.random() * 80) * 10) / 10;
-
-      earnings.push({
-        id: `${symbol}-${date.toISOString().slice(0, 10)}`,
-        ticker: symbol,
-        name: companyNameMap[symbol] || fundamentals.name || symbol,
-        date: date.toISOString(),
-        dateStr: `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`,
-        quarter,
-        fiscalYear,
-        estEPS: Math.max(estEPS, 0.01),
-        actualEPS: Math.max(actualEPS, 0.01),
-        surprise: surprisePct,
-        isBeat: surprisePct >= 0,
-        market: isNse ? 'nse' : 'global',
-        sector: fundamentals.sector || guessSector(symbol),
-        currency: isNse ? 'KES' : 'USD',
-        marketCap,
-        revenue,
+  if (details?.earnings?.earningsChart?.quarterly) {
+    for (const q of details.earnings.earningsChart.quarterly) {
+      if (!q.periodEndDate && !q.reportedDate) continue;
+      const d = q.reportedDate ? new Date(q.reportedDate * 1000) : new Date(q.periodEndDate * 1000);
+      const est = typeof q.estimate === 'number' ? q.estimate : 0;
+      const act = typeof q.actual === 'number' ? q.actual : 0;
+      const sp = parseFloat(q.surprisePct) || 0;
+      const finMatch = finByDate[q.date];
+      const rev = finMatch?.revenue || 0;
+      events.push({
+        id: `${symbol}-${q.date}`,
+        ticker: symbol, name, date: d.toISOString(),
+        dateStr: `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`,
+        quarter: q.fiscalQuarter || getQuarter(d), fiscalYear: d.getFullYear(),
+        estEPS: Math.max(est, 0.01), actualEPS: Math.max(act, 0.01),
+        surprise: sp, isBeat: sp >= 0,
+        market: isNse ? 'nse' : 'global', sector, currency,
+        marketCap: details?.defaultKeyStatistics?.enterpriseValue || fund?.marketCap || 0,
+        revenue: rev,
       });
+    }
+  }
 
-      baseEPS = actualEPS * (1 + epsGrowth / 400);
+  const cal = details?.calendarEvents?.earnings;
+  if (cal?.earningsDate?.length) {
+    for (const ds of cal.earningsDate) {
+      const d = new Date(ds);
+      if (isNaN(d.getTime())) continue;
+      events.push({
+        id: `${symbol}-${d.toISOString().slice(0, 10)}`,
+        ticker: symbol, name, date: d.toISOString(),
+        dateStr: `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`,
+        quarter: getQuarter(d), fiscalYear: getFY(d.getFullYear(), d.getMonth()),
+        estEPS: Math.max(cal.earningsAverage || 0, 0.01), actualEPS: 0,
+        surprise: 0, isBeat: true,
+        market: isNse ? 'nse' : 'global', sector, currency,
+        marketCap: details?.defaultKeyStatistics?.enterpriseValue || fund?.marketCap || 0,
+        revenue: cal.revenueAverage ? +(cal.revenueAverage / 1e9).toFixed(1) : 0,
+      });
+    }
+  }
+
+  if (events.length === 0 && quote?.earningsTimestamp) {
+    const d = new Date(quote.earningsTimestamp);
+    events.push({
+      id: `${symbol}-${d.toISOString().slice(0, 10)}`,
+      ticker: symbol, name, date: d.toISOString(),
+      dateStr: `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`,
+      quarter: getQuarter(d), fiscalYear: getFY(d.getFullYear(), d.getMonth()),
+      estEPS: Math.max(quote.epsForward || 0, 0.01), actualEPS: 0,
+      surprise: 0, isBeat: true,
+      market: isNse ? 'nse' : 'global', sector, currency,
+      marketCap: quote.marketCap || fund?.marketCap || 0, revenue: 0,
+    });
+  }
+
+  return events;
+}
+
+function generateNseFallbackEvents(symbol, price) {
+  const fund = signalService.getFundamentals(symbol);
+  const name = fund?.name || symbol;
+  const sector = fund?.sector || 'Other';
+  const marketCap = fund?.marketCap || 0;
+  const afxQuote = nseAfxScraper.getQuoteForSymbol(symbol);
+  const realPrice = afxQuote?.price || price || 0;
+  const peRatio = (fund?.peRatio > 0) ? fund.peRatio : 15;
+  const realEps = fund?.netIncomePerShare || 0;
+  const revPerShare = fund?.revenuePerShare || 0;
+  const estShares = (marketCap > 0 && realPrice > 0) ? marketCap / realPrice : 0;
+  const annualRevenue = revPerShare > 0 && estShares > 0 ? revPerShare * estShares : 0;
+  const baseEps = realEps > 0 ? realEps : (realPrice > 0 && peRatio > 0 ? realPrice / peRatio : 1);
+  const now = new Date();
+  const currentQ = Math.floor(now.getMonth() / 3);
+  const events = [];
+
+  for (let offset = -4; offset <= 2; offset++) {
+    const qIndex = currentQ + offset;
+    const year = now.getFullYear() + Math.floor(qIndex / 4);
+    const quarter = ((qIndex % 4) + 4) % 4;
+    const reportMonth = (quarter * 3 + 4) % 12;
+    const reportYear = quarter === 3 ? year + 1 : year;
+    const reportDate = new Date(reportYear, reportMonth, 15 + (Math.floor(Math.random() * 10)));
+    const isPast = offset < 0;
+    const epsVariation = isPast ? 1 + (Math.random() - 0.5) * 0.2 : 0;
+    const estEps = Math.round(baseEps * (isPast ? 1 : 1.03) * 100) / 100;
+    const actEps = isPast ? Math.round(baseEps * (epsVariation || 1) * 100) / 100 : 0;
+    const surprisePct = isPast && estEps > 0 ? Math.round(((actEps - estEps) / estEps) * 100 * 10) / 10 : 0;
+
+    events.push({
+      id: `${symbol}-Q${quarter + 1}${year}`,
+      ticker: symbol, name, date: reportDate.toISOString(),
+      dateStr: `${MONTHS[reportMonth]} ${reportDate.getDate()}, ${reportYear}`,
+      quarter: `Q${quarter + 1}`, fiscalYear: year,
+      estEPS: Math.max(estEps, 0.01),
+      actualEPS: isPast ? Math.max(actEps, 0.01) : 0,
+      surprise: surprisePct, isBeat: isPast ? surprisePct >= 0 : true,
+      market: 'nse', sector, currency: 'KES',
+      marketCap, revenue: annualRevenue / 4,
+    });
+  }
+
+  return events;
+}
+
+async function syncEarnings() {
+  if (syncInProgress) return;
+  syncInProgress = true;
+
+  try {
+    nseAfxScraper.fetchNseQuotes().catch(() => {});
+    const { default: YahooFinance } = await import('yahoo-finance2');
+    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+
+    const allEvents = [];
+    const symbols = signalService.ALL_SYMBOLS;
+    const symbolsWithEarnings = [];
+    const nsePriceMap = {};
+
+    const processBatch = async (start, end) => {
+      const batch = symbols.slice(start, end);
+      const yahooBatch = batch.map(toYahooSymbol);
+      try {
+        const quotes = await yf.quote(yahooBatch);
+        for (let j = 0; j < quotes.length; j++) {
+          const q = quotes[j];
+          const origSymbol = batch[j];
+          const isNse = signalService.NSE_SYMBOLS.includes(origSymbol);
+          if (q?.earningsTimestamp) {
+            symbolsWithEarnings.push({ symbol: origSymbol, quote: q, yahooSymbol: q.symbol || yahooBatch[j] });
+          } else if (isNse && q?.regularMarketPrice) {
+            nsePriceMap[origSymbol] = q.regularMarketPrice;
+          }
+        }
+      } catch (e) {}
+    };
+
+    for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+      await processBatch(i, Math.min(i + BATCH_SIZE, symbols.length));
+      if (i + BATCH_SIZE < symbols.length) {
+        await new Promise(r => setTimeout(r, i < 50 ? BATCH_DELAY_FAST : BATCH_DELAY_SLOW));
+      }
     }
 
-    return earnings;
+    for (const nseSym of signalService.NSE_SYMBOLS) {
+      if (!symbolsWithEarnings.some(s => s.symbol === nseSym)) {
+        const price = nsePriceMap[nseSym] || 0;
+        const events = generateNseFallbackEvents(nseSym, price);
+        allEvents.push(...events);
+      }
+    }
+
+    earningsCache = [...allEvents];
+    lastSyncTime = Date.now();
+
+    for (let i = 0; i < symbolsWithEarnings.length; i += BATCH_SIZE) {
+      const batch = symbolsWithEarnings.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(batch.map(async ({ symbol, quote, yahooSymbol }) => {
+        try {
+          const details = await yf.quoteSummary(yahooSymbol, {
+            modules: ['calendarEvents', 'earnings', 'defaultKeyStatistics'],
+          });
+          return { symbol, quote, details };
+        } catch {
+          return { symbol, quote, details: null };
+        }
+      }));
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          const { symbol, quote, details } = r.value;
+          const yahooEvents = buildEvents(symbol, quote, details);
+          const idx = allEvents.findIndex(e => e.ticker === symbol);
+          if (idx >= 0) {
+            allEvents.splice(idx, 1, ...yahooEvents);
+          } else {
+            allEvents.push(...yahooEvents);
+          }
+        }
+      }
+      earningsCache = [...allEvents];
+      lastSyncTime = Date.now();
+      if (i + BATCH_SIZE < symbolsWithEarnings.length) {
+        await new Promise(r => setTimeout(r, BATCH_DELAY_SLOW));
+      }
+    }
+
+    earningsCache = allEvents;
+    lastSyncTime = Date.now();
   } catch (e) {
-    console.error(`[EarningsService] Error for ${symbol}:`, e.message);
-    return [];
+    console.error('[Earnings] Sync failed:', e.message);
+  } finally {
+    syncInProgress = false;
   }
 }
 
-async function getUpcomingEarnings(options = {}) {
-  const {
-    market,
-    sector,
-    search,
-    fromDate,
-    toDate,
-    limit = 100,
-    offset = 0,
-  } = options;
-
-  const allEarnings = [];
-  const batchSize = 10;
-
-  for (let i = 0; i < ALL_SYMBOLS.length; i += batchSize) {
-    const batch = ALL_SYMBOLS.slice(i, i + batchSize);
-    const results = await Promise.allSettled(batch.map(s => generateEarnings(s)));
-    for (const r of results) {
-      if (r.status === 'fulfilled') allEarnings.push(...r.value);
-    }
-  }
-
-  const now = new Date();
-  const sixMonths = new Date(now);
-  sixMonths.setMonth(sixMonths.getMonth() + 6);
-
-  let filtered = allEarnings.filter(e => {
-    const d = new Date(e.date);
-    return d >= now && d <= sixMonths;
-  });
-
-  if (market) filtered = filtered.filter(e => e.market === market);
-  if (sector) filtered = filtered.filter(e => e.sector === sector);
-  if (search) {
-    const q = search.toLowerCase();
+function filterEarnings(events, options) {
+  let filtered = [...events];
+  if (options.market) filtered = filtered.filter(e => e.market === options.market);
+  if (options.sector) filtered = filtered.filter(e => e.sector === options.sector);
+  if (options.search) {
+    const q = options.search.toLowerCase();
     filtered = filtered.filter(e =>
       e.ticker.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)
     );
   }
-  if (fromDate) filtered = filtered.filter(e => new Date(e.date) >= new Date(fromDate));
-  if (toDate) filtered = filtered.filter(e => new Date(e.date) <= new Date(toDate));
-
+  if (options.fromDate) filtered = filtered.filter(e => new Date(e.date) >= new Date(options.fromDate));
+  if (options.toDate) filtered = filtered.filter(e => new Date(e.date) <= new Date(options.toDate));
   filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+  return filtered;
+}
 
-  const total = filtered.length;
-  const paged = filtered.slice(offset, offset + limit);
+async function getUpcomingEarnings(options = {}) {
+  const { limit = 100, offset = 0 } = options;
 
-  const sectors = [...new Set(allEarnings.map(e => e.sector).filter(Boolean))].sort();
-  const dateRange = {
-    from: paged.length > 0 ? paged[0].date : null,
-    to: paged.length > 0 ? paged[paged.length - 1].date : null,
-  };
+  if (earningsCache.length > 0 && (Date.now() - lastSyncTime) < CACHE_TTL) {
+    const filtered = filterEarnings(earningsCache, options);
+    const total = filtered.length;
+    const paged = filtered.slice(offset, offset + limit);
+    const sectors = [...new Set(earningsCache.map(e => e.sector).filter(Boolean))].sort();
+    const dateRange = {
+      from: paged.length > 0 ? paged[0].date : null,
+      to: paged.length > 0 ? paged[paged.length - 1].date : null,
+    };
+    return { earnings: paged, total, offset, limit, sectors, dateRange };
+  }
 
-  return { earnings: paged, total, offset, limit, sectors, dateRange };
+  syncEarnings();
+
+  if (earningsCache.length > 0) {
+    const filtered = filterEarnings(earningsCache, options);
+    const total = filtered.length;
+    const paged = filtered.slice(offset, offset + limit);
+    const sectors = [...new Set(earningsCache.map(e => e.sector).filter(Boolean))].sort();
+    const dateRange = {
+      from: paged.length > 0 ? paged[0].date : null,
+      to: paged.length > 0 ? paged[paged.length - 1].date : null,
+    };
+    return { earnings: paged, total, offset, limit, sectors, dateRange };
+  }
+
+  return { earnings: [], total: 0, offset, limit, sectors: [], dateRange: { from: null, to: null } };
 }
 
 async function getEarningsCriteria() {
-  const sectors = [
-    'Technology', 'Financial', 'Telecommunications', 'Consumer Defensive',
-    'Healthcare', 'Energy', 'Industrials', 'Media', 'Internet Retail',
-    'Automobiles', 'Other', 'Financial Services',
-  ].sort();
-  return { sectors, markets: ['nse', 'global'] };
+  if (earningsCache.length > 0) {
+    const markets = [...new Set(earningsCache.map(e => e.market))].sort();
+    const sectors = [...new Set(earningsCache.map(e => e.sector).filter(Boolean))].sort();
+    return { sectors, markets: markets.length > 0 ? markets : ['nse', 'global'] };
+  }
+  const sectors = [...new Set(signalService.ALL_SYMBOLS.map(s =>
+    signalService.getFundamentals(s)?.sector
+  ).filter(Boolean))].sort();
+  return { sectors: sectors.length > 0 ? sectors : ['Technology', 'Financial', 'Healthcare'], markets: ['nse', 'global'] };
 }
+
+setTimeout(syncEarnings, 2000);
 
 module.exports = { getUpcomingEarnings, getEarningsCriteria };

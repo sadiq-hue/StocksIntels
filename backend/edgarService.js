@@ -1,9 +1,20 @@
-const { generic } = require('./apiClient');
 require('dotenv').config();
+const axios = require('axios');
 
 const SEC_EDGAR_API_KEY = process.env.SEC_EDGAR_API_KEY || '';
 const SEC_BASE_URL = 'https://data.sec.gov';
 const USER_AGENT = 'StocksIntels/1.0 (contact@stockintel.app)';
+
+// Direct axios instance for SEC EDGAR (bypasses generic client to avoid Bottleneck issues)
+const edgarClient = axios.create({ timeout: 30000 });
+edgarClient.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    const status = err?.response?.status;
+    console.error(`[EDGAR] ${err.config?.url?.substring(0, 80)} → ${status ? `HTTP ${status}` : err.code}`);
+    return Promise.reject(err);
+  }
+);
 
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 const cache = new Map();
@@ -146,17 +157,32 @@ async function fetchCompanyFacts(cik) {
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  try {
-    const url = `${SEC_BASE_URL}/api/xbrl/companyfacts/CIK${padCik(cik)}.json`;
-    const res = await generic.get(url, {
-      headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' },
-      timeout: 15000,
-    });
-    return cacheSet(cacheKey, res.data);
-  } catch (err) {
-    console.error(`[EDGAR] Error fetching company facts for CIK ${cik}:`, err.message);
-    return null;
+  const url = `${SEC_BASE_URL}/api/xbrl/companyfacts/CIK${padCik(cik)}.json`;
+  console.log(`[EDGAR] Fetching company facts for CIK ${cik}...`);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await edgarClient.get(url, {
+        headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' },
+      });
+      const facts = res.data?.facts?.['us-gaap'];
+      const tagCount = facts ? Object.keys(facts).length : 0;
+      const revenueTag = 'us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax';
+      console.log(`[EDGAR] Company facts for CIK ${cik}: ${tagCount} tags, revenue=${facts ? !!facts[revenueTag] : 'no data'}`);
+      if (tagCount > 0) console.log(`[EDGAR] Sample tags: ${Object.keys(facts).slice(0, 3).join(', ')}...`);
+      return cacheSet(cacheKey, res.data);
+    } catch (err) {
+      const status = err?.response?.status;
+      const statusText = status ? `HTTP ${status}` : err.code;
+      console.warn(`[EDGAR] Attempt ${attempt + 1}/3 for CIK ${cik}: ${statusText}`);
+      if (attempt < 2) {
+        const delay = 2000 * Math.pow(2, attempt) + Math.random() * 1000;
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        console.error(`[EDGAR] Failed to fetch company facts for CIK ${cik} after 3 attempts`);
+      }
+    }
   }
+  return null;
 }
 
 async function fetchSubmissions(cik) {
@@ -164,17 +190,25 @@ async function fetchSubmissions(cik) {
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  try {
-    const url = `${SEC_BASE_URL}/submissions/CIK${padCik(cik)}.json`;
-    const res = await generic.get(url, {
-      headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' },
-      timeout: 15000,
-    });
-    return cacheSet(cacheKey, res.data);
-  } catch (err) {
-    console.error(`[EDGAR] Error fetching submissions for CIK ${cik}:`, err.message);
-    return null;
+  const url = `${SEC_BASE_URL}/submissions/CIK${padCik(cik)}.json`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await edgarClient.get(url, {
+        headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' },
+      });
+      return cacheSet(cacheKey, res.data);
+    } catch (err) {
+      const status = err?.response?.status;
+      if (attempt < 2) {
+        const delay = 2000 * Math.pow(2, attempt) + Math.random() * 1000;
+        console.warn(`[EDGAR] Retrying submissions for CIK ${cik} (attempt ${attempt + 2}/3): ${status ? `HTTP ${status}` : err.code}`);
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        console.error(`[EDGAR] Error fetching submissions for CIK ${cik} after 3 attempts: ${status ? `HTTP ${status}` : err.code}`);
+      }
+    }
   }
+  return null;
 }
 
 function cikLookup(ticker) {
@@ -357,18 +391,35 @@ async function getCompanyProfileFromEdgar(symbol) {
     const submissions = await fetchSubmissions(cik);
     if (!submissions) return null;
 
+    const sicDesc = submissions.sicDescription || '';
+    const exchange = submissions.exchange || 'NASDAQ';
+    let sector = 'N/A';
+    const industry = submissions.description || submissions.industry || sicDesc || 'N/A';
+    if (/TECHNOLOGY|SOFTWARE|SEMICONDUCTOR|COMPUTER|ELECTRONIC/i.test(sicDesc)) sector = 'Technology';
+    else if (/BANK|FINANCIAL|INSURANCE|INVESTMENT/i.test(sicDesc)) sector = 'Financial Services';
+    else if (/HEALTH|PHARMA|BIOTECH|MEDICAL/i.test(sicDesc)) sector = 'Healthcare';
+    else if (/RETAIL|WHOLESALE|CONSUMER|APPAREL/i.test(sicDesc)) sector = 'Consumer Cyclical';
+    else if (/ENERGY|OIL|GAS|UTILITY/i.test(sicDesc)) sector = 'Energy';
+    else if (/INDUSTRIAL|MANUFACTURING|MACHINERY/i.test(sicDesc)) sector = 'Industrials';
+    else if (/REAL|ESTATE|PROPERTY/i.test(sicDesc)) sector = 'Real Estate';
+    else if (/TELECOMMUNICATION|MEDIA|ENTERTAINMENT/i.test(sicDesc)) sector = 'Communication Services';
+    else if (/FOOD|BEVERAGE|AGRICULTURE/i.test(sicDesc)) sector = 'Consumer Defensive';
+    else if (/TRANSPORT|LOGISTICS|AIRLINE/i.test(sicDesc)) sector = 'Transportation';
+    else if (/EDUCATION|TRAINING/i.test(sicDesc)) sector = 'Education';
+    else if (/BIOTECH|PHARMACEUTICAL/i.test(sicDesc)) sector = 'Healthcare';
+
     const profile = {
       symbol,
       companyName: submissions.name || symbol,
-      industry: submissions.description || submissions.industry || 'N/A',
-      sector: 'N/A',
-      country: 'USA',
+      industry,
+      sector,
+      country: submissions.address?.state ? 'USA' : 'USA',
       website: submissions.website || submissions.address?.state || '',
-      description: submissions.description || '',
-      ceo: submissions.officers?.[0]?.name || 'N/A',
-      employees: submissions?.sicDescription?.includes('SERVICES') ? 1000 : 0,
+      description: submissions.description || sicDesc || '',
+      ceo: submissions.officers?.[0]?.name || '',
+      employees: submissions.employees || 0,
       marketCap: 0,
-      exchange: submissions.exchange || 'NASDAQ/NYSE',
+      exchange: exchange.includes('NASDAQ') ? 'NASDAQ' : exchange.includes('NYSE') ? 'NYSE' : exchange || 'NASDAQ/NYSE',
       currency: 'USD',
       cik: Number(cik),
       image: '',

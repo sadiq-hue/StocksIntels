@@ -1,0 +1,17 @@
+﻿Γùç injected env (25) from .env // tip: Γîÿ override existing { override: true }
+≡ƒô░ News Service Loaded
+Γùç injected env (0) from .env // tip: Γùê encrypted .env [www.dotenvx.com]
+Γùç injected env (0) from .env // tip: Γîÿ suppress logs { quiet: true }
+Γùç injected env (0) from .env // tip: Γîÿ multiple files { path: ['.env.local', '.env'] }
+≡ƒôè Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
+Stocks table already contains data, skipping seed
+Database schema verified
+Backend server running at http://localhost:3001
+[QueueService] Connected to Redis
+[SignalPublisher] Starting background worker (interval: 30000ms)
+[SignalPublisher] Markets closed (weekend/holiday), skipping cycle
+Redis pub/sub and signal publisher initialized
+[CRON] Daily portfolio report scheduled Mon-Fri at midnight UTC
+[SENTIMENT CRON] Daily sentiment email scheduled Mon-Fri at 16:00 UTC
+[SUBSCRIPTION CRON] Expiry check scheduled every hour
+[QueueService] Subscribed to signal:updates

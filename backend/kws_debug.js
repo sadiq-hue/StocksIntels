@@ -1,0 +1,30 @@
+const cheerio = require('cheerio');
+const axios = require('axios');
+(async()=>{
+  const r = await axios.get('https://kenyanwallstreet.com/', {timeout:15000, headers:{'User-Agent':'Mozilla/5.0'}});
+  const $ = cheerio.load(r.data);
+  var i = 0;
+  $('a[href]').each(function() {
+    var href = $(this).attr('href');
+    if (!href || !href.match(/^\/[a-z0-9-]+$/)) return;
+    var img = $(this).find('img[alt]').first();
+    var title = img.attr('alt');
+    if (!title || title.length < 10) return;
+    var tsSpan = $(this).find('.text-muted-background').first();
+    var raw = tsSpan.text().trim();
+    var timeEl = $(this).find('time').first();
+    var timeAttr = timeEl.attr('datetime') || '';
+    var timeText = timeEl.text().trim();
+    var hasTime = $(this).find('time').length;
+    var excerpt = $(this).text().trim().substring(0, 120);
+    var allClasses = $(this).find('*').map(function() { return $(this).attr('class'); }).get().filter(Boolean).slice(0,5).join(', ');
+    console.log('Title:', title.substring(0,60));
+    console.log('  href:', href);
+    console.log('  rawTimestamp:', JSON.stringify(raw));
+    console.log('  time[datetime]:', JSON.stringify(timeAttr));
+    console.log('  time text:', JSON.stringify(timeText));
+    console.log('  has <time>:', hasTime);
+    console.log('  excerpt:', excerpt);
+    if (++i > 5) return false;
+  });
+})();

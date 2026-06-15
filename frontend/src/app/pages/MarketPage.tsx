@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
   Search, RefreshCcw, Loader2, Globe, Landmark, Settings, X, Mail,
   TrendingUp, TrendingDown, ArrowUpDown, Star, Newspaper, BrainCircuit,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, ExternalLink,
 } from 'lucide-react';
 import { Link, useSearchParams, useNavigate } from 'react-router';
 import { Card } from '../components/ui/card';
@@ -13,7 +13,9 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { kenyanStocks, globalStocks } from '../data/stockUniverses';
 import { useStockData } from '../contexts/StockDataContext';
+import { useRealtimeQuotes } from '../contexts/RealtimeQuotesContext';
 import { fetchAllNews, type NewsArticle } from '../services/newsService';
+import { useAuth } from '../auth/AuthContext';
 
 function formatCompactNumber(value: number) {
   if (!Number.isFinite(value) || value === 0) return "0";
@@ -42,7 +44,7 @@ function toApiFormat(stocks: typeof kenyanStocks, prefixNse = false) {
     symbol: prefixNse ? `NSE:${s.ticker}` : s.ticker,
     company_name: s.name,
     price: s.price,
-    changePercent: s.change,
+    changePercent: 0,
     volume: parseVolume(s.volume),
     currency: s.currency || "KES",
     market_cap: s.marketCap,
@@ -58,23 +60,25 @@ const localGlobalStocks = toApiFormat(globalStocks, false);
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 const MarketPage: React.FC = () => {
-  const { nseStocks: ctxNse, globalStocks: ctxGlobal, allStocks, loading: ctxLoading, refresh: refreshCtx } = useStockData();
+  const { nseStocks: ctxNse, globalStocks: ctxGlobal, allStocks, loading: ctxLoading, refresh: refreshCtx, getRealtimeQuote } = useStockData();
+  const { getQuote } = useRealtimeQuotes();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [showSettings, setShowSettings] = useState(false);
   const [emailAlerts, setEmailAlerts] = useState(() => {
     return localStorage.getItem('market_sentiment_emails') === 'true';
   });
+  const [sentimentPrefLoaded, setSentimentPrefLoaded] = useState(false);
   const [marketData, setMarketData] = useState<{
-    nse: { active: any[], movers: any },
-    global: { active: any[], movers: any },
+    movers: { nse: any, global: any },
     indices: any[]
   }>({
-    nse: { active: localNseStocks, movers: { gainers: [], losers: [] } },
-    global: { active: localGlobalStocks, movers: { gainers: [], losers: [] } },
+    movers: { nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] } },
     indices: [],
   });
   const [fetchingMovers, setFetchingMovers] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [nseSearch, setNseSearch] = useState("");
   const [globalSearch, setGlobalSearch] = useState("");
@@ -85,12 +89,67 @@ const MarketPage: React.FC = () => {
   const itemsPerPage = 20;
 
   const [favorites, setFavorites] = useState<string[]>([]);
+
+  // Yahoo Finance search fallback
+  const [nseYahooResults, setNseYahooResults] = useState<any[]>([]);
+  const [globalYahooResults, setGlobalYahooResults] = useState<any[]>([]);
+  const [nseYahooSearching, setNseYahooSearching] = useState(false);
+  const [globalYahooSearching, setGlobalYahooSearching] = useState(false);
+  const nseYahooRef = useRef<ReturnType<typeof setTimeout>>();
+  const globalYahooRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const searchYahooNse = useCallback(async (query: string) => {
+    if (query.length < 1) { setNseYahooResults([]); return; }
+    setNseYahooSearching(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/stocks/search/yahoo?q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setNseYahooResults((data || []).slice(0, 8).map((r: any) => ({
+          symbol: r.symbol, company_name: r.name, exchange: r.exchange,
+          quoteType: r.quoteType, price: null, changePercent: null,
+          volume: null, provider: 'yahoo-search', currency: 'USD',
+        })));
+      }
+    } catch { /* ignore */ }
+    setNseYahooSearching(false);
+  }, []);
+
+  const searchYahooGlobal = useCallback(async (query: string) => {
+    if (query.length < 1) { setGlobalYahooResults([]); return; }
+    setGlobalYahooSearching(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/stocks/search/yahoo?q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setGlobalYahooResults((data || []).slice(0, 8).map((r: any) => ({
+          symbol: r.symbol, company_name: r.name, exchange: r.exchange,
+          quoteType: r.quoteType, price: null, changePercent: null,
+          volume: null, provider: 'yahoo-search', currency: 'USD',
+        })));
+      }
+    } catch { /* ignore */ }
+    setGlobalYahooSearching(false);
+  }, []);
+
+
   const [aiSummary, setAiSummary] = useState<{ summary: string; sentiment: string; confidence: string } | null>(null);
+  const [marketStatus, setMarketStatus] = useState<{ nse: { open: boolean; label: string; closeTime: string; eventLabel: string; timeToClose: number | null; timeToOpen: number | null }; global: { open: boolean; label: string; closeTime: string; eventLabel: string; timeToClose: number | null; timeToOpen: number | null } } | null>(null);
 
   const [marketNews, setMarketNews] = useState<NewsArticle[]>([]);
+  const newsFetched = useRef(false);
+
+  // Real-time turnover from API (Yahoo real volumes for global, seeded for NSE)
+  const [turnoverData, setTurnoverData] = useState<{
+    nse: { turnover: number; volume: number; count: number };
+    global: { turnover: number; volume: number; count: number };
+  } | null>(null);
 
   useEffect(() => {
-    fetchAllNews().then(articles => setMarketNews(articles));
+    if (!newsFetched.current) {
+      newsFetched.current = true;
+      setTimeout(() => fetchAllNews().then(articles => setMarketNews(articles)), 0);
+    }
   }, []);
 
   useEffect(() => {
@@ -99,58 +158,86 @@ const MarketPage: React.FC = () => {
     }
   }, [searchParams]);
 
+  // Load sentiment preference from backend on mount (if logged in)
+  useEffect(() => {
+    if (user?.id && !sentimentPrefLoaded) {
+      fetch(`${API_BASE_URL}/user/sentiment-preference?userId=${user.id}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.optedIn !== undefined) {
+            setEmailAlerts(data.optedIn);
+            localStorage.setItem('market_sentiment_emails', String(data.optedIn));
+          }
+          setSentimentPrefLoaded(true);
+        })
+        .catch(() => setSentimentPrefLoaded(true));
+    } else if (!user?.id) {
+      setSentimentPrefLoaded(true);
+    }
+  }, [user, sentimentPrefLoaded]);
+
+  // Sync to localStorage + backend on change
   useEffect(() => {
     localStorage.setItem('market_sentiment_emails', String(emailAlerts));
-  }, [emailAlerts]);
-
-  // Merge context stocks into market data whenever they change (shared with StocksPage)
-  useEffect(() => {
-    if (allStocks.length === 0) return;
-    const apiNseStocks = allStocks.filter(s => s.symbol?.startsWith('NSE:'));
-    const apiGlobalStocks = allStocks.filter(s => !s.symbol?.startsWith('NSE:'));
-    const apiNseMap = new Map(apiNseStocks.map(s => [s.symbol, s]));
-    const apiGlobalMap = new Map(apiGlobalStocks.map(s => [s.symbol, s]));
-
-    const mergedNse = localNseStocks.map(local => {
-      const api = apiNseMap.get(local.symbol);
-      return api ? { ...local, ...api } : local;
-    });
-    const mergedGlobal = localGlobalStocks.map(local => {
-      const api = apiGlobalMap.get(local.symbol);
-      return api ? { ...local, ...api } : local;
-    });
-
-    const localNseSymbols = new Set(localNseStocks.map(s => s.symbol));
-    const localGlobalSymbols = new Set(localGlobalStocks.map(s => s.symbol));
-    for (const s of apiNseStocks) {
-      if (!localNseSymbols.has(s.symbol)) mergedNse.push(s);
+    if (user?.id && sentimentPrefLoaded) {
+      fetch(`${API_BASE_URL}/user/sentiment-preference`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, optedIn: emailAlerts }),
+      }).catch(() => {});
     }
-    for (const s of apiGlobalStocks) {
-      if (!localGlobalSymbols.has(s.symbol)) mergedGlobal.push(s);
-    }
+  }, [emailAlerts, user, sentimentPrefLoaded]);
 
-    setMarketData(prev => ({
-      ...prev,
-      nse: { ...prev.nse, active: mergedNse },
-      global: { ...prev.global, active: mergedGlobal },
-    }));
-  }, [allStocks]);
+  // Build displayed stocks: start from hardcoded stockUniverses.ts (full coverage),
+  // then overlay realtime quotes from the context (live AFX/Yahoo data).
+  // Never show synthetic data — only overlay when provider is genuinely live.
+  const nseStocksDisplay = useMemo(() => {
+    return localNseStocks.map(local => {
+      const live = getQuote(local.symbol);
+      if (live && live.provider !== 'synthetic') {
+        return { ...local, price: live.price ?? local.price, changePercent: live.changePercent ?? local.changePercent, volume: live.volume ?? local.volume, provider: live.provider };
+      }
+      return { ...local, price: null, changePercent: null, volume: null, provider: 'pending' };
+    });
+  }, [localNseStocks, getQuote]);
 
-  const fetchMoversAndIndices = async () => {
+  const globalStocksDisplay = useMemo(() => {
+    return localGlobalStocks.map(local => {
+      const live = getQuote(local.symbol);
+      if (live && live.provider !== 'synthetic') {
+        return { ...local, price: live.price ?? local.price, changePercent: live.changePercent ?? local.changePercent, volume: live.volume ?? local.volume, provider: live.provider };
+      }
+      return { ...local, price: null, changePercent: null, volume: null, provider: 'pending' };
+    });
+  }, [localGlobalStocks, getQuote]);
+
+  const fetchMarketData = async () => {
     setFetchingMovers(true);
     try {
       const [moversRes, indicesRes] = await Promise.all([
         fetch(`${API_BASE_URL}/market/movers`),
         fetch(`${API_BASE_URL}/market/indices`),
       ]);
-      const movers = await moversRes.json();
-      const indices = await indicesRes.json();
-      setMarketData(prev => ({
-        ...prev,
-        nse: { ...prev.nse, movers: movers.nse || { gainers: [], losers: [] } },
-        global: { ...prev.global, movers: movers.global || { gainers: [], losers: [] } },
-        indices: indices || [],
+      const [movers, indices] = await Promise.all([
+        moversRes.json().catch(() => ({ nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] } })),
+        indicesRes.json().catch(() => []),
+      ]);
+      const normalize = (items) => (items || []).map(s => ({
+        symbol: s.symbol,
+        ticker: s.ticker,
+        name: s.name,
+        price: s.price,
+        changePercent: parseFloat(String(s.change || '0').replace('%', '')),
+        volume: s.volume,
+        isPositive: s.isPositive,
+        currency: s.currency,
       }));
+      const nseMovers = movers.nse ? { gainers: normalize(movers.nse.gainers), losers: normalize(movers.nse.losers) } : { gainers: [], losers: [] };
+      const globalMovers = movers.global ? { gainers: normalize(movers.global.gainers), losers: normalize(movers.global.losers) } : { gainers: [], losers: [] };
+      setMarketData({
+        movers: { nse: nseMovers, global: globalMovers },
+        indices: indices || [],
+      });
     } catch (err) {
       console.error("API fetch failed, using local stock data", err);
     } finally {
@@ -160,40 +247,60 @@ const MarketPage: React.FC = () => {
 
   const loading = ctxLoading && allStocks.length === 0;
 
+  const fetchMarketStatus = useCallback(() => {
+    fetch(`${API_BASE_URL}/market/status`)
+      .then(r => r.json())
+      .then(setMarketStatus)
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
-    fetchMoversAndIndices();
-    fetch(`${API_BASE_URL}/ai/market-summary`)
+    fetchMarketData();
+    fetchMarketStatus();
+    fetch(`${API_BASE_URL}/market/turnover`).then(r => r.json()).then(setTurnoverData).catch(() => {});
+    const userId = user?.id;
+    const aiUrl = userId ? `${API_BASE_URL}/ai/market-summary?userId=${userId}` : `${API_BASE_URL}/ai/market-summary`;
+    fetch(aiUrl)
       .then(r => r.json())
       .then(setAiSummary)
       .catch(() => {});
   }, []);
 
+  // Periodic refresh of market status and turnover every 60s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchMarketStatus();
+      fetch(`${API_BASE_URL}/market/turnover`).then(r => r.json()).then(setTurnoverData).catch(() => {});
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [fetchMarketStatus]);
+
+
+
   const indicesToDisplay = useMemo(() => {
     if (marketData.indices?.length) return marketData.indices;
-    return [
-      { symbol: 'NSEASI', name: 'NSE All Share Index', value: '112.45', change: '+1.08%', volume: '450.1M', turnover: 'KES 1.2B' },
-      { symbol: 'S&P 500', name: 'S&P 500 Index', value: '5,204.34', change: '+1.15%', volume: '3.8B', turnover: 'USD' },
-      { symbol: 'NASDAQ', name: 'Nasdaq Composite', value: '16,332.24', change: '+1.54%', volume: '4.2B', turnover: 'USD' },
-      { symbol: 'NYSE', name: 'NYSE Composite', value: '17,842.15', change: '+0.72%', volume: '2.1B', turnover: 'USD' },
-      { symbol: 'DJIA', name: 'Dow Jones Industrial', value: '38,904.04', change: '+0.85%', volume: '320M', turnover: 'USD' },
-      { symbol: 'RUSSELL', name: 'Russell 2000 Index', value: '2,012.45', change: '+0.12%', volume: '1.2B', turnover: 'USD' },
-      { symbol: 'NSE 20', name: 'NSE 20 Share Index', value: '1,542.12', change: '+0.45%', volume: '12.4M', turnover: 'KES 45.2M' },
-    ];
+    return [];
   }, [marketData]);
 
   const nseStats = useMemo(() => {
-    const stocks = marketData.nse.active || [];
+    if (turnoverData?.nse) {
+      return { volume: formatCompactNumber(turnoverData.nse.volume), turnover: formatCompactNumber(turnoverData.nse.turnover), count: turnoverData.nse.count };
+    }
+    const stocks = nseStocksDisplay || [];
     const totalVol = stocks.reduce((acc, s) => acc + safeVolume(s.volume), 0);
     const totalTurnover = stocks.reduce((acc, s) => acc + ((s.price || 0) * safeVolume(s.volume)), 0);
     return { volume: formatCompactNumber(totalVol), turnover: formatCompactNumber(totalTurnover), count: stocks.length };
-  }, [marketData.nse.active]);
+  }, [nseStocksDisplay, turnoverData]);
 
   const globalStats = useMemo(() => {
-    const stocks = marketData.global.active || [];
+    if (turnoverData?.global) {
+      return { volume: formatCompactNumber(turnoverData.global.volume), turnover: formatCompactNumber(turnoverData.global.turnover), count: turnoverData.global.count };
+    }
+    const stocks = globalStocksDisplay || [];
     const totalVol = stocks.reduce((acc, s) => acc + safeVolume(s.volume), 0);
     const totalTurnover = stocks.reduce((acc, s) => acc + ((s.price || 0) * safeVolume(s.volume)), 0);
     return { volume: formatCompactNumber(totalVol), turnover: formatCompactNumber(totalTurnover), count: stocks.length };
-  }, [marketData.global.active]);
+  }, [globalStocksDisplay, turnoverData]);
 
   const nseShareIdx = useMemo(() => {
     return indicesToDisplay.find(i =>
@@ -207,22 +314,22 @@ const MarketPage: React.FC = () => {
     ) || indicesToDisplay.find(i => !i.symbol?.startsWith('NSE')) || indicesToDisplay[1];
   }, [indicesToDisplay]);
 
-  // Compute top movers locally from active stock data (fallback when API movers are empty)
+  // Compute top movers locally from displayed stock data (fallback when API movers are empty)
   const localNseGainers = useMemo(() =>
-    [...marketData.nse.active].sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0)).slice(0, 5),
-    [marketData.nse.active]
+    [...nseStocksDisplay].sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0)).slice(0, 5),
+    [nseStocksDisplay]
   );
   const localNseLosers = useMemo(() =>
-    [...marketData.nse.active].sort((a, b) => (a.changePercent || 0) - (b.changePercent || 0)).slice(0, 5),
-    [marketData.nse.active]
+    [...nseStocksDisplay].sort((a, b) => (a.changePercent || 0) - (b.changePercent || 0)).slice(0, 5),
+    [nseStocksDisplay]
   );
   const localGlobalGainers = useMemo(() =>
-    [...marketData.global.active].sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0)).slice(0, 5),
-    [marketData.global.active]
+    [...globalStocksDisplay].sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0)).slice(0, 5),
+    [globalStocksDisplay]
   );
   const localGlobalLosers = useMemo(() =>
-    [...marketData.global.active].sort((a, b) => (a.changePercent || 0) - (b.changePercent || 0)).slice(0, 5),
-    [marketData.global.active]
+    [...globalStocksDisplay].sort((a, b) => (a.changePercent || 0) - (b.changePercent || 0)).slice(0, 5),
+    [globalStocksDisplay]
   );
 
   const toggleFavorite = (symbol: string, e: React.MouseEvent) => {
@@ -251,8 +358,8 @@ const MarketPage: React.FC = () => {
     return filtered;
   };
 
-  const nseStocks = marketData.nse.active;
-  const globalStocksData = marketData.global.active;
+  const nseStocks = nseStocksDisplay;
+  const globalStocksData = globalStocksDisplay;
 
   const filteredNse = filterAndSort(nseStocks, nseSearch, nseSort);
   const filteredGlobal = filterAndSort(globalStocksData, globalSearch, globalSort);
@@ -266,12 +373,34 @@ const MarketPage: React.FC = () => {
   useEffect(() => { setNsePage(1); }, [nseSearch, nseSort]);
   useEffect(() => { setGlobalPage(1); }, [globalSearch, globalSort]);
 
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center h-[60vh] gap-3">
-      <Loader2 className="animate-spin text-[#0D7490]" size={32} />
-      <p className="text-sm font-medium text-muted-foreground">Loading Market Data...</p>
-    </div>
-  );
+  // Debounced Yahoo search when local results are empty
+  useEffect(() => {
+    if (nseYahooRef.current) clearTimeout(nseYahooRef.current);
+    if (nseSearch.length > 0 && filteredNse.length === 0) {
+      nseYahooRef.current = setTimeout(() => searchYahooNse(nseSearch), 400);
+    } else {
+      setNseYahooResults([]);
+    }
+    return () => { if (nseYahooRef.current) clearTimeout(nseYahooRef.current); };
+  }, [nseSearch, filteredNse.length, searchYahooNse]);
+
+  useEffect(() => {
+    if (globalYahooRef.current) clearTimeout(globalYahooRef.current);
+    if (globalSearch.length > 0 && filteredGlobal.length === 0) {
+      globalYahooRef.current = setTimeout(() => searchYahooGlobal(globalSearch), 400);
+    } else {
+      setGlobalYahooResults([]);
+    }
+    return () => { if (globalYahooRef.current) clearTimeout(globalYahooRef.current); };
+  }, [globalSearch, filteredGlobal.length, searchYahooGlobal]);
+
+  if (loading && allStocks.length === 0) {
+    // Still show page content immediately even without API data
+    // (local data from stockUniverses.ts renders right away)
+  }
+
+  const nseStatus = marketStatus?.nse;
+  const globalStatus = marketStatus?.global;
 
   return (
     <div className="mx-auto max-w-[1600px] p-4 md:p-6 space-y-6">
@@ -292,8 +421,12 @@ const MarketPage: React.FC = () => {
           <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)}>
             <Settings size={14} className="mr-2" /> Settings
           </Button>
-          <Button variant="outline" size="sm" onClick={() => { refreshCtx(); fetchMoversAndIndices(); }}>
-            <RefreshCcw size={14} className="mr-2" /> Refresh
+          <Button variant="outline" size="sm" disabled={isRefreshing} onClick={async () => {
+            setIsRefreshing(true);
+            await Promise.all([refreshCtx(), fetchMarketData()]);
+            setIsRefreshing(false);
+          }}>
+            <RefreshCcw size={14} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} /> {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </Button>
         </div>
       </div>
@@ -305,13 +438,13 @@ const MarketPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">NSE</div>
-              <div className="text-lg font-bold text-emerald-600">Open</div>
-              <div className="text-[10px] text-muted-foreground">Closes 3:30 PM</div>
+              <div className={`text-lg font-bold ${nseStatus?.open ? 'text-emerald-600' : 'text-red-500'}`}>{nseStatus?.label || '--'}</div>
+              <div className="text-[10px] text-muted-foreground">{nseStatus?.eventLabel || `Closes ${nseStatus?.closeTime || '3:30 PM'}`}</div>
             </div>
             <div className="border-l border-border pl-3">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Global</div>
-              <div className="text-lg font-bold text-emerald-600">Open</div>
-              <div className="text-[10px] text-muted-foreground">Closes 4:00 PM</div>
+              <div className={`text-lg font-bold ${globalStatus?.open ? 'text-emerald-600' : 'text-red-500'}`}>{globalStatus?.label || '--'}</div>
+              <div className="text-[10px] text-muted-foreground">{globalStatus?.eventLabel || `Closes ${globalStatus?.closeTime || '4:00 PM'}`}</div>
             </div>
           </div>
         </Card>
@@ -347,14 +480,14 @@ const MarketPage: React.FC = () => {
           <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Share Index</div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <div className="text-[10px] font-medium text-muted-foreground mb-0.5 truncate">{nseShareIdx.name?.replace(' Index', '') || 'NSE'}</div>
-              <div className="text-lg font-bold text-foreground">{nseShareIdx.value}</div>
-              <div className={`text-[10px] font-semibold ${String(nseShareIdx.change)?.startsWith('+') ? 'text-emerald-600' : 'text-red-500'}`}>{nseShareIdx.change}</div>
+              <div className="text-[10px] font-medium text-muted-foreground mb-0.5 truncate">{nseShareIdx?.name?.replace(' Index', '') || 'NSE'}</div>
+              <div className="text-lg font-bold text-foreground">{nseShareIdx?.value ?? '--'}</div>
+              <div className={`text-[10px] font-semibold ${nseShareIdx?.change ? (String(nseShareIdx.change).startsWith('+') ? 'text-emerald-600' : 'text-red-500') : 'text-muted-foreground'}`}>{nseShareIdx?.change ?? '--'}</div>
             </div>
             <div className="border-l border-border pl-3">
-              <div className="text-[10px] font-medium text-muted-foreground mb-0.5 truncate">{globalShareIdx.name?.replace(' Index', '') || 'Global'}</div>
-              <div className="text-lg font-bold text-foreground">{globalShareIdx.value}</div>
-              <div className={`text-[10px] font-semibold ${String(globalShareIdx.change)?.startsWith('+') ? 'text-emerald-600' : 'text-red-500'}`}>{globalShareIdx.change}</div>
+              <div className="text-[10px] font-medium text-muted-foreground mb-0.5 truncate">{globalShareIdx?.name?.replace(' Index', '') || 'Global'}</div>
+              <div className="text-lg font-bold text-foreground">{globalShareIdx?.value ?? '--'}</div>
+              <div className={`text-[10px] font-semibold ${globalShareIdx?.change ? (String(globalShareIdx.change).startsWith('+') ? 'text-emerald-600' : 'text-red-500') : 'text-muted-foreground'}`}>{globalShareIdx?.change ?? '--'}</div>
             </div>
           </div>
         </Card>
@@ -394,41 +527,45 @@ const MarketPage: React.FC = () => {
       {/* Dual Windows */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <MarketWindow
-          title="NSE Activity"
-          icon={Landmark}
-          stocks={paginatedNse}
-          search={nseSearch}
-          setSearch={setNseSearch}
-          sort={nseSort}
-          setSort={setNseSort}
-          accentColor="#0D7490"
-          currency="KES"
-          favorites={favorites}
-          toggleFavorite={toggleFavorite}
-          page={nsePage}
-          setPage={setNsePage}
-          totalPages={nsePages}
-          totalCount={filteredNse.length}
-          onStockClick={(stock: any) => navigate(`/app/stock/${stock.symbol?.replace(/^(NSE|NYSE|NASDAQ|AMEX):/, '')}?market=nse`)}
-        />
+            title="NSE Activity"
+            icon={Landmark}
+            stocks={paginatedNse}
+            search={nseSearch}
+            setSearch={setNseSearch}
+            sort={nseSort}
+            setSort={setNseSort}
+            accentColor="#0D7490"
+            currency="KES"
+            favorites={favorites}
+            toggleFavorite={toggleFavorite}
+            page={nsePage}
+            setPage={setNsePage}
+            totalPages={nsePages}
+            totalCount={filteredNse.length}
+            yahooResults={nseYahooResults}
+            yahooSearching={nseYahooSearching}
+            onStockClick={(stock: any) => navigate(`/app/stock/${stock.symbol?.replace(/^(NSE|NYSE|NASDAQ|AMEX):/, '')}?market=nse`)}
+          />
         <MarketWindow
-          title="US & Global Activity"
-          icon={Globe}
-          stocks={paginatedGlobal}
-          search={globalSearch}
-          setSearch={setGlobalSearch}
-          sort={globalSort}
-          setSort={setGlobalSort}
-          accentColor="#6366f1"
-          currency="USD"
-          favorites={favorites}
-          toggleFavorite={toggleFavorite}
-          page={globalPage}
-          setPage={setGlobalPage}
-          totalPages={globalPages}
-          totalCount={filteredGlobal.length}
-          onStockClick={(stock: any) => navigate(`/app/stock/${stock.symbol?.replace(/^(NSE|NYSE|NASDAQ|AMEX):/, '')}?market=us`)}
-        />
+            title="US & Global Activity"
+            icon={Globe}
+            stocks={paginatedGlobal}
+            search={globalSearch}
+            setSearch={setGlobalSearch}
+            sort={globalSort}
+            setSort={setGlobalSort}
+            accentColor="#6366f1"
+            currency="USD"
+            favorites={favorites}
+            toggleFavorite={toggleFavorite}
+            page={globalPage}
+            setPage={setGlobalPage}
+            totalPages={globalPages}
+            totalCount={filteredGlobal.length}
+            yahooResults={globalYahooResults}
+            yahooSearching={globalYahooSearching}
+            onStockClick={(stock: any) => navigate(`/app/stock/${stock.symbol?.replace(/^(NSE|NYSE|NASDAQ|AMEX):/, '')}?market=us`)}
+          />
       </div>
 
       {/* Bottom Section: Widgets Row */}
@@ -488,14 +625,13 @@ const MarketPage: React.FC = () => {
         <div className="grid grid-cols-2 gap-4">
           <MoverWindow 
             title="Top Gainers" 
-            nse={marketData.nse.movers?.gainers?.length ? marketData.nse.movers.gainers : localNseGainers}
-            global={marketData.global.movers?.gainers?.length ? marketData.global.movers.gainers : localGlobalGainers}
-            pos 
+            nse={marketData.movers?.nse?.gainers?.length ? marketData.movers.nse.gainers : localNseGainers}
+            global={marketData.movers?.global?.gainers?.length ? marketData.movers.global.gainers : localGlobalGainers}
+            pos={true} 
           />
-          <MoverWindow 
-            title="Top Losers" 
-            nse={marketData.nse.movers?.losers?.length ? marketData.nse.movers.losers : localNseLosers}
-            global={marketData.global.movers?.losers?.length ? marketData.global.movers.losers : localGlobalLosers}
+          <MoverWindow title="🔻 Top Losers"
+            nse={marketData.movers?.nse?.losers?.length ? marketData.movers.nse.losers : localNseLosers}
+            global={marketData.movers?.global?.losers?.length ? marketData.movers.global.losers : localGlobalLosers}
             pos={false} 
           />
         </div>
@@ -520,12 +656,37 @@ const MarketPage: React.FC = () => {
                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Receive daily AI-powered market sentiment reports via email.</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setEmailAlerts(!emailAlerts)}
-                  className={`w-11 h-6 rounded-full relative transition-colors duration-200 shrink-0 ${emailAlerts ? 'bg-[#0D7490]' : 'bg-muted-foreground/30'}`}
-                >
-                  <div className={`absolute top-1 size-4 rounded-full bg-white shadow-sm transition-all duration-200 ${emailAlerts ? 'left-6' : 'left-1'}`} />
-                </button>
+                {user ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const body = { userId: user.id };
+                        fetch(`${API_BASE_URL}/user/send-test-sentiment`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(body),
+                        }).then(r => r.json()).then(data => {
+                          if (data.success) alert('Test sentiment email sent!');
+                          else alert('Failed: ' + (data.error || 'unknown error'));
+                        }).catch(() => alert('Request failed'));
+                      }}
+                      className="text-[10px] text-[#0D7490] font-medium hover:underline shrink-0 px-1"
+                      title="Send a test sentiment report now"
+                    >
+                      Send Now
+                    </button>
+                    <button 
+                      onClick={() => setEmailAlerts(!emailAlerts)}
+                      className={`w-11 h-6 rounded-full relative transition-colors duration-200 shrink-0 ${emailAlerts ? 'bg-[#0D7490]' : 'bg-muted-foreground/30'}`}
+                    >
+                      <div className={`absolute top-1 size-4 rounded-full bg-white shadow-sm transition-all duration-200 ${emailAlerts ? 'left-6' : 'left-1'}`} />
+                    </button>
+                  </div>
+                ) : (
+                  <Link to="/login" className="text-[11px] text-[#0D7490] font-medium hover:underline shrink-0">
+                    Log in
+                  </Link>
+                )}
               </div>
             </div>
           </div>
@@ -551,8 +712,14 @@ const MarketWindow = ({
   setPage,
   totalPages,
   totalCount,
+  yahooResults,
+  yahooSearching,
   onStockClick
-}: any) => (
+}: any) => {
+  const displayStocks = stocks.length > 0 ? stocks : (yahooResults || []);
+  const isShowingYahoo = stocks.length === 0 && yahooResults?.length > 0;
+
+  return (
   <div className="flex flex-col h-full bg-card rounded-xl border shadow-sm overflow-hidden">
     {/* Header */}
     <div className="px-5 py-4 border-b bg-muted/30 flex items-center justify-between">
@@ -562,7 +729,7 @@ const MarketWindow = ({
         </div>
         <div>
           <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-          <span className="text-xs text-muted-foreground">{totalCount} securities</span>
+          <span className="text-xs text-muted-foreground">Tracked securities · search any stock</span>
         </div>
       </div>
       <Badge variant="secondary" style={{ backgroundColor: `${accentColor}15`, color: accentColor }} className="font-medium text-xs">
@@ -592,6 +759,12 @@ const MarketWindow = ({
 
     {/* Table */}
     <div className="flex-1 overflow-auto">
+      {isShowingYahoo && (
+        <div className="px-4 py-2 bg-[#0D7490]/5 border-b border-[#0D7490]/20 flex items-center gap-2">
+          <ExternalLink size={12} className="text-[#0D7490]" />
+          <span className="text-[11px] font-medium text-[#0D7490]">Yahoo Finance results for &ldquo;{search}&rdquo;</span>
+        </div>
+      )}
       <table className="w-full text-left border-collapse">
         <thead className="sticky top-0 z-10 bg-muted/50">
           <tr className="border-b">
@@ -604,8 +777,8 @@ const MarketWindow = ({
           </tr>
         </thead>
         <tbody>
-          {stocks.map((stock: any) => {
-            const isPositive = (stock.changePercent || 0) >= 0;
+          {displayStocks.map((stock: any) => {
+            const isPositive = stock.provider !== 'pending' && (stock.changePercent || 0) >= 0;
             const isFav = favorites.includes(stock.symbol);
             return (
               <tr key={stock.symbol} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => onStockClick?.(stock)}>
@@ -624,33 +797,47 @@ const MarketWindow = ({
                   <span className="text-xs text-muted-foreground truncate block max-w-[160px]">{stock.company_name}</span>
                 </td>
                 <td className="px-3 py-2.5 text-right">
-                  <span className="text-sm font-semibold text-foreground font-mono">{stock.price}</span>
+                  <span className="text-sm font-semibold text-foreground font-mono">{stock.provider === 'pending' ? '--' : stock.price}</span>
+                  {stock.provider === 'pending' && (
+                    <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">loading</span>
+                  )}
                 </td>
                 <td className="px-3 py-2.5 text-right">
+                  {stock.provider === 'pending' ? (
+                    <span className="text-xs text-muted-foreground font-mono">--</span>
+                  ) : (
                   <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold ${
                     isPositive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
                   }`}>
                     {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                     {isPositive ? '+' : ''}{(stock.changePercent ?? 0).toFixed(2)}%
                   </span>
+                  )}
                 </td>
                 <td className="px-3 py-2.5 text-right hidden md:table-cell">
-                  <span className="text-xs text-muted-foreground">{formatCompactNumber(typeof stock.volume === 'number' ? stock.volume : parseFloat(String(stock.volume).replace(/[^0-9.]/g, '')) || 0)}</span>
+                  <span className="text-xs text-muted-foreground">{stock.provider === 'pending' ? '--' : formatCompactNumber(typeof stock.volume === 'number' ? stock.volume : parseFloat(String(stock.volume).replace(/[^0-9.]/g, '')) || 0)}</span>
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      {stocks.length === 0 && (
+      {displayStocks.length === 0 && !yahooSearching && (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Search size={24} className="mb-2 opacity-30" />
           <p className="text-xs font-medium">No stocks match &ldquo;{search}&rdquo;</p>
         </div>
       )}
+      {yahooSearching && (
+        <div className="flex items-center justify-center py-12 text-muted-foreground">
+          <Loader2 size={20} className="animate-spin mr-2" />
+          <p className="text-xs font-medium">Searching Yahoo Finance...</p>
+        </div>
+      )}
     </div>
 
     {/* Pagination */}
+    {!isShowingYahoo && (
     <div className="flex items-center justify-between border-t px-4 py-3 bg-muted/20">
       <span className="text-xs text-muted-foreground">{totalCount} results</span>
       <div className="flex items-center gap-1">
@@ -673,8 +860,10 @@ const MarketWindow = ({
         </button>
       </div>
     </div>
+    )}
   </div>
 );
+};
 
 const MoverWindow = ({ title, nse, global, pos }: any) => {
   const [tab, setTab] = useState<'nse' | 'global'>('nse');
@@ -708,18 +897,21 @@ const MoverWindow = ({ title, nse, global, pos }: any) => {
   );
 };
 
-const TinyCard = ({ s, p, c, v, pos }: any) => (
-  <div className="flex justify-between items-center py-2.5 border-b border-border/50 last:border-0">
-    <div className="flex flex-col">
-      <span className="text-sm font-semibold text-foreground">{s}</span>
-      <span className="text-[10px] text-muted-foreground font-medium">Vol: {formatCompactNumber(typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0)}</span>
+const TinyCard = ({ s, p, c, v, pos }: any) => {
+  const isPending = p === null || p === undefined || p === '--';
+  return (
+    <div className="flex justify-between items-center py-2.5 border-b border-border/50 last:border-0">
+      <div className="flex flex-col">
+        <span className="text-sm font-semibold text-foreground">{s}</span>
+        <span className="text-[10px] text-muted-foreground font-medium">Vol: {isPending ? '--' : formatCompactNumber(typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0)}</span>
+      </div>
+      <div className="text-right flex flex-col">
+        <span className="text-sm font-semibold text-foreground">{isPending ? '--' : p}</span>
+        <span className={`text-xs font-semibold ${isPending ? 'text-muted-foreground' : (pos ? 'text-emerald-600' : 'text-red-500')}`}>{isPending ? '--' : (pos ? '+' : '') + (c ?? 0).toFixed(2) + '%'}</span>
+      </div>
     </div>
-    <div className="text-right flex flex-col">
-      <span className="text-sm font-semibold text-foreground">{p}</span>
-      <span className={`text-xs font-semibold ${pos ? 'text-emerald-600' : 'text-red-500'}`}>{pos ? '+' : ''}{(c ?? 0).toFixed(2)}%</span>
-    </div>
-  </div>
-);
+  );
+};
 
 const NewsItem = ({ article }: { article: NewsArticle }) => {
   const sentimentColor = article.sentiment === "positive" ? "bg-green-100 text-green-700" : article.sentiment === "negative" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600";

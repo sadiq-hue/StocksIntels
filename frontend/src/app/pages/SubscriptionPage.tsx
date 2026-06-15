@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, Link, Navigate } from "react-router";
+import { useParams, Link, Navigate, useNavigate, useSearchParams } from "react-router";
 import { Check, CreditCard, Landmark, ArrowRight, Shield, Zap, Crown, Loader2, CheckCircle2, X } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
@@ -9,19 +9,22 @@ import { useAuth } from "../auth/AuthContext";
 const planDetails = {
   starter: {
     name: "Starter",
-    price: 1,
+    monthlyPrice: 1,
+    yearlyPrice: 10,
     icon: Zap,
     features: ["Real-time NSE data", "3 AI signals per day", "Basic portfolio tracking", "Email support"],
   },
   pro: {
     name: "Pro",
-    price: 29,
+    monthlyPrice: 29,
+    yearlyPrice: 290,
     icon: Shield,
     features: ["Everything in Starter", "Unlimited AI signals", "Global market data", "Advanced analytics", "Risk analysis tools", "Priority support"],
   },
   enterprise: {
     name: "Enterprise",
-    price: 99,
+    monthlyPrice: 99,
+    yearlyPrice: 990,
     icon: Crown,
     features: ["Everything in Pro", "Custom data feeds", "White-label analytics", "Full API access", "24/7 dedicated support", "Unlimited team members"],
   },
@@ -29,6 +32,8 @@ const planDetails = {
 
 export function SubscriptionPage() {
   const { planId } = useParams<{ planId: string }>();
+  const [searchParams] = useSearchParams();
+  const period = searchParams.get("period") === "yearly" ? "yearly" : "monthly";
   const [paymentMethod, setPaymentMethod] = useState<"card" | "mpesa">("card");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -38,7 +43,10 @@ export function SubscriptionPage() {
   
   const selectedPlan = planDetails[planId?.toLowerCase() as keyof typeof planDetails] || planDetails.starter;
   const PlanIcon = selectedPlan.icon;
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const navigate = useNavigate();
+  const price = period === "yearly" ? selectedPlan.yearlyPrice : selectedPlan.monthlyPrice;
+  const durationMonths = period === "yearly" ? 12 : 1;
 
   if (!user) {
     return <Navigate to={`/login?redirect=/subscribe/${planId}`} replace />;
@@ -50,7 +58,7 @@ export function SubscriptionPage() {
     setIsLoading(true);
 
     try {
-      if (selectedPlan.price === 0) {
+      if (price === 0) {
         setIsSuccess(true);
         toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
         setIsLoading(false);
@@ -74,9 +82,10 @@ export function SubscriptionPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             phoneNumber: formattedPhone,
-            amount: selectedPlan.price * 130,
+            amount: price * 130,
             plan: selectedPlan.name,
             userId: user?.id,
+            durationMonths,
           }),
         });
 
@@ -135,9 +144,11 @@ export function SubscriptionPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             phoneNumber: formattedPhone,
-            amount: selectedPlan.price * 130,
-            narration: `StocksIntels ${selectedPlan.name} Subscription`,
+            amount: price * 130,
+            narration: `StocksIntels ${selectedPlan.name} ${period === "yearly" ? "Yearly" : "Monthly"} Subscription`,
             userId: user?.id,
+            plan: selectedPlan.name,
+            durationMonths,
           }),
         });
 
@@ -164,7 +175,7 @@ export function SubscriptionPage() {
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center gap-2">
               <div className="w-9 h-9 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
-                <img src="/favicon.svg" alt="StocksIntels" className="w-5 h-5" />
+                <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
               </div>
               <span className="text-xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
             </Link>
@@ -175,7 +186,10 @@ export function SubscriptionPage() {
       <div className="max-w-4xl mx-auto px-4">
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-gray-900">Complete your subscription</h1>
-          <p className="text-gray-600 mt-2">Secure checkout for the <span className="text-[#0D7490] font-bold">{selectedPlan.name}</span> plan</p>
+          <p className="text-gray-600 mt-2">
+            Secure checkout for the <span className="text-[#0D7490] font-bold">{selectedPlan.name}</span> plan
+            <span className="text-gray-500"> ({period === "yearly" ? "Yearly" : "Monthly"})</span>
+          </p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-8">
@@ -186,12 +200,13 @@ export function SubscriptionPage() {
               </div>
               <h2 className="text-3xl font-black text-gray-900 mb-2">Subscription Confirmed!</h2>
               <p className="text-gray-600 mb-8">Welcome to the <span className="font-bold text-[#0D7490]">{selectedPlan.name}</span> plan. Your account is now active.</p>
-              <Link to="/app/dashboard">
-                <Button className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 h-12 font-bold shadow-lg shadow-[#0D7490]/20">
-                  Go to Dashboard
-                  <ArrowRight className="ml-2 w-5 h-5" />
-                </Button>
-              </Link>
+              <Button 
+                onClick={async () => { await refreshUser(); navigate("/app/dashboard"); }}
+                className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 h-12 font-bold shadow-lg shadow-[#0D7490]/20"
+              >
+                Go to Dashboard
+                <ArrowRight className="ml-2 w-5 h-5" />
+              </Button>
             </Card>
           ) : pollStatus === "waiting" || pollStatus === "failed" ? (
             <Card className="md:col-span-3 p-12 text-center border-gray-100">
@@ -232,14 +247,14 @@ export function SubscriptionPage() {
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900 leading-tight">{selectedPlan.name}</h3>
-                  <p className="text-xs text-gray-500 font-medium">Monthly Plan</p>
+                  <p className="text-xs text-gray-500 font-medium">{period === "yearly" ? "Yearly Plan" : "Monthly Plan"}</p>
                 </div>
               </div>
               
               <div className="border-y border-gray-100 py-4 my-4 space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Subtotal</span>
-                  <span className="text-gray-900 font-bold">${selectedPlan.price}</span>
+                  <span className="text-gray-900 font-bold">${price}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Tax</span>
@@ -249,7 +264,7 @@ export function SubscriptionPage() {
 
               <div className="flex justify-between items-center pt-2 mb-6">
                 <span className="font-bold text-gray-900">Total</span>
-                <span className="text-2xl font-black text-[#0D7490]">${selectedPlan.price}</span>
+                <span className="text-2xl font-black text-[#0D7490]">${price}</span>
               </div>
 
               <div className="space-y-3">

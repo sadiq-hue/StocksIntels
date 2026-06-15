@@ -29,7 +29,14 @@ export function RealtimeQuotesProvider({ children, symbols = [] }: { children: R
     setLoading(true);
     try {
       const data = await fetchRealtimeQuotesBatch(currentSymbols);
-      setQuotes(prev => ({ ...prev, ...data }));
+      setQuotes(prev => {
+        const merged = { ...prev };
+        for (const [key, q] of Object.entries(data)) {
+          if (q.provider === 'synthetic') continue;
+          merged[key] = q;
+        }
+        return merged;
+      });
       setError(null);
     } catch (err: any) {
       setError(err.message);
@@ -47,7 +54,7 @@ export function RealtimeQuotesProvider({ children, symbols = [] }: { children: R
   }, [fetchAll]);
 
   const getQuote = useCallback((symbol: string): RealtimeStockQuote | undefined => {
-    return quotes[symbol];
+    return quotes[symbol] ?? (!symbol.startsWith('NSE:') ? quotes[`NSE:${symbol}`] : undefined);
   }, [quotes]);
 
   return (

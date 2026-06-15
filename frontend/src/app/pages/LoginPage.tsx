@@ -7,7 +7,6 @@ import {
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Card } from "../components/ui/card";
-import { GoogleLogin, googleLogout } from "@react-oauth/google";
 import { jwtDecode } from "jwt-decode";
 import { useAuth } from "../auth/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,7 +18,9 @@ function cn(...inputs: ClassValue[]) {
 }
 
 type DecodedToken = { sub: string; name: string; email: string; picture: string };
-type AuthMode = "login" | "register" | "forgot" | "reset";
+type AuthMode = "login" | "register" | "forgot" | "reset" | "otp-login";
+type RegStage = "form" | "verify";
+type OtpStage = "send" | "verify";
 
 function FloatingOrbs() {
   return (
@@ -29,6 +30,36 @@ function FloatingOrbs() {
           style={{ width: Math.random() * 300 + 100, height: Math.random() * 300 + 100, left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
           animate={{ x: [0, Math.random() * 100 - 50, 0], y: [0, Math.random() * 100 - 50, 0], scale: [1, 1.2, 1] }}
           transition={{ duration: Math.random() * 10 + 10, repeat: Infinity, ease: "easeInOut" }} />
+      ))}
+    </div>
+  );
+}
+
+function FloatingMarkets() {
+  const items = [
+    { id: 'ngx', label: 'NGX', sub: '₦' },
+    { id: 'jse', label: 'JSE', sub: 'R' },
+    { id: 'nse', label: 'NSE', sub: 'KSh' },
+    { id: 'egx', label: 'EGX', sub: 'EGP' },
+    // global markets
+    { id: 'nyse', label: 'NYSE', sub: '$' },
+    { id: 'nasdaq', label: 'NASDAQ', sub: '$' },
+    { id: 'lse', label: 'LSE', sub: '£' },
+    { id: 'hkex', label: 'HKEX', sub: 'HK$' },
+    { id: 'tse', label: 'TSE', sub: '¥' },
+  ];
+  return (
+    <div className="absolute inset-0 pointer-events-none">
+      {items.map((it, i) => (
+        <motion.div key={it.id} className="absolute flex items-center gap-2 bg-white/80 text-gray-800 text-xs px-3 py-1 rounded-full shadow-sm"
+          style={{ left: `${10 + (i * 80) / items.length}%`, top: `${8 + (i * 13) % 60}%`, transform: 'translateX(-50%)' }}
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: [0.85, 1, 0.85], y: [ -4, 4, -4 ] }}
+          transition={{ repeat: Infinity, duration: 7 + i * 1.2, ease: 'easeInOut', delay: i * 0.35 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" className="shrink-0" xmlns="http://www.w3.org/2000/svg"><path fill="#0B69A3" d="M12 2C7.03 2 3 6.03 3 11c0 4.97 4.03 9 9 9s9-4.03 9-9c0-4.97-4.03-9-9-9zm3 12h-2v2h-2v-2H9v-2h2V9h2v2h2v2z"/></svg>
+          <div className="font-semibold">{it.label}</div>
+          <div className="text-[10px] text-gray-500">{it.sub}</div>
+        </motion.div>
       ))}
     </div>
   );
@@ -49,19 +80,42 @@ function FeatureCard({ icon: Icon, title, desc, delay }: { icon: React.ElementTy
   );
 }
 
+function CompactHero() {
+  return (
+    <div className="mb-4 text-center">
+      <div className="mx-auto flex items-center justify-center gap-3">
+        <div className="w-10 h-10 bg-gradient-to-br from-[#0B69A3] to-[#2D8FD6] rounded-xl flex items-center justify-center shadow-sm">
+          <img src="/logo1.jpg" alt="logo" className="w-6 h-6" />
+        </div>
+        <div className="text-left">
+          <div className="text-gray-700 text-sm font-semibold">StocksIntels</div>
+          <div className="text-[#0B69A3] text-2xl font-extrabold leading-tight">StocksIntels</div>
+        </div>
+      </div>
+      <p className="text-gray-500 text-xs mt-2">Welcome back</p>
+    </div>
+  );
+}
 export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/app";
-  const { login, register, forgotPassword, resetPassword } = useAuth();
+  const { login, register, sendVerificationCode, verifyEmailAndRegister, forgotPassword, resetPassword, sendOtp, verifyOtp, requestLoginOtp, verifyLoginOtp } = useAuth();
   const [mode, setMode] = useState<AuthMode>("login");
+  const [regStage, setRegStage] = useState<RegStage>("form");
+  const [otpStage, setOtpStage] = useState<OtpStage>("send");
+  const [loginStage, setLoginStage] = useState<"password" | "otp">("password");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [otpCode, setOtpCode] = useState("");
+  const [verifyCode, setVerifyCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [socialOpen, setSocialOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
@@ -73,21 +127,96 @@ export function LoginPage() {
     return () => clearInterval(t);
   }, [countdown]);
 
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.includes("id_token=")) {
+      const params = new URLSearchParams(hash.substring(1));
+      const idToken = params.get("id_token");
+      if (idToken) {
+        window.location.hash = "";
+        handleGoogleSuccess({ credential: idToken });
+      }
+    }
+  }, []);
+
   const clear = () => { setError(null); setSuccess(null); };
+
+  const getPwStrength = (pw: string) => {
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (/[a-z]/.test(pw)) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/\d/.test(pw)) score++;
+    if (/[^a-zA-Z0-9]/.test(pw)) score++;
+    return Math.min(score, 4);
+  };
+  const pwStrength = getPwStrength(password);
+  const pwLabel = ["Weak", "Fair", "Good", "Strong", "Very Strong"];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); clear();
     if (mode === "login") {
-      setIsLoading(true);
-      try { await login(email, password); navigate(redirectTo); }
-      catch (err) { setError(err instanceof Error ? err.message : "Login failed"); }
-      finally { setIsLoading(false); }
+      if (loginStage === "password") {
+        if (!email || !password) { setError("Email and password are required"); return; }
+        setIsLoading(true);
+        try {
+          const res = await requestLoginOtp(email, password);
+          setCountdown(res.expiresIn);
+          setSuccess("OTP sent to your email");
+          setLoginStage("otp");
+        } catch (err) { setError(err instanceof Error ? err.message : "Failed to send login OTP"); }
+        finally { setIsLoading(false); }
+      } else {
+        if (!otpCode || otpCode.length < 6) { setError("Enter the 6-digit OTP"); return; }
+        setIsLoading(true);
+        try { await verifyLoginOtp(email, otpCode); navigate(redirectTo); }
+        catch (err) { setError(err instanceof Error ? err.message : "OTP verification failed"); }
+        finally { setIsLoading(false); }
+      }
     } else if (mode === "register") {
-      if (!fullName.trim()) { setError("Full name is required"); return; }
-      setIsLoading(true);
-      try { await register(fullName.trim(), email, password); navigate(redirectTo); }
-      catch (err) { setError(err instanceof Error ? err.message : "Registration failed"); }
-      finally { setIsLoading(false); }
+      if (regStage === "form") {
+        if (!email) { setError("Email is required"); return; }
+        setIsLoading(true);
+        try {
+          const res = await sendVerificationCode(email);
+          setCountdown(res.expiresIn);
+          setSuccess("Verification code sent to your email");
+          setRegStage("verify");
+        } catch (err) { setError(err instanceof Error ? err.message : "Failed to send verification code"); }
+        finally { setIsLoading(false); }
+      } else {
+        if (!verifyCode || verifyCode.length < 6) { setError("Enter the 6-digit verification code"); return; }
+        if (!fullName.trim()) { setError("Full name is required"); return; }
+        if (password.length < 8) { setError("Password must be at least 8 characters"); return; }
+        if (password !== confirmPassword) { setError("Passwords do not match"); return; }
+        if (pwStrength < 3) { setError("Password is too weak — include uppercase, lowercase, number or symbol"); return; }
+        setIsLoading(true);
+        try {
+          await verifyEmailAndRegister(fullName.trim(), email, password, verifyCode);
+          navigate(redirectTo);
+        } catch (err) { setError(err instanceof Error ? err.message : "Verification or registration failed"); }
+        finally { setIsLoading(false); }
+      }
+    } else if (mode === "otp-login") {
+      if (otpStage === "send") {
+        if (!email) { setError("Email is required"); return; }
+        setIsLoading(true);
+        try {
+          const res = await sendOtp(email);
+          setCountdown(res.expiresIn);
+          setSuccess("OTP sent to your email");
+          setOtpStage("verify");
+        } catch (err) { setError(err instanceof Error ? err.message : "Failed to send OTP"); }
+        finally { setIsLoading(false); }
+      } else {
+        if (!otpCode || otpCode.length < 6) { setError("Enter the 6-digit OTP"); return; }
+        setIsLoading(true);
+        try {
+          await verifyOtp(email, otpCode);
+          navigate(redirectTo);
+        } catch (err) { setError(err instanceof Error ? err.message : "OTP verification failed"); }
+        finally { setIsLoading(false); }
+      }
     } else if (mode === "forgot") {
       if (!email) { setError("Email is required"); return; }
       setIsLoading(true);
@@ -105,10 +234,21 @@ export function LoginPage() {
       try {
         await resetPassword(email, otpCode, newPassword);
         setSuccess("Password reset successful. Sign in with your new password.");
-        setTimeout(() => { setMode("login"); setPassword(""); setOtpCode(""); setNewPassword(""); }, 2000);
+        setTimeout(() => { setMode("login"); setLoginStage("password"); setPassword(""); setOtpCode(""); setNewPassword(""); }, 2000);
       } catch (err) { setError(err instanceof Error ? err.message : "Password reset failed"); }
       finally { setIsLoading(false); }
     }
+  };
+
+  const handleResendLoginOtp = async () => {
+    if (!email || !password) return;
+    clear(); setIsLoading(true);
+    try {
+      const res = await requestLoginOtp(email, password);
+      setCountdown(res.expiresIn);
+      setSuccess("A new OTP has been sent to your email");
+    } catch (err) { setError(err instanceof Error ? err.message : "Failed to resend OTP"); }
+    finally { setIsLoading(false); }
   };
 
   const handleGoogleSuccess = useCallback(async (credentialResponse: any) => {
@@ -121,48 +261,59 @@ export function LoginPage() {
       }
       setIsLoading(false); navigate(redirectTo);
     }
-  }, [navigate, login, register]);
+  }, [navigate, login, register, redirectTo]);
 
   const handleGoogleError = useCallback(() => {
     setError("Google auth failed — check VITE_GOOGLE_CLIENT_ID in frontend/.env");
   }, []);
 
-  useEffect(() => { return () => { googleLogout(); }; }, []);
+  const loginWithGoogle = useCallback(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "269380955616-346nscd402cen6cr0ts8ppiiv6i85i1r.apps.googleusercontent.com";
+    const currentRedirect = searchParams.get("redirect");
+    const redirectUri = window.location.origin + "/login" + (currentRedirect ? `?redirect=${encodeURIComponent(currentRedirect)}` : "");
+    const nonce = crypto.randomUUID();
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: "id_token",
+      scope: "openid email profile",
+      nonce,
+    });
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+  }, [searchParams]);
 
   const inputClasses = (fieldName: string) => cn(
-    "pl-12 pr-4 h-14 bg-gray-50/80 border-2 text-gray-900 rounded-xl transition-all duration-200",
+    "pl-10 pr-3 h-10 bg-gray-50/80 border-2 text-gray-900 rounded-xl transition-all duration-200",
     "placeholder:text-gray-400",
     focusedField === fieldName
-      ? "border-[#0D7490] bg-white shadow-lg shadow-[#0D7490]/10 ring-4 ring-[#0D7490]/5"
+      ? "border-[#0B69A3] bg-white shadow-md shadow-[#0B69A3]/8 ring-4 ring-[#0B69A3]/5"
       : "border-gray-200 hover:border-gray-300",
     error && "border-red-300 focus:border-red-500"
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex">
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative">
-        <div className="w-full max-w-md relative z-10">
-          <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }} className="mb-10">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
-                <img src="/logo.svg" alt="StocksIntels" className="w-7 h-7" />
-              </div>
-              <div>
-                <h1 className="text-gray-900 text-2xl font-bold tracking-tight">StocksIntels</h1>
-                <p className="text-gray-500 text-sm font-medium">Welcome back</p>
-              </div>
-            </div>
-          </motion.div>
-
+    <div className="min-h-screen overflow-auto overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100 flex">
+      <FloatingMarkets />
+      <div className="flex-1 flex items-center justify-center p-4 lg:p-8 relative">
+        <div className="w-full max-w-sm relative z-10">
           <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
-            <Card className="bg-white/90 backdrop-blur-xl border-gray-100/80 shadow-2xl shadow-gray-200/60 rounded-3xl p-8">
+            <CompactHero />
+            <Card className="bg-white/90 backdrop-blur-xl border-gray-100/80 shadow-md shadow-gray-200/30 rounded-2xl p-4">
               
               <div className="mb-6">
                 <h2 className="text-gray-900 text-xl font-bold mb-1.5">
-                  {mode === "login" ? "Sign in" : mode === "register" ? "Create account" : mode === "forgot" ? "Reset Password" : "Set New Password"}
+                  {mode === "login" ? "Sign in" : mode === "register" ? "Create account" : mode === "forgot" ? "Reset Password" : mode === "otp-login" ? "Sign in with OTP" : "Set New Password"}
                 </h2>
                 <p className="text-gray-500 text-sm">
-                  {mode === "login" || mode === "register" ? "Enter your credentials to access your dashboard" : mode === "forgot" ? "Enter your email to receive a reset code" : "Enter the reset code and your new password"}
+                  {mode === "login"
+                    ? (loginStage === "password" ? "Enter your credentials to request a one-time password" : "Enter the OTP sent to your email")
+                    : mode === "register"
+                    ? "Enter your credentials to access your dashboard"
+                    : mode === "forgot"
+                    ? "Enter your email to receive a reset code"
+                    : mode === "otp-login"
+                    ? "Enter your email to receive a one-time password"
+                    : "Enter the reset code and your new password"}
                 </p>
               </div>
 
@@ -183,55 +334,196 @@ export function LoginPage() {
                 )}
               </AnimatePresence>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 {(mode === "login" || mode === "register") && (
                   <>
-                    {mode === "register" && (
-                      <div className="space-y-1.5">
-                        <label className="text-gray-700 text-sm font-semibold block ml-1">Full Name</label>
-                        <div className="relative">
-                          <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "name" ? "text-[#0D7490]" : "text-gray-400"}`} />
-                          <Input type="text" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)}
-                            onFocus={() => setFocusedField("name")} onBlur={() => setFocusedField(null)}
-                            className={inputClasses("name")} required />
-                        </div>
-                      </div>
-                    )}
                     <div className="space-y-1.5">
                       <label className="text-gray-700 text-sm font-semibold block ml-1">Email Address</label>
                       <div className="relative">
-                        <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-gray-400"}`} />
+                        <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0B69A3]" : "text-gray-400"}`} />
                         <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
                           onFocus={() => setFocusedField("email")} onBlur={() => setFocusedField(null)}
-                          className={inputClasses("email")} required autoComplete="email" />
+                          className={inputClasses("email")} required autoComplete="email" disabled={(mode === "register" && regStage === "verify") || (mode === "login" && loginStage === "otp")} />
                       </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between ml-1">
-                        <label className="text-gray-700 text-sm font-semibold">Password</label>
-                        {mode === "login" && (
-                          <button type="button" onClick={() => { setMode("forgot"); clear(); }}
-                            className="text-xs text-[#0D7490] hover:text-[#0A5F7A] font-semibold hover:underline">
-                            Forgot password?
-                          </button>
-                        )}
-                      </div>
-                      <div className="relative">
-                        <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0D7490]" : "text-gray-400"}`} />
-                        <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
-                          onFocus={() => setFocusedField("password")} onBlur={() => setFocusedField(null)}
-                          className={cn(inputClasses("password"), "pr-12")} required minLength={6} autoComplete={mode === "register" ? "new-password" : "current-password"} />
-                        <button type="button" onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
-                          {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {mode === "login" && loginStage === "password" && (
+                      <>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between ml-1">
+                            <label className="text-gray-700 text-sm font-semibold">Password</label>
+                            <button type="button" onClick={() => { setMode("forgot"); clear(); }}
+                              className="text-xs text-[#0B69A3] hover:text-[#2D8FD6] font-semibold hover:underline">
+                              Forgot password?
+                            </button>
+                          </div>
+                          <div className="relative">
+                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                              onFocus={() => setFocusedField("password")} onBlur={() => setFocusedField(null)}
+                              className={cn(inputClasses("password"), "pr-8 h-10")} required autoComplete="current-password" />
+                            <button type="button" onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
+                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                        <Button type="submit" disabled={isLoading || !email || !password}
+                          className="w-full h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                          {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending OTP...</span>
+                            : <span className="flex items-center gap-2">Sign In <ArrowRight className="w-4 h-4" /></span>}
+                        </Button>
+                        <button type="button" onClick={() => { setMode("otp-login"); setOtpStage("send"); setOtpCode(""); clear(); }}
+                          className="w-full text-xs text-[#0B69A3] hover:text-[#2D8FD6] font-semibold text-center">
+                          Sign in with OTP only
                         </button>
-                      </div>
-                    </div>
-                    <Button type="submit" disabled={isLoading}
-                      className="w-full h-14 bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] hover:from-[#0A5F7A] hover:to-[#0D7490] text-white font-bold rounded-xl shadow-lg shadow-[#0D7490]/25 hover:shadow-[#0D7490]/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 disabled:opacity-70 text-base">
-                      {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-5 h-5" /> Processing...</span>
-                        : <span className="flex items-center gap-2">{mode === "register" ? "Create Account" : "Sign In"} <ArrowRight className="w-5 h-5" /></span>}
-                    </Button>
+                      </>
+                    )}
+                    {mode === "login" && loginStage === "otp" && (
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-gray-700 text-sm font-semibold block ml-1">One-Time Password</label>
+                          <div className="relative">
+                            <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                              onFocus={() => setFocusedField("otpCode")} onBlur={() => setFocusedField(null)}
+                              className={cn(inputClasses("otpCode"), "text-center text-2xl tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
+                          </div>
+                          {countdown > 0 && <p className="text-xs text-gray-400 text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
+                          {countdown === 0 && (
+                            <button type="button" onClick={handleResendLoginOtp} disabled={isLoading}
+                              className="w-full text-xs text-[#0B69A3] hover:text-[#2D8FD6] font-semibold text-center disabled:opacity-50">
+                              {isLoading ? "Resending..." : "Didn't receive it? Resend OTP"}
+                            </button>
+                          )}
+                        </div>
+                        <Button type="submit" disabled={isLoading || otpCode.length < 6}
+                          className="w-full h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                          {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Verifying...</span>
+                            : <span className="flex items-center gap-2">Verify & Sign In <ArrowRight className="w-4 h-4" /></span>}
+                        </Button>
+                        <button type="button" onClick={() => { setLoginStage("password"); setOtpCode(""); clear(); }}
+                          className="w-full text-xs text-[#0B69A3] hover:text-[#2D8FD6] font-semibold text-center">
+                          Back to password
+                        </button>
+                      </>
+                    )}
+                    {mode === "otp-login" && (
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-gray-700 text-sm font-semibold block ml-1">Email Address</label>
+                          <div className="relative">
+                            <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
+                              onFocus={() => setFocusedField("email")} onBlur={() => setFocusedField(null)}
+                              className={inputClasses("email")} required autoComplete="email" disabled={otpStage === "verify"} />
+                          </div>
+                        </div>
+                        {otpStage === "verify" && (
+                          <div className="space-y-1.5">
+                            <label className="text-gray-700 text-sm font-semibold block ml-1">One-Time Password</label>
+                            <div className="relative">
+                              <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                              <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                                onFocus={() => setFocusedField("otpCode")} onBlur={() => setFocusedField(null)}
+                                className={cn(inputClasses("otpCode"), "text-center text-2xl tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
+                            </div>
+                            {countdown > 0 && <p className="text-xs text-gray-400 text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
+                          </div>
+                        )}
+                        <Button type="submit" disabled={isLoading || (otpStage === "send" ? !email : otpCode.length < 6)}
+                          className="w-full h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                          {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
+                            : otpStage === "send" ? <span className="flex items-center gap-2">Send OTP <ArrowRight className="w-4 h-4" /></span>
+                            : <span className="flex items-center gap-2">Verify & Sign In <ArrowRight className="w-4 h-4" /></span>}
+                        </Button>
+                        <button type="button" onClick={() => { setMode("login"); setLoginStage("password"); setOtpStage("send"); setOtpCode(""); clear(); }}
+                          className="w-full text-xs text-[#0B69A3] hover:text-[#2D8FD6] font-semibold text-center">
+                          Sign in with password instead
+                        </button>
+                      </>
+                    )}
+                    {mode === "register" && regStage === "form" && (
+                      <Button type="submit" disabled={isLoading || !email}
+                        className="w-full h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                        {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
+                          : <span className="flex items-center gap-2">Send Verification Code <ArrowRight className="w-4 h-4" /></span>}
+                      </Button>
+                    )}
+                    {mode === "register" && regStage === "verify" && (
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-gray-700 text-sm font-semibold block ml-1">Verification Code</label>
+                          <div className="relative">
+                            <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "vcode" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <Input type="text" placeholder="000000" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                              onFocus={() => setFocusedField("vcode")} onBlur={() => setFocusedField(null)}
+                              className={cn(inputClasses("vcode"), "text-center text-2xl tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
+                          </div>
+                          {countdown > 0 && <p className="text-xs text-gray-400 text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-gray-700 text-sm font-semibold block ml-1">Full Name</label>
+                          <div className="relative">
+                            <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "name" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <Input type="text" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)}
+                              onFocus={() => setFocusedField("name")} onBlur={() => setFocusedField(null)}
+                              className={inputClasses("name")} required />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-gray-700 text-sm font-semibold block ml-1">Password</label>
+                          <div className="relative">
+                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                              onFocus={() => setFocusedField("password")} onBlur={() => setFocusedField(null)}
+                              className={cn(inputClasses("password"), "pr-8 h-10")} required minLength={8} autoComplete="new-password" />
+                            <button type="button" onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
+                              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          {password && (
+                            <div className="mt-1.5">
+                              <div className="flex gap-1">
+                                {[0, 1, 2, 3, 4].map((i) => (
+                                  <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${
+                                    i <= pwStrength ? ["bg-red-400", "bg-orange-400", "bg-yellow-400", "bg-lime-500", "bg-emerald-500"][pwStrength] : "bg-gray-200"
+                                  }`} />
+                                ))}
+                              </div>
+                              <p className="text-xs text-gray-400 mt-0.5 text-right">{pwLabel[pwStrength]}</p>
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-gray-700 text-sm font-semibold block ml-1">Confirm Password</label>
+                          <div className="relative">
+                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "cpw" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <Input type={showConfirmPw ? "text" : "password"} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                              onFocus={() => setFocusedField("cpw")} onBlur={() => setFocusedField(null)}
+                              className={cn(inputClasses("cpw"), "pr-8 h-10")} required minLength={8} autoComplete="new-password" />
+                            <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
+                              {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                          {confirmPassword && password !== confirmPassword && (
+                            <p className="text-xs text-red-500 mt-0.5">Passwords do not match</p>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => { setRegStage("form"); setVerifyCode(""); setError(null); }}
+                            className="w-1/3 h-10 text-sm text-gray-500 hover:text-[#0B69A3] font-semibold border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
+                            Back
+                          </button>
+                          <Button type="submit" disabled={isLoading || verifyCode.length < 6 || !fullName.trim() || password.length < 8 || password !== confirmPassword || pwStrength < 3}
+                            className="flex-1 h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                            {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Creating account...</span>
+                              : <span className="flex items-center gap-2">Create Account <ArrowRight className="w-4 h-4" /></span>}
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
 
@@ -239,18 +531,18 @@ export function LoginPage() {
                   <div className="space-y-1.5">
                     <label className="text-gray-700 text-sm font-semibold block ml-1">Email Address</label>
                     <div className="relative">
-                      <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-gray-400"}`} />
+                      <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#AEB7C2]" : "text-gray-400"}`} />
                       <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
                         onFocus={() => setFocusedField("email")} onBlur={() => setFocusedField(null)}
                         className={inputClasses("email")} required autoComplete="email" />
                     </div>
                     <Button type="submit" disabled={isLoading}
-                      className="w-full mt-5 h-14 bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] hover:from-[#0A5F7A] hover:to-[#0D7490] text-white font-bold rounded-xl shadow-lg shadow-[#0D7490]/25 transition-all disabled:opacity-70 text-base">
-                      {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-5 h-5" /> Sending...</span>
-                        : <span className="flex items-center gap-2">Send Reset Code <ArrowRight className="w-5 h-5" /></span>}
+                      className="w-full mt-3 h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all disabled:opacity-70 text-sm">
+                      {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
+                        : <span className="flex items-center gap-2">Send Reset Code <ArrowRight className="w-4 h-4" /></span>}
                     </Button>
-                    <button type="button" onClick={() => { setMode("login"); clear(); }}
-                      className="w-full text-sm text-[#0D7490] hover:text-[#0A5F7A] font-semibold text-center">
+                    <button type="button" onClick={() => { setMode("login"); setLoginStage("password"); clear(); }}
+                      className="w-full text-sm text-[#AEB7C2] hover:text-[#0B69A3] font-semibold text-center">
                       Back to sign in
                     </button>
                   </div>
@@ -261,7 +553,7 @@ export function LoginPage() {
                     <div className="space-y-1.5">
                       <label className="text-gray-700 text-sm font-semibold block ml-1">Reset Code</label>
                       <div className="relative">
-                        <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "code" ? "text-[#0D7490]" : "text-gray-400"}`} />
+                        <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "code" ? "text-[#0B69A3]" : "text-gray-400"}`} />
                         <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                           onFocus={() => setFocusedField("code")} onBlur={() => setFocusedField(null)}
                           className={cn(inputClasses("code"), "text-center text-2xl tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
@@ -270,98 +562,83 @@ export function LoginPage() {
                     <div className="space-y-1.5">
                       <label className="text-gray-700 text-sm font-semibold block ml-1">New Password</label>
                       <div className="relative">
-                        <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "pw" ? "text-[#0D7490]" : "text-gray-400"}`} />
-                        <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                          onFocus={() => setFocusedField("pw")} onBlur={() => setFocusedField(null)}
-                          className={cn(inputClasses("pw"), "pr-12")} required minLength={6} />
+                        <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "pw" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                          <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                            onFocus={() => setFocusedField("pw")} onBlur={() => setFocusedField(null)}
+                            className={cn(inputClasses("pw"), "pr-8 h-10")} required minLength={6} />
                         <button type="button" onClick={() => setShowPassword(!showPassword)}
                           className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
-                          {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
                     {countdown > 0 && <p className="text-xs text-gray-400 text-center">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                     <Button type="submit" disabled={isLoading || otpCode.length < 6 || newPassword.length < 6}
-                      className="w-full h-14 bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] hover:from-[#0A5F7A] hover:to-[#0D7490] text-white font-bold rounded-xl shadow-lg shadow-[#0D7490]/25 transition-all disabled:opacity-70 text-base">
-                      {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-5 h-5" /> Resetting...</span>
-                        : <span className="flex items-center gap-2">Reset Password <ArrowRight className="w-5 h-5" /></span>}
+                      className="w-full h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all disabled:opacity-70 text-sm">
+                      {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Resetting...</span>
+                        : <span className="flex items-center gap-2">Reset Password <ArrowRight className="w-4 h-4" /></span>}
                     </Button>
                     <button type="button" onClick={() => { setMode("forgot"); setOtpCode(""); setNewPassword(""); clear(); }}
-                      className="w-full text-sm text-[#0D7490] hover:text-[#0A5F7A] font-semibold text-center">
+                      className="w-full text-sm text-[#AEB7C2] hover:text-[#0B69A3] font-semibold text-center">
                       Resend code
                     </button>
                   </>
                 )}
               </form>
 
-              {(mode === "login" || mode === "register") && (
+              {((mode === "login" && loginStage === "password") || mode === "register") && (
                 <>
-                  <div className="relative my-8">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-200" />
-                    </div>
-                    <div className="relative flex justify-center text-xs">
-                      <span className="px-4 bg-white text-gray-400 font-medium uppercase tracking-wider">Or continue with</span>
-                    </div>
+                  <div className="flex items-center my-4">
+                    <div className="flex-1 h-px bg-gray-200" />
+                    <div className="px-3 text-xs text-gray-400 whitespace-nowrap bg-white/90 rounded mx-3">Or continue with</div>
+                    <div className="flex-1 h-px bg-gray-200" />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="[&>div]:w-full [&>div>button]:w-full [&>div>button]:rounded-xl [&>div>button]:h-11">
-                      <GoogleLogin onSuccess={handleGoogleSuccess} onError={handleGoogleError} />
-                    </div>
-                    <button type="button"
-                      className="flex items-center justify-center gap-2 h-11 bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-gray-300 rounded-xl transition-all text-gray-700 font-semibold text-sm hover:shadow-md active:scale-[0.98]">
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" /></svg>
-                      GitHub
+                  <div className="relative">
+                    <button type="button" onClick={() => setSocialOpen(!socialOpen)}
+                      className="w-full flex items-center justify-between h-11 px-4 bg-gray-50 rounded-xl border border-gray-200 text-sm font-semibold">
+                      <span>Sign in with</span>
+                      <svg className={`w-4 h-4 transition-transform ${socialOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 8l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </button>
+                    {socialOpen && (
+                      <div className="mt-2 space-y-2">
+                        <div>
+                          <button type="button" onClick={() => loginWithGoogle()}
+                            className="w-full flex items-center justify-center gap-3 h-11 bg-white border border-gray-200 rounded-xl transition-all text-gray-700 font-semibold text-sm">
+                            <svg className="w-5 h-5" viewBox="0 0 533.5 544.3" xmlns="http://www.w3.org/2000/svg"><path d="M533.5 278.4c0-18.5-1.5-37.3-4.7-55.1H272v104.5h146.9c-6.3 33.8-25.5 62.5-54.3 81.6v67.8h87.7c51.3-47.3 81.2-116.9 81.2-198.8z" fill="#4285F4"/><path d="M272 544.3c73.5 0 135.3-24.1 180.4-65.4l-87.7-67.8c-24.4 16.4-55.7 26.1-92.7 26.1-71 0-131.3-48-152.8-112.5H31.8v70.5C76.9 494.9 168.2 544.3 272 544.3z" fill="#34A853"/><path d="M119.2 323.7c-11.9-35.3-11.9-73.1 0-108.4V144.8H31.8C11.3 190.9 0 233.6 0 278.4s11.3 87.5 31.8 133.6l87.4-88.3z" fill="#FBBC05"/><path d="M272 109.7c39.9-.6 78.2 14 107.4 40.3l80.5-80.5C404.7 24.5 345.5 0 272 0 168.2 0 76.9 49.4 31.8 144.8l87.4 70.5C140.7 157.7 201 109.7 272 109.7z" fill="#EA4335"/></svg>
+                            <span>Sign in with Google</span>
+                          </button>
+                        </div>
+                        <button type="button" onClick={() => { console.log('Apple Sign in clicked'); }}
+                          className="w-full flex items-center justify-center gap-3 h-11 bg-black text-white rounded-xl transition-all text-sm font-semibold">
+                            <span>Continue with Apple</span>
+                        </button>
+                        <button type="button" onClick={() => { console.log('Passkey Sign in clicked'); }}
+                          className="w-full flex items-center justify-center gap-3 h-11 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-all text-gray-700 font-semibold text-sm">
+                          <KeyRound className="w-5 h-5" />
+                          <span>Sign in with Passkey</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
+              <div className="mt-4 pt-2 border-t border-gray-100">
+                {(mode === "login" || mode === "otp-login" || mode === "register") && (
+                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="mt-0 text-center text-gray-500 text-xs flex items-center justify-center gap-2">
+                    <span className="text-xs text-gray-500">{mode === "register" ? "Already have an account?" : "Don't have an account?"}</span>
+                      <button type="button" onClick={() => { setMode(mode === "register" ? "login" : "register"); setLoginStage("password"); setRegStage("form"); setVerifyCode(""); setError(null); }}
+                      className="text-[#0B69A3] hover:text-[#2D8FD6] font-medium text-xs transition-colors">
+                      {mode === "register" ? "Sign in" : "Create one now"}
+                    </button>
+                  </motion.p>
+                )}
+              </div>
             </Card>
           </motion.div>
-
-          {(mode === "login" || mode === "register") && (
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="mt-8 text-center text-gray-500 text-sm">
-              {mode === "register" ? "Already have an account?" : "Don't have an account?"}{" "}
-              <button type="button" onClick={() => { setMode(mode === "register" ? "login" : "register"); setError(null); }}
-                className="text-[#0D7490] hover:text-[#0A5F7A] font-bold transition-colors hover:underline underline-offset-2">
-                {mode === "register" ? "Sign in" : "Create one now"}
-              </button>
-            </motion.p>
-          )}
         </div>
       </div>
 
-      <div className="hidden lg:flex flex-1 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0D7490] via-[#0A8BA8] to-[#0EA5E9]">
-          <FloatingOrbs />
-          <svg className="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
-            <defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" /></pattern></defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
-          </svg>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-white/5 rounded-full blur-3xl" />
-        </div>
-        <div className="relative z-10 flex flex-col justify-center items-center w-full p-12">
-          <div className="max-w-lg text-white">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="flex items-center gap-3 mb-8">
-              <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/10 shadow-lg">
-                <Sparkles className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-white/90 font-bold text-lg tracking-wide">AI-Powered Trading</span>
-            </motion.div>
-            <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="text-5xl font-bold mb-6 leading-[1.1] tracking-tight">
-              Make Smarter<br /><span className="text-white/90">Trading Decisions</span>
-            </motion.h2>
-            <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="text-white/70 text-lg mb-12 leading-relaxed max-w-md">
-              Get real-time AI insights, comprehensive market analysis, and powerful trading signals for African and global markets.
-            </motion.p>
-            <div className="space-y-4">
-              <FeatureCard icon={Zap} title="Real-time Market Data" desc="Live NSE and global market data with millisecond precision" delay={0.7} />
-              <FeatureCard icon={Sparkles} title="AI Trading Signals" desc="Smart recommendations powered by advanced machine learning" delay={0.8} />
-              <FeatureCard icon={CheckCircle2} title="Portfolio Analytics" desc="Track, analyze and optimize your investments automatically" delay={0.9} />
-            </div>
-          </div>
-        </div>
-      </div>
+      
     </div>
   );
 }

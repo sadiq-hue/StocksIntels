@@ -92,16 +92,114 @@ async function fetchNSEQuote(symbol) {
   return quote;
 }
 
+async function fetchGlobalQuote(symbol) {
+  if (symbol.startsWith('NSE:')) return null;
+
+  const cleanSymbol = symbol.toUpperCase().replace(/\./g, '-');
+  // Detect forex pairs (e.g. EURUSD) and append =X for Yahoo Finance
+  const isForex = /^[A-Z]{6}$/.test(cleanSymbol);
+  const yahooSymbol = isForex ? cleanSymbol + '=X' : cleanSymbol;
+  try {
+    const { default: YahooFinance } = await import('yahoo-finance2');
+    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const q = await yf.quote(yahooSymbol);
+    if (!q?.regularMarketPrice) return null;
+    const price = Number(q.regularMarketPrice ?? q.regularMarketPreviousClose);
+    return {
+      symbol: cleanSymbol,
+      company_name: q.shortName || q.longName || cleanSymbol,
+      price,
+      currency: 'USD',
+      change: Number(q.regularMarketChange ?? 0),
+      changePercent: Number(q.regularMarketChangePercent ?? 0),
+      volume: q.regularMarketVolume ?? 0,
+      dayHigh: Number(q.regularMarketDayHigh ?? price),
+      dayLow: Number(q.regularMarketDayLow ?? price),
+      previousClose: Number(q.regularMarketPreviousClose ?? price),
+      marketCap: q.marketCap ?? 0,
+      timestamp: Math.floor(Date.now() / 1000),
+      lastUpdated: new Date().toISOString(),
+      exchange: 'Global',
+      provider: 'yahoo',
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchBatchNSEQuotes(symbols) {
   const nseSymbols = symbols.filter(s => s.startsWith('NSE:'));
   if (!nseSymbols.length) return {};
 
-  const results = {};
-  for (const s of nseSymbols) {
-    const quote = await fetchNSEQuote(s);
-    if (quote) results[s] = quote;
+  try {
+    const { default: YahooFinance } = await import('yahoo-finance2');
+    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const yahooSymbols = nseSymbols.map(s => toYahooSymbol(s));
+    const chunks = chunkArray(yahooSymbols, 10);
+    const map = {};
+    // Process 5 chunks at a time to avoid overwhelming Yahoo
+    for (let i = 0; i < chunks.length; i += 5) {
+      const batch = chunks.slice(i, i + 5);
+      const results = await Promise.allSettled(batch.map(c => yf.quote(c)));
+      for (const result of results) {
+        if (result.status !== 'fulfilled' || !Array.isArray(result.value)) continue;
+        for (const q of result.value) {
+          if (!q?.regularMarketPrice) continue;
+          const rawSymbol = (q.symbol || '').toUpperCase();
+          const cleanSymbol = rawSymbol.replace('.NR', '');
+          const key = `NSE:${cleanSymbol}`;
+          const price = Number(q.regularMarketPrice ?? q.regularMarketPreviousClose);
+          map[key] = { symbol: key, company_name: q.shortName || q.longName || cleanSymbol, price, currency: 'KES', change: Number(q.regularMarketChange ?? 0), changePercent: Number(q.regularMarketChangePercent ?? 0), volume: q.regularMarketVolume ?? 0, dayHigh: Number(q.regularMarketDayHigh ?? price), dayLow: Number(q.regularMarketDayLow ?? price), previousClose: Number(q.regularMarketPreviousClose ?? price), timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(), exchange: 'NSE', provider: 'yahoo' };
+        }
+      }
+    }
+    return map;
+  } catch {
+    return {};
   }
-  return results;
 }
 
-module.exports = { fetchNSEQuote, fetchBatchNSEQuotes };
+function chunkArray(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
+
+function parseYahooGlobalResult(q) {
+  if (!q?.regularMarketPrice) return null;
+  const symbol = (q.symbol || '').toUpperCase();
+  if (!symbol) return null;
+  const price = Number(q.regularMarketPrice ?? q.regularMarketPreviousClose);
+  return { symbol, company_name: q.shortName || q.longName || symbol, price, currency: 'USD', change: Number(q.regularMarketChange ?? 0), changePercent: Number(q.regularMarketChangePercent ?? 0), volume: q.regularMarketVolume ?? 0, dayHigh: Number(q.regularMarketDayHigh ?? price), dayLow: Number(q.regularMarketDayLow ?? price), previousClose: Number(q.regularMarketPreviousClose ?? price), marketCap: q.marketCap ?? 0, timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(), exchange: 'Global', provider: 'yahoo' };
+}
+
+async function fetchBatchGlobalQuotes(symbols) {
+  const globalSymbols = symbols.filter(s => !s.startsWith('NSE:'));
+  if (!globalSymbols.length) return {};
+
+  try {
+    const { default: YahooFinance } = await import('yahoo-finance2');
+    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const cleanSymbols = globalSymbols.map(s => s.toUpperCase().replace(/\./g, '-'));
+    const chunks = chunkArray(cleanSymbols, 10);
+    const map = {};
+    // Process 5 chunks at a time to avoid overwhelming Yahoo
+    for (let i = 0; i < chunks.length; i += 5) {
+      const batch = chunks.slice(i, i + 5);
+      const results = await Promise.allSettled(batch.map(c => yf.quote(c)));
+      for (const result of results) {
+        if (result.status === 'fulfilled' && Array.isArray(result.value)) {
+          for (const q of result.value) {
+            const parsed = parseYahooGlobalResult(q);
+            if (parsed) map[parsed.symbol] = parsed;
+          }
+        }
+      }
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+module.exports = { fetchNSEQuote, fetchBatchNSEQuotes, fetchGlobalQuote, fetchBatchGlobalQuotes };

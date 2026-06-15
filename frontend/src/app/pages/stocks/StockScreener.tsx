@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card } from "../../components/ui/card";
 import {
   Search, TrendingUp, TrendingDown, Filter,
@@ -10,6 +10,8 @@ import {
   fetchScreenerResults, fetchScreenerCriteria,
   type ScreenerFilters, type ScreenerStock, type ScreenerResult, type ScreenerCriteria,
 } from "../../services/screenerService";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 function formatVolume(vol: string | number): string {
   const v = typeof vol === "string" ? parseFloat(vol.replace(/[^0-9.]/g, "")) : vol;
@@ -83,6 +85,28 @@ export function StockScreener() {
   const [sortDir, setSortDir] = useState("desc");
   const [page, setPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
+  const [yahooResults, setYahooResults] = useState<{ ticker: string; name: string }[]>([]);
+  const [yahooSearching, setYahooSearching] = useState(false);
+  const yahooTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    if (yahooTimer.current) clearTimeout(yahooTimer.current);
+    if (!search.trim()) {
+      setYahooResults([]); setYahooSearching(false); return;
+    }
+    setYahooSearching(true);
+    yahooTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_URL}/stocks/search/yahoo?q=${encodeURIComponent(search)}`);
+        const data = await res.json();
+        setYahooResults((data || []).filter((q: any) =>
+          q.quoteType === "EQUITY" || q.quoteType === "ETF"
+        ).map((q: any) => ({ ticker: q.symbol, name: q.longName || q.shortName || q.symbol })));
+      } catch { setYahooResults([]); }
+      finally { setYahooSearching(false); }
+    }, 400);
+    return () => { if (yahooTimer.current) clearTimeout(yahooTimer.current); };
+  }, [search]);
 
   useEffect(() => {
     fetchScreenerCriteria().then(setCriteria).catch(() => {});
@@ -353,10 +377,10 @@ export function StockScreener() {
                         </div>
                       </td>
                       <td className="px-4 py-3 hidden sm:table-cell">
-                        <span className="text-sm text-muted-foreground block max-w-[160px] truncate font-medium">{stock.name}</span>
+                        <span className="text-sm text-muted-foreground block font-medium">{stock.name || stock.ticker}</span>
                       </td>
                       <td className="px-4 py-3 hidden lg:table-cell">
-                        <span className="text-xs text-muted-foreground font-medium">{stock.sector}</span>
+                        <span className="text-xs text-muted-foreground font-medium">{stock.sector || 'N/A'}</span>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="text-sm font-bold text-foreground font-mono">
@@ -388,7 +412,7 @@ export function StockScreener() {
                 })}
               </tbody>
             </table>
-            {(!result || result.stocks.length === 0) && !loading && (
+            {(!result || result.stocks.length === 0) && !loading && !yahooSearching && yahooResults.length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Search className="size-8 mb-2 opacity-40" />
                 <p className="text-sm font-medium">No stocks match your criteria</p>
@@ -397,9 +421,37 @@ export function StockScreener() {
                 </button>
               </div>
             )}
-            {loading && (
+            {(!result || result.stocks.length === 0) && !loading && yahooResults.length > 0 && (
+              <div>
+                <div className="px-4 py-2 bg-teal-50 border-b border-teal-200">
+                  <span className="text-[11px] font-semibold text-teal-700">Yahoo Finance results for &quot;{search}&quot;</span>
+                </div>
+                <div className="divide-y divide-border">
+                  {yahooResults.map((r) => (
+                    <div
+                      key={r.ticker}
+                      className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                      onClick={() => navigate(`/app/stock/${r.ticker}?market=us`)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-sm text-foreground">{r.ticker}</span>
+                        <span className="text-xs text-muted-foreground">{r.name}</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-teal-600 bg-teal-50 px-2 py-0.5 rounded">Yahoo Finance</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {loading && !yahooSearching && (
               <div className="flex items-center justify-center py-16 text-muted-foreground">
                 <div className="size-6 border-2 border-[#0D7490] border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+            {yahooSearching && (
+              <div className="flex items-center justify-center py-8 text-muted-foreground">
+                <div className="size-5 border-2 border-teal-500 border-t-transparent rounded-full animate-spin mr-2" />
+                <span className="text-xs font-medium">Searching Yahoo Finance...</span>
               </div>
             )}
           </div>
@@ -422,7 +474,7 @@ export function StockScreener() {
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#0D7490]/10 text-[#0D7490] font-bold">NSE</span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground truncate max-w-[180px]">{stock.name}</p>
+                    <p className="text-xs text-muted-foreground">{stock.name || stock.ticker}</p>
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-bold font-mono text-foreground">
@@ -442,7 +494,7 @@ export function StockScreener() {
                   <span className="text-[10px] text-muted-foreground ml-auto">Conf: {stock.confidence}%</span>
                 </div>
                 <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                  <span>{stock.sector}</span>
+                  <span>{stock.sector || 'N/A'}</span>
                   <span>Vol: {formatVolume(stock.volume)}</span>
                 </div>
                 <div className="mt-2 pt-2 border-t border-border">
@@ -468,15 +520,43 @@ export function StockScreener() {
               </Card>
             );
           })}
-          {(!result || result.stocks.length === 0) && !loading && (
+          {(!result || result.stocks.length === 0) && !loading && !yahooSearching && yahooResults.length === 0 && (
             <div className="col-span-full flex flex-col items-center justify-center py-16 text-muted-foreground">
               <Search className="size-8 mb-2 opacity-40" />
               <p className="text-sm font-medium">No stocks match your criteria</p>
             </div>
           )}
-          {loading && (
+          {(!result || result.stocks.length === 0) && !loading && yahooResults.length > 0 && (
+            <div className="col-span-full">
+              <div className="px-4 py-2 bg-teal-50 border border-teal-200 rounded-t-lg">
+                <span className="text-[11px] font-semibold text-teal-700">Yahoo Finance results for &quot;{search}&quot;</span>
+              </div>
+              <div className="divide-y divide-border border-x border-b rounded-b-lg">
+                {yahooResults.map((r) => (
+                  <div
+                    key={r.ticker}
+                    className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                    onClick={() => navigate(`/app/stock/${r.ticker}?market=us`)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-sm text-foreground">{r.ticker}</span>
+                      <span className="text-xs text-muted-foreground">{r.name}</span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-teal-600 bg-teal-50 px-2 py-0.5 rounded">Yahoo Finance</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {loading && !yahooSearching && (
             <div className="col-span-full flex items-center justify-center py-16 text-muted-foreground">
               <div className="size-6 border-2 border-[#0D7490] border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {yahooSearching && (
+            <div className="col-span-full flex items-center justify-center py-8 text-muted-foreground">
+              <div className="size-5 border-2 border-teal-500 border-t-transparent rounded-full animate-spin mr-2" />
+              <span className="text-xs font-medium">Searching Yahoo Finance...</span>
             </div>
           )}
         </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Star, TrendingUp, TrendingDown, MoreVertical, Loader2, PlusCircle } from "lucide-react";
 import { Link } from "react-router";
+import { useAuth } from "../auth/AuthContext";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -16,16 +17,18 @@ interface WatchlistItem {
 export function Watchlist() {
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchWatchlist = async () => {
       try {
+        const userIdParam = user?.id ? `?userId=${user.id}` : '';
         // Fetch saved items and their current market data
-        const res = await fetch(`${API_BASE_URL}/watchlist`);
+        const res = await fetch(`${API_BASE_URL}/watchlist${userIdParam}`);
         const data = await res.json();
         
         // Fetch signals for these items to enrich the UI
-        const signalsRes = await fetch(`${API_BASE_URL}/signals`);
+        const signalsRes = await fetch(`${API_BASE_URL}/signals${userIdParam}`);
         const signalsData = await signalsRes.json();
         
         const enrichedItems = data.map((item: any) => {
@@ -47,7 +50,7 @@ export function Watchlist() {
     };
 
     fetchWatchlist();
-  }, []);
+  }, [user?.id]);
 
   return (
     <Card className="bg-white border-gray-200 shadow-sm overflow-hidden">

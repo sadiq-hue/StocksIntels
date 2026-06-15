@@ -1,0 +1,104 @@
+# Render Blueprint for StocksIntels backend
+# Deploy: push this file to GitHub, then create a Blueprint on Render pointing to this repo.
+# After the backend deploys, update CORS_ORIGIN with your real Netlify URL and redeploy.
+
+services:
+  - type: web
+    name: stockintel-backend
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    plan: starter
+    branch: main
+    healthCheckPath: /healthz
+    envVars:
+      # Infrastructure (auto-wired)
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stockintel-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: stockintel-redis
+          property: connectionString
+
+      # App settings
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: LOG_REQUESTS
+        value: "1"
+      - key: LOG_LEVEL
+        value: info
+      - key: CORS_ORIGIN
+        # TODO: Replace with your real Netlify URL after deploying the frontend
+        value: https://stockintel.netlify.app
+      - key: SIGNAL_INTERVAL_MS
+        value: "30000"
+      - key: MARKET_DATA_PROVIDER
+        value: polygon
+
+      # Market data providers (fill in Render dashboard)
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: RAPIDAPI_HOST
+        value: yahoo-finance15.p.rapidapi.com
+      - key: TWELVE_DATA_API_KEY
+        sync: false
+      - key: FMP_API_KEY
+        sync: false
+      - key: EODHD_API_KEY
+        sync: false
+      - key: POLYGON_API_KEY
+        sync: false
+      - key: SEC_EDGAR_API_KEY
+        sync: false
+      - key: SIMFIN_API_KEY
+        sync: false
+
+      # Email (Ensend) — set in Render dashboard
+      - key: ENSEND_PROJECT_SECRET
+        sync: false
+      - key: ENSEND_SENDER_NAME
+        value: StocksIntels
+      - key: ENSEND_SENDER_ADDRESS
+        sync: false
+
+      # Payments — set in Render dashboard or leave empty to disable
+      - key: PAYHERO_BASE_URL
+        value: https://backend.payhero.co.ke/api/v2
+      - key: PAYHERO_AUTH_TOKEN
+        sync: false
+      - key: PAYHERO_CHANNEL_ID
+        sync: false
+      - key: PAYHERO_CALLBACK_URL
+        sync: false
+      - key: PAYD_API_USERNAME
+        sync: false
+      - key: PAYD_API_PASSWORD
+        sync: false
+      - key: PAYD_API_SECRET
+        sync: false
+      - key: PAYD_USERNAME
+        sync: false
+      - key: PAYD_WALLET_TYPE
+        value: local
+      - key: PAYD_CALLBACK_URL
+        sync: false
+
+      # Security — generate strong values and set in Render dashboard
+      - key: JWT_SECRET
+        sync: false
+      - key: BROKER_ENCRYPTION_KEY
+        sync: false
+
+databases:
+  - name: stockintel-db
+    plan: starter
+    ipAllowList: []
+
+redis:
+  - name: stockintel-redis
+    plan: starter
+    ipAllowList: []

@@ -2,13 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import { Card } from "../components/ui/card";
 import { 
   Bell, Shield, User, Palette, Database, Check, Loader2, Eye, EyeOff, 
-  Trash2, Download, Camera, MapPin, Briefcase, Globe, Info 
+  Trash2, Download, Camera, MapPin, Briefcase, Globe, Info, Mail,
+  TrendingUp, BarChart3, LineChart, Newspaper
 } from "lucide-react";
 import { Switch } from "../components/ui/switch";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { toast } from "sonner";
 import { useAuth } from "../auth/AuthContext";
+import { useTheme } from "next-themes";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -27,6 +29,7 @@ interface AppearanceSettings {
 
 export function SettingsPage() {
   const { user } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [activeSection, setActiveSection] = useState("profile");
   
   const [profile, setProfile] = useState({
@@ -72,6 +75,7 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [sendingReport, setSendingReport] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -84,6 +88,8 @@ export function SettingsPage() {
             const data = await res.json();
             setProfile(prev => ({ ...prev, ...data }));
             setOriginalProfile(prev => ({ ...prev, ...data }));
+            localStorage.setItem("userProfile", JSON.stringify(data));
+            return;
           }
         }
         const saved = localStorage.getItem("userProfile");
@@ -164,6 +170,12 @@ export function SettingsPage() {
   };
 
   const handleAppearanceChange = async (key: keyof AppearanceSettings, value: boolean) => {
+    if (key === "darkMode") {
+      setTheme(value ? "dark" : "light");
+      localStorage.setItem("appearanceSettings", JSON.stringify({ ...appearance, darkMode: value }));
+      toast.success(`Dark mode ${value ? "enabled" : "disabled"}`);
+      return;
+    }
     const updated = { ...appearance, [key]: value };
     setAppearance(updated);
     try {
@@ -217,6 +229,43 @@ export function SettingsPage() {
     }
   };
 
+  const handleSendReport = async (reportType: string) => {
+    setSendingReport(reportType);
+    try {
+      const endpoint = reportType === 'sentiment' 
+        ? `${API_BASE_URL}/user/send-test-sentiment`
+        : reportType === 'portfolio'
+        ? `${API_BASE_URL}/user/send-test-portfolio`
+        : reportType === 'paper'
+        ? `${API_BASE_URL}/user/send-test-paper-portfolio`
+        : `${API_BASE_URL}/user/send-test-hot-news`;
+      
+      const body = {
+        email: user?.email || profile.email,
+        userId: user?.id,
+        ...(reportType === 'sentiment' || reportType === 'hot-news' ? { fullName: user?.full_name || profile.full_name } : {}),
+      };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: "Failed to send report" }));
+        throw new Error(error.error || error.message || "Failed to send report");
+      }
+
+      const data = await res.json();
+      toast.success(data.message || "Report sent successfully! Check your email.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to send report");
+    } finally {
+      setSendingReport(null);
+    }
+  };
+
   const handleExportData = () => {
     const userData = {
       profile,
@@ -244,6 +293,7 @@ export function SettingsPage() {
   const sections = [
     { icon: User, label: "Profile", id: "profile" },
     { icon: Bell, label: "Notifications", id: "notifications" },
+    { icon: Mail, label: "Email Reports", id: "email-reports" },
     { icon: Shield, label: "Security", id: "security" },
     { icon: Palette, label: "Appearance", id: "appearance" },
     { icon: Database, label: "Data & Privacy", id: "privacy" },
@@ -376,6 +426,156 @@ export function SettingsPage() {
           </Card>
         );
 
+      case "appearance":
+        return (
+          <Card className="bg-card border-border p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <Palette className="w-6 h-6 text-[#0D7490]" />
+              <h3 className="text-foreground text-xl">Appearance</h3>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
+                <div>
+                  <div className="text-foreground font-medium">Dark Mode</div>
+                  <div className="text-muted-foreground text-sm">
+                    {theme === "dark" ? "Currently enabled" : "Currently disabled"}
+                  </div>
+                </div>
+                <Switch 
+                  checked={theme === "dark"}
+                  onCheckedChange={(checked) => handleAppearanceChange("darkMode", checked)}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
+                <div>
+                  <div className="text-foreground font-medium">Compact View</div>
+                  <div className="text-muted-foreground text-sm">Show more data in less space</div>
+                </div>
+                <Switch 
+                  checked={appearance.compactView}
+                  onCheckedChange={(checked) => handleAppearanceChange("compactView", checked)}
+                />
+              </div>
+            </div>
+          </Card>
+        );
+
+      case "email-reports":
+        return (
+          <Card className="bg-white border-gray-200 p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <Mail className="w-6 h-6 text-[#0D7490]" />
+              <h3 className="text-gray-900 text-xl">Email Reports</h3>
+            </div>
+
+            <div className="space-y-4">
+              <div className="text-gray-600 text-sm mb-2">
+                Request your daily reports to be sent to your email instantly. These are the same reports scheduled for automatic delivery at midnight EAT.
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-5 h-5 text-[#0D7490]" />
+                    <div className="text-gray-900 font-medium">Market Sentiment</div>
+                  </div>
+                  <div className="text-gray-600 text-sm mb-3">
+                    Daily sentiment report with NSE & global gainers/losers and AI signal overview.
+                  </div>
+                  <Button
+                    onClick={() => handleSendReport("sentiment")}
+                    disabled={sendingReport !== null}
+                    className="w-full bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
+                  >
+                    {sendingReport === "sentiment" ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      "Send Now"
+                    )}
+                  </Button>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <BarChart3 className="w-5 h-5 text-[#0D7490]" />
+                    <div className="text-gray-900 font-medium">Real Portfolio</div>
+                  </div>
+                  <div className="text-gray-600 text-sm mb-3">
+                    Portfolio report with current holdings, P&L, sector allocation, and best/worst performers.
+                  </div>
+                  <Button
+                    onClick={() => handleSendReport("portfolio")}
+                    disabled={sendingReport !== null}
+                    className="w-full bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
+                  >
+                    {sendingReport === "portfolio" ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      "Send Now"
+                    )}
+                  </Button>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <LineChart className="w-5 h-5 text-[#0D7490]" />
+                    <div className="text-gray-900 font-medium">Paper Trading</div>
+                  </div>
+                  <div className="text-gray-600 text-sm mb-3">
+                    Paper trading portfolio report with simulated holdings, P&L, and cash balance.
+                  </div>
+                  <Button
+                    onClick={() => handleSendReport("paper")}
+                    disabled={sendingReport !== null}
+                    className="w-full bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
+                  >
+                    {sendingReport === "paper" ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      "Send Now"
+                    )}
+                  </Button>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Newspaper className="w-5 h-5 text-amber-600" />
+                    <div className="text-gray-900 font-medium">Hot News</div>
+                  </div>
+                  <div className="text-gray-600 text-sm mb-3">
+                    Breaking news alerts (IPO, earnings, mergers, regulatory changes) that could move markets.
+                  </div>
+                  <Button
+                    onClick={() => handleSendReport("hot-news")}
+                    disabled={sendingReport !== null}
+                    className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                  >
+                    {sendingReport === "hot-news" ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      "Send Now"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        );
+
       case "security":
         return (
           <Card className="bg-white border-gray-200 p-6">
@@ -459,42 +659,6 @@ export function SettingsPage() {
                 <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
                   Enable 2FA
                 </Button>
-              </div>
-            </div>
-          </Card>
-        );
-
-      case "appearance":
-        return (
-          <Card className="bg-white border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <Palette className="w-6 h-6 text-[#0D7490]" />
-              <h3 className="text-gray-900 text-xl">Appearance</h3>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
-                <div>
-                  <div className="text-gray-900 font-medium">Dark Mode</div>
-                  <div className="text-gray-600 text-sm">
-                    {appearance.darkMode ? "Currently enabled" : "Currently disabled"}
-                  </div>
-                </div>
-                <Switch 
-                  checked={appearance.darkMode}
-                  onCheckedChange={(checked) => handleAppearanceChange("darkMode", checked)}
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
-                <div>
-                  <div className="text-gray-900 font-medium">Compact View</div>
-                  <div className="text-gray-600 text-sm">Show more data in less space</div>
-                </div>
-                <Switch 
-                  checked={appearance.compactView}
-                  onCheckedChange={(checked) => handleAppearanceChange("compactView", checked)}
-                />
               </div>
             </div>
           </Card>

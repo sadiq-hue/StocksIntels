@@ -3,9 +3,23 @@ const { generateSignals } = require('./signalService');
 const { getQuotesBatch } = require('./marketService');
 const { connect, publishBatchSignalUpdate, publishSignalNotifications } = require('./queueService');
 const { pool } = require('./db');
+const engineConfig = require('./engineConfig');
 
-const SIGNAL_INTERVAL_MS = parseInt(process.env.SIGNAL_INTERVAL_MS || '30000', 10);
-const NSE_SYMBOLS = ['SCOM','EQTY','KCB','EABL','BAMB','ABSA','SBIC','KPLC','NMG','CRAY','KLG','OLYM','UMEM','TOTL','STAN','COOP','JUB','KNRE','LKL','CIC','HFCK','IMH'];
+function isMarketOpenNow() {
+  const now = new Date();
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false;
+  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const month = now.getMonth();
+  const isDST = month >= 2 && month <= 9;
+  const etOffset = isDST ? -4 : -5;
+  const etMinutes = ((utcMinutes + etOffset * 60) % 1440 + 1440) % 1440;
+  return etMinutes >= 570 && etMinutes < 960;
+}
+
+function getSignalIntervalMs() {
+  return engineConfig.getConfig().signalInterval || 300000;
+}
 const GLOBAL_SYMBOLS = [
   'AAPL','MSFT','GOOGL','AMZN','NVDA','META','TSLA','JPM','V','NFLX',
   'LLY','AVGO','UNH','XOM','PG','JNJ','WMT','CVX','HD','KO',
@@ -14,12 +28,12 @@ const GLOBAL_SYMBOLS = [
   'MCD','NKE','SBUX','GS','MS','C','WFC','BLK','SCHW','AXP',
   'UPS','RTX','HON','LOW','MMM','MDT','AMAT','MU','NOW','UBER',
   'ABNB','PLTR','SNOW','DDOG','CRWD','PANW','FTNT','SQ','PYPL','COIN',
+  'SPCX','NOK','SMCI','RKLB','RDW','ASTS','SATS','IREN','GRAB','PATH',
+  'MRVL','CPNG','NU','TTD','ITUB','CCL','SOUN','HPE','VALE','NIO',
+  'ARM','MSTR','ROKU','IONQ','HIMS','STLA','CAG','ACHR','PL',
 ];
 
-const ALL_SYMBOLS = [
-  ...NSE_SYMBOLS.map(s => `NSE:${s}`),
-  ...GLOBAL_SYMBOLS,
-];
+const ALL_SYMBOLS = GLOBAL_SYMBOLS;
 
 let intervalHandle = null;
 let running = false;
@@ -29,6 +43,11 @@ async function generateAndPublish() {
   running = true;
 
   try {
+    if (!isMarketOpenNow()) {
+      console.log(`[SignalPublisher] Markets closed (weekend/holiday), skipping cycle`);
+      return;
+    }
+
     const startTime = Date.now();
 
     // 1. Fetch live market data
@@ -54,10 +73,7 @@ async function generateAndPublish() {
       console.log(`[SignalPublisher] Published ${signals.length} signals in ${Date.now() - startTime}ms`);
     }
 
-    // 5. Persist signals to database for history
-    await persistSignals(signals);
-
-    // 6. Create notifications for important signal changes and publish via Redis
+    // 5. Create notifications for important signal changes and publish via Redis
     const notifications = await createSignalNotifications(signals);
     if (notifications.length > 0) {
       await publishSignalNotifications(notifications);
@@ -70,60 +86,25 @@ async function generateAndPublish() {
   }
 }
 
-async function persistSignals(signals) {
-  try {
-    const values = signals.map(s => [
-      s.ticker,
-      s.signal,
-      s.confidence,
-      s.price,
-      s.change || 0,
-      s.entry || s.price,
-      s.stopLoss || 0,
-      s.target1 || 0,
-      s.target2 || 0,
-      s.riskReward || 1,
-      s.sector || 'General',
-      s.market || 'Global',
-      s.currency || 'USD',
-      s.type || 'Swing Trade',
-      s.timeframe || '2-4 weeks',
-      s.reason || '',
-    ]);
-
-    // Batch insert, upsert on conflict (ticker + date bucket)
-    const placeholders = values.map((_, i) => {
-      const base = i * 16;
-      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, NOW())`;
-    }).join(',');
-
-    const flat = values.flat();
-    await pool.query(
-      `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, generated_at)
-       VALUES ${placeholders}
-       ON CONFLICT DO NOTHING`,
-      flat
-    );
-  } catch (error) {
-    // signal_history table may not exist yet; log and move on
-    if (error.code !== '42P01') {
-      console.error('[SignalPublisher] DB persist error:', error.message);
-    }
-  }
-}
-
 function start() {
   if (intervalHandle) return;
-  console.log(`[SignalPublisher] Starting background worker (interval: ${SIGNAL_INTERVAL_MS}ms)`);
+  const initialInterval = getSignalIntervalMs();
+  console.log(`[SignalPublisher] Starting background worker (interval: ${initialInterval}ms)`);
 
-  // Fire immediately, then on interval
+  // Fire immediately, then schedule
   generateAndPublish();
-  intervalHandle = setInterval(generateAndPublish, SIGNAL_INTERVAL_MS);
+  function scheduleNext() {
+    const ms = getSignalIntervalMs();
+    intervalHandle = setTimeout(() => {
+      generateAndPublish().finally(() => scheduleNext());
+    }, ms);
+  }
+  scheduleNext();
 }
 
 function stop() {
   if (intervalHandle) {
-    clearInterval(intervalHandle);
+    clearTimeout(intervalHandle);
     intervalHandle = null;
   }
   running = false;

@@ -1,6 +1,7 @@
 // News Service - Fetches real-time news from multiple sources for Kenyan stocks
 
 const cheerio = require('cheerio');
+const axios = require('axios');
 const RssParser = require('rss-parser');
 const rssParser = new RssParser({
   timeout: 10000,
@@ -13,29 +14,93 @@ const { newsapi, finnhub: finnhubClient, generic } = require('./apiClient');
 // API Keys - can be overridden by environment variables
 const NEWSAPI_KEY = process.env.VITE_NEWSAPI_KEY || '16eb777bdf469c92f9522c287a7e4d';
 const FINNHUB_KEY = process.env.VITE_FINNHUB_KEY || 'd7ji2ihr01qhf13euuvgd7ji2ihr01qhf13euv00';
+const BENZINGA_KEY = process.env.VITE_BENZINGA_API_KEY || process.env.BENZINGA_API_KEY || '';
 
-console.log('📰 News Service Loaded - API Keys Ready');
+// Cache
+let newsCache = [];
+let newsCacheTime = 0;
+const NEWS_CACHE_TTL = 60000;
+
+console.log('📰 News Service Loaded');
 
 // Kenyan stock symbols and company names for filtering news
 const KENYAN_STOCKS = {
-  'SCOM': 'Safaricom',
-  'EQTY': 'Equity Group',
+  'SCOM': 'Safaricom PLC',
+  'EQTY': 'Equity Group Holdings',
   'KCB': 'KCB Group',
   'EABL': 'East African Breweries',
-  'BAMB': 'Bamburi Cement',
-  'ABSA': 'Absa Bank Kenya',
-  'SBIC': 'Stanbic Holdings',
-  'KLG': 'Kenya Airways',
-  'KPLC': 'Kenya Power',
-  'NMG': 'Nation Media Group',
-  'CRAY': 'Crown Paints',
-  'UMEM': 'Umeme',
-  'TOTL': 'TotalEnergies Kenya',
-  'BRDR': "Bird's Broilers",
-  'OLYM': 'Olympia Capital',
-  'SCBK': 'Standard Chartered Kenya',
-  'TPS': 'TPS Serengeti Breweries',
-  'ARM': 'ARM Cement'
+  'BAMB': 'Bamburi Cement PLC',
+  'ABSA': 'Absa Bank Kenya PLC',
+  'SBIC': 'Stanbic Holdings PLC',
+  'KPLC': 'Kenya Power & Lighting Co PLC',
+  'NMG': 'Nation Media Group PLC',
+  'TOTL': 'TotalEnergies Marketing Kenya PLC',
+  'SCBK': 'Standard Chartered Bank Kenya Ltd',
+  'ARM': 'ARM Cement PLC',
+  'KUKZ': 'Kakuzi PLC',
+  'KAPC': 'Kapchorua Tea Kenya PLC',
+  'LIMT': 'Limuru Tea Plc',
+  'WTK': 'Williamson Tea Kenya PLC',
+  'SASN': 'Sasini PLC',
+  'REA': 'Rea Vipingo Plantations Ltd',
+  'EGAD': 'Eaagads Ltd',
+  'CGEN': 'Car & General (Kenya) PLC',
+  'COOP': 'Co-operative Bank of Kenya Ltd',
+  'NCBA': 'NCBA Group PLC',
+  'IMH': 'I&M Group PLC',
+  'DTK': 'Diamond Trust Bank Kenya Ltd',
+  'BKG': 'BK Group PLC',
+  'HFCK': 'HF Group PLC',
+  'SGL': 'Standard Group PLC',
+  'TPSE': 'TPS Eastern Africa Ltd',
+  'SCAN': 'WPP Scangroup Ltd',
+  'KQ': 'Kenya Airways PLC',
+  'XPRS': 'Express Kenya Ltd',
+  'SMER': 'Sameer Africa PLC',
+  'PORT': 'E.A. Portland Cement Co. Ltd',
+  'CRWN': 'Crown Paints Kenya PLC',
+  'KEGN': 'KenGen Co. PLC',
+  'UMME': 'Umeme Ltd',
+  'JUB': 'Jubilee Holdings Ltd',
+  'KNRE': 'Kenya Re-Insurance Corp Ltd',
+  'CIC': 'CIC Insurance Group PLC',
+  'BRIT': 'Britam Holdings PLC',
+  'LBTY': 'Liberty Kenya Holdings Ltd',
+  'SLAM': 'Sanlam Kenya PLC',
+  'CTUM': 'Centum Investment Company PLC',
+  'OCH': 'Olympia Capital Holdings Ltd',
+  'HAFR': 'Home Afrika Ltd',
+  'NSE': 'Nairobi Securities Exchange PLC',
+  'AMAC': 'Africa Mega Agricorp PLC',
+  'BAT': 'British American Tobacco Kenya PLC',
+  'BOC': 'B.O.C Kenya Ltd',
+  'CARB': 'Carbacid Investments Ltd',
+  'UNGA': 'Unga Group PLC',
+  'MSC': 'Mumias Sugar Co. Ltd',
+  'FTGH': 'Flame Tree Group Holdings Ltd',
+  'EVRD': 'Eveready East Africa PLC',
+  'LKL': 'Longhorn Publishers Ltd',
+  'NBV': 'Nairobi Business Ventures Ltd',
+  'UCHM': 'Uchumi Supermarkets PLC',
+  'ALP': 'ALP Real Estate Investment Trust',
+  'CABL': 'East African Cables',
+  'DCON': 'Deacons East Africa',
+  'GLD': 'Absa NewGold ETF',
+  'HBE': 'Homeboyz Entertainment',
+  'KPC': 'Kenya Pipeline Company',
+  'KPLC-P4': 'Kenya Power 4% Preference Shares',
+  'KPLC-P7': 'Kenya Power 7% Preference Shares',
+  'KURV': 'Kurwitu Ventures Ltd',
+  'LAPR': 'Laptrust Imara Income-REIT',
+  'SKL': 'Shri Krishana Overseas Ltd',
+  'SMWF': 'Satrix MSCI World Feeder ETF',
+  'TCL': 'TransCentury Plc',
+  KLG: 'Kenya Airways',
+  BRDR: "Bird's Broilers",
+  OLYM: 'Olympia Capital',
+  TPS: 'TPS Serengeti Breweries',
+  CRAY: 'Crown Paints',
+  UMEM: 'Umeme'
 };
 
 const STOCK_SYMBOLS = Object.keys(KENYAN_STOCKS);
@@ -145,7 +210,10 @@ async function getAggregatedSentiment() {
   if (sentimentCache && Date.now() - sentimentCacheTime < SENTIMENT_CACHE_TTL) {
     return sentimentCache;
   }
-  const news = await getAllNews();
+  const news = await Promise.race([
+    getAllNews(),
+    new Promise(resolve => setTimeout(() => resolve([]), 5000)),
+  ]);
   const sentimentCounts = {};
 
   for (const article of news) {
@@ -181,6 +249,29 @@ function classifyArticle(title, excerpt, relatedStocks) {
     'cbk', 'shilling', 'kenyan', 'nairobi stock'];
   if (nseKeywords.some(k => lower.includes(k))) return 'nse';
   return 'global';
+}
+
+// Hot news keywords that could drive prices
+const HOT_NEWS_KEYWORDS = {
+  'IPO': ['ipo', 'initial public offering', 'going public', 'listing', 'debut'],
+  'Earnings': ['earnings', 'quarterly results', 'profit', 'revenue', 'loss', 'annual results', 'half-year', 'half year', 'financial results', 'turnover', 'dividend'],
+  'Merger': ['merger', 'acquisition', 'acquire', 'takeover', 'buyout', 'merged', 'acquiring', 'buys'],
+  'Partnership': ['partnership', 'alliance', 'collaboration', 'joint venture', 'deal with', 'agreement with', 'strategic partnership'],
+  'Regulatory': ['regulatory', 'approval', 'license', 'central bank', 'cbk', 'cma', 'sec', 'court ruling', 'government', 'policy', 'tax', 'tariff', 'sanction'],
+  'Expansion': ['expansion', 'new market', 'entering', 'launch', 'new product', 'new service', 'unveils', 'opens', 'new branch', 'new plant', 'new factory', 'expands'],
+  'Funding': ['funding', 'investment', 'raised', 'capital', 'financing', 'loan', 'bond', 'securities', 'shares', 'rights issue', 'bonus'],
+  'Leadership': ['ceo', 'appointed', 'resigned', 'board', 'chairman', 'director', 'executive', 'management', 'leadership change'],
+  'Crisis': ['crisis', 'scandal', 'fraud', 'investigation', 'probe', 'lawsuit', 'litigation', 'bankruptcy', 'default', 'audit', 'irregularities']
+};
+
+function classifyHotNews(title, excerpt) {
+  const text = (title + ' ' + excerpt).toLowerCase();
+  for (const [type, keywords] of Object.entries(HOT_NEWS_KEYWORDS)) {
+    if (keywords.some(k => text.includes(k))) {
+      return { hot: true, hotType: type };
+    }
+  }
+  return { hot: false, hotType: null };
 }
 
 // Fetch news from NewsAPI with Kenyan focus
@@ -318,24 +409,68 @@ function getKenyanBusinessNews() {
   ];
 }
 
+// Fetch article dates from KWS sitemap (cached)
+let kwsDateCache = null;
+let kwsDateCacheTime = 0;
+const KWS_DATE_CACHE_TTL = 3600000; // 1 hour
+
+async function fetchKwsSitemapDates() {
+  const now = Date.now();
+  if (kwsDateCache && now - kwsDateCacheTime < KWS_DATE_CACHE_TTL) return kwsDateCache;
+
+  try {
+    const smRes = await generic.get('https://kenyanwallstreet.com/sitemap.xml', { timeout: 10000 });
+    const $ = cheerio.load(smRes.data, { xmlMode: true });
+    const postSitemaps = [];
+    $('sitemap loc').each(function() {
+      var loc = $(this).text();
+      if (loc.includes('/posts-')) postSitemaps.push(loc);
+    });
+
+    var dateMap = {};
+    for (var sitemapUrl of postSitemaps.slice(0, 3)) {
+      try {
+        const res = await generic.get(sitemapUrl, { timeout: 10000 });
+        const $$ = cheerio.load(res.data, { xmlMode: true });
+        $$('url').each(function() {
+          var loc = $$(this).find('loc').text().trim();
+          var lastmod = $$(this).find('lastmod').text().trim();
+          if (loc && lastmod) {
+            dateMap[loc.replace('https://kenyanwallstreet.com', '')] = lastmod;
+          }
+        });
+      } catch (e) { /* skip failed sitemap */ }
+    }
+    kwsDateCache = dateMap;
+    kwsDateCacheTime = now;
+    console.log(`  KWS sitemap: ${Object.keys(dateMap).length} dates cached`);
+    return dateMap;
+  } catch (e) {
+    console.error('  KWS sitemap fetch failed:', e.message);
+    return kwsDateCache || {};
+  }
+}
+
 // Fetch news from Kenyan Wall Street by scraping SSR HTML
 async function fetchFromKWS() {
   try {
-    const response = await generic.get('https://kenyanwallstreet.com/', {
-      timeout: 15000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
-    });
+    const [response, sitemapDates] = await Promise.all([
+      generic.get('https://kenyanwallstreet.com/', {
+        timeout: 15000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      }),
+      fetchKwsSitemapDates(),
+    ]);
 
     const $ = cheerio.load(response.data);
     const articles = [];
     const seen = new Set();
 
-    $('a[href]').each((i, el) => {
-      const href = $(el).attr('href');
+    $('a[href]').each(function() {
+      var href = $(this).attr('href');
 
-      // Only match article-like slugs: /some-article-slug
       if (!href || !href.match(/^\/[a-z0-9-]+$/) ||
           href === '/' ||
           href.startsWith('/shows/') ||
@@ -347,43 +482,37 @@ async function fetchFromKWS() {
       if (seen.has(href)) return;
       seen.add(href);
 
-      const img = $(el).find('img[alt]').first();
-      const title = img.attr('alt');
+      var img = $(this).find('img[alt]').first();
+      var title = img.attr('alt');
       if (!title || title.length < 10) return;
 
-      // Extract timestamp if present
-      const tsSpan = $(el).find('.text-muted-background').first();
-      const rawTimestamp = tsSpan.text().trim();
-
-      // Get full text content, remove timestamp from end
-      let excerpt = $(el).text().trim();
-      if (rawTimestamp && excerpt.endsWith(rawTimestamp)) {
-        excerpt = excerpt.substring(0, excerpt.length - rawTimestamp.length).trim();
-      }
+      var excerpt = $(this).text().trim();
       if (excerpt.length > 300) excerpt = excerpt.substring(0, 300);
 
-      const now = new Date();
-      const pubDate = rawTimestamp ? parseRelativeTime(rawTimestamp) : now;
+      // Get date from sitemap, fall back to current time
+      var lastmod = sitemapDates[href];
+      var pubDate = lastmod ? new Date(lastmod) : new Date();
+      var timeAgo = getTimeAgo(pubDate);
 
       articles.push({
-        id: `kws-${href.replace(/\//g, '')}-${Date.now()}`,
+        id: 'kws-' + href.replace(/\//g, '') + '-' + Date.now(),
         headline: title.substring(0, 200),
         source: 'Kenyan Wall Street',
-        timestamp: rawTimestamp || 'just now',
+        timestamp: timeAgo,
         publishedAt: pubDate.toISOString(),
         category: 'nse',
         relatedStocks: extractRelatedStocks(title + ' ' + excerpt),
         sentiment: analyzeSentiment(title + ' ' + excerpt),
-        excerpt,
-        url: `https://kenyanwallstreet.com${href}`,
+        excerpt: excerpt,
+        url: 'https://kenyanwallstreet.com' + href,
         imageUrl: null
       });
     });
 
-    console.log(`✅ Fetched ${articles.length} articles from Kenyan Wall Street`);
+    console.log('  Fetched ' + articles.length + ' articles from Kenyan Wall Street');
     return articles.slice(0, 20);
   } catch (error) {
-    console.error('Error fetching from Kenyan Wall Street:', error.message);
+    console.error('  KWS fetch error:', error.message);
     return [];
   }
 }
@@ -493,47 +622,153 @@ function getMockNews() {
   ];
 }
 
-// Main function to get all news
-async function getAllNews() {
+// Fetch from Benzinga API (if configured)
+async function fetchFromBenzinga() {
+  if (!BENZINGA_KEY) return [];
   try {
-    // Try to fetch from multiple sources
-    const [newsApiNews, finnhubNews, kenyanBusinessNews, kwsNews, globalRssNews] = await Promise.all([
-      fetchFromNewsAPI(),
-      fetchFromFinnhub(),
+    const res = await axios.get(`https://api.benzinga.com/api/v2/news`, {
+      params: { token: BENZINGA_KEY, pageSize: 25, display_output: 'full' },
+      timeout: 8000,
+    });
+    if (!res.data?.news) return [];
+    return res.data.news.map(a => {
+      const pubDate = new Date(a.created * 1000);
+      const excerpt = a.body ? a.body.substring(0, 300) : '';
+      const relatedStocks = (a.tickers || []).map(t => t.name.toUpperCase());
+      const s = (a.sentiment || '').toLowerCase();
+      const sentiment = s === 'positive' || s === 'bullish' ? 'positive' : s === 'negative' || s === 'bearish' ? 'negative' : 'neutral';
+      return {
+        id: `bz-${a.id}`,
+        headline: a.title,
+        source: 'Benzinga',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: classifyArticle(a.title, excerpt, relatedStocks),
+        relatedStocks,
+        sentiment,
+        excerpt,
+        url: a.url,
+        imageUrl: a.image || null,
+      };
+    });
+  } catch (e) {
+    console.error('Error fetching from Benzinga:', e.message);
+    return [];
+  }
+}
+
+// Wrapper that aborts slow calls (rate-limiters can queue for minutes)
+async function withTimeout(promise, ms = 8000) {
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(() => resolve([]), ms)),
+  ]);
+}
+
+// Main function to get all news
+async function getAllNews(limit = 50, categoryFilter) {
+  const now = Date.now();
+  if (newsCache.length > 0 && now - newsCacheTime < NEWS_CACHE_TTL) {
+    return filterNews(newsCache, limit, categoryFilter);
+  }
+
+  try {
+    const [kenyanBusinessNews, kwsNews, globalRssNews, newsApiNews, finnhubNews, benzingaNews] = await Promise.allSettled([
       getKenyanBusinessNews(),
       fetchFromKWS(),
-      fetchFromGlobalRSS()
+      fetchFromGlobalRSS(),
+      withTimeout(fetchFromNewsAPI(), 8000),
+      withTimeout(fetchFromFinnhub(), 8000),
+      withTimeout(fetchFromBenzinga(), 8000),
     ]);
 
-    // Combine all news sources
-    let allNews = [...kwsNews, ...kenyanBusinessNews, ...globalRssNews, ...newsApiNews, ...finnhubNews];
+    const extract = r => r.status === 'fulfilled' ? r.value : [];
+    let allNews = [
+      ...extract(benzingaNews),
+      ...extract(kwsNews),
+      ...extract(kenyanBusinessNews),
+      ...extract(globalRssNews),
+      ...extract(newsApiNews),
+      ...extract(finnhubNews),
+    ];
 
-    // Remove duplicates based on headline
-    const uniqueNews = [];
-    const seenHeadlines = new Set();
-    for (const article of allNews) {
-      const headlineKey = article.headline.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (!seenHeadlines.has(headlineKey)) {
-        seenHeadlines.add(headlineKey);
-        uniqueNews.push(article);
-      }
+    // Deduplicate by headline
+    const seen = new Set();
+    const unique = [];
+    for (const a of allNews) {
+      const key = a.headline.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!seen.has(key)) { seen.add(key); unique.push(a); }
     }
 
-    // Sort by publishedAt (most recent first)
-    uniqueNews.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+    // Classify hot news
+    unique.forEach(a => {
+      const hot = classifyHotNews(a.headline, a.excerpt);
+      a.hot = hot.hot;
+      a.hotType = hot.hotType;
+    });
 
-    // If no news from APIs, fall back to mock data
-    if (uniqueNews.length === 0) {
+    unique.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+
+    if (unique.length === 0) {
       console.log('⚠️ No news fetched from APIs, using mock data');
       return getMockNews();
     }
 
-    console.log(`✅ Fetched ${uniqueNews.length} news articles from multiple sources`);
-    return uniqueNews;
+    newsCache = unique;
+    newsCacheTime = now;
+    console.log(`✅ Fetched ${unique.length} news articles (${unique.filter(a => a.hot).length} hot)`);
+    return filterNews(unique, limit, categoryFilter);
   } catch (error) {
     console.error('Error in getAllNews:', error.message);
-    return getMockNews();
+    return newsCache.length > 0 ? filterNews(newsCache, limit, categoryFilter) : getMockNews();
   }
 }
 
-module.exports = { getAllNews, getAggregatedSentiment, KENYAN_STOCKS, STOCK_SYMBOLS };
+function filterNews(articles, limit, category) {
+  let filtered = articles;
+  if (category && category !== 'all') {
+    filtered = articles.filter(a => a.category === category);
+  }
+  return filtered.slice(0, limit);
+}
+
+// Get news summary with stats
+async function getNewsSummary() {
+  const news = await getAllNews(200);
+  const nseCount = news.filter(a => a.category === 'nse' || (a.relatedStocks && a.relatedStocks.length > 0)).length;
+  const globalCount = news.filter(a => a.category !== 'nse' && (!a.relatedStocks || a.relatedStocks.length === 0)).length;
+  const posCount = news.filter(a => a.sentiment === 'positive').length;
+  const negCount = news.filter(a => a.sentiment === 'negative').length;
+  const neutralCount = news.filter(a => a.sentiment === 'neutral').length;
+  const hotCount = news.filter(a => a.hot).length;
+  const hotNews = news.filter(a => a.hot).slice(0, 10);
+
+  // Trending: recency × sentiment intensity boost
+  const now = Date.now();
+  const scored = news.map(a => {
+    const ageHours = (now - new Date(a.publishedAt).getTime()) / 3600000;
+    const sentimentBoost = a.sentiment === 'positive' ? 2 : a.sentiment === 'negative' ? 1.5 : 1;
+    const recencyScore = Math.max(0, 1 - ageHours / 72);
+    const stockBoost = (a.relatedStocks?.length || 0) > 0 ? 1.3 : 1;
+    const hotBoost = a.hot ? 1.5 : 1;
+    const score = recencyScore * sentimentBoost * stockBoost * hotBoost;
+    return { ...a, trendingScore: +score.toFixed(3) };
+  });
+  scored.sort((a, b) => b.trendingScore - a.trendingScore);
+
+  return {
+    total: news.length,
+    nseCount,
+    globalCount,
+    positiveCount: posCount,
+    negativeCount: negCount,
+    neutralCount: neutralCount,
+    hotCount,
+    hotNews,
+    trending: scored.slice(0, 10),
+    topSources: [...new Set(news.map(a => a.source))].slice(0, 8),
+  };
+}
+
+module.exports = { getAllNews, getNewsSummary, getAggregatedSentiment, classifyHotNews, KENYAN_STOCKS, STOCK_SYMBOLS };
+

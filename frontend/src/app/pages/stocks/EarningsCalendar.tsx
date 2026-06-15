@@ -21,8 +21,17 @@ function formatMarketCap(mcap: number): string {
   return "";
 }
 
+function formatRevenue(rev: number): string {
+  if (rev >= 1e12) return `$${(rev / 1e12).toFixed(2)}T`;
+  if (rev >= 1e9) return `$${(rev / 1e9).toFixed(1)}B`;
+  if (rev >= 1e6) return `$${(rev / 1e6).toFixed(1)}M`;
+  if (rev > 0) return `$${(rev / 1e3).toFixed(1)}K`;
+  return "$0";
+}
+
 function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () => void }) {
   const navigate = useNavigate();
+  const isUpcoming = event.actualEPS === 0;
   const surpriseAbs = Math.abs(event.surprise);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
@@ -39,6 +48,7 @@ function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () =
                   <Badge variant="outline" className={`text-[10px] ${event.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
                     {event.market === "nse" ? "NSE" : "Global"}
                   </Badge>
+                  {isUpcoming && <Badge className="text-[9px] bg-amber-100 text-amber-800 border-amber-200">Upcoming</Badge>}
                 </div>
                 <p className="text-sm text-muted-foreground">{event.name}</p>
               </div>
@@ -70,18 +80,20 @@ function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () =
               </div>
               <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-3 text-center">
                 <p className="text-[10px] text-emerald-600 font-semibold uppercase mb-1">Actual</p>
-                <p className="text-lg font-black text-emerald-700">{event.currency === "KES" ? "KES " : "$"}{event.actualEPS.toFixed(2)}</p>
+                <p className="text-lg font-black text-emerald-700">
+                  {isUpcoming ? "\u2014\u2014" : `${event.currency === "KES" ? "KES " : "$"}${event.actualEPS.toFixed(2)}`}
+                </p>
               </div>
-              <div className={`rounded-lg border p-3 text-center ${event.isBeat ? "bg-emerald-50 border-emerald-100" : "bg-red-50 border-red-100"}`}>
-                <p className={`text-[10px] font-semibold uppercase mb-1 ${event.isBeat ? "text-emerald-600" : "text-red-600"}`}>Surprise</p>
-                <div className={`flex items-center justify-center gap-1 text-lg font-black ${event.isBeat ? "text-emerald-700" : "text-red-700"}`}>
-                  {event.isBeat ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}
-                  {event.surprise >= 0 ? "+" : ""}{event.surprise}%
+              <div className={`rounded-lg border p-3 text-center ${isUpcoming ? "bg-gray-50 border-gray-200" : event.isBeat ? "bg-emerald-50 border-emerald-100" : "bg-red-50 border-red-100"}`}>
+                <p className={`text-[10px] font-semibold uppercase mb-1 ${isUpcoming ? "text-gray-500" : event.isBeat ? "text-emerald-600" : "text-red-600"}`}>Surprise</p>
+                <div className={`flex items-center justify-center gap-1 text-lg font-black ${isUpcoming ? "text-gray-400" : event.isBeat ? "text-emerald-700" : "text-red-700"}`}>
+                  {isUpcoming ? "\u2014\u2014" : <>{event.isBeat ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}{event.surprise >= 0 ? "+" : ""}{event.surprise}%</>}
                 </div>
               </div>
             </div>
           </div>
 
+          {!isUpcoming && (
           <div className="rounded-lg bg-muted/30 p-4 border">
             <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-2">Surprise Visualization</p>
             <div className="flex items-center gap-3">
@@ -109,12 +121,13 @@ function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () =
               </span>
             </div>
           </div>
+          )}
 
           <div className="rounded-lg bg-muted/50 p-3 border">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">Revenue</p>
-                <p className="text-sm font-bold text-foreground">{event.currency === "KES" ? "KES " : "$"}{event.revenue.toFixed(1)}B</p>
+                <p className="text-sm font-bold text-foreground">{event.currency === "KES" ? `KES ${event.revenue.toFixed(1)}B` : formatRevenue(event.revenue)}</p>
               </div>
               <div className="text-right">
                 <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">Currency</p>
@@ -150,22 +163,36 @@ export function EarningsCalendar() {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    fetchUpcomingEarnings({
-      search: search || undefined,
-      market: marketFilter || undefined,
-      sector: sectorFilter || undefined,
-      limit: 200,
-    })
-      .then(setResult)
-      .catch(() => setResult(null))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout>;
+    const doFetch = () => {
+      setLoading(true);
+      fetchUpcomingEarnings({
+        search: search || undefined,
+        market: marketFilter || undefined,
+        sector: sectorFilter || undefined,
+        limit: 2000,
+      })
+        .then(r => {
+          if (cancelled) return;
+          setResult(r);
+          if (r.earnings.length > 0 || r.total > 0) {
+            setLoading(false);
+          } else {
+            retryTimer = setTimeout(doFetch, 5000);
+          }
+        })
+        .catch(() => { if (!cancelled) { setResult(null); retryTimer = setTimeout(doFetch, 5000); } })
+    };
+    doFetch();
+    return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
   }, [search, marketFilter, sectorFilter]);
 
   const allEarnings = result?.earnings || [];
 
   const today = new Date();
   const [weekOffset, setWeekOffset] = useState(0);
+  const [autoJumped, setAutoJumped] = useState(false);
 
   const viewWeekStart = new Date(today);
   viewWeekStart.setDate(viewWeekStart.getDate() + weekOffset * 7 - ((viewWeekStart.getDay() + 6) % 7));
@@ -173,25 +200,36 @@ export function EarningsCalendar() {
   viewWeekEnd.setDate(viewWeekEnd.getDate() + 6);
 
   const filtered = useMemo(() => {
-    return allEarnings.filter(e => {
+    const nextEvent = allEarnings.find(e => new Date(e.date) >= viewWeekStart);
+    const weekEvents = allEarnings.filter(e => {
       const d = new Date(e.date);
       return d >= viewWeekStart && d <= viewWeekEnd;
-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    });
+    return { all: weekEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()), nextEvent: nextEvent || null };
   }, [allEarnings, viewWeekStart, viewWeekEnd]);
+
+  useEffect(() => {
+    if (!autoJumped && allEarnings.length > 0 && filtered.all.length === 0 && filtered.nextEvent) {
+      const next = new Date(filtered.nextEvent.date);
+      const weeksDiff = Math.floor((next.getTime() - today.getTime()) / (7 * 86400000));
+      setWeekOffset(weeksDiff);
+      setAutoJumped(true);
+    }
+  }, [allEarnings.length, filtered.all.length, autoJumped, filtered.nextEvent, today]);
 
   const groupedByDay = useMemo(() => {
     const groups: Record<string, EarningsEvent[]> = {};
-    filtered.forEach(e => {
+    filtered.all.forEach(e => {
       if (!groups[e.dateStr]) groups[e.dateStr] = [];
       groups[e.dateStr].push(e);
     });
     return groups;
-  }, [filtered]);
+  }, [filtered.all]);
 
   const totals = useMemo(() => {
-    let beats = 0, misses = 0;
-    allEarnings.forEach(e => { if (e.isBeat) beats++; else misses++; });
-    return { total: allEarnings.length, beats, misses };
+    let beats = 0, misses = 0, upcoming = 0;
+    allEarnings.forEach(e => { if (e.actualEPS === 0) upcoming++; else if (e.isBeat) beats++; else misses++; });
+    return { total: allEarnings.length, beats, misses, upcoming };
   }, [allEarnings]);
 
   const weekLabel = `${months[viewWeekStart.getMonth()]} ${viewWeekStart.getDate()} - ${months[viewWeekEnd.getMonth()]} ${viewWeekEnd.getDate()}, ${viewWeekEnd.getFullYear()}`;
@@ -237,8 +275,8 @@ export function EarningsCalendar() {
 
       <div className="grid grid-cols-3 gap-3">
         <Card className="p-3"><p className="text-[10px] text-muted-foreground uppercase font-semibold">Total Reports</p><p className="text-lg font-bold text-foreground">{totals.total}</p></Card>
-        <Card className="p-3"><p className="text-[10px] text-muted-foreground uppercase font-semibold">Expected Beats</p><p className="text-lg font-bold text-emerald-600">{totals.beats}</p></Card>
-        <Card className="p-3"><p className="text-[10px] text-muted-foreground uppercase font-semibold">Expected Misses</p><p className="text-lg font-bold text-red-600">{totals.misses}</p></Card>
+        <Card className="p-3"><p className="text-[10px] text-muted-foreground uppercase font-semibold">Upcoming</p><p className="text-lg font-bold text-amber-600">{totals.upcoming}</p></Card>
+        <Card className="p-3"><p className="text-[10px] text-muted-foreground uppercase font-semibold">Reported</p><p className="text-lg font-bold text-emerald-600">{totals.beats + totals.misses}</p></Card>
       </div>
 
       <div className="flex items-center justify-between">
@@ -282,7 +320,7 @@ export function EarningsCalendar() {
                 <Card
                   key={e.id}
                   className="p-4 hover:shadow-sm hover:border-[#0D7490]/30 transition-all cursor-pointer border-l-4"
-                  style={{ borderLeftColor: e.isBeat ? "#10b981" : "#ef4444" }}
+                  style={{ borderLeftColor: e.actualEPS === 0 ? "#9ca3af" : e.isBeat ? "#10b981" : "#ef4444" }}
                   onClick={() => setSelectedEvent(e)}
                 >
                   <div className="flex items-center justify-between">
@@ -296,6 +334,7 @@ export function EarningsCalendar() {
                           <Badge variant="outline" className={`text-[9px] ${e.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
                             {e.market === "nse" ? "NSE" : "Global"}
                           </Badge>
+                          {e.actualEPS === 0 && <span className="text-[9px] text-amber-600 font-medium">Upcoming</span>}
                         </div>
                         <p className="text-xs text-muted-foreground">{e.name}</p>
                       </div>
@@ -311,12 +350,11 @@ export function EarningsCalendar() {
                       </div>
                       <div className="text-right">
                         <p className="text-[10px] text-muted-foreground uppercase font-semibold">Act.</p>
-                        <p className="text-sm font-mono font-bold">{e.currency === "KES" ? "KES " : "$"}{e.actualEPS.toFixed(2)}</p>
+                        <p className="text-sm font-mono font-bold">{e.actualEPS === 0 ? "\u2014\u2014" : `${e.currency === "KES" ? "KES " : "$"}${e.actualEPS.toFixed(2)}`}</p>
                       </div>
-                      <div className={`px-2.5 py-1.5 rounded-lg text-center ${e.isBeat ? "bg-emerald-50" : "bg-red-50"}`}>
-                        <p className={`text-xs font-bold flex items-center gap-0.5 ${e.isBeat ? "text-emerald-700" : "text-red-700"}`}>
-                          {e.isBeat ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
-                          {e.surprise >= 0 ? "+" : ""}{e.surprise}%
+                      <div className={`px-2.5 py-1.5 rounded-lg text-center ${e.actualEPS === 0 ? "bg-gray-50" : e.isBeat ? "bg-emerald-50" : "bg-red-50"}`}>
+                        <p className={`text-xs font-bold flex items-center gap-0.5 ${e.actualEPS === 0 ? "text-gray-400" : e.isBeat ? "text-emerald-700" : "text-red-700"}`}>
+                          {e.actualEPS === 0 ? "\u2014\u2014" : <>{e.isBeat ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}{e.surprise >= 0 ? "+" : ""}{e.surprise}%</>}
                         </p>
                       </div>
                     </div>
@@ -330,7 +368,7 @@ export function EarningsCalendar() {
 
       {result && result.total > 0 && (
         <div className="text-xs text-muted-foreground text-center">
-          Showing {filtered.length} earnings reports for {weekLabel} &middot; {result.total} total upcoming
+          Showing {filtered.all.length} earnings reports for {weekLabel} &middot; {result.total} total upcoming
         </div>
       )}
     </div>

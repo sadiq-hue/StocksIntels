@@ -12,12 +12,12 @@ const COUNTRY_MACRO = {
     centralBank: 'Federal Reserve (Fed)',
     interestRate: 4.50,
     gdpGrowth: 2.5,
-    inflation: 3.0,
+    inflation: 5.1,
     currentAccount: -3.2,
     politicalRisk: 15,
     creditRating: 'AA+',
     creditScore: 90,
-    pmi: 52.0,
+    pmi: 48.0,
     newsSentiment: 'neutral'
   },
   KE: {

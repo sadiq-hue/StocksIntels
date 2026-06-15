@@ -56,6 +56,7 @@ export function NotificationsPage() {
         <div className="space-y-2">
           {notifications.map((n) => {
             const isSignal = n.type === "signal";
+            const isMessage = n.type === "message";
             const isBullish = n.title?.includes("Buy");
             const isBearish = n.title?.includes("Sell");
             return (
@@ -75,6 +76,11 @@ export function NotificationsPage() {
                         }`}>
                           {isBullish ? <ArrowUp className="w-3 h-3" /> : isBearish ? <ArrowDown className="w-3 h-3" /> : null}
                           Signal
+                        </span>
+                      )}
+                      {isMessage && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                          Message
                         </span>
                       )}
                       <span className="text-[10px] text-gray-400">{formatNotificationTime(n.created_at)}</span>
@@ -140,7 +146,7 @@ export function NotificationsPage() {
                     className="flex items-center gap-1.5 px-4 py-2 bg-[#0D7490] text-white rounded-lg text-sm font-medium hover:bg-[#0A5F7A] transition-colors"
                   >
                     <ExternalLink className="w-4 h-4" />
-                    View Related Stock
+                    {selected.type === "message" ? "Open Chat" : "View Related Stock"}
                   </button>
                 )}
                 {!selected.read && (

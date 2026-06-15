@@ -1,7 +1,6 @@
-const axios = require('axios');
+// ETF Service — Real-time prices via Yahoo Finance, synthetic fallback
 
 const FMP_API_KEY = process.env.FMP_API_KEY;
-const FMP_BASE_URL = 'https://financialmodelingprep.com/stable';
 
 const ETF_LIST = [
   { ticker: 'SPY', name: 'SPDR S&P 500 ETF Trust', category: 'US Equity', expenseRatio: 0.09, aum: 545000000000, dividendYield: 1.32, description: 'Tracks the S&P 500 Index', currency: 'USD' },
@@ -34,6 +33,64 @@ const ETF_LIST = [
   { ticker: 'NSEQ', name: 'NSE Equity Index Fund', category: 'Africa', expenseRatio: 1.20, aum: 50000000, dividendYield: 4.50, description: 'Nairobi Securities Exchange tracker', currency: 'KES' },
 ];
 
+// Cache for Yahoo quotes
+let yahooCache = {};
+let yahooCacheTime = 0;
+const YAHOO_CACHE_TTL = 30000;
+
+async function fetchYahooQuotes() {
+  const now = Date.now();
+  if (yahooCache && now - yahooCacheTime < YAHOO_CACHE_TTL) return yahooCache;
+
+  try {
+    const { default: YahooFinance } = await import('yahoo-finance2');
+    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+
+    const symbols = ETF_LIST.map(e => e.ticker);
+    const quotes = await yf.quote(symbols);
+
+    const result = {};
+    for (const q of Array.isArray(quotes) ? quotes : [quotes]) {
+      if (q && q.symbol) {
+        result[q.symbol] = {
+          price: q.regularMarketPrice,
+          change: q.regularMarketChange,
+          changePercent: q.regularMarketChangePercent,
+          high: q.regularMarketDayHigh,
+          low: q.regularMarketDayLow,
+          volume: q.regularMarketVolume,
+          previousClose: q.regularMarketPreviousClose,
+          open: q.regularMarketOpen,
+          dataSource: 'yahoo',
+        };
+      }
+    }
+
+    yahooCache = result;
+    yahooCacheTime = now;
+    return result;
+  } catch (e) {
+    console.error('[ETFs] Yahoo fetch failed:', e.message);
+    return {};
+  }
+}
+
+function getSyntheticQuote(ticker, basePrice) {
+  const drift = (Math.random() - 0.48) * 1.5;
+  const price = +(basePrice + drift).toFixed(2);
+  const change = +(drift).toFixed(2);
+  const changePercent = +((change / (price - change)) * 100).toFixed(2);
+  return {
+    price, change, changePercent,
+    high: +(price + Math.random()).toFixed(2),
+    low: +(price - Math.random()).toFixed(2),
+    volume: Math.floor(Math.random() * 5000000 + 500000),
+    open: +(price - drift + (Math.random() - 0.5) * 0.5).toFixed(2),
+    previousClose: +(price - change).toFixed(2),
+    dataSource: 'simulated',
+  };
+}
+
 const BASE_PRICES = {
   SPY: 548.20, QQQ: 480.15, VOO: 502.80, VTI: 268.40, BND: 72.30,
   AGG: 98.50, VXUS: 61.40, VEU: 55.80, EEM: 41.20, IEMG: 53.60,
@@ -43,53 +100,64 @@ const BASE_PRICES = {
   EZA: 42.50, AFK: 17.80, NSEQ: 125.00,
 };
 
-const SYNTHETIC_QUOTES = {};
-
-function getSyntheticQuote(ticker) {
-  const now = Date.now();
-  const cached = SYNTHETIC_QUOTES[ticker];
-  if (cached && now - cached.ts < 30000) return cached;
-
-  const base = BASE_PRICES[ticker] || 100;
-  const drift = (Math.random() - 0.48) * 1.5;
-  const price = +(base + drift).toFixed(2);
-  const change = +(drift).toFixed(2);
-  const changePercent = +((change / (price - change)) * 100).toFixed(2);
-  const quote = { price, change, changePercent, high: +(price + Math.random()).toFixed(2), low: +(price - Math.random()).toFixed(2), volume: Math.floor(Math.random() * 5000000 + 500000) };
-  SYNTHETIC_QUOTES[ticker] = { ...quote, ts: now };
-  return quote;
-}
-
 async function getETFs(market) {
+  const yahooQuotes = await fetchYahooQuotes();
+  const hasLiveData = Object.keys(yahooQuotes).length > 0;
+
   const all = ETF_LIST.filter(e => {
     if (market === 'kenya') return e.currency === 'KES';
     if (market === 'global') return e.currency === 'USD';
-    return true; // 'all'
+    return true;
   });
+
   return all.map(etf => {
-    const quote = getSyntheticQuote(etf.ticker);
-    return { ...etf, ...quote };
+    const live = yahooQuotes[etf.ticker];
+    if (live) {
+      return { ...etf, ...live, lastUpdated: new Date().toISOString() };
+    }
+    const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100);
+    return { ...etf, ...synth, lastUpdated: new Date().toISOString() };
   });
 }
 
 async function getETFByTicker(ticker) {
   const etf = ETF_LIST.find(e => e.ticker === ticker.toUpperCase());
   if (!etf) return null;
-  const quote = getSyntheticQuote(ticker);
-  return { ...etf, ...quote };
+
+  const yahooQuotes = await fetchYahooQuotes();
+  const live = yahooQuotes[ticker.toUpperCase()];
+
+  if (live) {
+    return { ...etf, ...live, lastUpdated: new Date().toISOString() };
+  }
+  const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100);
+  return { ...etf, ...synth, lastUpdated: new Date().toISOString() };
 }
 
-function getETFSummary() {
-  const etfs = ETF_LIST.map(e => ({ ...e, ...getSyntheticQuote(e.ticker) }));
+async function getETFSummary() {
+  const yahooQuotes = await fetchYahooQuotes();
+  const hasLiveData = Object.keys(yahooQuotes).length > 0;
+
+  const etfs = ETF_LIST.map(etf => {
+    const live = yahooQuotes[etf.ticker];
+    if (live) return { ...etf, ...live };
+    const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100);
+    return { ...etf, ...synth };
+  });
+
   return {
     totalETFs: ETF_LIST.length,
-    topGainers: etfs.sort((a, b) => b.changePercent - a.changePercent).slice(0, 5),
-    topLosers: etfs.sort((a, b) => a.changePercent - b.changePercent).slice(0, 5),
-    largestAUM: etfs.sort((a, b) => b.aum - a.aum).slice(0, 5),
+    hasLiveData,
+    topGainers: [...etfs].sort((a, b) => b.changePercent - a.changePercent).slice(0, 5),
+    topLosers: [...etfs].sort((a, b) => a.changePercent - b.changePercent).slice(0, 5),
+    largestAUM: [...etfs].sort((a, b) => b.aum - a.aum).slice(0, 5),
     categories: [...new Set(ETF_LIST.map(e => e.category))].map(cat => ({
       name: cat,
       count: ETF_LIST.filter(e => e.category === cat).length,
     })),
+    totalVolume: etfs.reduce((s, e) => s + (e.volume || 0), 0),
+    advancing: etfs.filter(e => (e.changePercent || 0) > 0).length,
+    declining: etfs.filter(e => (e.changePercent || 0) < 0).length,
   };
 }
 

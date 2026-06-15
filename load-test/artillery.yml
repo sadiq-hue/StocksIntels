@@ -1,0 +1,115 @@
+config:
+  target: "{{ $processEnvironment.TARGET_URL || 'http://localhost:3001' }}"
+  phases:
+    - duration: 120
+      arrivalRate: 1
+      rampTo: 2
+      name: "Warm up - 1 to 2 users/sec"
+    - duration: 180
+      arrivalRate: 2
+      name: "Steady moderate - 2 users/sec"
+    - duration: 120
+      arrivalRate: 2
+      rampTo: 5
+      name: "Ramp up - 2 to 5 users/sec"
+    - duration: 180
+      arrivalRate: 5
+      name: "Peak - 5 users/sec"
+  payload:
+    path: "{{ $processEnvironment.USERS_CSV || './load-test/users.csv' }}"
+    fields:
+      - email
+      - password
+    order: random
+    skipHeader: true
+  http:
+    timeout: 30
+    maxSockets: 100
+  variables:
+    token: ""
+scenarios:
+  - name: "Browse public market data"
+    weight: 3
+    flow:
+      - get:
+          url: "/api/health"
+      - think: 1
+      - get:
+          url: "/api/market/status"
+      - think: 2
+      - get:
+          url: "/api/stocks/list"
+      - think: 2
+      - get:
+          url: "/api/news"
+          params:
+            limit: 5
+      - think: 3
+      - get:
+          url: "/api/market/indices"
+      - think: 3
+      - get:
+          url: "/api/quotes"
+          params:
+            symbols: "SCOM,BBK,KCB,EABL"
+      - think: 5
+
+  - name: "Authenticated user session"
+    weight: 2
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "{{ email }}"
+            password: "{{ password }}"
+          capture:
+            - json: "$.token"
+              as: "token"
+      - think: 1
+      - get:
+          url: "/api/auth/me"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - think: 2
+      - get:
+          url: "/api/watchlist"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - think: 3
+      - get:
+          url: "/api/notifications"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - think: 3
+      - get:
+          url: "/api/portfolio/statement"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - think: 5
+      - get:
+          url: "/api/signals"
+          headers:
+            Authorization: "Bearer {{ token }}"
+      - think: 10
+
+  - name: "Heavy data browsing"
+    weight: 1
+    flow:
+      - get:
+          url: "/api/stocks"
+      - think: 1
+      - get:
+          url: "/api/market/movers"
+      - think: 2
+      - get:
+          url: "/api/market/sectors"
+      - think: 2
+      - get:
+          url: "/api/bonds"
+      - think: 2
+      - get:
+          url: "/api/etfs"
+      - think: 3
+      - get:
+          url: "/api/stock/AAPL/history"
+      - think: 5

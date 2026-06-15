@@ -6,7 +6,7 @@ import {
   CheckCircle2, ArrowUpRight, Bell, Lock, Smartphone,
   Clock, Target, Sparkles, HeartHandshake, Check, Crown,
   Phone, Mail, MapPin, Twitter, Linkedin, Github, ChevronUp,
-  LineChart, TrendingUp, Bot,
+  LineChart, TrendingUp, Bot, AlertTriangle,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 
@@ -106,7 +106,7 @@ const whyChoose = [
 const faqs = [
   { q: "What markets does StocksIntels cover?", a: "We cover all major African exchanges (NSE, GSE, NGX, JSE, BSE) plus global markets including NYSE, NASDAQ, LSE, and more." },
   { q: "How accurate are the AI trading signals?", a: "Our AI models consistently achieve 92%+ accuracy through advanced machine learning trained on decades of historical data." },
-  { q: "Is there a free trial available?", a: "Yes! All plans come with a 14-day free trial. No credit card required, cancel anytime." },
+  { q: "Is there a free trial available?", a: "Yes! All plans come with a 7-day free trial. No credit card required, cancel anytime." },
   { q: "Can I connect my existing broker?", a: "Absolutely. We support integration with major brokers including Interactive Brokers, Alpaca, OANDA, and Pepperstone." },
 ];
 
@@ -221,7 +221,7 @@ export function LandingPage() {
           <div className="flex justify-between items-center h-16 md:h-20">
             <Link to="/" className="flex items-center gap-2.5 group">
               <div className="w-9 h-9 md:w-10 md:h-10 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20 group-hover:shadow-[#0D7490]/40 group-hover:scale-105 transition-all duration-300">
-                <img src="/favicon.svg" alt="StocksIntels" className="w-5 h-5 md:w-6 md:h-6" />
+                <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5 md:w-6 md:h-6" />
               </div>
               <span className="text-xl md:text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent tracking-tight">StocksIntels</span>
             </Link>
@@ -289,8 +289,8 @@ export function LandingPage() {
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             <div className="text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-full text-[#0D7490] text-sm font-medium mb-6 border border-[#0D7490]/10 animate-float">
-                <Sparkles className="w-4 h-4" />
-                AI-Powered Trading Intelligence
+                <LineChart className="w-4 h-4" />
+                Market Intelligence for African traders
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold text-gray-900 mb-6 leading-[1.05] tracking-tight">
@@ -302,7 +302,7 @@ export function LandingPage() {
               </h1>
 
               <p className="text-lg sm:text-xl text-gray-600 mb-8 max-w-xl mx-auto lg:mx-0 leading-relaxed">
-                Get real-time insights, comprehensive market analysis, and AI-driven signals for African and global markets. Make informed decisions with confidence.
+                Get real-time insights, comprehensive market analysis, and AI-driven signals across African and global markets. Trade with clarity, speed, and confidence.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
@@ -318,23 +318,21 @@ export function LandingPage() {
                 </Button>
               </div>
 
-              <div className="mt-10 flex flex-wrap items-center gap-4 justify-center lg:justify-start">
-                <div className="flex -space-x-3">
-                  {["bg-gradient-to-br from-blue-400 to-blue-500", "bg-gradient-to-br from-purple-400 to-pink-500", "bg-gradient-to-br from-green-400 to-emerald-500", "bg-gradient-to-br from-amber-400 to-orange-500"].map((color, i) => (
-                    <div key={i} className={`w-10 h-10 rounded-full border-2 border-white ${color} flex items-center justify-center text-white text-xs font-bold shadow-lg`}>
-                      {["JM", "AO", "DM", "KL"][i]}
-                    </div>
-                  ))}
+              <div className="mt-10 grid grid-cols-2 gap-4 max-w-xl mx-auto lg:mx-0">
+                <div className="rounded-3xl bg-white/90 border border-gray-200 p-5 shadow-sm">
+                  <p className="text-3xl font-bold text-gray-900">15+</p>
+                  <p className="text-sm text-gray-500 mt-2">African + global markets in one platform</p>
                 </div>
-                <div className="text-sm text-gray-600">
-                  <span className="font-semibold text-gray-900">2,500+</span> traders trust StocksIntels
+                <div className="rounded-3xl bg-white/90 border border-gray-200 p-5 shadow-sm">
+                  <p className="text-3xl font-bold text-gray-900">2,500+</p>
+                  <p className="text-sm text-gray-500 mt-2">active traders using StocksIntels</p>
                 </div>
               </div>
 
               <div className="mt-8 flex flex-wrap items-center gap-6 justify-center lg:justify-start text-gray-400">
                 {[
                   { text: "No credit card", color: "text-green-500" },
-                  { text: "14-day free trial", color: "text-green-500" },
+                  { text: "7-day free trial", color: "text-green-500" },
                   { text: "Cancel anytime", color: "text-green-500" },
                 ].map((item) => (
                   <div key={item.text} className="flex items-center gap-2 text-sm">
@@ -414,26 +412,26 @@ export function LandingPage() {
                 </div>
               </div>
 
-              <div className="absolute -top-5 -right-5 bg-white rounded-2xl p-4 shadow-xl border border-gray-100 animate-bounce">
+              <div className="absolute -top-5 -right-5 bg-white rounded-3xl p-4 shadow-2xl border border-gray-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-green-400/20">
+                  <div className="w-11 h-11 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-2xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
                     <Zap className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 font-medium">AI Prediction</p>
-                    <p className="text-sm font-bold text-green-600">92% Accuracy</p>
+                    <p className="text-xs text-gray-500 font-medium">AI Confidence</p>
+                    <p className="text-sm font-bold text-gray-900">92% predictive accuracy</p>
                   </div>
                 </div>
               </div>
 
-              <div className="absolute -bottom-5 -left-5 bg-white rounded-2xl p-4 shadow-xl border border-gray-100">
+              <div className="absolute -bottom-5 -left-5 bg-white rounded-3xl p-4 shadow-2xl border border-gray-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-full flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
+                  <div className="w-11 h-11 bg-gradient-to-br from-[#0EA5E9] to-[#0D7490] rounded-2xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
                     <Bell className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 font-medium">New Signal</p>
-                    <p className="text-sm font-bold text-[#0D7490]">KCB Group</p>
+                    <p className="text-xs text-gray-500 font-medium">Live NSE Alerts</p>
+                    <p className="text-sm font-bold text-gray-900">Stay ahead with instant market updates</p>
                   </div>
                 </div>
               </div>
@@ -666,7 +664,7 @@ export function LandingPage() {
               Pricing
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-4 tracking-tight">Simple, transparent pricing</h2>
-            <p className="text-lg text-gray-600">Choose the plan that fits your trading style. All plans include a 14-day free trial.</p>
+            <p className="text-lg text-gray-600">Choose the plan that fits your trading style. All plans include a 7-day free trial.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 lg:gap-8 items-start max-w-5xl mx-auto">
@@ -901,7 +899,7 @@ export function LandingPage() {
               Contact Sales
             </Button>
           </div>
-          <p className="text-white/60 text-sm mt-6 font-medium">No credit card required. 14-day free trial. Cancel anytime.</p>
+          <p className="text-white/60 text-sm mt-6 font-medium">No credit card required. 7-day free trial. Cancel anytime.</p>
         </div>
       </section>
 
@@ -912,14 +910,14 @@ export function LandingPage() {
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2 mb-4 group">
                 <div className="w-9 h-9 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-[#0D7490]/40 transition-all">
-                  <img src="/favicon.svg" alt="StocksIntels" className="w-5 h-5" />
+                  <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
                 </div>
                 <span className="text-lg font-bold">StocksIntels</span>
               </Link>
               <p className="text-gray-500 text-sm leading-relaxed mb-6">AI-powered trading intelligence for African and global markets.</p>
               <div className="flex items-center gap-3">
-                {[{ icon: Twitter, href: "#" }, { icon: Linkedin, href: "#" }, { icon: Github, href: "#" }].map(({ icon: Icon, href }) => (
-                  <a key={href} href={href} className="w-9 h-9 bg-gray-800 hover:bg-[#0D7490] rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-[#0D7490]/25">
+                {[{ icon: Twitter, name: "twitter", href: "#" }, { icon: Linkedin, name: "linkedin", href: "#" }, { icon: Github, name: "github", href: "#" }].map(({ icon: Icon, name }) => (
+                  <a key={name} href="#" className="w-9 h-9 bg-gray-800 hover:bg-[#0D7490] rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-[#0D7490]/25">
                     <Icon className="w-4 h-4 text-gray-400 group-hover:text-white" />
                   </a>
                 ))}
@@ -939,9 +937,9 @@ export function LandingPage() {
             <div>
               <h4 className="font-semibold text-sm uppercase tracking-wider text-gray-400 mb-5">Company</h4>
               <ul className="space-y-3.5">
-                <li><a href="#about" className="text-sm text-gray-500 hover:text-white transition-colors">About</a></li>
-                <li><a href="#blog" className="text-sm text-gray-500 hover:text-white transition-colors">Blog</a></li>
-                <li><a href="#careers" className="text-sm text-gray-500 hover:text-white transition-colors">Careers</a></li>
+                <li><Link to="/about" className="text-sm text-gray-500 hover:text-white transition-colors">About</Link></li>
+                <li><Link to="/blog" className="text-sm text-gray-500 hover:text-white transition-colors">Blog</Link></li>
+                <li><Link to="/careers" className="text-sm text-gray-500 hover:text-white transition-colors">Careers</Link></li>
                 <li><a href="#contact" className="text-sm text-gray-500 hover:text-white transition-colors">Contact</a></li>
               </ul>
             </div>
@@ -949,9 +947,10 @@ export function LandingPage() {
             <div>
               <h4 className="font-semibold text-sm uppercase tracking-wider text-gray-400 mb-5">Legal</h4>
               <ul className="space-y-3.5">
-                <li><a href="#privacy" className="text-sm text-gray-500 hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="#terms" className="text-sm text-gray-500 hover:text-white transition-colors">Terms of Service</a></li>
-                <li><a href="#security" className="text-sm text-gray-500 hover:text-white transition-colors">Security</a></li>
+                <li><Link to="/privacy" className="text-sm text-gray-500 hover:text-white transition-colors">Privacy Policy</Link></li>
+                <li><Link to="/terms" className="text-sm text-gray-500 hover:text-white transition-colors">Terms of Service</Link></li>
+                <li><Link to="/security" className="text-sm text-gray-500 hover:text-white transition-colors">Security</Link></li>
+                <li><Link to="/disclaimer" className="text-sm text-gray-500 hover:text-white transition-colors">Disclaimer</Link></li>
               </ul>
             </div>
 
@@ -991,6 +990,19 @@ export function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* DISCLAIMER */}
+      <div className="bg-gray-950 border-t border-gray-800/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 text-gray-600 mt-0.5 flex-shrink-0" />
+            <p className="text-[11px] text-gray-600 leading-relaxed">
+              <strong className="text-gray-500">Risk Disclaimer:</strong> Trading stocks and other financial instruments involves substantial risk of loss. AI signals are for informational purposes only and do not constitute financial advice. Past performance does not guarantee future results. StocksIntels is not a licensed broker or financial advisor. By using this platform, you acknowledge and accept these risks.{' '}
+              <Link to="/disclaimer" className="text-gray-500 hover:text-gray-400 underline">Read full disclaimer</Link>
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* DEMO MODAL */}
       {showDemoModal && (

@@ -1,6 +1,6 @@
 import { quickFinancialSymbols, type StockMarket } from "../data/stockUniverses";
 
-const API_BASE = "http://localhost:3001/api";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 export interface RealtimeStockQuote {
   symbol: string;
@@ -12,6 +12,24 @@ export interface RealtimeStockQuote {
   dayLow: number;
   previousClose: number;
   timestamp: number;
+  provider?: string;
+}
+
+export interface PriceBar {
+  date: string;
+  timestamp: number;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  volume: number;
+  adjclose: number | null;
+}
+
+export interface PriceHistoryResponse {
+  symbol: string;
+  bars: PriceBar[];
+  count: number;
 }
 
 const globalSymbols = new Set(
@@ -53,4 +71,11 @@ export async function fetchRealtimeQuotesBatch(symbols: string[]): Promise<Recor
   }
   const data = await response.json();
   return data.quotes as Record<string, RealtimeStockQuote>;
+}
+
+export async function fetchStockHistory(symbol: string, range = "6mo", interval = "1d"): Promise<PriceBar[]> {
+  const data = await fetchJson<PriceHistoryResponse>(
+    `${API_BASE}/stock/${encodeURIComponent(symbol)}/history?range=${range}&interval=${interval}`
+  );
+  return data.bars;
 }
