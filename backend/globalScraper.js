@@ -115,6 +115,17 @@ async function fetchGlobalQuotes(symbols) {
  * @param {string} interval - Data interval: 1m, 2m, 5m, 15m, 30m, 60m, 1d, 1wk, 1mo
  */
 async function fetchHistoricalQuotes(symbol, range = '6mo', interval = '1d') {
+  const bars = await fetchYahooHistoricalQuotes(symbol, range, interval);
+  if (bars && bars.length > 0) return bars;
+
+  // Fallback: RapidAPI Yahoo Finance proxy
+  const rapidBars = await fetchRapidApiHistoricalQuotes(symbol, range, interval);
+  if (rapidBars && rapidBars.length > 0) return rapidBars;
+
+  return null;
+}
+
+async function fetchYahooHistoricalQuotes(symbol, range, interval) {
   try {
     const { data } = await withRetry(
       () => axios.get(
@@ -124,28 +135,71 @@ async function fetchHistoricalQuotes(symbol, range = '6mo', interval = '1d') {
       { label: `yahoo-hist:${symbol}`, maxRetries: 2, baseDelay: 500,
         shouldRetry: e => !e?.response || e.response.status >= 500 }
     );
-    const result = data?.chart?.result?.[0];
-    if (!result) return null;
-
-    const timestamps = result.timestamp || [];
-    const quote = result.indicators?.quote?.[0] || {};
-    const adjclose = result.indicators?.adjclose?.[0]?.adjclose || [];
-
-    const bars = timestamps.map((t, i) => ({
-      date: new Date(t * 1000).toISOString().split('T')[0],
-      timestamp: t,
-      open: quote.open?.[i] ?? null,
-      high: quote.high?.[i] ?? null,
-      low: quote.low?.[i] ?? null,
-      close: quote.close?.[i] ?? null,
-      volume: quote.volume?.[i] ?? 0,
-      adjclose: adjclose[i] ?? quote.close?.[i] ?? null,
-    })).filter(d => d.close != null);
-
-    return bars.length > 0 ? bars : null;
+    return parseYahooChartResult(data);
   } catch {
     return null;
   }
+}
+
+async function fetchRapidApiHistoricalQuotes(symbol, range, interval) {
+  const key = process.env.RAPIDAPI_KEY;
+  let host = (process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com').trim();
+  host = host.replace(/^https?:\/\//, '');
+  if (!key || !host) return null;
+
+  const rangeMap = { '1d': '1d', '5d': '5d', '1mo': '1mo', '3mo': '3mo', '6mo': '6mo', '1y': '1y', '2y': '2y', '5y': '5y', 'max': 'max' };
+  const intervalMap = { '1m': '1m', '2m': '2m', '5m': '5m', '15m': '15m', '30m': '30m', '60m': '60m', '1d': '1d', '1wk': '1wk', '1mo': '1mo' };
+  const rapidRange = rangeMap[range] || '6mo';
+  const rapidInterval = intervalMap[interval] || '1d';
+
+  const endpoints = [
+    { path: '/api/v1/markets/stocks/historical-prices', params: { symbol: symbol.toUpperCase(), range: rapidRange, interval: rapidInterval, region: 'US' } },
+    { path: '/api/yahoo/hi/history', params: { symbol: symbol.toUpperCase(), range: rapidRange, interval: rapidInterval, region: 'US' } },
+    { path: '/stock/v3/get-chart', params: { symbol: symbol.toUpperCase(), range: rapidRange, interval: rapidInterval, region: 'US' } },
+  ];
+
+  for (const ep of endpoints) {
+    try {
+      const { data } = await axios.get(`https://${host}${ep.path}`, {
+        params: ep.params,
+        headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
+        timeout: 8000,
+      });
+      const bars = parseYahooChartResult(data);
+      if (bars && bars.length > 0) {
+        console.log(`[GlobalScraper] RapidAPI historical data for ${symbol} via ${ep.path}: ${bars.length} bars`);
+        return bars;
+      }
+    } catch (err) {
+      if (err.response?.status === 429) {
+        console.warn(`[GlobalScraper] RapidAPI rate limited for historical ${symbol}`);
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+function parseYahooChartResult(data) {
+  const result = data?.chart?.result?.[0];
+  if (!result) return null;
+
+  const timestamps = result.timestamp || [];
+  const quote = result.indicators?.quote?.[0] || {};
+  const adjclose = result.indicators?.adjclose?.[0]?.adjclose || [];
+
+  const bars = timestamps.map((t, i) => ({
+    date: new Date(t * 1000).toISOString().split('T')[0],
+    timestamp: t,
+    open: quote.open?.[i] ?? null,
+    high: quote.high?.[i] ?? null,
+    low: quote.low?.[i] ?? null,
+    close: quote.close?.[i] ?? null,
+    volume: quote.volume?.[i] ?? 0,
+    adjclose: adjclose[i] ?? quote.close?.[i] ?? null,
+  })).filter(d => d.close != null);
+
+  return bars.length > 0 ? bars : null;
 }
 
 module.exports = { fetchGlobalQuotes, fetchSingleStock, fetchHistoricalQuotes };
