@@ -2890,6 +2890,52 @@ app.get('/api/signals/engine/health', async (req, res) => {
   }
 });
 
+app.get('/api/signals/engine/diagnostics', async (req, res) => {
+  try {
+    const now = new Date();
+    const day = now.getDay();
+    const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const isDST = now.getMonth() >= 2 && now.getMonth() <= 9;
+    const etMinutes = ((utcMinutes + (isDST ? -4 : -5) * 60) % 1440 + 1440) % 1440;
+    const marketOpen = day !== 0 && day !== 6 && etMinutes >= 570 && etMinutes < 960;
+
+    const counts = await Promise.all([
+      pool.query('SELECT COUNT(*)::int as cnt FROM signal_history').catch(e => ({ rows: [{ cnt: 0 }], error: e.message })),
+      pool.query('SELECT COUNT(*)::int as cnt FROM signal_outcomes').catch(e => ({ rows: [{ cnt: 0 }], error: e.message })),
+      pool.query('SELECT COUNT(*)::int as cnt FROM forward_predictions').catch(e => ({ rows: [{ cnt: 0 }], error: e.message })),
+      pool.query("SELECT COUNT(*)::int as cnt FROM app_cache WHERE cache_key = 'signals_cache'").catch(e => ({ rows: [{ cnt: 0 }], error: e.message })),
+    ]);
+
+    const lastSignal = await pool.query('SELECT MAX(generated_at) as ts FROM signal_history').catch(() => ({ rows: [{ ts: null }] }));
+    const recentSignals = await pool.query("SELECT signal, COUNT(*)::int as cnt FROM signal_history WHERE generated_at > NOW() - INTERVAL '24 hours' GROUP BY signal ORDER BY cnt DESC").catch(() => ({ rows: [] }));
+    const lastOutcome = await pool.query('SELECT MAX(recorded_at) as ts FROM signal_outcomes').catch(() => ({ rows: [{ ts: null }] }));
+
+    const cacheEntry = await pool.query("SELECT updated_at FROM app_cache WHERE cache_key = 'signals_cache'").catch(() => ({ rows: [] }));
+
+    res.json({
+      success: true,
+      diagnostics: {
+        serverTime: now.toISOString(),
+        usMarketOpen: marketOpen,
+        etMinutes,
+        counts: {
+          signalHistory: counts[0].rows[0].cnt,
+          signalOutcomes: counts[1].rows[0].cnt,
+          forwardPredictions: counts[2].rows[0].cnt,
+          signalsCache: counts[3].rows[0].cnt,
+        },
+        dbErrors: counts.filter(c => c.error).map(c => c.error),
+        lastSignalGeneratedAt: lastSignal.rows[0].ts,
+        lastOutcomeRecordedAt: lastOutcome.rows[0].ts,
+        signalsLast24h: recentSignals.rows,
+        cacheLastUpdated: cacheEntry.rows[0]?.updated_at || null,
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/company/:symbol/profile', async (req, res) => {
   try {
     const symbol = req.params.symbol.toUpperCase();

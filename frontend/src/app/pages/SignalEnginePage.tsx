@@ -817,6 +817,125 @@ function HealthPanel() {
   );
 }
 
+// ─── Diagnostics Panel ───────────────────────────────────────────────────────
+interface DiagnosticsData {
+  serverTime: string;
+  usMarketOpen: boolean;
+  etMinutes: number;
+  counts: {
+    signalHistory: number;
+    signalOutcomes: number;
+    forwardPredictions: number;
+    signalsCache: number;
+  };
+  dbErrors: string[];
+  lastSignalGeneratedAt: string | null;
+  lastOutcomeRecordedAt: string | null;
+  signalsLast24h: { signal: string; cnt: number }[];
+  cacheLastUpdated: string | null;
+}
+
+function DiagnosticsPanel() {
+  const [data, setData] = useState<DiagnosticsData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/signals/engine/diagnostics`);
+      const json = await res.json();
+      if (json.success) setData(json.diagnostics);
+    } catch (e) { console.error(e); } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  if (loading && !data) {
+    return <div className="flex items-center justify-center py-16 text-muted-foreground"><RefreshCw className="w-6 h-6 animate-spin" /></div>;
+  }
+  if (!data) return <div className="text-center py-16 text-muted-foreground text-sm">Unable to load diagnostics</div>;
+
+  const etHours = Math.floor(data.etMinutes / 60);
+  const etMins = data.etMinutes % 60;
+  const etTime = `${etHours % 12 || 12}:${etMins.toString().padStart(2, '0')} ${etHours >= 12 ? 'PM' : 'AM'} ET`;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <p className="text-sm text-muted-foreground">Real-time pipeline diagnostics to debug empty backtest data.</p>
+        <Button onClick={fetchData} disabled={loading} variant="outline" size="sm" className="border-border h-8 text-xs">
+          <RefreshCw className={`w-3 h-3 mr-1.5 ${loading ? "animate-spin" : ""}`} />Refresh
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card className="bg-card border-border p-3">
+          <p className="text-muted-foreground text-[10px] uppercase tracking-wider">signal_history</p>
+          <p className="text-xl font-bold text-foreground">{data.counts.signalHistory}</p>
+        </Card>
+        <Card className="bg-card border-border p-3">
+          <p className="text-muted-foreground text-[10px] uppercase tracking-wider">signal_outcomes</p>
+          <p className="text-xl font-bold text-foreground">{data.counts.signalOutcomes}</p>
+        </Card>
+        <Card className="bg-card border-border p-3">
+          <p className="text-muted-foreground text-[10px] uppercase tracking-wider">Forward Predictions</p>
+          <p className="text-xl font-bold text-foreground">{data.counts.forwardPredictions}</p>
+        </Card>
+        <Card className="bg-card border-border p-3">
+          <p className="text-muted-foreground text-[10px] uppercase tracking-wider">Signals Cache</p>
+          <p className="text-xl font-bold text-foreground">{data.counts.signalsCache}</p>
+        </Card>
+      </div>
+
+      <Card className="bg-card border-border p-4">
+        <p className="text-sm font-semibold text-foreground mb-3">Market Hours Check</p>
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">US Market Open:</span>
+            <Badge className={`text-[10px] border ${data.usMarketOpen ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-red-100 text-red-700 border-red-200"}`}>
+              {data.usMarketOpen ? "Open" : "Closed"}
+            </Badge>
+          </div>
+          <div><span className="text-muted-foreground">Server time:</span> {new Date(data.serverTime).toLocaleString()}</div>
+          <div><span className="text-muted-foreground">Current ET time:</span> {etTime}</div>
+        </div>
+      </Card>
+
+      <Card className="bg-card border-border p-4">
+        <p className="text-sm font-semibold text-foreground mb-3">Timestamps</p>
+        <div className="space-y-2 text-sm">
+          <div><span className="text-muted-foreground">Last signal generated:</span> {data.lastSignalGeneratedAt ? new Date(data.lastSignalGeneratedAt).toLocaleString() : 'Never'}</div>
+          <div><span className="text-muted-foreground">Last outcome recorded:</span> {data.lastOutcomeRecordedAt ? new Date(data.lastOutcomeRecordedAt).toLocaleString() : 'Never'}</div>
+          <div><span className="text-muted-foreground">Signals cache last updated:</span> {data.cacheLastUpdated ? new Date(data.cacheLastUpdated).toLocaleString() : 'Never'}</div>
+        </div>
+      </Card>
+
+      {data.signalsLast24h.length > 0 && (
+        <Card className="bg-card border-border p-4">
+          <p className="text-sm font-semibold text-foreground mb-3">Signals Generated in Last 24h</p>
+          <div className="space-y-1">
+            {data.signalsLast24h.map((s) => (
+              <div key={s.signal} className="flex items-center justify-between text-sm">
+                <span className="font-medium">{s.signal}</span>
+                <span className="text-muted-foreground">{s.cnt}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {data.dbErrors.length > 0 && (
+        <Card className="border-red-200 bg-red-50 p-4">
+          <p className="text-sm font-semibold text-red-700 mb-2">Database Errors</p>
+          <ul className="list-disc list-inside text-xs text-red-700 space-y-1">
+            {data.dbErrors.map((err, i) => <li key={i}>{err}</li>)}
+          </ul>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 export function SignalEnginePage() {
   return (
@@ -849,6 +968,9 @@ export function SignalEnginePage() {
           <TabsTrigger value="health" className="text-xs data-[state=active]:bg-card">
             <Activity className="w-3.5 h-3.5 mr-1.5" />Health
           </TabsTrigger>
+          <TabsTrigger value="diagnostics" className="text-xs data-[state=active]:bg-card">
+            <Server className="w-3.5 h-3.5 mr-1.5" />Diagnostics
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="backtest"><BacktestPanel /></TabsContent>
@@ -856,6 +978,7 @@ export function SignalEnginePage() {
         <TabsContent value="audit"><AuditLogPanel /></TabsContent>
         <TabsContent value="config"><ConfigPanel /></TabsContent>
         <TabsContent value="health"><HealthPanel /></TabsContent>
+        <TabsContent value="diagnostics"><DiagnosticsPanel /></TabsContent>
       </Tabs>
     </div>
   );
