@@ -2761,6 +2761,14 @@ app.get('/api/signals/engine/diagnostics', async (req, res) => {
     const lastSignal = await pool.query('SELECT MAX(generated_at) as ts FROM signal_history').catch(() => ({ rows: [{ ts: null }] }));
     const recentSignals = await pool.query("SELECT signal, COUNT(*)::int as cnt FROM signal_history WHERE generated_at > NOW() - INTERVAL '24 hours' GROUP BY signal ORDER BY cnt DESC").catch(() => ({ rows: [] }));
     const lastOutcome = await pool.query('SELECT MAX(recorded_at) as ts FROM signal_outcomes').catch(() => ({ rows: [{ ts: null }] }));
+    const sampleOutcomes = await pool.query(
+      `SELECT ticker, signal, entry_price, exit_price, result, recorded_at
+       FROM signal_outcomes ORDER BY recorded_at DESC LIMIT 5`
+    ).catch(() => ({ rows: [] }));
+    const validReturns = await pool.query(
+      `SELECT COUNT(*)::int as cnt FROM signal_outcomes
+       WHERE entry_price > 0 AND exit_price > 0 AND exit_price != entry_price`
+    ).catch(() => ({ rows: [{ cnt: 0 }] }));
 
     const cacheEntry = await pool.query("SELECT updated_at FROM app_cache WHERE cache_key = 'signals_cache'").catch(() => ({ rows: [] }));
 
@@ -2781,6 +2789,8 @@ app.get('/api/signals/engine/diagnostics', async (req, res) => {
         lastOutcomeRecordedAt: lastOutcome.rows[0].ts,
         signalsLast24h: recentSignals.rows,
         cacheLastUpdated: cacheEntry.rows[0]?.updated_at || null,
+        sampleOutcomes: sampleOutcomes.rows,
+        validReturnOutcomes: validReturns.rows[0].cnt,
       }
     });
   } catch (error) {
@@ -8154,6 +8164,14 @@ async function initDatabase() {
       cache_value JSONB,
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );`);
+
+    // Restore signal-engine in-memory state now that tables are guaranteed to exist
+    try {
+      const { restoreStateFromDb } = require('./signalService');
+      await restoreStateFromDb();
+    } catch (e) {
+      console.warn('[initDatabase] restoreStateFromDb failed:', e.message);
+    }
 
     console.log('Database schema verified');
   } catch (err) {

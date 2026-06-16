@@ -417,19 +417,39 @@ function computeDynamicWeights(regime) {
 // Restore performance stats and portfolio state from DB on startup
 async function restoreStateFromDb() {
   try {
+    // Load all historical outcomes into memory so health/trade tracking works across restarts
+    const outcomes = await pool.query(
+      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at FROM signal_outcomes ORDER BY recorded_at DESC`
+    );
+    _signalOutcomes.clear();
+    for (const row of outcomes.rows) {
+      _signalOutcomes.set(row.ticker, {
+        entryPrice: parseFloat(row.entry_price) || 0,
+        signal: row.signal,
+        exitPrice: row.exit_price != null ? parseFloat(row.exit_price) : null,
+        result: row.result,
+        recordedAt: row.recorded_at,
+      });
+    }
+
+    // Compute performance stats from last 30 days of resolved outcomes
     const result = await pool.query(
-      `SELECT result, COUNT(*) as cnt FROM signal_outcomes 
-       WHERE recorded_at > NOW() - INTERVAL '30 days' 
+      `SELECT result, COUNT(*) as cnt FROM signal_outcomes
+       WHERE recorded_at > NOW() - INTERVAL '30 days'
        GROUP BY result`
     );
+    let wins = 0, losses = 0;
     for (const row of result.rows) {
-      if (row.result === 'win') _performanceStats.wins = parseInt(row.cnt) || 0;
-      if (row.result === 'loss') _performanceStats.losses = parseInt(row.cnt) || 0;
+      if (row.result === 'win') wins = parseInt(row.cnt) || 0;
+      if (row.result === 'loss') losses = parseInt(row.cnt) || 0;
     }
-    _performanceStats.total = _performanceStats.wins + _performanceStats.losses;
+    _performanceStats.wins = wins;
+    _performanceStats.losses = losses;
+    _performanceStats.total = wins + losses;
     _performanceStats.winRate = _performanceStats.total > 0
       ? Math.round((_performanceStats.wins / _performanceStats.total) * 1000) / 10 : 0;
-  } catch { /* table may not exist — start fresh */ }
+    console.log(`[SignalService] Restored ${_signalOutcomes.size} outcomes from DB (${wins} wins, ${losses} losses in last 30d)`);
+  } catch (e) { /* table may not exist — start fresh */ console.warn('[SignalService] restoreStateFromDb outcomes error:', e.message); }
   try {
     const result = await pool.query(
       `SELECT consecutive_losses FROM portfolio_state ORDER BY updated_at DESC LIMIT 1`
@@ -586,7 +606,7 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
 
       // Return-based metrics from resolved rows (where exit_price != entry_price)
       const returnsResult = await pool.query(`
-        SELECT (exit_price - entry_price) / entry_price * 100 AS return_pct
+        SELECT ticker, signal, entry_price, exit_price, (exit_price - entry_price) / entry_price * 100 AS return_pct
         FROM signal_outcomes
         WHERE recorded_at > NOW() - $1::interval
           AND signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
@@ -595,12 +615,40 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
       `, [`${days} days`]);
 
       let avgReturn = 0, profitFactor = 0, sharpe = 0, maxDrawdown = 0;
-      const retVals = returnsResult.rows.map(r => parseFloat(r.return_pct));
+      let retVals = returnsResult.rows.map(r => parseFloat(r.return_pct));
+
+      // If not enough valid exit prices, approximate returns from signal_history using batched live prices
+      if (retVals.length < 10) {
+        try {
+          const fallback = await pool.query(`
+            SELECT sh.ticker, sh.signal, sh.entry_price
+            FROM signal_history sh
+            LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price
+            WHERE sh.generated_at > NOW() - $1::interval
+              AND sh.signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
+              AND sh.entry_price > 0
+            ORDER BY sh.generated_at DESC
+            LIMIT $2
+          `, [`${days} days`, limit]);
+          const tickers = [...new Set(fallback.rows.map(r => r.ticker))];
+          const quotes = await getQuotesBatch(tickers).catch(() => ({}));
+          const approxReturns = [];
+          for (const row of fallback.rows) {
+            const quote = quotes[row.ticker];
+            if (!quote || !quote.price) continue;
+            const returnPct = ((quote.price - row.entry_price) / row.entry_price) * 100;
+            const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy' || row.signal === 'Accumulate';
+            const signedReturn = isBuy ? returnPct : -returnPct;
+            approxReturns.push(signedReturn);
+          }
+          if (approxReturns.length > 0) retVals = approxReturns;
+        } catch (e) { /* keep signal_outcomes returns if any */ }
+      }
+
       if (retVals.length > 0) {
-        const absRets = retVals.map(Math.abs);
-        const totalReturn = absRets.reduce((s, v) => s + v, 0);
+        const totalReturn = retVals.reduce((s, v) => s + v, 0);
         avgReturn = Math.round((totalReturn / retVals.length) * 10) / 10;
-        const mean = retVals.reduce((s, v) => s + v, 0) / retVals.length;
+        const mean = totalReturn / retVals.length;
         sharpe = retVals.length > 1 ? Math.round((mean / (stdDev(retVals) || 1)) * 100) / 100 : 0;
         // Max drawdown: running peak-to-trough of cumulative returns
         let peak = -Infinity, maxDd = 0, cum = 0;
@@ -617,11 +665,44 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
         profitFactor = grossLosses > 0 ? Math.round((grossWins / grossLosses) * 100) / 100 : grossWins > 0 ? 999 : 0;
       }
 
+      // Fill by-signal avgReturn using batched live price quotes
+      try {
+        const signalTypes = Object.keys(bySignal);
+        const historyBySignal = {};
+        const allTickers = new Set();
+        for (const st of signalTypes) {
+          const rows = await pool.query(`
+            SELECT sh.ticker, sh.entry_price
+            FROM signal_history sh
+            LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price
+            WHERE sh.generated_at > NOW() - $1::interval
+              AND sh.signal = $2
+              AND sh.entry_price > 0
+            ORDER BY sh.generated_at DESC
+            LIMIT $3
+          `, [`${days} days`, st, 50]);
+          historyBySignal[st] = rows.rows;
+          rows.rows.forEach(r => allTickers.add(r.ticker));
+        }
+        const quotes = await getQuotesBatch(Array.from(allTickers)).catch(() => ({}));
+        for (const st of signalTypes) {
+          const isBuy = st === 'Strong Buy' || st === 'Buy' || st === 'Accumulate';
+          const rets = [];
+          for (const row of historyBySignal[st]) {
+            const quote = quotes[row.ticker];
+            if (!quote || !quote.price) continue;
+            const returnPct = ((quote.price - row.entry_price) / row.entry_price) * 100;
+            rets.push(isBuy ? returnPct : -returnPct);
+          }
+          bySignal[st].avgReturn = rets.length > 0 ? Math.round((rets.reduce((s, v) => s + v, 0) / rets.length) * 10) / 10 : 0;
+        }
+      } catch { /* avgReturn stays 0 */ }
+
       const winRate = total > 0 ? Math.round((wins / total) * 1000) / 10 : 0;
       return {
         total, wins, losses, winRate,
         avgReturn, profitFactor, sharpe, maxDrawdown,
-        dataSource: 'signal_outcomes',
+        dataSource: retVals.length > 0 ? 'signal_outcomes_with_live_price_fallback' : 'signal_outcomes',
         bySignal,
       };
     }
@@ -1912,6 +1993,7 @@ module.exports = {
   NSE_SYMBOLS,
   US_SYMBOLS,
   getEngineHealth,
+  restoreStateFromDb,
   // Backtesting & Forward Testing
   computeBacktestStats,
   getForwardTestStats,
