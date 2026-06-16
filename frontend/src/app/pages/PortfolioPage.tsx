@@ -825,34 +825,34 @@ export function PortfolioPage() {
   return (
     <div className="p-4 md:p-6 max-w-[1800px] mx-auto space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4">
         <div>
-          <h2 className="text-foreground text-2xl font-semibold">Portfolio Intelligence</h2>
-          <p className="text-muted-foreground">{paperMode ? "Simulate trades with virtual cash" : "Track NSE & global investments, AI insights, and broker integrations"}</p>
+          <h2 className="text-foreground text-xl md:text-2xl font-semibold">Portfolio Intelligence</h2>
+          <p className="text-muted-foreground text-sm md:text-base">{paperMode ? "Simulate trades with virtual cash" : "Track NSE & global investments, AI insights, and broker integrations"}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant={paperMode ? "default" : "outline"} onClick={() => { setPaperMode(!paperMode); if (!paperMode) refreshPaper(); }} className={`gap-2 ${paperMode ? "bg-[#0D7490] text-white" : "border-border"}`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant={paperMode ? "default" : "outline"} onClick={() => { setPaperMode(!paperMode); if (!paperMode) refreshPaper(); }} className={`gap-2 flex-1 sm:flex-none justify-center ${paperMode ? "bg-[#0D7490] text-white" : "border-border"}`}>
             <SwitchCamera className="w-4 h-4" /> {paperMode ? "Real Portfolio" : "Paper Trading"}
           </Button>
-          <Button variant="outline" onClick={() => navigate('/app/stocks')} className="border-border gap-2">
+          <Button variant="outline" onClick={() => navigate('/app/stocks')} className="border-border gap-2 flex-1 sm:flex-none justify-center">
             <BarChart3 className="w-4 h-4" /> Screener
           </Button>
           {!paperMode && (
             <>
-              <Button variant="outline" onClick={handleRefresh} disabled={refreshing} className="border-border gap-2">
+              <Button variant="outline" onClick={handleRefresh} disabled={refreshing} className="border-border gap-2 flex-1 sm:flex-none justify-center">
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
-              <Button variant="outline" onClick={handleGetAdvice} className="border-border gap-2">
+              <Button variant="outline" onClick={handleGetAdvice} className="border-border gap-2 flex-1 sm:flex-none justify-center">
                 <BrainCircuit className="w-4 h-4" /> AI Advice
               </Button>
-              <Button variant="outline" onClick={openStatement} disabled={realStatementLoading} className="border-border gap-2">
+              <Button variant="outline" onClick={openStatement} disabled={realStatementLoading} className="border-border gap-2 flex-1 sm:flex-none justify-center">
                 <BarChartHorizontal className="w-4 h-4" /> Statement
               </Button>
-              <Button onClick={() => setShowAddHolding(true)} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
+              <Button onClick={() => setShowAddHolding(true)} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2 flex-1 sm:flex-none justify-center">
                 <Plus className="w-4 h-4" /> Add Position
               </Button>
-              <Button onClick={() => setShowConnect(true)} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
+              <Button onClick={() => setShowConnect(true)} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2 flex-1 sm:flex-none justify-center">
                 <Link2 className="w-4 h-4" /> Connect Account
               </Button>
             </>
@@ -863,27 +863,27 @@ export function PortfolioPage() {
       {paperMode ? (/* Paper Trading Panel */
         <div className="space-y-6">
           {/* Paper trading header actions */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               {["NSE", "Global"].map(m => (
                 <button key={m} onClick={() => setPaperOrder({ ...paperOrder, market: m as "NSE" | "Global" })}
-                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${paperOrder.market === m ? "bg-[#0D7490] text-white shadow-sm" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
+                  className={`px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all ${paperOrder.market === m ? "bg-[#0D7490] text-white shadow-sm" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
                   {m === "NSE" ? "NSE Stocks" : "Global Stocks"}
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {paperLoading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-              <Button size="sm" onClick={async () => { setStatementLoading(true); const d = await fetchStatement(); if (d) { setStatementData(d); setShowStatement(true); } setStatementLoading(false); }} className="border-border gap-1" variant="outline">
+              <Button size="sm" onClick={async () => { setStatementLoading(true); const d = await fetchStatement(); if (d) { setStatementData(d); setShowStatement(true); } setStatementLoading(false); }} className="border-border gap-1 flex-1 sm:flex-none justify-center" variant="outline">
                 <BarChartHorizontal className="w-3.5 h-3.5" /> Statement
               </Button>
-              <Button size="sm" onClick={() => { refreshPaper(); }} className="border-border gap-1" variant="outline">
+              <Button size="sm" onClick={() => { refreshPaper(); }} className="border-border gap-1 flex-1 sm:flex-none justify-center" variant="outline">
                 <RefreshCw className={`w-3.5 h-3.5 ${paperLoading ? 'animate-spin' : ''}`} /> Refresh
               </Button>
-              <Button size="sm" onClick={() => { resetPaperOrder(); setShowPaperBuy(true); }} className="bg-green-600 hover:bg-green-700 text-white gap-1">
+              <Button size="sm" onClick={() => { resetPaperOrder(); setShowPaperBuy(true); }} className="bg-green-600 hover:bg-green-700 text-white gap-1 flex-1 sm:flex-none justify-center">
                 <ShoppingCart className="w-3.5 h-3.5" /> Buy
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setShowPaperReset(true)} className="border-red-200 text-red-600 hover:bg-red-50 gap-1">
+              <Button size="sm" variant="outline" onClick={() => setShowPaperReset(true)} className="border-red-200 text-red-600 hover:bg-red-50 gap-1 flex-1 sm:flex-none justify-center">
                 <RotateCcw className="w-3.5 h-3.5" /> Reset
               </Button>
             </div>
@@ -953,10 +953,10 @@ export function PortfolioPage() {
               </div>
 
               {/* Positions Table */}
-              <Card className="bg-card border-border p-6">
+              <Card className="bg-card border-border p-4 md:p-6">
                 <h3 className="text-foreground font-semibold mb-4">Open Positions</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                  <table className="w-full text-sm min-w-[640px]">
                     <thead>
                       <tr className="border-b border-border">
                         <th className="text-left text-muted-foreground py-3 px-2 font-medium">Stock</th>
@@ -1010,7 +1010,7 @@ export function PortfolioPage() {
               </Card>
 
               {/* Trade History */}
-              <Card className="bg-card border-border p-6">
+              <Card className="bg-card border-border p-4 md:p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <History className="w-5 h-5 text-[#0D7490]" />
                   <h3 className="text-foreground font-semibold">Trade History</h3>
@@ -1018,8 +1018,8 @@ export function PortfolioPage() {
                 {paperTrades.length === 0 ? (
                   <div className="text-center py-6 text-muted-foreground text-sm">No trades yet.</div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                  <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                    <table className="w-full text-sm min-w-[640px]">
                       <thead>
                         <tr className="border-b border-border">
                           <th className="text-left text-muted-foreground py-2 px-2 font-medium">Date</th>
@@ -1476,7 +1476,7 @@ export function PortfolioPage() {
       {brokers.length > 0 && (
         <div className="flex flex-wrap gap-3">
           {brokers.map(b => (
-            <div key={b.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border ${
+            <div key={b.id} className={`flex flex-col sm:flex-row sm:items-center gap-2 px-3 py-2 rounded-lg text-sm border ${
               b.syncStatus === "error" ? "bg-red-50 border-red-200" :
               b.syncStatus === "syncing" ? "bg-blue-50 border-blue-200" :
               "bg-green-50 border-green-200"
@@ -1532,7 +1532,7 @@ export function PortfolioPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <Card className="bg-card border-border p-4">
           <div className="text-muted-foreground text-xs mb-1">Total Value (KES)</div>
           <div className="text-foreground text-xl font-bold">KES {enhancedTotals.combinedKesValue.toLocaleString()}</div>
@@ -1577,25 +1577,25 @@ export function PortfolioPage() {
       </div>
 
       {/* Market Filter + Add */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {["All", "NSE", "Global"].map(m => (
             <button key={m} onClick={() => setMarketFilter(m as any)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${marketFilter === m ? "bg-[#0D7490] text-white shadow-sm" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
+              className={`px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all ${marketFilter === m ? "bg-[#0D7490] text-white shadow-sm" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
               {m === "All" ? "All Markets" : m === "NSE" ? "NSE Stocks" : "Global Stocks"}
             </button>
           ))}
         </div>
-        <Button size="sm" onClick={() => setShowAddHolding(true)} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-1">
+        <Button size="sm" onClick={() => setShowAddHolding(true)} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-1 w-full sm:w-auto justify-center">
           <Plus className="w-3.5 h-3.5" /> Add Position
         </Button>
       </div>
 
       {/* Holdings Table */}
-      <Card className="bg-card border-border p-6">
+      <Card className="bg-card border-border p-4 md:p-6">
         <h3 className="text-foreground font-semibold mb-4">Holdings</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="border-b border-border">
                 <th className="text-left text-muted-foreground py-3 px-2 font-medium">Stock</th>
@@ -1676,18 +1676,18 @@ export function PortfolioPage() {
 
       {/* Trade History */}
       {brokers.length > 0 && (
-        <Card className="bg-card border-border p-6">
-          <div className="flex items-center justify-between mb-4">
+        <Card className="bg-card border-border p-4 md:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
             <h3 className="text-foreground font-semibold flex items-center gap-2">
               <History className="w-5 h-5 text-[#0D7490]" />
               Trade History
             </h3>
-            <Badge variant="outline" className="text-xs border-gray-300 text-muted-foreground">
+            <Badge variant="outline" className="text-xs border-gray-300 text-muted-foreground w-fit">
               {brokers.reduce((sum, b) => sum + (b.latestSnapshot?.trade_history?.length || 0), 0)} trades
             </Badge>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-border">
                   {['Account', 'Time', 'Ticket', 'Type', 'Volume', 'Symbol', 'Price', 'Close', 'Profit', 'Commission'].map(h => (
