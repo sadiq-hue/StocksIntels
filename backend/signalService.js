@@ -63,6 +63,8 @@ const FINANCIAL_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const _signalOutcomes = new Map();
 let _signalHistoryCount = 0;
 const _performanceStats = { total: 0, wins: 0, losses: 0, winRate: 0 };
+const _histBacktestCache = new Map(); // symbol -> { bars, ts }
+const HIST_BACKTEST_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 // Market regime cache
 let _marketRegime = { regime: 'unknown', score: 50, timestamp: 0 };
@@ -566,11 +568,19 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 10, maxSignals =
     for (const [ticker, signals] of Object.entries(byTicker)) {
       const isNse = NSE_SYMBOLS.includes(ticker);
       const yahooSymbol = isNse ? `${ticker}.NR` : ticker;
-      const bars = await fetchHistoricalQuotes(yahooSymbol, '3mo', '1d').catch(() => null);
-      if (!bars || bars.length < 2) {
-        console.warn(`[HistoricalBacktest] No historical bars for ${ticker}`);
-        continue;
+
+      // Reuse cached bars when possible to avoid repeated API calls
+      let cached = _histBacktestCache.get(yahooSymbol);
+      if (!cached || Date.now() - cached.ts > HIST_BACKTEST_CACHE_TTL) {
+        const bars = await fetchHistoricalQuotes(yahooSymbol, '3mo', '1d').catch(() => null);
+        if (!bars || bars.length < 2) {
+          console.warn(`[HistoricalBacktest] No historical bars for ${ticker}`);
+          continue;
+        }
+        cached = { bars, ts: Date.now() };
+        _histBacktestCache.set(yahooSymbol, cached);
       }
+      const bars = cached.bars;
 
       for (const sig of signals) {
         try {
@@ -1617,10 +1627,10 @@ setInterval(() => {
 
 // Auto-run historical backtest every 6 hours to mature signal outcomes
 setTimeout(() => {
-  runHistoricalBacktest({ days: 90, maxHoldDays: 5, maxSignals: 3000 }).catch(() => {});
+  runHistoricalBacktest({ days: 90, maxHoldDays: 5, maxSignals: 1000 }).catch(() => {});
 }, 60000);
 setInterval(() => {
-  runHistoricalBacktest({ days: 90, maxHoldDays: 5, maxSignals: 3000 }).catch(() => {});
+  runHistoricalBacktest({ days: 90, maxHoldDays: 5, maxSignals: 1000 }).catch(() => {});
 }, 6 * 60 * 60 * 1000);
 
 // Main function to generate signals for all tracked stocks

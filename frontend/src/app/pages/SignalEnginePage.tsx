@@ -853,7 +853,7 @@ function DiagnosticsPanel() {
   const runBacktest = useCallback(async () => {
     setBacktestLoading(true);
     try {
-      const res = await fetch(`${API_URL}/signals/engine/backtest/historical?days=90&maxHoldDays=5&maxSignals=3000`, { method: 'POST' });
+      const res = await fetch(`${API_URL}/signals/engine/backtest/historical?days=90&maxHoldDays=5&maxSignals=1000`, { method: 'POST' });
       const json = await res.json();
       if (json.success) {
         setBacktestResult({ ...json.result, signalOutcomes: json.signalOutcomes });
