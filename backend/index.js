@@ -6918,6 +6918,50 @@ app.get('/api/payments/status', async (req, res) => {
   }
 });
 
+app.post('/api/payments/resend-receipt', authenticateToken, async (req, res) => {
+  try {
+    const { reference } = req.body;
+    if (!reference) return res.status(400).json({ error: 'Reference required' });
+
+    const tx = await pool.query(
+      `SELECT * FROM payment_transactions
+       WHERE (payhero_reference = $1 OR external_reference = $1) AND user_id = $2`,
+      [reference, req.user.id]
+    );
+    if (tx.rows.length === 0) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+    const transaction = tx.rows[0];
+    if (transaction.status !== 'success') {
+      return res.status(400).json({ error: 'Transaction is not successful yet' });
+    }
+
+    const months = parseInt(transaction.duration_months) || 1;
+    const startDate = transaction.created_at ? new Date(transaction.created_at) : new Date();
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + months);
+
+    await sendPaymentReceiptEmail(req.user.email, {
+      userName: req.user.full_name,
+      planName: transaction.plan_name || 'Pro',
+      amount: transaction.amount,
+      currency: transaction.currency,
+      period: months === 12 ? 'yearly' : 'monthly',
+      durationMonths: months,
+      paymentMethod: transaction.provider || 'M-Pesa',
+      transactionRef: transaction.payhero_reference || reference,
+      paidAt: transaction.updated_at || new Date(),
+      startDate,
+      endDate,
+    });
+
+    res.json({ success: true, message: 'Receipt resent' });
+  } catch (error) {
+    console.error('Resend receipt error:', error.message);
+    res.status(500).json({ error: 'Failed to resend receipt', detail: error.message });
+  }
+});
+
 app.get('/api/payments/plans', async (req, res) => {
   try {
     const result = await pool.query(

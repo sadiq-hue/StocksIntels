@@ -64,6 +64,9 @@ async function sendViaEnsend({ to, subject, html, text }) {
   const senderName = process.env.ENSEND_SENDER_NAME || 'StocksIntels';
   const senderAddress = process.env.ENSEND_SENDER_ADDRESS;
 
+  if (!secret) {
+    throw new Error('ENSEND_PROJECT_SECRET env var is required when using Ensend');
+  }
   if (!senderAddress) {
     throw new Error('ENSEND_SENDER_ADDRESS env var is required when using Ensend');
   }
@@ -72,24 +75,30 @@ async function sendViaEnsend({ to, subject, html, text }) {
     ? to.map(addr => ({ address: addr }))
     : { address: to };
 
-  const { data } = await axios.post(
-    `${baseUrl}/send/mail`,
-    {
-      sender: { name: senderName, address: senderAddress },
-      recipients,
-      subject,
-      message: html || text,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${secret}`,
-        'Content-Type': 'application/json',
+  try {
+    const { data } = await axios.post(
+      `${baseUrl}/send/mail`,
+      {
+        sender: { name: senderName, address: senderAddress },
+        recipients,
+        subject,
+        message: html || text,
       },
-    }
-  );
+      {
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
-  console.log('[MAILER] Sent via Ensend, ref:', data?.data?.ref);
-  return data;
+    console.log('[MAILER] Sent via Ensend, ref:', data?.data?.ref);
+    return data;
+  } catch (err) {
+    const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+    console.error('[MAILER] Ensend send failed:', err.response?.status, detail);
+    throw new Error(`Ensend failed: ${detail}`);
+  }
 }
 
 const BRAND_COLOR = '#0D7490';
