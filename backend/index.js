@@ -75,7 +75,14 @@ const io = new Server(server, {
 
 // ── Liveness & Readiness Probes ──────────────────────────────────
 // Used by Kubernetes, Docker health checks, and load balancers
-app.get('/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));
+app.get('/healthz', async (_req, res) => {
+  try {
+    const dbResult = await pool.query('SELECT NOW() AS t');
+    res.status(200).json({ status: 'ok', db: 'connected', time: dbResult.rows[0].t });
+  } catch (e) {
+    res.status(200).json({ status: 'ok', db: 'disconnected', error: e.message });
+  }
+});
 app.get('/readyz', async (_req, res) => {
   const checks = {};
   try { await pool.query('SELECT 1'); checks.db = 'ok'; } catch { checks.db = 'fail'; }
