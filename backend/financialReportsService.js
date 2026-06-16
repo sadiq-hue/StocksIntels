@@ -674,8 +674,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           }
         };
       }
-      console.warn(`[FinancialReports] Yahoo Finance returned no data for ${symbol}, falling back to FMP/synthetic`);
-      // Fall through to FMP/synthetic below instead of erroring out
+      return { success: false, symbol, source: 'yahoo-finance', error: `Yahoo Finance returned no data for ${symbol}` };
     }
 
     // 2) SEC EDGAR — US stocks only, no synthetic fallback
