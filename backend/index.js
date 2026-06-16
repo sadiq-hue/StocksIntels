@@ -6686,8 +6686,8 @@ app.post('/api/payments/mpesa-push', async (req, res) => {
       : cleanedPhone.startsWith('254')
         ? cleanedPhone
         : '254' + cleanedPhone;
-    if (!formattedPhone.match(/^254[17]\d{8}$/)) {
-      return res.status(400).json({ error: 'Invalid Kenyan phone number' });
+    if (!formattedPhone.match(/^254(7\d{8}|1\d{8,9})$/)) {
+      return res.status(400).json({ error: 'Invalid Kenyan phone number. Use 07XX XXX XXX, 01XX XXX XXX, or 254XXX XXX XXX.' });
     }
     const result = await payheroService.sendStkPush({
       amount: Math.round(amount),

@@ -67,8 +67,8 @@ export function SubscriptionPage() {
 
       if (paymentMethod === "mpesa") {
         const cleanedPhone = phoneNumber.replace(/\+/g, "").trim();
-        if (!cleanedPhone.match(/^(?:254|0)[17]\d{8}$/)) {
-          toast.error("Please enter a valid M-Pesa number (e.g., 254712345678)");
+        if (!cleanedPhone.match(/^(?:254|0)(7\d{8}|1\d{8,9})$/)) {
+          toast.error("Please enter a valid M-Pesa number (e.g., 254712345678 or 0110123456)");
           setIsLoading(false);
           return;
         }
@@ -129,7 +129,7 @@ export function SubscriptionPage() {
         await poll();
       } else {
         const cleanedPhone = phoneNumber.replace(/\+/g, "").trim();
-        if (!cleanedPhone.match(/^(\+?254|0)[17]\d{8}$/)) {
+        if (!cleanedPhone.match(/^(\+?254|0)(7\d{8}|1\d{8,9})$/)) {
           toast.error("Please enter a valid phone number");
           setIsLoading(false);
           return;

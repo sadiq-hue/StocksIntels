@@ -63,9 +63,12 @@ async function fetchRapidAPI(symbol) {
   const symbolVariants = [yahooSymbol, cleanSymbol];
   const endpoints = [
     { path: '/api/v1/markets/quote', params: (sym) => ({ symbol: sym, region: 'KE' }) },
+    { path: '/api/v1/markets/stocks/quotes', params: (sym) => ({ ticker: sym, region: 'KE' }) },
     { path: '/market/v2/get-quotes', params: (sym) => ({ symbols: sym, region: 'KE' }) },
     { path: '/api/v1/markets/quote', params: (sym) => ({ symbol: sym, region: 'US' }) },
+    { path: '/api/v1/markets/stocks/quotes', params: (sym) => ({ ticker: sym, region: 'US' }) },
     { path: '/market/v2/get-quotes', params: (sym) => ({ symbols: sym, region: 'US' }) },
+    { path: '/stock/v2/get-summary', params: (sym) => ({ symbol: sym, region: 'US' }) },
   ];
 
   for (const sym of symbolVariants) {
@@ -78,13 +81,16 @@ async function fetchRapidAPI(symbol) {
           headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
           timeout: 6000,
         });
-        const result = resp.data?.quoteResponse?.result?.[0];
+        const result = resp.data?.quoteResponse?.result?.[0] || resp.data?.price;
         if (result?.regularMarketPrice) {
           console.log(`[rapidApiService] RapidAPI NSE success for ${cleanSymbol} via ${ep.path}:`, result.regularMarketPrice);
           return parseYahooResult(result, cleanSymbol);
+        } else {
+          console.log(`[rapidApiService] RapidAPI NSE ${ep.path} for ${sym} returned:`, JSON.stringify(resp.data).slice(0, 300));
         }
       } catch (err) {
-        console.error(`[rapidApiService] RapidAPI NSE ${ep.path} failed for ${sym}:`, err.message);
+        const detail = err.response?.data ? JSON.stringify(err.response.data).slice(0, 300) : err.message;
+        console.error(`[rapidApiService] RapidAPI NSE ${ep.path} failed for ${sym}:`, detail);
       }
     }
   }
