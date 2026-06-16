@@ -43,8 +43,9 @@ async function generateAndPublish() {
   running = true;
 
   try {
-    if (!isMarketOpenNow()) {
-      console.log(`[SignalPublisher] Markets closed (weekend/holiday), skipping cycle`);
+    const skipMarketHours = process.env.SIGNAL_PUBLISHER_SKIP_MARKET_HOURS === 'true';
+    if (!skipMarketHours && !isMarketOpenNow()) {
+      console.log(`[SignalPublisher] Markets closed (US hours only), skipping cycle. Set SIGNAL_PUBLISHER_SKIP_MARKET_HOURS=true to bypass.`);
       return;
     }
 
