@@ -8,7 +8,8 @@ const PAYHERO_CALLBACK_URL = process.env.PAYHERO_CALLBACK_URL;
 function getAuthHeader() {
   if (!PAYHERO_AUTH_TOKEN) return null;
   const token = PAYHERO_AUTH_TOKEN.trim();
-  if (token.toLowerCase().startsWith('bearer ')) return token;
+  const lower = token.toLowerCase();
+  if (lower.startsWith('basic ') || lower.startsWith('bearer ')) return token;
   return `Bearer ${token}`;
 }
 
