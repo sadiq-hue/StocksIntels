@@ -80,7 +80,7 @@ app.get('/healthz', async (_req, res) => {
     const dbResult = await pool.query('SELECT NOW() AS t');
     res.status(200).json({ status: 'ok', db: 'connected', time: dbResult.rows[0].t });
   } catch (e) {
-    res.status(200).json({ status: 'ok', db: 'disconnected', error: e.message });
+    res.status(200).json({ status: 'ok', db: 'disconnected', error: e.message, code: e.code, detail: `${e}` });
   }
 });
 app.get('/readyz', async (_req, res) => {
