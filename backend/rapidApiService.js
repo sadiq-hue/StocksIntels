@@ -115,8 +115,8 @@ async function fetchRapidAPIGlobal(symbol) {
         const parsed = parseYahooGlobalResult(result);
         if (parsed) return parsed;
       }
-    } catch {
-      // continue to next endpoint pattern
+    } catch (err) {
+      console.error(`[rapidApiService] RapidAPI endpoint ${ep.path} failed for ${cleanSymbol}:`, err.message);
     }
   }
   return null;
@@ -152,9 +152,12 @@ async function fetchGlobalQuote(symbol) {
       exchange: 'Global',
       provider: 'yahoo',
     };
-  } catch {}
+  } catch (err) {
+    console.error(`[rapidApiService] yahoo-finance2 failed for ${symbol}:`, err.message);
+  }
 
   // Fallback: RapidAPI Yahoo Finance proxy
+  console.log(`[rapidApiService] Trying RapidAPI fallback for ${symbol}; key set: ${!!process.env.RAPIDAPI_KEY}`);
   return fetchRapidAPIGlobal(symbol);
 }
 
