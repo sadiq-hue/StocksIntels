@@ -530,6 +530,126 @@ async function backfillOutcomesFromHistory(days = 30, maxRows = 500) {
   }
 }
 
+// ─── Historical Backtest: evaluate signal_history against actual OHLC history ─
+// For each signal in signal_history, walks forward day-by-day using the signal's
+// own stop_loss / target1 levels to decide win/loss, then inserts the outcome.
+async function runHistoricalBacktest({ days = 90, maxHoldDays = 10, maxSignals = 1000, force = false } = {}) {
+  try {
+    const result = await pool.query(`
+      SELECT sh.id, sh.ticker, sh.signal, sh.entry_price, sh.stop_loss, sh.target1, sh.target2, sh.generated_at
+      FROM signal_history sh
+      ${force ? '' : 'LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price'}
+      WHERE sh.generated_at > NOW() - $1::interval
+        AND sh.generated_at < NOW() - INTERVAL '1 hour'
+        AND sh.signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
+        AND sh.entry_price > 0
+        AND sh.stop_loss > 0
+        AND sh.target1 > 0
+        ${force ? '' : 'AND so.id IS NULL'}
+      ORDER BY sh.generated_at DESC
+      LIMIT $2
+    `, [`${days} days`, maxSignals]);
+    if (result.rows.length === 0) {
+      console.log('[HistoricalBacktest] No eligible signals to evaluate');
+      return { evaluated: 0, wins: 0, losses: 0 };
+    }
+
+    // Group signals by ticker so we fetch historical prices once per ticker
+    const byTicker = {};
+    for (const row of result.rows) {
+      if (!byTicker[row.ticker]) byTicker[row.ticker] = [];
+      byTicker[row.ticker].push(row);
+    }
+
+    let totalWins = 0, totalLosses = 0, totalInserted = 0, errors = 0;
+
+    for (const [ticker, signals] of Object.entries(byTicker)) {
+      const isNse = NSE_SYMBOLS.includes(ticker);
+      const yahooSymbol = isNse ? `${ticker}.NR` : ticker;
+      const bars = await fetchHistoricalQuotes(yahooSymbol, '3mo', '1d').catch(() => null);
+      if (!bars || bars.length < 2) {
+        console.warn(`[HistoricalBacktest] No historical bars for ${ticker}`);
+        continue;
+      }
+
+      for (const sig of signals) {
+        try {
+          const entry = parseFloat(sig.entry_price);
+          const stop = parseFloat(sig.stop_loss);
+          const target = parseFloat(sig.target1);
+          const signalDate = new Date(sig.generated_at);
+          const isBuy = sig.signal === 'Strong Buy' || sig.signal === 'Buy' || sig.signal === 'Accumulate';
+          const isSell = sig.signal === 'Sell' || sig.signal === 'Strong Sell' || sig.signal === 'Reduce';
+          if (!isBuy && !isSell) continue;
+
+          // Find the first bar on or after the signal date
+          let startIdx = bars.findIndex(b => new Date(b.date + 'T00:00:00Z').getTime() >= signalDate.getTime());
+          if (startIdx < 0) startIdx = bars.length - 1;
+          if (startIdx >= bars.length) continue;
+
+          let exitPrice = null;
+          let resultStr = null;
+          let exitDay = 0;
+
+          for (let i = startIdx; i < Math.min(startIdx + maxHoldDays, bars.length); i++) {
+            const bar = bars[i];
+            const dayHigh = parseFloat(bar.high);
+            const dayLow = parseFloat(bar.low);
+            const dayClose = parseFloat(bar.close);
+            if (!dayHigh || !dayLow || !dayClose) continue;
+
+            exitDay = i - startIdx;
+
+            if (isBuy) {
+              if (dayLow <= stop) { exitPrice = stop; resultStr = 'loss'; break; }
+              if (dayHigh >= target) { exitPrice = target; resultStr = 'win'; break; }
+            } else {
+              // Sell direction: profit when price falls to target1, loss when it rises to stop_loss
+              if (dayHigh >= stop) { exitPrice = stop; resultStr = 'loss'; break; }
+              if (dayLow <= target) { exitPrice = target; resultStr = 'win'; break; }
+            }
+
+            // If max hold reached, close at close price
+            if (i === startIdx + maxHoldDays - 1 || i === bars.length - 1) {
+              exitPrice = dayClose;
+              const pnl = (dayClose - entry) / entry * 100;
+              resultStr = isBuy ? (pnl > 0 ? 'win' : 'loss') : (pnl < 0 ? 'win' : 'loss');
+              break;
+            }
+          }
+
+          if (!exitPrice || !resultStr) continue;
+
+          await pool.query(
+            `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT DO NOTHING`,
+            [sig.ticker, entry, sig.signal, exitPrice, resultStr, sig.generated_at]
+          );
+          totalInserted++;
+          if (resultStr === 'win') totalWins++; else totalLosses++;
+          _signalOutcomes.set(sig.ticker, { entryPrice: entry, signal: sig.signal, exitPrice, result: resultStr, recordedAt: sig.generated_at });
+        } catch (e) {
+          errors++;
+          console.warn(`[HistoricalBacktest] Error evaluating ${sig.ticker}:`, e.message);
+        }
+      }
+    }
+
+    _performanceStats.wins += totalWins;
+    _performanceStats.losses += totalLosses;
+    _performanceStats.total += totalWins + totalLosses;
+    _performanceStats.winRate = _performanceStats.total > 0
+      ? Math.round((_performanceStats.wins / _performanceStats.total) * 1000) / 10 : 0;
+
+    console.log(`[HistoricalBacktest] Evaluated ${totalInserted} signals (${totalWins} wins, ${totalLosses} losses, ${errors} errors)`);
+    return { evaluated: totalInserted, wins: totalWins, losses: totalLosses, errors };
+  } catch (e) {
+    console.error('[HistoricalBacktest] runHistoricalBacktest error:', e.message);
+    return { evaluated: 0, wins: 0, losses: 0, errors: 1, error: e.message };
+  }
+}
+
 // ─── Dynamic Sector PE Update ───────────────────────────────────────────────
 // Computes sector-average PE ratios from the tracked stock fundamentals,
 // falling back to hardcoded values when insufficient data exists.
@@ -2067,6 +2187,7 @@ module.exports = {
   getEngineHealth,
   restoreStateFromDb,
   backfillOutcomesFromHistory,
+  runHistoricalBacktest,
   // Backtesting & Forward Testing
   computeBacktestStats,
   getForwardTestStats,

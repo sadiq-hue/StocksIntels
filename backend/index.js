@@ -2753,6 +2753,23 @@ app.post('/api/signals/engine/backfill', async (req, res) => {
   }
 });
 
+// Public historical backtest endpoint: evaluates signal_history against OHLC history
+app.post('/api/signals/engine/backtest/historical', async (req, res) => {
+  try {
+    const { runHistoricalBacktest } = require('./signalService');
+    const result = await runHistoricalBacktest({
+      days: req.query.days ? parseInt(req.query.days) : 90,
+      maxHoldDays: req.query.maxHoldDays ? parseInt(req.query.maxHoldDays) : 10,
+      maxSignals: req.query.maxSignals ? parseInt(req.query.maxSignals) : 1000,
+      force: req.query.force === 'true',
+    });
+    const counts = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_outcomes').catch(() => ({ rows: [{ cnt: 0 }] }));
+    res.json({ success: true, result, signalOutcomes: counts.rows[0].cnt });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Public signal engine diagnostics endpoint (no auth required for debugging)
 app.get('/api/signals/engine/diagnostics', async (req, res) => {
   try {
