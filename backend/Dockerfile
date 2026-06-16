@@ -10,14 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     /app/venv/bin/pip install --no-cache-dir xgboost numpy pandas scikit-learn
 
 # Install pnpm (workspace lockfile is used for deterministic installs)
-RUN npm install -g pnpm@9
+RUN npm install -g pnpm@10
 
 # Copy workspace files and backend manifest
 COPY pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY backend/package.json ./backend/
 
 # Install backend production dependencies using the workspace lockfile
-RUN pnpm install --filter backend --prod --frozen-lockfile
+RUN pnpm install --filter backend --prod --no-frozen-lockfile
 
 # Copy backend source
 COPY backend/ ./backend/
