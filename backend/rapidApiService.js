@@ -92,6 +92,36 @@ async function fetchNSEQuote(symbol) {
   return quote;
 }
 
+async function fetchRapidAPIGlobal(symbol) {
+  const key = process.env.RAPIDAPI_KEY;
+  const host = process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com';
+  if (!key) return null;
+
+  const cleanSymbol = symbol.toUpperCase().replace(/\./g, '-');
+  const endpoints = [
+    { path: '/api/v1/markets/quote', params: { symbol: cleanSymbol, region: 'US' } },
+    { path: '/market/v2/get-quotes', params: { symbols: cleanSymbol, region: 'US' } },
+  ];
+
+  for (const ep of endpoints) {
+    try {
+      const resp = await axios.get(`https://${host}${ep.path}`, {
+        params: ep.params,
+        headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
+        timeout: 6000,
+      });
+      const result = resp.data?.quoteResponse?.result?.[0];
+      if (result?.regularMarketPrice) {
+        const parsed = parseYahooGlobalResult(result);
+        if (parsed) return parsed;
+      }
+    } catch {
+      // continue to next endpoint pattern
+    }
+  }
+  return null;
+}
+
 async function fetchGlobalQuote(symbol) {
   if (symbol.startsWith('NSE:')) return null;
 
@@ -122,9 +152,10 @@ async function fetchGlobalQuote(symbol) {
       exchange: 'Global',
       provider: 'yahoo',
     };
-  } catch {
-    return null;
-  }
+  } catch {}
+
+  // Fallback: RapidAPI Yahoo Finance proxy
+  return fetchRapidAPIGlobal(symbol);
 }
 
 async function fetchBatchNSEQuotes(symbols) {
@@ -177,12 +208,13 @@ async function fetchBatchGlobalQuotes(symbols) {
   const globalSymbols = symbols.filter(s => !s.startsWith('NSE:'));
   if (!globalSymbols.length) return {};
 
+  const map = {};
+
   try {
     const { default: YahooFinance } = await import('yahoo-finance2');
     const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
     const cleanSymbols = globalSymbols.map(s => s.toUpperCase().replace(/\./g, '-'));
     const chunks = chunkArray(cleanSymbols, 10);
-    const map = {};
     // Process 5 chunks at a time to avoid overwhelming Yahoo
     for (let i = 0; i < chunks.length; i += 5) {
       const batch = chunks.slice(i, i + 5);
@@ -196,10 +228,20 @@ async function fetchBatchGlobalQuotes(symbols) {
         }
       }
     }
-    return map;
-  } catch {
-    return {};
+  } catch {}
+
+  // Fallback: RapidAPI for any symbols still missing
+  const missing = globalSymbols.filter(s => !map[s.toUpperCase().replace(/\./g, '-')]);
+  if (missing.length > 0 && process.env.RAPIDAPI_KEY) {
+    const rapidResults = await Promise.allSettled(missing.map(s => fetchRapidAPIGlobal(s)));
+    for (const result of rapidResults) {
+      if (result.status === 'fulfilled' && result.value) {
+        map[result.value.symbol] = result.value;
+      }
+    }
   }
+
+  return map;
 }
 
 module.exports = { fetchNSEQuote, fetchBatchNSEQuotes, fetchGlobalQuote, fetchBatchGlobalQuotes };
