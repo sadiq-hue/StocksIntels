@@ -250,23 +250,23 @@ export function AIInsightsPage() {
   };
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto h-[calc(100vh-200px)] flex flex-col">
+    <div className="p-4 md:p-6 max-w-[1400px] mx-auto h-[calc(100vh-160px)] md:h-[calc(100vh-200px)] flex flex-col">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-4 md:mb-6">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-lg shadow-[#0D7490]/20">
             <Sparkles className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="text-gray-900 text-2xl font-bold tracking-tight">AI Insights</h2>
+            <h2 className="text-gray-900 text-xl md:text-2xl font-bold tracking-tight">AI Insights</h2>
             <p className="text-gray-500 text-sm">Ask our AI analyst about stocks and market trends — NSE, NYSE, Nasdaq and more</p>
           </div>
         </div>
       </div>
 
-      <div className="flex gap-4 flex-1 min-h-0">
+      <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0">
         {/* Live Signals Panel */}
-        <Card className="w-80 bg-white border-gray-200 flex flex-col overflow-hidden shrink-0 shadow-sm">
+        <Card className="w-full md:w-80 bg-white border-gray-200 flex flex-col overflow-hidden shrink-0 shadow-sm max-h-[240px] md:max-h-none">
           <button onClick={() => setShowSignals(!showSignals)}
             className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100 hover:bg-gray-50/80 transition-colors group">
             <div className="flex items-center gap-2.5">
@@ -355,7 +355,7 @@ export function AIInsightsPage() {
         {/* Chat Panel */}
         <Card className="flex-1 bg-white border-gray-200 p-0 flex flex-col overflow-hidden shadow-sm">
           {/* Chat header */}
-          <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center gap-3 shrink-0">
+          <div className="px-4 py-3 md:px-6 md:py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center gap-3 shrink-0">
             <div className="p-2 rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10">
               <Brain className="w-4 h-4 text-[#0D7490]" />
             </div>
@@ -366,7 +366,7 @@ export function AIInsightsPage() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+          <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5 space-y-4">
             {messages.map((message, index) => (
               <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                 {message.role === "assistant" && (
@@ -409,7 +409,7 @@ export function AIInsightsPage() {
           </div>
 
           {/* Sample Questions & Input */}
-          <div className="border-t border-gray-100 bg-white px-6 py-4 space-y-3 shrink-0">
+          <div className="border-t border-gray-100 bg-white px-4 py-3 md:px-6 md:py-4 space-y-3 shrink-0">
             {messages.length === 1 && (
               <div className="flex flex-wrap gap-2">
                 {sampleQuestions.map((q, i) => {

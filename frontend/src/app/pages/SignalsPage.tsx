@@ -206,7 +206,7 @@ export function SignalsPage() {
             <Zap className="w-5 h-5 text-emerald-600" />
             <div><p className="text-emerald-900 text-sm font-semibold">{highConf.length} high-confidence signal{highConf.length > 1 ? "s" : ""} available</p><p className="text-emerald-700 text-xs">Confidence ≥ 80% — strong probability setups</p></div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {highConf.slice(0, 3).map(s => (
               <button key={s.ticker} onClick={() => { setSelected(s); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="px-2.5 py-1 bg-card border border-emerald-200 rounded-md text-xs font-medium text-emerald-700 hover:bg-emerald-50">{s.ticker} <span className="text-emerald-500">{s.confidence}%</span></button>
             ))}
@@ -249,9 +249,9 @@ export function SignalsPage() {
                     <Star className={`w-4 h-4 ${favorites.includes(s.ticker) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
                   </button>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <Link to={`/app/stock/${s.ticker}`} onClick={e => e.stopPropagation()} className="text-sm font-bold text-foreground hover:text-[#0D7490]">{s.ticker}</Link>
-                      <span className="text-xs text-muted-foreground truncate">{s.name}</span>
+                      <span className="text-xs text-muted-foreground truncate max-w-[140px] sm:max-w-[180px]">{s.name}</span>
                     </div>
                   </div>
                 </div>
@@ -293,7 +293,7 @@ export function SignalsPage() {
               </div>
 
               {/* Entry / Stop / Targets */}
-              <div className="px-4 pb-3 grid grid-cols-4 gap-2">
+              <div className="px-4 pb-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="bg-blue-50 rounded-md p-2 text-center border border-blue-100"><p className="text-[9px] font-medium text-blue-600 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 font-mono">{formatCurrency(s.entry)}</p></div>
                 <div className="bg-red-50 rounded-md p-2 text-center border border-red-100"><p className="text-[9px] font-medium text-red-600 uppercase">Stop</p><p className="text-xs font-bold text-red-900 font-mono">{formatCurrency(s.stopLoss)}</p></div>
                 <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">T1</p><p className="text-xs font-bold text-emerald-900 font-mono">{formatCurrency(s.target1)}</p></div>
@@ -372,18 +372,18 @@ export function SignalsPage() {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelected(null)}>
           <div className="bg-popover text-popover-foreground rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl border border-border" onClick={e => e.stopPropagation()}>
             <div className="p-6 space-y-5">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-3 mb-0.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-0.5">
                     <h2 className="text-xl font-bold text-foreground">{selected.ticker}</h2>
                     {(() => { const s = SIGNAL_STYLES[selected.signal]; const I = s.icon; return <Badge className={`${s.bg} ${s.text} border-0`}><I className="w-3 h-3 mr-1" />{selected.signal}</Badge>; })()}
                   </div>
-                  <p className="text-sm text-muted-foreground">{selected.name}</p>
+                  <p className="text-sm text-muted-foreground truncate">{selected.name}</p>
                 </div>
-                <button onClick={() => setSelected(null)} className="p-1.5 hover:bg-accent rounded-md transition-colors"><span className="text-muted-foreground text-lg font-bold">&times;</span></button>
+                <button onClick={() => setSelected(null)} className="p-1.5 hover:bg-accent rounded-md transition-colors shrink-0"><span className="text-muted-foreground text-lg font-bold">&times;</span></button>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-muted rounded-lg p-3 border border-border"><p className="text-xs text-muted-foreground">Price</p><p className="text-lg font-bold text-foreground">${formatCurrency(selected.price)}</p></div>
                 <div className={`rounded-lg p-3 border ${selected.change >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}><p className="text-xs text-muted-foreground">Change</p><p className={`text-lg font-bold flex items-center gap-1 ${selected.change >= 0 ? "text-emerald-700" : "text-red-700"}`}>{selected.change >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}{selected.change >= 0 ? "+" : ""}{selected.change}%</p></div>
                 <div className="bg-muted rounded-lg p-3 border border-border"><p className="text-xs text-muted-foreground">Confidence</p><p className={`text-lg font-bold ${selected.confidence >= 80 ? "text-emerald-600" : selected.confidence >= 70 ? "text-yellow-600" : "text-red-600"}`}>{selected.confidence}%</p></div>
@@ -391,7 +391,7 @@ export function SignalsPage() {
 
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-3">Trade Parameters</h3>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 text-center"><p className="text-[10px] font-medium text-blue-600 uppercase">Entry</p><p className="text-sm font-bold text-blue-900 font-mono">${formatCurrency(selected.entry)}</p></div>
                   <div className="bg-red-50 rounded-lg p-3 border border-red-100 text-center"><p className="text-[10px] font-medium text-red-600 uppercase">Stop</p><p className="text-sm font-bold text-red-900 font-mono">${formatCurrency(selected.stopLoss)}</p></div>
                   <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">T1</p><p className="text-sm font-bold text-emerald-900 font-mono">${formatCurrency(selected.target1)}</p></div>

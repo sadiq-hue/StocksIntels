@@ -425,7 +425,7 @@ export function FinancialsPage() {
             </div>
             <div>
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-2xl font-black text-foreground tracking-tight">{profile?.companyName || selectedSymbol} <span className="text-muted-foreground font-bold">({selectedSymbol})</span></h1>
+                <h1 className="text-xl md:text-2xl font-black text-foreground tracking-tight">{profile?.companyName || selectedSymbol} <span className="text-muted-foreground font-bold">({selectedSymbol})</span></h1>
                 <SourceBadge source={activeSource} />
                 <div className={`h-2 w-2 rounded-full ${status?.edgarConfigured ? "bg-emerald-500" : "bg-amber-500"}`} />
               </div>
@@ -799,16 +799,16 @@ export function FinancialsPage() {
             ) : (
               <>
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50/30 border border-blue-100 rounded-xl p-5">
-                  <div className="flex items-start justify-between mb-4">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <FileText className="w-5 h-5 text-[#0D7490]" />
-                        <h3 className="text-lg font-bold text-foreground">SEC EDGAR Filings — {selectedSymbol}</h3>
+                        <h3 className="text-base sm:text-lg font-bold text-foreground">SEC EDGAR Filings — {selectedSymbol}</h3>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">Retrieved directly from the SEC EDGAR database</p>
                     </div>
                     <a href={`https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${selectedSymbol}&type=10-K`} target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-[#0D7490] hover:underline font-medium flex items-center gap-1">SEC.gov <ExternalLink className="w-3 h-3" /></a>
+                      className="text-xs text-[#0D7490] hover:underline font-medium flex items-center gap-1 shrink-0">SEC.gov <ExternalLink className="w-3 h-3" /></a>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
                     {(() => {

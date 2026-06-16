@@ -7,7 +7,7 @@ export function DisclaimerPage() {
     <div className="min-h-screen bg-white">
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex flex-wrap justify-between items-center gap-4 h-16">
             <Link to="/" className="flex items-center gap-2">
               <div className="w-9 h-9 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
                 <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
@@ -33,7 +33,7 @@ export function DisclaimerPage() {
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-8">Risk Disclaimer</h1>
 
-          <div className="p-6 bg-amber-50 border border-amber-200 rounded-2xl mb-10">
+          <div className="p-4 md:p-6 bg-amber-50 border border-amber-200 rounded-2xl mb-10">
             <p className="text-amber-800 text-sm font-medium">
               Please read this carefully before using StocksIntels.
             </p>
@@ -64,7 +64,7 @@ export function DisclaimerPage() {
               <p>While we strive for real-time accuracy across all data feeds, StocksIntels cannot guarantee the completeness, timeliness, or accuracy of market data at all times. Do not rely solely on data from this platform for time-critical trading decisions.</p>
             </div>
 
-            <div className="p-6 bg-gray-50 rounded-2xl mt-8">
+            <div className="p-4 md:p-6 bg-gray-50 rounded-2xl mt-8">
               <p className="text-sm text-gray-600 font-medium">
                 By using StocksIntels, you acknowledge that you have read, understood, and accepted this disclaimer in full.
               </p>

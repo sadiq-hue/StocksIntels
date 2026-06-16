@@ -34,7 +34,7 @@ export function CareersPage() {
     <div className="min-h-screen bg-white">
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex flex-wrap justify-between items-center gap-4 h-16">
             <Link to="/" className="flex items-center gap-2">
               <div className="w-9 h-9 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
                 <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
@@ -62,14 +62,14 @@ export function CareersPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="space-y-6">
             {roles.map((role) => (
-              <div key={role.title} className="bg-white border border-gray-100 rounded-2xl p-8 hover:shadow-lg transition-shadow">
+              <div key={role.title} className="bg-white border border-gray-100 rounded-2xl p-4 md:p-6 hover:shadow-lg transition-shadow">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 bg-[#0D7490]/10 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Briefcase className="w-6 h-6 text-[#0D7490]" />
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <h2 className="text-xl font-bold text-gray-900 mb-2">{role.title}</h2>
-                    <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-4">
                       <span className="inline-flex items-center gap-1">
                         <MapPin className="w-3.5 h-3.5" />
                         {role.location}
@@ -86,7 +86,7 @@ export function CareersPage() {
             ))}
           </div>
 
-          <div className="mt-12 text-center p-8 bg-gray-50 rounded-2xl">
+          <div className="mt-12 text-center p-4 md:p-6 bg-gray-50 rounded-2xl">
             <h3 className="text-lg font-bold text-gray-900 mb-2">How to Apply</h3>
             <p className="text-gray-600 text-sm">
               Send your CV and a short note on why you're excited about StocksIntels to{' '}

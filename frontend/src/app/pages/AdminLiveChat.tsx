@@ -181,11 +181,11 @@ export default function AdminLiveChat() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-64px)] bg-gray-50">
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] bg-gray-50">
       {/* Active conversations sidebar */}
-      <div className="w-80 shrink-0 border-r border-gray-200 bg-white flex flex-col">
+      <div className="w-full lg:w-80 shrink-0 border-r border-gray-200 bg-white flex flex-col">
         <div className="p-4 border-b border-gray-100">
-          <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+          <h2 className="text-sm font-bold text-gray-900 flex flex-wrap items-center gap-2">
             <MessageCircle className="size-4 text-[#0D7490]" />
             Live Chat
             <span className="text-xs font-normal text-gray-400 ml-auto">{activeChats.length} active</span>
@@ -248,7 +248,7 @@ export default function AdminLiveChat() {
         ) : (
           <>
             {/* Conversation header */}
-            <div className="px-5 py-3 border-b border-gray-200 bg-white shrink-0 flex items-center justify-between">
+            <div className="px-5 py-3 border-b border-gray-200 bg-white shrink-0 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="size-9 rounded-full bg-[#0D7490]/10 flex items-center justify-center">
                   <User className="size-4 text-[#0D7490]" />
@@ -313,7 +313,7 @@ export default function AdminLiveChat() {
 
             {/* Reply input */}
             <div className="p-4 border-t border-gray-200 bg-white shrink-0">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Input value={input} onChange={e => setInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }}
                   placeholder="Type your reply..." className="h-11 bg-gray-50 border-2 border-gray-200 rounded-xl" />

@@ -83,11 +83,11 @@ function FeatureCard({ icon: Icon, title, desc, delay }: { icon: React.ElementTy
 function CompactHero() {
   return (
     <div className="mb-4 text-center">
-      <div className="mx-auto flex items-center justify-center gap-3">
+      <div className="mx-auto flex flex-wrap items-center justify-center gap-3">
         <div className="w-10 h-10 bg-gradient-to-br from-[#0B69A3] to-[#2D8FD6] rounded-xl flex items-center justify-center shadow-sm">
           <img src="/logo1.jpg" alt="logo" className="w-6 h-6" />
         </div>
-        <div className="text-left">
+        <div className="text-left min-w-0">
           <div className="text-gray-700 text-sm font-semibold">StocksIntels</div>
           <div className="text-[#0B69A3] text-2xl font-extrabold leading-tight">StocksIntels</div>
         </div>
@@ -322,14 +322,14 @@ export function LoginPage() {
                   <motion.div key="err" initial={{ opacity: 0, y: -10, height: 0 }} animate={{ opacity: 1, y: 0, height: "auto" }} exit={{ opacity: 0, y: -10, height: 0 }}
                     className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-red-700 text-sm font-medium">{error}</p>
+                    <p className="text-red-700 text-sm font-medium min-w-0">{error}</p>
                   </motion.div>
                 )}
                 {success && (
                   <motion.div key="ok" initial={{ opacity: 0, y: -10, height: 0 }} animate={{ opacity: 1, y: 0, height: "auto" }} exit={{ opacity: 0, y: -10, height: 0 }}
                     className="mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-xl flex items-start gap-3">
                     <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                    <p className="text-emerald-700 text-sm font-medium">{success}</p>
+                    <p className="text-emerald-700 text-sm font-medium min-w-0">{success}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -349,7 +349,7 @@ export function LoginPage() {
                     {mode === "login" && loginStage === "password" && (
                       <>
                         <div className="space-y-1.5">
-                          <div className="flex items-center justify-between ml-1">
+                          <div className="flex flex-wrap items-center justify-between gap-2 ml-1">
                             <label className="text-gray-700 text-sm font-semibold">Password</label>
                             <button type="button" onClick={() => { setMode("forgot"); clear(); }}
                               className="text-xs text-[#0B69A3] hover:text-[#2D8FD6] font-semibold hover:underline">
@@ -513,7 +513,7 @@ export function LoginPage() {
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => { setRegStage("form"); setVerifyCode(""); setError(null); }}
-                            className="w-1/3 h-10 text-sm text-gray-500 hover:text-[#0B69A3] font-semibold border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
+                            className="w-full sm:w-1/3 h-10 text-sm text-gray-500 hover:text-[#0B69A3] font-semibold border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
                             Back
                           </button>
                           <Button type="submit" disabled={isLoading || verifyCode.length < 6 || !fullName.trim() || password.length < 8 || password !== confirmPassword || pwStrength < 3}
@@ -595,7 +595,7 @@ export function LoginPage() {
                   </div>
                   <div className="relative">
                     <button type="button" onClick={() => setSocialOpen(!socialOpen)}
-                      className="w-full flex items-center justify-between h-11 px-4 bg-gray-50 rounded-xl border border-gray-200 text-sm font-semibold">
+                      className="w-full flex flex-wrap items-center justify-between gap-2 h-11 px-4 bg-gray-50 rounded-xl border border-gray-200 text-sm font-semibold">
                       <span>Sign in with</span>
                       <svg className={`w-4 h-4 transition-transform ${socialOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 8l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </button>

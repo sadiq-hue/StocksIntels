@@ -38,7 +38,7 @@ export function BlogPage() {
     <div className="min-h-screen bg-white">
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex flex-wrap justify-between items-center gap-4 h-16">
             <Link to="/" className="flex items-center gap-2">
               <div className="w-9 h-9 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
                 <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
@@ -66,8 +66,8 @@ export function BlogPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="space-y-8">
             {posts.map((post) => (
-              <article key={post.title} className="bg-white border border-gray-100 rounded-2xl p-8 hover:shadow-lg transition-shadow">
-                <div className="flex items-center gap-3 text-sm text-gray-500 mb-3">
+              <article key={post.title} className="bg-white border border-gray-100 rounded-2xl p-4 md:p-6 hover:shadow-lg transition-shadow">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 mb-3">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#0D7490]/5 text-[#0D7490] rounded-full text-xs font-semibold">
                     {post.category}
                   </span>
@@ -102,13 +102,13 @@ export function BlogPage() {
 
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative bg-gradient-to-br from-[#0D7490] to-[#0A5F7A] rounded-3xl p-12 lg:p-16 text-center overflow-hidden">
+          <div className="relative bg-gradient-to-br from-[#0D7490] to-[#0A5F7A] rounded-3xl p-4 md:p-6 lg:p-16 text-center overflow-hidden">
             <div className="absolute inset-0 opacity-10">
               <div className="absolute top-0 left-0 w-64 h-64 bg-white rounded-full blur-3xl" />
               <div className="absolute bottom-0 right-0 w-64 h-64 bg-white rounded-full blur-3xl" />
             </div>
             <div className="relative z-10 max-w-2xl mx-auto">
-              <h2 className="text-3xl font-bold text-white mb-4">Stay informed with market insights</h2>
+              <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">Stay informed with market insights</h2>
               <p className="text-lg text-white/80 mb-8">Subscribe to our newsletter for weekly updates.</p>
               <Link to="/login">
                 <Button size="lg" className="bg-white text-[#0D7490] hover:bg-gray-100 px-8 py-6 text-base font-semibold shadow-xl">

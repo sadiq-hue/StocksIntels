@@ -24,11 +24,11 @@ export function NotificationsPage() {
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-6 max-w-3xl mx-auto">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <Bell className="w-6 h-6 text-[#0D7490]" />
-          <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Notifications</h1>
           {unread > 0 && (
             <span className="bg-[#0D7490] text-white text-xs font-bold px-2 py-0.5 rounded-full">
               {unread} new
@@ -139,7 +139,7 @@ export function NotificationsPage() {
                 <span>{formatDate(selected.created_at)}</span>
               </div>
 
-              <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
                 {selected.link && (
                   <button
                     onClick={() => { navigate(selected.link!); setSelected(null); }}

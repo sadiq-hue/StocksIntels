@@ -260,9 +260,9 @@ export function GroupPage() {
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-foreground text-3xl font-bold mb-2">Trading Groups</h1>
+          <h1 className="text-foreground text-2xl md:text-3xl font-bold mb-2">Trading Groups</h1>
           <p className="text-muted-foreground">Join communities connected by market interests and trading strategies</p>
         </div>
         <Button onClick={() => setShowCreateDialog(true)} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
@@ -349,7 +349,7 @@ export function GroupPage() {
           {/* Left: Group Info + Actions */}
           <div className="lg:col-span-2 space-y-6">
             {/* Back + Header */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Button variant="outline" size="sm" onClick={handleBackToBrowse} className="border-border text-muted-foreground gap-1">
                 <ArrowLeft className="w-4 h-4" /> Back
               </Button>
@@ -367,7 +367,7 @@ export function GroupPage() {
 
             {/* Group Header Card */}
             <Card className="border-border p-6">
-              <div className="flex items-start gap-4">
+              <div className="flex flex-wrap items-start gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center text-3xl border border-border shrink-0">
                   {selectedGroup.icon}
                 </div>
@@ -387,7 +387,7 @@ export function GroupPage() {
             </Card>
 
             {/* Stats Row */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card className="p-4 border-border text-center">
                 <p className="text-2xl font-bold text-foreground">{selectedGroup.members}</p>
                 <p className="text-xs text-muted-foreground mt-1">Members</p>
@@ -409,7 +409,7 @@ export function GroupPage() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               {selectedGroup.isJoined ? (
                 <>
                   <Button onClick={() => handleNavigateToChat(selectedGroup.id)} className="flex-1 bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2 h-11">
@@ -485,7 +485,7 @@ export function GroupPage() {
           {/* Search & Filters */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
             <div className="lg:col-span-2 space-y-4">
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
                   <Input placeholder="Search groups..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 bg-card border-border h-11" />
@@ -561,7 +561,7 @@ export function GroupPage() {
                       group.trending ? "hover:border-[#0D7490]" : "border-border hover:border-border"
                     } ${group.isJoined ? "ring-1 ring-[#0D7490]/10" : ""}`}
                       onClick={() => handleSelectGroup(group)}>
-                      <div className="flex items-start justify-between mb-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center text-2xl border border-border">{group.icon}</div>
                           <div>
@@ -578,7 +578,7 @@ export function GroupPage() {
                         </div>
                       </div>
                       <p className="text-muted-foreground text-sm mb-4 flex-1 line-clamp-2">{group.description}</p>
-                      <div className="grid grid-cols-4 gap-2 mb-4 py-3 border-y border-border">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4 py-3 border-y border-border">
                         <div className="text-center"><p className="text-lg font-bold text-foreground">{group.members}</p><p className="text-[11px] text-muted-foreground">Members</p></div>
                         <div className="text-center">
                           <p className="text-lg font-bold text-green-600 flex items-center justify-center gap-1">
@@ -589,7 +589,7 @@ export function GroupPage() {
                         <div className="text-center"><p className="text-lg font-bold text-foreground">{group.activity_last_hour}</p><p className="text-[11px] text-muted-foreground">Active/hr</p></div>
                         <div className="text-center"><p className="text-lg font-bold text-foreground">{group.message_count?.toLocaleString() || 0}</p><p className="text-[11px] text-muted-foreground">Messages</p></div>
                       </div>
-                      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                         {group.isJoined ? (
                           <>
                             <Button onClick={() => handleNavigateToChat(group.id)} className="flex-1 bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">

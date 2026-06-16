@@ -96,12 +96,12 @@ export function TopAnalysts() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
           <h2 className="text-lg font-bold text-foreground">Top Analysts</h2>
-          <p className="text-sm text-muted-foreground">Real Wall Street analyst ratings & recommendations tracked via FMP</p>
+          <p className="text-sm text-muted-foreground truncate">Real Wall Street analyst ratings & recommendations tracked via FMP</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button onClick={fetchData} className="p-2 hover:bg-muted rounded-lg transition-colors" title="Refresh">
             <RefreshCw className={`size-4 text-muted-foreground ${loading ? "animate-spin" : ""}`} />
           </button>
@@ -110,7 +110,7 @@ export function TopAnalysts() {
             <input
               type="text"
               placeholder="Search analysts or stocks..."
-              className="w-44 pl-9 pr-3 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-[#0D7490]/20 focus:border-[#0D7490] transition-all text-sm outline-none"
+              className="w-full sm:w-44 pl-9 pr-3 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-[#0D7490]/20 focus:border-[#0D7490] transition-all text-sm outline-none"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -126,22 +126,22 @@ export function TopAnalysts() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="p-4">
           <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Analyst Firms</p>
-          <p className="text-2xl font-bold text-foreground">{data?.total || 0}</p>
+          <p className="text-xl md:text-2xl font-bold text-foreground">{data?.total || 0}</p>
         </Card>
         <Card className="p-4 border-emerald-200 bg-emerald-50/30">
           <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Buy Ratings</p>
-          <p className="text-2xl font-bold text-emerald-600">{totalBuys}</p>
+          <p className="text-xl md:text-2xl font-bold text-emerald-600">{totalBuys}</p>
         </Card>
         <Card className="p-4 border-amber-200 bg-amber-50/30">
           <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Neutral</p>
-          <p className="text-2xl font-bold text-amber-600">{totalNeutral}</p>
+          <p className="text-xl md:text-2xl font-bold text-amber-600">{totalNeutral}</p>
         </Card>
         <Card className="p-4 border-red-200 bg-red-50/30">
           <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Sell Ratings</p>
-          <p className="text-2xl font-bold text-red-600">{totalSells}</p>
+          <p className="text-xl md:text-2xl font-bold text-red-600">{totalSells}</p>
         </Card>
       </div>
 
@@ -160,19 +160,19 @@ export function TopAnalysts() {
                 className="p-5 cursor-pointer hover:bg-muted/30 transition-colors"
                 onClick={() => setExpanded(isExpanded ? null : firm.id)}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="size-12 rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] flex items-center justify-center text-white font-bold text-lg">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="size-12 rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] flex items-center justify-center text-white font-bold text-lg shrink-0">
                       {firm.name.split(" ").map(w => w[0]).slice(0, 2).join("")}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-foreground">{firm.name}</h3>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-foreground truncate">{firm.name}</h3>
                         <Badge className={`text-[10px] ${ratingColors[firm.rating] || "bg-gray-50 text-gray-700"}`}>
                           {firm.rating}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1"><Target className="size-3" />{firm.topSector}</span>
                         <span className="flex items-center gap-1"><Star className="size-3" />{firm.totalRatings.toLocaleString()} ratings</span>
                         {firm.avgTargetPrice > 0 && (
@@ -193,7 +193,7 @@ export function TopAnalysts() {
 
               {isExpanded && (
                 <div className="px-5 pb-5 border-t pt-4">
-                  <div className="grid grid-cols-5 gap-2 mb-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mb-4">
                     {Object.entries(firm.ratings).map(([rating, count]) => (
                       <div key={rating} className="text-center p-2 rounded-lg bg-muted/30">
                         <p className="text-lg font-bold text-foreground">{count}</p>
@@ -212,7 +212,7 @@ export function TopAnalysts() {
 
                       return (
                         <Card key={pick.symbol} className="p-4 hover:shadow-sm transition-all cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/app/stock/${pick.symbol}?market=global`); }}>
-                          <div className="flex items-center justify-between mb-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                             <div>
                               <p className="text-sm font-bold text-foreground">{pick.symbol}</p>
                               {pick.publishedDate && (
@@ -224,7 +224,7 @@ export function TopAnalysts() {
                               {pick.rating}
                             </Badge>
                           </div>
-                          <div className="flex items-center justify-between text-xs">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                             <span className="text-muted-foreground">
                               Current: <strong className="text-foreground font-mono">${currentPrice.toFixed(2)}</strong>
                             </span>

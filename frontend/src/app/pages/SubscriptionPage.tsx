@@ -185,7 +185,7 @@ export function SubscriptionPage() {
 
       <div className="max-w-4xl mx-auto px-4">
         <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-gray-900">Complete your subscription</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Complete your subscription</h1>
           <p className="text-gray-600 mt-2">
             Secure checkout for the <span className="text-[#0D7490] font-bold">{selectedPlan.name}</span> plan
             <span className="text-gray-500"> ({period === "yearly" ? "Yearly" : "Monthly"})</span>
@@ -198,7 +198,7 @@ export function SubscriptionPage() {
               <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
                 <CheckCircle2 className="w-12 h-12" />
               </div>
-              <h2 className="text-3xl font-black text-gray-900 mb-2">Subscription Confirmed!</h2>
+              <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-2">Subscription Confirmed!</h2>
               <p className="text-gray-600 mb-8">Welcome to the <span className="font-bold text-[#0D7490]">{selectedPlan.name}</span> plan. Your account is now active.</p>
               <Button 
                 onClick={async () => { await refreshUser(); navigate("/app/dashboard"); }}
@@ -215,7 +215,7 @@ export function SubscriptionPage() {
                   <div className="w-20 h-20 bg-[#0D7490]/10 rounded-full flex items-center justify-center mx-auto mb-6">
                     <Loader2 className="w-12 h-12 text-[#0D7490] animate-spin" />
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Waiting for Payment</h2>
+                  <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">Waiting for Payment</h2>
                   <p className="text-gray-500 mb-2">STK Push sent to your phone. Enter your M-Pesa PIN to complete payment.</p>
                   <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -228,7 +228,7 @@ export function SubscriptionPage() {
                   <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
                     <X className="w-12 h-12 text-red-600" />
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Failed</h2>
+                  <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">Payment Failed</h2>
                   <p className="text-gray-500 mb-8">Your payment was declined. Please try again.</p>
                   <Button onClick={() => { setPollStatus("idle"); setIsLoading(false); }} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 h-12 font-bold">
                     Try Again
@@ -242,10 +242,10 @@ export function SubscriptionPage() {
           <div className="md:col-span-1">
             <Card className="p-6 sticky top-28 border-gray-100">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 shrink-0 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
                   <PlanIcon className="w-6 h-6 text-[#0D7490]" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h3 className="font-bold text-gray-900 leading-tight">{selectedPlan.name}</h3>
                   <p className="text-xs text-gray-500 font-medium">{period === "yearly" ? "Yearly Plan" : "Monthly Plan"}</p>
                 </div>
@@ -287,7 +287,7 @@ export function SubscriptionPage() {
                 Payment Method
               </h2>
               
-              <div className="grid grid-cols-2 gap-4 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                 <button
                   onClick={() => setPaymentMethod("card")}
                   className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${

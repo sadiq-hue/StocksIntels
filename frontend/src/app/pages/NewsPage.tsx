@@ -145,7 +145,7 @@ export function NewsPage() {
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-foreground">Financial News</h2>
           <p className="text-sm text-muted-foreground">Latest market updates and NSE news</p>
@@ -159,10 +159,10 @@ export function NewsPage() {
       {/* Error */}
       {error && (
         <Card className="p-4 bg-red-50 border-red-200">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <AlertCircle className="size-4 text-red-600" />
             <p className="text-sm text-red-700">{error}</p>
-            <button onClick={handleRefresh} className="ml-auto px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">Retry</button>
+            <button onClick={handleRefresh} className="ml-auto shrink-0 px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">Retry</button>
           </div>
         </Card>
       )}
@@ -208,7 +208,7 @@ export function NewsPage() {
       )}
 
       {/* Status bar */}
-      <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1"><Clock className="size-3" /> Auto-refreshes every 60s</span>
         {summary?.topSources && summary.topSources.length > 0 && (
           <span>Sources: {summary.topSources.slice(0, 5).join(", ")}</span>
@@ -228,7 +228,7 @@ export function NewsPage() {
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
+        <TabsList className="flex flex-wrap">
           <TabsTrigger value="all">All News</TabsTrigger>
           <TabsTrigger value="hot" className="relative">
             <Flame className="size-3 mr-1 text-amber-500" />

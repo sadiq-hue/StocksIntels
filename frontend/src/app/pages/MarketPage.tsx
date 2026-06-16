@@ -404,19 +404,19 @@ const MarketPage: React.FC = () => {
   return (
     <div className="mx-auto max-w-[1600px] p-4 md:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <div className="p-2 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9]">
               <Globe className="size-5 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">Market Intelligence</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Market Intelligence</h1>
           </div>
           <p className="text-sm text-muted-foreground">
             Real-time NSE &amp; Global Market Activity &bull; Updated {new Date().toLocaleTimeString()}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)}>
             <Settings size={14} className="mr-2" /> Settings
           </Button>
@@ -509,7 +509,7 @@ const MarketPage: React.FC = () => {
       </div>
 
       {/* Market Legend */}
-      <div className="flex flex-wrap items-center gap-6 px-1">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1">
         <div className="flex items-center gap-2">
           <div className="size-2 rounded-full bg-[#0D7490]" />
           <span className="text-xs font-medium text-muted-foreground">Nairobi Securities Exchange (KES)</span>
@@ -518,7 +518,7 @@ const MarketPage: React.FC = () => {
           <div className="size-2 rounded-full bg-indigo-500" />
           <span className="text-xs font-medium text-muted-foreground">US/Global Markets (USD)</span>
         </div>
-        <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground sm:ml-auto">
           <span>Both markets update in real-time</span>
         </div>
       </div>
@@ -737,8 +737,8 @@ const MarketWindow = ({
     </div>
 
     {/* Search & Sort */}
-    <div className="px-4 py-3 border-b flex items-center gap-2">
-      <div className="relative flex-1">
+    <div className="px-4 py-3 border-b flex flex-wrap items-center gap-2">
+      <div className="relative flex-1 min-w-[140px]">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={search}

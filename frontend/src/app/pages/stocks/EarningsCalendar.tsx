@@ -36,8 +36,8 @@ function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () =
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
       <Card className="max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="p-6 space-y-5">
-          <div className="flex items-start justify-between">
+        <div className="p-4 md:p-6 space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="size-12 rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] flex items-center justify-center">
                 <BarChart3 className="size-6 text-white" />
@@ -238,18 +238,18 @@ export function EarningsCalendar() {
     <div className="space-y-6">
       {selectedEvent && <EarningDetail event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
 
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
           <h2 className="text-lg font-bold text-foreground">Earnings Calendar</h2>
-          <p className="text-sm text-muted-foreground">Upcoming earnings reports and estimates</p>
+          <p className="text-sm text-muted-foreground truncate">Upcoming earnings reports and estimates</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search ticker or company..."
-              className="w-48 pl-9 pr-3 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-[#0D7490]/20 focus:border-[#0D7490] transition-all text-sm outline-none"
+              className="w-full sm:w-48 pl-9 pr-3 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-[#0D7490]/20 focus:border-[#0D7490] transition-all text-sm outline-none"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -273,20 +273,20 @@ export function EarningsCalendar() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card className="p-3"><p className="text-[10px] text-muted-foreground uppercase font-semibold">Total Reports</p><p className="text-lg font-bold text-foreground">{totals.total}</p></Card>
         <Card className="p-3"><p className="text-[10px] text-muted-foreground uppercase font-semibold">Upcoming</p><p className="text-lg font-bold text-amber-600">{totals.upcoming}</p></Card>
         <Card className="p-3"><p className="text-[10px] text-muted-foreground uppercase font-semibold">Reported</p><p className="text-lg font-bold text-emerald-600">{totals.beats + totals.misses}</p></Card>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <button
           onClick={() => setWeekOffset(prev => prev - 1)}
           className="flex items-center gap-1 px-3 py-2 rounded-lg border bg-background text-sm font-semibold hover:bg-accent transition-colors"
         >
           <ChevronLeft className="size-4" /> Previous Week
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <CalendarDays className="size-4 text-[#0D7490]" />
           <span className="font-semibold text-foreground">{weekLabel}</span>
         </div>
@@ -323,23 +323,23 @@ export function EarningsCalendar() {
                   style={{ borderLeftColor: e.actualEPS === 0 ? "#9ca3af" : e.isBeat ? "#10b981" : "#ef4444" }}
                   onClick={() => setSelectedEvent(e)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="size-9 rounded-lg bg-muted flex items-center justify-center">
                         <BarChart3 className="size-4 text-muted-foreground" />
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-sm text-foreground">{e.ticker}</span>
                           <Badge variant="outline" className={`text-[9px] ${e.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
                             {e.market === "nse" ? "NSE" : "Global"}
                           </Badge>
                           {e.actualEPS === 0 && <span className="text-[9px] text-amber-600 font-medium">Upcoming</span>}
                         </div>
-                        <p className="text-xs text-muted-foreground">{e.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{e.name}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 flex-wrap">
                       <div className="text-right hidden sm:block">
                         <p className="text-[10px] text-muted-foreground uppercase font-semibold">{e.quarter} FY{e.fiscalYear}</p>
                         <p className="text-xs text-muted-foreground">{e.sector}</p>

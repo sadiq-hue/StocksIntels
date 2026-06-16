@@ -526,6 +526,7 @@ async function getWeeklyTrend(symbol) {
 // by comparing entry prices to current market prices.
 async function computeBacktestStats({ days = 30, limit = 500, signalType, minConfidence = 0 } = {}) {
   try {
+    console.log(`[Backtest] computeBacktestStats requested: days=${days}, signalType=${signalType || 'all'}`);
     // Primary data source: signal_outcomes — has actual exit prices and real win/loss results
     let outcomeRows;
     try {
@@ -540,7 +541,11 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
         [...params, limit]
       );
       outcomeRows = result.rows;
-    } catch { outcomeRows = []; }
+      console.log(`[Backtest] Found ${outcomeRows.length} signal_outcomes rows`);
+    } catch (e) {
+      console.warn('[Backtest] signal_outcomes query failed:', e.message);
+      outcomeRows = [];
+    }
 
     if (outcomeRows.length > 0) {
       // Aggregate win/loss counts
@@ -638,6 +643,7 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
         [...params, limit]
       );
       const rows = result.rows;
+      console.log(`[Backtest] Fallback signal_history query returned ${rows.length} unresolved rows`);
       if (!rows.length) return { total: 0, wins: 0, losses: 0, winRate: 0, avgReturn: 0, profitFactor: 0, sharpe: 0, maxDrawdown: 0, bySignal: {}, dataSource: 'none' };
 
       let wins = 0, losses = 0, total = 0, totalReturn = 0;
@@ -1213,7 +1219,12 @@ function getFundamentals(symbol) {
 // Persist signals to database for history
 async function persistSignals(signals) {
   try {
-    if (!signals || signals.length === 0) return;
+    if (!signals || signals.length === 0) {
+      console.log('[SignalService] persistSignals called with empty signals');
+      return;
+    }
+    const actionable = signals.filter(s => s.signal !== 'Hold');
+    console.log(`[SignalService] Persisting ${signals.length} signals (${actionable.length} non-Hold) to signal_history`);
     const values = signals.map(s => [
       s.ticker, s.signal, s.confidence, s.price, s.change || 0,
       s.entry || s.price, s.stopLoss || 0, s.target1 || 0, s.target2 || 0,
@@ -1225,15 +1236,18 @@ async function persistSignals(signals) {
       return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, NOW())`;
     }).join(',');
     const flat = values.flat();
-    await pool.query(
+    const result = await pool.query(
       `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, generated_at)
        VALUES ${placeholders}
        ON CONFLICT DO NOTHING`,
       flat
     );
+    console.log(`[SignalService] Persisted ${result.rowCount} new signal_history rows`);
   } catch (error) {
     if (error.code !== '42P01') {
       console.error('[SignalService] DB persist error:', error.message);
+    } else {
+      console.warn('[SignalService] signal_history table does not exist');
     }
   }
 }
@@ -1300,6 +1314,26 @@ setTimeout(() => {
   generateSignals(null, true).catch(() => {});
   generateSignals(null, false).catch(() => {});
 }, 100);
+
+// Seed signal_history on startup if it's empty (e.g. fresh deploy / cleared DB)
+// so the Signal Engine backtest has something to show. Uses cached/fundamental data.
+setTimeout(async () => {
+  try {
+    const countRes = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_history').catch(() => ({ rows: [{ cnt: 0 }] }));
+    if ((countRes.rows[0]?.cnt || 0) === 0) {
+      console.log('[SignalService] signal_history is empty; seeding initial signals...');
+      const signals = await generateSignals(null, false, true);
+      if (signals && signals.length > 0) {
+        await persistSignals(signals);
+        console.log(`[SignalService] Seeded ${signals.length} signals into signal_history`);
+      } else {
+        console.log('[SignalService] No signals generated for seeding');
+      }
+    }
+  } catch (e) {
+    console.error('[SignalService] Startup seed error:', e.message);
+  }
+}, 5000);
 // Auto-resolve forward test predictions every 5 minutes
 setInterval(() => {
   resolveAllForwardPredictions().catch(() => {});
@@ -1311,16 +1345,16 @@ setInterval(() => {
 
 // Main function to generate signals for all tracked stocks
 // When quick=true, skips all external API fetches and uses only cached data.
-async function generateSignals(marketData = null, quick = false) {
-  if (!marketData && !quick && _signalsCache && Date.now() - _signalsCacheTime < SIGNALS_CACHE_TTL) {
+async function generateSignals(marketData = null, quick = false, force = false) {
+  if (!marketData && !quick && !force && _signalsCache && Date.now() - _signalsCacheTime < SIGNALS_CACHE_TTL) {
     return _signalsCache;
   }
   if (!marketData && !quick && _signalsInProgress) {
     return _signalsCache || [];
   }
 
-  // Skip generation outside US market hours unless marketData is explicitly provided
-  if (!marketData && !quick) {
+  // Skip generation outside US market hours unless marketData is explicitly provided or force=true
+  if (!marketData && !quick && !force) {
     const now = new Date();
     const day = now.getDay();
     const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
@@ -1370,6 +1404,7 @@ async function generateSignals(marketData = null, quick = false) {
   updateSectorAverages();
   
   const BATCH_SIZE = 20;
+  console.log(`[SignalService] generateSymbols: ${symbols.length} symbols, marketData=${!!marketData}, quick=${quick}, force=${force}`);
   const processSymbol = async (symbol) => {
     let stock = getFundamentals(symbol);
     if (!stock) return null;
@@ -1436,6 +1471,8 @@ async function generateSignals(marketData = null, quick = false) {
     }
   }
   
+  console.log(`[SignalService] Generated ${signals.length} raw signals before constraints (${signals.filter(s => s.signal !== 'Hold').length} non-Hold)`);
+
   // Sort by confidence and signal strength
   signals.sort((a, b) => {
     const signalOrder = { 'Strong Buy': 6, 'Buy': 5, 'Accumulate': 4, 'Hold': 3, 'Sell': 2, 'Strong Sell': 1 };
@@ -1447,7 +1484,8 @@ async function generateSignals(marketData = null, quick = false) {
   
   // Apply portfolio-level constraints (sector concentration, correlation)
   const constrainedSignals = applyPortfolioConstraints(signals);
-  
+  console.log(`[SignalService] After portfolio constraints: ${constrainedSignals.length} signals (${constrainedSignals.filter(s => s.signal !== 'Hold').length} non-Hold)`);
+
     // Full mode: persist, monitor, train ML
     if (!quick) {
       persistSignals(constrainedSignals).catch(() => {});

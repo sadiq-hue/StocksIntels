@@ -127,22 +127,22 @@ export function WatchlistPage() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 md:mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-            <Star className="w-8 h-8 text-amber-400 fill-amber-400" />
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-3">
+            <Star className="w-7 h-7 md:w-8 md:h-8 text-amber-400 fill-amber-400" />
             Watchlist
           </h1>
-          <p className="text-muted-foreground mt-1 text-lg">Monitor your favorite assets and AI trading signals.</p>
+          <p className="text-muted-foreground mt-1 text-base md:text-lg">Monitor your favorite assets and AI trading signals.</p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link to="/app/stocks" className="inline-flex items-center gap-1.5 px-4 py-2 bg-card border border-border rounded-lg text-sm font-semibold text-foreground hover:bg-accent transition-colors">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+          <Link to="/app/stocks" className="inline-flex items-center gap-1.5 px-4 py-2 bg-card border border-border rounded-lg text-sm font-semibold text-foreground hover:bg-accent transition-colors w-full sm:w-auto justify-center">
             <BarChart3 className="w-4 h-4" /> Stock Screener
           </Link>
           <form 
-          className="flex gap-2 relative" 
+          className="flex gap-2 relative w-full sm:w-auto" 
           onClick={(e) => e.stopPropagation()}
           onSubmit={(e) => {
             e.preventDefault();
@@ -154,12 +154,12 @@ export function WatchlistPage() {
             }
           }}
         >
-          <div className="relative">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input 
               type="text" 
               placeholder="Search stocks to add..." 
-              className="pl-10 pr-4 py-2 bg-card border border-border rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:border-transparent outline-none w-64 text-foreground"
+              className="pl-10 pr-4 py-2 bg-card border border-border rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:border-transparent outline-none w-full sm:w-64 text-foreground"
               value={newTicker}
               onChange={(e) => {
                 setNewTicker(e.target.value.toUpperCase());
@@ -214,17 +214,17 @@ export function WatchlistPage() {
               <table className="w-full text-left">
                 <thead className="bg-muted border-b border-border">
                   <tr>
-                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Asset</th>
-                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Price</th>
-                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Conf</th>
-                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Entry</th>
-                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Stop</th>
-                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">T1</th>
-                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">T2</th>
-                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">R:R</th>
-                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Signal</th>
-                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Timeframe</th>
-                    <th className="px-6 py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Actions</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Asset</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Price</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Conf</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Entry</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Stop</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">T1</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">T2</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">R:R</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Signal</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Timeframe</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -232,7 +232,7 @@ export function WatchlistPage() {
                     const s = stock.signal;
                     return (
                     <tr key={stock.id} className="hover:bg-accent/50 transition-colors group">
-                      <td className="px-6 py-4">
+                      <td className="px-3 py-3 md:px-6 md:py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-sm font-bold text-[#0D7490] shrink-0">
                             {stock.symbol.charAt(0)}
@@ -251,10 +251,10 @@ export function WatchlistPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-right font-semibold text-foreground text-sm">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right font-semibold text-foreground text-sm">
                         {stock.symbol.startsWith('NSE:') ? 'KES' : '$'} {s?.price?.toFixed(2) || '0.00'}
                       </td>
-                      <td className="px-4 py-4 text-right">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right">
                         <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
                           (s?.confidence || 0) >= 80 ? 'bg-emerald-100 text-emerald-700' :
                           (s?.confidence || 0) >= 70 ? 'bg-yellow-100 text-yellow-700' :
@@ -263,22 +263,22 @@ export function WatchlistPage() {
                           {s?.confidence || '-'}%
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-right font-mono text-sm font-semibold text-foreground">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-foreground">
                         {s?.entry ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.entry.toFixed(2)}` : '-'}
                       </td>
-                      <td className="px-4 py-4 text-right font-mono text-sm text-red-600 font-semibold">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm text-red-600 font-semibold">
                         {s?.stopLoss ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.stopLoss.toFixed(2)}` : '-'}
                       </td>
-                      <td className="px-4 py-4 text-right font-mono text-sm font-semibold text-emerald-600">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-emerald-600">
                         {s?.target1 ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.target1.toFixed(2)}` : '-'}
                       </td>
-                      <td className="px-4 py-4 text-right font-mono text-sm font-semibold text-emerald-600">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-emerald-600">
                         {s?.target2 ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.target2.toFixed(2)}` : '-'}
                       </td>
-                      <td className="px-4 py-4 text-right text-sm font-bold text-foreground">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right text-sm font-bold text-foreground">
                         {s?.riskReward ? `1:${s.riskReward.toFixed(1)}` : '-'}
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-3 py-3 md:px-4 md:py-4">
                         <div className={`text-[10px] font-black uppercase px-2 py-1 rounded tracking-wider border inline-block ${
                           s?.signal === 'Strong Buy' || s?.signal === 'Buy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
                           s?.signal === 'Strong Sell' || s?.signal === 'Sell' ? 'bg-rose-50 text-rose-700 border-rose-200' :
@@ -289,10 +289,10 @@ export function WatchlistPage() {
                           {s?.signal || 'Hold'}
                         </div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-3 py-3 md:px-4 md:py-4">
                         <span className="text-xs text-muted-foreground font-medium">{s?.timeframe || '-'}</span>
                       </td>
-                      <td className="px-4 py-4 text-right">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right">
                         <button onClick={() => handleRemove(stock.id)} className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all">
                           <Trash2 className="w-4 h-4" />
                         </button>

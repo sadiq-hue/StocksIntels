@@ -335,26 +335,28 @@ export function StockAnalysisPage() {
   return (
     <div className="mx-auto max-w-[1600px] p-4 md:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <div className="p-2 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9]">
               <TrendingUpIcon className="size-5 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">Stock Analysis</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">Stock Analysis</h1>
           </div>
           <p className="text-sm text-muted-foreground">Explore markets with advanced analytics &amp; signals</p>
         </div>
-        <div className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-xl bg-card border shadow-sm">
-          <Sparkles className="size-4 text-[#0D7490]" />
-          <span className="text-sm font-medium text-muted-foreground">{liveQuote?.provider === 'afx' ? 'AFX Live' : liveQuote?.provider ? 'Live' : 'Real-time Data'}</span>
+        <div className="flex items-center gap-2">
+          <div className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-xl bg-card border shadow-sm">
+            <Sparkles className="size-4 text-[#0D7490]" />
+            <span className="text-sm font-medium text-muted-foreground">{liveQuote?.provider === 'afx' ? 'AFX Live' : liveQuote?.provider ? 'Live' : 'Real-time Data'}</span>
+          </div>
+          <Link
+            to="/app/stocks"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-card text-xs font-semibold text-muted-foreground hover:text-[#0D7490] hover:border-[#0D7490]/30 transition-colors"
+          >
+            <BarChart3 className="size-3.5" /> Stock Screener
+          </Link>
         </div>
-        <Link
-          to="/app/stocks"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-card text-xs font-semibold text-muted-foreground hover:text-[#0D7490] hover:border-[#0D7490]/30 transition-colors"
-        >
-          <BarChart3 className="size-3.5" /> Stock Screener
-        </Link>
       </div>
 
       {/* Market Tabs */}
@@ -381,7 +383,7 @@ export function StockAnalysisPage() {
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* Sidebar */}
         <div className="xl:col-span-1">
-          <Card className="border shadow-sm h-full">
+          <Card className="border shadow-sm h-full max-h-[520px] xl:max-h-none flex flex-col">
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-sm text-foreground">
@@ -553,8 +555,8 @@ export function StockAnalysisPage() {
                     <TrendingUp className="size-7 text-white" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h2 className="text-2xl font-bold text-foreground">{activeSelection.ticker}</h2>
+                    <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                      <h2 className="text-xl sm:text-2xl font-bold text-foreground">{activeSelection.ticker}</h2>
                       <button
                         onClick={() => toggleFavorite(activeSelection.ticker)}
                         className="transition-transform hover:scale-110"
@@ -1141,7 +1143,7 @@ export function StockAnalysisPage() {
                 })()}
 
                 {/* Sector & Market Context */}
-                <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3 pb-3 border-b border-border">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-3 pb-3 border-b border-border">
                   <span>Sector: <span className="font-medium text-foreground">{stockSignal?.sector || activeSelection.sector}</span></span>
                   <span>Market: <span className="font-medium text-foreground">{stockSignal?.market || activeSelection.market?.toUpperCase()}</span></span>
                   {stockSignal?.country && <span>Country: <span className="font-medium text-foreground">{stockSignal.country}</span></span>}

@@ -78,18 +78,18 @@ export function TopStocks() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
           <h2 className="text-lg font-bold text-foreground">Top Stocks</h2>
-          <p className="text-sm text-muted-foreground">Top performing stocks across all categories</p>
+          <p className="text-sm text-muted-foreground truncate">Top performing stocks across all categories</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search stocks..."
-              className="w-44 pl-9 pr-3 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-[#0D7490]/20 focus:border-[#0D7490] transition-all text-sm outline-none"
+              className="w-full sm:w-44 pl-9 pr-3 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-[#0D7490]/20 focus:border-[#0D7490] transition-all text-sm outline-none"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -163,10 +163,10 @@ export function TopStocks() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-foreground group-hover:text-[#0D7490] transition-colors">{stock.ticker}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-bold text-sm text-foreground group-hover:text-[#0D7490] transition-colors truncate">{stock.ticker}</span>
                         {stock.market === "NSE" && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#0D7490]/10 text-[#0D7490] font-bold">NSE</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#0D7490]/10 text-[#0D7490] font-bold shrink-0">NSE</span>
                         )}
                       </div>
                     </td>

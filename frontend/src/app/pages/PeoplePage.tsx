@@ -168,7 +168,7 @@ export function PeoplePage() {
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Community Directory</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-foreground">Community Directory</h2>
           <p className="text-muted-foreground">Connect with top traders and analysts in the NSE market</p>
         </div>
         <div className="relative">
@@ -178,7 +178,7 @@ export function PeoplePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card className="p-4 border-border bg-card">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><Users className="w-5 h-5 text-blue-600" /></div>
@@ -220,8 +220,8 @@ export function PeoplePage() {
             const isFollowed = following.has(person.id);
             return (
               <Card key={person.id} className="p-5 hover:shadow-lg transition-all border-border bg-card group">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+                  <div className="flex items-center gap-4 min-w-0">
                     <div className="relative">
                       <Avatar className="w-14 h-14 ring-2 ring-gray-100">
                         <AvatarFallback className="text-xl font-bold text-[#0D7490] bg-muted">{getInitials(person.full_name)}</AvatarFallback>
@@ -230,7 +230,7 @@ export function PeoplePage() {
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <h3 className="font-bold text-foreground">{person.full_name}</h3>
+                        <h3 className="font-bold text-foreground truncate">{person.full_name}</h3>
                         {person.is_verified && <ShieldCheck className="w-4 h-4 text-blue-500 fill-blue-500/20" />}
                       </div>
                       <p className="text-sm text-muted-foreground">{person.role || "Trader"}</p>
@@ -255,7 +255,7 @@ export function PeoplePage() {
                     <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1.5">
                       <TrendingUp className="w-3 h-3 text-green-500" /> HIGH CONVICTION PICKS
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {person.topPicks.map(ticker => (
                         <span key={ticker} className="text-sm font-bold text-foreground bg-card px-2.5 py-0.5 rounded-md border border-border shadow-sm">{ticker}</span>
                       ))}
@@ -263,7 +263,7 @@ export function PeoplePage() {
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-4 border-t border-border">
+                <div className="flex flex-wrap gap-2 pt-4 border-t border-border">
                   <Button onClick={() => navigate(`/app/chat?person=${person.id}`)} className="flex-1 gap-2 bg-[#0D7490] hover:bg-[#0A5F7A] text-white">
                     <MessageSquare className="w-4 h-4" /> Message
                   </Button>

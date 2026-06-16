@@ -95,12 +95,12 @@ export function Industries() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
           <h2 className="text-lg font-bold text-foreground">Industries & Sectors</h2>
-          <p className="text-sm text-muted-foreground">Real-time performance across all industries and sectors</p>
+          <p className="text-sm text-muted-foreground truncate">Real-time performance across all industries and sectors</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button onClick={fetchData} className="p-2 hover:bg-muted rounded-lg transition-colors" title="Refresh">
             <RefreshCw className={`size-4 text-muted-foreground ${loading ? "animate-spin" : ""}`} />
           </button>
@@ -109,7 +109,7 @@ export function Industries() {
             <input
               type="text"
               placeholder="Search industries..."
-              className="w-44 pl-9 pr-3 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-[#0D7490]/20 focus:border-[#0D7490] transition-all text-sm outline-none"
+              className="w-full sm:w-44 pl-9 pr-3 py-2 bg-background border rounded-lg focus:ring-2 focus:ring-[#0D7490]/20 focus:border-[#0D7490] transition-all text-sm outline-none"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -136,18 +136,18 @@ export function Industries() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="p-4">
           <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Total Industries</p>
-          <p className="text-2xl font-bold text-foreground">{totalIndustries}</p>
+          <p className="text-xl md:text-2xl font-bold text-foreground">{totalIndustries}</p>
         </Card>
         <Card className="p-4 border-emerald-200 bg-emerald-50/30">
           <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Advancing</p>
-          <p className="text-2xl font-bold text-emerald-600">{advancing}</p>
+          <p className="text-xl md:text-2xl font-bold text-emerald-600">{advancing}</p>
         </Card>
         <Card className="p-4 border-red-200 bg-red-50/30">
           <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Declining</p>
-          <p className="text-2xl font-bold text-red-600">{declining}</p>
+          <p className="text-xl md:text-2xl font-bold text-red-600">{declining}</p>
         </Card>
       </div>
 
@@ -162,13 +162,13 @@ export function Industries() {
 
           return (
             <Card key={industry.name} className="p-5 hover:shadow-md transition-all cursor-pointer" onClick={() => navigate(`/app/sectors`)}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="size-10 rounded-lg bg-muted flex items-center justify-center">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
                     <Building2 className="size-5 text-[#0D7490]" />
                   </div>
-                  <div>
-                    <h3 className="font-bold text-foreground">{industry.name}</h3>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-foreground truncate">{industry.name}</h3>
                     <p className="text-xs text-muted-foreground">{industry.count} companies</p>
                   </div>
                 </div>
@@ -177,7 +177,7 @@ export function Industries() {
                   {isPositive ? "+" : ""}{industry.avgChange}%
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                 {nseCount > 0 && (
                   <span className="flex items-center gap-1">
                     <span className="size-1.5 rounded-full bg-[#0D7490]" /> NSE: {nseCount}

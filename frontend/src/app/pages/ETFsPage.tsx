@@ -73,7 +73,7 @@ export function ETFsPage() {
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-foreground">Exchange-Traded Funds</h2>
           <p className="text-sm text-muted-foreground">Track top ETFs across global markets — equity, bonds, commodities, and more</p>
@@ -128,9 +128,9 @@ export function ETFsPage() {
             <button key={c} onClick={() => setCategory(c)} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${category === c ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{c === "all" ? "All" : c}</button>
           ))}
         </div>
-        <div className="relative flex-1 max-w-xs ml-auto">
+        <div className="relative w-full sm:w-auto sm:max-w-xs sm:ml-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search ETFs..." className="pl-9" />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search ETFs..." className="pl-9 w-full" />
         </div>
       </div>
 
@@ -150,14 +150,14 @@ export function ETFsPage() {
                   <Layers className="size-5 text-[#0D7490]" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <span className="text-foreground font-bold text-sm">{etf.ticker}</span>
                     <Badge variant="outline" className="text-[10px]">{etf.category}</Badge>
                     {etf.currency === "KES" && <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-700 border-amber-200">NSE</Badge>}
                     {etf.dataSource === 'yahoo' && <span className="text-[8px] text-emerald-600 font-semibold uppercase tracking-wider">Live</span>}
                   </div>
                   <p className="text-sm text-muted-foreground truncate">{etf.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{etf.description}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{etf.description}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-foreground font-semibold">{formatCurrency(etf.price)}</p>

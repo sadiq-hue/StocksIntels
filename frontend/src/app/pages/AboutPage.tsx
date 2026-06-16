@@ -31,7 +31,7 @@ export function AboutPage() {
     <div className="min-h-screen bg-white">
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex flex-wrap justify-between items-center gap-4 h-16">
             <Link to="/" className="flex items-center gap-2">
               <div className="w-9 h-9 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
                 <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
@@ -64,7 +64,7 @@ export function AboutPage() {
       <section className="py-20 bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Our Mission</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Our Mission</h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
               To democratize financial intelligence across Africa — making professional-grade market analysis accessible to every trader, from Nairobi to Lagos to Accra.
             </p>
@@ -76,7 +76,7 @@ export function AboutPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">Our Team</p>
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Meet the People Behind StocksIntels</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Meet the People Behind StocksIntels</h2>
             <p className="text-lg text-gray-600 max-w-3xl mx-auto">
               We are a team of engineers, data scientists, and finance professionals based across East and West Africa. We understand the structural nuances of African markets — from NSE liquidity cycles to currency risk on cross-border trades — because we trade them ourselves.
             </p>
@@ -99,7 +99,7 @@ export function AboutPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">Our Values</p>
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">What We Stand For</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">What We Stand For</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {values.map((value) => {
@@ -120,13 +120,13 @@ export function AboutPage() {
 
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative bg-gradient-to-br from-[#0D7490] to-[#0A5F7A] rounded-3xl p-12 lg:p-16 text-center overflow-hidden">
+          <div className="relative bg-gradient-to-br from-[#0D7490] to-[#0A5F7A] rounded-3xl p-4 md:p-6 lg:p-16 text-center overflow-hidden">
             <div className="absolute inset-0 opacity-10">
               <div className="absolute top-0 left-0 w-64 h-64 bg-white rounded-full blur-3xl" />
               <div className="absolute bottom-0 right-0 w-64 h-64 bg-white rounded-full blur-3xl" />
             </div>
             <div className="relative z-10 max-w-2xl mx-auto">
-              <h2 className="text-3xl font-bold text-white mb-4">Ready to trade smarter?</h2>
+              <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">Ready to trade smarter?</h2>
               <p className="text-lg text-white/80 mb-8">Join 2,500+ traders using AI-powered insights.</p>
               <Link to="/login">
                 <Button size="lg" className="bg-white text-[#0D7490] hover:bg-gray-100 px-8 py-6 text-base font-semibold shadow-xl">

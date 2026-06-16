@@ -41,7 +41,7 @@ export function TermsPage() {
     <div className="min-h-screen bg-white">
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex flex-wrap justify-between items-center gap-4 h-16">
             <Link to="/" className="flex items-center gap-2">
               <div className="w-9 h-9 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
                 <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
@@ -70,7 +70,7 @@ export function TermsPage() {
             ))}
           </div>
 
-          <div className="mt-12 p-6 bg-gray-50 rounded-2xl">
+          <div className="mt-12 p-4 md:p-6 bg-gray-50 rounded-2xl">
             <p className="text-gray-600 text-sm">
               <strong>Contact:</strong>{' '}
               <a href="mailto:support@stocksintels.com" className="text-[#0D7490] hover:underline">support@stocksintels.com</a>

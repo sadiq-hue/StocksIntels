@@ -472,7 +472,8 @@ app.delete('/api/admin/signals/:id', async (req, res) => {
 app.post('/api/admin/signals/generate', async (req, res) => {
   try {
     const { force } = req.body || {};
-    const marketData = await getQuotesBatch(ALL_SYMBOLS).catch(() => ({}));
+    const marketData = await getQuotesBatch(ALL_SYMBOLS).catch((e) => { console.error('[Admin] getQuotesBatch failed:', e.message); return {}; });
+    console.log(`[Admin] Generate signals: received ${Object.keys(marketData).length} live quotes`);
     const liveMarketData = {};
     for (const [symbol, quote] of Object.entries(marketData)) {
       const ticker = symbol.replace('NSE:', '');
@@ -482,7 +483,11 @@ app.post('/api/admin/signals/generate', async (req, res) => {
         volume: quote.volume,
       };
     }
-    const signals = await generateSignals(liveMarketData);
+    // If live quotes are unavailable, fall back to force-generating from cached/fundamental data
+    const hasLiveData = Object.keys(liveMarketData).length > 0;
+    const signals = hasLiveData
+      ? await generateSignals(liveMarketData, false, !!force)
+      : await generateSignals(null, false, true);
 
     // Publish via Redis if available
     if (signals.length > 0) {
@@ -493,7 +498,8 @@ app.post('/api/admin/signals/generate', async (req, res) => {
       }
     }
 
-    res.json({ success: true, count: signals.length, notifications: signals.length > 0 });
+    const historyCount = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_history').catch(() => ({ rows: [{ cnt: 0 }] }));
+    res.json({ success: true, count: signals.length, notifications: signals.length > 0, source: hasLiveData ? 'live_quotes' : 'force_cached', signalHistoryRows: historyCount.rows[0].cnt });
   } catch (err) { console.error('Admin generate signals error:', err.message); res.status(500).json({ error: err.message }); }
 });
 

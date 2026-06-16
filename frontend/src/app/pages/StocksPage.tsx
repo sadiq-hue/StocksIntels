@@ -7,7 +7,7 @@ import {
 import { ScrollArea } from "../components/ui/scroll-area";
 import {
   Building2, CalendarDays, BarChart3, Star, Trophy,
-  ChevronDown, LineChart, Search, SlidersHorizontal,
+  ChevronDown, LineChart, Search, SlidersHorizontal, Menu, X,
 } from "lucide-react";
 import { StockScreener } from "./stocks/StockScreener";
 import { StockExchanges } from "./stocks/StockExchanges";
@@ -48,10 +48,29 @@ export function StocksPage() {
   const activeLabel = sections.find(s => s.id === activeTab)?.label || "";
   const activeDescription = sections.find(s => s.id === activeTab)?.description || "";
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <div className="h-[calc(100vh-4rem)] flex">
-      <aside className="w-56 shrink-0 border-r bg-card flex flex-col">
-        <div className="p-4 border-b">
+    <div className="h-[calc(100vh-4rem)] flex flex-col md:flex-row">
+      {/* Mobile header */}
+      <div className="md:hidden flex items-center justify-between p-3 border-b bg-card">
+        <div className="flex items-center gap-2.5">
+          <div className="size-8 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] flex items-center justify-center shadow-sm">
+            <LineChart className="size-4 text-white" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-foreground leading-tight">Stock Intel</h2>
+            <p className="text-[10px] text-muted-foreground">{activeLabel}</p>
+          </div>
+        </div>
+        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 hover:bg-accent rounded-lg">
+          {mobileMenuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+        </button>
+      </div>
+
+      {/* Sidebar / mobile menu */}
+      <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} md:flex w-full md:w-56 shrink-0 border-r bg-card flex-col absolute md:relative z-20 h-[calc(100vh-7rem)] md:h-auto top-[3.5rem] md:top-0 left-0`}>
+        <div className="p-4 border-b hidden md:block">
           <div className="flex items-center gap-2.5">
             <div className="size-8 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] flex items-center justify-center shadow-sm">
               <LineChart className="size-4 text-white" />
@@ -83,7 +102,7 @@ export function StocksPage() {
                           ? "bg-[#0D7490] text-white shadow-sm"
                           : "text-muted-foreground hover:bg-accent hover:text-foreground"
                       }`}
-                      onClick={() => setActiveTab(section.id)}
+                      onClick={() => { setActiveTab(section.id); setMobileMenuOpen(false); }}
                     >
                       <Icon className="size-4 shrink-0" />
                       <span className="font-medium truncate">{section.label}</span>
@@ -107,7 +126,7 @@ export function StocksPage() {
           </nav>
         </ScrollArea>
 
-        <div className="p-3 border-t mt-auto">
+        <div className="p-3 border-t mt-auto hidden md:block">
           <div className="bg-muted/50 rounded-lg p-2.5 text-center">
             <p className="text-[10px] text-muted-foreground font-medium">Active View</p>
             <p className="text-xs font-bold text-foreground truncate">{activeLabel}</p>
@@ -115,15 +134,15 @@ export function StocksPage() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+      <main className="flex-1 overflow-y-auto p-3 md:p-6">
         <div className="max-w-[1400px] mx-auto">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="size-10 rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
-              <ActiveIcon className="size-5 text-white" />
+          <div className="flex items-center gap-3 mb-4 md:mb-6">
+            <div className="size-9 md:size-10 rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
+              <ActiveIcon className="size-4 md:size-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground tracking-tight">{activeLabel}</h1>
-              <p className="text-xs text-muted-foreground font-medium">{activeDescription}</p>
+              <h1 className="text-lg md:text-xl font-bold text-foreground tracking-tight">{activeLabel}</h1>
+              <p className="text-[10px] md:text-xs text-muted-foreground font-medium">{activeDescription}</p>
             </div>
           </div>
 

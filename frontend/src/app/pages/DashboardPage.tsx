@@ -467,7 +467,7 @@ export function DashboardPage() {
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] rounded-xl p-6 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
-        <div className="relative z-10 flex items-center justify-between">
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <p className="text-white/80 text-sm mb-1">
               {greeting}, {firstName}
@@ -478,14 +478,14 @@ export function DashboardPage() {
                 </span>
               )}
             </p>
-            <h2 className="text-xl font-bold">Your portfolio is {enhancedTotals.pnlPercent >= 0 ? 'up' : 'down'} <span className={enhancedTotals.pnlPercent >= 0 ? 'text-green-300' : 'text-red-300'}>{enhancedTotals.pnlPercent >= 0 ? '+' : ''}{enhancedTotals.pnlPercent}%</span> today</h2>
+            <h2 className="text-lg sm:text-xl font-bold">Your portfolio is {enhancedTotals.pnlPercent >= 0 ? 'up' : 'down'} <span className={enhancedTotals.pnlPercent >= 0 ? 'text-green-300' : 'text-red-300'}>{enhancedTotals.pnlPercent >= 0 ? '+' : ''}{enhancedTotals.pnlPercent}%</span> today</h2>
             <p className="text-white/70 text-sm mt-1">
               NSE 20: {indices[0].value} ({indices[0].change}) &middot; S&P 500: {indices[1].value} ({indices[1].change})
             </p>
           </div>
-          <div className="hidden sm:flex items-center gap-3">
-            <Link to="/app/markets">
-              <Button className="bg-white text-[#0D7490] hover:bg-gray-100 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Link to="/app/markets" className="w-full sm:w-auto">
+              <Button className="bg-white text-[#0D7490] hover:bg-gray-100 shadow-sm w-full sm:w-auto">
                 <Globe className="size-4 mr-2" />
                 View Markets
               </Button>
@@ -640,7 +640,7 @@ export function DashboardPage() {
               <BarChart3 className="size-4 text-[#0D7490]" />
               <h3 className="text-sm font-semibold text-foreground">Portfolio vs NSE 20 &amp; S&P 500</h3>
             </div>
-            <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+            <div className="flex flex-wrap items-center gap-1 bg-muted rounded-lg p-0.5">
               {timeRanges.map((range) => (
                 <button
                   key={range}
@@ -687,7 +687,7 @@ export function DashboardPage() {
                   <Area type="monotone" dataKey="nse20" name="NSE 20" stroke="#6B7280" strokeWidth={2} strokeDasharray="5 5" fill="url(#nseGrad)" dot={{ fill: '#6B7280', r: 3 }} />
                 </AreaChart>
               </ResponsiveContainer>
-              <div className="flex items-center justify-center gap-6 mt-3 pt-3 border-t border-border">
+              <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mt-3 pt-3 border-t border-border">
                 <div className="flex items-center gap-2">
                   <div className="size-3 rounded-full bg-emerald-500"></div>
                   <span className="text-xs text-muted-foreground">Portfolio {perfMeta.hasHistory ? `${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}%` : 'N/A'}</span>
@@ -766,28 +766,28 @@ export function DashboardPage() {
             {topGainers.map((stock) => {
               const sig = signals.find(s => s.ticker === stock.ticker);
               return (
-                <div key={stock.ticker} onClick={() => setSelectedStock({
-                  ticker: stock.ticker, name: stock.name, price: stock.price,
-                  change: stock.change, volume: stock.volume,
-                  market: stock.market === 'nse' ? 'nse' : 'global',
-                  currency: stock.currency || 'KES', signal: sig,
-                })} className="flex items-center justify-between p-3 rounded-lg hover:bg-emerald-50/50 transition-all border border-transparent hover:border-emerald-200 cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <div className="size-9 rounded-lg bg-gradient-to-br from-emerald-100 to-green-100 flex items-center justify-center">
-                      <span className="text-emerald-700 font-bold text-xs">{stock.ticker}</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-foreground">{stock.name}</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {stock.currency === "USD" ? "$" : "KES "}{stock.price} &middot; Vol: {stock.volume}
-                        <span className={`ml-1.5 text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
-                          {stock.market === "nse" ? "NSE" : "Global"}
-                        </span>
+                  <div key={stock.ticker} onClick={() => setSelectedStock({
+                    ticker: stock.ticker, name: stock.name, price: stock.price,
+                    change: stock.change, volume: stock.volume,
+                    market: stock.market === 'nse' ? 'nse' : 'global',
+                    currency: stock.currency || 'KES', signal: sig,
+                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-emerald-50/50 transition-all border border-transparent hover:border-emerald-200 cursor-pointer gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="size-9 rounded-lg bg-gradient-to-br from-emerald-100 to-green-100 flex items-center justify-center shrink-0">
+                        <span className="text-emerald-700 font-bold text-xs">{stock.ticker}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-foreground truncate">{stock.name}</div>
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          {stock.currency === "USD" ? "$" : "KES "}{stock.price} &middot; Vol: {stock.volume}
+                          <span className={`ml-1.5 text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
+                            {stock.market === "nse" ? "NSE" : "Global"}
+                          </span>
+                        </div>
                       </div>
                     </div>
+                    <div className="text-emerald-600 font-bold text-sm shrink-0">{stock.change > 0 ? "+" : ""}{stock.change}%</div>
                   </div>
-                  <div className="text-emerald-600 font-bold text-sm">{stock.change > 0 ? "+" : ""}{stock.change}%</div>
-                </div>
               );
             })}
           </div>
@@ -814,23 +814,23 @@ export function DashboardPage() {
                   change: stock.change, volume: stock.volume,
                   market: stock.market === 'nse' ? 'nse' : 'global',
                   currency: stock.currency || 'KES', signal: sig,
-                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-red-50/50 transition-all border border-transparent hover:border-red-200 cursor-pointer">
-                  <div className="flex items-center gap-3">
-                    <div className="size-9 rounded-lg bg-gradient-to-br from-red-100 to-rose-100 flex items-center justify-center">
-                      <span className="text-red-700 font-bold text-xs">{stock.ticker}</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-foreground">{stock.name}</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {stock.currency === "USD" ? "$" : "KES "}{stock.price} &middot; Vol: {stock.volume}
-                        <span className={`ml-1.5 text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
-                          {stock.market === "nse" ? "NSE" : "Global"}
-                        </span>
+                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-red-50/50 transition-all border border-transparent hover:border-red-200 cursor-pointer gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="size-9 rounded-lg bg-gradient-to-br from-red-100 to-rose-100 flex items-center justify-center shrink-0">
+                        <span className="text-red-700 font-bold text-xs">{stock.ticker}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-foreground truncate">{stock.name}</div>
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          {stock.currency === "USD" ? "$" : "KES "}{stock.price} &middot; Vol: {stock.volume}
+                          <span className={`ml-1.5 text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
+                            {stock.market === "nse" ? "NSE" : "Global"}
+                          </span>
+                        </div>
                       </div>
                     </div>
+                    <div className="text-red-500 font-bold text-sm shrink-0">{stock.change >= 0 ? "+" : ""}{stock.change}%</div>
                   </div>
-                  <div className="text-red-500 font-bold text-sm">{stock.change >= 0 ? "+" : ""}{stock.change}%</div>
-                </div>
               );
             })}
           </div>
@@ -865,23 +865,23 @@ export function DashboardPage() {
                     market: stock.market === 'nse' ? 'nse' : 'global',
                     currency: stock.currency || 'KES',
                     signal: sig,
-                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-all border border-transparent hover:border-border cursor-pointer">
-                    <div className="flex items-center gap-3">
-                      <div className="size-9 rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 flex items-center justify-center relative">
+                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-all border border-transparent hover:border-border cursor-pointer gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="size-9 rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 flex items-center justify-center relative shrink-0">
                         <span className="text-[#0D7490] font-bold text-xs">{stock.ticker}</span>
                         {stock.alert && (
                           <span className="absolute -top-0.5 -right-0.5 size-2.5 bg-red-500 rounded-full border-2 border-card" />
                         )}
                       </div>
-                      <div>
-                        <div className="text-sm font-semibold text-foreground">{stock.name || stock.ticker}</div>
-                        <div className="text-[11px] text-muted-foreground">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-foreground truncate">{stock.name || stock.ticker}</div>
+                        <div className="text-[11px] text-muted-foreground truncate">
                           {stock.currency === "USD" ? "$" : "KES "}{stock.price}
                           {stock.volume && stock.volume !== '0' && <span className="ml-1.5">· Vol: {stock.volume}</span>}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <span className={`px-2 py-1 rounded-md text-xs font-semibold ${stock.isPositive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
                         {stock.change}
                       </span>

@@ -625,9 +625,9 @@ export function ChatPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-[1800px] mx-auto h-[calc(100vh-140px)]">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-foreground text-2xl mb-1">Chat & Trading Groups</h2>
+          <h2 className="text-foreground text-xl md:text-2xl mb-1">Chat & Trading Groups</h2>
           <p className="text-muted-foreground">Connected as <strong>{user!.full_name}</strong></p>
         </div>
         <a href="/app/groups" className="flex items-center gap-2 px-4 py-2 bg-[#0D7490] text-white rounded-lg hover:bg-[#0A5F7A] transition-colors">
@@ -726,7 +726,7 @@ export function ChatPage() {
         {/* Main Chat Area */}
         <Card className="lg:col-span-6 bg-card border-border flex flex-col overflow-hidden">
           {/* Chat header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 border-b border-border">
             <div className="flex items-center gap-3">
               {chatMode === "group" ? (
                 <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-lg">
@@ -767,7 +767,7 @@ export function ChatPage() {
             ) : chatMode === "group" && groupView === "detail" && currentGroup ? (
               <div className="h-full overflow-y-auto px-4 py-4">
                 {/* Full Group Info Panel in Main Area */}
-                <div className="flex items-center gap-3 mb-6">
+                <div className="flex flex-wrap items-center gap-3 mb-6">
                   <Button variant="outline" size="sm" onClick={() => setGroupView("list")} className="border-border text-muted-foreground gap-1">
                     <ArrowLeft className="w-4 h-4" /> Back
                   </Button>
@@ -783,7 +783,7 @@ export function ChatPage() {
                   )}
                 </div>
 
-                <div className="flex items-start gap-4 mb-6">
+                <div className="flex flex-wrap items-start gap-4 mb-6">
                   <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center text-3xl border border-border shrink-0">
                     {currentGroup.icon || GROUP_ICONS[currentGroup.id] || '📊'}
                   </div>
@@ -802,7 +802,7 @@ export function ChatPage() {
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-4 gap-3 mb-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                   <div className="text-center p-3 bg-muted rounded-xl">
                     <p className="text-xl font-bold text-foreground">{currentGroup.members}</p>
                     <p className="text-[11px] text-muted-foreground">Members</p>
@@ -824,7 +824,7 @@ export function ChatPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-3 mb-6">
+                <div className="flex flex-wrap gap-3 mb-6">
                   {currentGroup.isJoined ? (
                     <>
                       <Button onClick={() => handleEnterChat(currentGroup.id)} className="flex-1 bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2 h-11">
@@ -965,7 +965,7 @@ export function ChatPage() {
                                         const fileUrl = msg.image_url!.startsWith('http') ? msg.image_url! : `${BACKEND_URL}${msg.image_url}`;
                                         return /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(fileUrl) ? (
                                           <img src={fileUrl} alt={msg.file_name || ""}
-                                            className="max-w-60 max-h-60 rounded-lg cursor-pointer object-cover"
+                                            className="max-w-full sm:max-w-60 max-h-60 rounded-lg cursor-pointer object-cover"
                                             onClick={() => window.open(fileUrl, '_blank')}
                                             loading="lazy" />
                                         ) : (
@@ -1053,7 +1053,7 @@ export function ChatPage() {
             <>
               {/* Stock Mentions */}
               <div className="mb-4">
-                <div className="flex items-center gap-2 mb-4">
+                <div className="flex flex-wrap items-center gap-2 mb-4">
                   <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] flex items-center justify-center shadow-sm">
                     <TrendingUp className="w-4 h-4 text-white" />
                   </div>
@@ -1324,14 +1324,14 @@ export function ChatPage() {
                         className={`w-full text-left p-3 rounded-xl transition-all ${
                           selectedPeer === peer.id ? "bg-[#E8F4F8] border border-[#0D7490]" : "bg-muted border border-border hover:border-border"
                         }`}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
                             <Avatar className="w-8 h-8">
                               <AvatarFallback className="text-xs bg-green-100 text-green-700">{getInitials(peer.full_name)}</AvatarFallback>
                             </Avatar>
-                            <span className="text-sm font-medium text-foreground">{peer.full_name}</span>
+                            <span className="text-sm font-medium text-foreground truncate">{peer.full_name}</span>
                           </div>
-                          <span className="text-xs text-green-600 font-medium">Online</span>
+                          <span className="text-xs text-green-600 font-medium shrink-0">Online</span>
                         </div>
                       </button>
                     ))

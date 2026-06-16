@@ -123,6 +123,23 @@ function BacktestPanel() {
         </Button>
       </div>
 
+      {stats?.dataSource && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <Badge variant="outline" className="text-[10px]">
+            {stats.dataSource === 'signal_outcomes'
+              ? 'Historical Outcomes'
+              : stats.dataSource === 'live_prices_approximate'
+              ? 'Live Price Approximation'
+              : stats.dataSource === 'none'
+              ? 'No Data'
+              : stats.dataSource}
+          </Badge>
+          {stats.dataSource !== 'signal_outcomes' && (
+            <span>Backtest stats are approximate until enough resolved outcomes accumulate.</span>
+          )}
+        </div>
+      )}
+
       {loading && !stats ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground">
           <RefreshCw className="w-6 h-6 animate-spin" />
@@ -272,7 +289,7 @@ function ForwardTestPanel() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-sm text-muted-foreground">Tracks signal predictions forward and compares actual outcomes after 8 hours</p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {resolveResult && (
             <span className="text-xs text-emerald-600">
               Resolved {resolveResult.resolved}, failed {resolveResult.failed}
@@ -390,7 +407,7 @@ function ForwardTestPanel() {
       <div>
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <p className="text-sm font-semibold text-foreground">Prediction Log</p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1">
               <span className="text-xs text-muted-foreground">Symbol:</span>
               <Select value={selectedSymbol} onValueChange={(v) => { setSelectedSymbol(v); setPredPage(0); }}>
@@ -630,9 +647,9 @@ function ConfigPanel() {
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">Runtime engine configuration. Changes are persisted to the audit log.</p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {message && <span className="text-xs text-emerald-600">{message}</span>}
           <Button onClick={saveConfig} disabled={saving} size="sm" className="bg-[#0D7490] hover:bg-[#0A5C72] text-white h-8 text-xs">
             {saving ? <RefreshCw className="w-3 h-3 mr-1.5 animate-spin" /> : <Shield className="w-3 h-3 mr-1.5" />}
@@ -661,7 +678,7 @@ function ConfigPanel() {
 
       <div className="space-y-3">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Weights</p>
-        <Card className="bg-card border-border p-4 grid grid-cols-2 gap-3">
+        <Card className="bg-card border-border p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FieldRow label="Fundamental" value={Math.round(config.weights.fundamental * 100)} unit="%" onChange={v => updateField("weights.fundamental", (parseInt(v) || 0) / 100)} />
           <FieldRow label="Technical" value={Math.round(config.weights.technical * 100)} unit="%" onChange={v => updateField("weights.technical", (parseInt(v) || 0) / 100)} />
           <FieldRow label="Financial" value={Math.round(config.weights.financial * 100)} unit="%" onChange={v => updateField("weights.financial", (parseInt(v) || 0) / 100)} />
@@ -671,7 +688,7 @@ function ConfigPanel() {
 
       <div className="space-y-3">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Portfolio</p>
-        <Card className="bg-card border-border p-4 grid grid-cols-3 gap-3">
+        <Card className="bg-card border-border p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <FieldRow label="Max Concentration" value={Math.round(config.portfolio.maxConcentration * 100)} unit="%" onChange={v => updateField("portfolio.maxConcentration", (parseInt(v) || 0) / 100)} />
           <FieldRow label="Max Drawdown" value={Math.round(config.portfolio.maxDrawdown * 100)} unit="%" onChange={v => updateField("portfolio.maxDrawdown", (parseInt(v) || 0) / 100)} />
           <FieldRow label="Stop Loss" value={Math.round(config.portfolio.stopLoss * 100)} unit="%" onChange={v => updateField("portfolio.stopLoss", (parseInt(v) || 0) / 100)} />
@@ -683,7 +700,7 @@ function ConfigPanel() {
 
 function FieldRow({ label, value, unit, onChange }: { label: string; value: number; unit?: string; onChange: (v: string) => void }) {
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <span className="text-sm text-foreground">{label}</span>
       <div className="flex items-center gap-1.5">
         <Input
@@ -723,7 +740,7 @@ function HealthPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Badge className={`text-xs font-semibold border ${statusColor}`}>
             <Activity className="w-3 h-3 mr-1" />{health.status}
@@ -780,7 +797,7 @@ function HealthPanel() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {Object.entries(health.sources).map(([name, src]) => (
             <Card key={name} className={`bg-card border p-3 ${src.ok ? "border-border" : "border-red-200 bg-red-50"}`}>
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                 <div className="flex items-center gap-2">
                   {src.ok ? <CheckCircle className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-red-500" />}
                   <span className="text-sm font-medium text-foreground capitalize">{name.replace(/([A-Z])/g, " $1").trim()}</span>
@@ -810,13 +827,13 @@ export function SignalEnginePage() {
           <Cpu className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Signal Engine</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Signal Engine</h1>
           <p className="text-muted-foreground text-sm">Backtesting, forward testing, audit, and configuration management</p>
         </div>
       </div>
 
       <Tabs defaultValue="backtest" className="space-y-4">
-        <TabsList className="bg-muted border border-border">
+        <TabsList className="flex flex-wrap bg-muted border border-border">
           <TabsTrigger value="backtest" className="text-xs data-[state=active]:bg-card">
             <BarChart3 className="w-3.5 h-3.5 mr-1.5" />Backtest
           </TabsTrigger>

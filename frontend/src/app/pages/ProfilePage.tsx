@@ -79,13 +79,13 @@ export function ProfilePage() {
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto">
       <div className="mb-6">
-        <h2 className="text-foreground text-2xl mb-1">Profile</h2>
+        <h2 className="text-foreground text-xl md:text-2xl mb-1">Profile</h2>
         <p className="text-muted-foreground">Manage your account details and preferences</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <Card className="bg-card border-border p-6">
+          <Card className="bg-card border-border p-4 md:p-6">
             <h3 className="text-foreground font-semibold mb-4 flex items-center gap-2">
               <User className="w-5 h-5 text-[#0D7490]" />
               Personal Information
@@ -102,7 +102,7 @@ export function ProfilePage() {
             </div>
           </Card>
 
-          <Card className="bg-card border-border p-6">
+          <Card className="bg-card border-border p-4 md:p-6">
             <h3 className="text-foreground font-semibold mb-4 flex items-center gap-2">
               <Lock className="w-5 h-5 text-[#0D7490]" />
               Change Password
@@ -126,7 +126,7 @@ export function ProfilePage() {
         </div>
 
         <div className="space-y-6">
-          <Card className="bg-card border-border p-6">
+          <Card className="bg-card border-border p-4 md:p-6">
             <div className="flex flex-col items-center text-center">
               <div className="w-20 h-20 rounded-full bg-[#0D7490]/10 flex items-center justify-center mb-3">
                 <User className="w-10 h-10 text-[#0D7490]" />
@@ -155,7 +155,7 @@ export function ProfilePage() {
             </div>
           </Card>
 
-          <Card className="bg-card border-border p-6">
+          <Card className="bg-card border-border p-4 md:p-6">
             <Button onClick={logout} variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50">
               Sign Out
             </Button>

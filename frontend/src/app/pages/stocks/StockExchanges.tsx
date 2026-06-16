@@ -195,18 +195,18 @@ export function StockExchanges() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-foreground">Stock Exchanges</h2>
           <p className="text-sm text-muted-foreground">Major stock exchanges around the world</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[140px] max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search exchanges..."
-              className="w-56 pl-9 pr-3 py-2 bg-background border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#0D7490]/20 focus:border-[#0D7490] transition-all"
+              className="w-full pl-9 pr-3 py-2 bg-background border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#0D7490]/20 focus:border-[#0D7490] transition-all"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -352,7 +352,7 @@ export function StockExchanges() {
             Full Screener <ExternalLink className="size-3 ml-1" />
           </Button>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
           {nseLiveStocks.map(s => {
             const isPositive = (s.changePercent ?? 0) >= 0;
             return (

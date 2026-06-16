@@ -109,7 +109,7 @@ export function BondsPage() {
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-foreground">Bonds</h2>
           <p className="text-sm text-muted-foreground">Fixed income securities — government bonds, T-bills, and corporate debt</p>
@@ -219,7 +219,7 @@ export function BondsPage() {
                     <Badge className={getRatingColor(bond.rating)}>{bond.rating}</Badge>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-3 text-center">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase font-semibold">Coupon</p>
                       <p className="text-sm font-bold text-foreground">{bond.coupon}%</p>
@@ -244,7 +244,7 @@ export function BondsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 mt-3 pt-3 border-t text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 pt-3 border-t text-xs text-muted-foreground">
                     <span className="flex items-center gap-1"><CalendarDays className="size-3" /> {bond.maturity}</span>
                     <span className="flex items-center gap-1"><DollarSign className="size-3" /> {formatAmount(bond.amountIssued, bond.currency)}</span>
                     <span className="flex items-center gap-1"><Percent className="size-3" /> {bond.type}</span>
@@ -308,7 +308,7 @@ export function BondsPage() {
             );
           })}
           {filtered.length === 0 && (
-            <div className="col-span-2 text-center py-12 text-muted-foreground text-sm">No bonds match your filters.</div>
+            <div className="col-span-1 md:col-span-2 text-center py-12 text-muted-foreground text-sm">No bonds match your filters.</div>
           )}
         </div>
       )}

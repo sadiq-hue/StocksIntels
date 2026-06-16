@@ -303,7 +303,7 @@ export function SettingsPage() {
     switch (activeSection) {
       case "profile":
         return (
-          <Card className="bg-white border-gray-200 p-6">
+          <Card className="bg-white border-gray-200 p-4 md:p-6">
             <div className="flex items-center gap-3 mb-6">
               <User className="w-6 h-6 text-[#0D7490]" />
               <h3 className="text-gray-900 text-xl">Profile Settings</h3>
@@ -361,14 +361,14 @@ export function SettingsPage() {
 
       case "notifications":
         return (
-          <Card className="bg-white border-gray-200 p-6">
+          <Card className="bg-white border-gray-200 p-4 md:p-6">
             <div className="flex items-center gap-3 mb-6">
               <Bell className="w-6 h-6 text-[#0D7490]" />
               <h3 className="text-gray-900 text-xl">Notification Preferences</h3>
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
                 <div>
                   <div className="text-gray-900 font-medium">Price Alerts</div>
                   <div className="text-gray-600 text-sm">Get notified when stocks hit target prices</div>
@@ -379,7 +379,7 @@ export function SettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
                 <div>
                   <div className="text-gray-900 font-medium">Trading Signals</div>
                   <div className="text-gray-600 text-sm">Receive AI-generated trading signals</div>
@@ -390,7 +390,7 @@ export function SettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
                 <div>
                   <div className="text-gray-900 font-medium">Market News</div>
                   <div className="text-gray-600 text-sm">Stay updated with NSE news</div>
@@ -401,7 +401,7 @@ export function SettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
                 <div>
                   <div className="text-gray-900 font-medium">Portfolio Updates</div>
                   <div className="text-gray-600 text-sm">Daily portfolio performance summary</div>
@@ -412,7 +412,7 @@ export function SettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
                 <div>
                   <div className="text-gray-900 font-medium">Chat Messages</div>
                   <div className="text-gray-600 text-sm">Notifications from trading groups</div>
@@ -428,14 +428,14 @@ export function SettingsPage() {
 
       case "appearance":
         return (
-          <Card className="bg-card border-border p-6">
+          <Card className="bg-card border-border p-4 md:p-6">
             <div className="flex items-center gap-3 mb-6">
               <Palette className="w-6 h-6 text-[#0D7490]" />
               <h3 className="text-foreground text-xl">Appearance</h3>
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
+              <div className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg border border-border">
                 <div>
                   <div className="text-foreground font-medium">Dark Mode</div>
                   <div className="text-muted-foreground text-sm">
@@ -448,7 +448,7 @@ export function SettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-muted rounded-lg border border-border">
+              <div className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg border border-border">
                 <div>
                   <div className="text-foreground font-medium">Compact View</div>
                   <div className="text-muted-foreground text-sm">Show more data in less space</div>
@@ -464,7 +464,7 @@ export function SettingsPage() {
 
       case "email-reports":
         return (
-          <Card className="bg-white border-gray-200 p-6">
+          <Card className="bg-white border-gray-200 p-4 md:p-6">
             <div className="flex items-center gap-3 mb-6">
               <Mail className="w-6 h-6 text-[#0D7490]" />
               <h3 className="text-gray-900 text-xl">Email Reports</h3>
@@ -578,7 +578,7 @@ export function SettingsPage() {
 
       case "security":
         return (
-          <Card className="bg-white border-gray-200 p-6">
+          <Card className="bg-white border-gray-200 p-4 md:p-6">
             <div className="flex items-center gap-3 mb-6">
               <Shield className="w-6 h-6 text-[#0D7490]" />
               <h3 className="text-gray-900 text-xl">Security Settings</h3>
@@ -666,7 +666,7 @@ export function SettingsPage() {
 
       case "privacy":
         return (
-          <Card className="bg-white border-gray-200 p-6">
+          <Card className="bg-white border-gray-200 p-4 md:p-6">
             <div className="flex items-center gap-3 mb-6">
               <Database className="w-6 h-6 text-[#0D7490]" />
               <h3 className="text-gray-900 text-xl">Data & Privacy</h3>
@@ -676,7 +676,7 @@ export function SettingsPage() {
               <div>
                 <h4 className="text-gray-900 font-medium mb-4">Data Visibility</h4>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
                     <div>
                       <div className="text-gray-900 font-medium">Profile Visibility</div>
                       <div className="text-gray-600 text-sm">Control who can see your profile</div>
@@ -692,7 +692,7 @@ export function SettingsPage() {
                     </select>
                   </div>
 
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
                     <div>
                       <div className="text-gray-900 font-medium">Analytics</div>
                       <div className="text-gray-600 text-sm">Allow anonymous usage analytics</div>
@@ -703,7 +703,7 @@ export function SettingsPage() {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
                     <div>
                       <div className="text-gray-900 font-medium">Show Portfolio</div>
                       <div className="text-gray-600 text-sm">Let others view your portfolio</div>
@@ -750,7 +750,7 @@ export function SettingsPage() {
   return (
     <div className="p-4 md:p-6 max-w-[1200px] mx-auto">
       <div className="mb-6">
-        <h2 className="text-gray-900 text-2xl mb-1">Settings</h2>
+        <h2 className="text-gray-900 text-xl md:text-2xl mb-1">Settings</h2>
         <p className="text-gray-600">Manage your account and preferences</p>
       </div>
 

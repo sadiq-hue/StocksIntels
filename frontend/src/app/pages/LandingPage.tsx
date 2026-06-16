@@ -218,7 +218,7 @@ export function LandingPage() {
         scrolled ? "bg-white/95 backdrop-blur-lg shadow-lg shadow-gray-200/50 border-b border-gray-100" : "bg-transparent"
       }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16 md:h-20">
+          <div className="flex flex-wrap justify-between items-center gap-4 h-16 md:h-20">
             <Link to="/" className="flex items-center gap-2.5 group">
               <div className="w-9 h-9 md:w-10 md:h-10 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20 group-hover:shadow-[#0D7490]/40 group-hover:scale-105 transition-all duration-300">
                 <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5 md:w-6 md:h-6" />
@@ -318,7 +318,7 @@ export function LandingPage() {
                 </Button>
               </div>
 
-              <div className="mt-10 grid grid-cols-2 gap-4 max-w-xl mx-auto lg:mx-0">
+              <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto lg:mx-0">
                 <div className="rounded-3xl bg-white/90 border border-gray-200 p-5 shadow-sm">
                   <p className="text-3xl font-bold text-gray-900">15+</p>
                   <p className="text-sm text-gray-500 mt-2">African + global markets in one platform</p>
@@ -344,14 +344,14 @@ export function LandingPage() {
             </div>
 
             <div className="hidden lg:block relative">
-              <div className="relative bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-gray-100 overflow-hidden animate-pulse-glow">
+              <div className="relative bg-white/80 backdrop-blur-xl rounded-3xl p-4 md:p-6 shadow-2xl border border-gray-100 overflow-hidden animate-pulse-glow">
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#10B981]" />
-                <div className="flex items-center justify-between mb-6">
-                  <div>
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                  <div className="min-w-0">
                     <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Portfolio Value</p>
-                    <p className="text-3xl font-bold text-gray-900">$124,592.00</p>
+                    <p className="text-2xl md:text-3xl font-bold text-gray-900">$124,592.00</p>
                   </div>
-                  <div className="flex items-center gap-1 text-green-600 bg-green-50/80 px-3 py-1.5 rounded-full text-sm font-medium border border-green-100">
+                  <div className="flex items-center gap-1 text-green-600 bg-green-50/80 px-3 py-1.5 rounded-full text-sm font-medium border border-green-100 shrink-0">
                     <ArrowUpRight className="w-4 h-4" />
                     +12.5%
                   </div>
@@ -376,7 +376,7 @@ export function LandingPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     { label: "NSE", value: "+2.4%", color: "text-green-600", bg: "bg-green-50" },
                     { label: "AI Signal", value: "Buy", color: "text-[#0D7490]", bg: "bg-[#0D7490]/10" },
@@ -396,15 +396,15 @@ export function LandingPage() {
                       { stock: "SAFARICOM", action: "BUY", confidence: "94%" },
                       { stock: "EQUITY", action: "HOLD", confidence: "87%" },
                     ].map((signal) => (
-                      <div key={signal.stock} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors">
-                        <span className="font-semibold text-gray-700 text-sm">{signal.stock}</span>
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${
+                      <div key={signal.stock} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors min-w-0">
+                        <span className="font-semibold text-gray-700 text-sm truncate">{signal.stock}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`px-2.5 py-1 rounded-md text-xs font-bold shrink-0 ${
                             signal.action === "BUY" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
                           }`}>
                             {signal.action}
                           </span>
-                          <span className="text-gray-500 text-xs font-medium">{signal.confidence}</span>
+                          <span className="text-gray-500 text-xs font-medium shrink-0">{signal.confidence}</span>
                         </div>
                       </div>
                     ))}
@@ -490,7 +490,7 @@ export function LandingPage() {
               <div
                 key={feature.title}
                 onMouseEnter={() => setActiveFeature(idx)}
-                className={`group relative bg-white rounded-2xl p-8 border transition-all duration-500 cursor-pointer overflow-hidden ${
+                className={`group relative bg-white rounded-2xl p-4 md:p-6 border transition-all duration-500 cursor-pointer overflow-hidden ${
                   activeFeature === idx
                     ? "border-[#0D7490]/30 shadow-2xl shadow-[#0D7490]/10 -translate-y-2"
                     : "border-gray-100 hover:border-[#0D7490]/20 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1"
@@ -537,7 +537,7 @@ export function LandingPage() {
                     <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:from-[#0D7490]/20 group-hover:to-[#0EA5E9]/20 transition-all duration-300">
                       <item.icon className="w-6 h-6 text-[#0D7490]" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <h4 className="font-bold text-gray-900 mb-1">{item.title}</h4>
                       <p className="text-gray-600 text-sm leading-relaxed">{item.description}</p>
                     </div>
@@ -549,9 +549,9 @@ export function LandingPage() {
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-br from-[#0D7490]/5 to-[#0EA5E9]/5 rounded-3xl transform rotate-3 scale-105" />
               <div className="relative bg-white rounded-3xl p-8 shadow-2xl border border-gray-100">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                   <h4 className="font-bold text-gray-900">Market Overview</h4>
-                  <span className="text-xs text-green-600 bg-green-50 px-3 py-1.5 rounded-full font-bold flex items-center gap-1.5">
+                  <span className="text-xs text-green-600 bg-green-50 px-3 py-1.5 rounded-full font-bold flex items-center gap-1.5 shrink-0">
                     <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                     Live
                   </span>
@@ -563,12 +563,12 @@ export function LandingPage() {
                     { name: "GSE Composite Index", value: "2,945.18", change: "-0.3%", up: false },
                     { name: "NGX All-Share Index", value: "98,234.75", change: "+1.5%", up: true },
                   ].map((market) => (
-                    <div key={market.name} className="flex items-center justify-between p-3.5 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">{market.name}</p>
+                    <div key={market.name} className="flex items-center justify-between p-3.5 rounded-xl hover:bg-gray-50 transition-colors border border-transparent hover:border-gray-100 min-w-0">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{market.name}</p>
                         <p className="text-xs text-gray-500 mt-0.5 font-medium">{market.value}</p>
                       </div>
-                      <span className={`text-sm font-bold flex items-center gap-1 ${market.up ? "text-green-600" : "text-red-600"}`}>
+                      <span className={`text-sm font-bold flex items-center gap-1 shrink-0 ${market.up ? "text-green-600" : "text-red-600"}`}>
                         {market.up ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5 rotate-90" />}
                         {market.change}
                       </span>
@@ -633,7 +633,7 @@ export function LandingPage() {
 
           <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
             {testimonials.map((testimonial, index) => (
-              <div key={index} className="group bg-white rounded-2xl p-8 border border-gray-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 relative overflow-hidden">
+              <div key={index} className="group bg-white rounded-2xl p-4 md:p-6 border border-gray-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all duration-500 relative overflow-hidden">
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#0D7490]/20 via-[#0EA5E9]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="flex gap-1 mb-4">
                   {[...Array(testimonial.rating)].map((_, i) => (
@@ -668,7 +668,7 @@ export function LandingPage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 lg:gap-8 items-start max-w-5xl mx-auto">
-            <div className="bg-white rounded-2xl p-8 border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500 group">
+            <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500 group">
               <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center mb-4 group-hover:from-[#0D7490]/20 group-hover:to-[#0EA5E9]/20 transition-all">
                 <Zap className="w-6 h-6 text-[#0D7490]" />
               </div>
@@ -695,7 +695,7 @@ export function LandingPage() {
               </div>
             </div>
 
-            <div className="relative bg-gray-900 text-white rounded-2xl p-8 shadow-2xl shadow-gray-900/30 scale-105 z-10 overflow-hidden">
+            <div className="relative bg-gray-900 text-white rounded-2xl p-4 md:p-6 shadow-2xl shadow-gray-900/30 scale-105 z-10 overflow-hidden">
               <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-[#0D7490]/20 to-transparent rounded-full" />
               <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                 <span className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] text-white text-xs font-bold px-5 py-1.5 rounded-full uppercase tracking-wider shadow-lg">
@@ -729,7 +729,7 @@ export function LandingPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-8 border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500 group">
+            <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500 group">
               <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center mb-4 group-hover:from-[#0D7490]/20 group-hover:to-[#0EA5E9]/20 transition-all">
                 <Crown className="w-6 h-6 text-[#0D7490]" />
               </div>
@@ -782,9 +782,9 @@ export function LandingPage() {
               <div key={i} className="bg-white rounded-2xl border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-md hover:border-gray-200">
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full flex items-center justify-between p-5 md:p-6 text-left"
+                  className="w-full flex flex-wrap items-center justify-between gap-4 p-5 md:p-6 text-left"
                 >
-                  <span className="font-semibold text-gray-900 pr-4">{faq.q}</span>
+                  <span className="font-semibold text-gray-900 pr-4 min-w-0">{faq.q}</span>
                   <ChevronRight className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform duration-300 ${openFaq === i ? "rotate-90" : ""}`} />
                 </button>
                 <div className={`overflow-hidden transition-all duration-300 ${openFaq === i ? "max-h-40" : "max-h-0"}`}>
@@ -814,7 +814,7 @@ export function LandingPage() {
                   <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Phone className="w-6 h-6 text-[#0D7490]" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-0.5">Phone</p>
                     <a href="tel:+254792754435" className="text-gray-900 font-semibold hover:text-[#0D7490] transition-colors">+254 792 754 435</a>
                   </div>
@@ -824,7 +824,7 @@ export function LandingPage() {
                   <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Mail className="w-6 h-6 text-[#0D7490]" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-0.5">Email</p>
                     <a href="mailto:support@stocksintels.com" className="text-gray-900 font-semibold hover:text-[#0D7490] transition-colors">support@stocksintels.com</a>
                   </div>
@@ -834,7 +834,7 @@ export function LandingPage() {
                   <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center flex-shrink-0">
                     <MapPin className="w-6 h-6 text-[#0D7490]" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-0.5">Location</p>
                     <p className="text-gray-900 font-semibold">Nairobi, Kenya</p>
                   </div>
@@ -842,7 +842,7 @@ export function LandingPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-3xl p-8 lg:p-10 shadow-2xl border border-gray-100">
+            <div className="bg-white rounded-3xl p-4 md:p-6 lg:p-10 shadow-2xl border border-gray-100">
               <h3 className="text-2xl font-bold text-gray-900 mb-2">Send us a message</h3>
               <p className="text-gray-600 text-sm mb-8">We'll get back to you within 24 hours</p>
               <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
@@ -1007,8 +1007,8 @@ export function LandingPage() {
       {/* DEMO MODAL */}
       {showDemoModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowDemoModal(false)}>
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-white rounded-3xl p-4 md:p-6 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <h3 className="text-xl font-bold text-gray-900">Watch Demo</h3>
               <button onClick={() => setShowDemoModal(false)} className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
                 <X className="w-4 h-4 text-gray-500" />
