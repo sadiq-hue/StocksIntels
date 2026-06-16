@@ -2667,7 +2667,8 @@ app.post('/api/upload', authenticateToken, (req, res) => {
       return res.status(400).json({ error: err.message });
     }
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
-    res.json({ url: `/uploads/${req.file.filename}`, filename: req.file.originalname, size: req.file.size });
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    res.json({ url: `${baseUrl}/uploads/${req.file.filename}`, filename: req.file.originalname, size: req.file.size });
   });
 });
 
