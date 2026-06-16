@@ -358,7 +358,7 @@ export function StockAnalysisPage() {
   };
 
   const prices = chartData.map((d: any) => d.price);
-  const currentPrice = prices.length > 0 ? prices[prices.length - 1] : displayPrice;
+  const currentPrice = liveQuote?.price ?? (prices.length > 0 ? prices[prices.length - 1] : displayPrice);
   const highPrice = prices.length > 0 ? Math.max(...prices) : displayPrice;
   const lowPrice = prices.length > 0 ? Math.min(...prices) : displayPrice;
   const avgPrice = prices.length > 0 ? prices.reduce((a: number, b: number) => a + b, 0) / prices.length : displayPrice;
@@ -681,7 +681,7 @@ export function StockAnalysisPage() {
                 <div className="rounded-lg bg-muted/50 p-2.5 border">
                   <div className="text-[11px] font-medium text-muted-foreground mb-0.5">Prev Close</div>
                   <div className="text-sm font-semibold text-foreground">
-                    {formatCurrency(activeSelection)}{formatPrice(chartData.length > 1 ? chartData[chartData.length - 2]?.price : displayPrice)}
+                    {formatCurrency(activeSelection)}{formatPrice(liveQuote?.previousClose ?? (chartData.length > 1 ? chartData[chartData.length - 2]?.price : displayPrice))}
                   </div>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-2.5 border">
