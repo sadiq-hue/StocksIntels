@@ -191,6 +191,7 @@ app.post('/api/admin/send-otp', async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'admin_login']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'admin_login', expiresAt]);
+    console.log(`[OTP] Admin login code for ${email}: ${code}`);
     await sendOtpEmail(email, code).catch(e => console.error('[MAILER] admin send-otp failed:', e.message));
     await logAdminAction(user.rows[0].id, email, 'otp_sent', ip, ua, null, true);
     res.json({ message: 'OTP sent to email', expiresIn: 600 });
@@ -729,6 +730,7 @@ app.post('/api/admin/users/:id/reset-password', async (req, res) => {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'password_reset']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'password_reset', expiresAt]);
+    console.log(`[OTP] Admin password reset code for ${email}: ${code}`);
     await sendResetCode(email, code).catch(e => console.error('[MAILER] admin reset-password failed:', e.message));
     res.json({ message: 'Password reset email sent' });
   } catch (err) { console.error('Admin reset password error:', err.message); res.status(500).json({ error: err.message }); }
@@ -1531,6 +1533,7 @@ app.post('/api/auth/send-verification-code', async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'email_verify']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'email_verify', expiresAt]);
+    console.log(`[OTP] Email verification code for ${email}: ${code}`);
     await sendVerificationEmail(email, code).catch(e => console.error('[MAILER] send-verification-code failed:', e.message));
     res.json({ message: 'Verification code sent to email', expiresIn: 600 });
   } catch (error) {
@@ -1660,6 +1663,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'login']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'login', expiresAt]);
+    console.log(`[OTP] Login code for ${email}: ${code}`);
     // Send email in the background so the UI responds immediately even if the mailer is slow/fails
     sendOtpEmail(email, code).catch(e => console.error('[MAILER] send-otp failed:', e.message));
     res.json({ message: 'OTP sent to email', expiresIn: 600 });
@@ -1725,6 +1729,7 @@ app.post('/api/auth/login-request-otp', async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'login_password']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'login_password', expiresAt]);
+    console.log(`[OTP] Login code for ${email}: ${code}`);
     // Send email in the background so the UI responds immediately even if the mailer is slow/fails
     sendOtpEmail(email, code).catch(e => console.error('[MAILER] login-request-otp failed:', e.message));
     res.json({ message: 'OTP sent to email', expiresIn: 600 });
@@ -1837,6 +1842,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'password_reset']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'password_reset', expiresAt]);
+    console.log(`[OTP] Password reset code for ${email}: ${code}`);
     await sendResetCode(email, code).catch(e => console.error('[MAILER] forgot-password failed:', e.message));
     res.json({ message: 'Reset code sent to email', expiresIn: 900 });
   } catch (error) {
