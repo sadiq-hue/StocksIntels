@@ -2741,6 +2741,18 @@ app.delete('/api/messages/:id', authenticateToken, async (req, res) => {
   } catch (err) { console.error('Delete message error:', err.message); res.status(500).json({ error: err.message }); }
 });
 
+// Public signal engine backfill endpoint (no auth required for admin debugging)
+app.post('/api/signals/engine/backfill', async (req, res) => {
+  try {
+    const { backfillOutcomesFromHistory } = require('./signalService');
+    await backfillOutcomesFromHistory(req.query.days ? parseInt(req.query.days) : 30, req.query.limit ? parseInt(req.query.limit) : 500);
+    const counts = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_outcomes').catch(() => ({ rows: [{ cnt: 0 }] }));
+    res.json({ success: true, signalOutcomes: counts.rows[0].cnt });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Public signal engine diagnostics endpoint (no auth required for debugging)
 app.get('/api/signals/engine/diagnostics', async (req, res) => {
   try {

@@ -2066,6 +2066,7 @@ module.exports = {
   US_SYMBOLS,
   getEngineHealth,
   restoreStateFromDb,
+  backfillOutcomesFromHistory,
   // Backtesting & Forward Testing
   computeBacktestStats,
   getForwardTestStats,
