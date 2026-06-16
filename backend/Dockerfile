@@ -1,9 +1,11 @@
-FROM node:20-alpine
+FROM node:20-bookworm
 
 WORKDIR /app
 
 # Install Python + build deps for XGBoost
-RUN apk add --no-cache python3 py3-pip build-base cmake linux-headers && \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-venv build-essential cmake && \
+    rm -rf /var/lib/apt/lists/* && \
     python3 -m venv /app/venv && \
     /app/venv/bin/pip install --no-cache-dir xgboost numpy pandas scikit-learn
 
