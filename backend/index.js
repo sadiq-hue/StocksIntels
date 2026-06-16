@@ -62,6 +62,7 @@ const upload = multer({
 });
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // Support single origin or comma-separated list (e.g. "https://app.netlify.app,http://localhost:5173")
