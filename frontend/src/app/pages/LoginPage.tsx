@@ -9,7 +9,7 @@ import { Input } from "../components/ui/input";
 import { Card } from "../components/ui/card";
 import { jwtDecode } from "jwt-decode";
 import { useAuth } from "../auth/AuthContext";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
