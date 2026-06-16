@@ -71,42 +71,33 @@ async function fetchRapidAPI(symbol) {
     { path: '/stock/v2/get-summary', params: (sym) => ({ symbol: sym, region: 'US' }) },
   ];
 
+  let lastError = null;
   for (const sym of symbolVariants) {
     for (const ep of endpoints) {
-      const url = `https://${host}${ep.path}`;
       try {
-        console.log(`[rapidApiService] RapidAPI NSE request: ${url} symbol=${sym}`);
-        const resp = await axios.get(url, {
+        const resp = await axios.get(`https://${host}${ep.path}`, {
           params: ep.params(sym),
           headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
           timeout: 6000,
         });
         const result = resp.data?.quoteResponse?.result?.[0] || resp.data?.price;
         if (result?.regularMarketPrice) {
-          console.log(`[rapidApiService] RapidAPI NSE success for ${cleanSymbol} via ${ep.path}:`, result.regularMarketPrice);
           return parseYahooResult(result, cleanSymbol);
-        } else {
-          console.log(`[rapidApiService] RapidAPI NSE ${ep.path} for ${sym} returned:`, JSON.stringify(resp.data).slice(0, 300));
         }
       } catch (err) {
-        const detail = err.response?.data ? JSON.stringify(err.response.data).slice(0, 300) : err.message;
-        console.error(`[rapidApiService] RapidAPI NSE ${ep.path} failed for ${sym}:`, detail);
+        lastError = err.response?.status || err.message;
       }
     }
   }
+  if (lastError) console.log(`[rapidApiService] RapidAPI NSE lookup failed for ${cleanSymbol}: ${lastError}`);
   return null;
 }
 
 async function fetchNSEQuote(symbol) {
   if (!symbol.startsWith('NSE:')) return null;
 
-  // RapidAPI first — it works on Railway; yahoo-finance2 direct is unreliable from cloud IPs
-  console.log(`[rapidApiService] fetchNSEQuote for ${symbol}; key set: ${!!process.env.RAPIDAPI_KEY}`);
   let quote = await fetchRapidAPI(symbol);
-  if (quote) {
-    console.log(`[rapidApiService] fetchNSEQuote got RapidAPI quote for ${symbol}:`, quote.price);
-    return quote;
-  }
+  if (quote) return quote;
 
   quote = await fetchYahooFinance2(symbol);
   if (quote) return quote;
@@ -115,37 +106,46 @@ async function fetchNSEQuote(symbol) {
 }
 
 async function fetchRapidAPIGlobal(symbol) {
+  const results = await fetchRapidAPIGlobalBatch([symbol]);
+  return results[symbol.toUpperCase().replace(/\./g, '-')] || null;
+}
+
+async function fetchRapidAPIGlobalBatch(symbols) {
   const key = process.env.RAPIDAPI_KEY;
   let host = (process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com').trim();
-  // Remove accidental scheme prefix
   host = host.replace(/^https?:\/\//, '');
-  if (!key || !host) return null;
+  if (!key || !host || !symbols.length) return {};
 
-  const cleanSymbol = symbol.toUpperCase().replace(/\./g, '-');
-  const endpoints = [
-    { path: '/api/v1/markets/quote', params: { symbol: cleanSymbol, region: 'US' } },
-    { path: '/market/v2/get-quotes', params: { symbols: cleanSymbol, region: 'US' } },
-  ];
+  const cleanSymbols = symbols.map(s => s.toUpperCase().replace(/\./g, '-'));
+  const chunks = chunkArray(cleanSymbols, 10);
+  const map = {};
+  let rateLimited = false;
 
-  for (const ep of endpoints) {
-    const url = `https://${host}${ep.path}`;
+  for (const chunk of chunks) {
+    if (rateLimited) break;
+    const symbolsParam = chunk.join(',');
     try {
-      console.log(`[rapidApiService] RapidAPI request: ${url} for ${cleanSymbol}`);
-      const resp = await axios.get(url, {
-        params: ep.params,
+      const resp = await axios.get(`https://${host}/market/v2/get-quotes`, {
+        params: { symbols: symbolsParam, region: 'US' },
         headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
-        timeout: 6000,
+        timeout: 8000,
       });
-      const result = resp.data?.quoteResponse?.result?.[0];
-      if (result?.regularMarketPrice) {
-        const parsed = parseYahooGlobalResult(result);
-        if (parsed) return parsed;
+      const results = resp.data?.quoteResponse?.result || [];
+      for (const q of results) {
+        const parsed = parseYahooGlobalResult(q);
+        if (parsed) map[parsed.symbol] = parsed;
       }
     } catch (err) {
-      console.error(`[rapidApiService] RapidAPI endpoint ${ep.path} failed for ${cleanSymbol}:`, err.message);
+      const status = err.response?.status;
+      if (status === 429) {
+        rateLimited = true;
+        console.warn(`[rapidApiService] RapidAPI rate limited (429) on batch, stopping further RapidAPI calls`);
+      } else {
+        console.error(`[rapidApiService] RapidAPI batch failed for ${symbolsParam}:`, status || err.message);
+      }
     }
   }
-  return null;
+  return map;
 }
 
 async function fetchGlobalQuote(symbol) {
@@ -179,11 +179,10 @@ async function fetchGlobalQuote(symbol) {
       provider: 'yahoo',
     };
   } catch (err) {
-    console.error(`[rapidApiService] yahoo-finance2 failed for ${symbol}:`, err.message);
+    // yahoo-finance2 is expected to fail from cloud IPs; RapidAPI is the fallback
   }
 
   // Fallback: RapidAPI Yahoo Finance proxy
-  console.log(`[rapidApiService] Trying RapidAPI fallback for ${symbol}; key set: ${!!process.env.RAPIDAPI_KEY}`);
   return fetchRapidAPIGlobal(symbol);
 }
 
@@ -259,15 +258,11 @@ async function fetchBatchGlobalQuotes(symbols) {
     }
   } catch {}
 
-  // Fallback: RapidAPI for any symbols still missing
+  // Fallback: RapidAPI for any symbols still missing (batched to avoid rate limits)
   const missing = globalSymbols.filter(s => !map[s.toUpperCase().replace(/\./g, '-')]);
   if (missing.length > 0 && process.env.RAPIDAPI_KEY) {
-    const rapidResults = await Promise.allSettled(missing.map(s => fetchRapidAPIGlobal(s)));
-    for (const result of rapidResults) {
-      if (result.status === 'fulfilled' && result.value) {
-        map[result.value.symbol] = result.value;
-      }
-    }
+    const rapidMap = await fetchRapidAPIGlobalBatch(missing);
+    Object.assign(map, rapidMap);
   }
 
   return map;
