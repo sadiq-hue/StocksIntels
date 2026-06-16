@@ -52,8 +52,9 @@ async function fetchYahooFinance2(symbol) {
 
 async function fetchRapidAPI(symbol) {
   const key = process.env.RAPIDAPI_KEY;
-  const host = process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com';
-  if (!key) return null;
+  let host = (process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com').trim();
+  host = host.replace(/^https?:\/\//, '');
+  if (!key || !host) return null;
 
   const cleanSymbol = symbol.replace('NSE:', '').toUpperCase();
   const yahooSymbol = toYahooSymbol(symbol);
@@ -94,8 +95,10 @@ async function fetchNSEQuote(symbol) {
 
 async function fetchRapidAPIGlobal(symbol) {
   const key = process.env.RAPIDAPI_KEY;
-  const host = process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com';
-  if (!key) return null;
+  let host = (process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com').trim();
+  // Remove accidental scheme prefix
+  host = host.replace(/^https?:\/\//, '');
+  if (!key || !host) return null;
 
   const cleanSymbol = symbol.toUpperCase().replace(/\./g, '-');
   const endpoints = [
@@ -104,8 +107,10 @@ async function fetchRapidAPIGlobal(symbol) {
   ];
 
   for (const ep of endpoints) {
+    const url = `https://${host}${ep.path}`;
     try {
-      const resp = await axios.get(`https://${host}${ep.path}`, {
+      console.log(`[rapidApiService] RapidAPI request: ${url} for ${cleanSymbol}`);
+      const resp = await axios.get(url, {
         params: ep.params,
         headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
         timeout: 6000,
