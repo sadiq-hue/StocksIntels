@@ -1,12 +1,6 @@
-const { fmp, eodhd } = require('./apiClient');
 const { getQuotesBatch } = require('./marketService');
 const axios = require('axios');
 const { fetchNseIndicesFromSite } = require('./nseIndexScraper');
-
-const FMP_API_KEY = process.env.FMP_API_KEY;
-const FMP_BASE_URL = 'https://financialmodelingprep.com/stable';
-const EODHD_API_KEY = process.env.EODHD_API_KEY;
-const POLYGON_API_KEY = process.env.POLYGON_API_KEY;
 
 const CACHE_TTL_MS = 60 * 1000;
 const cache = { indices: {}, sectors: {}, lastFetch: 0 };
@@ -38,33 +32,6 @@ const SECTORS = [
   'Real Estate', 'Media', 'Automobiles', 'Transport', 'Agriculture'
 ];
 
-const BASE_INDEX_VALUES = {
-  'NSE:NSE20': 1847.56, 'NSE:NSEASI': 112.45, 'NSE:NSE25': 3450.00, 'NSE:NSE10': 2150.00,
-  '^GSPC': 7553.68, '^IXIC': 26853.98, '^DJI': 50687.07, '^NYA': 23276.49,
-  '^FTSE': 10284.49, '^N225': 67470.69, '^GDAXI': 24867.45, '^HSI': 25253.40,
-  '^STOXX50E': 6058.17,
-};
-
-function getSyntheticIndexValue(symbol) {
-  const base = BASE_INDEX_VALUES[symbol] || 1000;
-  const vol = 0.3 + Math.random() * 0.5;
-  const changePct = (Math.random() - 0.5) * vol;
-  const value = base * (1 + changePct / 100);
-  const open = base;
-  const high = Math.max(value, open) * (1 + Math.random() * 0.005);
-  const low = Math.min(value, open) * (1 - Math.random() * 0.005);
-  return {
-    price: value,
-    change: value - open,
-    changePercent: changePct,
-    previousClose: base,
-    open,
-    dayHigh: high,
-    dayLow: low,
-    volume: Math.floor(Math.random() * 10000000) + 1000000,
-  };
-}
-
 function formatIndexForResponse(symbol, data) {
   const meta = ALL_INDICES[symbol];
   const pct = data.changePercent || 0;
@@ -92,62 +59,6 @@ function formatCompact(v) {
   if (v >= 1e6) return (v / 1e6).toFixed(2) + 'M';
   if (v >= 1e3) return (v / 1e3).toFixed(2) + 'K';
   return v.toString();
-}
-
-async function fetchIndexFromFMP(symbol) {
-  if (!FMP_API_KEY) return null;
-  const clean = symbol.replace('NSE:', '');
-  try {
-    const response = await fmp.get(`${FMP_BASE_URL}/quote`, {
-      params: { symbol: clean, apikey: FMP_API_KEY },
-      timeout: 8000,
-    });
-    const data = Array.isArray(response.data) ? response.data[0] : response.data;
-    if (data && data.price !== undefined) {
-      return {
-        price: Number(data.price) || 0,
-        change: Number(data.change) || 0,
-        changePercent: Number(data.changesPercentage ?? data.changePercentage) || 0,
-        previousClose: Number(data.previousClose) || 0,
-        open: Number(data.open) || 0,
-        dayHigh: Number(data.dayHigh) || 0,
-        dayLow: Number(data.dayLow) || 0,
-        volume: data.volume || 0,
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchIndexFromEODHD(symbol) {
-  if (!EODHD_API_KEY) return null;
-  const clean = symbol.replace('NSE:', '').toUpperCase();
-  const isNse = !!NSE_INDICES[symbol];
-  const fetchSymbol = isNse ? `${clean}.INDX` : `${clean.replace('^', '')}.INDX`;
-  try {
-    const response = await eodhd.get(`https://eodhd.com/api/real-time/${fetchSymbol}`, {
-      params: { api_token: EODHD_API_KEY, fmt: 'json' },
-      timeout: 8000,
-    });
-    const data = response.data;
-    if (data && data.close !== undefined) {
-      return {
-        price: Number(data.close) || 0,
-        change: Number(data.change) || 0,
-        changePercent: Number(data.change_p) || 0,
-        previousClose: Number(data.previousClose || data.previous_close) || 0,
-        open: Number(data.open) || 0,
-        dayHigh: Number(data.high) || 0,
-        dayLow: Number(data.low) || 0,
-        volume: data.volume || 0,
-      };
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 async function fetchIndexFromYahoo(symbol) {
@@ -187,7 +98,6 @@ async function fetchIndexFromYahoo(symbol) {
 }
 
 async function fetchIndexLive(symbol) {
-  let data = null;
   // For NSE indices, scrape NSE website directly (free, real-time)
   if (symbol.startsWith('NSE:')) {
     const nseData = await fetchNseIndicesFromSite().catch(() => null);
@@ -197,15 +107,13 @@ async function fetchIndexLive(symbol) {
     // If scraper didn't return data for this symbol, try Yahoo with mapped symbol
     const meta = ALL_INDICES[symbol];
     if (meta?.yahooSymbol) {
-      data = await fetchIndexFromYahoo(meta.yahooSymbol);
+      const data = await fetchIndexFromYahoo(meta.yahooSymbol);
       if (data) return data;
     }
+    return null;
   }
-  // Yahoo first for global indices (free, real-time)
-  data = await fetchIndexFromYahoo(symbol);
-  if (!data && FMP_API_KEY) data = await fetchIndexFromFMP(symbol);
-  if (!data && EODHD_API_KEY) data = await fetchIndexFromEODHD(symbol);
-  return data || getSyntheticIndexValue(symbol);
+  // Yahoo for global indices (free, real-time)
+  return fetchIndexFromYahoo(symbol);
 }
 
 async function getAllIndices() {
@@ -249,7 +157,7 @@ async function getSectorPerformance() {
   const quotes = await getQuotesBatch(allSymbols);
 
   if (!quotes || Object.keys(quotes).length === 0) {
-    return getSyntheticSectors();
+    return [];
   }
 
   const sectorMap = {};
@@ -272,7 +180,7 @@ async function getSectorPerformance() {
   });
 
   if (Object.keys(sectorMap).length === 0) {
-    return getSyntheticSectors();
+    return [];
   }
 
   const result = Object.entries(sectorMap).map(([sector, data]) => ({
@@ -340,18 +248,6 @@ function getAllSectors() {
   return SECTORS;
 }
 
-function getSyntheticSectors() {
-  return SECTORS.map(s => ({
-    sector: s,
-    avgChange: +((Math.random() - 0.5) * 3).toFixed(2),
-    change: +((Math.random() - 0.5) * 3).toFixed(2),
-    count: Math.floor(Math.random() * 10) + 1,
-    upCount: Math.floor(Math.random() * 6) + 1,
-    downCount: Math.floor(Math.random() * 4),
-    totalPrice: +(Math.random() * 50000 + 5000).toFixed(2),
-  })).sort((a, b) => b.avgChange - a.avgChange);
-}
-
 const INDICES_CACHE_KEY = 'indices:cache';
 
 async function getCachedIndices() {
@@ -366,7 +262,6 @@ module.exports = {
   getNseIndices,
   getGlobalIndices,
   getSectorPerformance,
-  getSyntheticSectors,
   getAllSectors,
   getCachedIndices,
   NSE_INDICES,

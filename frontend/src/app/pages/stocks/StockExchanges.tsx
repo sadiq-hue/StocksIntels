@@ -149,7 +149,7 @@ export function StockExchanges() {
   const nseLiveStocks = useMemo<DisplayStock[]>(() => {
     return localNseStocks.map(local => {
       const live = getQuote(local.symbol);
-      if (live && live.provider !== 'synthetic') {
+      if (live) {
         return {
           ticker: local.ticker,
           name: local.name,

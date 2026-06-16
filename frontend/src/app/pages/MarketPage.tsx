@@ -190,11 +190,10 @@ const MarketPage: React.FC = () => {
 
   // Build displayed stocks: start from hardcoded stockUniverses.ts (full coverage),
   // then overlay realtime quotes from the context (live AFX/Yahoo data).
-  // Never show synthetic data — only overlay when provider is genuinely live.
   const nseStocksDisplay = useMemo(() => {
     return localNseStocks.map(local => {
       const live = getQuote(local.symbol);
-      if (live && live.provider !== 'synthetic') {
+      if (live) {
         return { ...local, price: live.price ?? local.price, changePercent: live.changePercent ?? local.changePercent, volume: live.volume ?? local.volume, provider: live.provider };
       }
       return { ...local, price: null, changePercent: null, volume: null, provider: 'pending' };
@@ -204,7 +203,7 @@ const MarketPage: React.FC = () => {
   const globalStocksDisplay = useMemo(() => {
     return localGlobalStocks.map(local => {
       const live = getQuote(local.symbol);
-      if (live && live.provider !== 'synthetic') {
+      if (live) {
         return { ...local, price: live.price ?? local.price, changePercent: live.changePercent ?? local.changePercent, volume: live.volume ?? local.volume, provider: live.provider };
       }
       return { ...local, price: null, changePercent: null, volume: null, provider: 'pending' };

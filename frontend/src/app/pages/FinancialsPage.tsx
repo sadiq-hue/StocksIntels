@@ -85,7 +85,7 @@ const PROVIDER_LABELS: Record<string, { label: string; color: string }> = {
   simfin: { label: "SimFin", color: "bg-orange-100 text-orange-800" },
   fmp: { label: "FMP", color: "bg-purple-100 text-purple-800" },
   "yahoo-finance": { label: "Yahoo Finance", color: "bg-red-100 text-red-800" },
-  synthetic: { label: "Estimated", color: "bg-amber-100 text-amber-800" },
+  unknown: { label: "Unknown", color: "bg-amber-100 text-amber-800" },
 };
 
 interface HistoryMetric { label: string; key: string; kind?: "currency" | "percent" | "number"; calcGrowth?: boolean; }
@@ -372,7 +372,7 @@ export function FinancialsPage() {
   const cashFlow = report?.data.cashFlowStatement as CashFlowStatement | null | undefined;
   const metrics = report?.data.keyMetrics as KeyMetric | null | undefined;
   const dividends = report?.data.dividendHistory as DividendEvent[] | undefined;
-  const activeSource = report?.source || "synthetic";
+  const activeSource = report?.source || "unknown";
   const availableProviders = (report?.availableProviders || ["yahoo-finance"]) as DataProvider[];
 
   // Auto-sync provider only after data loads (e.g. switching to a stock that doesn't support sec-edgar)

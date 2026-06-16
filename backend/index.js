@@ -11,7 +11,7 @@ const { getAllNews, getNewsSummary, getAggregatedSentiment, KENYAN_STOCKS, STOCK
 const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions, getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats, getForwardTestPredictions, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig } = require('./signalService');
-const { getStockQuote, getQuotesBatch, getCompanyName, getSyntheticQuote } = require('./marketService');
+const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
 const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
 const signalPublisher = require('./signalPublisher');
@@ -1425,7 +1425,7 @@ async function getMarketSnapshot() {
 }
 
 async function getLivePrice(market, ticker) {
-  const { getStockQuote, getSyntheticQuote } = require('./marketService');
+  const { getStockQuote } = require('./marketService');
   const sym = market === 'NSE' ? 'NSE:' + ticker : ticker;
   try {
     const quote = await Promise.race([
@@ -1434,11 +1434,11 @@ async function getLivePrice(market, ticker) {
     ]);
     if (quote && quote.price) return quote.price;
   } catch {}
-  return getSyntheticQuote(sym).price || null;
+  return null;
 }
 
 async function getLiveQuote(market, ticker) {
-  const { getStockQuote, getSyntheticQuote } = require('./marketService');
+  const { getStockQuote } = require('./marketService');
   const sym = market === 'NSE' ? 'NSE:' + ticker : ticker;
   try {
     const quote = await Promise.race([
@@ -1447,8 +1447,7 @@ async function getLiveQuote(market, ticker) {
     ]);
     if (quote && quote.price != null) return { price: quote.price, previousClose: quote.previousClose ?? quote.price };
   } catch {}
-  const fallback = getSyntheticQuote(sym);
-  return { price: fallback.price ?? 0, previousClose: fallback.previousClose ?? fallback.price ?? 0 };
+  return null;
 }
 
 function formatMinutes(minutes) {
@@ -4791,7 +4790,7 @@ app.get('/api/market/turnover', async (req, res) => {
     const { fetchNseQuotes, getQuoteForSymbol } = require('./nseAfxScraper');
     await fetchNseQuotes();
     for (const t of NSE_TURNOVER_TICKERS) {
-      const q = getQuoteForSymbol('NSE:' + t) || getSyntheticQuote('NSE:' + t);
+      const q = getQuoteForSymbol('NSE:' + t);
       if (q) { nseTurnover += (q.price || 0) * (q.volume || 0); nseVolume += q.volume || 0; }
     }
 

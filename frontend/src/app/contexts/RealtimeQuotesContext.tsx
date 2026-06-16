@@ -29,14 +29,7 @@ export function RealtimeQuotesProvider({ children, symbols = [] }: { children: R
     setLoading(true);
     try {
       const data = await fetchRealtimeQuotesBatch(currentSymbols);
-      setQuotes(prev => {
-        const merged = { ...prev };
-        for (const [key, q] of Object.entries(data)) {
-          if (q.provider === 'synthetic') continue;
-          merged[key] = q;
-        }
-        return merged;
-      });
+      setQuotes(prev => ({ ...prev, ...data }));
       setError(null);
     } catch (err: any) {
       setError(err.message);

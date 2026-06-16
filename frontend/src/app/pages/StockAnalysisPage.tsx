@@ -63,14 +63,14 @@ export function StockAnalysisPage() {
   const { ticker: urlTicker } = useParams<{ ticker: string }>();
   const navigate = useNavigate();
 
-  // Resolve ticker from URL — find in universe or create synthetic entry
+  // Resolve ticker from URL — find in universe or create placeholder entry
   const resolveUrlTicker = () => {
     if (urlTicker) {
       const inNse = kenyanStocks.find(s => s.ticker.toUpperCase() === urlTicker.toUpperCase());
       const inGlobal = globalStocks.find(s => s.ticker.toUpperCase() === urlTicker.toUpperCase());
       if (inNse) return { stock: inNse, market: "nse" as StockMarket };
       if (inGlobal) return { stock: inGlobal, market: "global" as StockMarket };
-      // Unknown ticker — create a synthetic entry
+      // Unknown ticker — create a placeholder entry
       return {
         stock: {
           ticker: urlTicker.toUpperCase(),
@@ -198,7 +198,7 @@ export function StockAnalysisPage() {
         const res = await fetch(`${API_URL}/stock/${encodeURIComponent(ticker)}?market=${market}`);
         if (!res.ok) return;
         const data = await res.json();
-        if (active && data && data.price > 0 && data.provider !== 'synthetic') {
+        if (active && data && data.price > 0) {
           setLiveQuote(data as LiveQuote);
         }
       } catch { /* silent */ }
@@ -234,11 +234,11 @@ export function StockAnalysisPage() {
   const displayPrice = liveQuote?.price ?? activeSelection.price;
   const displayChange = liveQuote?.changePercent ?? activeSelection.change;
 
-  // Chart data — live from Yahoo for global stocks, synthetic fallback for NSE
+  // Chart data — live from Yahoo Finance
   const [chartHistory, setChartHistory] = useState<PriceBar[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartPeriod, setChartPeriod] = useState("6M");
-  const historySource = chartHistory.length > 0 ? 'live' : 'synthetic';
+  const historySource = chartHistory.length > 0 ? 'live' : 'none';
 
   const periodToRange = (period: string): string => {
     switch (period) {
@@ -262,7 +262,7 @@ export function StockAnalysisPage() {
         if (!cancelled && bars.length > 0) {
           setChartHistory(bars);
         }
-      } catch { /* fall through to synthetic */ }
+      } catch { /* ignore */ }
       if (!cancelled) setChartLoading(false);
     };
     fetchHistory();
@@ -270,58 +270,26 @@ export function StockAnalysisPage() {
   }, [activeSelection.ticker, chartPeriod]);
 
   const chartData = useMemo(() => {
-    if (chartHistory.length > 0) {
-      const prices = chartHistory.map(b => b.close ?? 0);
-      return chartHistory.map((bar, i) => {
-        const sma20 = i >= 19 ? prices.slice(i - 19, i + 1).reduce((a, b) => a + b, 0) / 20 : null;
-        const sma50 = i >= 49 ? prices.slice(i - 49, i + 1).reduce((a, b) => a + b, 0) / 50 : null;
-        const d = new Date(bar.date + 'T00:00:00');
-        return {
-          date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          displayDate: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          fullDate: d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-          price: bar.close ?? 0,
-          open: bar.open ?? 0,
-          high: bar.high ?? 0,
-          low: bar.low ?? 0,
-          volume: bar.volume,
-          sma20: sma20 !== null ? sma20 : null,
-          sma50: sma50 !== null ? sma50 : null,
-        };
-      });
-    }
-    // Synthetic fallback when API fails — mean-reverting walk ending at displayPrice
-    const periodDays = { '1M': 30, '3M': 90, '6M': 180, '1Y': 365 };
-    const days = periodDays[chartPeriod] || 180;
-    const data = [];
-    const startPrice = displayPrice * (0.8 + Math.random() * 0.4);
-    let price = startPrice;
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    for (let i = 0; i < days; i++) {
-      const date = new Date(startDate);
-      date.setDate(date.getDate() + i);
-      // Mean-revert toward displayPrice
-      const reversion = (displayPrice - price) * 0.02;
-      const noise = (Math.random() - 0.5) * 0.035 * displayPrice;
-      price = price + reversion + noise;
-      price = Math.max(displayPrice * 0.65, Math.min(displayPrice * 1.4, price));
-      const dayPrice = i === days - 1 ? displayPrice : price;
-      data.push({
-        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        displayDate: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        fullDate: date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
-        price: dayPrice,
-        open: dayPrice * (1 - Math.random() * 0.01),
-        high: dayPrice * (1 + Math.random() * 0.02),
-        low: dayPrice * (1 - Math.random() * 0.02),
-        volume: Math.floor(Math.random() * 5000000 + 1000000),
-        sma20: null,
-        sma50: null,
-      });
-    }
-    return data;
-  }, [chartHistory, displayPrice]);
+    if (chartHistory.length === 0) return [];
+    const prices = chartHistory.map(b => b.close ?? 0);
+    return chartHistory.map((bar, i) => {
+      const sma20 = i >= 19 ? prices.slice(i - 19, i + 1).reduce((a, b) => a + b, 0) / 20 : null;
+      const sma50 = i >= 49 ? prices.slice(i - 49, i + 1).reduce((a, b) => a + b, 0) / 50 : null;
+      const d = new Date(bar.date + 'T00:00:00');
+      return {
+        date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        displayDate: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        fullDate: d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+        price: bar.close ?? 0,
+        open: bar.open ?? 0,
+        high: bar.high ?? 0,
+        low: bar.low ?? 0,
+        volume: bar.volume,
+        sma20: sma20 !== null ? sma20 : null,
+        sma50: sma50 !== null ? sma50 : null,
+      };
+    });
+  }, [chartHistory]);
 
   const { rsi, atr, atrPct, sma20, sma50, macdLine, macdSignal, macdHistogram, bbUpper, bbLower, bbPosition } = useMemo(() => {
     const prices = chartData.map((d: any) => d.price);
@@ -646,7 +614,7 @@ export function StockAnalysisPage() {
                   <h3 className="text-base font-semibold text-foreground">Price Trend</h3>
                   <p className="text-xs text-muted-foreground">
                     {chartPeriod} price movement
-                    {historySource === 'synthetic' ? ' (estimated)' : ''}
+                    {historySource === 'none' ? ' (no historical data)' : ''}
                     {historySource === 'live' ? ' — Yahoo Finance' : ''}
                   </p>
                 </div>
@@ -708,6 +676,10 @@ export function StockAnalysisPage() {
               {chartLoading && chartHistory.length === 0 ? (
                 <div className="flex items-center justify-center h-[340px] text-sm text-muted-foreground">
                   <Loader2 className="size-5 animate-spin mr-2" /> Loading price history...
+                </div>
+              ) : chartData.length === 0 ? (
+                <div className="flex items-center justify-center h-[340px] text-sm text-muted-foreground">
+                  No historical price data available
                 </div>
               ) : (
                 <div className="space-y-0">
