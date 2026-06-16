@@ -134,6 +134,64 @@ async function getDividendHistory(symbol, limit = 8) {
   return cacheSet(cacheKey, []);
 }
 
+async function buildEdgarReport(symbol, period, limit, availableProviders) {
+  const edgarReport = await edgarService.getFinancialReportFromEdgar(symbol, period, limit);
+  if (!edgarReport.success) {
+    return { success: false, symbol, source: 'sec-edgar', error: edgarReport.error || 'SEC EDGAR data unavailable' };
+  }
+  const edgarIncHistory = edgarReport.data.incomeStatementHistory || [];
+  if (edgarIncHistory.length === 0) {
+    return { success: false, symbol, source: 'sec-edgar', error: 'SEC EDGAR returned no financial data for this symbol' };
+  }
+
+  const [quote, dividends] = await Promise.allSettled([
+    getQuote(symbol),
+    getDividendHistory(symbol, Math.max(limit * 2, 8)),
+  ]);
+
+  const edgarBalHistory = edgarReport.data.balanceSheetHistory || [];
+  const edgarCfHistory = edgarReport.data.cashFlowStatementHistory || [];
+  const edgarKmHistory = edgarReport.data.keyMetricsHistory || [];
+  const edgarFilings = edgarReport.data.filings || [];
+
+  const quoteValue = quote.status === 'fulfilled' ? quote.value : null;
+  const price = quoteValue?.price || 0;
+  const marketCap = quoteValue?.marketCap || 0;
+  const enrichedKm = edgarKmHistory.map((km) => {
+    const pe = (price > 0 && km.netIncomePerShare > 0) ? price / km.netIncomePerShare : 0;
+    return {
+      ...km, marketCap: marketCap || km.marketCap,
+      peRatio: pe,
+      priceToSalesRatio: (price > 0 && km.revenuePerShare > 0) ? price / km.revenuePerShare : km.priceToSalesRatio,
+      earningsYield: pe > 0 ? 1 / pe : 0,
+    };
+  });
+  if (enrichedKm.length > 0 && edgarBalHistory.length > 0 && marketCap > 0) {
+    const latestBal = edgarBalHistory[0];
+    const equity = latestBal.totalStockholdersEquity || latestBal.totalEquity || 0;
+    if (equity > 0) enrichedKm[0].pbRatio = marketCap / equity;
+  }
+
+  return {
+    success: true, symbol, source: 'sec-edgar', availableProviders,
+    lastUpdated: new Date().toISOString(),
+    data: {
+      profile: edgarReport.data.profile || { symbol, companyName: symbol, exchange: 'NASDAQ', currency: 'USD' },
+      quote: quoteValue || { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 },
+      incomeStatement: edgarIncHistory[0] || null,
+      incomeStatementHistory: edgarIncHistory,
+      balanceSheet: edgarBalHistory[0] || null,
+      balanceSheetHistory: edgarBalHistory,
+      cashFlowStatement: edgarCfHistory[0] || null,
+      cashFlowStatementHistory: edgarCfHistory,
+      keyMetrics: enrichedKm[0] || null,
+      keyMetricsHistory: enrichedKm,
+      dividendHistory: dividends.status === 'fulfilled' ? dividends.value : [],
+      filings: edgarFilings,
+    }
+  };
+}
+
 async function getFinancialReport(symbol, period = 'annual', limit = 4, providerOverride = null) {
   try {
     const isUs = edgarService.isUsStock(symbol);
@@ -161,66 +219,17 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           }
         };
       }
+      // Fallback to SEC EDGAR for US stocks when Yahoo Finance has no data
+      if (isUs) {
+        console.log(`[FinancialReports] Yahoo Finance empty for ${symbol}; trying SEC EDGAR fallback`);
+        return buildEdgarReport(symbol, period, limit, availableProviders);
+      }
       return { success: false, symbol, source: 'yahoo-finance', error: `Yahoo Finance returned no data for ${symbol}` };
     }
 
     // SEC EDGAR — US stocks only, no synthetic fallback
     if (activeProvider === 'sec-edgar' && isUs) {
-      const edgarReport = await edgarService.getFinancialReportFromEdgar(symbol, period, limit);
-      if (!edgarReport.success) {
-        return { success: false, symbol, source: 'sec-edgar', error: edgarReport.error || 'SEC EDGAR data unavailable' };
-      }
-      const edgarIncHistory = edgarReport.data.incomeStatementHistory || [];
-      if (edgarIncHistory.length === 0) {
-        return { success: false, symbol, source: 'sec-edgar', error: 'SEC EDGAR returned no financial data for this symbol' };
-      }
-
-      const [quote, dividends] = await Promise.allSettled([
-        getQuote(symbol),
-        getDividendHistory(symbol, Math.max(limit * 2, 8)),
-      ]);
-
-      const edgarBalHistory = edgarReport.data.balanceSheetHistory || [];
-      const edgarCfHistory = edgarReport.data.cashFlowStatementHistory || [];
-      const edgarKmHistory = edgarReport.data.keyMetricsHistory || [];
-      const edgarFilings = edgarReport.data.filings || [];
-
-      const quoteValue = quote.status === 'fulfilled' ? quote.value : null;
-      const price = quoteValue?.price || 0;
-      const marketCap = quoteValue?.marketCap || 0;
-      const enrichedKm = edgarKmHistory.map((km) => {
-        const pe = (price > 0 && km.netIncomePerShare > 0) ? price / km.netIncomePerShare : 0;
-        return {
-          ...km, marketCap: marketCap || km.marketCap,
-          peRatio: pe,
-          priceToSalesRatio: (price > 0 && km.revenuePerShare > 0) ? price / km.revenuePerShare : km.priceToSalesRatio,
-          earningsYield: pe > 0 ? 1 / pe : 0,
-        };
-      });
-      if (enrichedKm.length > 0 && edgarBalHistory.length > 0 && marketCap > 0) {
-        const latestBal = edgarBalHistory[0];
-        const equity = latestBal.totalStockholdersEquity || latestBal.totalEquity || 0;
-        if (equity > 0) enrichedKm[0].pbRatio = marketCap / equity;
-      }
-
-      return {
-        success: true, symbol, source: 'sec-edgar', availableProviders,
-        lastUpdated: new Date().toISOString(),
-        data: {
-          profile: edgarReport.data.profile || { symbol, companyName: symbol, exchange: 'NASDAQ', currency: 'USD' },
-          quote: quoteValue || { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 },
-          incomeStatement: edgarIncHistory[0] || null,
-          incomeStatementHistory: edgarIncHistory,
-          balanceSheet: edgarBalHistory[0] || null,
-          balanceSheetHistory: edgarBalHistory,
-          cashFlowStatement: edgarCfHistory[0] || null,
-          cashFlowStatementHistory: edgarCfHistory,
-          keyMetrics: enrichedKm[0] || null,
-          keyMetricsHistory: enrichedKm,
-          dividendHistory: dividends.status === 'fulfilled' ? dividends.value : [],
-          filings: edgarFilings,
-        }
-      };
+      return buildEdgarReport(symbol, period, limit, availableProviders);
     }
 
     return { success: false, symbol, error: `No provider available for ${symbol}` };
