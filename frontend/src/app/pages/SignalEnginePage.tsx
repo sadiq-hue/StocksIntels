@@ -10,7 +10,7 @@ import {
 import {
   Activity, BarChart3, BookOpen, Settings, Shield, RefreshCw,
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle, XCircle,
-  Clock, Cpu, Zap, Server, Database,
+  Clock, Cpu, Zap, Server, Database, Play,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 
@@ -838,6 +838,8 @@ interface DiagnosticsData {
 function DiagnosticsPanel() {
   const [data, setData] = useState<DiagnosticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [backtestLoading, setBacktestLoading] = useState(false);
+  const [backtestResult, setBacktestResult] = useState<{ evaluated: number; wins: number; losses: number; signalOutcomes: number } | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -847,6 +849,18 @@ function DiagnosticsPanel() {
       if (json.success) setData(json.diagnostics);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   }, []);
+
+  const runBacktest = useCallback(async () => {
+    setBacktestLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/signals/engine/backtest/historical?days=90&maxHoldDays=5&maxSignals=3000`, { method: 'POST' });
+      const json = await res.json();
+      if (json.success) {
+        setBacktestResult({ ...json.result, signalOutcomes: json.signalOutcomes });
+        fetchData();
+      }
+    } catch (e) { console.error(e); } finally { setBacktestLoading(false); }
+  }, [fetchData]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -863,10 +877,28 @@ function DiagnosticsPanel() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">Real-time pipeline diagnostics to debug empty backtest data.</p>
-        <Button onClick={fetchData} disabled={loading} variant="outline" size="sm" className="border-border h-8 text-xs">
-          <RefreshCw className={`w-3 h-3 mr-1.5 ${loading ? "animate-spin" : ""}`} />Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={runBacktest} disabled={backtestLoading} variant="default" size="sm" className="h-8 text-xs">
+            <Play className={`w-3 h-3 mr-1.5 ${backtestLoading ? "animate-pulse" : ""}`} />Run Historical Backtest
+          </Button>
+          <Button onClick={fetchData} disabled={loading} variant="outline" size="sm" className="border-border h-8 text-xs">
+            <RefreshCw className={`w-3 h-3 mr-1.5 ${loading ? "animate-spin" : ""}`} />Refresh
+          </Button>
+        </div>
       </div>
+
+      {backtestResult && (
+        <Card className="bg-card border-border p-4">
+          <p className="text-sm font-semibold text-foreground mb-2">Last Historical Backtest Result</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <div><span className="text-muted-foreground">Evaluated:</span> {backtestResult.evaluated}</div>
+            <div><span className="text-emerald-600">Wins:</span> {backtestResult.wins}</div>
+            <div><span className="text-red-600">Losses:</span> {backtestResult.losses}</div>
+            <div><span className="text-muted-foreground">Win Rate:</span> {backtestResult.evaluated > 0 ? Math.round((backtestResult.wins / backtestResult.evaluated) * 1000) / 10 : 0}%</div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">Total signal_outcomes: {backtestResult.signalOutcomes}</p>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="bg-card border-border p-3">

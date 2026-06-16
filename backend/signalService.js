@@ -1615,6 +1615,14 @@ setInterval(() => {
   generateSignals(null, false).catch(() => {});
 }, 60 * 60 * 1000);
 
+// Auto-run historical backtest every 6 hours to mature signal outcomes
+setTimeout(() => {
+  runHistoricalBacktest({ days: 90, maxHoldDays: 5, maxSignals: 3000 }).catch(() => {});
+}, 60000);
+setInterval(() => {
+  runHistoricalBacktest({ days: 90, maxHoldDays: 5, maxSignals: 3000 }).catch(() => {});
+}, 6 * 60 * 60 * 1000);
+
 // Main function to generate signals for all tracked stocks
 // When quick=true, skips all external API fetches and uses only cached data.
 async function generateSignals(marketData = null, quick = false, force = false) {
