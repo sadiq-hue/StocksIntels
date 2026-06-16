@@ -61,6 +61,7 @@ const FINANCIAL_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 // Signal performance tracker (in-memory, rolling 100 signals per symbol)
 const _signalOutcomes = new Map();
+let _signalHistoryCount = 0;
 const _performanceStats = { total: 0, wins: 0, losses: 0, winRate: 0 };
 
 // Market regime cache
@@ -448,7 +449,12 @@ async function restoreStateFromDb() {
     _performanceStats.total = wins + losses;
     _performanceStats.winRate = _performanceStats.total > 0
       ? Math.round((_performanceStats.wins / _performanceStats.total) * 1000) / 10 : 0;
-    console.log(`[SignalService] Restored ${_signalOutcomes.size} outcomes from DB (${wins} wins, ${losses} losses in last 30d)`);
+
+    // Track total signal history rows for health display
+    const histCount = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_history').catch(() => ({ rows: [{ cnt: 0 }] }));
+    _signalHistoryCount = histCount.rows[0]?.cnt || 0;
+
+    console.log(`[SignalService] Restored ${_signalOutcomes.size} outcomes, ${_signalHistoryCount} history rows from DB (${wins} wins, ${losses} losses in last 30d)`);
   } catch (e) { /* table may not exist — start fresh */ console.warn('[SignalService] restoreStateFromDb outcomes error:', e.message); }
   try {
     const result = await pool.query(
@@ -1177,7 +1183,7 @@ function getEngineHealth() {
       maxDrawdown: Math.round(_portfolioState.maxDrawdown * 1000) / 10,
     },
     regime: _marketRegime.regime,
-    signalCount: _signalOutcomes.size,
+    signalCount: _signalHistoryCount,
     confidenceMultiplier: getConfidenceMultiplier(),
   };
 }
@@ -1323,6 +1329,7 @@ async function persistSignals(signals) {
        ON CONFLICT DO NOTHING`,
       flat
     );
+    _signalHistoryCount += result.rowCount || 0;
     console.log(`[SignalService] Persisted ${result.rowCount} new signal_history rows`);
   } catch (error) {
     if (error.code !== '42P01') {
@@ -1533,11 +1540,12 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       newsSent: newsSentiment[symbol] || null,
       priceHistory, degFactor
     });
+    const prevOutcome = _signalOutcomes.get(symbol);
+    trackSignalOutcomes(_portfolioState, _performanceStats, _signalOutcomes, symbol, currentPrice, sigObj);
     if (sigObj.signal !== 'Hold') {
       recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice).catch(() => {});
-      if (_performanceStats.total > 0) {
-        const prev = _signalOutcomes.get(symbol);
-        if (prev && prev.result) persistSignalOutcome(symbol, prev.entryPrice, prev.signal, currentPrice, prev.result);
+      if (prevOutcome && prevOutcome.result) {
+        persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, currentPrice, prevOutcome.result);
       }
     }
     resolveForwardPredictions(symbol).catch(() => {});
