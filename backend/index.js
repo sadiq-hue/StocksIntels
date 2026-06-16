@@ -6843,10 +6843,50 @@ app.get('/api/payments/status', async (req, res) => {
             );
             if (tx.rows[0].user_id) {
               const tier = (tx.rows[0].plan_name || 'pro').toLowerCase();
-              await pool.query(
-                `UPDATE users SET subscription_tier = $1, subscription_status = 'active' WHERE id = $2`,
-                [tier, tx.rows[0].user_id]
+              const months = parseInt(tx.rows[0].duration_months) || 1;
+              const startDate = new Date();
+              const endDate = new Date(startDate);
+              endDate.setMonth(endDate.getMonth() + months);
+              const planRes = await pool.query(
+                'SELECT id FROM subscription_plans WHERE LOWER(name) = $1 LIMIT 1',
+                [tier]
               );
+              const planId = planRes.rows[0]?.id || null;
+              const subRes = await pool.query(
+                `INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)
+                 VALUES ($1, $2, 'active', $3, $4)
+                 RETURNING id`,
+                [tx.rows[0].user_id, planId, startDate, endDate]
+              );
+              await pool.query(
+                `UPDATE users SET subscription_tier = $1, subscription_status = 'active', subscription_start_date = $2, subscription_end_date = $3 WHERE id = $4`,
+                [tier, startDate, endDate, tx.rows[0].user_id]
+              );
+              await pool.query(
+                'UPDATE payment_transactions SET subscription_id = $1 WHERE id = $2',
+                [subRes.rows[0]?.id || null, tx.rows[0].id]
+              );
+              try {
+                const userRes = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [tx.rows[0].user_id]);
+                const { full_name: uName, email: uEmail } = userRes.rows[0] || {};
+                if (uEmail) {
+                  await sendPaymentReceiptEmail(uEmail, {
+                    userName: uName,
+                    planName: tx.rows[0].plan_name || 'Pro',
+                    amount: tx.rows[0].amount,
+                    currency: tx.rows[0].currency,
+                    period: months === 12 ? 'yearly' : 'monthly',
+                    durationMonths: months,
+                    paymentMethod: 'M-Pesa',
+                    transactionRef: tx.rows[0].payhero_reference || reference,
+                    paidAt: new Date(),
+                    startDate,
+                    endDate,
+                  });
+                }
+              } catch (emailErr) {
+                console.error('Payment receipt email error:', emailErr.message);
+              }
             }
             return res.json({ found: true, status: 'success', amount: tx.rows[0].amount, currency: tx.rows[0].currency, phoneNumber: tx.rows[0].phone_number, createdAt: tx.rows[0].created_at });
           }
