@@ -6918,6 +6918,7 @@ app.get('/api/payments/status', async (req, res) => {
   }
 });
 
+// Resend payment receipt (useful when email provider fails on first attempt)
 app.post('/api/payments/resend-receipt', authenticateToken, async (req, res) => {
   try {
     const { reference } = req.body;
