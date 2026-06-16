@@ -455,6 +455,11 @@ async function restoreStateFromDb() {
     _signalHistoryCount = histCount.rows[0]?.cnt || 0;
 
     console.log(`[SignalService] Restored ${_signalOutcomes.size} outcomes, ${_signalHistoryCount} history rows from DB (${wins} wins, ${losses} losses in last 30d)`);
+
+    // If no outcomes exist yet, approximate them from recent signal_history using current prices
+    if (_signalOutcomes.size === 0 && _signalHistoryCount > 0) {
+      await backfillOutcomesFromHistory(30, 500);
+    }
   } catch (e) { /* table may not exist — start fresh */ console.warn('[SignalService] restoreStateFromDb outcomes error:', e.message); }
   try {
     const result = await pool.query(
@@ -464,6 +469,65 @@ async function restoreStateFromDb() {
       _portfolioState.consecutiveLosses = parseInt(result.rows[0].consecutive_losses) || 0;
     }
   } catch { /* table may not exist — start fresh */ }
+}
+
+// ─── Backfill signal_outcomes from recent signal_history ─────────────────────
+// When signal_outcomes is empty but signal_history has rows (fresh deploy / schema fix),
+// approximate outcomes using current live prices so health/backtest show real numbers immediately.
+async function backfillOutcomesFromHistory(days = 30, maxRows = 500) {
+  try {
+    const outcomeCount = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_outcomes').catch(() => ({ rows: [{ cnt: 0 }] }));
+    if ((outcomeCount.rows[0]?.cnt || 0) > 0) return; // only backfill when empty
+
+    const result = await pool.query(`
+      SELECT DISTINCT ON (sh.ticker, sh.entry_price) sh.ticker, sh.signal, sh.entry_price, sh.generated_at
+      FROM signal_history sh
+      LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price
+      WHERE sh.generated_at > NOW() - $1::interval
+        AND sh.signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
+        AND sh.entry_price > 0
+        AND so.id IS NULL
+      ORDER BY sh.ticker, sh.entry_price, sh.generated_at DESC
+      LIMIT $2
+    `, [`${days} days`, maxRows]);
+    if (result.rows.length === 0) return;
+
+    const tickers = [...new Set(result.rows.map(r => r.ticker))];
+    const quotes = await getQuotesBatch(tickers).catch(() => ({}));
+
+    let wins = 0, losses = 0, inserted = 0;
+    for (const row of result.rows) {
+      const quote = quotes[row.ticker];
+      if (!quote || !quote.price) continue;
+      const currentPrice = quote.price;
+      const returnPct = ((currentPrice - row.entry_price) / row.entry_price) * 100;
+      const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy' || row.signal === 'Accumulate';
+      const isSell = row.signal === 'Sell' || row.signal === 'Strong Sell' || row.signal === 'Reduce';
+      if (!isBuy && !isSell) continue;
+      const won = isBuy ? returnPct > 0.5 : returnPct < -0.5;
+      const resultStr = won ? 'win' : 'loss';
+      try {
+        await pool.query(
+          `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT DO NOTHING`,
+          [row.ticker, row.entry_price, row.signal, currentPrice, resultStr, row.generated_at]
+        );
+        inserted++;
+        if (won) wins++; else losses++;
+        _signalOutcomes.set(row.ticker, { entryPrice: row.entry_price, signal: row.signal, exitPrice: currentPrice, result: resultStr, recordedAt: row.generated_at });
+      } catch { /* skip duplicates */ }
+    }
+
+    _performanceStats.wins += wins;
+    _performanceStats.losses += losses;
+    _performanceStats.total += wins + losses;
+    _performanceStats.winRate = _performanceStats.total > 0
+      ? Math.round((_performanceStats.wins / _performanceStats.total) * 1000) / 10 : 0;
+    console.log(`[SignalService] Backfilled ${inserted} outcomes from signal_history (${wins} wins, ${losses} losses)`);
+  } catch (e) {
+    console.warn('[SignalService] backfillOutcomesFromHistory error:', e.message);
+  }
 }
 
 // ─── Dynamic Sector PE Update ───────────────────────────────────────────────
