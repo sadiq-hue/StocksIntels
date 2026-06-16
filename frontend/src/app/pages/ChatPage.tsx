@@ -24,6 +24,7 @@ const GROUP_ICONS: Record<string, string> = {
 };
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const BACKEND_URL = API_URL.replace(/\/api$/, '');
 
 interface Message {
   id: number;
@@ -960,18 +961,21 @@ export function ChatPage() {
                                 }`}>
                                   {msg.image_url && (
                                     <div className="mb-1">
-                                      {/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(msg.image_url) ? (
-                                        <img src={msg.image_url} alt={msg.file_name || ""}
-                                          className="max-w-60 max-h-60 rounded-lg cursor-pointer object-cover"
-                                          onClick={() => window.open(msg.image_url!, '_blank')}
-                                          loading="lazy" />
-                                      ) : (
-                                        <a href={msg.image_url} target="_blank" rel="noopener noreferrer"
-                                          className="flex items-center gap-2 text-sm underline underline-offset-2">
-                                          <FileText className="w-4 h-4" />
-                                          {msg.file_name || msg.image_url.split('/').pop()}
-                                        </a>
-                                      )}
+                                      {(() => {
+                                        const fileUrl = msg.image_url!.startsWith('http') ? msg.image_url! : `${BACKEND_URL}${msg.image_url}`;
+                                        return /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(fileUrl) ? (
+                                          <img src={fileUrl} alt={msg.file_name || ""}
+                                            className="max-w-60 max-h-60 rounded-lg cursor-pointer object-cover"
+                                            onClick={() => window.open(fileUrl, '_blank')}
+                                            loading="lazy" />
+                                        ) : (
+                                          <a href={fileUrl} target="_blank" rel="noopener noreferrer"
+                                            className="flex items-center gap-2 text-sm underline underline-offset-2">
+                                            <FileText className="w-4 h-4" />
+                                            {msg.file_name || msg.image_url.split('/').pop()}
+                                          </a>
+                                        );
+                                      })()}
                                     </div>
                                   )}
                                   {msg.content && <p className="text-sm leading-relaxed">{msg.content}</p>}
