@@ -6716,8 +6716,9 @@ app.post('/api/payments/callback', async (req, res) => {
   try {
     const callbackData = req.body;
     console.log('PayHero callback received:', JSON.stringify(callbackData));
-    const reference = callbackData.reference || callbackData.external_reference;
-    const rawStatus = (callbackData.status || '').toLowerCase();
+    const response = callbackData.response || {};
+    const reference = response.ExternalReference || response.MerchantRequestID || callbackData.reference || callbackData.external_reference;
+    const rawStatus = String(response.Status || callbackData.status || '').toLowerCase();
     const status = rawStatus === 'success' ? 'success'
       : rawStatus === 'failed' ? 'failed'
       : rawStatus === 'cancelled' ? 'failed'
