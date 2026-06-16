@@ -1,4 +1,4 @@
-// Signal Publisher - Background worker that generates signals and publishes via Redis
+// Signal Publisher - Background worker that generates signals and publishes via Redis (deploy trigger)
 const { generateSignals } = require('./signalService');
 const { getQuotesBatch } = require('./marketService');
 const { connect, publishBatchSignalUpdate, publishSignalNotifications } = require('./queueService');
