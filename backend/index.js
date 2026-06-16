@@ -15,6 +15,7 @@ const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketServi
 const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
 const signalPublisher = require('./signalPublisher');
+const { createSignalNotifications } = require('./signalPublisher');
 const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail } = require('./mailer');
 const cron = require('node-cron');
 const {
@@ -470,8 +471,29 @@ app.delete('/api/admin/signals/:id', async (req, res) => {
 // ── Admin Generate Signals ──
 app.post('/api/admin/signals/generate', async (req, res) => {
   try {
-    const signals = await generateSignals();
-    res.json({ success: true, count: signals.length });
+    const { force } = req.body || {};
+    const marketData = await getQuotesBatch(ALL_SYMBOLS).catch(() => ({}));
+    const liveMarketData = {};
+    for (const [symbol, quote] of Object.entries(marketData)) {
+      const ticker = symbol.replace('NSE:', '');
+      liveMarketData[ticker] = {
+        price: quote.price,
+        changePercent: quote.changePercent,
+        volume: quote.volume,
+      };
+    }
+    const signals = await generateSignals(liveMarketData);
+
+    // Publish via Redis if available
+    if (signals.length > 0) {
+      await queueService.publishBatchSignalUpdate(signals);
+      const notifications = await createSignalNotifications(signals);
+      if (notifications.length > 0) {
+        await queueService.publishSignalNotifications(notifications);
+      }
+    }
+
+    res.json({ success: true, count: signals.length, notifications: signals.length > 0 });
   } catch (err) { console.error('Admin generate signals error:', err.message); res.status(500).json({ error: err.message }); }
 });
 

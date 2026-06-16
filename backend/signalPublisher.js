@@ -153,4 +153,4 @@ async function createSignalNotifications(signals) {
   }
 }
 
-module.exports = { start, stop, generateAndPublish };
+module.exports = { start, stop, generateAndPublish, createSignalNotifications };
