@@ -4481,15 +4481,22 @@ app.get('/api/stock/:symbol/history', async (req, res) => {
   try {
     const { symbol } = req.params;
     const { range, interval } = req.query;
+    const upperSymbol = symbol.toUpperCase();
+
+    // NSE historical OHLCV is not available from Yahoo/RapidAPI. Avoid showing wrong-ticker data.
+    if (upperSymbol.startsWith('NSE:') || upperSymbol.endsWith('.NSE')) {
+      return res.status(404).json({ error: 'NSE historical chart data is not available' });
+    }
+
     const { fetchHistoricalQuotes } = require('./globalScraper');
     const bars = await Promise.race([
-      fetchHistoricalQuotes(symbol.toUpperCase(), range || '6mo', interval || '1d'),
+      fetchHistoricalQuotes(upperSymbol, range || '6mo', interval || '1d'),
       new Promise(resolve => setTimeout(() => resolve(null), 15000)),
     ]);
     if (!bars || bars.length === 0) {
       return res.status(404).json({ error: 'No historical data found' });
     }
-    res.json({ symbol: symbol.toUpperCase(), bars, count: bars.length });
+    res.json({ symbol: upperSymbol, bars, count: bars.length });
   } catch (error) {
     console.error(`Error fetching history for ${req.params.symbol}:`, error.message);
     res.status(500).json({ error: 'Failed to fetch price history' });
