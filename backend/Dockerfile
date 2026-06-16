@@ -3,7 +3,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install Python + build deps for XGBoost
-RUN apk add --no-cache python3 py3-pip build-base && \
+RUN apk add --no-cache python3 py3-pip build-base cmake && \
     python3 -m venv /app/venv && \
     /app/venv/bin/pip install --no-cache-dir xgboost numpy pandas scikit-learn
 
