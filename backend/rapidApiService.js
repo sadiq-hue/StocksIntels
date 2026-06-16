@@ -57,27 +57,35 @@ async function fetchRapidAPI(symbol) {
   if (!key || !host) return null;
 
   const cleanSymbol = symbol.replace('NSE:', '').toUpperCase();
-  const yahooSymbol = toYahooSymbol(symbol);
+  const yahooSymbol = toYahooSymbol(symbol); // e.g. SCOM.NR
 
-  // Try multiple endpoint patterns
+  // Try multiple symbol formats and endpoint patterns
+  const symbolVariants = [yahooSymbol, cleanSymbol];
   const endpoints = [
-    { path: '/api/v1/markets/quote', params: { symbol: yahooSymbol, region: 'KE' } },
-    { path: '/market/v2/get-quotes', params: { symbols: yahooSymbol, region: 'KE' } },
+    { path: '/api/v1/markets/quote', params: (sym) => ({ symbol: sym, region: 'KE' }) },
+    { path: '/market/v2/get-quotes', params: (sym) => ({ symbols: sym, region: 'KE' }) },
+    { path: '/api/v1/markets/quote', params: (sym) => ({ symbol: sym, region: 'US' }) },
+    { path: '/market/v2/get-quotes', params: (sym) => ({ symbols: sym, region: 'US' }) },
   ];
 
-  for (const ep of endpoints) {
-    try {
-      const resp = await axios.get(`https://${host}${ep.path}`, {
-        params: ep.params,
-        headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
-        timeout: 6000,
-      });
-      const result = resp.data?.quoteResponse?.result?.[0];
-      if (result?.regularMarketPrice) {
-        return parseYahooResult(result, cleanSymbol);
+  for (const sym of symbolVariants) {
+    for (const ep of endpoints) {
+      const url = `https://${host}${ep.path}`;
+      try {
+        console.log(`[rapidApiService] RapidAPI NSE request: ${url} symbol=${sym}`);
+        const resp = await axios.get(url, {
+          params: ep.params(sym),
+          headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
+          timeout: 6000,
+        });
+        const result = resp.data?.quoteResponse?.result?.[0];
+        if (result?.regularMarketPrice) {
+          console.log(`[rapidApiService] RapidAPI NSE success for ${cleanSymbol} via ${ep.path}:`, result.regularMarketPrice);
+          return parseYahooResult(result, cleanSymbol);
+        }
+      } catch (err) {
+        console.error(`[rapidApiService] RapidAPI NSE ${ep.path} failed for ${sym}:`, err.message);
       }
-    } catch {
-      // continue to next endpoint pattern
     }
   }
   return null;
@@ -86,11 +94,18 @@ async function fetchRapidAPI(symbol) {
 async function fetchNSEQuote(symbol) {
   if (!symbol.startsWith('NSE:')) return null;
 
-  let quote = await fetchYahooFinance2(symbol);
+  // RapidAPI first — it works on Railway; yahoo-finance2 direct is unreliable from cloud IPs
+  console.log(`[rapidApiService] fetchNSEQuote for ${symbol}; key set: ${!!process.env.RAPIDAPI_KEY}`);
+  let quote = await fetchRapidAPI(symbol);
+  if (quote) {
+    console.log(`[rapidApiService] fetchNSEQuote got RapidAPI quote for ${symbol}:`, quote.price);
+    return quote;
+  }
+
+  quote = await fetchYahooFinance2(symbol);
   if (quote) return quote;
 
-  quote = await fetchRapidAPI(symbol);
-  return quote;
+  return null;
 }
 
 async function fetchRapidAPIGlobal(symbol) {
