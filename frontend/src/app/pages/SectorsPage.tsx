@@ -80,8 +80,9 @@ export const SectorsPage: React.FC = () => {
 
     for (const stock of kenyanStocks) {
       const live = getQuote(`NSE:${stock.ticker}`);
-      const change = live?.changePercent ?? stock.change;
-      const volume = live?.volume ?? parseVolume(stock.volume);
+      if (!live || live.changePercent == null) continue;
+      const change = live.changePercent;
+      const volume = live.volume ?? parseVolume(stock.volume);
       const key = `NSE ${stock.sector}`;
       if (!map.has(key)) map.set(key, { changes: [], totalVolume: 0, stocks: [], market: "NSE" });
       const entry = map.get(key)!;
@@ -92,8 +93,9 @@ export const SectorsPage: React.FC = () => {
 
     for (const stock of globalStocks) {
       const live = getQuote(stock.ticker);
-      const change = live?.changePercent ?? stock.change;
-      const volume = live?.volume ?? parseVolume(stock.volume);
+      if (!live || live.changePercent == null) continue;
+      const change = live.changePercent;
+      const volume = live.volume ?? parseVolume(stock.volume);
       const key = stock.sector;
       if (!map.has(key)) map.set(key, { changes: [], totalVolume: 0, stocks: [], market: "Global" });
       const entry = map.get(key)!;

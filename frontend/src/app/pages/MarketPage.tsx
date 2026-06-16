@@ -193,8 +193,8 @@ const MarketPage: React.FC = () => {
   const nseStocksDisplay = useMemo(() => {
     return localNseStocks.map(local => {
       const live = getQuote(local.symbol);
-      if (live) {
-        return { ...local, price: live.price ?? local.price, changePercent: live.changePercent ?? local.changePercent, volume: live.volume ?? local.volume, provider: live.provider };
+      if (live && live.price != null) {
+        return { ...local, price: live.price, changePercent: live.changePercent ?? null, volume: live.volume ?? null, provider: live.provider };
       }
       return { ...local, price: null, changePercent: null, volume: null, provider: 'pending' };
     });
@@ -203,8 +203,8 @@ const MarketPage: React.FC = () => {
   const globalStocksDisplay = useMemo(() => {
     return localGlobalStocks.map(local => {
       const live = getQuote(local.symbol);
-      if (live) {
-        return { ...local, price: live.price ?? local.price, changePercent: live.changePercent ?? local.changePercent, volume: live.volume ?? local.volume, provider: live.provider };
+      if (live && live.price != null) {
+        return { ...local, price: live.price, changePercent: live.changePercent ?? null, volume: live.volume ?? null, provider: live.provider };
       }
       return { ...local, price: null, changePercent: null, volume: null, provider: 'pending' };
     });

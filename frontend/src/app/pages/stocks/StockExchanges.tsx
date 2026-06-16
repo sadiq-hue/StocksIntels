@@ -149,16 +149,16 @@ export function StockExchanges() {
   const nseLiveStocks = useMemo<DisplayStock[]>(() => {
     return localNseStocks.map(local => {
       const live = getQuote(local.symbol);
-      if (live) {
+      if (live && live.price != null) {
         return {
           ticker: local.ticker,
           name: local.name,
-          price: live.price ?? local.price,
-          changePercent: live.changePercent ?? 0,
-          volume: live.volume ?? local.volume,
+          price: live.price,
+          changePercent: live.changePercent ?? null,
+          volume: live.volume ?? null,
         };
       }
-      return { ticker: local.ticker, name: local.name, price: null, changePercent: null, volume: 0 };
+      return { ticker: local.ticker, name: local.name, price: null, changePercent: null, volume: null };
     });
   }, [localNseStocks, getQuote]);
 
