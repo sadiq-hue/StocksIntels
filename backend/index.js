@@ -8077,6 +8077,84 @@ async function initDatabase() {
         AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.user_id = u.id)
     `);
 
+    // Signal engine tables
+    await pool.query(`CREATE TABLE IF NOT EXISTS signal_history (
+      id SERIAL PRIMARY KEY,
+      ticker VARCHAR(20) NOT NULL,
+      signal VARCHAR(20) NOT NULL,
+      confidence INTEGER,
+      price NUMERIC(15,2),
+      change_pct NUMERIC(10,4),
+      entry_price NUMERIC(15,2),
+      stop_loss NUMERIC(15,2),
+      target1 NUMERIC(15,2),
+      target2 NUMERIC(15,2),
+      risk_reward NUMERIC(5,2),
+      sector VARCHAR(100),
+      market VARCHAR(20),
+      currency VARCHAR(10),
+      trade_type VARCHAR(20),
+      timeframe VARCHAR(20),
+      reason TEXT,
+      generated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_history_ticker ON signal_history(ticker)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_history_generated_at ON signal_history(generated_at)');
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS signal_outcomes (
+      id SERIAL PRIMARY KEY,
+      ticker VARCHAR(20) NOT NULL,
+      entry_price NUMERIC(15,2),
+      signal VARCHAR(20),
+      exit_price NUMERIC(15,2),
+      result VARCHAR(10) CHECK (result IN ('win', 'loss')),
+      recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      signal_history_id INTEGER REFERENCES signal_history(id) ON DELETE SET NULL
+    );`);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_outcomes_ticker ON signal_outcomes(ticker)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_outcomes_result ON signal_outcomes(result)');
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS forward_predictions (
+      id SERIAL PRIMARY KEY,
+      symbol VARCHAR(20) NOT NULL,
+      signal VARCHAR(20) NOT NULL,
+      confidence INTEGER,
+      price NUMERIC(15,2),
+      generated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      resolved BOOLEAN DEFAULT false,
+      actual_return NUMERIC(10,4),
+      correct BOOLEAN
+    );`);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_fp_symbol ON forward_predictions(symbol)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_fp_resolved ON forward_predictions(resolved)');
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS prediction_log (
+      id SERIAL PRIMARY KEY,
+      signal_history_id INTEGER REFERENCES signal_history(id) ON DELETE SET NULL,
+      ticker VARCHAR(20) NOT NULL,
+      signal_type VARCHAR(20),
+      ml_prob NUMERIC(5,4),
+      confidence INTEGER,
+      predicted_outcome VARCHAR(10),
+      actual_outcome VARCHAR(10),
+      resolved_at TIMESTAMP WITH TIME ZONE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS signal_audit_log (
+      id SERIAL PRIMARY KEY,
+      event_type VARCHAR(50) NOT NULL,
+      message TEXT,
+      details JSONB,
+      recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS app_cache (
+      cache_key VARCHAR(100) PRIMARY KEY,
+      cache_value JSONB,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+
     console.log('Database schema verified');
   } catch (err) {
     console.error('Database initialization failed:', err.message);
