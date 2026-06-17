@@ -95,6 +95,11 @@ async function fetchStatistics(symbol) {
       if (qd) price = qd.price;
     } catch {}
 
+    // Compute price from marketCap / sharesOutstanding if quote unavailable
+    if (!price && svm.market_capitalization && sss.shares_outstanding) {
+      price = Math.round(svm.market_capitalization / sss.shares_outstanding * 100) / 100;
+    }
+
     const result = {
       symbol: clean,
       companyName: d.name || clean,
@@ -149,6 +154,11 @@ async function fetchQuoteWithStats(symbol) {
 
   const q = quote.status === 'fulfilled' ? quote.value : null;
   const s = stats.status === 'fulfilled' ? stats.value : null;
+
+  if (!q && s) {
+    // Use statistics as standalone quote (price may be computed from marketCap/sharesOutstanding)
+    return s;
+  }
 
   if (!q) return null;
 

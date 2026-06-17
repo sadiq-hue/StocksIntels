@@ -268,6 +268,14 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
         const quote = await getQuote(symbol).catch(() => null);
         const price = quote?.price || 0;
 
+        // Force USD for known US stocks (guard against wrong profile currency from API)
+        if (isUs && yahooReport.data.profile) {
+          yahooReport.data.profile.currency = 'USD';
+          if (yahooReport.data.profile.exchange === 'NSE' || !yahooReport.data.profile.exchange) {
+            yahooReport.data.profile.exchange = 'NASDAQ/NYSE';
+          }
+        }
+
         // Compute dividend yield from dividend history
         const divHist = yahooReport.data.dividendHistory || [];
         const totalAnnualDiv = divHist.slice(0, 4).reduce((sum, d) => sum + Math.abs(d.dividend || d.adjDividend || 0), 0);

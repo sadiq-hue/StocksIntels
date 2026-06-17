@@ -106,7 +106,12 @@ async function fetchNseQuotes() {
     return quotes;
   } catch (err) {
     consecutiveFailures++;
-    if (consecutiveFailures <= 3 || consecutiveFailures % 10 === 0) {
+    const status = err.response?.status || err.status;
+    if (status === 402) {
+      if (consecutiveFailures <= 2) {
+        console.error(`[Apify] Payment required - add billing at https://console.apify.com/ to run NSE actor`);
+      }
+    } else if (consecutiveFailures <= 3 || consecutiveFailures % 10 === 0) {
       console.error(`[Apify] Actor run failed (${consecutiveFailures}): ${err.message}`);
     }
     if (nseCache) return nseCache;

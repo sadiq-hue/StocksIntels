@@ -259,43 +259,34 @@ async function getCompanyProfile(symbol) {
   const ceoRole = topOfficer?.title || '';
   const cik = ap?.cik || '';
 
+  // Always try EDGAR to fill missing profile data
+  let edgarProfile = null;
+  try {
+    const edgarService = require('./edgarService');
+    if (edgarService.cikLookup(symbol)) {
+      edgarProfile = await edgarService.getCompanyProfileFromEdgar(symbol);
+    }
+  } catch {}
+
   const profile = {
     symbol,
-    companyName: sp.longName || sp.shortName || symbol,
-    industry: sp.industry || ap?.industry || '',
-    sector: sp.sector || ap?.sector || '',
-    country: sp.country || ap?.country || '',
-    website: sp.website || ap?.website || '',
-    description: (sp.longBusinessSummary || ap?.longBusinessSummary || '').slice(0, 500),
-    ceo,
+    companyName: sp.longName || sp.shortName || edgarProfile?.companyName || symbol,
+    industry: sp.industry || ap?.industry || edgarProfile?.industry || '',
+    sector: sp.sector || ap?.sector || edgarProfile?.sector || '',
+    country: sp.country || ap?.country || edgarProfile?.country || '',
+    website: sp.website || ap?.website || edgarProfile?.website || '',
+    description: (sp.longBusinessSummary || ap?.longBusinessSummary || edgarProfile?.description || '').slice(0, 500),
+    ceo: ceo !== 'N/A' ? ceo : (edgarProfile?.ceo || 'N/A'),
     ceoRole,
-    employees: sp.fullTimeEmployees || ap?.fullTimeEmployees || 0,
+    employees: sp.fullTimeEmployees || ap?.fullTimeEmployees || edgarProfile?.employees || 0,
     marketCap: fd.marketCap || dk.marketCap || 0,
-    exchange: sp.exchange || sp.exchangeDisplay || ap?.exchange || '',
-    currency: fd.financialCurrency || 'USD',
-    cik: cik ? Number(cik) : '',
+    exchange: sp.exchange || sp.exchangeDisplay || ap?.exchange || edgarProfile?.exchange || '',
+    // Force USD for known US stocks (CIK lookup succeeded)
+    currency: edgarProfile ? 'USD' : (fd.financialCurrency || 'USD'),
+    cik: cik ? Number(cik) : (edgarProfile?.cik || ''),
     image: '',
     lastUpdated: new Date().toISOString(),
   };
-
-  // Fallback: enrich sparse profile with EDGAR data
-  if (!profile.industry && !profile.sector) {
-    try {
-      const edgarService = require('./edgarService');
-      const edgarProfile = await edgarService.getCompanyProfileFromEdgar(symbol);
-      if (edgarProfile) {
-        if (!profile.industry && edgarProfile.industry) profile.industry = edgarProfile.industry;
-        if (!profile.sector && edgarProfile.sector) profile.sector = edgarProfile.sector;
-        if (!profile.country && edgarProfile.country) profile.country = edgarProfile.country;
-        if (!profile.website && edgarProfile.website) profile.website = edgarProfile.website;
-        if (!profile.description && edgarProfile.description) profile.description = edgarProfile.description;
-        if (profile.ceo === 'N/A' && edgarProfile.ceo) profile.ceo = edgarProfile.ceo;
-        if (!profile.employees && edgarProfile.employees) profile.employees = edgarProfile.employees;
-        if (!profile.cik && edgarProfile.cik) profile.cik = edgarProfile.cik;
-        if (!profile.exchange && edgarProfile.exchange) profile.exchange = edgarProfile.exchange;
-      }
-    } catch {}
-  }
 
   return cacheSet(cacheKey, profile);
 }
@@ -597,12 +588,8 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4) {
     const ocf = incItem.ebitda || 0;
     const eps = incItem.eps || 0;
 
-    // Estimate marketCap for each historical period
-    let cap = currentMarketCap;
-    if (netIncome > 0 && eps > 0 && !cap) {
-      const sharesOut = netIncome / eps;
-      cap = sharesOut * (forwardPE || 15);
-    }
+    // Use real marketCap when available; don't estimate
+    const cap = currentMarketCap;
 
     const divYieldDecimal = fd.dividendYield ?? 0;
     const divYieldPct = divYieldDecimal * 100;
@@ -620,7 +607,7 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4) {
       dividendYieldPercentage: divYieldPct,
       payoutRatio: fd.payoutRatio || 0,
       netDebtToEBITDA: ocf > 0 ? totalLiabilities / ocf : 0,
-      earningsYield: netIncome > 0 ? netIncome / cap : 0,
+      earningsYield: (netIncome > 0 && cap > 0) ? netIncome / cap : 0,
       freeCashFlowYield: cap > 0 ? (incItem.ebitda || 0) / cap : 0,
       revenuePerShare: eps > 0 && netIncome > 0 ? revenue / (netIncome / eps) : 0,
       netIncomePerShare: eps || 0,
