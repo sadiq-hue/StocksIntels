@@ -367,6 +367,17 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
     }
   }
 
+  // 3. Fallback: use FY annual data from SEC EDGAR when yahoo-finance2 is unavailable
+  if (items.length === 0 && fts.status === 'fulfilled' && fts.value) {
+    const fyData = fts.value
+      .filter(item => item.periodType === 'FY' && item.totalRevenue != null)
+      .sort((a, b) => ((b.date || '')).localeCompare(a.date || ''))
+      .slice(0, limit);
+    if (fyData.length > 0) {
+      fyData.forEach(item => items.push(formatIncomeItem(item, 'fy')));
+    }
+  }
+
   if (items.length === 0) return null;
 
   // Sort by date descending
@@ -399,21 +410,17 @@ async function getBalanceSheet(symbol, period = 'annual', limit = 4) {
   const allData = await fetchAllFundamentals(symbol);
   if (!allData) return null;
 
-  const quarterly = allData
-    .filter(item => item.periodType === '3M' && item.totalAssets != null)
+  // Accept both 3M (quarterly) and FY (annual) period types
+  const items = allData
+    .filter(item => (item.periodType === '3M' || item.periodType === 'FY') && item.totalAssets != null)
     .sort((a, b) => {
       const da = getDateStr(a.date) || '';
       const db = getDateStr(b.date) || '';
       return db.localeCompare(da);
     });
-  if (quarterly.length === 0) return null;
+  if (items.length === 0) return null;
 
-  if (period === 'quarter') {
-    return quarterly.slice(0, limit).map(item => formatBalanceSheet(item, period));
-  }
-
-  // Annual: use quarterly snapshots (balance sheets are point-in-time)
-  return quarterly.slice(0, limit).map(item => formatBalanceSheet(item, period));
+  return items.slice(0, limit).map(item => formatBalanceSheet(item, period));
 }
 
 function formatBalanceSheet(item, period) {
@@ -476,21 +483,28 @@ async function getCashFlowStatement(symbol, period = 'annual', limit = 4) {
     'netDebt',
   ];
 
+  // Accept both 3M (quarterly) and FY (annual) period types
+  const hasQuarterly = allData.some(item => item.periodType === '3M' && item.operatingCashFlow != null);
+  const items = allData
+    .filter(item => (hasQuarterly ? item.periodType === '3M' : true) && item.operatingCashFlow != null)
+    .sort((a, b) => {
+      const da = getDateStr(a.date) || '';
+      const db = getDateStr(b.date) || '';
+      return db.localeCompare(da);
+    });
+  if (items.length === 0) return null;
+
   if (period === 'quarter') {
-    return allData.filter(item => item.periodType === '3M' && item.operatingCashFlow != null)
-      .slice(0, limit)
-      .map(item => formatCashFlow(item, period));
+    return items.slice(0, limit).map(item => formatCashFlow(item, period));
   }
 
-  const quarterly = allData.filter(item =>
-    item.periodType === '3M' && item.operatingCashFlow != null
-  );
-  if (quarterly.length === 0) return null;
+  // For annual: prefer TTM from quarterly data when available, else use FY items directly
+  if (hasQuarterly) {
+    const ttmWindows = computeTTM(items, keys).slice(0, limit);
+    if (ttmWindows.length > 0) return ttmWindows.map(item => formatCashFlow(item, 'ttm'));
+  }
 
-  const ttmWindows = computeTTM(quarterly, keys).slice(0, limit);
-  if (ttmWindows.length === 0) return null;
-
-  return ttmWindows.map(item => formatCashFlow(item, 'ttm'));
+  return items.slice(0, limit).map(item => formatCashFlow(item, 'fy'));
 }
 
 function formatCashFlow(item, period) {

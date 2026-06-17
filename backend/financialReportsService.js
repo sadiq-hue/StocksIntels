@@ -189,8 +189,10 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
   const marketCapFromQuote = quoteValue?.marketCap || tds?.marketCap || 0;
   const epsFromStats = tds?.eps || 0;
 
-  const enrichedKm = edgarKmHistory.map((km) => {
-    const eps = epsFromStats || km.netIncomePerShare || 0;
+  const enrichedKm = edgarKmHistory.map((km, idx) => {
+    const incItem = edgarIncHistory[idx] || {};
+    const eps = epsFromStats || km.netIncomePerShare ||
+      (km.sharesOutstanding > 0 && incItem.netIncome ? incItem.netIncome / km.sharesOutstanding : 0);
     const pe = (price > 0 && eps > 0) ? price / eps : 0;
     const sharesOut = km.sharesOutstanding || 0;
     const computedMarketCap = marketCapFromQuote || (price > 0 && sharesOut > 0 ? price * sharesOut : 0);
