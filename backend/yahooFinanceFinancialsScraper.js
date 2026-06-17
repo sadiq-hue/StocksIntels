@@ -79,17 +79,18 @@ function normalizeYahooResponse(data) {
   return result;
 }
 
-// Helper: call Yahoo Finance API directly through a proxy
+// Helper: call Yahoo Finance API directly through a proxy or CORS relay
 async function fetchYahooViaProxy(symbol) {
   const proxyService = require('./proxyService');
-  const maxAttempts = 3;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}`;
+
+  // Try direct proxy agents first
+  for (let attempt = 0; attempt < 3; attempt++) {
     const proxy = proxyService.getRandomProxy();
     if (!proxy) break;
     const agent = proxyService.createProxyAgent(proxy);
     if (!agent) continue;
     try {
-      const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}`;
       const resp = await axios.get(url, {
         params: { modules: 'assetProfile,financialData,defaultKeyStatistics,summaryProfile' },
         httpsAgent: agent,
@@ -97,19 +98,29 @@ async function fetchYahooViaProxy(symbol) {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
           'Accept': 'application/json',
-          'Origin': 'https://finance.yahoo.com',
         },
       });
       const result = resp.data?.quoteSummary?.result?.[0];
       if (result?.financialData?.marketCap?.raw) return normalizeYahooResponse(result);
     } catch {}
   }
+
+  // Fallback: try free CORS proxy relays (no agent needed)
+  try {
+    const params = new URLSearchParams({ modules: 'assetProfile,financialData,defaultKeyStatistics,summaryProfile' });
+    const data = await proxyService.fetchViaCorsProxy(url + '?' + params.toString());
+    const result = data?.quoteSummary?.result?.[0];
+    if (result?.financialData?.marketCap?.raw) return normalizeYahooResponse(result);
+  } catch {}
+
   return null;
 }
 
-// Fetch current price and basic trade data from Yahoo Finance chart API via proxy
+// Fetch current price and basic trade data from Yahoo Finance chart API via proxy or CORS relay
 async function fetchPriceViaProxy(symbol) {
   const proxyService = require('./proxyService');
+
+  // Try direct proxy agents first
   for (let attempt = 0; attempt < 3; attempt++) {
     const proxy = proxyService.getRandomProxy();
     if (!proxy) break;
@@ -139,6 +150,25 @@ async function fetchPriceViaProxy(symbol) {
       }
     } catch {}
   }
+
+  // Fallback: try free CORS proxy relays
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
+    const params = new URLSearchParams({ interval: '1d', range: '1d' });
+    const data = await proxyService.fetchViaCorsProxy(url + '?' + params.toString());
+    const meta = data?.chart?.result?.[0]?.meta;
+    if (meta?.regularMarketPrice) {
+      return {
+        price: meta.regularMarketPrice,
+        previousClose: meta.chartPreviousClose || meta.regularMarketPrice,
+        currency: meta.currency || 'USD',
+        exchange: meta.exchangeName || '',
+        marketCap: 0,
+        symbol: symbol.toUpperCase(),
+      };
+    }
+  } catch {}
+
   return null;
 }
 

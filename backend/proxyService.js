@@ -2,14 +2,36 @@ const axios = require('axios');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 const { SocksProxyAgent } = require('socks-proxy-agent');
 
-const proxyCache = new Map();
+const CORS_PROXIES = [
+  'https://corsproxy.io/?url=',
+  'https://api.allorigins.win/raw?url=',
+  'https://api.codetabs.com/v1/proxy?quest=',
+];
+
 const PROXY_REFRESH_MS = 10 * 60 * 1000;
-const TEST_TIMEOUT = 5000;
+const TEST_TIMEOUT = 6000;
 const TEST_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d';
 const MAX_WORKING = 10;
 
 let workingProxies = [];
 let lastRefresh = 0;
+
+// Fetch Yahoo URL through a free CORS proxy relay (no agent needed)
+async function fetchViaCorsProxy(url) {
+  for (const proxy of CORS_PROXIES) {
+    try {
+      const resp = await axios.get(proxy + encodeURIComponent(url), {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+        },
+      });
+      if (resp.data) return resp.data;
+    } catch {}
+  }
+  return null;
+}
 
 async function fetchFreeProxyList() {
   const proxies = [];
@@ -83,9 +105,7 @@ async function refreshProxies() {
     }
   }
   lastRefresh = Date.now();
-  if (workingProxies.length > 0) {
-    console.log(`[ProxyService] ${workingProxies.length} working proxies found`);
-  }
+  console.log(`[ProxyService] ${candidates.length} candidates, ${workingProxies.length} working`);
 }
 
 function getRandomProxy() {
@@ -107,4 +127,4 @@ function getWorkingCount() {
 // Warm up on module load
 refreshProxies().catch(() => {});
 
-module.exports = { refreshProxies, getRandomProxy, createProxyAgent, getWorkingCount };
+module.exports = { refreshProxies, getRandomProxy, createProxyAgent, getWorkingCount, fetchViaCorsProxy };
