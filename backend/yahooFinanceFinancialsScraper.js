@@ -257,8 +257,9 @@ async function getCompanyProfile(symbol) {
   const topOfficer = ceoOfficer || officers[0];
   const ceo = topOfficer?.name?.trim() || 'N/A';
   const ceoRole = topOfficer?.title || '';
+  const cik = ap?.cik || '';
 
-  return cacheSet(cacheKey, {
+  const profile = {
     symbol,
     companyName: sp.longName || sp.shortName || symbol,
     industry: sp.industry || ap?.industry || '',
@@ -270,11 +271,33 @@ async function getCompanyProfile(symbol) {
     ceoRole,
     employees: sp.fullTimeEmployees || ap?.fullTimeEmployees || 0,
     marketCap: fd.marketCap || dk.marketCap || 0,
-    exchange: sp.exchange || sp.exchangeDisplay || '',
+    exchange: sp.exchange || sp.exchangeDisplay || ap?.exchange || '',
     currency: fd.financialCurrency || 'USD',
+    cik: cik ? Number(cik) : '',
     image: '',
     lastUpdated: new Date().toISOString(),
-  });
+  };
+
+  // Fallback: enrich sparse profile with EDGAR data
+  if (!profile.industry && !profile.sector) {
+    try {
+      const edgarService = require('./edgarService');
+      const edgarProfile = await edgarService.getCompanyProfileFromEdgar(symbol);
+      if (edgarProfile) {
+        if (!profile.industry && edgarProfile.industry) profile.industry = edgarProfile.industry;
+        if (!profile.sector && edgarProfile.sector) profile.sector = edgarProfile.sector;
+        if (!profile.country && edgarProfile.country) profile.country = edgarProfile.country;
+        if (!profile.website && edgarProfile.website) profile.website = edgarProfile.website;
+        if (!profile.description && edgarProfile.description) profile.description = edgarProfile.description;
+        if (profile.ceo === 'N/A' && edgarProfile.ceo) profile.ceo = edgarProfile.ceo;
+        if (!profile.employees && edgarProfile.employees) profile.employees = edgarProfile.employees;
+        if (!profile.cik && edgarProfile.cik) profile.cik = edgarProfile.cik;
+        if (!profile.exchange && edgarProfile.exchange) profile.exchange = edgarProfile.exchange;
+      }
+    } catch {}
+  }
+
+  return cacheSet(cacheKey, profile);
 }
 
 async function fetchAnnualIncomeHistory(symbol) {
