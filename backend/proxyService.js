@@ -3,9 +3,9 @@ const { HttpsProxyAgent } = require('https-proxy-agent');
 const { SocksProxyAgent } = require('socks-proxy-agent');
 
 const CORS_PROXIES = [
-  'https://corsproxy.io/?url=',
   'https://api.allorigins.win/raw?url=',
   'https://api.codetabs.com/v1/proxy?quest=',
+  'https://api.allorigins.win/get?url=',
 ];
 
 const PROXY_REFRESH_MS = 10 * 60 * 1000;
@@ -21,7 +21,7 @@ async function fetchViaCorsProxy(url) {
   for (const proxy of CORS_PROXIES) {
     try {
       const resp = await axios.get(proxy + encodeURIComponent(url), {
-        timeout: 10000,
+        timeout: 20000,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Accept': 'application/json',
@@ -126,5 +126,8 @@ function getWorkingCount() {
 
 // Warm up on module load
 refreshProxies().catch(() => {});
+
+// Refresh proxy pool every 10 minutes (was missing scheduled refresh)
+setInterval(() => refreshProxies().catch(() => {}), PROXY_REFRESH_MS);
 
 module.exports = { refreshProxies, getRandomProxy, createProxyAgent, getWorkingCount, fetchViaCorsProxy };

@@ -151,12 +151,35 @@ async function fetchPriceViaProxy(symbol) {
     } catch {}
   }
 
-  // Fallback: try free CORS proxy relays
+  // Fallback: try free CORS proxy relays (no agent needed)
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
     const params = new URLSearchParams({ interval: '1d', range: '1d' });
     const data = await proxyService.fetchViaCorsProxy(url + '?' + params.toString());
     const meta = data?.chart?.result?.[0]?.meta;
+    if (meta?.regularMarketPrice) {
+      return {
+        price: meta.regularMarketPrice,
+        previousClose: meta.chartPreviousClose || meta.regularMarketPrice,
+        currency: meta.currency || 'USD',
+        exchange: meta.exchangeName || '',
+        marketCap: 0,
+        symbol: symbol.toUpperCase(),
+      };
+    }
+  } catch {}
+
+  // Last resort: direct request to Yahoo chart API (may work from some cloud regions)
+  try {
+    const resp = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`, {
+      params: { interval: '1d', range: '1d' },
+      timeout: 5000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      },
+    });
+    const meta = resp.data?.chart?.result?.[0]?.meta;
     if (meta?.regularMarketPrice) {
       return {
         price: meta.regularMarketPrice,
