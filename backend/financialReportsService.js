@@ -260,6 +260,34 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
       const yahooReport = await yahooFinanceScraper.getFinancialReport(symbol, period, limit);
       if (yahooReport.success && yahooReport.data.incomeStatementHistory?.length > 0) {
         const quote = await getQuote(symbol).catch(() => null);
+
+        // Enrich keyMetrics with real ratios from quote price + financial data
+        const price = quote?.price || 0;
+        const quoteMc = quote?.marketCap || 0;
+        const incHist = yahooReport.data.incomeStatementHistory || [];
+        const balHist = yahooReport.data.balanceSheetHistory || [];
+        const enrichedKm = (yahooReport.data.keyMetricsHistory || []).map((km, idx) => {
+          const inc = incHist[idx] || {};
+          const bal = balHist[idx] || {};
+          const netIncome = inc.netIncome || 0;
+          const eps = inc.eps || 0;
+          const sharesOut = (eps > 0 && netIncome > 0) ? netIncome / eps : 0;
+          const mc = quoteMc || (price > 0 && sharesOut > 0 ? price * sharesOut : km.marketCap || 0);
+          const revenue = inc.revenue || 0;
+          const equity = bal.totalStockholdersEquity || bal.totalEquity || 0;
+          return {
+            ...km,
+            marketCap: mc,
+            peRatio: (price > 0 && eps > 0) ? price / eps : (netIncome > 0 && mc > 0 ? mc / netIncome : 0),
+            priceToSalesRatio: (mc > 0 && revenue > 0) ? mc / revenue : 0,
+            pbRatio: (mc > 0 && equity > 0) ? mc / equity : 0,
+            earningsYield: (price > 0 && eps > 0) ? eps / price : 0,
+            sharesOutstanding: Math.round(sharesOut),
+            revenuePerShare: sharesOut > 0 ? revenue / sharesOut : 0,
+            netIncomePerShare: eps || (sharesOut > 0 ? netIncome / sharesOut : 0),
+          };
+        });
+
         return {
           ...yahooReport,
           symbol,
@@ -267,6 +295,8 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           availableProviders,
           data: {
             ...yahooReport.data,
+            keyMetrics: enrichedKm[0] || null,
+            keyMetricsHistory: enrichedKm,
             quote: quote || { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 },
             dividendHistory: yahooReport.data.dividendHistory?.length
               ? yahooReport.data.dividendHistory
