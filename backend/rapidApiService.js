@@ -159,7 +159,7 @@ async function fetchGlobalQuote(symbol) {
     const { default: YahooFinance } = await import('yahoo-finance2');
     const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
     const q = await Promise.race([
-      yf.quote(yahooSymbol),
+      yf.quote(yahooSymbol).catch(() => {}),
       new Promise(r => setTimeout(r, 5000)),
     ]);
     if (!q?.regularMarketPrice) return null;
@@ -233,7 +233,7 @@ async function fetchBatchNSEQuotes(symbols) {
         const chunks = chunkArray(yahooSymbols, 10);
         for (let i = 0; i < chunks.length; i += 5) {
           const batch = chunks.slice(i, i + 5);
-          const results = await Promise.allSettled(batch.map(c => yf.quote(c)));
+          const results = await Promise.allSettled(batch.map(c => yf.quote(c).catch(() => {})));
           for (const result of results) {
             if (result.status !== 'fulfilled' || !Array.isArray(result.value)) continue;
             for (const q of result.value) {
