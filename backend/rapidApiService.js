@@ -348,13 +348,14 @@ async function fetchBatchGlobalQuotes(symbols) {
     } catch {}
   }
 
-  // Last resort: Yahoo via proxy for any still-missing symbols
+  // Last resort: Yahoo via proxy for any still-missing symbols (max 20s total)
   const stillMissing2 = globalSymbols.filter(s => !map[s.toUpperCase().replace(/\./g, '-')]);
   if (stillMissing2.length > 0) {
     try {
       const { fetchPriceViaProxy } = require('./yahooFinanceFinancialsScraper');
-      for (let i = 0; i < stillMissing2.length; i += 5) {
-        const batch = stillMissing2.slice(i, i + 5);
+      const proxyStart = Date.now();
+      for (let i = 0; i < stillMissing2.length && (Date.now() - proxyStart) < 20000; i += 10) {
+        const batch = stillMissing2.slice(i, i + 10);
         await Promise.all(batch.map(async (sym) => {
           try {
             const p = await fetchPriceViaProxy(sym);
