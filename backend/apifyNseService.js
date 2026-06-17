@@ -47,8 +47,8 @@ async function runActor() {
   if (!key) return [];
 
   const resp = await axios.post(
-    `${API_BASE}/acts/${ACTOR_ID}/run-sync`,
-    {},
+    `${API_BASE}/acts/${ACTOR_ID}/run-sync-get-dataset-items`,
+    { dataType: 'all' },
     {
       params: { token: key, timeout: MAX_RUN_TIME_SEC },
       timeout: (MAX_RUN_TIME_SEC + 5) * 1000,
@@ -56,10 +56,7 @@ async function runActor() {
     }
   );
 
-  const data = resp.data;
-  if (!data) return [];
-
-  const items = Array.isArray(data) ? data : (data.items || data.results || []);
+  const items = resp.data;
   if (!Array.isArray(items)) return [];
 
   return items;
