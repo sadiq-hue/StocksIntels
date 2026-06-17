@@ -57,6 +57,9 @@ async function fetchNseQuotes() {
         afxCacheTime = now;
         afxFailCount = 0;
         console.log(`[AFX] Scraped ${Object.keys(quotes).length} NSE stocks from afx.kwayisi.org`);
+      } else {
+        const snippet = response.data.substring(0, 300).replace(/\n/g, ' ');
+        console.log(`[AFX] Response has no rows, length=${response.data.length}, snippet: ${snippet}`);
       }
       return quotes;
     } catch (err) {
