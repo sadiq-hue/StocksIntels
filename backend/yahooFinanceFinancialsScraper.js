@@ -67,119 +67,169 @@ function computeTTM(items, valueKeys) {
   return results.reverse(); // most recent first
 }
 
-async function getYahooFinanceClient() {
-  const { default: YahooFinance } = await import('yahoo-finance2');
-  return new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-}
-
-async function fetchFundamentals(symbol, module = 'all') {
-  const cacheKey = `yh_fundamentals_${module}_${symbol}`;
-  const cached = cacheGet(cacheKey);
-  if (cached) return cached;
-
-  try {
-    const yf = await getYahooFinanceClient();
-    const startDate = Math.floor(Date.now() / 1000) - 10 * 365 * 24 * 3600;
-    const data = await yf.fundamentalsTimeSeries(symbol, {
-      period1: startDate,
-      module,
-    });
-    if (Array.isArray(data) && data.length > 0) {
-      return cacheSet(cacheKey, data);
-    }
-    return null;
-  } catch (err) {
-    return null;
-  }
-}
-
-async function fetchAllFundamentals(symbol) {
-  // Try 'all' first (most comprehensive)
-  const allData = await fetchFundamentals(symbol, 'all');
-  if (allData && allData.some(item => item.totalRevenue != null || item.operatingRevenue != null)) {
-    return allData;
-  }
-  // Fall back to 'financials' (income-specific)
-  const finData = await fetchFundamentals(symbol, 'financials');
-  if (finData && finData.length > 0) {
-    return finData;
-  }
-  return allData || finData || null;
-}
-
+// Fetch quote-like summary from Twelve Data statistics API + RapidAPI proxy fallback
 async function fetchQuoteSummary(symbol, modules) {
   const cacheKey = `yh_quoteSummary_${symbol}_${modules.join(',')}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  let data = null;
+  // Try Twelve Data statistics first
   try {
-    const yf = await getYahooFinanceClient();
-    data = await yf.quoteSummary(symbol, { modules });
-  } catch (err) {
-    console.error(`[YahooFinanceScraper] quoteSummary failed for ${symbol}:`, err.message);
-    data = null;
-  }
-
-  // If quoteSummary returned data but is missing key financial fields, supplement with quote()
-  const fd = data?.financialData || {};
-  const hasMarketData = fd.marketCap || fd.forwardPE || fd.dividendYield != null;
-  if (!hasMarketData || !data) {
-    try {
-      const yf = await getYahooFinanceClient();
-      const quote = await yf.quote(symbol);
-      if (quote) {
-        // quote() returns dividendYield as a percentage (0.35 = 0.35%),
-        // convert to decimal for dividendYield to match quoteSummary convention
-        const divYieldDecimal = quote.dividendYield != null ? quote.dividendYield / 100 : undefined;
-        const existingProfile = data?.summaryProfile || {};
-        const merged = {
-          financialData: {
-            marketCap: quote.marketCap,
-            forwardPE: quote.forwardPE,
-            dividendYield: divYieldDecimal,
-            payoutRatio: quote.payoutRatio,
-            priceToBook: quote.priceToBook,
-            earningsPerShare: quote.epsTrailingTwelveMonths,
-            financialCurrency: quote.currency,
-          },
-          defaultKeyStatistics: {
-            marketCap: quote.marketCap,
-            forwardPE: quote.forwardPE,
-            sharesOutstanding: quote.sharesOutstanding,
-          },
-          summaryProfile: {
-            longName: existingProfile.longName || quote.longName,
-            shortName: existingProfile.shortName || quote.shortName,
-            industry: existingProfile.industry || quote.industry,
-            sector: existingProfile.sector || quote.sector,
-            country: existingProfile.country,
-            fullTimeEmployees: existingProfile.fullTimeEmployees,
-            website: existingProfile.website || quote.website,
-            longBusinessSummary: existingProfile.longBusinessSummary || quote.longBusinessSummary,
-            companyOfficers: existingProfile.companyOfficers,
-            exchange: quote.exchange,
-            exchangeDisplay: quote.exchange,
-          },
-          price: { marketCap: quote.marketCap, currencySymbol: quote.currency, currency: quote.currency },
-        };
-        // Preserve any extra modules from the original response (e.g. assetProfile)
-        if (data) {
-          for (const key of Object.keys(data)) {
-            if (!['financialData','defaultKeyStatistics','summaryProfile','price'].includes(key)) {
-              merged[key] = data[key];
-            }
-          }
-        }
-        return cacheSet(cacheKey, merged);
-      }
-    } catch (fallbackErr) {
-      console.error(`[YahooFinanceScraper] quote fallback also failed for ${symbol}:`, fallbackErr.message);
+    const tdModule = require('./twelveDataService');
+    const tds = await tdModule.fetchStatistics(symbol);
+    if (tds) {
+      const data = twelveDataToQuoteSummary(tds, symbol);
+      if (data) return cacheSet(cacheKey, data);
     }
+  } catch {}
+
+  // Fallback: RapidAPI Yahoo proxy
+  const key = process.env.RAPIDAPI_KEY;
+  let host = (process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com').trim();
+  host = host.replace(/^https?:\/\//, '');
+  if (key && host) {
+    try {
+      const axios = require('axios');
+      const resp = await axios.get(`https://${host}/api/v1/markets/stock/modules`, {
+        params: { symbol, module: 'financialData,defaultKeyStatistics,summaryProfile,assetProfile' },
+        headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
+        timeout: 10000,
+      });
+      if (resp.data?.financialData?.marketCap) {
+        return cacheSet(cacheKey, resp.data);
+      }
+    } catch {}
   }
 
-  if (data && hasMarketData) return cacheSet(cacheKey, data);
-  return data || null;
+  return null;
+}
+
+// Map Twelve Data statistics response to quoteSummary-like shape
+function twelveDataToQuoteSummary(tds, symbol) {
+  if (!tds) return null;
+  return {
+    financialData: {
+      marketCap: tds.marketCap,
+      forwardPE: tds.forwardPE,
+      dividendYield: tds.dividendYield,
+      payoutRatio: tds.payoutRatio,
+      priceToBook: tds.pbRatio,
+      earningsPerShare: tds.eps,
+      financialCurrency: tds.currency || 'USD',
+      totalRevenue: tds.revenueTTM,
+      netIncome: tds.netIncomeTTM,
+    },
+    defaultKeyStatistics: {
+      marketCap: tds.marketCap,
+      forwardPE: tds.forwardPE,
+      sharesOutstanding: tds.sharesOutstanding,
+      enterpriseValue: tds.enterpriseValue,
+      bookValue: tds.bookValuePerShare,
+    },
+    summaryProfile: {
+      longName: tds.companyName || symbol,
+      shortName: tds.companyName || symbol,
+      exchange: tds.exchange || 'NASDAQ/NYSE',
+      exchangeDisplay: tds.exchange || 'NASDAQ/NYSE',
+    },
+    price: { marketCap: tds.marketCap, currencySymbol: tds.currency || 'USD', currency: tds.currency || 'USD' },
+  };
+}
+
+// Get fundamentals data from SEC EDGAR (income, balance, cash flow history)
+async function fetchAllFundamentals(symbol) {
+  const cacheKey = `yh_fundamentals_${symbol}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const edgarService = require('./edgarService');
+    const edgarReport = await edgarService.getFinancialReportFromEdgar(symbol, 'annual', 4);
+    if (!edgarReport.success) return null;
+
+    const incHist = edgarReport.data.incomeStatementHistory || [];
+    const balHist = edgarReport.data.balanceSheetHistory || [];
+    const cfHist = edgarReport.data.cashFlowStatementHistory || [];
+    const kmHist = edgarReport.data.keyMetricsHistory || [];
+
+    // Transform into array items matching yahoo-finance2 fundamentalsTimeSeries format
+    const items = [];
+    const maxLen = Math.max(incHist.length, balHist.length, cfHist.length);
+    for (let i = 0; i < maxLen; i++) {
+      const inc = incHist[i] || {};
+      const bal = balHist[i] || {};
+      const cf = cfHist[i] || {};
+      const km = kmHist[i] || {};
+      const date = inc.date || bal.date || cf.date || '';
+      items.push({
+        date,
+        periodType: 'FY',
+        totalRevenue: inc.revenue || inc.totalRevenue || 0,
+        operatingRevenue: inc.revenue || inc.totalRevenue || 0,
+        costOfRevenue: inc.costOfRevenue || 0,
+        grossProfit: inc.grossProfit || 0,
+        operatingIncome: inc.operatingIncome || inc.operatingProfit || 0,
+        netIncome: inc.netIncome || 0,
+        netIncomeCommonStockholders: inc.netIncome || 0,
+        netIncomeApplicableToCommonShares: inc.netIncome || 0,
+        EBITDA: inc.ebitda || 0,
+        EBIT: inc.ebit || inc.ebitda || 0,
+        pretaxIncome: inc.pretaxIncome || inc.incomeBeforeTax || 0,
+        taxProvision: inc.incomeTaxExpense || 0,
+        interestExpense: inc.interestExpense || 0,
+        researchAndDevelopment: inc.researchAndDevelopment || inc.rAndD || 0,
+        sellingGeneralAndAdministration: inc.sellingGeneralAndAdministrative || inc.sgaExpense || 0,
+        totalExpenses: inc.totalExpenses || inc.operatingExpenses || 0,
+        basicEPS: km.netIncomePerShare || (inc.netIncome && km.sharesOutstanding ? inc.netIncome / km.sharesOutstanding : 0),
+        dilutedEPS: km.netIncomePerShare || 0,
+        basicAverageShares: km.sharesOutstanding || 0,
+        dilutedAverageShares: km.sharesOutstanding || 0,
+        totalAssets: bal.totalAssets || 0,
+        totalLiabilities: bal.totalLiabilities || 0,
+        totalEquity: bal.totalStockholdersEquity || bal.totalEquity || 0,
+        totalCurrentAssets: bal.totalCurrentAssets || bal.currentAssets || 0,
+        totalCurrentLiabilities: bal.totalCurrentLiabilities || bal.currentLiabilities || 0,
+        inventory: bal.inventory || 0,
+        goodwill: bal.goodwill || 0,
+        intangibleAssets: bal.intangibleAssets || 0,
+        longTermDebt: bal.longTermDebt || 0,
+        totalDebt: bal.totalDebt || 0,
+        cashAndCashEquivalents: bal.cashAndCashEquivalents || bal.cash || 0,
+        operatingCashFlow: cf.operatingCashFlow || 0,
+        capitalExpenditure: cf.capitalExpenditure || 0,
+        freeCashFlow: cf.freeCashFlow || 0,
+        cashDividendsPaid: cf.dividendsPaid || 0,
+        marketCap: km.marketCap || 0,
+      });
+    }
+    if (items.length > 0) return cacheSet(cacheKey, items);
+  } catch {}
+  return null;
+}
+
+// Annual income history from SEC EDGAR
+async function fetchAnnualIncomeHistory(symbol) {
+  const allData = await fetchAllFundamentals(symbol);
+  if (!allData) return null;
+  // Filter to items that have totalRevenue
+  const withRevenue = allData.filter(i => i.totalRevenue);
+  // Map to the format expected by getIncomeStatement
+  return withRevenue.map(i => ({
+    endDate: i.date,
+    totalRevenue: i.totalRevenue,
+    costOfRevenue: i.costOfRevenue,
+    grossProfit: i.grossProfit,
+    totalOperatingExpenses: i.totalExpenses,
+    operatingIncome: i.operatingIncome,
+    netIncomeApplicableToCommonShares: i.netIncome,
+    netIncome: i.netIncome,
+    netIncomeFromContinuingOps: i.netIncome,
+    ebit: i.EBIT,
+    interestExpense: i.interestExpense,
+    incomeTaxExpense: i.taxProvision,
+    researchDevelopment: i.researchAndDevelopment,
+    sellingGeneralAdministrative: i.sellingGeneralAndAdministration,
+  }));
 }
 
 async function getCompanyProfile(symbol) {
@@ -549,17 +599,15 @@ async function getDividendHistory(symbol, limit = 8) {
   const allData = await fetchAllFundamentals(symbol);
   if (!allData) return [];
 
-  // Get shares outstanding from quote() for per-share calculation
+  // Get shares outstanding from fundamentals data
   let sharesOut = 0;
-  try {
-    const yf = await getYahooFinanceClient();
-    const q = await yf.quote(symbol);
-    sharesOut = q.sharesOutstanding || 0;
-  } catch {}
+  for (const item of allData) {
+    if (item.basicAverageShares) { sharesOut = item.basicAverageShares; break; }
+  }
 
   // Extract actual dividend payments from fundamentals cashDividendsPaid
   const divPayments = allData
-    .filter(i => i.periodType === '3M' && i.cashDividendsPaid != null && i.cashDividendsPaid < 0)
+    .filter(i => i.periodType === 'FY' && i.cashDividendsPaid != null && i.cashDividendsPaid !== 0)
     .sort((a, b) => {
       const da = getDateStr(a.date) || '';
       const db = getDateStr(b.date) || '';
