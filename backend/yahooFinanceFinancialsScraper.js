@@ -146,6 +146,7 @@ async function fetchPriceViaProxy(symbol) {
           exchange: meta.exchangeName || '',
           marketCap: 0,
           symbol: symbol.toUpperCase(),
+          companyName: meta.shortName || meta.longName || '',
         };
       }
     } catch {}
@@ -165,6 +166,7 @@ async function fetchPriceViaProxy(symbol) {
         exchange: meta.exchangeName || '',
         marketCap: 0,
         symbol: symbol.toUpperCase(),
+        companyName: meta.shortName || meta.longName || '',
       };
     }
   } catch {}
@@ -188,6 +190,7 @@ async function fetchPriceViaProxy(symbol) {
         exchange: meta.exchangeName || '',
         marketCap: 0,
         symbol: symbol.toUpperCase(),
+        companyName: meta.shortName || meta.longName || '',
       };
     }
   } catch {}

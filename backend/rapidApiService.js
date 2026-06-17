@@ -361,17 +361,18 @@ async function fetchBatchGlobalQuotes(symbols) {
             if (p && p.price) {
               const key = sym.toUpperCase().replace(/\./g, '-');
               if (!map[key]) {
+                const prevClose = p.previousClose || p.price;
                 map[key] = {
                   symbol: key,
-                  company_name: key,
+                  company_name: p.companyName || key,
                   price: p.price,
                   currency: p.currency || 'USD',
-                  change: 0,
-                  changePercent: 0,
+                  change: p.price - prevClose,
+                  changePercent: prevClose > 0 ? ((p.price - prevClose) / prevClose) * 100 : 0,
                   volume: 0,
                   dayHigh: p.price,
                   dayLow: p.price,
-                  previousClose: p.previousClose || p.price,
+                  previousClose: prevClose,
                   marketCap: p.marketCap || 0,
                   timestamp: Math.floor(Date.now() / 1000),
                   lastUpdated: new Date().toISOString(),
