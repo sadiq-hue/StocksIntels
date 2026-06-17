@@ -252,6 +252,30 @@ async function fetchBatchNSEQuotes(symbols) {
     if (Object.keys(map).length > 0) return map;
   } catch {}
 
+  // Fallback: try Yahoo Chart API directly (works from cloud IPs)
+  try {
+    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+    const map = {};
+    for (const sym of nseSymbols) {
+      const yahooSym = toYahooSymbol(sym);
+      try {
+        const resp = await Promise.race([
+          axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?range=1d&interval=1m`, { timeout: 5000, headers: { 'User-Agent': UA } }),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000)),
+        ]);
+        const result = resp?.data?.chart?.result?.[0];
+        if (!result?.meta) continue;
+        const meta = result.meta;
+        const price = meta.regularMarketPrice || meta.previousClose || 0;
+        if (!price) continue;
+        const cleanSymbol = yahooSym.replace('.NR', '');
+        const key = `NSE:${cleanSymbol}`;
+        map[key] = { symbol: key, company_name: meta.shortName || meta.longName || cleanSymbol, price, currency: 'KES', change: price - (meta.previousClose || price), changePercent: meta.previousClose ? ((price - meta.previousClose) / meta.previousClose) * 100 : 0, volume: meta.regularMarketVolume || 0, dayHigh: meta.regularMarketDayHigh || price, dayLow: meta.regularMarketDayLow || price, previousClose: meta.previousClose || price, timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(), exchange: 'NSE', provider: 'yahoo-chart' };
+      } catch {}
+    }
+    if (Object.keys(map).length > 0) return map;
+  } catch {}
+
   return {};
 }
 
