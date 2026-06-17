@@ -16,12 +16,12 @@ function getApiKey() {
 }
 
 function mapActorItem(item) {
-  const ticker = (item.symbol || item.ticker || item.code || '').toString().trim().toUpperCase();
-  const price = Number(item.price || item.currentPrice || item.lastPrice || item.close || 0);
-  const change = Number(item.change || item.difference || 0);
-  const changePercent = Number(item.changePercent || item.pctChange || item.changePercentage || 0);
+  const ticker = (item.symbol || item.ticker || item.code || item.securityCode || '').toString().trim().toUpperCase();
+  const price = Number(item.price || item.currentPrice || item.lastPrice || item.close || item.lastTradePrice || item.ltp || 0);
+  const change = Number(item.change || item.difference || item.priceChange || 0);
+  const changePercent = Number(item.changePercent || item.pctChange || item.changePercentage || item.percentageChange || item.percentChange || 0);
   const volume = Number(item.volume || item.totalVolume || item.tradedVolume || 0);
-  const name = item.name || item.company || item.companyName || '';
+  const name = item.name || item.company || item.companyName || item.securityName || '';
 
   if (!ticker || !price) return null;
 
@@ -81,6 +81,10 @@ async function fetchNseQuotes() {
     const quotes = {};
     let mappedCount = 0;
 
+    if (items.length > 0) {
+      console.log(`[Apify] Actor returned ${items.length} items, first item keys: ${Object.keys(items[0]).join(', ')}`);
+    }
+
     for (const item of items) {
       const q = mapActorItem(item);
       if (q) {
@@ -96,7 +100,7 @@ async function fetchNseQuotes() {
       consecutiveFailures = 0;
       console.log(`[Apify] Fetched ${mappedCount} NSE stocks from actor ${ACTOR_ID}`);
     } else {
-      throw new Error('No valid quotes mapped from actor response');
+      throw new Error(`No valid quotes mapped from ${items.length} actor items`);
     }
 
     return quotes;
