@@ -186,14 +186,17 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
   const quoteValue = quote.status === 'fulfilled' ? quote.value : null;
   const tds = tdStats.status === 'fulfilled' ? tdStats.value : null;
   const price = quoteValue?.price || tds?.price || 0;
-  const marketCap = quoteValue?.marketCap || tds?.marketCap || 0;
+  const marketCapFromQuote = quoteValue?.marketCap || tds?.marketCap || 0;
   const epsFromStats = tds?.eps || 0;
 
   const enrichedKm = edgarKmHistory.map((km) => {
     const eps = epsFromStats || km.netIncomePerShare || 0;
     const pe = (price > 0 && eps > 0) ? price / eps : 0;
+    const sharesOut = km.sharesOutstanding || 0;
+    const computedMarketCap = marketCapFromQuote || (price > 0 && sharesOut > 0 ? price * sharesOut : 0);
     return {
-      ...km, marketCap: marketCap || km.marketCap,
+      ...km, marketCap: computedMarketCap,
+      sharesOutstanding: sharesOut,
       peRatio: pe,
       priceToSalesRatio: (price > 0 && km.revenuePerShare > 0) ? price / km.revenuePerShare : km.priceToSalesRatio,
       earningsYield: pe > 0 ? 1 / pe : 0,
@@ -201,24 +204,26 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
       dividendYieldPercentage: tds?.dividendYield ? tds.dividendYield * 100 : (km.dividendYieldPercentage || 0),
     };
   });
-  if (enrichedKm.length > 0 && edgarBalHistory.length > 0 && marketCap > 0) {
+  if (enrichedKm.length > 0 && edgarBalHistory.length > 0) {
     const latestBal = edgarBalHistory[0];
     const equity = latestBal.totalStockholdersEquity || latestBal.totalEquity || 0;
-    if (equity > 0) enrichedKm[0].pbRatio = marketCap / equity;
+    const mc = enrichedKm[0].marketCap || 0;
+    if (equity > 0 && mc > 0) enrichedKm[0].pbRatio = mc / equity;
   }
 
+  const computedCap = enrichedKm[0]?.marketCap || 0;
   const quoteResponse = quoteValue || (tds ? {
     symbol: symbol.toUpperCase(),
     price: tds.price || 0,
     change: 0,
     changesPercentage: 0,
-    marketCap: tds.marketCap || 0,
+    marketCap: computedCap || tds.marketCap || 0,
     eps: tds.eps || 0,
     pe: tds.peRatio || 0,
     volume: 0,
     previousClose: 0,
     lastUpdated: new Date().toISOString(),
-  } : { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 });
+  } : { symbol, price: price || 0, change: 0, changesPercentage: 0, marketCap: computedCap });
 
   return {
     success: true, symbol, source: 'sec-edgar', availableProviders,

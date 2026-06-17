@@ -527,9 +527,9 @@ async function getKeyMetricsFromEdgar(symbol, period = 'annual', limit = 4) {
     const dividends = Math.abs(getLatestValueByFy(facts, US_GAAP_TAGS.dividendsPaid, fy) || 0);
     const shares = getLatestValueByFy(facts, US_GAAP_TAGS.sharesOutstanding, fy) || 0;
 
-    const peRatio = netIncome !== 0 ? (0 / netIncome) : 0;
-    const priceToSales = revenue !== 0 ? (0 / revenue) : 0;
-    const pbRatio = equity !== 0 ? (0 / equity) : 0;
+    const peRatio = 0;
+    const priceToSales = revenue !== 0 ? 0 : 0;
+    const pbRatio = 0;
     const debtToEquity = equity !== 0 ? (totalLiabilities / equity) : 0;
     const currentRatio = currentLiabilities !== 0 ? (currentAssets / currentLiabilities) : 0;
     const dividendYieldPct = 0;
@@ -539,6 +539,7 @@ async function getKeyMetricsFromEdgar(symbol, period = 'annual', limit = 4) {
       date,
       period,
       marketCap: 0,
+      sharesOutstanding: shares,
       peRatio,
       priceToSalesRatio: priceToSales,
       pbRatio,
