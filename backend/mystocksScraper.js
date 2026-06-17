@@ -26,39 +26,50 @@ async function scrapeStockPage(ticker) {
       timeout: FETCH_TIMEOUT,
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
     });
-    const $ = cheerio.load(resp.data);
-    const priceEl = $('#rtPrice2');
-    if (!priceEl.length) return null;
-    const price = parseFloat(priceEl.text().trim().replace(/,/g, ''));
-    if (isNaN(price) || !price) return null;
-    const changeEl = $('#rtChange2');
+    const html = resp.data;
+    // Fallback: parse rtPrice2 from raw HTML (cheerio might not work with this HTML)
+    let price = null;
+    const priceMatch = html.match(/<b[^>]*id\s*=\s*rtPrice2[^>]*>\s*([0-9.,]+)\s*<\/b>/i);
+    if (priceMatch) {
+      price = parseFloat(priceMatch[1].replace(/,/g, ''));
+    }
+    if (price === null || isNaN(price)) {
+      // Try cheerio as fallback
+      const $ = cheerio.load(html);
+      const priceEl = $('#rtPrice2');
+      if (priceEl.length) {
+        price = parseFloat(priceEl.text().trim().replace(/,/g, ''));
+      }
+    }
+    if (price === null || isNaN(price) || !price) return null;
+
     let change = 0;
-    if (changeEl.length) {
-      const t = changeEl.text().trim().replace(/,/g, '');
-      change = parseFloat(t) || 0;
-    }
-    const hiEl = $('#rtHi');
-    const loEl = $('#rtLo');
-    const high = hiEl.length ? parseFloat(hiEl.text().trim()) || price : price;
-    const low = loEl.length ? parseFloat(loEl.text().trim()) || price : price;
-    const volEl = $('#rtVol');
-    let volume = 0;
-    if (volEl.length) {
-      const v = volEl.text().trim().toUpperCase().replace(/,/g, '');
-      if (v.endsWith('M')) volume = parseFloat(v) * 1e6;
-      else if (v.endsWith('K')) volume = parseFloat(v) * 1e3;
-      else volume = parseFloat(v) || 0;
-    }
-    let name = resp.data.match(/<title>([^<]+) Realtime/);
-    name = name ? name[1].trim() : ticker;
+    const chMatch = html.match(/<b[^>]*id\s*=\s*rtChange2[^>]*>\s*([0-9.,-]+)\s*<\/b>/i);
+    if (chMatch) change = parseFloat(chMatch[1].replace(/,/g, '')) || 0;
+
+    let high = price, low = price;
+    const hiMatch = html.match(/<b[^>]*id\s*=\s*rtHi[^>]*>\s*([0-9.,]+)\s*<\/b>/i);
+    if (hiMatch) high = parseFloat(hiMatch[1].replace(/,/g, '')) || price;
+    const loMatch = html.match(/<b[^>]*id\s*=\s*rtLo[^>]*>\s*([0-9.,]+)\s*<\/b>/i);
+    if (loMatch) low = parseFloat(loMatch[1].replace(/,/g, '')) || price;
+
+    let name = ticker;
+    const titleMatch = html.match(/<title>([^<]+)\s+Realtime/i);
+    if (titleMatch) name = titleMatch[1].trim();
+
     return {
       ticker, name, price, change,
       changePercent: change && price ? (change / (price - change)) * 100 : 0,
-      volume, previousClose: price - change, dayHigh: high, dayLow: low,
+      volume: 0, previousClose: price - change, dayHigh: high, dayLow: low,
       currency: 'KES', market: 'NSE', provider: 'mystocks',
       timestamp: Math.floor(Date.now() / 1000),
     };
-  } catch {
+  } catch (err) {
+    if (err.response?.status === 404) {
+      console.warn(`[myStocks] 404 for ${ticker} - stock not found`);
+    } else if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      console.warn(`[myStocks] timeout for ${ticker}`);
+    }
     return null;
   }
 }
@@ -73,7 +84,8 @@ async function fetchAllQuotes(force) {
     batches.push(NSE_TICKERS.slice(i, i + BATCH_SIZE));
   }
   let successCount = 0;
-  for (const batch of batches) {
+  for (let bi = 0; bi < batches.length; bi++) {
+    const batch = batches[bi];
     const results = await Promise.allSettled(batch.map(t => scrapeStockPage(t)));
     for (const r of results) {
       if (r.status === 'fulfilled' && r.value) {
@@ -81,6 +93,7 @@ async function fetchAllQuotes(force) {
         successCount++;
       }
     }
+    console.log(`[myStocks] batch ${bi + 1}/${batches.length}: got ${successCount}/${NSE_TICKERS.length} so far`);
     await new Promise(r => setTimeout(r, BATCH_DELAY));
   }
 
@@ -91,7 +104,7 @@ async function fetchAllQuotes(force) {
   } else if (cache) {
     console.warn(`[myStocks] All stock pages failed, using cached data`);
   } else {
-    console.error(`[myStocks] All stock pages failed, no cache available`);
+    console.error(`[myStocks] All stock pages failed, no cache available. Check if live.mystocks.co.ke is reachable.`);
   }
   return quotes;
 }
