@@ -651,11 +651,16 @@ async function getDividendHistory(symbol, limit = 8) {
       return db.localeCompare(da);
     })
     .slice(0, limit)
-    .map(i => ({
-      date: getDateStr(i.date),
-      adjDividend: sharesOut > 0 ? Math.abs(i.cashDividendsPaid) / sharesOut : 0,
-      dividend: sharesOut > 0 ? Math.abs(i.cashDividendsPaid) / sharesOut : 0,
-    }));
+    .map(i => {
+      const perShareShares = i.basicAverageShares || i.basicEPS > 0 && i.netIncome > 0 ? i.netIncome / i.basicEPS : sharesOut;
+      const perShare = perShareShares > 0 ? Math.abs(i.cashDividendsPaid) / perShareShares : 0;
+      return {
+        date: getDateStr(i.date),
+        adjDividend: perShare,
+        dividend: perShare,
+        currency: 'USD',
+      };
+    });
 
   return divPayments;
 }

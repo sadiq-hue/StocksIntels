@@ -172,7 +172,7 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
 
   const [quote, dividends, tdStats] = await Promise.allSettled([
     getQuote(symbol),
-    getDividendHistory(symbol, Math.max(limit * 2, 8)),
+    yahooFinanceScraper.getDividendHistory(symbol, Math.max(limit * 2, 8)),
     (() => {
       try { return require('./twelveDataService').fetchStatistics(symbol); } catch { return null; }
     })(),
@@ -185,9 +185,14 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
 
   const quoteValue = quote.status === 'fulfilled' ? quote.value : null;
   const tds = tdStats.status === 'fulfilled' ? tdStats.value : null;
+  const divsValue = dividends.status === 'fulfilled' ? dividends.value : [];
   const price = quoteValue?.price || tds?.price || 0;
   const marketCapFromQuote = quoteValue?.marketCap || tds?.marketCap || 0;
   const epsFromStats = tds?.eps || 0;
+
+  // Compute dividend yield from dividend history
+  const totalAnnualDiv = divsValue.slice(0, 4).reduce((sum, d) => sum + Math.abs(d.dividend || d.adjDividend || 0), 0);
+  const divYieldFromHistory = (price > 0 && totalAnnualDiv > 0) ? totalAnnualDiv / price : null;
 
   const enrichedKm = edgarKmHistory.map((km, idx) => {
     const incItem = edgarIncHistory[idx] || {};
@@ -196,14 +201,15 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
     const pe = (price > 0 && eps > 0) ? price / eps : 0;
     const sharesOut = km.sharesOutstanding || 0;
     const computedMarketCap = marketCapFromQuote || (price > 0 && sharesOut > 0 ? price * sharesOut : 0);
+    const divYield = divYieldFromHistory !== null ? divYieldFromHistory : (tds?.dividendYield || km.dividendYield || 0);
     return {
       ...km, marketCap: computedMarketCap,
       sharesOutstanding: sharesOut,
       peRatio: pe,
       priceToSalesRatio: (price > 0 && km.revenuePerShare > 0) ? price / km.revenuePerShare : km.priceToSalesRatio,
       earningsYield: pe > 0 ? 1 / pe : 0,
-      dividendYield: tds?.dividendYield || km.dividendYield || 0,
-      dividendYieldPercentage: tds?.dividendYield ? tds.dividendYield * 100 : (km.dividendYieldPercentage || 0),
+      dividendYield: divYield,
+      dividendYieldPercentage: divYield * 100,
     };
   });
   if (enrichedKm.length > 0 && edgarBalHistory.length > 0) {
@@ -261,6 +267,11 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
       if (yahooReport.success && yahooReport.data.incomeStatementHistory?.length > 0) {
         const quote = await getQuote(symbol).catch(() => null);
 
+        // Compute dividend yield from dividend history
+        const divHist = yahooReport.data.dividendHistory || [];
+        const totalAnnualDiv = divHist.slice(0, 4).reduce((sum, d) => sum + Math.abs(d.dividend || d.adjDividend || 0), 0);
+        const divYieldFromHistory = (price > 0 && totalAnnualDiv > 0) ? totalAnnualDiv / price : null;
+
         // Enrich keyMetrics with real ratios from quote price + financial data
         const price = quote?.price || 0;
         const quoteMc = quote?.marketCap || 0;
@@ -275,6 +286,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           const mc = quoteMc || (price > 0 && sharesOut > 0 ? price * sharesOut : km.marketCap || 0);
           const revenue = inc.revenue || 0;
           const equity = bal.totalStockholdersEquity || bal.totalEquity || 0;
+          const divYield = divYieldFromHistory !== null ? divYieldFromHistory : km.dividendYield || 0;
           return {
             ...km,
             marketCap: mc,
@@ -282,6 +294,8 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
             priceToSalesRatio: (mc > 0 && revenue > 0) ? mc / revenue : 0,
             pbRatio: (mc > 0 && equity > 0) ? mc / equity : 0,
             earningsYield: (price > 0 && eps > 0) ? eps / price : 0,
+            dividendYield: divYield,
+            dividendYieldPercentage: divYield * 100,
             sharesOutstanding: Math.round(sharesOut),
             revenuePerShare: sharesOut > 0 ? revenue / sharesOut : 0,
             netIncomePerShare: eps || (sharesOut > 0 ? netIncome / sharesOut : 0),

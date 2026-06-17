@@ -20,7 +20,7 @@ import {
 } from "../services/financialsService";
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 
-function formatCurrency(value: number, currency = "KES") {
+function formatCurrency(value: number, currency = "USD") {
   if (!Number.isFinite(value) || value === 0) return `${currency} 0`;
   const abs = Math.abs(value);
   const fracDigits = abs < 0.0001 ? 6 : abs < 0.01 ? 4 : abs < 1 ? 3 : abs >= 1000 ? 1 : 2;
@@ -695,7 +695,7 @@ export function FinancialsPage() {
                   {(dividends || []).slice(0, 6).map((item) => (
                     <div key={item.date} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
                       <span className="text-xs font-semibold text-foreground">{formatDate(item.date)}</span>
-                      <span className="text-xs font-bold text-emerald-600">{formatCurrency(item.dividend || item.adjDividend)}</span>
+                      <span className="text-xs font-bold text-emerald-600">{formatCurrency(item.dividend || item.adjDividend, profile?.currency || "USD")}</span>
                     </div>
                   ))}
                   {!dividends?.length && <p className="text-sm text-muted-foreground py-4 text-center">No dividend history available</p>}
