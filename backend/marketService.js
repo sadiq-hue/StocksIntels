@@ -5,6 +5,10 @@ const { fetchNseQuotes: fetchAfxQuotes, getQuoteForSymbol: getAfxQuote } = requi
 const apifyNse = require('./apifyNseService');
 apifyNse.startAutoRefresh();
 
+// Background myStocks refresh (primary NSE source from Railway)
+const mystocks = require('./mystocksScraper');
+mystocks.startAutoRefresh();
+
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 
 // Unified Quote Cache
@@ -367,20 +371,26 @@ async function getStockQuote(symbol) {
     return cached;
   }
 
-  // 2. For NSE stocks, try RapidAPI
+  // 2. For NSE stocks, try myStocks cache first (background-refreshed)
   if (!quote && symbol.startsWith('NSE:')) {
-    const { fetchNSEQuote } = require('./rapidApiService');
-    quote = await fetchNSEQuote(symbol);
-    // Kick off AFX background refresh for cache warmth
-    fetchAfxQuotes().catch(() => {});
+    const msQ = await mystocks.getQuoteForSymbol(symbol);
+    if (msQ) {
+      quote = { symbol: symbol.replace('NSE:', '').toUpperCase(), company_name: msQ.name, ...msQ };
+    }
   }
 
-  // 3. Try AFX cache (in case background refresh completed)
+  // 3. Try AFX cache (background refresh)
   if (!quote && symbol.startsWith('NSE:')) {
     const afxQ = getAfxQuote(symbol);
     if (afxQ) {
       quote = { ...afxQ, symbol: symbol.replace('NSE:', '').toUpperCase() };
     }
+  }
+
+  // 4. Try RapidAPI for NSE stocks (individual fallback)
+  if (!quote && symbol.startsWith('NSE:')) {
+    const { fetchNSEQuote } = require('./rapidApiService');
+    quote = await fetchNSEQuote(symbol);
   }
 
   // 4. Try Yahoo/RapidAPI for global stocks
@@ -447,10 +457,21 @@ async function fetchLiveBatch(symbols) {
     fetchAfxQuotes().catch(() => {});
   }
 
-  // For NSE stocks: use RapidAPI (works from cloud), fallback to yahoo-finance2
-  if (nseSymbols.length > 0 && RAPIDAPI_KEY) {
+  // For NSE stocks: use myStocks cache (background-refreshed every 5 min from all 69 tickers)
+  if (nseSymbols.length > 0) {
+    for (const s of nseSymbols) {
+      const msQ = await mystocks.getQuoteForSymbol(s);
+      if (msQ) {
+        results[s] = { symbol: s.replace('NSE:', '').toUpperCase(), company_name: msQ.name, ...msQ };
+      }
+    }
+  }
+
+  // Fallback: RapidAPI for any NSE stocks still missing
+  const missingNse = nseSymbols.filter(s => !results[s]);
+  if (missingNse.length > 0 && RAPIDAPI_KEY) {
     const { fetchBatchNSEQuotes } = require('./rapidApiService');
-    const rapidResults = await fetchBatchNSEQuotes(nseSymbols);
+    const rapidResults = await fetchBatchNSEQuotes(missingNse);
     results = { ...results, ...rapidResults };
   }
 
