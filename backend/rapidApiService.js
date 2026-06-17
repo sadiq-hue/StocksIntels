@@ -348,43 +348,43 @@ async function fetchBatchGlobalQuotes(symbols) {
     } catch {}
   }
 
-  // Last resort: Yahoo via proxy for any still-missing symbols (max 20s total)
+  // Last resort: Yahoo via proxy for any still-missing symbols
   const stillMissing2 = globalSymbols.filter(s => !map[s.toUpperCase().replace(/\./g, '-')]);
   if (stillMissing2.length > 0) {
     try {
       const { fetchPriceViaProxy } = require('./yahooFinanceFinancialsScraper');
-      const proxyStart = Date.now();
-      for (let i = 0; i < stillMissing2.length && (Date.now() - proxyStart) < 20000; i += 10) {
-        const batch = stillMissing2.slice(i, i + 10);
-        await Promise.all(batch.map(async (sym) => {
-          try {
-            const p = await fetchPriceViaProxy(sym);
-            if (p && p.price) {
-              const key = sym.toUpperCase().replace(/\./g, '-');
-              if (!map[key]) {
-                const prevClose = p.previousClose || p.price;
-                map[key] = {
-                  symbol: key,
-                  company_name: p.companyName || key,
-                  price: p.price,
-                  currency: p.currency || 'USD',
-                  change: p.price - prevClose,
-                  changePercent: prevClose > 0 ? ((p.price - prevClose) / prevClose) * 100 : 0,
-                  volume: 0,
-                  dayHigh: p.price,
-                  dayLow: p.price,
-                  previousClose: prevClose,
-                  marketCap: p.marketCap || 0,
-                  timestamp: Math.floor(Date.now() / 1000),
-                  lastUpdated: new Date().toISOString(),
-                  exchange: 'Global',
-                  provider: 'yahoo-proxy',
-                };
-              }
+      const promises = stillMissing2.slice(0, 20).map(async (sym) => { // max 20 symbols
+        try {
+          const p = await fetchPriceViaProxy(sym);
+          if (p && p.price) {
+            const key = sym.toUpperCase().replace(/\./g, '-');
+            if (!map[key]) {
+              const prevClose = p.previousClose || p.price;
+              map[key] = {
+                symbol: key,
+                company_name: p.companyName || key,
+                price: p.price,
+                currency: p.currency || 'USD',
+                change: p.price - prevClose,
+                changePercent: prevClose > 0 ? ((p.price - prevClose) / prevClose) * 100 : 0,
+                volume: 0,
+                dayHigh: p.price,
+                dayLow: p.price,
+                previousClose: prevClose,
+                marketCap: p.marketCap || 0,
+                timestamp: Math.floor(Date.now() / 1000),
+                lastUpdated: new Date().toISOString(),
+                exchange: 'Global',
+                provider: 'yahoo-proxy',
+              };
             }
-          } catch {}
-        }));
-      }
+          }
+        } catch {}
+      });
+      await Promise.race([
+        Promise.all(promises),
+        new Promise(r => setTimeout(r, 20000)),
+      ]);
     } catch {}
   }
 
