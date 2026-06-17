@@ -2,8 +2,8 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 
 const AFX_URL = 'https://afx.kwayisi.org/nse/';
-const SCRAPE_TIMEOUT = 20000;
-const RETRIES = 1;
+const SCRAPE_TIMEOUT = 15000;
+const RETRIES = 0;
 const CACHE_TTL = 60000;
 
 let afxCache = null;
