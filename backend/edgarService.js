@@ -169,11 +169,16 @@ async function fetchCompanyFacts(cik) {
       const res = await edgarClient.get(url, {
         headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' },
       });
-      const facts = res.data?.facts?.['us-gaap'];
-      const tagCount = facts ? Object.keys(facts).length : 0;
-      const revenueTag = 'us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax';
-      console.log(`[EDGAR] Company facts for CIK ${cik}: ${tagCount} tags, revenue=${facts ? !!facts[revenueTag] : 'no data'}`);
-      if (tagCount > 0) console.log(`[EDGAR] Sample tags: ${Object.keys(facts).slice(0, 3).join(', ')}...`);
+      const usGaap = res.data?.facts?.['us-gaap'] || {};
+      const dei = res.data?.facts?.['dei'] || {};
+      // Merge dei facts into us-gaap so EntityCommonStockSharesOutstanding etc. are accessible
+      for (const key of Object.keys(dei)) {
+        if (!usGaap[key]) usGaap[key] = dei[key];
+      }
+      const tagCount = Object.keys(usGaap).length;
+      const revenueTag = 'RevenueFromContractWithCustomerExcludingAssessedTax';
+      console.log(`[EDGAR] Company facts for CIK ${cik}: ${tagCount} tags (incl ${Object.keys(dei).length} dei), revenue=${!!usGaap[revenueTag]}`);
+      if (tagCount > 0) console.log(`[EDGAR] Sample tags: ${Object.keys(usGaap).slice(0, 3).join(', ')}...`);
       return cacheSet(cacheKey, res.data);
     } catch (err) {
       const status = err?.response?.status;
@@ -278,7 +283,7 @@ function getLatestValueByFy(facts, tagKeys, fy) {
     const entries = factLookup(facts, tag);
     if (!entries) continue;
     const units = entries.units;
-    const usd = units?.USD || units?.USD_per_share || units?.['USD/shares'] || units?.shares;
+    const usd = units?.USD || units?.USD_per_share || units?.['USD/shares'] || units?.shares || units?.pure;
     if (!usd) continue;
     const matches = usd.filter(e => e.fy === fy && (e.fp === 'FY' || true));
     if (matches.length > 0) {

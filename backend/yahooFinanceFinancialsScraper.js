@@ -180,8 +180,8 @@ async function fetchAllFundamentals(symbol) {
         researchAndDevelopment: inc.researchAndDevelopment || inc.rAndD || 0,
         sellingGeneralAndAdministration: inc.sellingGeneralAndAdministrative || inc.sgaExpense || 0,
         totalExpenses: inc.totalExpenses || inc.operatingExpenses || 0,
-        basicEPS: km.netIncomePerShare || (inc.netIncome && km.sharesOutstanding ? inc.netIncome / km.sharesOutstanding : 0),
-        dilutedEPS: km.netIncomePerShare || 0,
+        basicEPS: km.netIncomePerShare || inc.eps || (inc.netIncome && km.sharesOutstanding ? inc.netIncome / km.sharesOutstanding : 0),
+        dilutedEPS: km.netIncomePerShare || inc.epsdiluted || inc.eps || 0,
         basicAverageShares: km.sharesOutstanding || 0,
         dilutedAverageShares: km.sharesOutstanding || 0,
         totalAssets: bal.totalAssets || 0,
@@ -425,10 +425,10 @@ async function getBalanceSheet(symbol, period = 'annual', limit = 4) {
 
 function formatBalanceSheet(item, period) {
   const totalAssets = item.totalAssets || item.totalAssetsMm || 0;
-  const totalLiabilities = item.totalLiabilitiesNetMinorityInterest || 0;
-  const equity = item.commonStockEquity || item.totalEquityGrossMinorityInterest || item.stockholdersEquity || (totalAssets - totalLiabilities);
-  const currentAssets = item.currentAssets || 0;
-  const currentLiabilities = item.currentLiabilities || 0;
+  const totalLiabilities = item.totalLiabilitiesNetMinorityInterest || item.totalLiabilities || 0;
+  const equity = item.commonStockEquity || item.totalEquityGrossMinorityInterest || item.stockholdersEquity || item.totalEquity || item.totalStockholdersEquity || (totalAssets - totalLiabilities);
+  const currentAssets = item.currentAssets || item.totalCurrentAssets || 0;
+  const currentLiabilities = item.currentLiabilities || item.totalCurrentLiabilities || 0;
   const longTermDebt = item.longTermDebt || item.longTermDebtAndCapitalLeaseObligation || 0;
   const cash = item.cashAndCashEquivalents || item.cashCashEquivalentsAndShortTermInvestments || 0;
   const inventory = item.inventory || 0;
