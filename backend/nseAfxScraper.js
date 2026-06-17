@@ -1,5 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const apifyNse = require('./apifyNseService');
 
 const AFX_URL = 'https://afx.kwayisi.org/nse/';
 const SCRAPE_TIMEOUT = 15000;
@@ -17,6 +18,24 @@ async function fetchNseQuotes() {
   if (afxCache && (now - afxCacheTime) < CACHE_TTL) {
     return afxCache;
   }
+
+  // Try Apify actor first (primary NSE source)
+  if (process.env.APIFY_API_KEY) {
+    try {
+      const apifyQuotes = await apifyNse.fetchNseQuotes();
+      if (apifyQuotes && Object.keys(apifyQuotes).length > 0) {
+        afxCache = apifyQuotes;
+        afxCacheTime = now;
+        afxFailCount = 0;
+        console.log(`[AFX] Using Apify data (${Object.keys(apifyQuotes).length} stocks)`);
+        return apifyQuotes;
+      }
+    } catch {
+      // Apify failed, fall through to AFX scrape
+    }
+  }
+
+  // Fallback: scrape AFX
   let lastErr = null;
   for (let attempt = 0; attempt <= RETRIES; attempt++) {
     try {

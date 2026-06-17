@@ -1,5 +1,8 @@
 const { KENYAN_STOCKS } = require('./newsService');
-const { fetchNseQuotes, getQuoteForSymbol } = require('./nseAfxScraper');
+const apifyNse = require('./apifyNseService');
+const { fetchNseQuotes: fetchAfxQuotes, getQuoteForSymbol: getAfxQuote } = require('./nseAfxScraper');
+
+apifyNse.startAutoRefresh();
 
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
 
@@ -363,25 +366,31 @@ async function getStockQuote(symbol) {
     return cached;
   }
 
-  // 2. For NSE stocks, try AFX scraper first (free, real-time)
-  // Handle both "NSE:BAT" and plain "BAT"
-  if (!quote) {
-    const nseSymbol = symbol.startsWith('NSE:') ? symbol : `NSE:${symbol}`;
-    if (symbol.startsWith('NSE:')) {
-      await fetchNseQuotes();
-      const afxQuote = getQuoteForSymbol(symbol);
-      if (afxQuote) {
-        quote = { ...afxQuote, symbol: symbol.replace('NSE:', '').toUpperCase() };
-      }
+  // 2. For NSE stocks, try Apify actor first (most reliable)
+  if (!quote && symbol.startsWith('NSE:')) {
+    const cleanSym = symbol.replace('NSE:', '').toUpperCase();
+    await apifyNse.fetchNseQuotes();
+    const apifyQ = apifyNse.getQuoteForSymbol(symbol);
+    if (apifyQ) {
+      quote = { ...apifyQ, symbol: cleanSym };
     }
   }
 
-  // 3. Try free Yahoo Finance for NSE stocks (yahoo-finance2, no API key needed)
+  // 3. Try AFX scraper fallback for NSE stocks
+  if (!quote && symbol.startsWith('NSE:')) {
+    await fetchAfxQuotes();
+    const afxQ = getAfxQuote(symbol);
+    if (afxQ) {
+      quote = { ...afxQ, symbol: symbol.replace('NSE:', '').toUpperCase() };
+    }
+  }
+
+  // 4. Try Yahoo/RapidAPI for NSE stocks
   if (!quote && symbol.startsWith('NSE:')) {
     const { fetchNSEQuote } = require('./rapidApiService');
     quote = await fetchNSEQuote(symbol);
   }
-  // 7. Try free Yahoo Finance (yahoo-finance2) for global stocks
+  // 5. Try Yahoo/RapidAPI for global stocks
   if (!quote && !symbol.startsWith('NSE:')) {
     const { fetchGlobalQuote } = require('./rapidApiService');
     quote = await fetchGlobalQuote(symbol);
@@ -437,14 +446,27 @@ async function getQuotesBatch(symbols) {
 async function fetchLiveBatch(symbols) {
   let results = {};
 
-  // 0. For NSE stocks, try AFX scraper first (free, real-time)
-  // Symbols may come as plain tickers ("BAT") or NSE-prefixed ("NSE:BAT")
   const hasNse = symbols.some(s => s.startsWith('NSE:'));
+
+  // 0. For NSE stocks, try Apify actor first (most reliable)
   if (hasNse) {
-    const afxQuotes = await fetchNseQuotes();
-    if (afxQuotes) {
+    const apifyQuotes = await apifyNse.fetchNseQuotes();
+    if (apifyQuotes && Object.keys(apifyQuotes).length > 0) {
       for (const sym of symbols) {
-        if (results[sym]) continue;
+        const cleanSym = sym.replace('NSE:', '').toUpperCase();
+        if (apifyQuotes[cleanSym]) {
+          results[sym] = { ...apifyQuotes[cleanSym], symbol: cleanSym };
+        }
+      }
+    }
+  }
+
+  // 1. For NSE stocks still missing, try AFX scraper fallback
+  const missingNse = symbols.filter(s => s.startsWith('NSE:') && !results[s]);
+  if (missingNse.length > 0) {
+    const afxQuotes = await fetchAfxQuotes();
+    if (afxQuotes) {
+      for (const sym of missingNse) {
         const cleanSym = sym.replace('NSE:', '').toUpperCase();
         if (afxQuotes[cleanSym]) {
           results[sym] = { ...afxQuotes[cleanSym], symbol: cleanSym };
@@ -453,14 +475,15 @@ async function fetchLiveBatch(symbols) {
     }
   }
 
-  // 1. Try Yahoo Finance via yahoo-finance2 for NSE stocks
-  if (RAPIDAPI_KEY) {
+  // 2. Try Yahoo Finance via RapidAPI for remaining NSE stocks
+  const stillMissingNse = symbols.filter(s => s.startsWith('NSE:') && !results[s]);
+  if (stillMissingNse.length > 0 && RAPIDAPI_KEY) {
     const { fetchBatchNSEQuotes } = require('./rapidApiService');
-    const rapidResults = await fetchBatchNSEQuotes(symbols);
+    const rapidResults = await fetchBatchNSEQuotes(stillMissingNse);
     results = { ...results, ...rapidResults };
   }
 
-  // 2. Try free Yahoo Finance for remaining global stocks
+  // 3. Try Yahoo/RapidAPI for global stocks
   const missingGlobal = symbols.filter(s => !results[s] && !s.startsWith('NSE:'));
   if (missingGlobal.length > 0) {
     const { fetchBatchGlobalQuotes } = require('./rapidApiService');
