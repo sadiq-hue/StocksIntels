@@ -246,8 +246,6 @@ async function getCompanyProfile(symbol) {
   const apData = apResult.status === 'fulfilled' ? apResult.value : null;
   const ap = apData?.assetProfile || null;
 
-  if (!qs && !ap) return null;
-
   const sp = qs?.summaryProfile || ap || {};
   const fd = qs?.financialData || {};
   const dk = qs?.defaultKeyStatistics || {};
