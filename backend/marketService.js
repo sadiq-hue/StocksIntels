@@ -3,6 +3,7 @@ const { fetchNseQuotes: fetchAfxQuotes, getQuoteForSymbol: getAfxQuote } = requi
 
 // Background Apify refresh (runs every 5 min, never blocks requests)
 const apifyNse = require('./apifyNseService');
+const axios = require('axios');
 apifyNse.startAutoRefresh();
 
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
@@ -367,21 +368,40 @@ async function getStockQuote(symbol) {
     return cached;
   }
 
-  // 2. For NSE stocks, try AFX scraper (free, real-time)
+  // 2. For NSE stocks, try Yahoo Chart API first (works from Railway)
   if (!quote && symbol.startsWith('NSE:')) {
-    await fetchAfxQuotes();
+    const clean = symbol.replace('NSE:', '').toUpperCase();
+    const yahooSym = clean + '.NR';
+    try {
+      const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+      const resp = await axios.get(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?range=1d&interval=1m`,
+        { timeout: 8000, headers: { 'User-Agent': UA } }
+      );
+      const meta = resp?.data?.chart?.result?.[0]?.meta;
+      if (meta?.regularMarketPrice) {
+        const price = meta.regularMarketPrice;
+        quote = { symbol: clean, company_name: meta.shortName || meta.longName || clean, price, currency: 'KES', change: price - (meta.previousClose || price), changePercent: meta.previousClose ? ((price - meta.previousClose) / meta.previousClose) * 100 : 0, volume: meta.regularMarketVolume || 0, dayHigh: meta.regularMarketDayHigh || price, dayLow: meta.regularMarketDayLow || price, previousClose: meta.previousClose || price, timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(), exchange: 'NSE', provider: 'yahoo-chart' };
+      }
+    } catch {}
+    // Kick off AFX background refresh
+    fetchAfxQuotes().catch(() => {});
+  }
+
+  // 3. Try AFX cache (in case background refresh completed)
+  if (!quote && symbol.startsWith('NSE:')) {
     const afxQ = getAfxQuote(symbol);
     if (afxQ) {
       quote = { ...afxQ, symbol: symbol.replace('NSE:', '').toUpperCase() };
     }
   }
 
-  // 3. Try Yahoo/RapidAPI for NSE stocks
+  // 4. Try Yahoo/RapidAPI for NSE stocks
   if (!quote && symbol.startsWith('NSE:')) {
     const { fetchNSEQuote } = require('./rapidApiService');
     quote = await fetchNSEQuote(symbol);
   }
-  // 4. Try Yahoo/RapidAPI for global stocks
+  // 5. Try Yahoo/RapidAPI for global stocks
   if (!quote && !symbol.startsWith('NSE:')) {
     const { fetchGlobalQuote } = require('./rapidApiService');
     quote = await fetchGlobalQuote(symbol);
@@ -437,37 +457,57 @@ async function getQuotesBatch(symbols) {
 async function fetchLiveBatch(symbols) {
   let results = {};
 
-  const hasNse = symbols.some(s => s.startsWith('NSE:'));
+  const nseSymbols = symbols.filter(s => s.startsWith('NSE:'));
+  const globalSymbols = symbols.filter(s => !s.startsWith('NSE:'));
 
-  // 0. For NSE stocks, try AFX scraper (free, real-time)
-  if (hasNse) {
-    const afxQuotes = await fetchAfxQuotes();
-    if (afxQuotes) {
-      for (const sym of symbols) {
-        if (results[sym]) continue;
-        const cleanSym = sym.replace('NSE:', '').toUpperCase();
-        if (afxQuotes[cleanSym]) {
-          results[sym] = { ...afxQuotes[cleanSym], symbol: cleanSym };
+  // Kick off AFX background refresh (non-blocking, for cache warmth)
+  if (nseSymbols.length > 0) {
+    fetchAfxQuotes().catch(() => {});
+  }
+
+  // For NSE stocks: try Yahoo Chart API (most reliable from cloud), then RapidAPI
+  if (nseSymbols.length > 0) {
+    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+    for (const sym of nseSymbols) {
+      const clean = sym.replace('NSE:', '').toUpperCase();
+      const yahooSym = clean + '.NR';
+      try {
+        const resp = await axios.get(
+          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?range=1d&interval=1m`,
+          { timeout: 8000, headers: { 'User-Agent': UA } }
+        );
+        const meta = resp?.data?.chart?.result?.[0]?.meta;
+        if (meta?.regularMarketPrice) {
+          const price = meta.regularMarketPrice;
+          results[sym] = {
+            symbol: clean, company_name: meta.shortName || meta.longName || clean,
+            price, currency: 'KES', change: price - (meta.previousClose || price),
+            changePercent: meta.previousClose ? ((price - meta.previousClose) / meta.previousClose) * 100 : 0,
+            volume: meta.regularMarketVolume || 0, dayHigh: meta.regularMarketDayHigh || price,
+            dayLow: meta.regularMarketDayLow || price, previousClose: meta.previousClose || price,
+            timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(),
+            exchange: 'NSE', provider: 'yahoo-chart',
+          };
         }
-      }
+      } catch {}
+    }
+
+    // Fallback: RapidAPI for any NSE stocks still missing
+    const missingNse = nseSymbols.filter(s => !results[s]);
+    if (missingNse.length > 0 && RAPIDAPI_KEY) {
+      const { fetchBatchNSEQuotes } = require('./rapidApiService');
+      const rapidResults = await fetchBatchNSEQuotes(missingNse);
+      results = { ...results, ...rapidResults };
     }
   }
 
-  // 1. Try Yahoo Finance via RapidAPI for remaining NSE stocks
-  const missingNse = symbols.filter(s => s.startsWith('NSE:') && !results[s]);
-  if (missingNse.length > 0 && RAPIDAPI_KEY) {
-    const { fetchBatchNSEQuotes } = require('./rapidApiService');
-    const rapidResults = await fetchBatchNSEQuotes(missingNse);
-    results = { ...results, ...rapidResults };
-  }
-
-  // 2. Try Yahoo/RapidAPI for global stocks
-  const missingGlobal = symbols.filter(s => !results[s] && !s.startsWith('NSE:'));
-  if (missingGlobal.length > 0) {
+  // For global stocks: use existing batch service
+  if (globalSymbols.length > 0) {
     const { fetchBatchGlobalQuotes } = require('./rapidApiService');
-    const yahooResults = await fetchBatchGlobalQuotes(missingGlobal);
+    const yahooResults = await fetchBatchGlobalQuotes(globalSymbols);
     results = { ...results, ...yahooResults };
   }
+
   return results;
 }
 
