@@ -63,9 +63,9 @@ async function scrapeStockPage(ticker) {
   }
 }
 
-async function fetchAllQuotes() {
+async function fetchAllQuotes(force) {
   const now = Date.now();
-  if (cache && (now - cacheTime) < CACHE_TTL) return cache;
+  if (!force && cache && (now - cacheTime) < CACHE_TTL) return cache;
 
   const quotes = {};
   const batches = [];
@@ -103,11 +103,16 @@ async function getQuoteForSymbol(symbol) {
   return cache?.[cleanSymbol] || null;
 }
 
+function getCacheSize() {
+  return cache ? Object.keys(cache).length : 0;
+}
+
 function startAutoRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
-  fetchAllQuotes().catch(() => {});
+  // First fetch runs inline (no await so module import doesn't block)
+  fetchAllQuotes(true).catch(() => {});
   refreshTimer = setInterval(() => fetchAllQuotes().catch(() => {}), CACHE_TTL);
   console.log('[myStocks] Auto-refresh started every 5 min');
 }
 
-module.exports = { fetchAllQuotes, getQuoteForSymbol, startAutoRefresh };
+module.exports = { fetchAllQuotes, getQuoteForSymbol, startAutoRefresh, getCacheSize };

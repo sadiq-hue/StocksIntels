@@ -97,6 +97,18 @@ app.get('/readyz', async (_req, res) => {
   res.status(allOk ? 200 : 503).json({ status: allOk ? 'ok' : 'degraded', checks, uptime: process.uptime() });
 });
 
+// Debug: check myStocks scraper cache status
+app.get('/api/debug/mystocks', async (_req, res) => {
+  try {
+    const mystocks = require('./mystocksScraper');
+    const size = mystocks.getCacheSize();
+    const sample = size > 0 ? mystocks.getQuoteForSymbol('SCOM') : null;
+    res.json({ cacheSize: size, sample, tickerList: size });
+  } catch (e) {
+    res.json({ error: e.message });
+  }
+});
+
 // Security headers
 app.use(helmet({
   contentSecurityPolicy: {
