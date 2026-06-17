@@ -317,7 +317,7 @@ async function fetchBatchGlobalQuotes(symbols) {
     Object.assign(map, rapidMap);
   }
 
-  // Final fallback: Twelve Data for any still-missing symbols
+  // Fallback: Twelve Data for any still-missing symbols
   const stillMissing = globalSymbols.filter(s => !map[s.toUpperCase().replace(/\./g, '-')]);
   if (stillMissing.length > 0 && process.env.TWELVE_DATA_API_KEY) {
     try {
@@ -344,6 +344,44 @@ async function fetchBatchGlobalQuotes(symbols) {
             provider: 'twelvedata',
           };
         }
+      }
+    } catch {}
+  }
+
+  // Last resort: Yahoo via proxy for any still-missing symbols
+  const stillMissing2 = globalSymbols.filter(s => !map[s.toUpperCase().replace(/\./g, '-')]);
+  if (stillMissing2.length > 0) {
+    try {
+      const { fetchPriceViaProxy } = require('./yahooFinanceFinancialsScraper');
+      for (let i = 0; i < stillMissing2.length; i += 5) {
+        const batch = stillMissing2.slice(i, i + 5);
+        await Promise.all(batch.map(async (sym) => {
+          try {
+            const p = await fetchPriceViaProxy(sym);
+            if (p && p.price) {
+              const key = sym.toUpperCase().replace(/\./g, '-');
+              if (!map[key]) {
+                map[key] = {
+                  symbol: key,
+                  company_name: key,
+                  price: p.price,
+                  currency: p.currency || 'USD',
+                  change: 0,
+                  changePercent: 0,
+                  volume: 0,
+                  dayHigh: p.price,
+                  dayLow: p.price,
+                  previousClose: p.previousClose || p.price,
+                  marketCap: p.marketCap || 0,
+                  timestamp: Math.floor(Date.now() / 1000),
+                  lastUpdated: new Date().toISOString(),
+                  exchange: 'Global',
+                  provider: 'yahoo-proxy',
+                };
+              }
+            }
+          } catch {}
+        }));
       }
     } catch {}
   }
