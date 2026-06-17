@@ -97,29 +97,6 @@ app.get('/readyz', async (_req, res) => {
   res.status(allOk ? 200 : 503).json({ status: allOk ? 'ok' : 'degraded', checks, uptime: process.uptime() });
 });
 
-// Debug: check myStocks scraper cache status
-const mystocks = require('./mystocksScraper');
-app.get('/api/debug/mystocks', async (_req, res) => {
-  try {
-    const size = mystocks.getCacheSize();
-    const sample = size > 0 ? mystocks.getQuoteForSymbol('SCOM') : null;
-    res.json({ cacheSize: size, sample, tickerList: size });
-  } catch (e) {
-    res.json({ error: e.message });
-  }
-});
-app.get('/api/debug/mystocks-test', async (_req, res) => {
-  try {
-    const axios = require('axios');
-    const resp = await axios.get('https://live.mystocks.co.ke/stock=SCOM', { timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
-    const idx = resp.data.indexOf('rtPrice2');
-    const jsonIdx = resp.data.indexOf('rtDataJson');
-    res.json({ status: resp.status, length: resp.data.length, hasPriceElement: idx >= 0, hasDataJson: jsonIdx >= 0, snippet: resp.data.substring(jsonIdx, Math.min(jsonIdx + 300, resp.data.length)).substring(0, 300) });
-  } catch (e) {
-    res.json({ error: e.message, code: e.code, status: e.response?.status });
-  }
-});
-
 // Security headers
 app.use(helmet({
   contentSecurityPolicy: {
