@@ -281,24 +281,14 @@ const MarketPage: React.FC = () => {
   }, [marketData]);
 
   const nseStats = useMemo(() => {
-    if (turnoverData?.nse?.volume > 0) {
-      return { volume: formatCompactNumber(turnoverData.nse.volume), turnover: formatCompactNumber(turnoverData.nse.turnover), count: turnoverData.nse.count };
-    }
-    const stocks = nseStocksDisplay || [];
-    const totalVol = stocks.reduce((acc, s) => acc + safeVolume(s.volume), 0);
-    const totalTurnover = stocks.reduce((acc, s) => acc + ((s.price || 0) * safeVolume(s.volume)), 0);
-    return { volume: formatCompactNumber(totalVol), turnover: formatCompactNumber(totalTurnover), count: stocks.length };
-  }, [nseStocksDisplay, turnoverData]);
+    if (!turnoverData?.nse) return { volume: '--', turnover: '--', count: '--' };
+    return { volume: formatCompactNumber(turnoverData.nse.volume || 0), turnover: formatCompactNumber(turnoverData.nse.turnover || 0), count: turnoverData.nse.count ?? '--' };
+  }, [turnoverData]);
 
   const globalStats = useMemo(() => {
-    if (turnoverData?.global?.volume > 0) {
-      return { volume: formatCompactNumber(turnoverData.global.volume), turnover: formatCompactNumber(turnoverData.global.turnover), count: turnoverData.global.count };
-    }
-    const stocks = globalStocksDisplay || [];
-    const totalVol = stocks.reduce((acc, s) => acc + safeVolume(s.volume), 0);
-    const totalTurnover = stocks.reduce((acc, s) => acc + ((s.price || 0) * safeVolume(s.volume)), 0);
-    return { volume: formatCompactNumber(totalVol), turnover: formatCompactNumber(totalTurnover), count: stocks.length };
-  }, [globalStocksDisplay, turnoverData]);
+    if (!turnoverData?.global) return { volume: '--', turnover: '--', count: '--' };
+    return { volume: formatCompactNumber(turnoverData.global.volume || 0), turnover: formatCompactNumber(turnoverData.global.turnover || 0), count: turnoverData.global.count ?? '--' };
+  }, [turnoverData]);
 
   const nseShareIdx = useMemo(() => {
     return indicesToDisplay.find(i =>
