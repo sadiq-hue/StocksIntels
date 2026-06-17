@@ -114,9 +114,14 @@ const US_GAAP_TAGS = {
   marketCap: [],  // calculated
 };
 
+function factLookup(facts, tag) {
+  // SEC EDGAR API may return keys with or without the us-gaap: prefix
+  return facts[tag] || facts[tag.replace('us-gaap:', '')] || null;
+}
+
 function getFiscalYear(facts, tagKeys) {
   for (const tag of tagKeys) {
-    const entries = facts[tag];
+    const entries = factLookup(facts, tag);
     if (!entries) continue;
     const units = entries.units;
     const usd = units?.USD || units?.USD_per_share || units?.shares || units?.pure;
@@ -270,7 +275,7 @@ async function getIncomeStatementFromEdgar(symbol, period = 'annual', limit = 4)
 
 function getLatestValueByFy(facts, tagKeys, fy) {
   for (const tag of tagKeys) {
-    const entries = facts[tag];
+    const entries = factLookup(facts, tag);
     if (!entries) continue;
     const units = entries.units;
     const usd = units?.USD || units?.USD_per_share || units?.shares;
