@@ -253,7 +253,13 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
     const availableProviders = ['yahoo-finance'];
     if (isUs) availableProviders.push('sec-edgar');
 
-    // Yahoo Finance — primary for all stocks
+    // For US stocks: use SEC EDGAR as primary (yahoo-finance2 is blocked from Railway cloud IPs)
+    if (isUs) {
+      console.log(`[FinancialReports] US stock ${symbol}; using SEC EDGAR as primary`);
+      return buildEdgarReport(symbol, period, limit, availableProviders);
+    }
+
+    // Yahoo Finance — primary for non-US stocks (may work for non-US tickers)
     if (activeProvider === 'yahoo-finance') {
       const yahooReport = await yahooFinanceScraper.getFinancialReport(symbol, period, limit);
       if (yahooReport.success && yahooReport.data.incomeStatementHistory?.length > 0) {
@@ -272,15 +278,9 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           }
         };
       }
-      // Fallback to SEC EDGAR for US stocks when Yahoo Finance has no data
-      if (isUs) {
-        console.log(`[FinancialReports] Yahoo Finance empty for ${symbol}; trying SEC EDGAR fallback`);
-        return buildEdgarReport(symbol, period, limit, availableProviders);
-      }
-      return { success: false, symbol, source: 'yahoo-finance', error: `Yahoo Finance returned no data for ${symbol}` };
     }
 
-    // SEC EDGAR — US stocks only, no synthetic fallback
+    // SEC EDGAR — US stocks only
     if (activeProvider === 'sec-edgar' && isUs) {
       return buildEdgarReport(symbol, period, limit, availableProviders);
     }
