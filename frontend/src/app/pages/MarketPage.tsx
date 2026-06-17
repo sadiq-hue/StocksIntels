@@ -190,14 +190,13 @@ const MarketPage: React.FC = () => {
 
   // Build displayed stocks: start from hardcoded stockUniverses.ts (full coverage),
   // then overlay realtime quotes from the context (live AFX/Yahoo data).
-  // When live data is unavailable, fall back to the hardcoded local data.
   const nseStocksDisplay = useMemo(() => {
     return localNseStocks.map(local => {
       const live = getQuote(local.symbol);
       if (live && live.price != null) {
-        return { ...local, price: live.price, changePercent: live.changePercent ?? local.changePercent ?? 0, volume: live.volume ?? local.volume ?? 0, provider: live.provider || 'live' };
+        return { ...local, price: live.price, changePercent: live.changePercent ?? null, volume: live.volume ?? null, provider: live.provider };
       }
-      return { ...local, provider: 'local-fallback' };
+      return { ...local, price: null, changePercent: null, volume: null, provider: 'pending' };
     });
   }, [localNseStocks, getQuote]);
 
@@ -205,9 +204,9 @@ const MarketPage: React.FC = () => {
     return localGlobalStocks.map(local => {
       const live = getQuote(local.symbol);
       if (live && live.price != null) {
-        return { ...local, price: live.price, changePercent: live.changePercent ?? local.changePercent ?? 0, volume: live.volume ?? local.volume ?? 0, provider: live.provider || 'live' };
+        return { ...local, price: live.price, changePercent: live.changePercent ?? null, volume: live.volume ?? null, provider: live.provider };
       }
-      return { ...local, provider: 'local-fallback' };
+      return { ...local, price: null, changePercent: null, volume: null, provider: 'pending' };
     });
   }, [localGlobalStocks, getQuote]);
 
@@ -278,14 +277,7 @@ const MarketPage: React.FC = () => {
 
 
   const indicesToDisplay = useMemo(() => {
-    if (marketData.indices?.length) return marketData.indices;
-    return [
-      { symbol: 'NSE:NSE20', name: 'NSE 20 Share Index', value: '1,847.56', change: '+0.87%', isPositive: true, volume: '0', currency: 'KES' },
-      { symbol: 'NSE:NSEASI', name: 'NSE All Share Index', value: '145.23', change: '+1.24%', isPositive: true, volume: '0', currency: 'KES' },
-      { symbol: '^GSPC', name: 'S&P 500', value: '5,432.10', change: '+0.56%', isPositive: true, volume: '0', currency: 'USD' },
-      { symbol: '^IXIC', name: 'NASDAQ', value: '17,123.45', change: '+0.42%', isPositive: true, volume: '0', currency: 'USD' },
-      { symbol: '^DJI', name: 'Dow Jones', value: '39,876.54', change: '+0.31%', isPositive: true, volume: '0', currency: 'USD' },
-    ];
+    return marketData.indices || [];
   }, [marketData]);
 
   const nseStats = useMemo(() => {
@@ -784,7 +776,7 @@ const MarketWindow = ({
         </thead>
         <tbody>
           {displayStocks.map((stock: any) => {
-            const isPending = !stock.provider || stock.provider === 'pending' || stock.provider === 'local-fallback';
+            const isPending = stock.provider === 'pending';
             const isPositive = !isPending && (stock.changePercent || 0) >= 0;
             const isFav = favorites.includes(stock.symbol);
             return (
@@ -807,9 +799,6 @@ const MarketWindow = ({
                   <span className="text-sm font-semibold text-foreground font-mono">{isPending ? '--' : stock.price}</span>
                   {stock.provider === 'pending' && (
                     <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">loading</span>
-                  )}
-                  {stock.provider === 'local-fallback' && (
-                    <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">est</span>
                   )}
                 </td>
                 <td className="px-3 py-2.5 text-right">
