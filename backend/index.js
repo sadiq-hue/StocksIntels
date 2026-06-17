@@ -6335,19 +6335,7 @@ app.post('/api/market/quotes', marketDataLimiter, async (req, res) => {
   }
 });
 
-app.get('/api/debug/afx', async (req, res) => {
-  try {
-    const axios = require('axios');
-    const cheerio = require('cheerio');
-    const resp = await axios.get('https://afx.kwayisi.org/nse/', { timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
-    const $ = cheerio.load(resp.data);
-    const rows = $('div.t > table > tbody > tr');
-    const snippet = resp.data.substring(0, 500).replace(/\n/g, ' ');
-    res.json({ status: resp.status, length: resp.data.length, rowsFound: rows.length, snippet, sample: rows.length > 0 ? $(rows[0]).text().trim().substring(0, 100) : null });
-  } catch (e) {
-    res.json({ error: e.message, code: e.code, status: e.response?.status });
-  }
-});
+
 
 app.get('/api/paper/account', async (req, res) => {
   try {

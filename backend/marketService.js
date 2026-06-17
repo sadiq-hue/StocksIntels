@@ -3,7 +3,6 @@ const { fetchNseQuotes: fetchAfxQuotes, getQuoteForSymbol: getAfxQuote } = requi
 
 // Background Apify refresh (runs every 5 min, never blocks requests)
 const apifyNse = require('./apifyNseService');
-const axios = require('axios');
 apifyNse.startAutoRefresh();
 
 const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
@@ -368,23 +367,11 @@ async function getStockQuote(symbol) {
     return cached;
   }
 
-  // 2. For NSE stocks, try Yahoo Chart API first (works from Railway)
+  // 2. For NSE stocks, try RapidAPI
   if (!quote && symbol.startsWith('NSE:')) {
-    const clean = symbol.replace('NSE:', '').toUpperCase();
-    const yahooSym = clean + '.NR';
-    try {
-      const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-      const resp = await axios.get(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?range=1d&interval=1m`,
-        { timeout: 8000, headers: { 'User-Agent': UA } }
-      );
-      const meta = resp?.data?.chart?.result?.[0]?.meta;
-      if (meta?.regularMarketPrice) {
-        const price = meta.regularMarketPrice;
-        quote = { symbol: clean, company_name: meta.shortName || meta.longName || clean, price, currency: 'KES', change: price - (meta.previousClose || price), changePercent: meta.previousClose ? ((price - meta.previousClose) / meta.previousClose) * 100 : 0, volume: meta.regularMarketVolume || 0, dayHigh: meta.regularMarketDayHigh || price, dayLow: meta.regularMarketDayLow || price, previousClose: meta.previousClose || price, timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(), exchange: 'NSE', provider: 'yahoo-chart' };
-      }
-    } catch {}
-    // Kick off AFX background refresh
+    const { fetchNSEQuote } = require('./rapidApiService');
+    quote = await fetchNSEQuote(symbol);
+    // Kick off AFX background refresh for cache warmth
     fetchAfxQuotes().catch(() => {});
   }
 
@@ -396,12 +383,7 @@ async function getStockQuote(symbol) {
     }
   }
 
-  // 4. Try Yahoo/RapidAPI for NSE stocks
-  if (!quote && symbol.startsWith('NSE:')) {
-    const { fetchNSEQuote } = require('./rapidApiService');
-    quote = await fetchNSEQuote(symbol);
-  }
-  // 5. Try Yahoo/RapidAPI for global stocks
+  // 4. Try Yahoo/RapidAPI for global stocks
   if (!quote && !symbol.startsWith('NSE:')) {
     const { fetchGlobalQuote } = require('./rapidApiService');
     quote = await fetchGlobalQuote(symbol);
@@ -465,40 +447,11 @@ async function fetchLiveBatch(symbols) {
     fetchAfxQuotes().catch(() => {});
   }
 
-  // For NSE stocks: try Yahoo Chart API (most reliable from cloud), then RapidAPI
-  if (nseSymbols.length > 0) {
-    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-    for (const sym of nseSymbols) {
-      const clean = sym.replace('NSE:', '').toUpperCase();
-      const yahooSym = clean + '.NR';
-      try {
-        const resp = await axios.get(
-          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?range=1d&interval=1m`,
-          { timeout: 8000, headers: { 'User-Agent': UA } }
-        );
-        const meta = resp?.data?.chart?.result?.[0]?.meta;
-        if (meta?.regularMarketPrice) {
-          const price = meta.regularMarketPrice;
-          results[sym] = {
-            symbol: clean, company_name: meta.shortName || meta.longName || clean,
-            price, currency: 'KES', change: price - (meta.previousClose || price),
-            changePercent: meta.previousClose ? ((price - meta.previousClose) / meta.previousClose) * 100 : 0,
-            volume: meta.regularMarketVolume || 0, dayHigh: meta.regularMarketDayHigh || price,
-            dayLow: meta.regularMarketDayLow || price, previousClose: meta.previousClose || price,
-            timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(),
-            exchange: 'NSE', provider: 'yahoo-chart',
-          };
-        }
-      } catch {}
-    }
-
-    // Fallback: RapidAPI for any NSE stocks still missing
-    const missingNse = nseSymbols.filter(s => !results[s]);
-    if (missingNse.length > 0 && RAPIDAPI_KEY) {
-      const { fetchBatchNSEQuotes } = require('./rapidApiService');
-      const rapidResults = await fetchBatchNSEQuotes(missingNse);
-      results = { ...results, ...rapidResults };
-    }
+  // For NSE stocks: use RapidAPI (works from cloud), fallback to yahoo-finance2
+  if (nseSymbols.length > 0 && RAPIDAPI_KEY) {
+    const { fetchBatchNSEQuotes } = require('./rapidApiService');
+    const rapidResults = await fetchBatchNSEQuotes(nseSymbols);
+    results = { ...results, ...rapidResults };
   }
 
   // For global stocks: use existing batch service

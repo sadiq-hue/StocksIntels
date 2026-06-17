@@ -222,14 +222,47 @@ async function fetchBatchNSEQuotes(symbols) {
   const nseSymbols = symbols.filter(s => s.startsWith('NSE:'));
   if (!nseSymbols.length) return {};
 
+  const map = {};
+
+  // Try RapidAPI first (works from cloud IPs)
+  const key = process.env.RAPIDAPI_KEY;
+  let host = (process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com').trim();
+  host = host.replace(/^https?:\/\//, '');
+  if (key && host) {
+    const yahooSymbols = nseSymbols.map(s => toYahooSymbol(s));
+    const chunks = chunkArray(yahooSymbols, 10);
+    for (const chunk of chunks) {
+      try {
+        const resp = await axios.get(`https://${host}/market/v2/get-quotes`, {
+          params: { symbols: chunk.join(','), region: 'KE' },
+          headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
+          timeout: 8000,
+        });
+        const results = resp.data?.quoteResponse?.result || [];
+        for (const q of results) {
+          if (!q?.regularMarketPrice) continue;
+          const rawSymbol = (q.symbol || '').toUpperCase();
+          const cleanSymbol = rawSymbol.replace('.NR', '');
+          const keySym = `NSE:${cleanSymbol}`;
+          map[keySym] = { symbol: keySym, company_name: q.shortName || q.longName || cleanSymbol, price: Number(q.regularMarketPrice), currency: 'KES', change: Number(q.regularMarketChange ?? 0), changePercent: Number(q.regularMarketChangePercent ?? 0), volume: q.regularMarketVolume ?? 0, dayHigh: Number(q.regularMarketDayHigh ?? q.regularMarketPrice), dayLow: Number(q.regularMarketDayLow ?? q.regularMarketPrice), previousClose: Number(q.regularMarketPreviousClose ?? q.regularMarketPrice), timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(), exchange: 'NSE', provider: 'yahoo' };
+        }
+        if (Object.keys(map).length > 0) return map;
+      } catch (err) {
+        if (err.response?.status === 429) {
+          console.warn(`[rapidApiService] RapidAPI rate limited on NSE batch`);
+          break;
+        }
+      }
+    }
+  }
+
   // Try yahoo-finance2 with a timeout (often fails from cloud IPs)
   try {
-    const map = {};
     await Promise.race([
       (async () => {
         const { default: YahooFinance } = await import('yahoo-finance2');
         const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-        const yahooSymbols = nseSymbols.map(s => toYahooSymbol(s));
+        const yahooSymbols = nseSymbols.filter(s => !map[s]).map(s => toYahooSymbol(s));
         const chunks = chunkArray(yahooSymbols, 10);
         for (let i = 0; i < chunks.length; i += 5) {
           const batch = chunks.slice(i, i + 5);
@@ -240,43 +273,18 @@ async function fetchBatchNSEQuotes(symbols) {
               if (!q?.regularMarketPrice) continue;
               const rawSymbol = (q.symbol || '').toUpperCase();
               const cleanSymbol = rawSymbol.replace('.NR', '');
-              const key = `NSE:${cleanSymbol}`;
-              const price = Number(q.regularMarketPrice ?? q.regularMarketPreviousClose);
-              map[key] = { symbol: key, company_name: q.shortName || q.longName || cleanSymbol, price, currency: 'KES', change: Number(q.regularMarketChange ?? 0), changePercent: Number(q.regularMarketChangePercent ?? 0), volume: q.regularMarketVolume ?? 0, dayHigh: Number(q.regularMarketDayHigh ?? price), dayLow: Number(q.regularMarketDayLow ?? price), previousClose: Number(q.regularMarketPreviousClose ?? price), timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(), exchange: 'NSE', provider: 'yahoo' };
+              const keySym = `NSE:${cleanSymbol}`;
+              if (map[keySym]) continue;
+              map[keySym] = { symbol: keySym, company_name: q.shortName || q.longName || cleanSymbol, price: Number(q.regularMarketPrice), currency: 'KES', change: Number(q.regularMarketChange ?? 0), changePercent: Number(q.regularMarketChangePercent ?? 0), volume: q.regularMarketVolume ?? 0, dayHigh: Number(q.regularMarketDayHigh ?? q.regularMarketPrice), dayLow: Number(q.regularMarketDayLow ?? q.regularMarketPrice), previousClose: Number(q.regularMarketPreviousClose ?? q.regularMarketPrice), timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(), exchange: 'NSE', provider: 'yahoo' };
             }
           }
         }
       })(),
       new Promise(r => setTimeout(r, 5000)),
     ]);
-    if (Object.keys(map).length > 0) return map;
   } catch {}
 
-  // Fallback: try Yahoo Chart API directly (works from cloud IPs)
-  try {
-    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-    const map = {};
-    for (const sym of nseSymbols) {
-      const yahooSym = toYahooSymbol(sym);
-      try {
-        const resp = await Promise.race([
-          axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?range=1d&interval=1m`, { timeout: 5000, headers: { 'User-Agent': UA } }),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000)),
-        ]);
-        const result = resp?.data?.chart?.result?.[0];
-        if (!result?.meta) continue;
-        const meta = result.meta;
-        const price = meta.regularMarketPrice || meta.previousClose || 0;
-        if (!price) continue;
-        const cleanSymbol = yahooSym.replace('.NR', '');
-        const key = `NSE:${cleanSymbol}`;
-        map[key] = { symbol: key, company_name: meta.shortName || meta.longName || cleanSymbol, price, currency: 'KES', change: price - (meta.previousClose || price), changePercent: meta.previousClose ? ((price - meta.previousClose) / meta.previousClose) * 100 : 0, volume: meta.regularMarketVolume || 0, dayHigh: meta.regularMarketDayHigh || price, dayLow: meta.regularMarketDayLow || price, previousClose: meta.previousClose || price, timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(), exchange: 'NSE', provider: 'yahoo-chart' };
-      } catch {}
-    }
-    if (Object.keys(map).length > 0) return map;
-  } catch {}
-
-  return {};
+  return map;
 }
 
 function chunkArray(arr, size) {
