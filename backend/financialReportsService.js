@@ -91,6 +91,32 @@ async function getQuote(symbol) {
     console.warn(`[FinancialReports] Quote fetch failed for ${symbol}`);
   }
 
+  // Fallback: Twelve Data statistics for rich quote data
+  try {
+    const { fetchQuoteWithStats } = require('./twelveDataService');
+    const tq = await fetchQuoteWithStats(symbol);
+    if (tq) {
+      const enriched = {
+        symbol: symbol.toUpperCase(),
+        price: tq.price,
+        change: tq.change || 0,
+        changesPercentage: tq.changePercent || 0,
+        dayLow: tq.dayLow || tq.price,
+        dayHigh: tq.dayHigh || tq.price,
+        marketCap: tq.marketCap || 0,
+        volume: tq.volume || 0,
+        previousClose: tq.previousClose || tq.price,
+        eps: tq.eps || 0,
+        pe: tq.peRatio || 0,
+        company_name: tq.company_name || symbol,
+        currency: tq.currency || 'USD',
+        exchange: tq.exchange || 'Global',
+        lastUpdated: tq.lastUpdated || new Date().toISOString(),
+      };
+      return cacheSet(cacheKey, enriched);
+    }
+  } catch {}
+
   return null;
 }
 
@@ -144,9 +170,12 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
     return { success: false, symbol, source: 'sec-edgar', error: 'SEC EDGAR returned no financial data for this symbol' };
   }
 
-  const [quote, dividends] = await Promise.allSettled([
+  const [quote, dividends, tdStats] = await Promise.allSettled([
     getQuote(symbol),
     getDividendHistory(symbol, Math.max(limit * 2, 8)),
+    (() => {
+      try { return require('./twelveDataService').fetchStatistics(symbol); } catch { return null; }
+    })(),
   ]);
 
   const edgarBalHistory = edgarReport.data.balanceSheetHistory || [];
@@ -155,15 +184,21 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
   const edgarFilings = edgarReport.data.filings || [];
 
   const quoteValue = quote.status === 'fulfilled' ? quote.value : null;
-  const price = quoteValue?.price || 0;
-  const marketCap = quoteValue?.marketCap || 0;
+  const tds = tdStats.status === 'fulfilled' ? tdStats.value : null;
+  const price = quoteValue?.price || tds?.price || 0;
+  const marketCap = quoteValue?.marketCap || tds?.marketCap || 0;
+  const epsFromStats = tds?.eps || 0;
+
   const enrichedKm = edgarKmHistory.map((km) => {
-    const pe = (price > 0 && km.netIncomePerShare > 0) ? price / km.netIncomePerShare : 0;
+    const eps = epsFromStats || km.netIncomePerShare || 0;
+    const pe = (price > 0 && eps > 0) ? price / eps : 0;
     return {
       ...km, marketCap: marketCap || km.marketCap,
       peRatio: pe,
       priceToSalesRatio: (price > 0 && km.revenuePerShare > 0) ? price / km.revenuePerShare : km.priceToSalesRatio,
       earningsYield: pe > 0 ? 1 / pe : 0,
+      dividendYield: tds?.dividendYield || km.dividendYield || 0,
+      dividendYieldPercentage: tds?.dividendYield ? tds.dividendYield * 100 : (km.dividendYieldPercentage || 0),
     };
   });
   if (enrichedKm.length > 0 && edgarBalHistory.length > 0 && marketCap > 0) {
@@ -172,12 +207,25 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
     if (equity > 0) enrichedKm[0].pbRatio = marketCap / equity;
   }
 
+  const quoteResponse = quoteValue || (tds ? {
+    symbol: symbol.toUpperCase(),
+    price: tds.price || 0,
+    change: 0,
+    changesPercentage: 0,
+    marketCap: tds.marketCap || 0,
+    eps: tds.eps || 0,
+    pe: tds.peRatio || 0,
+    volume: 0,
+    previousClose: 0,
+    lastUpdated: new Date().toISOString(),
+  } : { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 });
+
   return {
     success: true, symbol, source: 'sec-edgar', availableProviders,
     lastUpdated: new Date().toISOString(),
     data: {
       profile: edgarReport.data.profile || { symbol, companyName: symbol, exchange: 'NASDAQ', currency: 'USD' },
-      quote: quoteValue || { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 },
+      quote: quoteResponse,
       incomeStatement: edgarIncHistory[0] || null,
       incomeStatementHistory: edgarIncHistory,
       balanceSheet: edgarBalHistory[0] || null,

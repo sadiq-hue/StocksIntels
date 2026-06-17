@@ -183,7 +183,36 @@ async function fetchGlobalQuote(symbol) {
   }
 
   // Fallback: RapidAPI Yahoo Finance proxy
-  return fetchRapidAPIGlobal(symbol);
+  const rapidQuote = await fetchRapidAPIGlobal(symbol);
+  if (rapidQuote) return rapidQuote;
+
+  // Final fallback: Twelve Data
+  try {
+    const { fetchQuoteWithStats } = require('./twelveDataService');
+    const tq = await fetchQuoteWithStats(symbol);
+    if (tq) {
+      return {
+        symbol: cleanSymbol,
+        company_name: tq.company_name || cleanSymbol,
+        price: tq.price,
+        currency: tq.currency || 'USD',
+        change: tq.change || 0,
+        changePercent: tq.changePercent || 0,
+        volume: tq.volume || 0,
+        dayHigh: tq.dayHigh || tq.price,
+        dayLow: tq.dayLow || tq.price,
+        previousClose: tq.previousClose || tq.price,
+        marketCap: tq.marketCap || 0,
+        peRatio: tq.peRatio || 0,
+        eps: tq.eps || 0,
+        timestamp: Math.floor(Date.now() / 1000),
+        lastUpdated: new Date().toISOString(),
+        exchange: tq.exchange || 'Global',
+        provider: 'twelvedata',
+      };
+    }
+  } catch {}
+  return null;
 }
 
 async function fetchBatchNSEQuotes(symbols) {
@@ -263,6 +292,37 @@ async function fetchBatchGlobalQuotes(symbols) {
   if (missing.length > 0 && process.env.RAPIDAPI_KEY) {
     const rapidMap = await fetchRapidAPIGlobalBatch(missing);
     Object.assign(map, rapidMap);
+  }
+
+  // Final fallback: Twelve Data for any still-missing symbols
+  const stillMissing = globalSymbols.filter(s => !map[s.toUpperCase().replace(/\./g, '-')]);
+  if (stillMissing.length > 0 && process.env.TWELVE_DATA_API_KEY) {
+    try {
+      const { fetchBatchQuotes } = require('./twelveDataService');
+      const tdMap = await fetchBatchQuotes(stillMissing);
+      for (const [sym, q] of Object.entries(tdMap)) {
+        const key = sym.toUpperCase().replace(/\./g, '-');
+        if (!map[key]) {
+          map[key] = {
+            symbol: key,
+            company_name: q.company_name || key,
+            price: q.price,
+            currency: q.currency || 'USD',
+            change: q.change || 0,
+            changePercent: q.changePercent || 0,
+            volume: q.volume || 0,
+            dayHigh: q.dayHigh || q.price,
+            dayLow: q.dayLow || q.price,
+            previousClose: q.previousClose || q.price,
+            marketCap: q.marketCap || 0,
+            timestamp: Math.floor(Date.now() / 1000),
+            lastUpdated: new Date().toISOString(),
+            exchange: 'Global',
+            provider: 'twelvedata',
+          };
+        }
+      }
+    } catch {}
   }
 
   return map;
