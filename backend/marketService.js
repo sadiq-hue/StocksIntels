@@ -439,13 +439,16 @@ async function fetchLiveBatch(symbols) {
 
   // 0. For NSE stocks, try AFX scraper first (free, real-time)
   // Symbols may come as plain tickers ("BAT") or NSE-prefixed ("NSE:BAT")
-  const afxQuotes = await fetchNseQuotes();
-  if (afxQuotes) {
-    for (const sym of symbols) {
-      if (results[sym]) continue;
-      const cleanSym = sym.replace('NSE:', '').toUpperCase();
-      if (afxQuotes[cleanSym]) {
-        results[sym] = { ...afxQuotes[cleanSym], symbol: cleanSym };
+  const hasNse = symbols.some(s => s.startsWith('NSE:'));
+  if (hasNse) {
+    const afxQuotes = await fetchNseQuotes();
+    if (afxQuotes) {
+      for (const sym of symbols) {
+        if (results[sym]) continue;
+        const cleanSym = sym.replace('NSE:', '').toUpperCase();
+        if (afxQuotes[cleanSym]) {
+          results[sym] = { ...afxQuotes[cleanSym], symbol: cleanSym };
+        }
       }
     }
   }
