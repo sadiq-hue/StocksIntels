@@ -158,7 +158,10 @@ async function fetchGlobalQuote(symbol) {
   try {
     const { default: YahooFinance } = await import('yahoo-finance2');
     const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-    const q = await yf.quote(yahooSymbol);
+    const q = await Promise.race([
+      yf.quote(yahooSymbol),
+      new Promise(r => setTimeout(r, 5000)),
+    ]);
     if (!q?.regularMarketPrice) return null;
     const price = Number(q.regularMarketPrice ?? q.regularMarketPreviousClose);
     return {
@@ -219,32 +222,37 @@ async function fetchBatchNSEQuotes(symbols) {
   const nseSymbols = symbols.filter(s => s.startsWith('NSE:'));
   if (!nseSymbols.length) return {};
 
+  // Try yahoo-finance2 with a timeout (often fails from cloud IPs)
   try {
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-    const yahooSymbols = nseSymbols.map(s => toYahooSymbol(s));
-    const chunks = chunkArray(yahooSymbols, 10);
     const map = {};
-    // Process 5 chunks at a time to avoid overwhelming Yahoo
-    for (let i = 0; i < chunks.length; i += 5) {
-      const batch = chunks.slice(i, i + 5);
-      const results = await Promise.allSettled(batch.map(c => yf.quote(c)));
-      for (const result of results) {
-        if (result.status !== 'fulfilled' || !Array.isArray(result.value)) continue;
-        for (const q of result.value) {
-          if (!q?.regularMarketPrice) continue;
-          const rawSymbol = (q.symbol || '').toUpperCase();
-          const cleanSymbol = rawSymbol.replace('.NR', '');
-          const key = `NSE:${cleanSymbol}`;
-          const price = Number(q.regularMarketPrice ?? q.regularMarketPreviousClose);
-          map[key] = { symbol: key, company_name: q.shortName || q.longName || cleanSymbol, price, currency: 'KES', change: Number(q.regularMarketChange ?? 0), changePercent: Number(q.regularMarketChangePercent ?? 0), volume: q.regularMarketVolume ?? 0, dayHigh: Number(q.regularMarketDayHigh ?? price), dayLow: Number(q.regularMarketDayLow ?? price), previousClose: Number(q.regularMarketPreviousClose ?? price), timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(), exchange: 'NSE', provider: 'yahoo' };
+    await Promise.race([
+      (async () => {
+        const { default: YahooFinance } = await import('yahoo-finance2');
+        const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+        const yahooSymbols = nseSymbols.map(s => toYahooSymbol(s));
+        const chunks = chunkArray(yahooSymbols, 10);
+        for (let i = 0; i < chunks.length; i += 5) {
+          const batch = chunks.slice(i, i + 5);
+          const results = await Promise.allSettled(batch.map(c => yf.quote(c)));
+          for (const result of results) {
+            if (result.status !== 'fulfilled' || !Array.isArray(result.value)) continue;
+            for (const q of result.value) {
+              if (!q?.regularMarketPrice) continue;
+              const rawSymbol = (q.symbol || '').toUpperCase();
+              const cleanSymbol = rawSymbol.replace('.NR', '');
+              const key = `NSE:${cleanSymbol}`;
+              const price = Number(q.regularMarketPrice ?? q.regularMarketPreviousClose);
+              map[key] = { symbol: key, company_name: q.shortName || q.longName || cleanSymbol, price, currency: 'KES', change: Number(q.regularMarketChange ?? 0), changePercent: Number(q.regularMarketChangePercent ?? 0), volume: q.regularMarketVolume ?? 0, dayHigh: Number(q.regularMarketDayHigh ?? price), dayLow: Number(q.regularMarketDayLow ?? price), previousClose: Number(q.regularMarketPreviousClose ?? price), timestamp: Math.floor(Date.now() / 1000), lastUpdated: new Date().toISOString(), exchange: 'NSE', provider: 'yahoo' };
+            }
+          }
         }
-      }
-    }
-    return map;
-  } catch {
-    return {};
-  }
+      })(),
+      new Promise(r => setTimeout(r, 5000)),
+    ]);
+    if (Object.keys(map).length > 0) return map;
+  } catch {}
+
+  return {};
 }
 
 function chunkArray(arr, size) {
@@ -267,25 +275,8 @@ async function fetchBatchGlobalQuotes(symbols) {
 
   const map = {};
 
-  try {
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-    const cleanSymbols = globalSymbols.map(s => s.toUpperCase().replace(/\./g, '-'));
-    const chunks = chunkArray(cleanSymbols, 10);
-    // Process 5 chunks at a time to avoid overwhelming Yahoo
-    for (let i = 0; i < chunks.length; i += 5) {
-      const batch = chunks.slice(i, i + 5);
-      const results = await Promise.allSettled(batch.map(c => yf.quote(c)));
-      for (const result of results) {
-        if (result.status === 'fulfilled' && Array.isArray(result.value)) {
-          for (const q of result.value) {
-            const parsed = parseYahooGlobalResult(q);
-            if (parsed) map[parsed.symbol] = parsed;
-          }
-        }
-      }
-    }
-  } catch {}
+  // yahoo-finance2 batch is skipped here because it hangs from cloud IPs.
+  // Single-quote path (fetchGlobalQuote) still tries yahoo-finance2 first.
 
   // Fallback: RapidAPI for any symbols still missing (batched to avoid rate limits)
   const missing = globalSymbols.filter(s => !map[s.toUpperCase().replace(/\./g, '-')]);
