@@ -266,6 +266,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
       const yahooReport = await yahooFinanceScraper.getFinancialReport(symbol, period, limit);
       if (yahooReport.success && yahooReport.data.incomeStatementHistory?.length > 0) {
         const quote = await getQuote(symbol).catch(() => null);
+        const price = quote?.price || 0;
 
         // Compute dividend yield from dividend history
         const divHist = yahooReport.data.dividendHistory || [];
@@ -273,7 +274,6 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
         const divYieldFromHistory = (price > 0 && totalAnnualDiv > 0) ? totalAnnualDiv / price : null;
 
         // Enrich keyMetrics with real ratios from quote price + financial data
-        const price = quote?.price || 0;
         const quoteMc = quote?.marketCap || 0;
         const incHist = yahooReport.data.incomeStatementHistory || [];
         const balHist = yahooReport.data.balanceSheetHistory || [];
