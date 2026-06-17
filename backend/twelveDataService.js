@@ -193,10 +193,44 @@ async function fetchBatchQuotes(symbols) {
   const key = getApiKey();
   if (!key) return results;
 
-  for (const sym of uncached) {
+  // Batch via comma-separated endpoint (1 API call instead of N)
+  const BATCH_MAX = 120;
+  for (let i = 0; i < uncached.length; i += BATCH_MAX) {
+    const chunk = uncached.slice(i, i + BATCH_MAX);
     try {
-      const q = await fetchQuote(sym);
-      if (q) results[sym] = q;
+      const resp = await axios.get(`${BASE_URL}/quote`, {
+        params: { symbol: chunk.join(','), apikey: key },
+        timeout: 15000,
+      });
+      const d = resp.data;
+      if (!d || d.status === 'error') continue;
+
+      // Batch response returns an object keyed by symbol when multiple symbols are passed
+      const entries = Array.isArray(d) ? d : (typeof d === 'object' && d.symbol ? [d] : Object.values(d).filter(v => v?.symbol));
+      for (const q of entries) {
+        if (!q || q.status === 'error' || !q.symbol) continue;
+        const clean = q.symbol.toUpperCase().replace(/\./g, '-');
+        const price = Number(q.close || q.previous_close || 0);
+        if (!price) continue;
+        const result = {
+          symbol: clean,
+          company_name: q.name || clean,
+          price,
+          currency: q.currency || 'USD',
+          change: Number(q.change || 0),
+          changePercent: Number(q.percent_change || 0),
+          volume: Number(q.volume || 0),
+          dayHigh: Number(q.high || price),
+          dayLow: Number(q.low || price),
+          previousClose: Number(q.previous_close || price),
+          exchange: q.exchange || 'Global',
+          timestamp: Math.floor(Date.now() / 1000),
+          lastUpdated: new Date().toISOString(),
+          provider: 'twelvedata',
+        };
+        cacheSet(quoteCache, clean, result);
+        results[clean] = result;
+      }
     } catch {}
   }
 
