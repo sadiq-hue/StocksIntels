@@ -1414,7 +1414,7 @@ async function getMarketSnapshot() {
         : symbol === 'NSE:NSEASI' ? 'NSE All Share Index'
         : symbol === 'NSE:NSE25' ? 'NSE 25 Share Index' : 'NSE 10 Share Index',
       symbol, currency: 'KES',
-      value: (data.price || 0).toFixed(2),
+      value: parseFloat((data.price || 0).toFixed(2)),
       change: (data.change >= 0 ? '+' : '') + (data.changePercent || 0).toFixed(2) + '%',
       isPositive: data.change >= 0,
       volume: formatVolume(data.volume),
@@ -1427,7 +1427,7 @@ async function getMarketSnapshot() {
       ticker: symbol.includes(':') ? symbol.split(':')[1] : symbol,
       symbol,
       name: data.company_name || getCompanyName(symbol),
-      price: (data.price || 0).toFixed(2),
+      price: parseFloat((data.price || 0).toFixed(2)),
       currency: data.currency || (symbol.startsWith('NSE:') ? 'KES' : 'USD'),
       change: (data.change >= 0 ? '+' : '') + (data.changePercent || 0).toFixed(2) + '%',
       changePercent: data.changePercent || 0,
