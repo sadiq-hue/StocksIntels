@@ -124,7 +124,7 @@ function getFiscalYear(facts, tagKeys) {
     const entries = factLookup(facts, tag);
     if (!entries) continue;
     const units = entries.units;
-    const usd = units?.USD || units?.USD_per_share || units?.shares || units?.pure;
+    const usd = units?.USD || units?.USD_per_share || units?.['USD/shares'] || units?.shares || units?.pure;
     if (!usd || usd.length === 0) continue;
     const annual = usd.filter(e => e.frame && e.frame.endsWith('I') && e.fy);
     if (annual.length > 0) {
@@ -278,7 +278,7 @@ function getLatestValueByFy(facts, tagKeys, fy) {
     const entries = factLookup(facts, tag);
     if (!entries) continue;
     const units = entries.units;
-    const usd = units?.USD || units?.USD_per_share || units?.shares;
+    const usd = units?.USD || units?.USD_per_share || units?.['USD/shares'] || units?.shares;
     if (!usd) continue;
     const matches = usd.filter(e => e.fy === fy && (e.fp === 'FY' || true));
     if (matches.length > 0) {
