@@ -203,7 +203,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
     // Yahoo Finance — primary for all stocks
     if (activeProvider === 'yahoo-finance') {
       const yahooReport = await yahooFinanceScraper.getFinancialReport(symbol, period, limit);
-      if (yahooReport.success && (yahooReport.data.incomeStatementHistory?.length > 0 || yahooReport.data.profile)) {
+      if (yahooReport.success && yahooReport.data.incomeStatementHistory?.length > 0) {
         const quote = await getQuote(symbol).catch(() => null);
         return {
           ...yahooReport,
