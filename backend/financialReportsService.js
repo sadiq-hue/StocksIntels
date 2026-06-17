@@ -117,6 +117,31 @@ async function getQuote(symbol) {
     }
   } catch {}
 
+  // Fallback: Yahoo Finance chart API via proxy (for price)
+  try {
+    const yf = require('./yahooFinanceFinancialsScraper');
+    const yp = await yf.fetchPriceViaProxy(symbol);
+    if (yp?.price) {
+      return cacheSet(cacheKey, {
+        symbol: yp.symbol || symbol.toUpperCase(),
+        price: yp.price,
+        change: 0,
+        changesPercentage: 0,
+        dayLow: yp.price,
+        dayHigh: yp.price,
+        marketCap: 0,
+        volume: 0,
+        previousClose: yp.previousClose || yp.price,
+        eps: 0,
+        pe: 0,
+        company_name: symbol,
+        currency: yp.currency || 'USD',
+        exchange: yp.exchange || '',
+        lastUpdated: new Date().toISOString(),
+      });
+    }
+  } catch {}
+
   return null;
 }
 

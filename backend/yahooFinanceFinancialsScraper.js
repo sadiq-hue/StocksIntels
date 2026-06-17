@@ -1,3 +1,4 @@
+const axios = require('axios');
 const yahooFinanceCache = new Map();
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
@@ -67,13 +68,87 @@ function computeTTM(items, valueKeys) {
   return results.reverse(); // most recent first
 }
 
-// Fetch quote-like summary from Twelve Data statistics API + RapidAPI proxy fallback
+// Normalize Yahoo v10 API response: flatten { raw, fmt } → scalar values
+function normalizeYahooResponse(data) {
+  if (!data || typeof data !== 'object') return data;
+  if (data.raw !== undefined) return data.raw;
+  const result = Array.isArray(data) ? [] : {};
+  for (const [key, val] of Object.entries(data)) {
+    result[key] = normalizeYahooResponse(val);
+  }
+  return result;
+}
+
+// Helper: call Yahoo Finance API directly through a proxy
+async function fetchYahooViaProxy(symbol) {
+  const proxyService = require('./proxyService');
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const proxy = proxyService.getRandomProxy();
+    if (!proxy) break;
+    const agent = proxyService.createProxyAgent(proxy);
+    if (!agent) continue;
+    try {
+      const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}`;
+      const resp = await axios.get(url, {
+        params: { modules: 'assetProfile,financialData,defaultKeyStatistics,summaryProfile' },
+        httpsAgent: agent,
+        timeout: 8000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+          'Origin': 'https://finance.yahoo.com',
+        },
+      });
+      const result = resp.data?.quoteSummary?.result?.[0];
+      if (result?.financialData?.marketCap?.raw) return normalizeYahooResponse(result);
+    } catch {}
+  }
+  return null;
+}
+
+// Fetch current price and basic trade data from Yahoo Finance chart API via proxy
+async function fetchPriceViaProxy(symbol) {
+  const proxyService = require('./proxyService');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const proxy = proxyService.getRandomProxy();
+    if (!proxy) break;
+    const agent = proxyService.createProxyAgent(proxy);
+    if (!agent) continue;
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
+      const resp = await axios.get(url, {
+        params: { interval: '1d', range: '1d' },
+        httpsAgent: agent,
+        timeout: 8000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+        },
+      });
+      const meta = resp.data?.chart?.result?.[0]?.meta;
+      if (meta?.regularMarketPrice) {
+        return {
+          price: meta.regularMarketPrice,
+          previousClose: meta.chartPreviousClose || meta.regularMarketPrice,
+          currency: meta.currency || 'USD',
+          exchange: meta.exchangeName || '',
+          marketCap: 0,
+          symbol: symbol.toUpperCase(),
+        };
+      }
+    } catch {}
+  }
+  return null;
+}
+
+// Fetch quote-like summary from multiple sources: Twelve Data → Yahoo via proxy → RapidAPI
 async function fetchQuoteSummary(symbol, modules) {
   const cacheKey = `yh_quoteSummary_${symbol}_${modules.join(',')}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  // Try Twelve Data statistics first
+  // 1. Try Twelve Data statistics first
   try {
     const tdModule = require('./twelveDataService');
     const tds = await tdModule.fetchStatistics(symbol);
@@ -83,13 +158,18 @@ async function fetchQuoteSummary(symbol, modules) {
     }
   } catch {}
 
-  // Fallback: RapidAPI Yahoo proxy
+  // 2. Try Yahoo Finance API directly through a free proxy pool
+  try {
+    const yahooData = await fetchYahooViaProxy(symbol);
+    if (yahooData) return cacheSet(cacheKey, yahooData);
+  } catch {}
+
+  // 3. Fallback: RapidAPI Yahoo proxy (may be exhausted)
   const key = process.env.RAPIDAPI_KEY;
   let host = (process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com').trim();
   host = host.replace(/^https?:\/\//, '');
   if (key && host) {
     try {
-      const axios = require('axios');
       const resp = await axios.get(`https://${host}/api/v1/markets/stock/modules`, {
         params: { symbol, module: 'financialData,defaultKeyStatistics,summaryProfile,assetProfile' },
         headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
@@ -100,6 +180,14 @@ async function fetchQuoteSummary(symbol, modules) {
       }
     } catch {}
   }
+
+  // 4. Last resort: try yahoo-finance2 directly (may be blocked, but worth trying)
+  try {
+    const { default: YahooFinance } = await import('yahoo-finance2');
+    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const qs = await yf.quoteSummary(symbol, { modules });
+    if (qs?.financialData?.marketCap) return cacheSet(cacheKey, qs);
+  } catch {}
 
   return null;
 }
@@ -711,5 +799,7 @@ module.exports = {
   getKeyMetrics,
   getDividendHistory,
   getFinancialReport,
+  fetchPriceViaProxy,
+  fetchQuoteSummary,
   clearCache,
 };
