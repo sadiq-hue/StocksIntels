@@ -139,6 +139,9 @@ const MarketPage: React.FC = () => {
   const [marketNews, setMarketNews] = useState<NewsArticle[]>([]);
   const newsFetched = useRef(false);
 
+  // Client-side pre-market data (fetched directly from Yahoo Finance in the browser)
+  const [clientPreMarket, setClientPreMarket] = useState<Record<string, any>>({});
+
   // Real-time turnover from API (Yahoo real volumes for global, seeded for NSE)
   const [turnoverData, setTurnoverData] = useState<{
     nse: { turnover: number; volume: number; count: number };
@@ -203,18 +206,18 @@ const MarketPage: React.FC = () => {
   const globalStocksDisplay = useMemo(() => {
     return localGlobalStocks.map(local => {
       const live = getQuote(local.symbol);
-      const hasPre = live?.preMarketPrice != null;
-      if (hasPre) {
+      const pre = clientPreMarket[local.symbol];
+      if (pre?.preMarketPrice != null) {
         return {
           ...local,
-          price: live.preMarketPrice,
-          changePercent: live.preMarketChangePercent ?? null,
-          change: live.preMarketChange ?? null,
-          volume: live.volume ?? null,
-          previousClose: live.regularMarketPrice ?? live.previousClose,
+          price: pre.preMarketPrice,
+          changePercent: pre.preMarketChangePercent ?? null,
+          change: pre.preMarketChange ?? null,
+          volume: live?.volume ?? null,
+          previousClose: pre.regularMarketPrice ?? live?.previousClose,
           provider: 'premarket',
           isPreMarket: true,
-          regularPrice: live.regularMarketPrice,
+          regularPrice: pre.regularMarketPrice,
         };
       }
       if (live && live.price != null) {
@@ -222,7 +225,7 @@ const MarketPage: React.FC = () => {
       }
       return { ...local, price: null, changePercent: null, volume: null, provider: 'pending', isPreMarket: false };
     });
-  }, [localGlobalStocks, getQuote]);
+  }, [localGlobalStocks, getQuote, clientPreMarket]);
 
   const fetchMarketData = async () => {
     setFetchingMovers(true);
@@ -267,10 +270,36 @@ const MarketPage: React.FC = () => {
       .catch(() => {});
   }, []);
 
+  const fetchClientPreMarket = useCallback(async () => {
+    const symbols = localGlobalStocks.map(s => s.symbol).filter(Boolean).slice(0, 20);
+    if (symbols.length === 0) return;
+    const preMap: Record<string, any> = {};
+    const results = await Promise.allSettled(symbols.map(sym =>
+      fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d&includePreMarket=true`, {
+        headers: { 'Accept': 'application/json' }
+      }).then(r => r.json()).then(d => {
+        const meta = d?.chart?.result?.[0]?.meta;
+        if (meta?.preMarketPrice != null) {
+          preMap[sym] = {
+            preMarketPrice: meta.preMarketPrice,
+            preMarketChange: meta.preMarketChange,
+            preMarketChangePercent: meta.preMarketChangePercent,
+            preMarketTime: meta.preMarketTime,
+            regularMarketPrice: meta.regularMarketPrice,
+            marketState: meta.marketState,
+          };
+        }
+      }).catch(() => {})
+    ));
+    await Promise.allSettled(results);
+    if (Object.keys(preMap).length > 0) setClientPreMarket(preMap);
+  }, []);
+
   useEffect(() => {
     fetchMarketData();
     fetchMarketStatus();
     fetch(`${API_BASE_URL}/market/turnover`).then(r => r.json()).then(setTurnoverData).catch(() => {});
+    fetchClientPreMarket();
     const userId = user?.id;
     const aiUrl = userId ? `${API_BASE_URL}/ai/market-summary?userId=${userId}` : `${API_BASE_URL}/ai/market-summary`;
     fetch(aiUrl)
@@ -279,14 +308,15 @@ const MarketPage: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  // Periodic refresh of market status and turnover every 60s
+  // Periodic refresh of market status, turnover, and client pre-market every 60s
   useEffect(() => {
     const interval = setInterval(() => {
       fetchMarketStatus();
       fetch(`${API_BASE_URL}/market/turnover`).then(r => r.json()).then(setTurnoverData).catch(() => {});
+      fetchClientPreMarket();
     }, 60000);
     return () => clearInterval(interval);
-  }, [fetchMarketStatus]);
+  }, [fetchMarketStatus, fetchClientPreMarket]);
 
 
 
@@ -425,7 +455,7 @@ const MarketPage: React.FC = () => {
           </Button>
           <Button variant="outline" size="sm" disabled={isRefreshing} onClick={async () => {
             setIsRefreshing(true);
-            await Promise.all([refreshCtx(), fetchMarketData()]);
+            await Promise.all([refreshCtx(), fetchMarketData(), fetchClientPreMarket()]);
             setIsRefreshing(false);
           }}>
             <RefreshCcw size={14} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} /> {isRefreshing ? 'Refreshing...' : 'Refresh'}
@@ -447,7 +477,9 @@ const MarketPage: React.FC = () => {
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Global</div>
               <div className={`text-lg font-bold ${globalStatus?.open ? 'text-emerald-600' : 'text-red-500'}`}>{globalStatus?.label || '--'}</div>
               <div className="text-[10px] text-muted-foreground">
-                {globalStatus?.eventLabel || `Closes ${globalStatus?.closeTime || '4:00 PM'}`}
+                {!globalStatus?.open && Object.keys(clientPreMarket).length > 0 ? (
+                  <span className="text-amber-600 font-semibold">Pre-Market Active</span>
+                ) : globalStatus?.eventLabel || `Closes ${globalStatus?.closeTime || '4:00 PM'}`}
               </div>
             </div>
           </div>
