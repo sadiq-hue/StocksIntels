@@ -166,8 +166,8 @@ export function BondsPage() {
           <p className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Clock className="size-3" /> Last updated: {new Date(summary.lastUpdated).toLocaleTimeString()} &middot; Auto-refreshes every 30s
           </p>
-          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${summary.hasLiveData ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-            {summary.hasLiveData ? '● Live' : '● Simulated'}
+          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${summary.hasLiveData ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+            {summary.hasLiveData ? '● Live' : '● CBK Auction'}
           </span>
         </div>
       )}
@@ -232,7 +232,9 @@ export function BondsPage() {
                           {isPositive ? "▲" : "▼"}
                         </span>
                       </div>
-                      {bond.dataSource === 'yahoo' && <span className="text-[8px] text-emerald-600 font-semibold uppercase tracking-wider">Live</span>}
+                      {bond.dataSource === 'live' && <span className="text-[8px] text-emerald-600 font-semibold uppercase tracking-wider">Live</span>}
+                      {bond.dataSource === 'cbk' && <span className="text-[8px] text-blue-600 font-semibold uppercase tracking-wider">CBK</span>}
+                      {bond.dataSource === 'estimated' && <span className="text-[8px] text-amber-600 font-semibold uppercase tracking-wider">Est.</span>}
                     </div>
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase font-semibold">Price</p>
