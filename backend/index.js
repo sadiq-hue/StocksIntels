@@ -8192,8 +8192,11 @@ async function initDatabase() {
       trade_type VARCHAR(20),
       timeframe VARCHAR(20),
       reason TEXT,
+      position_size INTEGER DEFAULT 25,
       generated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );`);
+    // Migration: add position_size column if missing (safe for existing tables)
+    await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS position_size INTEGER DEFAULT 25`).catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_history_ticker ON signal_history(ticker)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_history_generated_at ON signal_history(generated_at)');
 
@@ -8205,8 +8208,10 @@ async function initDatabase() {
       exit_price NUMERIC(15,2),
       result VARCHAR(10) CHECK (result IN ('win', 'loss')),
       recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-      signal_history_id INTEGER REFERENCES signal_history(id) ON DELETE SET NULL
+      signal_history_id INTEGER REFERENCES signal_history(id) ON DELETE SET NULL,
+      position_size INTEGER DEFAULT 25
     );`);
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS position_size INTEGER DEFAULT 25`).catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_outcomes_ticker ON signal_outcomes(ticker)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_outcomes_result ON signal_outcomes(result)');
 

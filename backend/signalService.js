@@ -861,7 +861,9 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
 
         // Return-based metrics from resolved rows (where exit_price != entry_price)
         const returnsResult = await pool.query(`
-          SELECT ticker, signal, entry_price, exit_price, (exit_price - entry_price) / entry_price * 100 AS return_pct
+          SELECT ticker, signal, entry_price, exit_price,
+            (exit_price - entry_price) / entry_price * 100 AS return_pct,
+            COALESCE(position_size, 25) AS position_size
           FROM signal_outcomes
           WHERE recorded_at > NOW() - $1::interval
             AND signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
@@ -870,13 +872,13 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
         `, [`${days} days`]);
 
         let avgReturn = 0, profitFactor = 0, sharpe = 0, maxDrawdown = 0;
-        let retVals = returnsResult.rows.map(r => parseFloat(r.return_pct));
+        let retVals = returnsResult.rows.map(r => ({ return: parseFloat(r.return_pct), posSize: parseInt(r.position_size) || 25 }));
 
-        // If not enough valid exit prices, approximate returns from signal_history using batched live prices
+        // If not enough valid exit prices, approximate returns from signal_history using batched live prices with default position sizing
         if (retVals.length < 10) {
           try {
             const fallback = await pool.query(`
-              SELECT sh.ticker, sh.signal, sh.entry_price
+              SELECT sh.ticker, sh.signal, sh.entry_price, COALESCE(sh.position_size, 25) AS position_size
               FROM signal_history sh
               LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price
               WHERE sh.generated_at > NOW() - $1::interval
@@ -894,29 +896,31 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
               const returnPct = ((quote.price - row.entry_price) / row.entry_price) * 100;
               const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy' || row.signal === 'Accumulate';
               const signedReturn = isBuy ? returnPct : -returnPct;
-              approxReturns.push(signedReturn);
+              approxReturns.push({ return: signedReturn, posSize: parseInt(row.position_size) || 25 });
             }
             if (approxReturns.length > 0) retVals = approxReturns;
           } catch (e) { /* keep signal_outcomes returns if any */ }
         }
 
         if (retVals.length > 0) {
-          const totalReturn = retVals.reduce((s, v) => s + v, 0);
+          const totalReturn = retVals.reduce((s, v) => s + v.return, 0);
           avgReturn = Math.round((totalReturn / retVals.length) * 10) / 10;
           const mean = totalReturn / retVals.length;
-          sharpe = retVals.length > 1 ? Math.round((mean / (stdDev(retVals) || 1)) * 100) / 100 : 0;
-          // Max drawdown: compound equity curve peak-to-trough
+          const returnArr = retVals.map(v => v.return);
+          sharpe = returnArr.length > 1 ? Math.round((mean / (stdDev(returnArr) || 1)) * 100) / 100 : 0;
+          // Max drawdown: compound equity curve with position sizing
           let equity = 100, peak = 100, maxDd = 0;
-          for (const r of retVals) {
-            equity *= (1 + r / 100);
+          for (const v of retVals) {
+            const tradeImpact = (v.return / 100) * (v.posSize / 100);
+            equity *= (1 + tradeImpact);
             if (equity > peak) peak = equity;
             const dd = ((peak - equity) / peak) * 100;
             if (dd > maxDd) maxDd = dd;
           }
           maxDrawdown = Math.round(maxDd * 10) / 10;
           // Profit factor: gross wins / gross losses
-          const grossWins = retVals.filter(v => v > 0).reduce((s, v) => s + v, 0);
-          const grossLosses = Math.abs(retVals.filter(v => v < 0).reduce((s, v) => s + v, 0));
+          const grossWins = retVals.filter(v => v.return > 0).reduce((s, v) => s + v.return, 0);
+          const grossLosses = Math.abs(retVals.filter(v => v.return < 0).reduce((s, v) => s + v.return, 0));
           profitFactor = grossLosses > 0 ? Math.round((grossWins / grossLosses) * 100) / 100 : grossWins > 0 ? 999 : 0;
         }
 
@@ -954,10 +958,12 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
       } catch { /* avgReturn stays 0 */ }
 
       const winRate = total > 0 ? Math.round((wins / total) * 1000) / 10 : 0;
+      const hasRealExits = returnsResult.rows.length > 0;
+      const dataSource = hasRealExits ? 'signal_outcomes' : 'signal_outcomes_with_live_price_fallback';
       return {
         total, wins, losses, winRate,
         avgReturn, profitFactor, sharpe, maxDrawdown,
-        dataSource: retVals.length > 0 ? 'signal_outcomes_with_live_price_fallback' : 'signal_outcomes',
+        dataSource,
         bySignal,
       };
     }
@@ -1398,11 +1404,12 @@ function getConfidenceMultiplier() {
 // Stores signal performance outcomes in the database so state survives restarts.
 async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result) {
   try {
+    const posSize = _signalOutcomes.get(symbol)?.positionSize || 25;
     await pool.query(
-      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
+      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
        ON CONFLICT DO NOTHING`,
-      [symbol, entryPrice, signalAction, currentPrice, result]
+      [symbol, entryPrice, signalAction, currentPrice, result, posSize]
     );
     // Update prediction log with actual outcome
     resolvePredictionLogs(symbol, result).catch(() => {});
@@ -1568,14 +1575,16 @@ async function persistSignals(signals) {
       s.entry || s.price, s.stopLoss || 0, s.target1 || 0, s.target2 || 0,
       s.riskReward || 1, s.sector || 'General', s.market || 'Global',
       s.currency || 'USD', s.type || 'Swing Trade', s.timeframe || '2-4 weeks', s.reason || '',
+      parseInt(s.positionSize) || 25,
     ]);
+    const cols = 17;
     const placeholders = values.map((_, i) => {
-      const base = i * 16;
-      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, NOW())`;
+      const base = i * cols;
+      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, $${base+17}, NOW())`;
     }).join(',');
     const flat = values.flat();
     const result = await pool.query(
-      `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, generated_at)
+      `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, position_size, generated_at)
        VALUES ${placeholders}
        ON CONFLICT DO NOTHING`,
       flat

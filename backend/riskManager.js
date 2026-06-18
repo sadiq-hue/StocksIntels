@@ -122,7 +122,8 @@ function applyPortfolioConstraints(signals) {
 
 function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, symbol, currentPrice, newSignal) {
   let previous = signalOutcomes.get(symbol);
-  const outcome = { entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action, timestamp: Date.now(), result: null };
+  const posSize = parseInt(newSignal.positionSize) || 25;
+  const outcome = { entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action, timestamp: Date.now(), result: null, positionSize: posSize };
   if (previous && previous.action !== 'hold') {
     const priceChange = ((currentPrice - previous.entryPrice) / previous.entryPrice) * 100;
     let won;
