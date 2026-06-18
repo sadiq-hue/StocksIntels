@@ -1594,7 +1594,7 @@ _loadForwardPredictionsFromDb().catch(() => {});
 _loadSignalCacheFromDb().catch(() => {});
 setTimeout(() => {
   generateSignals(null, true).catch(() => {});
-  generateSignals(null, false).catch(() => {});
+  generateSignals(null, false, true).catch(() => {});
 }, 100);
 
 // Seed signal_history on startup if it's empty (e.g. fresh deploy / cleared DB)
@@ -1637,6 +1637,9 @@ setInterval(() => {
 // When quick=true, skips all external API fetches and uses only cached data.
 async function generateSignals(marketData = null, quick = false, force = false) {
   if (!marketData && !quick && !force && _signalsCache && Date.now() - _signalsCacheTime < SIGNALS_CACHE_TTL) {
+    return _signalsCache;
+  }
+  if (!marketData && quick && _signalsCache) {
     return _signalsCache;
   }
   if (!marketData && !quick && _signalsInProgress) {

@@ -4697,7 +4697,7 @@ app.get('/api/stocks/search/yahoo', async (req, res) => {
 // --- Stock Screener Routes ---
 app.get('/api/screener/criteria', async (req, res) => {
   try {
-    const signals = await generateSignals();
+    const signals = await generateSignals(null, true);
     const sectors = [...new Set(signals.map(s => s.sector).filter(Boolean))].sort();
     const markets = [...new Set(signals.map(s => s.market).filter(Boolean))].sort();
     const signalTypes = [...new Set(signals.map(s => s.signal).filter(Boolean))].sort();
@@ -4717,7 +4717,7 @@ app.get('/api/screener/criteria', async (req, res) => {
 
 app.get('/api/screener', async (req, res) => {
   try {
-    const signals = await generateSignals();
+    const signals = await generateSignals(null, true);
     let filtered = [...signals];
 
     // Filters
