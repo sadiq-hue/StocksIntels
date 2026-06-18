@@ -41,41 +41,41 @@ const plans = [
     icon: Zap,
     popular: false,
     features: [
-      { text: "Real-time African market data", included: true },
+      { text: "Real-time African + global data", included: true },
       { text: "5 AI signals per day", included: true },
       { text: "Stock screener", included: true },
       { text: "Portfolio tracking", included: true },
       { text: "Email support", included: true },
-      { text: "Global market data", included: false },
       { text: "Advanced charting", included: false },
       { text: "Risk analysis tools", included: false },
+      { text: "Unlimited signals", included: false },
     ],
     cta: "Start Free Trial",
     ctaVariant: "default" as const,
   },
   {
-    name: "NSE Pro",
-    description: "For active NSE traders",
+    name: "Premium",
+    description: "For serious investors",
     monthlyPrice: 7.99,
     yearlyPrice: 79.99,
     icon: Shield,
     popular: false,
     features: [
-      { text: "Unlimited NSE AI signals", included: true },
-      { text: "Advanced NSE screener", included: true },
-      { text: "NSE technical analysis", included: true },
-      { text: "Portfolio tracking", included: true },
+      { text: "Unlimited AI signals", included: true },
+      { text: "African + global market data", included: true },
+      { text: "Advanced screener", included: true },
+      { text: "Technical analysis", included: true },
       { text: "Email support", included: true },
-      { text: "Global market data", included: false },
       { text: "Advanced charting", included: false },
-      { text: "Risk analysis tools", included: false },
+      { text: "Risk scoring", included: false },
+      { text: "Priority support", included: false },
     ],
     cta: "Start Free Trial",
     ctaVariant: "outline" as const,
   },
   {
     name: "Pro",
-    description: "For active global traders",
+    description: "For active traders",
     monthlyPrice: 14.99,
     yearlyPrice: 149.99,
     icon: Shield,
@@ -133,8 +133,8 @@ const faqs = [
     answer: "M-Pesa amounts are in KES: Starter 649 KES/mo, NSE Pro 1,039 KES/mo, Pro 1,949 KES/mo. You'll receive an STK push on your phone to confirm.",
   },
   {
-    question: "What's the difference between NSE Pro and Pro?",
-    answer: "NSE Pro is for traders focused only on Nairobi Securities Exchange — unlimited NSE signals, no global data. Pro includes both African and global markets with advanced charting and risk scoring.",
+    question: "What's the difference between Premium and Pro?",
+    answer: "Premium gives you unlimited AI signals with African + global data, advanced screener, and technical analysis. Pro adds advanced charting, risk scoring, and priority support for professional traders.",
   },
   {
     question: "Can I cancel my subscription?",
@@ -340,30 +340,30 @@ export function PricingPage() {
                     <th className="text-left py-4 px-6 text-sm font-semibold text-gray-900">Feature</th>
                     <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">Free</th>
                     <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">Starter</th>
-                    <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">NSE Pro</th>
+                    <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">Premium</th>
                     <th className="text-center py-4 px-6 text-sm font-semibold text-[#0D7490] bg-[#0D7490]/5">Pro</th>
                     <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">Institutional</th>
                   </tr>
                 </thead>
                 <tbody>
                   {[
-                    { name: "Market data", free: "Delayed", starter: "African real-time", nsePro: "NSE real-time", pro: "African + Global", inst: "All + Custom" },
-                    { name: "AI signals", free: "1/day", starter: "5/day", nsePro: "Unlimited NSE", pro: "Unlimited", inst: "Unlimited" },
-                    { name: "Stock screener", free: "—", starter: "✓", nsePro: "Advanced NSE", pro: "✓", inst: "✓" },
-                    { name: "Portfolio tracking", free: "—", starter: "Basic", nsePro: "Basic", pro: "Advanced", inst: "White-label" },
-                    { name: "Charting", free: "—", starter: "Basic", nsePro: "NSE technical", pro: "Advanced", inst: "Advanced" },
-                    { name: "Risk analysis", free: "—", starter: "—", nsePro: "—", pro: "✓", inst: "✓" },
-                    { name: "API access", free: "—", starter: "—", nsePro: "—", pro: "—", inst: "Full access" },
-                    { name: "Support", free: "—", starter: "Email", nsePro: "Email", pro: "Priority", inst: "24/7 Dedicated" },
-                    { name: "Team seats", free: "1", starter: "1", nsePro: "1", pro: "1", inst: "Unlimited" },
-                    { name: "Price (USD)", free: "$0", starter: "$4.99/mo", nsePro: "$7.99/mo", pro: "$14.99/mo", inst: "From $200/mo" },
-                    { name: "Price (KES)", free: "Free", starter: "649/mo", nsePro: "1,039/mo", pro: "1,949/mo", inst: "From 26,000/mo" },
+                    { name: "Market data", free: "Delayed", starter: "African + Global", premium: "African + Global", pro: "All markets", inst: "All + Custom" },
+                    { name: "AI signals", free: "1/day", starter: "5/day", premium: "Unlimited", pro: "Unlimited", inst: "Unlimited" },
+                    { name: "Stock screener", free: "—", starter: "✓", premium: "Advanced", pro: "✓", inst: "✓" },
+                    { name: "Technical analysis", free: "—", starter: "Basic", premium: "✓", pro: "Advanced", inst: "Advanced" },
+                    { name: "Portfolio tracking", free: "—", starter: "Basic", premium: "Basic", pro: "Advanced", inst: "White-label" },
+                    { name: "Charting", free: "—", starter: "Basic", premium: "Basic", pro: "Advanced", inst: "Advanced" },
+                    { name: "Risk scoring", free: "—", starter: "—", premium: "—", pro: "✓", inst: "✓" },
+                    { name: "API access", free: "—", starter: "—", premium: "—", pro: "—", inst: "Full access" },
+                    { name: "Support", free: "—", starter: "Email", premium: "Email", pro: "Priority", inst: "24/7 Dedicated" },
+                    { name: "Price (USD)", free: "$0", starter: "$4.99/mo", premium: "$7.99/mo", pro: "$14.99/mo", inst: "From $200/mo" },
+                    { name: "Price (KES)", free: "Free", starter: "649/mo", premium: "1,039/mo", pro: "1,949/mo", inst: "From 26,000/mo" },
                   ].map((row, idx) => (
                     <tr key={row.name} className={idx % 2 === 0 ? "bg-gray-50/50" : ""}>
                       <td className="py-4 px-6 text-sm text-gray-700">{row.name}</td>
                       <td className="py-4 px-6 text-center text-sm text-gray-600">{row.free}</td>
                       <td className="py-4 px-6 text-center text-sm text-gray-600">{row.starter}</td>
-                      <td className="py-4 px-6 text-center text-sm text-gray-600">{row.nsePro}</td>
+                      <td className="py-4 px-6 text-center text-sm text-gray-600">{row.premium}</td>
                       <td className="py-4 px-6 text-center text-sm font-medium text-[#0D7490] bg-[#0D7490]/5">{row.pro}</td>
                       <td className="py-4 px-6 text-center text-sm text-gray-600">{row.inst}</td>
                     </tr>

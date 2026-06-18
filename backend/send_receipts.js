@@ -7,7 +7,7 @@ async function main() {
     const starters = await pool.query(`
       SELECT u.id, u.full_name, u.email, u.subscription_tier
       FROM users u
-      WHERE u.subscription_status = 'active' AND u.subscription_tier IN ('starter', 'nse pro', 'pro', 'institutional')
+      WHERE u.subscription_status = 'active' AND u.subscription_tier IN ('starter', 'premium', 'pro', 'institutional')
       ORDER BY u.id
     `);
     console.log('Found', starters.rows.length, 'active paid subscribers');

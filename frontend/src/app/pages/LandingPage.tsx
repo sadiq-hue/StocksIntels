@@ -713,7 +713,7 @@ export function LandingPage() {
                 </Button>
               </Link>
               <div className="space-y-2">
-                {["Real-time African data", "5 AI signals/day", "Stock screener", "Portfolio tracking"].map((f) => (
+                {["Real-time African + global data", "5 AI signals/day", "Stock screener", "Portfolio tracking"].map((f) => (
                   <div key={f} className="flex items-center gap-2">
                     <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
                       <Check className="w-2.5 h-2.5 text-green-600" />
@@ -724,24 +724,24 @@ export function LandingPage() {
               </div>
             </div>
 
-            {/* NSE Pro */}
+            {/* Premium */}
             <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500 group">
               <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center mb-4 group-hover:from-[#0D7490]/20 group-hover:to-[#0EA5E9]/20 transition-all">
                 <Shield className="w-6 h-6 text-[#0D7490]" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-1">NSE Pro</h3>
-              <p className="text-sm text-gray-500 mb-4 font-medium">Active NSE traders</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-1">Premium</h3>
+              <p className="text-sm text-gray-500 mb-4 font-medium">Serious investors</p>
               <div className="mb-4">
                 <span className="text-3xl font-bold text-gray-900">$7.99</span>
                 <span className="text-gray-500 text-sm">/mo</span>
               </div>
-              <Link to="/subscribe/nse%20pro">
+              <Link to="/subscribe/premium">
                 <Button variant="outline" className="w-full py-4 text-sm font-semibold mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all group-hover:border-[#0D7490]/30">
                   Start Free Trial
                 </Button>
               </Link>
               <div className="space-y-2">
-                {["Unlimited NSE signals", "Advanced NSE screener", "NSE technical analysis", "Email support"].map((f) => (
+                {["Unlimited AI signals", "African + global data", "Advanced screener", "Technical analysis"].map((f) => (
                   <div key={f} className="flex items-center gap-2">
                     <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
                       <Check className="w-2.5 h-2.5 text-green-600" />
@@ -764,7 +764,7 @@ export function LandingPage() {
                 <Shield className="w-6 h-6 text-white" />
               </div>
               <h3 className="text-xl font-bold mb-1">Pro</h3>
-              <p className="text-sm text-gray-400 mb-4 font-medium">Active global traders</p>
+              <p className="text-sm text-gray-400 mb-4 font-medium">Active traders</p>
               <div className="mb-4">
                 <span className="text-3xl font-bold">$14.99</span>
                 <span className="text-gray-400 text-sm">/mo</span>

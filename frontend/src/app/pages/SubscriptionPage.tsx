@@ -19,14 +19,14 @@ const planDetails = {
     monthlyPrice: 4.99,
     yearlyPrice: 49.99,
     icon: Zap,
-    features: ["Real-time African market data", "5 AI signals per day", "Stock screener", "Portfolio tracking", "Email support"],
+    features: ["Real-time African + global data", "5 AI signals per day", "Stock screener", "Portfolio tracking", "Email support"],
   },
-  "nse pro": {
-    name: "NSE Pro",
+  premium: {
+    name: "Premium",
     monthlyPrice: 7.99,
     yearlyPrice: 79.99,
     icon: Shield,
-    features: ["Unlimited NSE AI signals", "Advanced NSE screener", "NSE technical analysis", "Portfolio tracking", "Email support"],
+    features: ["Unlimited AI signals", "African + global market data", "Advanced screener", "Technical analysis", "Email support"],
   },
   pro: {
     name: "Pro",
