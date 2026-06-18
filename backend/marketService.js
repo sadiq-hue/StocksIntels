@@ -482,6 +482,30 @@ async function fetchLiveBatch(symbols) {
     results = { ...results, ...yahooResults };
   }
 
+  // Enrich global quotes with pre-market data if available (best-effort, non-blocking enrichment)
+  const globalResults = Object.entries(results).filter(([s]) => !s.startsWith('NSE:'));
+  if (globalResults.length > 0) {
+    const { fetchPreMarketBatch } = require('./yahooFinanceFinancialsScraper');
+    fetchPreMarketBatch(globalResults.map(([s]) => s)).then(preData => {
+      if (!preData || Object.keys(preData).length === 0) return;
+      for (const [sym, pre] of Object.entries(preData)) {
+        if (results[sym]) {
+          Object.assign(results[sym], {
+            preMarketPrice: pre.preMarketPrice ?? null,
+            preMarketChange: pre.preMarketChange ?? null,
+            preMarketChangePercent: pre.preMarketChangePercent ?? null,
+            preMarketTime: pre.preMarketTime ?? null,
+            postMarketPrice: pre.postMarketPrice ?? null,
+            postMarketChange: pre.postMarketChange ?? null,
+            postMarketChangePercent: pre.postMarketChangePercent ?? null,
+            postMarketTime: pre.postMarketTime ?? null,
+            marketState: pre.marketState || 'REGULAR',
+          });
+        }
+      }
+    }).catch(() => {});
+  }
+
   return results;
 }
 
