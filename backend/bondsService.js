@@ -91,29 +91,47 @@ const MARKET_ACCESS = {
   },
 };
 
-// ─── Real-Time US Treasury Yields via Yahoo Finance ─────────────────────
+// ─── Real-Time US Treasury & Global Bond Yields via Yahoo Proxy ────────
 async function fetchRealYields() {
   try {
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const { fetchPriceViaProxy } = require('./yahooFinanceFinancialsScraper');
 
-    const symbols = Object.values(YAHOO_TREASURY_MAP).map(m => m.symbol);
-    const quotes = await yf.quote(symbols);
+    // Add non-US global bond yield symbols (may not all resolve)
+    const EXTRA_GLOBAL = {
+      'UK-GILT-10Y': { symbol: '^UK10', name: 'UK 10-Year Gilt Yield' },
+      'DE-BUND-10Y': { symbol: '^DE10YD', name: 'Germany 10-Year Bund Yield' },
+      'JP-GOV-10Y': { symbol: '^JP10YT', name: 'Japan 10-Year JGB Yield' },
+      'IN-GOV-10Y': { symbol: 'IN10YD.NS', name: 'India 10-Year Bond Yield' },
+      'NG-GOV-10Y': { symbol: '^NG10YD', name: 'Nigeria 10-Year Bond Yield' },
+      'ZA-GOV-10Y': { symbol: '^ZA10YD', name: 'South Africa 10-Year Bond Yield' },
+    };
+
+    const allSymbols = { ...YAHOO_TREASURY_MAP, ...EXTRA_GLOBAL };
     const yields = {};
 
-    for (const q of Array.isArray(quotes) ? quotes : [quotes]) {
-      const symbol = q.symbol;
-      for (const [bondId, mapping] of Object.entries(YAHOO_TREASURY_MAP)) {
-        if (mapping.symbol === symbol) {
-          // Yahoo returns CBOE yield indexes as direct percentages
-          const yieldVal = (q.regularMarketPrice || 0);
-          yields[bondId] = { ytm: +yieldVal.toFixed(2), price: q.regularMarketPrice, source: 'yahoo' };
+    // Fetch in parallel batches of 5
+    const entries = Object.entries(allSymbols);
+    for (let i = 0; i < entries.length; i += 5) {
+      const batch = entries.slice(i, i + 5);
+      const results = await Promise.allSettled(
+        batch.map(async ([bondId, mapping]) => {
+          const data = await fetchPriceViaProxy(mapping.symbol);
+          if (data?.price && data.price > 0) {
+            return { bondId, ytm: +data.price.toFixed(2), price: data.price, source: 'yahoo' };
+          }
+          return null;
+        })
+      );
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value) {
+          yields[r.value.bondId] = { ytm: r.value.ytm, price: r.value.price, source: r.value.source };
         }
       }
     }
+
     return yields;
   } catch (e) {
-    console.error('[Bonds] Yahoo Finance fetch failed:', e.message);
+    console.error('[Bonds] Proxy fetch failed:', e.message);
     return {};
   }
 }
