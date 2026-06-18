@@ -730,7 +730,7 @@ export function LandingPage() {
                 <Shield className="w-6 h-6 text-[#0D7490]" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-1">Premium</h3>
-              <p className="text-sm text-gray-500 mb-4 font-medium">Serious investors</p>
+              <p className="text-sm text-gray-500 mb-4 font-medium">NSE-focused traders</p>
               <div className="mb-4">
                 <span className="text-3xl font-bold text-gray-900">$7.99</span>
                 <span className="text-gray-500 text-sm">/mo</span>
@@ -741,7 +741,7 @@ export function LandingPage() {
                 </Button>
               </Link>
               <div className="space-y-2">
-                {["Unlimited AI signals", "African + global data", "Advanced screener", "Technical analysis"].map((f) => (
+                {["Unlimited NSE signals", "10 global/day", "Advanced NSE screener", "NSE technical analysis"].map((f) => (
                   <div key={f} className="flex items-center gap-2">
                     <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
                       <Check className="w-2.5 h-2.5 text-green-600" />

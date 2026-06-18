@@ -26,7 +26,7 @@ const planDetails = {
     monthlyPrice: 7.99,
     yearlyPrice: 79.99,
     icon: Shield,
-    features: ["Unlimited AI signals", "African + global market data", "Advanced screener", "Technical analysis", "Email support"],
+    features: ["Unlimited NSE AI signals", "10 global signals per day", "African + global market data", "Advanced NSE screener", "NSE technical analysis", "Email support"],
   },
   pro: {
     name: "Pro",

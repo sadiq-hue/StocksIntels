@@ -55,20 +55,20 @@ const plans = [
   },
   {
     name: "Premium",
-    description: "For serious investors",
+    description: "For NSE-focused traders",
     monthlyPrice: 7.99,
     yearlyPrice: 79.99,
     icon: Shield,
     popular: false,
     features: [
-      { text: "Unlimited AI signals", included: true },
+      { text: "Unlimited NSE AI signals", included: true },
+      { text: "10 global signals per day", included: true },
       { text: "African + global market data", included: true },
-      { text: "Advanced screener", included: true },
-      { text: "Technical analysis", included: true },
+      { text: "Advanced NSE screener", included: true },
+      { text: "NSE technical analysis", included: true },
       { text: "Email support", included: true },
       { text: "Advanced charting", included: false },
       { text: "Risk scoring", included: false },
-      { text: "Priority support", included: false },
     ],
     cta: "Start Free Trial",
     ctaVariant: "outline" as const,
@@ -134,7 +134,7 @@ const faqs = [
   },
   {
     question: "What's the difference between Premium and Pro?",
-    answer: "Premium gives you unlimited AI signals with African + global data, advanced screener, and technical analysis. Pro adds advanced charting, risk scoring, and priority support for professional traders.",
+    answer: "Premium is built for NSE-focused traders — unlimited NSE signals + 10 global signals/day, NSE advanced screener and technical analysis. Pro gives you unlimited everything across all markets plus advanced charting, risk scoring, and priority support.",
   },
   {
     question: "Can I cancel my subscription?",
@@ -348,9 +348,10 @@ export function PricingPage() {
                 <tbody>
                   {[
                     { name: "Market data", free: "Delayed", starter: "African + Global", premium: "African + Global", pro: "All markets", inst: "All + Custom" },
-                    { name: "AI signals", free: "1/day", starter: "5/day", premium: "Unlimited", pro: "Unlimited", inst: "Unlimited" },
-                    { name: "Stock screener", free: "—", starter: "✓", premium: "Advanced", pro: "✓", inst: "✓" },
-                    { name: "Technical analysis", free: "—", starter: "Basic", premium: "✓", pro: "Advanced", inst: "Advanced" },
+                    { name: "NSE signals", free: "1/day", starter: "5/day", premium: "Unlimited", pro: "Unlimited", inst: "Unlimited" },
+                    { name: "Global signals", free: "1/day", starter: "5/day", premium: "10/day", pro: "Unlimited", inst: "Unlimited" },
+                    { name: "Stock screener", free: "—", starter: "✓", premium: "Advanced NSE", pro: "✓", inst: "✓" },
+                    { name: "Technical analysis", free: "—", starter: "Basic", premium: "NSE-focused", pro: "Advanced", inst: "Advanced" },
                     { name: "Portfolio tracking", free: "—", starter: "Basic", premium: "Basic", pro: "Advanced", inst: "White-label" },
                     { name: "Charting", free: "—", starter: "Basic", premium: "Basic", pro: "Advanced", inst: "Advanced" },
                     { name: "Risk scoring", free: "—", starter: "—", premium: "—", pro: "✓", inst: "✓" },

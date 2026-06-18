@@ -1990,7 +1990,7 @@ const FAQ_ITEMS = [
   { question: "What settings can I change?", answer: "In **Settings** you can: edit your profile (name, email, phone, bio, location, trader type, experience level), manage notification preferences (price alerts, signals, news, portfolio, chat), toggle appearance (dark mode, compact view), change your password, and set privacy controls.", category: "account" },
   { question: "How do notifications work?", answer: "You'll receive notifications for new trading signals, price alerts, and system updates. The bell icon in the header shows unread count. Click to view all, mark individual as read, or mark all read. Real-time updates arrive via WebSocket.", category: "account" },
   { question: "How do I connect a broker?", answer: "Go to **Settings > Brokers** to connect real brokerage accounts. Supported: Alpaca, Interactive Brokers (IBKR), MetaTrader 5, OANDA, Tradier, and manual entry for African brokers like AIB-AXYS and Hisa. Credentials are encrypted with AES-256-GCM.", category: "account" },
-  { question: "What subscription plans are available?", answer: "We offer **Free** ($0) for casual investors, **Starter** ($4.99/mo) for retail investors with real-time African + global data and the stock screener, **Premium** ($7.99/mo) for unlimited AI signals with advanced analysis, **Pro** ($14.99/mo) for professional-grade charting and risk scoring, and **Institutional** (custom from $200/mo) for brokers and funds. Pay via M-Pesa or card.", category: "account" },
+  { question: "What subscription plans are available?", answer: "We offer **Free** ($0) for casual investors, **Starter** ($4.99/mo) for real-time African + global data with the stock screener, **Premium** ($7.99/mo) for unlimited NSE signals + 10 global/day, **Pro** ($14.99/mo) for unlimited everything with advanced charting and risk scoring, and **Institutional** (custom from $200/mo) for brokers and funds. Pay via M-Pesa or card.", category: "account" },
   { question: "How do M-Pesa payments work?", answer: "On the subscription page, select M-Pesa as your payment method. Enter your M-Pesa phone number and you'll receive an STK push prompt on your phone. Confirm the payment and your subscription activates immediately.", category: "account" },
   { question: "What is the AI Insights page?", answer: "**AI Insights** is a conversational AI analyst. Ask questions like 'Analyze Safaricom trend', 'Best NSE momentum stocks', or 'Outlook for banking sector'. It responds with data-driven market analysis.", category: "signals" },
   { question: "How does sector analysis work?", answer: "The **Sectors** page shows performance by sector/industry with bar charts. Filter by NSE or Global markets. Each sector shows leading stocks, sentiment indicators, and volume analysis.", category: "markets" },
@@ -2222,7 +2222,7 @@ const KNOWLEDGE_BASE = [
   },
   {
     keywords: ['subscription', 'plan', 'pricing', 'upgrade', 'downgrade', 'starter', 'pro', 'enterprise', 'institutional', 'premium', 'cost', 'price', 'monthly', 'free'],
-    answer: 'Plans: **Free** ($0), **Starter** ($4.99/mo) with real-time African + global data + screener, **Premium** ($7.99/mo) for unlimited signals + advanced analysis, **Pro** ($14.99/mo) for professional charting + risk scoring, and **Institutional** (from $200/mo) for teams. Pay via **M-Pesa** or **card**. Compare on the **Pricing** page.',
+    answer: 'Plans: **Free** ($0), **Starter** ($4.99/mo) with real-time African + global data + screener, **Premium** ($7.99/mo) for unlimited NSE + 10 global signals/day, **Pro** ($14.99/mo) for unlimited everything + charting + risk scoring, and **Institutional** (from $200/mo) for teams. Pay via **M-Pesa** or **card**.',
     category: 'account',
   },
   {
@@ -8086,14 +8086,14 @@ async function initDatabase() {
       await pool.query(`INSERT INTO subscription_plans (name, description, price_kes, price_usd, features) VALUES
         ('Free', 'New and casual investors', 0, 0, $1::jsonb),
         ('Starter', 'For retail investors', 649, 4.99, $2::jsonb),
-        ('Premium', 'For serious investors', 1039, 7.99, $3::jsonb),
+        ('Premium', 'For NSE-focused traders', 1039, 7.99, $3::jsonb),
         ('Pro', 'For active traders', 1949, 14.99, $4::jsonb),
         ('Institutional', 'For brokers, funds and advisors', 26000, 200, $5::jsonb)
       `, [
         JSON.stringify(['Delayed data on select markets', '1 AI signal per day', 'Basic watchlist']),
         JSON.stringify(['Real-time African + global data', '5 AI signals per day', 'Stock screener', 'Portfolio tracking']),
-        JSON.stringify(['Unlimited AI signals', 'African + global market data', 'Advanced screener', 'Technical analysis', 'Email support']),
-        JSON.stringify(['Unlimited AI signals', 'All African + global market data', 'Advanced charting', 'Risk scoring', 'Priority support']),
+        JSON.stringify(['Unlimited NSE signals', '10 global signals/day', 'Advanced NSE screener', 'NSE technical analysis', 'Email support']),
+        JSON.stringify(['Unlimited AI signals', 'All African + global markets', 'Advanced charting', 'Risk scoring', 'Priority support']),
         JSON.stringify(['API access', 'White-label analytics', 'Dedicated support', 'Team seats', 'Custom data feeds']),
       ]);
     } else {
@@ -8106,17 +8106,21 @@ async function initDatabase() {
       await pool.query(`UPDATE subscription_plans SET name = 'Institutional', price_kes = 26000, price_usd = 200, description = 'For brokers, funds and advisors', features = $1::jsonb WHERE name = 'Enterprise'`, [
         JSON.stringify(['API access', 'White-label analytics', 'Dedicated support', 'Team seats', 'Custom data feeds']),
       ]);
-      // Rename NSE Pro → Premium with global data
+      // Rename NSE Pro → Premium with NSE-focused unlimited
       const nseProRows = await pool.query(`SELECT id FROM subscription_plans WHERE name = 'NSE Pro'`);
       if (nseProRows.rows.length > 0) {
-        await pool.query(`UPDATE subscription_plans SET name = 'Premium', description = 'For serious investors', features = $1::jsonb WHERE name = 'NSE Pro'`, [
-          JSON.stringify(['Unlimited AI signals', 'African + global market data', 'Advanced screener', 'Technical analysis', 'Email support']),
+        await pool.query(`UPDATE subscription_plans SET name = 'Premium', description = 'For NSE-focused traders', features = $1::jsonb WHERE name = 'NSE Pro'`, [
+          JSON.stringify(['Unlimited NSE signals', '10 global signals/day', 'Advanced NSE screener', 'NSE technical analysis', 'Email support']),
         ]);
       } else {
         const premiumExists = await pool.query(`SELECT id FROM subscription_plans WHERE name = 'Premium'`);
         if (premiumExists.rows.length === 0) {
-          await pool.query(`INSERT INTO subscription_plans (name, description, price_kes, price_usd, features) VALUES ('Premium', 'For serious investors', 1039, 7.99, $1::jsonb)`, [
-            JSON.stringify(['Unlimited AI signals', 'African + global market data', 'Advanced screener', 'Technical analysis', 'Email support']),
+          await pool.query(`INSERT INTO subscription_plans (name, description, price_kes, price_usd, features) VALUES ('Premium', 'For NSE-focused traders', 1039, 7.99, $1::jsonb)`, [
+            JSON.stringify(['Unlimited NSE signals', '10 global signals/day', 'Advanced NSE screener', 'NSE technical analysis', 'Email support']),
+          ]);
+        } else {
+          await pool.query(`UPDATE subscription_plans SET description = 'For NSE-focused traders', features = $1::jsonb WHERE name = 'Premium'`, [
+            JSON.stringify(['Unlimited NSE signals', '10 global signals/day', 'Advanced NSE screener', 'NSE technical analysis', 'Email support']),
           ]);
         }
       }
