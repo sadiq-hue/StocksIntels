@@ -667,34 +667,92 @@ export function LandingPage() {
             <p className="text-lg text-gray-600">Choose the plan that fits your trading style. All plans include a 7-day free trial.</p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6 lg:gap-8 items-start max-w-5xl mx-auto">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 items-start">
+            {/* Free */}
             <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500 group">
               <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center mb-4 group-hover:from-[#0D7490]/20 group-hover:to-[#0EA5E9]/20 transition-all">
                 <Zap className="w-6 h-6 text-[#0D7490]" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-1">Starter</h3>
-              <p className="text-sm text-gray-500 mb-4 font-medium">Perfect for beginners</p>
-              <div className="mb-6">
-                <span className="text-4xl font-bold text-gray-900">$0</span>
-                <span className="text-gray-500 text-sm">/month</span>
+              <h3 className="text-xl font-bold text-gray-900 mb-1">Free</h3>
+              <p className="text-sm text-gray-500 mb-4 font-medium">Casual investors</p>
+              <div className="mb-4">
+                <span className="text-3xl font-bold text-gray-900">$0</span>
+                <span className="text-gray-500 text-sm">/mo</span>
               </div>
-              <Link to="/subscribe/starter">
-                <Button variant="outline" className="w-full py-5 text-base font-semibold mb-6 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all group-hover:border-[#0D7490]/30">
-                  Get Started Free
+              <Link to="/subscribe/free">
+                <Button variant="outline" className="w-full py-4 text-sm font-semibold mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all group-hover:border-[#0D7490]/30">
+                  Get Started
                 </Button>
               </Link>
-              <div className="space-y-3">
-                {["Real-time NSE data", "3 AI signals per day", "Basic portfolio tracking", "Email support"].map((f) => (
-                  <div key={f} className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                      <Check className="w-3 h-3 text-green-600" />
+              <div className="space-y-2">
+                {["Delayed data", "1 AI signal/day", "Basic watchlist"].map((f) => (
+                  <div key={f} className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                      <Check className="w-2.5 h-2.5 text-green-600" />
                     </div>
-                    <span className="text-sm text-gray-700">{f}</span>
+                    <span className="text-xs text-gray-700">{f}</span>
                   </div>
                 ))}
               </div>
             </div>
 
+            {/* Starter */}
+            <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500 group">
+              <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center mb-4 group-hover:from-[#0D7490]/20 group-hover:to-[#0EA5E9]/20 transition-all">
+                <Zap className="w-6 h-6 text-[#0D7490]" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-1">Starter</h3>
+              <p className="text-sm text-gray-500 mb-4 font-medium">Retail investors</p>
+              <div className="mb-4">
+                <span className="text-3xl font-bold text-gray-900">$4.99</span>
+                <span className="text-gray-500 text-sm">/mo</span>
+              </div>
+              <Link to="/subscribe/starter">
+                <Button variant="outline" className="w-full py-4 text-sm font-semibold mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all group-hover:border-[#0D7490]/30">
+                  Start Free Trial
+                </Button>
+              </Link>
+              <div className="space-y-2">
+                {["Real-time African data", "5 AI signals/day", "Stock screener", "Portfolio tracking"].map((f) => (
+                  <div key={f} className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                      <Check className="w-2.5 h-2.5 text-green-600" />
+                    </div>
+                    <span className="text-xs text-gray-700">{f}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* NSE Pro */}
+            <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500 group">
+              <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center mb-4 group-hover:from-[#0D7490]/20 group-hover:to-[#0EA5E9]/20 transition-all">
+                <Shield className="w-6 h-6 text-[#0D7490]" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-1">NSE Pro</h3>
+              <p className="text-sm text-gray-500 mb-4 font-medium">Active NSE traders</p>
+              <div className="mb-4">
+                <span className="text-3xl font-bold text-gray-900">$7.99</span>
+                <span className="text-gray-500 text-sm">/mo</span>
+              </div>
+              <Link to="/subscribe/nse%20pro">
+                <Button variant="outline" className="w-full py-4 text-sm font-semibold mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all group-hover:border-[#0D7490]/30">
+                  Start Free Trial
+                </Button>
+              </Link>
+              <div className="space-y-2">
+                {["Unlimited NSE signals", "Advanced NSE screener", "NSE technical analysis", "Email support"].map((f) => (
+                  <div key={f} className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                      <Check className="w-2.5 h-2.5 text-green-600" />
+                    </div>
+                    <span className="text-xs text-gray-700">{f}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Pro */}
             <div className="relative bg-gray-900 text-white rounded-2xl p-4 md:p-6 shadow-2xl shadow-gray-900/30 scale-105 z-10 overflow-hidden">
               <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-[#0D7490]/20 to-transparent rounded-full" />
               <div className="absolute -top-4 left-1/2 -translate-x-1/2">
@@ -706,51 +764,52 @@ export function LandingPage() {
                 <Shield className="w-6 h-6 text-white" />
               </div>
               <h3 className="text-xl font-bold mb-1">Pro</h3>
-              <p className="text-sm text-gray-400 mb-4 font-medium">For active traders</p>
-              <div className="mb-6">
-                <span className="text-4xl font-bold">$29</span>
-                <span className="text-gray-400 text-sm">/month</span>
+              <p className="text-sm text-gray-400 mb-4 font-medium">Active global traders</p>
+              <div className="mb-4">
+                <span className="text-3xl font-bold">$14.99</span>
+                <span className="text-gray-400 text-sm">/mo</span>
               </div>
               <Link to="/subscribe/pro">
-                <Button className="w-full py-5 text-base font-semibold mb-6 bg-white text-gray-900 hover:bg-gray-100 shadow-xl transition-all hover:shadow-2xl">
+                <Button className="w-full py-4 text-sm font-semibold mb-4 bg-white text-gray-900 hover:bg-gray-100 shadow-xl transition-all hover:shadow-2xl">
                   Start Pro Trial
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </Link>
-              <div className="space-y-3">
-                {["Everything in Starter", "Unlimited AI signals", "Global market data", "Advanced analytics", "Risk analysis tools", "Priority support"].map((f) => (
-                  <div key={f} className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 backdrop-blur-sm">
-                      <Check className="w-3 h-3 text-white" />
+              <div className="space-y-2">
+                {["Unlimited AI signals", "African + global data", "Advanced charting", "Risk scoring"].map((f) => (
+                  <div key={f} className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 backdrop-blur-sm">
+                      <Check className="w-2.5 h-2.5 text-white" />
                     </div>
-                    <span className="text-sm text-gray-200">{f}</span>
+                    <span className="text-xs text-gray-200">{f}</span>
                   </div>
                 ))}
               </div>
             </div>
 
+            {/* Institutional */}
             <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500 group">
               <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center mb-4 group-hover:from-[#0D7490]/20 group-hover:to-[#0EA5E9]/20 transition-all">
                 <Crown className="w-6 h-6 text-[#0D7490]" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-1">Enterprise</h3>
-              <p className="text-sm text-gray-500 mb-4 font-medium">For institutions</p>
-              <div className="mb-6">
-                <span className="text-4xl font-bold text-gray-900">$99</span>
-                <span className="text-gray-500 text-sm">/month</span>
+              <h3 className="text-xl font-bold text-gray-900 mb-1">Institutional</h3>
+              <p className="text-sm text-gray-500 mb-4 font-medium">Brokers & funds</p>
+              <div className="mb-4">
+                <span className="text-3xl font-bold text-gray-900">$200+</span>
+                <span className="text-gray-500 text-sm">/mo</span>
               </div>
-              <Link to="/subscribe/enterprise">
-                <Button variant="outline" className="w-full py-5 text-base font-semibold mb-6 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all group-hover:border-[#0D7490]/30">
+              <Link to="/subscribe/institutional">
+                <Button variant="outline" className="w-full py-4 text-sm font-semibold mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all group-hover:border-[#0D7490]/30">
                   Contact Sales
                 </Button>
               </Link>
-              <div className="space-y-3">
-                {["Everything in Pro", "Custom data feeds", "White-label analytics", "Full API access", "24/7 dedicated support", "Unlimited team members"].map((f) => (
-                  <div key={f} className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                      <Check className="w-3 h-3 text-green-600" />
+              <div className="space-y-2">
+                {["API access", "White-label analytics", "Dedicated support", "Team seats"].map((f) => (
+                  <div key={f} className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                      <Check className="w-2.5 h-2.5 text-green-600" />
                     </div>
-                    <span className="text-sm text-gray-700">{f}</span>
+                    <span className="text-xs text-gray-700">{f}</span>
                   </div>
                 ))}
               </div>

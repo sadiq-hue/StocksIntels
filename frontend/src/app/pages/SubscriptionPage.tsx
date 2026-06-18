@@ -7,26 +7,40 @@ import { toast } from "sonner";
 import { useAuth } from "../auth/AuthContext";
 
 const planDetails = {
+  free: {
+    name: "Free",
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    icon: Zap,
+    features: ["Delayed data on select markets", "1 AI signal per day", "Basic watchlist"],
+  },
   starter: {
     name: "Starter",
-    monthlyPrice: 1,
-    yearlyPrice: 10,
+    monthlyPrice: 4.99,
+    yearlyPrice: 49.99,
     icon: Zap,
-    features: ["Real-time NSE data", "3 AI signals per day", "Basic portfolio tracking", "Email support"],
+    features: ["Real-time African market data", "5 AI signals per day", "Stock screener", "Portfolio tracking", "Email support"],
+  },
+  "nse pro": {
+    name: "NSE Pro",
+    monthlyPrice: 7.99,
+    yearlyPrice: 79.99,
+    icon: Shield,
+    features: ["Unlimited NSE AI signals", "Advanced NSE screener", "NSE technical analysis", "Portfolio tracking", "Email support"],
   },
   pro: {
     name: "Pro",
-    monthlyPrice: 29,
-    yearlyPrice: 290,
+    monthlyPrice: 14.99,
+    yearlyPrice: 149.99,
     icon: Shield,
-    features: ["Everything in Starter", "Unlimited AI signals", "Global market data", "Advanced analytics", "Risk analysis tools", "Priority support"],
+    features: ["Unlimited AI signals", "All African + global market data", "Advanced charting", "Risk scoring & analysis", "Priority support"],
   },
-  enterprise: {
-    name: "Enterprise",
-    monthlyPrice: 99,
-    yearlyPrice: 990,
+  institutional: {
+    name: "Institutional",
+    monthlyPrice: 200,
+    yearlyPrice: 2000,
     icon: Crown,
-    features: ["Everything in Pro", "Custom data feeds", "White-label analytics", "Full API access", "24/7 dedicated support", "Unlimited team members"],
+    features: ["API access", "White-label analytics", "Dedicated support 24/7", "Team seats", "Custom data feeds", "Everything in Pro"],
   },
 };
 
