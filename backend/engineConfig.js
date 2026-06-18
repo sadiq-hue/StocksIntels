@@ -19,13 +19,13 @@ const DEFAULTS = {
   },
 
   weights: {
-    fundamental: 0.20,
-    technical: 0.20,
+    fundamental: 0.35,
+    technical: 0.35,
     financial: 0.10,
     macro: 0.05,
-    ml_probability: 0.35,
-    confidence: 0.10,
-    auto_optimize: true,
+    ml_probability: 0.00,
+    confidence: 0.15,
+    auto_optimize: false,
     optimize_frequency_hours: 24,
   },
 
@@ -61,10 +61,10 @@ const DEFAULTS = {
       },
     },
     weights_per_regime: {
-      bull:     { fundamental: 0.25, technical: 0.20, ml_probability: 0.35, confidence: 0.10, financial: 0.10 },
-      bear:     { fundamental: 0.15, technical: 0.30, ml_probability: 0.30, confidence: 0.15, financial: 0.10 },
-      sideways: { fundamental: 0.20, technical: 0.25, ml_probability: 0.30, confidence: 0.15, financial: 0.10 },
-      crash:    { fundamental: 0.30, technical: 0.15, ml_probability: 0.25, confidence: 0.20, financial: 0.10 },
+      bull:     { fundamental: 0.40, technical: 0.30, confidence: 0.15, financial: 0.15 },
+      bear:     { fundamental: 0.25, technical: 0.40, confidence: 0.20, financial: 0.15 },
+      sideways: { fundamental: 0.30, technical: 0.35, confidence: 0.20, financial: 0.15 },
+      crash:    { fundamental: 0.40, technical: 0.25, confidence: 0.20, financial: 0.15 },
     },
   },
 
@@ -248,6 +248,13 @@ async function loadFromDb() {
     }
     if (Object.keys(dbConfig).length > 0) {
       _config = mergeDeep(deepClone(DEFAULTS), dbConfig);
+      // Migration: remove ml_probability from stored weights and regime_adaptation
+      if (_config.weights && _config.weights.ml_probability > 0) {
+        _config.weights = { ...DEFAULTS.weights };
+        await persistToDb('weights', _config.weights);
+        await persistToDb('regime_adaptation', DEFAULTS.regime_adaptation);
+        console.log('[EngineConfig] Migrated weights and regime_adaptation — removed ml_probability');
+      }
     } else {
       // No config in DB yet — persist defaults so API edits survive restarts
       for (const key of Object.keys(DEFAULTS)) {
