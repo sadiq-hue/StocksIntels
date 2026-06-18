@@ -667,7 +667,7 @@ export function LandingPage() {
             <p className="text-lg text-gray-600">Choose the plan that fits your trading style. All plans include a 7-day free trial.</p>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 items-start">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 items-start">
             {/* Free */}
             <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500 group">
               <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center mb-4 group-hover:from-[#0D7490]/20 group-hover:to-[#0EA5E9]/20 transition-all">
@@ -787,33 +787,6 @@ export function LandingPage() {
               </div>
             </div>
 
-            {/* Institutional */}
-            <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500 group">
-              <div className="w-12 h-12 bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 rounded-xl flex items-center justify-center mb-4 group-hover:from-[#0D7490]/20 group-hover:to-[#0EA5E9]/20 transition-all">
-                <Crown className="w-6 h-6 text-[#0D7490]" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-1">Institutional</h3>
-              <p className="text-sm text-gray-500 mb-4 font-medium">Brokers & funds</p>
-              <div className="mb-4">
-                <span className="text-3xl font-bold text-gray-900">$200+</span>
-                <span className="text-gray-500 text-sm">/mo</span>
-              </div>
-              <Link to="/subscribe/institutional">
-                <Button variant="outline" className="w-full py-4 text-sm font-semibold mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all group-hover:border-[#0D7490]/30">
-                  Contact Sales
-                </Button>
-              </Link>
-              <div className="space-y-2">
-                {["API access", "White-label analytics", "Dedicated support", "Team seats"].map((f) => (
-                  <div key={f} className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                      <Check className="w-2.5 h-2.5 text-green-600" />
-                    </div>
-                    <span className="text-xs text-gray-700">{f}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
 
           <div className="text-center mt-12">

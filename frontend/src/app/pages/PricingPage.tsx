@@ -93,26 +93,6 @@ const plans = [
     cta: "Start Pro Trial",
     ctaVariant: "default" as const,
   },
-  {
-    name: "Institutional",
-    description: "For brokers, funds & advisors",
-    monthlyPrice: 200,
-    yearlyPrice: 2000,
-    icon: Crown,
-    popular: false,
-    features: [
-      { text: "API access", included: true },
-      { text: "White-label analytics", included: true },
-      { text: "Dedicated support 24/7", included: true },
-      { text: "Team seats", included: true },
-      { text: "Custom data feeds", included: true },
-      { text: "Everything in Pro", included: true },
-      { text: "On-premise deployment", included: false },
-      { text: "SLA guarantee", included: false },
-    ],
-    cta: "Contact Sales",
-    ctaVariant: "outline" as const,
-  },
 ];
 
 const faqs = [
@@ -126,7 +106,7 @@ const faqs = [
   },
   {
     question: "What payment methods do you accept?",
-    answer: "We accept M-Pesa (KES) for African users and credit/debit cards (USD) for global users. Bank transfers available for Institutional plans.",
+    answer: "We accept M-Pesa (KES) for African users and credit/debit cards (USD) for global users.",
   },
   {
     question: "How does M-Pesa pricing work?",
@@ -218,7 +198,7 @@ export function PricingPage() {
       {/* Pricing Cards */}
       <section className="pb-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {plans.map((plan) => {
               const Icon = plan.icon;
               const price = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
@@ -342,23 +322,22 @@ export function PricingPage() {
                     <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">Starter</th>
                     <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">Premium</th>
                     <th className="text-center py-4 px-6 text-sm font-semibold text-[#0D7490] bg-[#0D7490]/5">Pro</th>
-                    <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">Institutional</th>
                   </tr>
                 </thead>
                 <tbody>
                   {[
-                    { name: "Market data", free: "Delayed", starter: "African + Global", premium: "African + Global", pro: "All markets", inst: "All + Custom" },
-                    { name: "NSE signals", free: "1/day", starter: "5/day", premium: "Unlimited", pro: "Unlimited", inst: "Unlimited" },
-                    { name: "Global signals", free: "1/day", starter: "5/day", premium: "10/day", pro: "Unlimited", inst: "Unlimited" },
-                    { name: "Stock screener", free: "—", starter: "✓", premium: "Advanced NSE", pro: "✓", inst: "✓" },
-                    { name: "Technical analysis", free: "—", starter: "Basic", premium: "NSE-focused", pro: "Advanced", inst: "Advanced" },
-                    { name: "Portfolio tracking", free: "—", starter: "Basic", premium: "Basic", pro: "Advanced", inst: "White-label" },
-                    { name: "Charting", free: "—", starter: "Basic", premium: "Basic", pro: "Advanced", inst: "Advanced" },
-                    { name: "Risk scoring", free: "—", starter: "—", premium: "—", pro: "✓", inst: "✓" },
-                    { name: "API access", free: "—", starter: "—", premium: "—", pro: "—", inst: "Full access" },
-                    { name: "Support", free: "—", starter: "Email", premium: "Email", pro: "Priority", inst: "24/7 Dedicated" },
-                    { name: "Price (USD)", free: "$0", starter: "$4.99/mo", premium: "$7.99/mo", pro: "$14.99/mo", inst: "From $200/mo" },
-                    { name: "Price (KES)", free: "Free", starter: "649/mo", premium: "1,039/mo", pro: "1,949/mo", inst: "From 26,000/mo" },
+                    { name: "Market data", free: "Delayed", starter: "African + Global", premium: "African + Global", pro: "All markets" },
+                    { name: "NSE signals", free: "1/day", starter: "5/day", premium: "Unlimited", pro: "Unlimited" },
+                    { name: "Global signals", free: "1/day", starter: "5/day", premium: "10/day", pro: "Unlimited" },
+                    { name: "Stock screener", free: "—", starter: "✓", premium: "Advanced NSE", pro: "✓" },
+                    { name: "Technical analysis", free: "—", starter: "Basic", premium: "NSE-focused", pro: "Advanced" },
+                    { name: "Portfolio tracking", free: "—", starter: "Basic", premium: "Basic", pro: "Advanced" },
+                    { name: "Charting", free: "—", starter: "Basic", premium: "Basic", pro: "Advanced" },
+                    { name: "Risk scoring", free: "—", starter: "—", premium: "—", pro: "✓" },
+                    { name: "API access", free: "—", starter: "—", premium: "—", pro: "—" },
+                    { name: "Support", free: "—", starter: "Email", premium: "Email", pro: "Priority" },
+                    { name: "Price (USD)", free: "$0", starter: "$4.99/mo", premium: "$7.99/mo", pro: "$14.99/mo" },
+                    { name: "Price (KES)", free: "Free", starter: "649/mo", premium: "1,039/mo", pro: "1,949/mo" },
                   ].map((row, idx) => (
                     <tr key={row.name} className={idx % 2 === 0 ? "bg-gray-50/50" : ""}>
                       <td className="py-4 px-6 text-sm text-gray-700">{row.name}</td>
@@ -366,7 +345,6 @@ export function PricingPage() {
                       <td className="py-4 px-6 text-center text-sm text-gray-600">{row.starter}</td>
                       <td className="py-4 px-6 text-center text-sm text-gray-600">{row.premium}</td>
                       <td className="py-4 px-6 text-center text-sm font-medium text-[#0D7490] bg-[#0D7490]/5">{row.pro}</td>
-                      <td className="py-4 px-6 text-center text-sm text-gray-600">{row.inst}</td>
                     </tr>
                   ))}
                 </tbody>
