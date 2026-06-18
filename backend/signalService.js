@@ -859,66 +859,66 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
         };
       }
 
-      // Return-based metrics from resolved rows (where exit_price != entry_price)
-      const returnsResult = await pool.query(`
-        SELECT ticker, signal, entry_price, exit_price, (exit_price - entry_price) / entry_price * 100 AS return_pct
-        FROM signal_outcomes
-        WHERE recorded_at > NOW() - $1::interval
-          AND signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
-          AND entry_price > 0 AND exit_price > 0 AND exit_price != entry_price
-        ORDER BY recorded_at ASC
-      `, [`${days} days`]);
+        // Return-based metrics from resolved rows (where exit_price != entry_price)
+        const returnsResult = await pool.query(`
+          SELECT ticker, signal, entry_price, exit_price, (exit_price - entry_price) / entry_price * 100 AS return_pct
+          FROM signal_outcomes
+          WHERE recorded_at > NOW() - $1::interval
+            AND signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
+            AND entry_price > 0 AND exit_price > 0 AND exit_price != entry_price
+          ORDER BY recorded_at ASC
+        `, [`${days} days`]);
 
-      let avgReturn = 0, profitFactor = 0, sharpe = 0, maxDrawdown = 0;
-      let retVals = returnsResult.rows.map(r => parseFloat(r.return_pct));
+        let avgReturn = 0, profitFactor = 0, sharpe = 0, maxDrawdown = 0;
+        let retVals = returnsResult.rows.map(r => parseFloat(r.return_pct));
 
-      // If not enough valid exit prices, approximate returns from signal_history using batched live prices
-      if (retVals.length < 10) {
-        try {
-          const fallback = await pool.query(`
-            SELECT sh.ticker, sh.signal, sh.entry_price
-            FROM signal_history sh
-            LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price
-            WHERE sh.generated_at > NOW() - $1::interval
-              AND sh.signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
-              AND sh.entry_price > 0
-            ORDER BY sh.generated_at DESC
-            LIMIT $2
-          `, [`${days} days`, limit]);
-          const tickers = [...new Set(fallback.rows.map(r => r.ticker))];
-          const quotes = await getQuotesBatch(tickers).catch(() => ({}));
-          const approxReturns = [];
-          for (const row of fallback.rows) {
-            const quote = quotes[row.ticker];
-            if (!quote || !quote.price) continue;
-            const returnPct = ((quote.price - row.entry_price) / row.entry_price) * 100;
-            const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy' || row.signal === 'Accumulate';
-            const signedReturn = isBuy ? returnPct : -returnPct;
-            approxReturns.push(signedReturn);
-          }
-          if (approxReturns.length > 0) retVals = approxReturns;
-        } catch (e) { /* keep signal_outcomes returns if any */ }
-      }
-
-      if (retVals.length > 0) {
-        const totalReturn = retVals.reduce((s, v) => s + v, 0);
-        avgReturn = Math.round((totalReturn / retVals.length) * 10) / 10;
-        const mean = totalReturn / retVals.length;
-        sharpe = retVals.length > 1 ? Math.round((mean / (stdDev(retVals) || 1)) * 100) / 100 : 0;
-        // Max drawdown: running peak-to-trough of cumulative returns
-        let peak = -Infinity, maxDd = 0, cum = 0;
-        for (const r of retVals) {
-          cum += r;
-          if (cum > peak) peak = cum;
-          const dd = peak - cum;
-          if (dd > maxDd) maxDd = dd;
+        // If not enough valid exit prices, approximate returns from signal_history using batched live prices
+        if (retVals.length < 10) {
+          try {
+            const fallback = await pool.query(`
+              SELECT sh.ticker, sh.signal, sh.entry_price
+              FROM signal_history sh
+              LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price
+              WHERE sh.generated_at > NOW() - $1::interval
+                AND sh.signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
+                AND sh.entry_price > 0
+              ORDER BY sh.generated_at DESC
+              LIMIT $2
+            `, [`${days} days`, limit]);
+            const tickers = [...new Set(fallback.rows.map(r => r.ticker))];
+            const quotes = await getQuotesBatch(tickers).catch(() => ({}));
+            const approxReturns = [];
+            for (const row of fallback.rows) {
+              const quote = quotes[row.ticker];
+              if (!quote || !quote.price) continue;
+              const returnPct = ((quote.price - row.entry_price) / row.entry_price) * 100;
+              const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy' || row.signal === 'Accumulate';
+              const signedReturn = isBuy ? returnPct : -returnPct;
+              approxReturns.push(signedReturn);
+            }
+            if (approxReturns.length > 0) retVals = approxReturns;
+          } catch (e) { /* keep signal_outcomes returns if any */ }
         }
-        maxDrawdown = Math.round(maxDd * 10) / 10;
-        // Profit factor: gross wins / gross losses
-        const grossWins = retVals.filter(v => v > 0).reduce((s, v) => s + v, 0);
-        const grossLosses = Math.abs(retVals.filter(v => v < 0).reduce((s, v) => s + v, 0));
-        profitFactor = grossLosses > 0 ? Math.round((grossWins / grossLosses) * 100) / 100 : grossWins > 0 ? 999 : 0;
-      }
+
+        if (retVals.length > 0) {
+          const totalReturn = retVals.reduce((s, v) => s + v, 0);
+          avgReturn = Math.round((totalReturn / retVals.length) * 10) / 10;
+          const mean = totalReturn / retVals.length;
+          sharpe = retVals.length > 1 ? Math.round((mean / (stdDev(retVals) || 1)) * 100) / 100 : 0;
+          // Max drawdown: compound equity curve peak-to-trough
+          let equity = 100, peak = 100, maxDd = 0;
+          for (const r of retVals) {
+            equity *= (1 + r / 100);
+            if (equity > peak) peak = equity;
+            const dd = ((peak - equity) / peak) * 100;
+            if (dd > maxDd) maxDd = dd;
+          }
+          maxDrawdown = Math.round(maxDd * 10) / 10;
+          // Profit factor: gross wins / gross losses
+          const grossWins = retVals.filter(v => v > 0).reduce((s, v) => s + v, 0);
+          const grossLosses = Math.abs(retVals.filter(v => v < 0).reduce((s, v) => s + v, 0));
+          profitFactor = grossLosses > 0 ? Math.round((grossWins / grossLosses) * 100) / 100 : grossWins > 0 ? 999 : 0;
+        }
 
       // Fill by-signal avgReturn using batched live price quotes
       try {
@@ -996,14 +996,15 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
           const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy' || row.signal === 'Accumulate';
           const isSell = row.signal === 'Sell' || row.signal === 'Strong Sell' || row.signal === 'Reduce';
           if (!isBuy && !isSell) continue;
-          const won = isBuy ? returnPct > 0 : isSell ? returnPct < 0 : false;
+          const signedReturn = isBuy ? returnPct : -returnPct;
+          const won = signedReturn > 0;
           if (won) wins++; else losses++;
           total++;
-          totalReturn += Math.abs(returnPct);
-          returns.push(returnPct);
+          totalReturn += signedReturn;
+          returns.push(signedReturn);
           if (!bySignal[row.signal]) bySignal[row.signal] = { wins: 0, losses: 0, total: 0, returns: [] };
           bySignal[row.signal].total++;
-          bySignal[row.signal].returns.push(returnPct);
+          bySignal[row.signal].returns.push(signedReturn);
           if (won) bySignal[row.signal].wins++; else bySignal[row.signal].losses++;
         } catch { /* skip */ }
       }
@@ -1034,10 +1035,11 @@ function stdDev(arr) {
 }
 
 function computeMaxDrawdown(returns) {
-  let peak = 0, maxDD = 0;
+  let equity = 100, peak = 100, maxDD = 0;
   for (const r of returns) {
-    if (r > peak) peak = r;
-    const dd = peak - r;
+    equity *= (1 + r / 100);
+    if (equity > peak) peak = equity;
+    const dd = ((peak - equity) / peak) * 100;
     if (dd > maxDD) maxDD = dd;
   }
   return maxDD;
