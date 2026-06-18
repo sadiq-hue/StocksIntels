@@ -45,10 +45,65 @@ async function _loadSignalCacheFromDb() {
     );
     if (result.rows.length && result.rows[0].cache_value) {
       _signalsCache = result.rows[0].cache_value;
-      _signalsCacheTime = 0; // expired — forces fresh generation but provides fallback for first API call
+      _signalsCacheTime = Date.now();
       console.log(`[SignalService] Loaded ${_signalsCache.length} signals from cache DB`);
+      return;
     }
   } catch { /* table may not exist */ }
+
+  // Fallback: rebuild from signal_history (last known signal per ticker)
+  try {
+    const hist = await pool.query(
+      `SELECT DISTINCT ON (ticker) ticker, signal, confidence, price, change_pct, sector, market, currency, trade_type
+       FROM signal_history ORDER BY ticker, generated_at DESC LIMIT 500`
+    );
+    if (hist.rows.length > 0) {
+      _signalsCache = hist.rows.map(r => ({
+        ticker: r.ticker,
+        name: r.ticker,
+        sector: r.sector || 'General',
+        price: parseFloat(r.price) || 0,
+        change: parseFloat(r.change_pct) || 0,
+        market: r.market || 'US',
+        currency: r.currency || 'USD',
+        signal: r.signal || 'Hold',
+        type: r.trade_type || 'Swing Trade',
+        confidence: parseInt(r.confidence) || 0,
+        volume: 0,
+        analysis: { overall: { score: 50, grade: 'C' }, fundamental: { score: 50 }, technical: { score: 50 }, financial: { score: 50 }, macro: { score: 50 } },
+      }));
+      _signalsCacheTime = Date.now();
+      console.log(`[SignalService] Loaded ${_signalsCache.length} signals from signal_history (fallback)`);
+      return;
+    }
+  } catch { /* table may not exist */ }
+
+  // Final fallback: build baseline from KNOWN_FUNDAMENTALS
+  _buildBaselineCache();
+}
+
+function _buildBaselineCache() {
+  const baseline = [];
+  for (const symbol of ALL_SYMBOLS) {
+    const info = KNOWN_FUNDAMENTALS[symbol] || NSE_FUNDAMENTALS[symbol] || {};
+    baseline.push({
+      ticker: symbol,
+      name: KNOWN_FUNDAMENTALS[symbol]?.name || symbol,
+      sector: info.sector || guessSector(symbol),
+      price: 0,
+      change: 0,
+      market: NSE_SYMBOLS.includes(symbol) ? 'NSE' : 'US',
+      currency: NSE_SYMBOLS.includes(symbol) ? 'KES' : 'USD',
+      signal: 'Hold',
+      type: 'Swing Trade',
+      confidence: 0,
+      volume: 0,
+      analysis: { overall: { score: 50, grade: 'C' }, fundamental: { score: 50 }, technical: { score: 50 }, financial: { score: 50 }, macro: { score: 50 } },
+    });
+  }
+  _signalsCache = baseline;
+  _signalsCacheTime = Date.now();
+  console.log(`[SignalService] Built baseline cache with ${baseline.length} stocks`);
 }
 
 // Price history cache for technical analysis
@@ -1805,7 +1860,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     const minConfidence = cfg.minConfidence || 40;
     const filteredSignals = constrainedSignals.filter(s => s.confidence >= minConfidence);
 
-    if (!marketData) {
+    if (!marketData && filteredSignals.length > 0) {
       _signalsCache = filteredSignals;
       _signalsCacheTime = Date.now();
       _persistSignalCache(filteredSignals).catch(() => {});
