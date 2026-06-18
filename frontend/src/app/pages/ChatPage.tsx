@@ -132,6 +132,7 @@ export function ChatPage() {
   const [editingMsgId, setEditingMsgId] = useState<number | null>(null);
   const [editText, setEditText] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(true);
 
   const socket = getSocket();
 
@@ -539,6 +540,7 @@ export function ChatPage() {
     setSelectedGroup(groupId);
     setSelectedPeer(null);
     setGroupView("detail");
+    setShowMobileSidebar(false);
   };
 
   const handleEnterChat = (groupId: string) => {
@@ -604,6 +606,7 @@ export function ChatPage() {
     setSelectedPeer(peerId);
     setSelectedGroup(null);
     setGroupView("list");
+    setShowMobileSidebar(false);
   };
 
   const getLastMessage = (id: string, mode: "group" | "people") => {
@@ -638,7 +641,7 @@ export function ChatPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[calc(100%-80px)]">
         {/* Left sidebar */}
-        <Card className="lg:col-span-3 bg-card border-border p-4 flex flex-col gap-4 overflow-hidden">
+        <Card className={`lg:col-span-3 bg-card border-border p-4 flex flex-col gap-4 overflow-hidden ${showMobileSidebar ? '' : 'hidden lg:flex'}`}>
           <div>
             <h3 className="text-foreground mb-4 flex items-center gap-2">
               <Users className="w-5 h-5" />
@@ -724,10 +727,17 @@ export function ChatPage() {
         </Card>
 
         {/* Main Chat Area */}
-        <Card className="lg:col-span-6 bg-card border-border flex flex-col overflow-hidden">
+        <Card className={`lg:col-span-6 bg-card border-border flex flex-col overflow-hidden ${showMobileSidebar ? 'hidden lg:flex' : ''}`}>
           {/* Chat header */}
-          <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 border-b border-border">
+          <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-border">
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowMobileSidebar(true)}
+                className="lg:hidden p-2 -ml-2 hover:bg-accent rounded-lg transition-colors text-muted-foreground"
+                aria-label="Back to conversations"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
               {chatMode === "group" ? (
                 <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-lg">
                   {GROUP_ICONS[selectedGroup || ""] || <Hash className="w-5 h-5 text-[#0D7490]" />}
@@ -740,11 +750,11 @@ export function ChatPage() {
                   {currentPeer.online && <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />}
                 </div>
               ) : null}
-              <div>
-                <h3 className="text-foreground font-semibold">
+              <div className="min-w-0">
+                <h3 className="text-foreground font-semibold truncate">
                   {chatMode === "group" ? currentGroup?.name || "Select a group" : currentPeer?.full_name || "Select a person"}
                 </h3>
-                <p className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-xs truncate">
                   {chatMode === "group"
                     ? `${currentGroup?.members || 0} members · ${currentGroup?.online_members || 0} online`
                     : formatLastSeen(currentPeer?.last_seen ?? null, currentPeer?.online ?? false)}
@@ -768,7 +778,7 @@ export function ChatPage() {
               <div className="h-full overflow-y-auto px-4 py-4">
                 {/* Full Group Info Panel in Main Area */}
                 <div className="flex flex-wrap items-center gap-3 mb-6">
-                  <Button variant="outline" size="sm" onClick={() => setGroupView("list")} className="border-border text-muted-foreground gap-1">
+                  <Button variant="outline" size="sm" onClick={() => { setGroupView("list"); setShowMobileSidebar(true); }} className="border-border text-muted-foreground gap-1">
                     <ArrowLeft className="w-4 h-4" /> Back
                   </Button>
                   {currentGroup.isAdmin && (
@@ -1048,7 +1058,7 @@ export function ChatPage() {
         </Card>
 
         {/* Right sidebar */}
-        <Card className="lg:col-span-3 bg-card border-border p-4 overflow-y-auto">
+        <Card className="lg:col-span-3 bg-card border-border p-4 overflow-y-auto hidden lg:block">
           {chatMode === "group" && currentGroup ? (
             <>
               {/* Stock Mentions */}

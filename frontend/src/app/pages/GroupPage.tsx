@@ -271,7 +271,7 @@ export function GroupPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <Card className="p-4 border-border bg-card">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><Users className="w-5 h-5 text-blue-600" /></div>
@@ -387,7 +387,7 @@ export function GroupPage() {
             </Card>
 
             {/* Stats Row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <Card className="p-4 border-border text-center">
                 <p className="text-2xl font-bold text-foreground">{selectedGroup.members}</p>
                 <p className="text-xs text-muted-foreground mt-1">Members</p>
@@ -589,13 +589,13 @@ export function GroupPage() {
                         <div className="text-center"><p className="text-lg font-bold text-foreground">{group.activity_last_hour}</p><p className="text-[11px] text-muted-foreground">Active/hr</p></div>
                         <div className="text-center"><p className="text-lg font-bold text-foreground">{group.message_count?.toLocaleString() || 0}</p><p className="text-[11px] text-muted-foreground">Messages</p></div>
                       </div>
-                      <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-col sm:flex-row gap-2" onClick={(e) => e.stopPropagation()}>
                         {group.isJoined ? (
                           <>
                             <Button onClick={() => handleNavigateToChat(group.id)} className="flex-1 bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
                               <MessageSquare className="w-4 h-4" /> Chat
                             </Button>
-                            <Button onClick={() => handleLeaveGroup(group.id)} variant="outline" className="px-3 text-red-600 hover:bg-red-50 border-red-200 hover:border-red-300 gap-1.5">
+                            <Button onClick={() => handleLeaveGroup(group.id)} variant="outline" className="flex-1 sm:flex-none px-3 text-red-600 hover:bg-red-50 border-red-200 hover:border-red-300 gap-1.5">
                               <Trash2 className="w-4 h-4" /> Leave
                             </Button>
                           </>
