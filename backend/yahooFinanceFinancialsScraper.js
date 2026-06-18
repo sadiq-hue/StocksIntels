@@ -129,7 +129,7 @@ async function fetchPriceViaProxy(symbol) {
     try {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
       const resp = await axios.get(url, {
-        params: { interval: '1d', range: '1d' },
+        params: { interval: '1d', range: '1d', includePreMarket: 'true' },
         httpsAgent: agent,
         timeout: 8000,
         headers: {
@@ -137,16 +137,29 @@ async function fetchPriceViaProxy(symbol) {
           'Accept': 'application/json',
         },
       });
-      const meta = resp.data?.chart?.result?.[0]?.meta;
+      const result = resp.data?.chart?.result?.[0];
+      const meta = result?.meta;
       if (meta?.regularMarketPrice) {
         return {
           price: meta.regularMarketPrice,
           previousClose: meta.chartPreviousClose || meta.regularMarketPrice,
           currency: meta.currency || 'USD',
           exchange: meta.exchangeName || '',
-          marketCap: 0,
+          marketCap: meta.marketCap || 0,
           symbol: symbol.toUpperCase(),
           companyName: meta.shortName || meta.longName || '',
+          regularMarketPrice: meta.regularMarketPrice,
+          regularMarketPreviousClose: meta.chartPreviousClose || meta.regularMarketPrice,
+          preMarketPrice: meta.preMarketPrice ?? null,
+          preMarketChange: meta.preMarketChange ?? null,
+          preMarketChangePercent: meta.preMarketChangePercent ?? null,
+          preMarketTime: meta.preMarketTime ?? null,
+          postMarketPrice: meta.postMarketPrice ?? null,
+          postMarketChange: meta.postMarketChange ?? null,
+          postMarketChangePercent: meta.postMarketChangePercent ?? null,
+          postMarketTime: meta.postMarketTime ?? null,
+          currentTradingPeriod: result?.meta?.currentTradingPeriod || null,
+          marketState: meta.marketState || 'REGULAR',
         };
       }
     } catch {}
@@ -155,18 +168,31 @@ async function fetchPriceViaProxy(symbol) {
   // Fallback: try free CORS proxy relays (no agent needed)
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
-    const params = new URLSearchParams({ interval: '1d', range: '1d' });
+    const params = new URLSearchParams({ interval: '1d', range: '1d', includePreMarket: 'true' });
     const data = await proxyService.fetchViaCorsProxy(url + '?' + params.toString());
-    const meta = data?.chart?.result?.[0]?.meta;
+    const result = data?.chart?.result?.[0];
+    const meta = result?.meta;
     if (meta?.regularMarketPrice) {
       return {
         price: meta.regularMarketPrice,
         previousClose: meta.chartPreviousClose || meta.regularMarketPrice,
         currency: meta.currency || 'USD',
         exchange: meta.exchangeName || '',
-        marketCap: 0,
+        marketCap: meta.marketCap || 0,
         symbol: symbol.toUpperCase(),
         companyName: meta.shortName || meta.longName || '',
+        regularMarketPrice: meta.regularMarketPrice,
+        regularMarketPreviousClose: meta.chartPreviousClose || meta.regularMarketPrice,
+        preMarketPrice: meta.preMarketPrice ?? null,
+        preMarketChange: meta.preMarketChange ?? null,
+        preMarketChangePercent: meta.preMarketChangePercent ?? null,
+        preMarketTime: meta.preMarketTime ?? null,
+        postMarketPrice: meta.postMarketPrice ?? null,
+        postMarketChange: meta.postMarketChange ?? null,
+        postMarketChangePercent: meta.postMarketChangePercent ?? null,
+        postMarketTime: meta.postMarketTime ?? null,
+        currentTradingPeriod: result?.meta?.currentTradingPeriod || null,
+        marketState: meta.marketState || 'REGULAR',
       };
     }
   } catch {}
@@ -174,28 +200,61 @@ async function fetchPriceViaProxy(symbol) {
   // Last resort: direct request to Yahoo chart API (may work from some cloud regions)
   try {
     const resp = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`, {
-      params: { interval: '1d', range: '1d' },
+      params: { interval: '1d', range: '1d', includePreMarket: 'true' },
       timeout: 5000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json',
       },
     });
-    const meta = resp.data?.chart?.result?.[0]?.meta;
+    const result = resp.data?.chart?.result?.[0];
+    const meta = result?.meta;
     if (meta?.regularMarketPrice) {
       return {
         price: meta.regularMarketPrice,
         previousClose: meta.chartPreviousClose || meta.regularMarketPrice,
         currency: meta.currency || 'USD',
         exchange: meta.exchangeName || '',
-        marketCap: 0,
+        marketCap: meta.marketCap || 0,
         symbol: symbol.toUpperCase(),
         companyName: meta.shortName || meta.longName || '',
+        regularMarketPrice: meta.regularMarketPrice,
+        regularMarketPreviousClose: meta.chartPreviousClose || meta.regularMarketPrice,
+        preMarketPrice: meta.preMarketPrice ?? null,
+        preMarketChange: meta.preMarketChange ?? null,
+        preMarketChangePercent: meta.preMarketChangePercent ?? null,
+        preMarketTime: meta.preMarketTime ?? null,
+        postMarketPrice: meta.postMarketPrice ?? null,
+        postMarketChange: meta.postMarketChange ?? null,
+        postMarketChangePercent: meta.postMarketChangePercent ?? null,
+        postMarketTime: meta.postMarketTime ?? null,
+        currentTradingPeriod: result?.meta?.currentTradingPeriod || null,
+        marketState: meta.marketState || 'REGULAR',
       };
     }
   } catch {}
 
   return null;
+}
+
+async function fetchPreMarketBatch(symbols) {
+  if (!symbols || symbols.length === 0) return {};
+  const results = {};
+  const batches = [];
+  for (let i = 0; i < symbols.length; i += 10) {
+    batches.push(symbols.slice(i, i + 10));
+  }
+  for (const batch of batches) {
+    const promises = batch.map(async (sym) => {
+      try {
+        const data = await fetchPriceViaProxy(sym);
+        if (data) results[sym.toUpperCase()] = data;
+      } catch {}
+    });
+    await Promise.all(promises);
+    if (batches.length > 1) await new Promise(r => setTimeout(r, 200));
+  }
+  return results;
 }
 
 // Fetch quote-like summary from multiple sources: Twelve Data → Yahoo via proxy → RapidAPI
@@ -856,6 +915,7 @@ module.exports = {
   getDividendHistory,
   getFinancialReport,
   fetchPriceViaProxy,
+  fetchPreMarketBatch,
   fetchQuoteSummary,
   clearCache,
 };

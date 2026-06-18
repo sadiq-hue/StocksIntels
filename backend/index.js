@@ -4873,6 +4873,21 @@ app.get('/api/market/movers', async (req, res) => {
   }
 });
 
+// Pre-market / after-hours data for global stocks via Yahoo chart API with includePreMarket=true
+app.get('/api/market/premarket', async (req, res) => {
+  try {
+    const { symbols } = req.query;
+    if (!symbols) return res.status(400).json({ error: 'symbols query param required (comma-separated)' });
+    const list = symbols.split(',').map(s => s.trim()).filter(Boolean);
+    const { fetchPreMarketBatch } = require('./yahooFinanceFinancialsScraper');
+    const data = await fetchPreMarketBatch(list);
+    res.json({ quotes: data });
+  } catch (error) {
+    console.error('Error fetching pre-market data:', error);
+    res.status(500).json({ error: 'Failed to fetch pre-market data' });
+  }
+});
+
 // Real-time total turnover by market (price * volume) — uses direct Yahoo chart API for global, BASE_QUOTES for NSE
 let turnoverCache = { nse: 0, global: 0, nseVolume: 0, globalVolume: 0, nse: { turnover: 0, volume: 0, count: 0 }, global: { turnover: 0, volume: 0, count: 0 } };
 let turnoverCacheTime = 0;

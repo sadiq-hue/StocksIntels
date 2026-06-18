@@ -139,6 +139,9 @@ const MarketPage: React.FC = () => {
   const [marketNews, setMarketNews] = useState<NewsArticle[]>([]);
   const newsFetched = useRef(false);
 
+  // Pre-market data for global stocks
+  const [preMarketData, setPreMarketData] = useState<Record<string, any>>({});
+
   // Real-time turnover from API (Yahoo real volumes for global, seeded for NSE)
   const [turnoverData, setTurnoverData] = useState<{
     nse: { turnover: number; volume: number; count: number };
@@ -203,12 +206,27 @@ const MarketPage: React.FC = () => {
   const globalStocksDisplay = useMemo(() => {
     return localGlobalStocks.map(local => {
       const live = getQuote(local.symbol);
-      if (live && live.price != null) {
-        return { ...local, price: live.price, changePercent: live.changePercent ?? null, volume: live.volume ?? null, provider: live.provider };
+      const pre = preMarketData[local.symbol];
+      const hasPre = pre?.preMarketPrice != null;
+      if (hasPre) {
+        return {
+          ...local,
+          price: pre.preMarketPrice,
+          changePercent: pre.preMarketChangePercent ?? null,
+          change: pre.preMarketChange ?? null,
+          volume: pre.regularMarketVolume ?? live?.volume ?? null,
+          previousClose: pre.regularMarketPrice ?? pre.previousClose,
+          provider: 'premarket',
+          isPreMarket: true,
+          regularPrice: pre.regularMarketPrice,
+        };
       }
-      return { ...local, price: null, changePercent: null, volume: null, provider: 'pending' };
+      if (live && live.price != null) {
+        return { ...local, price: live.price, changePercent: live.changePercent ?? null, volume: live.volume ?? null, provider: live.provider, isPreMarket: false };
+      }
+      return { ...local, price: null, changePercent: null, volume: null, provider: 'pending', isPreMarket: false };
     });
-  }, [localGlobalStocks, getQuote]);
+  }, [localGlobalStocks, getQuote, preMarketData]);
 
   const fetchMarketData = async () => {
     setFetchingMovers(true);
@@ -253,10 +271,22 @@ const MarketPage: React.FC = () => {
       .catch(() => {});
   }, []);
 
+  const fetchPreMarketData = useCallback(async () => {
+    const globalSymbols = localGlobalStocks.map(s => s.symbol).filter(Boolean);
+    if (globalSymbols.length === 0) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/market/premarket?symbols=${globalSymbols.join(',')}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.quotes) setPreMarketData(data.quotes);
+    } catch {}
+  }, []);
+
   useEffect(() => {
     fetchMarketData();
     fetchMarketStatus();
     fetch(`${API_BASE_URL}/market/turnover`).then(r => r.json()).then(setTurnoverData).catch(() => {});
+    fetchPreMarketData();
     const userId = user?.id;
     const aiUrl = userId ? `${API_BASE_URL}/ai/market-summary?userId=${userId}` : `${API_BASE_URL}/ai/market-summary`;
     fetch(aiUrl)
@@ -265,14 +295,15 @@ const MarketPage: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  // Periodic refresh of market status and turnover every 60s
+  // Periodic refresh of market status, turnover, and pre-market data every 60s
   useEffect(() => {
     const interval = setInterval(() => {
       fetchMarketStatus();
       fetch(`${API_BASE_URL}/market/turnover`).then(r => r.json()).then(setTurnoverData).catch(() => {});
+      fetchPreMarketData();
     }, 60000);
     return () => clearInterval(interval);
-  }, [fetchMarketStatus]);
+  }, [fetchMarketStatus, fetchPreMarketData]);
 
 
 
@@ -411,7 +442,7 @@ const MarketPage: React.FC = () => {
           </Button>
           <Button variant="outline" size="sm" disabled={isRefreshing} onClick={async () => {
             setIsRefreshing(true);
-            await Promise.all([refreshCtx(), fetchMarketData()]);
+            await Promise.all([refreshCtx(), fetchMarketData(), fetchPreMarketData()]);
             setIsRefreshing(false);
           }}>
             <RefreshCcw size={14} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} /> {isRefreshing ? 'Refreshing...' : 'Refresh'}
@@ -432,7 +463,11 @@ const MarketPage: React.FC = () => {
             <div className="border-l border-border pl-3">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Global</div>
               <div className={`text-lg font-bold ${globalStatus?.open ? 'text-emerald-600' : 'text-red-500'}`}>{globalStatus?.label || '--'}</div>
-              <div className="text-[10px] text-muted-foreground">{globalStatus?.eventLabel || `Closes ${globalStatus?.closeTime || '4:00 PM'}`}</div>
+              <div className="text-[10px] text-muted-foreground">
+                {!globalStatus?.open && Object.keys(preMarketData).length > 0 ? (
+                  <span className="text-amber-600 font-medium">Pre-Market Active</span>
+                ) : globalStatus?.eventLabel || `Closes ${globalStatus?.closeTime || '4:00 PM'}`}
+              </div>
             </div>
           </div>
         </Card>
@@ -786,10 +821,15 @@ const MarketWindow = ({
                   <span className="text-xs text-muted-foreground truncate block max-w-[160px]">{stock.company_name}</span>
                 </td>
                 <td className="px-3 py-2.5 text-right">
-                  <span className="text-sm font-semibold text-foreground font-mono">{isPending ? '--' : stock.price}</span>
-                  {stock.provider === 'pending' && (
-                    <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">loading</span>
-                  )}
+                  <div className="flex items-center justify-end gap-1">
+                    <span className="text-sm font-semibold text-foreground font-mono">{isPending ? '--' : stock.price}</span>
+                    {stock.isPreMarket && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">PRE</span>
+                    )}
+                    {stock.provider === 'pending' && (
+                      <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">loading</span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-3 py-2.5 text-right">
                   {isPending ? (
@@ -800,6 +840,7 @@ const MarketWindow = ({
                   }`}>
                     {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                     {isPositive ? '+' : ''}{(stock.changePercent ?? 0).toFixed(2)}%
+                    {stock.isPreMarket && <span className="text-[9px] opacity-70">pre</span>}
                   </span>
                   )}
                 </td>

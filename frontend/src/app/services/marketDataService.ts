@@ -13,6 +13,17 @@ export interface RealtimeStockQuote {
   previousClose: number;
   timestamp: number;
   provider?: string;
+  regularMarketPrice?: number;
+  regularMarketPreviousClose?: number;
+  preMarketPrice?: number | null;
+  preMarketChange?: number | null;
+  preMarketChangePercent?: number | null;
+  preMarketTime?: number | null;
+  postMarketPrice?: number | null;
+  postMarketChange?: number | null;
+  postMarketChangePercent?: number | null;
+  postMarketTime?: number | null;
+  marketState?: string;
 }
 
 export interface PriceBar {
