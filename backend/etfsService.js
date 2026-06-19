@@ -1,5 +1,6 @@
-// ETF Service — Real-time prices via Yahoo Finance, synthetic fallback
+// ETF Service — Real-time prices via Yahoo Chart API (works from Railway), synthetic fallback
 
+const axios = require('axios');
 const FMP_API_KEY = process.env.FMP_API_KEY;
 
 const ETF_LIST = [
@@ -43,34 +44,40 @@ async function fetchYahooQuotes() {
   if (yahooCache && now - yahooCacheTime < YAHOO_CACHE_TTL) return yahooCache;
 
   try {
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-
-    const symbols = ETF_LIST.map(e => e.ticker);
-    const quotes = await yf.quote(symbols);
+    const symbols = ETF_LIST.map(e => e.ticker).join(',');
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbols)}`;
+    const res = await axios.get(url, { timeout: 15000 });
 
     const result = {};
-    for (const q of Array.isArray(quotes) ? quotes : [quotes]) {
-      if (q && q.symbol) {
-        result[q.symbol] = {
-          price: q.regularMarketPrice,
-          change: q.regularMarketChange,
-          changePercent: q.regularMarketChangePercent,
-          high: q.regularMarketDayHigh,
-          low: q.regularMarketDayLow,
-          volume: q.regularMarketVolume,
-          previousClose: q.regularMarketPreviousClose,
-          open: q.regularMarketOpen,
-          dataSource: 'yahoo',
-        };
-      }
+    const chartResult = res.data?.chart?.result;
+    if (!chartResult || !Array.isArray(chartResult)) return {};
+
+    for (const item of chartResult) {
+      const m = item.meta;
+      if (!m || !m.symbol) continue;
+      const price = m.regularMarketPrice;
+      const prevClose = m.chartPreviousClose || m.previousClose;
+      if (price == null || prevClose == null) continue;
+      const change = price - prevClose;
+      const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+      result[m.symbol] = {
+        price,
+        change: +change.toFixed(2),
+        changePercent: +changePercent.toFixed(2),
+        high: m.regularMarketDayHigh || 0,
+        low: m.regularMarketDayLow || 0,
+        volume: m.regularMarketVolume || 0,
+        previousClose: prevClose,
+        open: m.regularMarketOpen || 0,
+        dataSource: 'yahoo',
+      };
     }
 
     yahooCache = result;
     yahooCacheTime = now;
     return result;
   } catch (e) {
-    console.error('[ETFs] Yahoo fetch failed:', e.message);
+    console.error('[ETFs] Yahoo chart API fetch failed:', e.message);
     return {};
   }
 }
