@@ -29,6 +29,7 @@ import { fetchStockHistory, type PriceBar } from "../services/marketDataService"
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import type { Signal as SharedSignal } from "../types/signals";
 import { TradingViewChart } from "../components/TradingViewChart";
+import { FinancialMetrics } from "../components/FinancialMetrics";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -1091,153 +1092,8 @@ export function StockAnalysisPage() {
               </div>
             </Card>
 
-            {/* Fundamentals */}
-            <Card className="border shadow-sm">
-              <div className="p-5">
-                <h3 className="text-sm font-semibold text-foreground mb-4">Fundamental Analysis</h3>
-
-                {/* Rating Header */}
-                {(() => {
-                  const fundScore = stockSignal?.analysis?.fundamental?.score ?? stockSignal?.fundamental?.score ?? null;
-                  const fundGrade = stockSignal?.analysis?.fundamental?.grade ?? null;
-                  const fundMetrics = stockSignal?.analysis?.fundamental?.metrics ?? null;
-                  const ratingLabel = companyProfile?.recommendation || stockSignal?.signal || 'Hold';
-                  const ratingScore = companyProfile?.scores?.total || fundScore || stockSignal?.confidence || 50;
-                  const isPositive = ratingLabel === 'Strong Buy' || ratingLabel === 'Buy';
-                  const isNegative = ratingLabel === 'Strong Sell' || ratingLabel === 'Sell';
-                  const ratingColor = isPositive ? 'text-emerald-700' : isNegative ? 'text-red-700' : 'text-amber-700';
-                  const ratingBg = isPositive ? 'bg-emerald-50/50 border-emerald-200' : isNegative ? 'bg-red-50/50 border-red-200' : 'bg-amber-50/50 border-amber-200';
-                  return (
-                    <div className={`${ratingBg} rounded-lg p-3 border mb-3`}>
-                      <div className="text-[11px] font-medium text-muted-foreground mb-1">{activeSelection.sector}</div>
-                      <div className={`text-lg font-bold ${ratingColor}`}>{ratingLabel}</div>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${isPositive ? 'bg-emerald-500' : isNegative ? 'bg-red-500' : 'bg-amber-500'}`}
-                            style={{ width: `${Math.min(100, Math.max(0, ratingScore))}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-semibold text-muted-foreground">{ratingScore}/100</span>
-                      </div>
-                      {fundGrade && <div className="text-[11px] text-muted-foreground mt-1">Grade: {fundGrade}</div>}
-                    </div>
-                  );
-                })()}
-
-                {/* Sector & Market Context */}
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-3 pb-3 border-b border-border">
-                  <span>Sector: <span className="font-medium text-foreground">{stockSignal?.sector || activeSelection.sector}</span></span>
-                  <span>Market: <span className="font-medium text-foreground">{stockSignal?.market || activeSelection.market?.toUpperCase()}</span></span>
-                  {stockSignal?.country && <span>Country: <span className="font-medium text-foreground">{stockSignal.country}</span></span>}
-                </div>
-
-                {/* Key Metrics Grid */}
-                <div className="grid grid-cols-2 gap-2">
-
-                  {/* P/E */}
-                  <div className="bg-background rounded-lg p-2.5 border">
-                    <div className="text-[11px] font-medium text-muted-foreground">P/E Ratio</div>
-                    <div className="text-sm font-semibold text-foreground">
-                      {companyProfile?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : '—')}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {(() => {
-                        const pe = companyProfile?.peRatio || activeSelection.pe;
-                        if (!pe || pe <= 0) return 'N/A';
-                        const sectorAvgPe = (() => {
-                          const avgs: Record<string, number> = {
-                            'Telecommunications': 15, 'Banking': 10, 'Manufacturing': 18,
-                            'Media': 12, 'Utilities': 14, 'Technology': 30, 'Financial': 14,
-                            'Healthcare': 25, 'Consumer': 22, 'Energy': 12, 'Real Estate': 35,
-                            'Semiconductors': 25, 'Software': 35, 'Insurance': 12, 'Agricultural': 14,
-                            'Construction': 16, 'Transportation': 15, 'Other': 18,
-                          };
-                          return avgs[activeSelection.sector] || 18;
-                        })();
-                        if (pe < sectorAvgPe * 0.7) return `Undervalued vs sector (${sectorAvgPe})`;
-                        if (pe > sectorAvgPe * 1.4) return `Above sector avg (${sectorAvgPe})`;
-                        return `In line with sector (${sectorAvgPe})`;
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* Market Cap */}
-                  <div className="bg-background rounded-lg p-2.5 border">
-                    <div className="text-[11px] font-medium text-muted-foreground">Market Cap</div>
-                    <div className="text-sm font-semibold text-foreground">
-                      {companyProfile?.marketCap ? `$${(companyProfile.marketCap / 1e9).toFixed(1)}B` : activeSelection.marketCap || '—'}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">Enterprise Value</div>
-                  </div>
-
-                  {/* Dividend */}
-                  <div className="bg-background rounded-lg p-2.5 border">
-                    <div className="text-[11px] font-medium text-muted-foreground">Dividend</div>
-                    <div className="text-sm font-semibold text-foreground">
-                      {activeSelection.dividend > 0 ? `${activeSelection.dividend.toFixed(2)}%` : 'None'}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {activeSelection.dividend > 0 ? 'Yield' : 'No dividend'}
-                    </div>
-                  </div>
-
-                  {/* Volume */}
-                  <div className="bg-background rounded-lg p-2.5 border">
-                    <div className="text-[11px] font-medium text-muted-foreground">Volume</div>
-                    <div className="text-sm font-semibold text-foreground">
-                      {stockSignal?.volume || activeSelection.volume || '—'}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">Today</div>
-                  </div>
-
-                  {/* Today's Range */}
-                  <div className="bg-background rounded-lg p-2.5 border">
-                    <div className="text-[11px] font-medium text-muted-foreground">Today's Range</div>
-                    <div className="text-sm font-semibold text-foreground">
-                      {liveQuote?.dayLow && liveQuote?.dayHigh
-                        ? `${formatPrice(liveQuote.dayLow)} — ${formatPrice(liveQuote.dayHigh)}`
-                        : '—'}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">{activeSelection.market === 'nse' ? 'NSE' : 'Global'}</div>
-                  </div>
-
-                  {/* Country */}
-                  <div className="bg-background rounded-lg p-2.5 border">
-                    <div className="text-[11px] font-medium text-muted-foreground">Country</div>
-                    <div className="text-sm font-semibold text-foreground">
-                      {companyProfile?.country || (activeSelection.market === 'nse' ? 'Kenya' : 'Global')}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground">Headquarters</div>
-                  </div>
-                </div>
-
-                {/* Signal Fundamental Metrics (when available) */}
-                {stockSignal?.analysis?.fundamental?.metrics && (() => {
-                  const m = stockSignal.analysis.fundamental.metrics;
-                  const items = [];
-                  if (m.peRating) items.push({ label: 'P/E', text: m.peRating, signal: m.peSignal });
-                  if (m.divRating) items.push({ label: 'Div', text: m.divRating, signal: m.divSignal });
-                  if (m.revRating) items.push({ label: 'Rev', text: m.revRating, signal: m.revSignal });
-                  if (m.epsRating) items.push({ label: 'EPS', text: m.epsRating, signal: m.epsSignal });
-                  if (m.mgnRating) items.push({ label: 'Margin', text: m.mgnRating, signal: m.mgnSignal });
-                  if (items.length === 0) return null;
-                  return (
-                    <div className="mt-3 pt-3 border-t border-border space-y-1.5">
-                      <div className="text-[11px] font-medium text-muted-foreground mb-1">Fundamental Signals</div>
-                      {items.map(item => (
-                        <div key={item.label} className="flex items-center gap-2 text-[11px]">
-                          <span className={`size-1.5 rounded-full shrink-0 ${
-                            item.signal === 'BUY' ? 'bg-emerald-500' : item.signal === 'SELL' ? 'bg-red-500' : 'bg-amber-400'
-                          }`} />
-                          <span className="text-muted-foreground">{item.text}</span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
-            </Card>
+            {/* Financial Health */}
+            <FinancialMetrics symbol={activeSelection.ticker} sector={activeSelection.sector} />
           </div>
         </div>
       </div>
