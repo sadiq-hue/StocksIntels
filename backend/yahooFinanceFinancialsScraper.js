@@ -747,12 +747,15 @@ function formatCashFlow(item, period) {
   };
 }
 
-async function getKeyMetrics(symbol, period = 'annual', limit = 4) {
+async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHistory = null) {
   const allData = await fetchAllFundamentals(symbol);
   if (!allData) return null;
 
   const income = await getIncomeStatement(symbol, period, limit);
   const balance = await getBalanceSheet(symbol, period, limit);
+  if (!cashFlowHistory) {
+    cashFlowHistory = await getCashFlowStatement(symbol, period, limit);
+  }
 
   // Get current market data from quoteSummary
   let qs = await fetchQuoteSummary(symbol, ['financialData', 'defaultKeyStatistics']);
@@ -777,6 +780,7 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4) {
   for (let i = 0; i < count; i++) {
     const incItem = income?.[i] || {};
     const balItem = balance?.[i] || {};
+    const cfItem = cashFlowHistory?.[i] || {};
     if (!incItem.date && !balItem.date) continue;
     const yr = incItem.date || balItem.date || new Date().toISOString().split('T')[0];
     const revenue = incItem.revenue || 0;
@@ -788,6 +792,7 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4) {
     const currentLiabilities = balItem.totalCurrentLiabilities || 0;
     const ocf = incItem.ebitda || 0;
     const eps = incItem.eps || 0;
+    const freeCashFlow = cfItem.freeCashFlow || 0;
 
     // Use real marketCap when available; don't estimate
     const cap = currentMarketCap;
@@ -809,7 +814,7 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4) {
       payoutRatio: fd.payoutRatio || 0,
       netDebtToEBITDA: ocf > 0 ? totalLiabilities / ocf : 0,
       earningsYield: (netIncome > 0 && cap > 0) ? netIncome / cap : 0,
-      freeCashFlowYield: cap > 0 ? (incItem.ebitda || 0) / cap : 0,
+      freeCashFlowYield: cap > 0 ? freeCashFlow / cap : 0,
       revenuePerShare: eps > 0 && netIncome > 0 ? revenue / (netIncome / eps) : 0,
       netIncomePerShare: eps || 0,
       operatingCashFlowPerShare: 0,
@@ -873,7 +878,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
       return { success: false, symbol, error: 'No financial data available from Yahoo Finance for this symbol' };
     }
 
-    const km = await getKeyMetrics(symbol, period, limit);
+    const km = await getKeyMetrics(symbol, period, limit, cfHistory);
 
     return {
       success: true,

@@ -640,8 +640,8 @@ export function StockAnalysisPage() {
               </div>
 
               {/* Key Stats Bar */}
-              <div className="grid grid-cols-2 md:grid-cols-7 gap-2 mb-6">
-                <div className="col-span-2 md:col-span-2 rounded-lg bg-muted/50 p-3 border">
+              <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-7 gap-2 mb-6">
+                <div className="sm:col-span-1 md:col-span-2 rounded-lg bg-muted/50 p-3 border">
                   <div className="text-[11px] font-medium text-muted-foreground mb-1">Current Price</div>
                   <div className={`text-xl md:text-2xl font-bold ${displayChange >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                     {formatCurrency(activeSelection)}{formatPrice(currentPrice)}
@@ -840,9 +840,12 @@ export function StockAnalysisPage() {
           </Card>
 
           {/* Analytics Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Signal */}
-            <Card className="border shadow-sm">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Technical Analysis (Signal + Key Indicators) */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Signal */}
+                <Card className="border shadow-sm">
               <div className="p-5">
                 <h3 className="text-sm font-semibold text-foreground mb-3">Trading Signal</h3>
                 {loadingData ? (
@@ -1091,9 +1094,13 @@ export function StockAnalysisPage() {
                 </div>
               </div>
             </Card>
+              </div>
+            </div>
 
             {/* Financial Health */}
-            <FinancialMetrics symbol={activeSelection.ticker} sector={activeSelection.sector} />
+            <div className="lg:col-span-1">
+              <FinancialMetrics symbol={activeSelection.ticker} sector={activeSelection.sector} />
+            </div>
           </div>
         </div>
       </div>
