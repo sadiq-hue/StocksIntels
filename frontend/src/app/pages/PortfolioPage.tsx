@@ -18,7 +18,7 @@ import { useAuth } from "../auth/AuthContext";
 import { usePortfolioData } from "../contexts/PortfolioDataContext";
 import { usePaperTrading, type PaperPosition, type PaperTrade } from "../contexts/PaperTradingContext";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 interface Holding {
   id?: number;

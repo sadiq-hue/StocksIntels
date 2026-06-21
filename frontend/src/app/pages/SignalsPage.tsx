@@ -15,7 +15,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../auth/AuthContext";
 import type { Signal as StockSignal } from "../types/signals";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 const SIGNAL_STYLES: Record<string, { bg: string; text: string; border: string; icon: typeof TrendingUp }> = {
   "Strong Buy":  { bg: "bg-emerald-600", text: "text-white", border: "border-emerald-600", icon: TrendingUp },

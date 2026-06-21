@@ -14,7 +14,7 @@ function getInitials(name: string): string {
   return name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
 }
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 function TrialBanner() {
   const { user } = useAuth();

@@ -11,7 +11,7 @@ import {
   type ScreenerFilters, type ScreenerStock, type ScreenerResult, type ScreenerCriteria,
 } from "../../services/screenerService";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 function formatVolume(vol: string | number): string {
   const v = typeof vol === "string" ? parseFloat(vol.replace(/[^0-9.]/g, "")) : vol;

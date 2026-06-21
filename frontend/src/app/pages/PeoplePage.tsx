@@ -12,7 +12,7 @@ import { useAuth } from "../auth/AuthContext";
 import { getSocket, connectSocket } from "../services/socketService";
 import { formatLastSeen } from "../utils/timeFormat";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 interface UserProfile {
   id: number;

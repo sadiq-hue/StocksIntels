@@ -10,7 +10,7 @@ import { kenyanStocks, globalStocks, type StockListItem } from "../data/stockUni
 import { useAuth } from "../auth/AuthContext";
 import type { Signal } from "../types/signals";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 interface WatchlistItem {
   id: number;

@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import { useAuth } from "../auth/AuthContext";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 export interface PaperAccount {
   id: number;

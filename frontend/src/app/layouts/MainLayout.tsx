@@ -5,7 +5,7 @@ import { Sidebar } from "../components/Sidebar";
 import { Toaster } from "../components/ui/sonner";
 import { useAuth } from "../auth/AuthContext";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 export function MainLayout() {
   const { user } = useAuth();

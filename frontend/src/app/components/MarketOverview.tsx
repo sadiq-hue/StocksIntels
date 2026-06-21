@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { TrendingUp, TrendingDown } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 interface MarketStatus {
   open: boolean;

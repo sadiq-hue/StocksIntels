@@ -15,7 +15,7 @@ import { useNavigate } from "react-router";
 import { useAuth } from "../auth/AuthContext";
 import { getSocket, connectSocket, joinGroup, leaveGroup } from "../services/socketService";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 interface Group {
   id: string;

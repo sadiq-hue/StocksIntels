@@ -9,7 +9,7 @@ import {
   Info, Clock, TrendingUp as ArrowUpRight,
 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 interface Bond {
   id: string; type: string; issuer: string; name: string;

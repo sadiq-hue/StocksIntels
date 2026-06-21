@@ -29,7 +29,7 @@ import { fetchStockHistory, type PriceBar } from "../services/marketDataService"
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import type { Signal as SharedSignal } from "../types/signals";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 const formatCurrency = (stock: StockListItem) => stock.currency === "USD" ? "$" : "KES ";
 

@@ -4,7 +4,7 @@ import { Command, CommandList, CommandItem, CommandGroup, CommandEmpty } from ".
 import { useNavigate } from "react-router";
 import { useState, useRef, useEffect } from "react";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 interface SearchResult {
   symbol: string;

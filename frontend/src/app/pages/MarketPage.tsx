@@ -57,7 +57,7 @@ function toApiFormat(stocks: typeof kenyanStocks, prefixNse = false) {
 const localNseStocks = toApiFormat(kenyanStocks, true);
 const localGlobalStocks = toApiFormat(globalStocks, false);
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 const MarketPage: React.FC = () => {
   const { nseStocks: ctxNse, globalStocks: ctxGlobal, allStocks, loading: ctxLoading, refresh: refreshCtx, getRealtimeQuote } = useStockData();

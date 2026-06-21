@@ -6,7 +6,7 @@ import { User, Mail, Save, BadgeCheck, Shield, Lock, Loader2 } from "lucide-reac
 import { useAuth } from "../auth/AuthContext";
 import { Badge } from "../components/ui/badge";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 export function ProfilePage() {
   const { user, logout } = useAuth();

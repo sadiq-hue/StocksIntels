@@ -23,7 +23,7 @@ const GROUP_ICONS: Record<string, string> = {
   "day-traders": "⚡",
 };
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 const BACKEND_URL = API_URL.replace(/\/api$/, '');
 
 interface Message {

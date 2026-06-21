@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 export type DataProvider = "auto" | "sec-edgar" | "simfin" | "fmp" | "yahoo-finance" | "synthetic";
 

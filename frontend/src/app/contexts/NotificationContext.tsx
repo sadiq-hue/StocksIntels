@@ -4,7 +4,7 @@ import { getSocket } from "../services/socketService";
 import { useAuth } from "../auth/AuthContext";
 import { formatNotificationTime } from "../utils/timeFormat";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 export interface Notification {
   id: number;

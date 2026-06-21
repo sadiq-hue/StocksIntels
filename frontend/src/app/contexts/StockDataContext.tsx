@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from "react";
 import { useRealtimeQuotes } from "./RealtimeQuotesContext";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 interface StockData {
   symbol: string;

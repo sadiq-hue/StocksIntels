@@ -4,7 +4,7 @@ import { Star, TrendingUp, TrendingDown, MoreVertical, Loader2, PlusCircle } fro
 import { Link } from "react-router";
 import { useAuth } from "../auth/AuthContext";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 interface WatchlistItem {
   symbol: string;

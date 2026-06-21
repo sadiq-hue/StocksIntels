@@ -18,7 +18,7 @@ import { kenyanStocks, globalStocks } from "../data/stockUniverses";
 import { fetchAllNews, type NewsArticle } from "../services/newsService";
 import type { Signal } from "../types/signals";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 function AnimatedCounter({ end, duration = 2000, prefix = "", suffix = "" }: { end: number; duration?: number; prefix?: string; suffix?: string }) {
   const [count, setCount] = useState(0);
@@ -347,7 +347,7 @@ export function DashboardPage() {
 
   const fetchSignals = useCallback(() => {
     const userIdParam = user?.id ? `?userId=${user.id}` : '';
-    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3001/api"}/signals${userIdParam}`)
+    fetch(`${import.meta.env.VITE_API_URL || "/api"}/signals${userIdParam}`)
       .then(r => r.json())
       .then(data => { if (data.success) setSignals(data.signals); })
       .catch(() => {});

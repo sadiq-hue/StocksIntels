@@ -313,7 +313,7 @@ export function FinancialsPage() {
       yahooSuggestRef.current = setTimeout(async () => {
         setYahooSuggesting(true);
         try {
-          const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3001/api"}/stocks/search/yahoo?q=${encodeURIComponent(q)}`);
+          const res = await fetch(`${import.meta.env.VITE_API_URL || "/api"}/stocks/search/yahoo?q=${encodeURIComponent(q)}`);
           if (res.ok) {
             const data = await res.json();
             setYahooSuggestions((data || []).slice(0, 10).map((r: any) => ({ ticker: r.symbol, name: r.name })));

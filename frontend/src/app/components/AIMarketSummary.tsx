@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
 import { Sparkles, Loader2 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 interface MarketSummary {
   summary: string;

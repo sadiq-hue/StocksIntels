@@ -18,7 +18,7 @@ import {
   ThumbsUp, Bot, User, Phone, Circle,
 } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 type Ticket = {
   id: number; email: string; subject: string; category: string;
