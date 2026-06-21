@@ -131,7 +131,26 @@ async function fetchIndexLive(symbol) {
     return null;
   }
   // Yahoo for global indices (free, real-time)
-  return fetchIndexFromYahoo(symbol);
+  const yahooData = await fetchIndexFromYahoo(symbol);
+  if (yahooData) return yahooData;
+  // Fallback to Twelve Data when Yahoo rate-limits
+  try {
+    const { fetchQuote } = require('./twelveDataService');
+    const td = await fetchQuote(symbol);
+    if (td?.price) {
+      return {
+        price: td.price,
+        change: td.change || 0,
+        changePercent: td.changePercent || 0,
+        previousClose: td.previousClose || td.price,
+        open: td.dayHigh ? undefined : undefined,
+        dayHigh: td.dayHigh,
+        dayLow: td.dayLow,
+        volume: td.volume || 0,
+      };
+    }
+  } catch {}
+  return null;
 }
 
 async function getAllIndices() {
