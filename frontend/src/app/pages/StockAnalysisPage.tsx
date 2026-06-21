@@ -676,7 +676,165 @@ export function StockAnalysisPage() {
               </div>
 
               {/* Chart */}
-              <TradingViewChart symbol={activeSelection.ticker} market={activeSelection.market} />
+              {activeSelection.market === "global" ? (
+                <TradingViewChart symbol={activeSelection.ticker} market={activeSelection.market} />
+              ) : chartLoading && chartHistory.length === 0 ? (
+                <div className="flex items-center justify-center h-[340px] text-sm text-muted-foreground">
+                  <Loader2 className="size-5 animate-spin mr-2" /> Loading price history...
+                </div>
+              ) : chartData.length === 0 ? (
+                <div className="flex items-center justify-center h-[340px] text-sm text-muted-foreground">
+                  No historical price data available
+                </div>
+              ) : (
+                <div className="space-y-0">
+                  <ResponsiveContainer width="100%" height={240}>
+                    <AreaChart data={chartData} margin={{ top: 5, right: 12, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#0D7490" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="#0D7490" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                      <XAxis dataKey="date" hide />
+                      <YAxis
+                        stroke="var(--muted-foreground)"
+                        tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                        domain={["dataMin - 1", "dataMax + 1"]}
+                        width={55}
+                        tickFormatter={(v: number) => `${v.toFixed(0)}`}
+                      />
+                      <Tooltip
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null;
+                          const d = payload[0]?.payload;
+                          const isUp = d?.price >= d?.open;
+                          return (
+                            <div className="bg-card border border-border rounded-lg shadow-lg p-3 text-xs space-y-1" style={{ fontSize: 12, minWidth: 160 }}>
+                              <div className="font-semibold text-foreground mb-1.5 border-b border-border pb-1">{d?.fullDate || label}</div>
+                              <div className="flex justify-between gap-4">
+                                <span className="text-muted-foreground">Open</span>
+                                <span className="font-medium">{d?.open != null ? formatPrice(d.open) : '—'}</span>
+                              </div>
+                              <div className="flex justify-between gap-4">
+                                <span className="text-muted-foreground">High</span>
+                                <span className="font-medium text-emerald-600">{d?.high != null ? formatPrice(d.high) : '—'}</span>
+                              </div>
+                              <div className="flex justify-between gap-4">
+                                <span className="text-muted-foreground">Low</span>
+                                <span className="font-medium text-red-500">{d?.low != null ? formatPrice(d.low) : '—'}</span>
+                              </div>
+                              <div className="flex justify-between gap-4">
+                                <span className="text-muted-foreground">Close</span>
+                                <span className={`font-bold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{d?.price != null ? formatPrice(d.price) : '—'}</span>
+                              </div>
+                              <div className="flex justify-between gap-4">
+                                <span className="text-muted-foreground">Volume</span>
+                                <span className="font-medium">{d?.volume ? `${(d.volume / 1000000).toFixed(2)}M` : '—'}</span>
+                              </div>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="price"
+                        stroke="#0D7490"
+                        strokeWidth={2}
+                        fill="url(#priceGrad)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: "#0D7490", stroke: "#fff", strokeWidth: 2 }}
+                      />
+                      {chartData.some((d: any) => d.sma20 != null) && (
+                        <Line type="monotone" dataKey="sma20" stroke="#f59e0b" strokeWidth={1.5} dot={false} connectNulls />
+                      )}
+                      {chartData.some((d: any) => d.sma50 != null) && (
+                        <Line type="monotone" dataKey="sma50" stroke="#ef4444" strokeWidth={1.5} dot={false} connectNulls />
+                      )}
+                      {stockSignal?.entry && (
+                        <ReferenceLine y={stockSignal.entry} stroke="#8b5cf6" strokeWidth={1} strokeDasharray="4 4" label={{ value: 'Entry', position: 'right', fill: '#8b5cf6', fontSize: 10 }} />
+                      )}
+                      {stockSignal?.stopLoss && (
+                        <ReferenceLine y={stockSignal.stopLoss} stroke="#dc2626" strokeWidth={1} strokeDasharray="4 4" label={{ value: 'SL', position: 'right', fill: '#dc2626', fontSize: 10 }} />
+                      )}
+                      {stockSignal?.target1 && (
+                        <ReferenceLine y={stockSignal.target1} stroke="#059669" strokeWidth={1} strokeDasharray="4 4" label={{ value: 'T1', position: 'right', fill: '#059669', fontSize: 10 }} />
+                      )}
+                      {stockSignal?.target2 && (
+                        <ReferenceLine y={stockSignal.target2} stroke="#0D7490" strokeWidth={1} strokeDasharray="4 4" label={{ value: 'T2', position: 'right', fill: '#0D7490', fontSize: 10 }} />
+                      )}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                  <ResponsiveContainer width="100%" height={60}>
+                    <AreaChart data={chartData} margin={{ top: 0, right: 12, left: 0, bottom: 2 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                      <XAxis
+                        dataKey="date"
+                        stroke="var(--muted-foreground)"
+                        tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                        interval={Math.floor(chartData.length / 7)}
+                        height={16}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="volume"
+                        stroke="#0EA5E9"
+                        strokeWidth={1}
+                        fill="#0EA5E9"
+                        fillOpacity={0.5}
+                        dot={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {activeSelection.market !== "global" && chartData.length > 0 && (
+                <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 pt-4 border-t border-border">
+                  <div className="flex items-center gap-2">
+                    <div className="size-3 rounded-sm bg-[#0D7490]" />
+                    <div>
+                      <div className="text-[11px] font-medium text-muted-foreground">PRICE</div>
+                      <div className="text-sm font-semibold text-foreground">{formatPrice(currentPrice)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="size-3 rounded-sm bg-[#0EA5E9]" />
+                    <div>
+                      <div className="text-[11px] font-medium text-muted-foreground">{chartPeriod} RANGE</div>
+                      <div className="text-sm font-semibold text-foreground">{formatPrice(lowPrice)} &mdash; {formatPrice(highPrice)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className={`size-3 rounded-sm ${displayChange >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                    <div>
+                      <div className="text-[11px] font-medium text-muted-foreground">CHANGE</div>
+                      <div className={`text-sm font-semibold ${displayChange >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {displayChange >= 0 ? '+' : ''}{displayChange.toFixed(2)}%
+                      </div>
+                    </div>
+                  </div>
+                  {chartData.some((d: any) => d.sma20 != null) && (
+                    <div className="flex items-center gap-2">
+                      <div className="size-3 rounded-sm bg-[#f59e0b]" />
+                      <div>
+                        <div className="text-[11px] font-medium text-muted-foreground">SMA 20</div>
+                        <div className="text-sm font-semibold text-foreground">{formatPrice(sma20)}</div>
+                      </div>
+                    </div>
+                  )}
+                  {chartData.some((d: any) => d.sma50 != null) && (
+                    <div className="flex items-center gap-2">
+                      <div className="size-3 rounded-sm bg-[#ef4444]" />
+                      <div>
+                        <div className="text-[11px] font-medium text-muted-foreground">SMA 50</div>
+                        <div className="text-sm font-semibold text-foreground">{formatPrice(sma50)}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </Card>
 
