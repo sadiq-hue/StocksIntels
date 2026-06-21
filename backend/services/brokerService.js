@@ -11,8 +11,11 @@ if (!ENCRYPTION_KEY) {
 
 function encrypt(text) {
   if (!text) return null;
+  if (!ENCRYPTION_KEY) throw new Error('BROKER_ENCRYPTION_KEY is not set');
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), iv);
+  const key = Buffer.from(ENCRYPTION_KEY, 'hex');
+  if (key.length !== 32) throw new Error(`BROKER_ENCRYPTION_KEY must be a 64-char hex string (32 bytes), got ${ENCRYPTION_KEY.length} chars`);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
   const authTag = cipher.getAuthTag().toString('hex');
@@ -23,7 +26,9 @@ function decrypt(encryptedPayload) {
   if (!encryptedPayload) return null;
   try {
     const { iv, encrypted, authTag } = JSON.parse(encryptedPayload);
-    const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), Buffer.from(iv, 'hex'));
+    const key = Buffer.from(ENCRYPTION_KEY, 'hex');
+    if (key.length !== 32) return null;
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, Buffer.from(iv, 'hex'));
     decipher.setAuthTag(Buffer.from(authTag, 'hex'));
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
