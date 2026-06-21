@@ -1,12 +1,15 @@
 import { io, Socket } from "socket.io-client";
 
+const isVercel = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1');
+const transports = isVercel ? ["polling"] : ["websocket", "polling"];
+
 let socket: Socket | null = null;
 
 export function getSocket(): Socket {
   if (!socket) {
     socket = io({
       autoConnect: false,
-      transports: ["websocket", "polling"],
+      transports,
     });
   }
   return socket;
