@@ -1,13 +1,10 @@
-FROM node:22-bookworm
+FROM mcr.microsoft.com/playwright:v1.60.0-jammy
 
 WORKDIR /app
 
-# Install Python + build deps for XGBoost + Playwright
+# Install Python + build deps for XGBoost
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip python3-venv build-essential cmake \
-    libnss3 libnspr4 libatk-bridge2.0-0 libdrm2 libdbus-1-3 \
-    libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 \
-    libgbm1 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 && \
+    python3 python3-pip python3-venv build-essential cmake && \
     rm -rf /var/lib/apt/lists/* && \
     python3 -m venv /app/venv && \
     /app/venv/bin/pip install --no-cache-dir xgboost numpy pandas scikit-learn
@@ -21,9 +18,6 @@ COPY backend/package.json ./backend/
 
 # Install backend production dependencies using the workspace lockfile
 RUN pnpm install --filter backend --prod --no-frozen-lockfile
-
-# Install Playwright Chromium browsers (both full chromium and headless-shell)
-RUN npx playwright install --with-deps chromium chromium-headless-shell
 
 # Copy backend source
 COPY backend/ ./backend/
