@@ -658,14 +658,14 @@ const MarketPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <MoverWindow 
             title="Top Gainers" 
             nse={marketData.movers?.nse?.gainers?.length ? marketData.movers.nse.gainers : localNseGainers}
             global={marketData.movers?.global?.gainers?.length ? marketData.movers.global.gainers : localGlobalGainers}
             pos={true} 
           />
-          <MoverWindow title="🔻 Top Losers"
+          <MoverWindow title="Top Losers"
             nse={marketData.movers?.nse?.losers?.length ? marketData.movers.nse.losers : localNseLosers}
             global={marketData.movers?.global?.losers?.length ? marketData.movers.global.losers : localGlobalLosers}
             pos={false} 
@@ -774,8 +774,8 @@ const MarketWindow = ({
     </div>
 
     {/* Search & Sort */}
-    <div className="px-4 py-3 border-b flex flex-wrap items-center gap-2">
-      <div className="relative flex-1 min-w-[140px]">
+    <div className="px-3 sm:px-4 py-3 border-b flex items-center gap-1.5 sm:gap-2">
+      <div className="relative flex-1 min-w-0">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={search}
@@ -804,12 +804,12 @@ const MarketWindow = ({
       <table className="w-full text-left border-collapse">
         <thead className="sticky top-0 z-10 bg-muted/50">
           <tr className="border-b">
-            <th className="w-8 px-3 py-2.5"></th>
-            <th className="px-3 py-2.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Symbol</th>
-            <th className="px-3 py-2.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Name</th>
-            <th className="px-3 py-2.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider text-right">Price</th>
-            <th className="px-3 py-2.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider text-right">Change</th>
-            <th className="px-3 py-2.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider text-right hidden md:table-cell">Volume</th>
+            <th className="w-6 sm:w-8 px-2 sm:px-3 py-2.5"></th>
+            <th className="px-2 sm:px-3 py-2.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Symbol</th>
+            <th className="px-2 sm:px-3 py-2.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider hidden sm:table-cell">Name</th>
+            <th className="px-2 sm:px-3 py-2.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider text-right">Price</th>
+            <th className="px-2 sm:px-3 py-2.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider text-right">Change</th>
+            <th className="px-2 sm:px-3 py-2.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider text-right hidden md:table-cell">Volume</th>
           </tr>
         </thead>
         <tbody>
@@ -819,41 +819,41 @@ const MarketWindow = ({
             const isFav = favorites.includes(stock.symbol);
             return (
               <tr key={stock.symbol} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => onStockClick?.(stock)}>
-                <td className="px-3 py-2.5">
+                <td className="px-2 sm:px-3 py-2.5">
                   <button className="p-0.5 hover:bg-muted rounded transition-colors" onClick={(e) => { e.stopPropagation(); toggleFavorite(stock.symbol, e); }}>
-                    <Star size={13} className={isFav ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/40'} />
+                    <Star size={12} className={isFav ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/40'} />
                   </button>
                 </td>
-                <td className="px-3 py-2.5">
-                  <div className="flex items-center gap-1.5">
+                <td className="px-2 sm:px-3 py-2.5">
+                  <div className="flex items-center gap-1">
                     <span className="text-sm font-semibold text-foreground">{stock.symbol?.replace('NSE:', '')}</span>
-                    <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-muted text-muted-foreground">{stock.currency || currency}</span>
+                    <span className="hidden sm:inline-block text-[9px] font-medium px-1 py-0.5 rounded bg-muted text-muted-foreground">{stock.currency || currency}</span>
                   </div>
                 </td>
-                <td className="px-3 py-2.5 hidden sm:table-cell">
+                <td className="px-2 sm:px-3 py-2.5 hidden sm:table-cell">
                   <span className="text-xs text-muted-foreground truncate block max-w-[160px]">{stock.company_name}</span>
                 </td>
-                <td className="px-3 py-2.5 text-right">
-                  <div className="flex items-center justify-end gap-1">
+                <td className="px-2 sm:px-3 py-2.5 text-right">
+                  <div className="flex items-center justify-end gap-0.5">
                     <span className="text-sm font-semibold text-foreground font-mono">{isPending ? '--' : stock.price}</span>
                     {stock.isPreMarket && (
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">PRE</span>
+                      <span className="text-[8px] sm:text-[9px] px-0.5 sm:px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">PRE</span>
                     )}
                     {stock.provider === 'pending' && (
-                      <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">loading</span>
+                      <span className="text-[8px] sm:text-[9px] px-0.5 sm:px-1 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">load</span>
                     )}
                   </div>
                 </td>
-                <td className="px-3 py-2.5 text-right">
+                <td className="px-2 sm:px-3 py-2.5 text-right">
                   {isPending ? (
                     <span className="text-xs text-muted-foreground font-mono">--</span>
                   ) : (
-                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold ${
+                  <span className={`inline-flex items-center gap-0.5 sm:gap-1 px-1 sm:px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold ${
                     isPositive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
                   }`}>
-                    {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                    {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                     {isPositive ? '+' : ''}{(stock.changePercent ?? 0).toFixed(2)}%
-                    {stock.isPreMarket && <span className="text-[9px] opacity-70">pre</span>}
+                    {stock.isPreMarket && <span className="hidden sm:inline text-[9px] opacity-70">pre</span>}
                   </span>
                   )}
                 </td>
