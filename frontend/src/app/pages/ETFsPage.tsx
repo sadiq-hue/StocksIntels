@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import {
-  Search, RefreshCcw, TrendingUp, TrendingDown, BarChart3,
-  Layers, Globe, DollarSign, PieChart, Activity, Clock,
+  Search, RefreshCcw, TrendingUp, TrendingDown,
+  Layers, Clock, Wifi, WifiOff,
 } from "lucide-react";
+import { fetchRealtimeQuotesBatch } from "../services/marketDataService";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -32,29 +33,85 @@ export function ETFsPage() {
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const [etfsRes, summaryRes] = await Promise.all([
-        fetch(`${API_URL}/etfs?market=all`),
-        fetch(`${API_URL}/etfs/summary`),
-      ]);
-      setEtfs(await etfsRes.json());
-      setSummary(await summaryRes.json());
-    } catch (e) {
-      console.error("Failed to load ETFs:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, []);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "offline">("connecting");
+  const tickersRef = useRef<string[]>([]);
 
   useEffect(() => {
-    const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [etfsRes, summaryRes] = await Promise.all([
+          fetch(`${API_URL}/etfs?market=all`),
+          fetch(`${API_URL}/etfs/summary`),
+        ]);
+        const etfsData = await etfsRes.json();
+        setEtfs(etfsData);
+        setSummary(await summaryRes.json());
+        tickersRef.current = etfsData.map((e: ETF) => e.ticker);
+        setLastUpdate(new Date());
+        setLiveStatus(etfsData.some((e: ETF) => e.dataSource === 'yahoo') ? "live" : "offline");
+      } catch (e) {
+        console.error("Failed to load ETFs:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    const updateQuotes = async () => {
+      const tickers = tickersRef.current;
+      if (tickers.length === 0) return;
+      try {
+        const quotes = await fetchRealtimeQuotesBatch(tickers);
+        setEtfs(prev => prev.map(etf => {
+          const q = quotes[etf.ticker];
+          if (q && q.price != null) {
+            return {
+              ...etf,
+              price: q.price,
+              change: q.change ?? 0,
+              changePercent: q.changePercent ?? 0,
+              volume: q.volume ?? etf.volume,
+              high: q.dayHigh ?? etf.high,
+              low: q.dayLow ?? etf.low,
+              previousClose: q.previousClose ?? etf.previousClose,
+              lastUpdated: new Date().toISOString(),
+              dataSource: q.provider || 'live',
+            };
+          }
+          return etf;
+        }));
+        setLastUpdate(new Date());
+        setLiveStatus("live");
+      } catch (e) {
+        console.error("Failed to update ETF quotes:", e);
+        setLiveStatus("offline");
+      }
+    };
+    if (tickersRef.current.length > 0) updateQuotes();
+    const interval = setInterval(updateQuotes, 30000);
+    return () => clearInterval(interval);
+  }, [loading]);
+
+  const liveSummary = useMemo((): Summary | null => {
+    if (!summary || etfs.length === 0) return summary;
+    const advancing = etfs.filter(e => (e.changePercent || 0) > 0).length;
+    const declining = etfs.filter(e => (e.changePercent || 0) < 0).length;
+    const sortedByChange = [...etfs].sort((a, b) => b.changePercent - a.changePercent);
+    return {
+      ...summary,
+      advancing,
+      declining,
+      topGainers: sortedByChange.slice(0, 5),
+      topLosers: [...sortedByChange].reverse().slice(0, 5),
+      totalVolume: etfs.reduce((s, e) => s + (e.volume || 0), 0),
+      hasLiveData: etfs.some(e => e.dataSource && e.dataSource !== 'simulated'),
+    };
+  }, [etfs, summary]);
 
   const categories = ["all", ...new Set(etfs.map(e => e.category))];
 
@@ -72,56 +129,51 @@ export function ETFsPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-foreground">Exchange-Traded Funds</h2>
           <p className="text-sm text-muted-foreground">Track top ETFs across global markets — equity, bonds, commodities, and more</p>
         </div>
-        <button onClick={load} disabled={loading} className="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg hover:bg-muted transition-colors">
-          <RefreshCcw className={`size-4 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          {lastUpdate && (
+            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <Clock className="size-3" /> {lastUpdate.toLocaleTimeString()}
+            </p>
+          )}
+          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${liveStatus === "live" ? 'bg-emerald-100 text-emerald-700' : liveStatus === "connecting" ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+            {liveStatus === "live" ? <Wifi className="size-2.5" /> : <WifiOff className="size-2.5" />}
+            {liveStatus === "live" ? 'Live' : liveStatus === "connecting" ? 'Connecting' : 'Offline'}
+          </span>
+        </div>
       </div>
 
-      {/* Summary Cards */}
-      {summary && (
+      {liveSummary && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="p-4">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">Total ETFs</p>
-              <p className="text-2xl font-bold text-foreground">{summary.totalETFs}</p>
-              <p className="text-[10px] text-muted-foreground mt-1">{summary.categories.length} categories</p>
+              <p className="text-2xl font-bold text-foreground">{liveSummary.totalETFs}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">{liveSummary.categories.length} categories</p>
             </Card>
             <Card className="p-4">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">Advancing</p>
-              <p className="text-2xl font-bold text-emerald-600">{summary.advancing}</p>
-              <p className="text-[10px] text-muted-foreground mt-1">Declining: {summary.declining}</p>
+              <p className="text-2xl font-bold text-emerald-600">{liveSummary.advancing}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Declining: {liveSummary.declining}</p>
             </Card>
             <Card className="p-4">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">Top Gainer</p>
-              <p className="text-xl font-bold text-emerald-600">{summary.topGainers?.[0]?.ticker || "—"}</p>
-              <p className="text-xs text-emerald-600 mt-1">+{summary.topGainers?.[0]?.changePercent?.toFixed(2) || "0"}%</p>
+              <p className="text-xl font-bold text-emerald-600">{liveSummary.topGainers?.[0]?.ticker || "—"}</p>
+              <p className="text-xs text-emerald-600 mt-1">+{liveSummary.topGainers?.[0]?.changePercent?.toFixed(2) || "0"}%</p>
             </Card>
             <Card className="p-4">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">Top Loser</p>
-              <p className="text-xl font-bold text-red-600">{summary.topLosers?.[0]?.ticker || "—"}</p>
-              <p className="text-xs text-red-600 mt-1">{summary.topLosers?.[0]?.changePercent?.toFixed(2) || "0"}%</p>
+              <p className="text-xl font-bold text-red-600">{liveSummary.topLosers?.[0]?.ticker || "—"}</p>
+              <p className="text-xs text-red-600 mt-1">{liveSummary.topLosers?.[0]?.changePercent?.toFixed(2) || "0"}%</p>
             </Card>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-              <Clock className="size-3" /> Auto-refreshes every 30s
-            </p>
-            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${summary.hasLiveData ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-              {summary.hasLiveData ? '● Live' : '● Simulated'}
-            </span>
           </div>
         </>
       )}
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex bg-muted rounded-lg p-1 flex-wrap">
           {categories.slice(0, 8).map(c => (
@@ -134,7 +186,6 @@ export function ETFsPage() {
         </div>
       </div>
 
-      {/* ETF List */}
       {loading ? (
         <div className="space-y-2">
           {[...Array(6)].map((_, i) => (
@@ -154,7 +205,11 @@ export function ETFsPage() {
                     <span className="text-foreground font-bold text-sm">{etf.ticker}</span>
                     <Badge variant="outline" className="text-[10px]">{etf.category}</Badge>
                     {etf.currency === "KES" && <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-700 border-amber-200">NSE</Badge>}
-                    {etf.dataSource === 'yahoo' && <span className="text-[8px] text-emerald-600 font-semibold uppercase tracking-wider">Live</span>}
+                    {etf.dataSource && etf.dataSource !== 'simulated' && (
+                      <span className="text-[8px] text-emerald-600 font-semibold uppercase tracking-wider flex items-center gap-0.5">
+                        <Wifi className="size-2.5" /> Live
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-muted-foreground truncate">{etf.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{etf.description}</p>
