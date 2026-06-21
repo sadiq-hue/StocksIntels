@@ -234,10 +234,11 @@ const MarketPage: React.FC = () => {
         fetch(`${API_BASE_URL}/market/movers`),
         fetch(`${API_BASE_URL}/market/indices`),
       ]);
-      const [movers, indices] = await Promise.all([
+      const [movers, indicesRaw] = await Promise.all([
         moversRes.json().catch(() => ({ nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] } })),
         indicesRes.json().catch(() => []),
       ]);
+      const indices = Array.isArray(indicesRaw) ? indicesRaw : [];
       const normalize = (items) => (items || []).map(s => ({
         symbol: s.symbol,
         ticker: s.ticker,
@@ -252,7 +253,7 @@ const MarketPage: React.FC = () => {
       const globalMovers = movers.global ? { gainers: normalize(movers.global.gainers), losers: normalize(movers.global.losers) } : { gainers: [], losers: [] };
       setMarketData({
         movers: { nse: nseMovers, global: globalMovers },
-        indices: indices || [],
+        indices,
       });
     } catch (err) {
       console.error("API fetch failed, using local stock data", err);
@@ -273,26 +274,11 @@ const MarketPage: React.FC = () => {
   const fetchClientPreMarket = useCallback(async () => {
     const symbols = localGlobalStocks.map(s => s.symbol).filter(Boolean).slice(0, 20);
     if (symbols.length === 0) return;
-    const preMap: Record<string, any> = {};
-    const results = await Promise.allSettled(symbols.map(sym =>
-      fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d&includePreMarket=true`, {
-        headers: { 'Accept': 'application/json' }
-      }).then(r => r.json()).then(d => {
-        const meta = d?.chart?.result?.[0]?.meta;
-        if (meta?.preMarketPrice != null) {
-          preMap[sym] = {
-            preMarketPrice: meta.preMarketPrice,
-            preMarketChange: meta.preMarketChange,
-            preMarketChangePercent: meta.preMarketChangePercent,
-            preMarketTime: meta.preMarketTime,
-            regularMarketPrice: meta.regularMarketPrice,
-            marketState: meta.marketState,
-          };
-        }
-      }).catch(() => {})
-    ));
-    await Promise.allSettled(results);
-    if (Object.keys(preMap).length > 0) setClientPreMarket(preMap);
+    try {
+      const res = await fetch(`${API_BASE_URL}/market/premarket?symbols=${symbols.join(',')}`);
+      const data = await res.json();
+      if (data && Object.keys(data).length > 0) setClientPreMarket(data);
+    } catch {}
   }, []);
 
   useEffect(() => {

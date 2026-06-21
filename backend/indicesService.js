@@ -34,13 +34,31 @@ const SECTORS = [
 
 function formatIndexForResponse(symbol, data) {
   const meta = ALL_INDICES[symbol];
+  if (!data) {
+    return {
+      name: meta?.name || symbol,
+      symbol: meta?.symbol || symbol,
+      market: meta?.market || 'Unknown',
+      currency: meta?.currency || 'USD',
+      value: '--',
+      change: '0.00%',
+      changeRaw: 0,
+      isPositive: true,
+      open: '--',
+      high: '--',
+      low: '--',
+      volume: '0',
+      previousClose: '--',
+      lastUpdated: new Date().toISOString(),
+    };
+  }
   const pct = data.changePercent || 0;
   return {
     name: meta.name,
     symbol: meta.symbol,
     market: meta.market,
     currency: meta.currency,
-    value: data.price.toFixed(2),
+    value: data.price?.toFixed?.(2) ?? '--',
     change: (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%',
     changeRaw: pct,
     isPositive: pct >= 0,

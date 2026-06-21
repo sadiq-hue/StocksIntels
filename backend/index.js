@@ -5005,6 +5005,39 @@ app.get('/api/market/indices', async (req, res) => {
   }
 });
 
+app.get('/api/market/premarket', async (req, res) => {
+  try {
+    const symbols = req.query.symbols ? req.query.symbols.split(',').map(s => s.trim()).filter(Boolean) : [];
+    if (symbols.length === 0) return res.json({});
+    const axios = require('axios');
+    const results = {};
+    await Promise.allSettled(symbols.map(async (sym) => {
+      try {
+        const cleanSym = sym.includes('.') ? sym : sym.replace('^', '%5E');
+        const { data } = await axios.get(
+          `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSym}?interval=1d&range=1d&includePreMarket=true`,
+          { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+        );
+        const meta = data?.chart?.result?.[0]?.meta;
+        if (meta?.preMarketPrice != null) {
+          results[sym] = {
+            preMarketPrice: meta.preMarketPrice,
+            preMarketChange: meta.preMarketChange,
+            preMarketChangePercent: meta.preMarketChangePercent,
+            preMarketTime: meta.preMarketTime,
+            regularMarketPrice: meta.regularMarketPrice,
+            marketState: meta.marketState,
+          };
+        }
+      } catch {}
+    }));
+    res.json(results);
+  } catch (error) {
+    console.error('Error fetching premarket:', error.message);
+    res.status(500).json({ error: 'Failed to fetch premarket data' });
+  }
+});
+
 app.get('/api/indices/nse', async (req, res) => {
   try {
     const indices = await indicesService.getNseIndices();
