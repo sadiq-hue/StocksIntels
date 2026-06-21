@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
+const YAHOO_BASE = "https://query1.finance.yahoo.com/v8/finance/chart";
 
 interface ETF {
   ticker: string; name: string; category: string;
@@ -26,48 +27,110 @@ interface Summary {
   totalVolume: number; advancing: number; declining: number;
 }
 
+async function fetchYahooQuotes(tickers: string[]): Promise<Record<string, Partial<ETF>>> {
+  const results = await Promise.allSettled(tickers.map(ticker =>
+    fetch(`${YAHOO_BASE}/${ticker}?interval=1d&range=1d`, {
+      headers: { Accept: "application/json" },
+    })
+      .then(r => r.json())
+      .then(d => {
+        const meta = d?.chart?.result?.[0]?.meta;
+        if (!meta || meta.regularMarketPrice == null) return null;
+        const price = meta.regularMarketPrice;
+        const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
+        const change = price - prevClose;
+        return {
+          ticker,
+          price,
+          change: +change.toFixed(2),
+          changePercent: +((change / prevClose) * 100).toFixed(2),
+          high: meta.regularMarketDayHigh ?? 0,
+          low: meta.regularMarketDayLow ?? 0,
+          volume: meta.regularMarketVolume ?? 0,
+          open: meta.regularMarketOpen ?? 0,
+          previousClose: prevClose,
+          dataSource: "yahoo",
+          lastUpdated: new Date().toISOString(),
+        };
+      })
+      .catch(() => null)
+  ));
+
+  const quotes: Record<string, Partial<ETF>> = {};
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value) {
+      quotes[r.value.ticker] = r.value;
+    }
+  }
+  return quotes;
+}
+
 export function ETFsPage() {
   const [etfs, setEtfs] = useState<ETF[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "offline">("connecting");
+  const tickersRef = useRef<string[]>([]);
 
-  const load = useCallback(async (silent = false) => {
-    if (!silent) setInitialLoading(true);
-    else setRefreshing(true);
-    try {
-      const [etfsRes, summaryRes] = await Promise.all([
-        fetch(`${API_URL}/etfs?market=all`),
-        fetch(`${API_URL}/etfs/summary`),
-      ]);
-      setEtfs(await etfsRes.json());
-      setSummary(await summaryRes.json());
-      setLastUpdate(new Date());
-    } catch (e) {
-      console.error("Failed to load ETFs:", e);
-      setLiveStatus("offline");
-    } finally {
-      setInitialLoading(false);
-      setRefreshing(false);
-    }
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [etfsRes, summaryRes] = await Promise.all([
+          fetch(`${API_URL}/etfs?market=all`),
+          fetch(`${API_URL}/etfs/summary`),
+        ]);
+        const data: ETF[] = await etfsRes.json();
+        setEtfs(data);
+        setSummary(await summaryRes.json());
+        tickersRef.current = data.filter(e => e.currency !== "KES").map(e => e.ticker);
+        setLastUpdate(new Date());
+      } catch (e) {
+        console.error("Failed to load ETFs:", e);
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+    load();
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-
   useEffect(() => {
-    const interval = setInterval(() => load(true), 30000);
-    return () => clearInterval(interval);
-  }, [load]);
+    if (initialLoading) return;
+    let mounted = true;
 
-  useEffect(() => {
-    if (!initialLoading && etfs.length > 0) {
-      setLiveStatus(etfs.some(e => e.dataSource === 'yahoo') ? "live" : "offline");
-    }
-  }, [initialLoading, etfs]);
+    const update = async () => {
+      const globalTickers = tickersRef.current;
+      if (globalTickers.length === 0) return;
+
+      const quotes = await fetchYahooQuotes(globalTickers);
+      if (!mounted) return;
+
+      if (Object.keys(quotes).length > 0) {
+        setEtfs(prev =>
+          prev.map(etf => {
+            const q = quotes[etf.ticker];
+            if (q && q.price != null) {
+              return { ...etf, ...q } as ETF;
+            }
+            return etf;
+          })
+        );
+        setLiveStatus("live");
+      } else {
+        setLiveStatus(prev => prev === "connecting" ? prev : "offline");
+      }
+      setLastUpdate(new Date());
+    };
+
+    update();
+    const interval = setInterval(update, 30000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [initialLoading]);
 
   const liveSummary = useMemo((): Summary | null => {
     if (!summary || etfs.length === 0) return summary;
@@ -81,7 +144,7 @@ export function ETFsPage() {
       topGainers: sortedByChange.slice(0, 5),
       topLosers: [...sortedByChange].reverse().slice(0, 5),
       totalVolume: etfs.reduce((s, e) => s + (e.volume || 0), 0),
-      hasLiveData: etfs.some(e => e.dataSource && e.dataSource !== 'simulated'),
+      hasLiveData: etfs.some(e => e.dataSource === "yahoo"),
     };
   }, [etfs, summary]);
 
@@ -112,14 +175,10 @@ export function ETFsPage() {
               <Clock className="size-3" /> {lastUpdate.toLocaleTimeString()}
             </p>
           )}
-          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${liveStatus === "live" ? 'bg-emerald-100 text-emerald-700' : liveStatus === "connecting" ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${liveStatus === "live" ? "bg-emerald-100 text-emerald-700" : liveStatus === "connecting" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
             {liveStatus === "live" ? <Wifi className="size-2.5" /> : <WifiOff className="size-2.5" />}
-            {liveStatus === "live" ? 'Live' : liveStatus === "connecting" ? 'Connecting' : 'Offline'}
+            {liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Offline"}
           </span>
-          <button onClick={() => load(true)} disabled={refreshing || initialLoading} className="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg hover:bg-muted transition-colors">
-            <RefreshCcw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
         </div>
       </div>
 
@@ -179,7 +238,7 @@ export function ETFsPage() {
                     <span className="text-foreground font-bold text-sm">{etf.ticker}</span>
                     <Badge variant="outline" className="text-[10px]">{etf.category}</Badge>
                     {etf.currency === "KES" && <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-700 border-amber-200">NSE</Badge>}
-                    {etf.dataSource === 'yahoo' && (
+                    {etf.dataSource === "yahoo" && (
                       <span className="text-[8px] text-emerald-600 font-semibold uppercase tracking-wider flex items-center gap-0.5">
                         <Wifi className="size-2.5" /> Live
                       </span>
