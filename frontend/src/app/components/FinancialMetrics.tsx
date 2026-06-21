@@ -153,7 +153,7 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
             <div className="grid grid-cols-2 gap-1.5">
               <MetricBox label="Revenue Growth" value={pct(revenueGrowth, 1)} color={badgeColor(revenueGrowth, v => v > 0.05)} sub="YoY Revenue Change" />
               <MetricBox label="EPS Growth" value={pct(epsGrowth, 1)} color={badgeColor(epsGrowth, v => v > 0.05)} sub="YoY Earnings/Share" />
-              <MetricBox label="FCF Growth" value={pct(fcf, 0)} color={badgeColor(fcf, v => v > 0)} sub="Free Cash Flow" />
+              <MetricBox label="Free Cash Flow" value={fcf != null ? formatLargeNum(fcf) : "—"} color={badgeColor(fcf, v => v > 0)} sub="Operating CF − CapEx" />
               <MetricBox label="Earnings Yield" value={pct(earningsYield, 1)} color={badgeColor(earningsYield, v => v > 0.05)} sub="Net Income ÷ Market Cap" />
             </div>
           </div>
