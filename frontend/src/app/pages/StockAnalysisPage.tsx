@@ -385,7 +385,7 @@ export function StockAnalysisPage() {
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* Sidebar */}
         <div className="xl:col-span-1">
-          <Card className="border shadow-sm h-full flex flex-col">
+          <Card className="border shadow-sm xl:sticky xl:top-6 xl:max-h-[calc(100vh-5rem)] flex flex-col">
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-sm text-foreground">
