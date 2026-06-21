@@ -45,30 +45,29 @@ async function fetchYahooQuotes() {
 
   try {
     const symbols = ETF_LIST.map(e => e.ticker).join(',');
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbols)}`;
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
     const res = await axios.get(url, { timeout: 15000 });
 
     const result = {};
-    const chartResult = res.data?.chart?.result;
-    if (!chartResult || !Array.isArray(chartResult)) return {};
+    const quoteResult = res.data?.quoteResponse?.result;
+    if (!quoteResult || !Array.isArray(quoteResult)) return {};
 
-    for (const item of chartResult) {
-      const m = item.meta;
-      if (!m || !m.symbol) continue;
-      const price = m.regularMarketPrice;
-      const prevClose = m.chartPreviousClose || m.previousClose;
+    for (const q of quoteResult) {
+      if (!q || !q.symbol) continue;
+      const price = q.regularMarketPrice;
+      const prevClose = q.regularMarketPreviousClose;
       if (price == null || prevClose == null) continue;
       const change = price - prevClose;
       const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
-      result[m.symbol] = {
+      result[q.symbol] = {
         price,
         change: +change.toFixed(2),
         changePercent: +changePercent.toFixed(2),
-        high: m.regularMarketDayHigh || 0,
-        low: m.regularMarketDayLow || 0,
-        volume: m.regularMarketVolume || 0,
+        high: q.regularMarketDayHigh || 0,
+        low: q.regularMarketDayLow || 0,
+        volume: q.regularMarketVolume || 0,
         previousClose: prevClose,
-        open: m.regularMarketOpen || 0,
+        open: q.regularMarketOpen || 0,
         dataSource: 'yahoo',
       };
     }
@@ -77,7 +76,7 @@ async function fetchYahooQuotes() {
     yahooCacheTime = now;
     return result;
   } catch (e) {
-    console.error('[ETFs] Yahoo chart API fetch failed:', e.message);
+    console.error('[ETFs] Yahoo quote API fetch failed:', e.message);
     return {};
   }
 }
