@@ -1,7 +1,6 @@
-// ETF Service — Real-time prices via Yahoo Chart API (works from Railway), synthetic fallback
+// ETF Service — Real-time prices via marketService pipeline (yahoo-finance2, RapidAPI, TwelveData), synthetic fallback
 
 const axios = require('axios');
-const FMP_API_KEY = process.env.FMP_API_KEY;
 
 const ETF_LIST = [
   { ticker: 'SPY', name: 'SPDR S&P 500 ETF Trust', category: 'US Equity', expenseRatio: 0.09, aum: 545000000000, dividendYield: 1.32, description: 'Tracks the S&P 500 Index', currency: 'USD' },
@@ -34,51 +33,84 @@ const ETF_LIST = [
   { ticker: 'NSEQ', name: 'NSE Equity Index Fund', category: 'Africa', expenseRatio: 1.20, aum: 50000000, dividendYield: 4.50, description: 'Nairobi Securities Exchange tracker', currency: 'KES' },
 ];
 
-// Cache for Yahoo quotes
-let yahooCache = {};
-let yahooCacheTime = 0;
-const YAHOO_CACHE_TTL = 30000;
+const tickers = ETF_LIST.map(e => e.ticker);
 
-async function fetchYahooQuotes() {
+let quotesCache = {};
+let cacheTime = 0;
+const CACHE_TTL = 30000;
+
+async function fetchLiveQuotes() {
   const now = Date.now();
-  if (yahooCache && now - yahooCacheTime < YAHOO_CACHE_TTL) return yahooCache;
+  if (quotesCache && now - cacheTime < CACHE_TTL) return quotesCache;
 
+  let result = {};
+
+  // 1. Use marketService batch pipeline (yahoo-finance2 + RapidAPI + TwelveData)
   try {
-    const symbols = ETF_LIST.map(e => e.ticker).join(',');
+    const { getQuotesBatch } = require('./marketService');
+    const batch = await getQuotesBatch(tickers);
+    if (batch && Object.keys(batch).length > 0) {
+      for (const [sym, q] of Object.entries(batch)) {
+        if (q && q.price != null) {
+          result[sym] = {
+            price: q.price,
+            change: q.change ?? 0,
+            changePercent: q.changePercent ?? 0,
+            high: q.dayHigh ?? 0,
+            low: q.dayLow ?? 0,
+            volume: q.volume ?? 0,
+            previousClose: q.previousClose ?? q.price,
+            open: q.open ?? 0,
+            dataSource: q.provider || 'live',
+          };
+        }
+      }
+      if (Object.keys(result).length > 0) {
+        quotesCache = result;
+        cacheTime = now;
+        return result;
+      }
+    }
+  } catch (e) {
+    console.error('[ETFs] marketService batch failed:', e.message);
+  }
+
+  // 2. Fallback: direct Yahoo Finance quote API
+  try {
+    const symbols = tickers.join(',');
     const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
     const res = await axios.get(url, { timeout: 15000 });
-
-    const result = {};
     const quoteResult = res.data?.quoteResponse?.result;
-    if (!quoteResult || !Array.isArray(quoteResult)) return {};
-
-    for (const q of quoteResult) {
-      if (!q || !q.symbol) continue;
-      const price = q.regularMarketPrice;
-      const prevClose = q.regularMarketPreviousClose;
-      if (price == null || prevClose == null) continue;
-      const change = price - prevClose;
-      const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
-      result[q.symbol] = {
-        price,
-        change: +change.toFixed(2),
-        changePercent: +changePercent.toFixed(2),
-        high: q.regularMarketDayHigh || 0,
-        low: q.regularMarketDayLow || 0,
-        volume: q.regularMarketVolume || 0,
-        previousClose: prevClose,
-        open: q.regularMarketOpen || 0,
-        dataSource: 'yahoo',
-      };
+    if (quoteResult && Array.isArray(quoteResult)) {
+      for (const q of quoteResult) {
+        if (!q || !q.symbol) continue;
+        const price = q.regularMarketPrice;
+        const prevClose = q.regularMarketPreviousClose;
+        if (price == null || prevClose == null) continue;
+        const change = price - prevClose;
+        result[q.symbol] = {
+          price,
+          change: +change.toFixed(2),
+          changePercent: +((change / prevClose) * 100).toFixed(2),
+          high: q.regularMarketDayHigh || 0,
+          low: q.regularMarketDayLow || 0,
+          volume: q.regularMarketVolume || 0,
+          previousClose: prevClose,
+          open: q.regularMarketOpen || 0,
+          dataSource: 'yahoo',
+        };
+      }
+      if (Object.keys(result).length > 0) {
+        quotesCache = result;
+        cacheTime = now;
+        return result;
+      }
     }
-
-    yahooCache = result;
-    yahooCacheTime = now;
-    return result;
   } catch (e) {
     console.error('[ETFs] Yahoo quote API fetch failed:', e.message);
-    return {};
   }
+
+  return {};
 }
 
 function getSyntheticQuote(ticker, basePrice) {
@@ -107,8 +139,8 @@ const BASE_PRICES = {
 };
 
 async function getETFs(market) {
-  const yahooQuotes = await fetchYahooQuotes();
-  const hasLiveData = Object.keys(yahooQuotes).length > 0;
+  const liveQuotes = await fetchLiveQuotes();
+  const hasLiveData = Object.keys(liveQuotes).length > 0;
 
   const all = ETF_LIST.filter(e => {
     if (market === 'kenya') return e.currency === 'KES';
@@ -117,7 +149,7 @@ async function getETFs(market) {
   });
 
   return all.map(etf => {
-    const live = yahooQuotes[etf.ticker];
+    const live = liveQuotes[etf.ticker];
     if (live) {
       return { ...etf, ...live, lastUpdated: new Date().toISOString() };
     }
@@ -130,8 +162,8 @@ async function getETFByTicker(ticker) {
   const etf = ETF_LIST.find(e => e.ticker === ticker.toUpperCase());
   if (!etf) return null;
 
-  const yahooQuotes = await fetchYahooQuotes();
-  const live = yahooQuotes[ticker.toUpperCase()];
+  const liveQuotes = await fetchLiveQuotes();
+  const live = liveQuotes[ticker.toUpperCase()];
 
   if (live) {
     return { ...etf, ...live, lastUpdated: new Date().toISOString() };
@@ -141,11 +173,11 @@ async function getETFByTicker(ticker) {
 }
 
 async function getETFSummary() {
-  const yahooQuotes = await fetchYahooQuotes();
-  const hasLiveData = Object.keys(yahooQuotes).length > 0;
+  const liveQuotes = await fetchLiveQuotes();
+  const hasLiveData = Object.keys(liveQuotes).length > 0;
 
   const etfs = ETF_LIST.map(etf => {
-    const live = yahooQuotes[etf.ticker];
+    const live = liveQuotes[etf.ticker];
     if (live) return { ...etf, ...live };
     const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100);
     return { ...etf, ...synth };
