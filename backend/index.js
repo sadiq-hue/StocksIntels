@@ -5019,14 +5019,22 @@ app.get('/api/market/premarket', async (req, res) => {
           { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } }
         );
         const meta = data?.chart?.result?.[0]?.meta;
-        if (meta?.preMarketPrice != null) {
+        if (meta) {
           results[sym] = {
-            preMarketPrice: meta.preMarketPrice,
-            preMarketChange: meta.preMarketChange,
-            preMarketChangePercent: meta.preMarketChangePercent,
-            preMarketTime: meta.preMarketTime,
-            regularMarketPrice: meta.regularMarketPrice,
-            marketState: meta.marketState,
+            preMarketPrice: meta.preMarketPrice ?? null,
+            preMarketChange: meta.preMarketChange ?? null,
+            preMarketChangePercent: meta.preMarketChangePercent ?? null,
+            preMarketTime: meta.preMarketTime ?? null,
+            postMarketPrice: meta.postMarketPrice ?? null,
+            postMarketChange: meta.postMarketChange ?? null,
+            postMarketChangePercent: meta.postMarketChangePercent ?? null,
+            postMarketTime: meta.postMarketTime ?? null,
+            regularMarketPrice: meta.regularMarketPrice ?? null,
+            regularMarketPreviousClose: meta.chartPreviousClose ?? meta.previousClose ?? null,
+            marketState: meta.marketState || 'CLOSED',
+            currentTradingPeriod: data?.chart?.result?.[0]?.meta?.currentTradingPeriod || null,
+            exchange: meta.exchangeName || '',
+            currency: meta.currency || 'USD',
           };
         }
       } catch {}
