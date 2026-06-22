@@ -646,7 +646,7 @@ export function StockAnalysisPage() {
                 <div className="text-right">
                   <div className="text-[11px] text-muted-foreground mb-1">
                     {(liveQuote as any)?.exchange || (activeSelection.market === "nse" ? "NSE" : "NasdaqGS")}
-                    {(liveQuote as any)?.exchange ? " -" : ""} Nasdaq Real Time Price &bull; {(liveQuote as any)?.currency || activeSelection.currency || "USD"}
+                    &nbsp;&mdash;&nbsp;Nasdaq Real Time Price &bull; {(liveQuote as any)?.currency || activeSelection.currency || "USD"}
                   </div>
                   <div className="text-3xl font-bold text-foreground">
                     {formatCurrency(activeSelection)}{formatPrice(regularPrice)}
@@ -655,7 +655,8 @@ export function StockAnalysisPage() {
                     displayChange >= 0 ? "text-emerald-600" : "text-red-500"
                   }`}>
                     {displayChange >= 0 ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}
-                    <span className="font-semibold">{displayChange > 0 ? "+" : ""}{displayChange.toFixed(2)}%</span>
+                    <span className="font-semibold">{liveQuote?.change != null ? `${liveQuote.change > 0 ? "+" : ""}${liveQuote.change.toFixed(2)}` : ""}</span>
+                    <span className="font-semibold">({displayChange > 0 ? "+" : ""}{displayChange.toFixed(2)}%)</span>
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
                     {sessionLabel}: {formatSessionTime(liveQuote?.currentTradingPeriod?.regular?.end)}
