@@ -233,7 +233,7 @@ export function StockAnalysisPage() {
   const isPreMarket = marketState === 'PRE';
   const isPostMarket = marketState === 'POST';
   const isRegular = marketState === 'REGULAR';
-  const regularPrice = liveQuote?.regularMarketPrice ?? liveQuote?.previousClose ?? displayPrice;
+  const regularPrice = liveQuote?.regularMarketPrice ?? liveQuote?.previousClose ?? activeSelection.price;
   const prePrice = liveQuote?.preMarketPrice;
   const postPrice = liveQuote?.postMarketPrice;
   const altPrice = prePrice ?? postPrice ?? null;
