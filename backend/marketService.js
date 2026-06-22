@@ -371,33 +371,28 @@ async function getStockQuote(symbol) {
     return cached;
   }
 
-  // 2. For NSE stocks, try NSE Scraper API first (live, dedicated NSE source)
-  //    Then enrich with dayHigh/dayLow/previousClose from cached sources
+  // 2. For NSE stocks, run NSE Scraper and myStocks in parallel, then merge best fields
   if (!quote && symbol.startsWith('NSE:')) {
-    const { fetchNSEQuote } = require('./nseScraperService');
-    quote = await fetchNSEQuote(symbol);
-    if (quote) {
-      const msQ = await mystocks.getQuoteForSymbol(symbol).catch(() => null);
-      const afxQ = getAfxQuote(symbol);
-      const enrich = msQ || afxQ;
+    const [nsQ, msQ] = await Promise.all([
+      require('./nseScraperService').fetchNSEQuote(symbol).catch(() => null),
+      mystocks.getQuoteForSymbol(symbol).catch(() => null),
+    ]);
+    const fxQ = getAfxQuote(symbol);
+    const enrich = msQ || fxQ;
+    if (nsQ) {
+      quote = nsQ;
       if (enrich) {
         if (enrich.dayHigh != null) quote.dayHigh = enrich.dayHigh;
         if (enrich.dayLow != null) quote.dayLow = enrich.dayLow;
         if (enrich.previousClose != null) quote.previousClose = enrich.previousClose;
         if (enrich.open != null) quote.open = enrich.open;
       }
+    } else if (enrich) {
+      quote = { symbol: symbol.replace('NSE:', '').toUpperCase(), company_name: enrich.name, ...enrich };
     }
   }
 
-  // 3. Fallback: myStocks cache (background-refreshed)
-  if (!quote && symbol.startsWith('NSE:')) {
-    const msQ = await mystocks.getQuoteForSymbol(symbol);
-    if (msQ) {
-      quote = { symbol: symbol.replace('NSE:', '').toUpperCase(), company_name: msQ.name, ...msQ };
-    }
-  }
-
-  // 4. Fallback: AFX cache (background refresh)
+  // 3. Fallback: AFX cache (background refresh)
   if (!quote && symbol.startsWith('NSE:')) {
     const afxQ = getAfxQuote(symbol);
     if (afxQ) {
