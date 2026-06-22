@@ -13,6 +13,7 @@ const SYMBOL_MAP = {
 
 let cache = null;
 let cacheTime = 0;
+let rateLimitedUntil = 0;
 
 function getApiKey() {
   return process.env.RAPIDAPI_KEY || '';
@@ -78,6 +79,7 @@ function lookupStock(lookup, symbol) {
 
 async function refreshCache() {
   if (isCacheValid()) return true;
+  if (Date.now() < rateLimitedUntil) return cache !== null;
   const key = getApiKey();
   if (!key) return false;
   try {
@@ -93,7 +95,8 @@ async function refreshCache() {
     return false;
   } catch (err) {
     if (err.response?.status === 429) {
-      console.warn(`[nseScraperService] Rate limited (429) refreshing cache, using stale`);
+      rateLimitedUntil = Date.now() + 5 * 60 * 1000;
+      console.warn(`[nseScraperService] Rate limited (429), retrying in 5 min`);
     }
     return cache !== null;
   }
