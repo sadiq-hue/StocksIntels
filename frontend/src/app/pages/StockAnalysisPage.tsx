@@ -54,6 +54,24 @@ interface LiveQuote {
   dayLow: number;
   previousClose: number;
   provider?: string;
+  regularMarketPrice?: number;
+  regularMarketPreviousClose?: number;
+  preMarketPrice?: number | null;
+  preMarketChange?: number | null;
+  preMarketChangePercent?: number | null;
+  preMarketTime?: number | null;
+  postMarketPrice?: number | null;
+  postMarketChange?: number | null;
+  postMarketChangePercent?: number | null;
+  postMarketTime?: number | null;
+  marketState?: string;
+  currentTradingPeriod?: {
+    pre?: { start?: number; end?: number; timezone?: string; gmtoffset?: number };
+    regular?: { start?: number; end?: number; timezone?: string; gmtoffset?: number };
+    post?: { start?: number; end?: number; timezone?: string; gmtoffset?: number };
+  };
+  exchange?: string;
+  currency?: string;
 }
 
 interface StockSignal extends Partial<SharedSignal> {
@@ -210,6 +228,55 @@ export function StockAnalysisPage() {
     return () => { active = false; clearInterval(id); };
   }, [activeSelection.ticker]);
 
+  // Derived market-state helpers
+  const marketState = liveQuote?.marketState || 'CLOSED';
+  const isPreMarket = marketState === 'PRE';
+  const isPostMarket = marketState === 'POST';
+  const isRegular = marketState === 'REGULAR';
+  const regularPrice = liveQuote?.regularMarketPrice ?? liveQuote?.previousClose ?? displayPrice;
+  const prePrice = liveQuote?.preMarketPrice;
+  const postPrice = liveQuote?.postMarketPrice;
+  const altPrice = prePrice ?? postPrice ?? null;
+  const altChange = isPreMarket ? liveQuote?.preMarketChange : isPostMarket ? liveQuote?.postMarketChange : null;
+  const altChangePct = isPreMarket ? liveQuote?.preMarketChangePercent : isPostMarket ? liveQuote?.postMarketChangePercent : null;
+  const altTime = isPreMarket ? liveQuote?.preMarketTime : isPostMarket ? liveQuote?.postMarketTime : null;
+
+  function formatSessionTime(unixSeconds?: number | null): string {
+    if (!unixSeconds) return '';
+    const d = new Date(unixSeconds * 1000);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const month = months[d.getMonth()];
+    const day = d.getDate();
+    const hours = d.getHours();
+    const minutes = d.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const h12 = hours % 12 || 12;
+    const min = minutes.toString().padStart(2, '0');
+    const tz = liveQuote?.currentTradingPeriod?.regular?.timezone || 'EDT';
+    return `${month} ${day} at ${h12}:${min}:${String(d.getSeconds()).padStart(2, '0')} ${ampm} ${tz}`;
+  }
+
+  function formatAltTime(unixSeconds?: number | null): string {
+    if (!unixSeconds) return '';
+    const d = new Date(unixSeconds * 1000);
+    const hours = d.getHours();
+    const minutes = d.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const h12 = hours % 12 || 12;
+    const min = minutes.toString().padStart(2, '0');
+    const tz = liveQuote?.currentTradingPeriod?.pre?.timezone || 'EDT';
+    return `${h12}:${min}:${String(d.getSeconds()).padStart(2, '0')} ${ampm} ${tz}`;
+  }
+
+  const sessionLabel = isPreMarket
+    ? 'At close'
+    : isPostMarket
+    ? 'At close'
+    : isRegular
+    ? 'Real-time'
+    : 'Previous close';
+  const altSessionLabel = isPreMarket ? 'Overnight' : isPostMarket ? 'After Hours' : null;
+
   // Fetch signal and profile
   useEffect(() => {
     const ticker = activeSelection.ticker;
@@ -233,7 +300,7 @@ export function StockAnalysisPage() {
     return () => { cancelled = true; };
   }, [activeSelection.ticker]);
 
-  const displayPrice = liveQuote?.price ?? activeSelection.price;
+  const displayPrice = regularPrice;
   const displayChange = liveQuote?.changePercent ?? activeSelection.change;
 
   // Chart data — live from Yahoo Finance
@@ -577,16 +644,39 @@ export function StockAnalysisPage() {
                   </div>
                 </div>
                 <div className="text-right">
+                  <div className="text-[11px] text-muted-foreground mb-1">
+                    {(liveQuote as any)?.exchange || (activeSelection.market === "nse" ? "NSE" : "NasdaqGS")}
+                    {(liveQuote as any)?.exchange ? " -" : ""} Nasdaq Real Time Price &bull; {(liveQuote as any)?.currency || activeSelection.currency || "USD"}
+                  </div>
                   <div className="text-3xl font-bold text-foreground">
-                    {formatCurrency(activeSelection)}{formatPrice(displayPrice)}
+                    {formatCurrency(activeSelection)}{formatPrice(regularPrice)}
                   </div>
                   <div className={`flex items-center justify-end gap-1.5 mt-0.5 ${
                     displayChange >= 0 ? "text-emerald-600" : "text-red-500"
                   }`}>
                     {displayChange >= 0 ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}
                     <span className="font-semibold">{displayChange > 0 ? "+" : ""}{displayChange.toFixed(2)}%</span>
-                    <span className="text-xs text-muted-foreground">Today</span>
                   </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    {sessionLabel}: {formatSessionTime(liveQuote?.currentTradingPeriod?.regular?.end)}
+                  </div>
+                  {altPrice != null && (
+                    <div className="mt-2 pt-2 border-t border-border/40">
+                      <div className="text-lg font-bold text-foreground">
+                        {formatCurrency(activeSelection)}{formatPrice(altPrice)}
+                      </div>
+                      <div className={`flex items-center justify-end gap-1.5 ${
+                        (altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"
+                      }`}>
+                        {altChangePct != null && altChangePct >= 0 ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
+                        <span className="font-semibold text-xs">{altChange != null ? `${altChange > 0 ? "+" : ""}${altChange.toFixed(2)}` : ""}</span>
+                        <span className="font-semibold text-xs">({altChangePct != null ? `${altChangePct > 0 ? "+" : ""}${altChangePct.toFixed(2)}%` : ""})</span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
+                        {altSessionLabel}: {formatAltTime(altTime)}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
