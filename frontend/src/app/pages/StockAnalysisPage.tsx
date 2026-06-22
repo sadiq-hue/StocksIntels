@@ -249,47 +249,24 @@ export function StockAnalysisPage() {
     return () => { active = false; clearInterval(id); };
   }, [activeSelection.ticker]);
 
-  // Merge yahoo premarket data into liveQuote for market-state fields
-  useEffect(() => {
-    if (!yahooPremarket) return;
-    const ticker = activeSelection.ticker;
-    const pm = yahooPremarket[ticker];
-    if (!pm) return;
-    setLiveQuote(prev => {
-      const base = prev || { symbol: ticker, price: 0, change: 0, changePercent: 0, volume: 0, dayHigh: 0, dayLow: 0, previousClose: 0 };
-      return {
-        ...base,
-        price: pm.regularMarketPrice ?? base.price,
-        regularMarketPrice: pm.regularMarketPrice ?? base.regularMarketPrice,
-        regularMarketPreviousClose: pm.regularMarketPreviousClose ?? base.regularMarketPreviousClose,
-        preMarketPrice: pm.preMarketPrice ?? base.preMarketPrice,
-        preMarketChange: pm.preMarketChange ?? base.preMarketChange,
-        preMarketChangePercent: pm.preMarketChangePercent ?? base.preMarketChangePercent,
-        preMarketTime: pm.preMarketTime ?? base.preMarketTime,
-        postMarketPrice: pm.postMarketPrice ?? base.postMarketPrice,
-        postMarketChange: pm.postMarketChange ?? base.postMarketChange,
-        postMarketChangePercent: pm.postMarketChangePercent ?? base.postMarketChangePercent,
-        postMarketTime: pm.postMarketTime ?? base.postMarketTime,
-        marketState: pm.marketState ?? base.marketState,
-        currentTradingPeriod: pm.currentTradingPeriod ?? (base as any)?.currentTradingPeriod,
-        exchange: pm.exchange ?? (base as any)?.exchange,
-        currency: pm.currency ?? (base as any)?.currency,
-      };
-    });
-  }, [yahooPremarket, activeSelection.ticker]);
+  // Yahoo pre-market data for the current ticker (from Yahoo Finance directly, never generic)
+  const yahooData = (yahooPremarket && activeSelection.ticker ? yahooPremarket[activeSelection.ticker] : null) || null;
+  const yahooMarketState = yahooData?.marketState || liveQuote?.marketState || 'CLOSED';
+  const yahooRegularPrice = yahooData?.regularMarketPrice ?? yahooData?.regularMarketPreviousClose ?? null;
 
-  // Derived market-state helpers
-  const marketState = liveQuote?.marketState || 'CLOSED';
+  // Derived market-state helpers (yahoo takes priority when available)
+  const marketState = yahooData?.marketState ? yahooData.marketState : (liveQuote?.marketState || 'CLOSED');
   const isPreMarket = marketState === 'PRE';
   const isPostMarket = marketState === 'POST';
   const isRegular = marketState === 'REGULAR';
-  const regularPrice = liveQuote?.regularMarketPrice ?? liveQuote?.price ?? liveQuote?.previousClose ?? activeSelection.price;
-  const prePrice = liveQuote?.preMarketPrice;
-  const postPrice = liveQuote?.postMarketPrice;
+  const regularPrice = yahooRegularPrice ?? liveQuote?.regularMarketPrice ?? liveQuote?.price ?? liveQuote?.previousClose ?? activeSelection.price;
+  const prePrice = yahooData?.preMarketPrice ?? liveQuote?.preMarketPrice;
+  const postPrice = yahooData?.postMarketPrice ?? liveQuote?.postMarketPrice;
   const altPrice = prePrice ?? postPrice ?? null;
-  const altChange = isPreMarket ? liveQuote?.preMarketChange : isPostMarket ? liveQuote?.postMarketChange : null;
-  const altChangePct = isPreMarket ? liveQuote?.preMarketChangePercent : isPostMarket ? liveQuote?.postMarketChangePercent : null;
-  const altTime = isPreMarket ? liveQuote?.preMarketTime : isPostMarket ? liveQuote?.postMarketTime : null;
+  const altChange = isPreMarket ? (yahooData?.preMarketChange ?? liveQuote?.preMarketChange) : isPostMarket ? (yahooData?.postMarketChange ?? liveQuote?.postMarketChange) : null;
+  const altChangePct = isPreMarket ? (yahooData?.preMarketChangePercent ?? liveQuote?.preMarketChangePercent) : isPostMarket ? (yahooData?.postMarketChangePercent ?? liveQuote?.postMarketChangePercent) : null;
+  const altTime = isPreMarket ? (yahooData?.preMarketTime ?? liveQuote?.preMarketTime) : isPostMarket ? (yahooData?.postMarketTime ?? liveQuote?.postMarketTime) : null;
+  const yahooTradingPeriod = yahooData?.currentTradingPeriod;
 
   function formatSessionTime(unixSeconds?: number | null): string {
     if (!unixSeconds) return '';
@@ -302,7 +279,7 @@ export function StockAnalysisPage() {
     const ampm = hours >= 12 ? 'PM' : 'AM';
     const h12 = hours % 12 || 12;
     const min = minutes.toString().padStart(2, '0');
-    const tz = liveQuote?.currentTradingPeriod?.regular?.timezone || 'EDT';
+    const tz = yahooTradingPeriod?.regular?.timezone || liveQuote?.currentTradingPeriod?.regular?.timezone || 'EDT';
     return `${month} ${day} at ${h12}:${min}:${String(d.getSeconds()).padStart(2, '0')} ${ampm} ${tz}`;
   }
 
@@ -314,7 +291,7 @@ export function StockAnalysisPage() {
     const ampm = hours >= 12 ? 'PM' : 'AM';
     const h12 = hours % 12 || 12;
     const min = minutes.toString().padStart(2, '0');
-    const tz = liveQuote?.currentTradingPeriod?.pre?.timezone || 'EDT';
+    const tz = yahooTradingPeriod?.pre?.timezone || yahooTradingPeriod?.post?.timezone || liveQuote?.currentTradingPeriod?.pre?.timezone || 'EDT';
     return `${h12}:${min}:${String(d.getSeconds()).padStart(2, '0')} ${ampm} ${tz}`;
   }
 
