@@ -75,17 +75,17 @@ services:
         sync: false
       - key: PAYHERO_CALLBACK_URL
         sync: false
-      - key: PAYD_API_USERNAME
+      - key: PAYPAL_MODE
+        value: sandbox
+      - key: PAYPAL_CLIENT_ID
         sync: false
-      - key: PAYD_API_PASSWORD
+      - key: PAYPAL_CLIENT_SECRET
         sync: false
-      - key: PAYD_API_SECRET
+      - key: PAYPAL_RETURN_URL
         sync: false
-      - key: PAYD_USERNAME
+      - key: PAYPAL_WEBHOOK_ID
         sync: false
-      - key: PAYD_WALLET_TYPE
-        value: local
-      - key: PAYD_CALLBACK_URL
+      - key: FRONTEND_URL
         sync: false
 
       # Security — generate strong values and set in Render dashboard

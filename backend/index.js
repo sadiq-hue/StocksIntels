@@ -27,13 +27,7 @@ const brokerService = require('./services/brokerService');
 const { fetchAnalystData } = require('./analystService');
 const fxService = require('./fxService');
 const payheroService = require('./payheroService');
-let paydService;
-try {
-  paydService = require('./paydService');
-} catch (e) {
-  console.warn('[Payd] Service not available:', e.message);
-  paydService = null;
-}
+const paypalService = require('./paypalService');
 const indicesService = require('./indicesService');
 const { generalLimiter, authLimiter, marketDataLimiter, aiLimiter } = require('./rateLimiter');
 const path = require('path');
@@ -2231,8 +2225,8 @@ const KNOWLEDGE_BASE = [
     category: 'account',
   },
   {
-    keywords: ['card payment', 'credit card', 'debit card', 'payd', 'visa', 'mastercard'],
-    answer: 'Pay with **card** via our secure Payd integration. Enter your card details on the payment page. Your information is processed securely and not stored on our servers.',
+    keywords: ['card payment', 'credit card', 'debit card', 'paypal', 'visa', 'mastercard'],
+    answer: 'Pay with **PayPal** via our secure checkout. You will be redirected to PayPal to complete your payment using your PayPal balance or credit/debit card. Your subscription activates instantly upon confirmation.',
     category: 'account',
   },
   {
@@ -7154,122 +7148,169 @@ app.get('/api/payments/plans', async (req, res) => {
   }
 });
 
-// --- Payd Card Payment Routes ---
-app.post('/api/payments/payd-card', async (req, res) => {
+// --- PayPal Payment Routes ---
+// Convert USD to KES for display, but charge in USD via PayPal
+const USD_TO_KES_RATE = 130;
+
+app.post('/api/payments/paypal', async (req, res) => {
   try {
-    const { phoneNumber, amount, narration, plan, userId, durationMonths } = req.body;
-    if (!phoneNumber || !amount) {
-      return res.status(400).json({ error: 'Phone number and amount required' });
+    const { amount, plan, userId, durationMonths } = req.body;
+    if (!amount) {
+      return res.status(400).json({ error: 'Amount is required' });
     }
-    if (amount < 100) {
-      return res.status(400).json({ error: 'Minimum amount is 100 KES' });
+    const usdAmount = parseFloat((amount / USD_TO_KES_RATE).toFixed(2));
+    if (usdAmount < 1) {
+      return res.status(400).json({ error: 'Minimum amount is 1 USD' });
     }
-    const result = await paydService.createCardCheckout({
-      amount,
-      phoneNumber,
-      narration: narration || 'StocksIntels Subscription',
+    const planName = plan || 'Subscription';
+    const period = durationMonths === 12 ? 'Yearly' : 'Monthly';
+    const externalRef = `STK-${Date.now()}-${String(Math.random()).slice(2, 8)}`;
+    const result = await paypalService.createOrder({
+      amount: usdAmount,
+      currency: 'USD',
+      description: `StocksIntels ${planName} ${period}`,
+      externalReference: externalRef,
     });
-    // Store transaction record for linking on callback
     await pool.query(
       `INSERT INTO payment_transactions (user_id, amount, currency, provider, phone_number, external_reference, status, plan_name, duration_months)
-       VALUES ($1, $2, 'KES', 'payd-card', $3, $4, 'pending', $5, $6)
+       VALUES ($1, $2, 'USD', 'paypal', $3, $4, 'pending', $5, $6)
        ON CONFLICT (external_reference) DO NOTHING`,
-      [userId || null, amount, phoneNumber, result.reference || result.checkoutId, plan || null, durationMonths || 1]
+      [userId || null, usdAmount, '', externalRef, planName, durationMonths || 1]
     );
     res.json({
       success: true,
       checkoutUrl: result.checkoutUrl,
+      orderId: result.orderId,
     });
   } catch (error) {
-    console.error('Payd card checkout error:', error.message);
-    res.status(500).json({ error: 'Failed to create checkout session' });
+    console.error('PayPal order creation error:', error.message);
+    res.status(500).json({ error: 'Failed to create PayPal checkout session' });
   }
 });
 
-app.post('/api/payments/payd-callback', async (req, res) => {
+app.get('/api/payments/paypal-capture', async (req, res) => {
   try {
-    const payload = req.body;
-    const signature = req.headers['x-payd-signature'];
-    if (signature) {
-      try {
-        paydService.verifyWebhookSignature(payload, signature);
-      } catch {
-        console.warn('Payd webhook signature verification failed');
+    const { token, PayerID } = req.query;
+    if (!token) {
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/subscribe?paypal=failed`);
+    }
+    const capture = await paypalService.captureOrder(token);
+    const status = capture.captureStatus === 'COMPLETED' ? 'success' : 'failed';
+    const reference = capture.referenceId || token;
+    const amount = parseFloat(capture.amount || 0);
+    const currency = capture.currency || 'USD';
+    let tier = 'pro';
+    await pool.query(
+      `UPDATE payment_transactions SET status = $1, callback_data = $2, external_reference = $3, updated_at = NOW()
+       WHERE external_reference = $4 OR external_reference = $5`,
+      [
+        status,
+        JSON.stringify(capture),
+        token,
+        reference,
+        token,
+      ]
+    );
+    if (status === 'success') {
+      const tx = await pool.query(
+        'SELECT id, user_id, plan_name, duration_months FROM payment_transactions WHERE external_reference = $1 OR external_reference = $2',
+        [reference, token]
+      );
+      if (tx.rows.length > 0 && tx.rows[0].user_id) {
+        const { id: txId, user_id: targetUserId, plan_name, duration_months } = tx.rows[0];
+        const tier = (plan_name || 'pro').toLowerCase();
+        const months = parseInt(duration_months) || 1;
+        const planRes = await pool.query(
+          'SELECT id FROM subscription_plans WHERE LOWER(name) = $1 LIMIT 1',
+          [tier]
+        );
+        const planId = planRes.rows[0]?.id || null;
+        const startDate = new Date();
+        const endDate = new Date(startDate);
+        endDate.setMonth(endDate.getMonth() + months);
+        const subRes = await pool.query(
+          `INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)
+           VALUES ($1, $2, 'active', $3, $4)
+           RETURNING id`,
+          [targetUserId, planId, startDate, endDate]
+        );
+        const subscriptionId = subRes.rows[0]?.id || null;
+        await pool.query(
+          `UPDATE users SET subscription_tier = $1, subscription_status = 'active', subscription_start_date = $2, subscription_end_date = $3 WHERE id = $4`,
+          [tier, startDate, endDate, targetUserId]
+        );
+        if (subscriptionId) {
+          await pool.query(
+            'UPDATE payment_transactions SET subscription_id = $1 WHERE id = $2',
+            [subscriptionId, txId]
+          );
+        }
+        console.log(`PayPal subscription activated: user=${targetUserId} tier=${tier} months=${months} end=${endDate.toISOString()}`);
+        try {
+          const userRes = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [targetUserId]);
+          const { full_name: uName, email: uEmail } = userRes.rows[0] || {};
+          if (uEmail) {
+            await sendPaymentReceiptEmail(uEmail, {
+              userName: uName,
+              planName: plan_name || 'Pro',
+              amount: amount * USD_TO_KES_RATE,
+              currency: 'KES',
+              period: months === 12 ? 'yearly' : 'monthly',
+              durationMonths: months,
+              paymentMethod: 'PayPal',
+              transactionRef: capture.captureId || token,
+              paidAt: new Date(),
+              startDate,
+              endDate,
+            });
+          }
+        } catch (mailErr) {
+          console.error('[RECEIPT] Failed to send receipt email:', mailErr.message);
+        }
       }
     }
-    const reference = payload.reference || payload.external_reference;
-    const status = payload.status === 'SUCCESS' || payload.status === 'success' ? 'success'
-      : payload.status === 'FAILED' || payload.status === 'failed' ? 'failed'
-      : 'pending';
-    if (reference) {
-      await pool.query(
-        `UPDATE payment_transactions SET status = $1, callback_data = $2, updated_at = NOW()
-         WHERE external_reference = $3`,
-        [status, JSON.stringify(payload), reference]
-      );
-      if (status === 'success') {
-        const tx = await pool.query(
-          'SELECT id, user_id, plan_name, duration_months FROM payment_transactions WHERE external_reference = $1',
-          [reference]
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    if (status === 'success') {
+      res.redirect(`${frontendUrl}/subscribe/${tier}?paypal=success`);
+    } else {
+      res.redirect(`${frontendUrl}/subscribe?paypal=failed`);
+    }
+  } catch (error) {
+    console.error('PayPal capture error:', error.message);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    res.redirect(`${frontendUrl}/subscribe?paypal=failed`);
+  }
+});
+
+app.get('/api/payments/paypal-cancel', async (req, res) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  res.redirect(`${frontendUrl}/subscribe?paypal=cancelled`);
+});
+
+app.post('/api/payments/paypal-webhook', async (req, res) => {
+  try {
+    const verified = await paypalService.verifyWebhookSignature(req.headers, req.body);
+    if (!verified) {
+      console.warn('PayPal webhook signature verification failed');
+      return res.status(400).json({ error: 'Invalid signature' });
+    }
+    const event = req.body;
+    const resource = event.resource || {};
+    if (event.event_type === 'CHECKOUT.ORDER.APPROVED' || event.event_type === 'PAYMENT.CAPTURE.COMPLETED') {
+      const orderId = resource.id || resource.supplementary_data?.related_ids?.order_id;
+      const amount = resource.amount?.value || resource.purchase_units?.[0]?.amount?.value;
+      const reference = resource.custom_id || resource.invoice_id;
+      if (orderId && reference) {
+        await pool.query(
+          `UPDATE payment_transactions SET status = 'success', callback_data = $1, updated_at = NOW()
+           WHERE external_reference = $2 AND status = 'pending'`,
+          [JSON.stringify(event), reference]
         );
-        if (tx.rows.length > 0 && tx.rows[0].user_id) {
-          const { id: txId, user_id: targetUserId, plan_name, duration_months } = tx.rows[0];
-          const tier = (plan_name || 'pro').toLowerCase();
-          const months = parseInt(duration_months) || 1;
-          const planRes = await pool.query(
-            'SELECT id FROM subscription_plans WHERE LOWER(name) = $1 LIMIT 1',
-            [tier]
-          );
-          const planId = planRes.rows[0]?.id || null;
-          const startDate = new Date();
-          const endDate = new Date(startDate);
-          endDate.setMonth(endDate.getMonth() + months);
-          const subRes = await pool.query(
-            `INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)
-             VALUES ($1, $2, 'active', $3, $4)
-             RETURNING id`,
-            [targetUserId, planId, startDate, endDate]
-          );
-          const subscriptionId = subRes.rows[0]?.id || null;
-          await pool.query(
-            `UPDATE users SET subscription_tier = $1, subscription_status = 'active', subscription_start_date = $2, subscription_end_date = $3 WHERE id = $4`,
-            [tier, startDate, endDate, targetUserId]
-          );
-          if (subscriptionId) {
-            await pool.query(
-              'UPDATE payment_transactions SET subscription_id = $1 WHERE id = $2',
-              [subscriptionId, txId]
-            );
-          }
-          console.log(`Payd subscription activated: user=${targetUserId} tier=${tier} months=${months} end=${endDate.toISOString()}`);
-          // Send receipt email
-          try {
-            const userRes = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [targetUserId]);
-            const { full_name: uName, email: uEmail } = userRes.rows[0] || {};
-            if (uEmail) {
-              await sendPaymentReceiptEmail(uEmail, {
-                userName: uName,
-                planName: plan_name || 'Pro',
-                amount: tx.rows[0].amount,
-                currency: 'KES',
-                period: months === 12 ? 'yearly' : 'monthly',
-                durationMonths: months,
-                paymentMethod: 'Card',
-                transactionRef: reference,
-                paidAt: new Date(),
-                startDate,
-                endDate,
-              });
-            }
-          } catch (mailErr) {
-            console.error('[RECEIPT] Failed to send receipt email:', mailErr.message);
-          }
-        }
       }
     }
     res.json({ received: true });
   } catch (error) {
-    console.error('Payd callback error:', error.message);
+    console.error('PayPal webhook error:', error.message);
     res.json({ received: true });
   }
 });

@@ -15,6 +15,7 @@ export interface PortfolioHolding {
   currentPrice: string;
   value: string;
   pnl: string;
+  pnlAmount: string;
   isPositive: boolean;
   sector: string;
   market: "NSE" | "Global";
@@ -135,6 +136,7 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
               currentPrice: String(livePrice),
               value: val.toFixed(2),
               pnl: (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(1) + "%",
+              pnlAmount: Math.abs(pnl).toFixed(2),
               isPositive: h.is_positive !== undefined ? h.is_positive : pnl >= 0,
               sector: h.sector || "Other",
               market: (h.market || "NSE") as "NSE" | "Global",

@@ -45,7 +45,6 @@ const generic = createRateLimitedClient('generic', 1000, 2);
 
 // Brokers / payment services
 const broker = createRateLimitedClient('broker', 500, 2);
-const payd = createRateLimitedClient('payd', 500, 2);
 
 // Exponential backoff retry wrapper for transient failures
 async function withRetry(fn, { label = 'api', maxRetries = 3, baseDelay = 1000, shouldRetry } = {}) {
@@ -68,4 +67,4 @@ async function withRetry(fn, { label = 'api', maxRetries = 3, baseDelay = 1000, 
   throw lastError;
 }
 
-module.exports = { fmp, eodhd, polygon, finnhub, newsapi, rapidapi, generic, broker, payd, withRetry };
+module.exports = { fmp, eodhd, polygon, finnhub, newsapi, rapidapi, generic, broker, withRetry };

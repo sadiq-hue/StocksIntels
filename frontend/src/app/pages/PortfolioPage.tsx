@@ -29,6 +29,7 @@ interface Holding {
   currentPrice?: string;
   value: string;
   pnl: string;
+  pnlAmount?: string;
   isPositive: boolean;
   sector: string;
   market: "NSE" | "Global";
@@ -1621,7 +1622,10 @@ export function PortfolioPage() {
                         <div className="text-left">
                           <div className="text-foreground font-semibold">{h.ticker}</div>
                           <div className="text-muted-foreground text-xs">{h.name}</div>
-                          <Badge className="bg-blue-100 text-blue-700 text-[9px] px-1 py-0.5 mt-0.5">Synced</Badge>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <Badge className="bg-blue-100 text-blue-700 text-[9px] px-1 py-0.5">Synced</Badge>
+                            <span className="text-[10px] text-muted-foreground truncate max-w-[100px]" title={h._brokerName}>{h._brokerName}</span>
+                          </div>
                         </div>
                       ) : (
                         <button onClick={() => navigate(`/app/stock/${h.ticker}`)} className="text-left hover:text-[#0D7490] transition-colors">
@@ -1632,15 +1636,9 @@ export function PortfolioPage() {
                       )}
                     </td>
                     <td className="text-center py-3 px-2">
-                      {h._brokerName ? (
-                        <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-600" title={h._brokerName}>
-                          {h._brokerName}
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className={`text-[10px] ${h.market === "NSE" ? "border-[#0D7490] text-[#0D7490]" : "border-purple-300 text-purple-600"}`}>
-                          {h.market}
-                        </Badge>
-                      )}
+                      <Badge variant="outline" className={`text-[10px] ${h.market === "NSE" ? "border-[#0D7490] text-[#0D7490]" : "border-purple-300 text-purple-600"}`}>
+                        {h.market}
+                      </Badge>
                     </td>
                     <td className="text-right text-foreground py-3 px-2">{h.shares}</td>
                     <td className="text-right text-foreground py-3 px-2">{h.market === "NSE" ? "KES " : "$"}{h.avgCost}</td>
@@ -1649,7 +1647,12 @@ export function PortfolioPage() {
                     <td className="text-right py-3 px-2">
                       <span className={`flex items-center gap-1 justify-end font-medium ${h.isPositive ? 'text-green-600' : 'text-red-600'}`}>
                         {h.isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                        {h.pnl}
+                        <span className="flex flex-col items-end leading-tight">
+                          <span>{h.pnl}</span>
+                          {h.pnlAmount !== undefined && (
+                            <span className="text-[10px] opacity-70">{h.isPositive ? '+' : '-'}{h.market === "NSE" ? "KES " : "$"}{h.pnlAmount}</span>
+                          )}
+                        </span>
                       </span>
                     </td>
                     <td className="text-center py-3 px-2">

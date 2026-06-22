@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link, Navigate, useNavigate, useSearchParams } from "react-router";
 import { Check, CreditCard, Landmark, ArrowRight, Shield, Zap, Crown, Loader2, CheckCircle2, X } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -48,12 +48,25 @@ export function SubscriptionPage() {
   const { planId } = useParams<{ planId: string }>();
   const [searchParams] = useSearchParams();
   const period = searchParams.get("period") === "yearly" ? "yearly" : "monthly";
-  const [paymentMethod, setPaymentMethod] = useState<"card" | "mpesa">("card");
+  const [paymentMethod, setPaymentMethod] = useState<"paypal" | "mpesa">("paypal");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [paymentRef, setPaymentRef] = useState("");
   const [pollStatus, setPollStatus] = useState<"idle" | "waiting" | "success" | "failed">("idle");
+
+  // Handle PayPal return redirect
+  useEffect(() => {
+    const paypalStatus = searchParams.get("paypal");
+    if (paypalStatus === "success") {
+      setIsSuccess(true);
+      refreshUser().then(() => {});
+      toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
+    } else if (paypalStatus === "failed" || paypalStatus === "cancelled") {
+      toast.error(paypalStatus === "cancelled" ? "PayPal checkout was cancelled." : "Payment failed. Please try again.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   const selectedPlan = planDetails[planId?.toLowerCase() as keyof typeof planDetails] || planDetails.starter;
   const PlanIcon = selectedPlan.icon;
@@ -142,33 +155,20 @@ export function SubscriptionPage() {
 
         await poll();
       } else {
-        const cleanedPhone = phoneNumber.replace(/\+/g, "").trim();
-        if (!cleanedPhone.match(/^(\+?254|0)(7\d{8}|1\d{8,9})$/)) {
-          toast.error("Please enter a valid phone number");
-          setIsLoading(false);
-          return;
-        }
-
-        const formattedPhone = cleanedPhone.startsWith("0")
-          ? "254" + cleanedPhone.slice(1)
-          : cleanedPhone.replace(/^\+/, "");
-
-        const res = await fetch(`${API_URL}/payments/payd-card`, {
+        const res = await fetch(`${API_URL}/payments/paypal`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            phoneNumber: formattedPhone,
             amount: price * 130,
-            narration: `StocksIntels ${selectedPlan.name} ${period === "yearly" ? "Yearly" : "Monthly"} Subscription`,
-            userId: user?.id,
             plan: selectedPlan.name,
+            userId: user?.id,
             durationMonths,
           }),
         });
 
         const data = await res.json();
         if (!res.ok || !data.success) {
-          throw new Error(data.error || "Failed to create checkout");
+          throw new Error(data.error || "Failed to create PayPal checkout");
         }
 
         window.location.href = data.checkoutUrl;
@@ -303,13 +303,13 @@ export function SubscriptionPage() {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                 <button
-                  onClick={() => setPaymentMethod("card")}
+                  onClick={() => setPaymentMethod("paypal")}
                   className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
-                    paymentMethod === "card" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-gray-50 hover:border-gray-200"
+                    paymentMethod === "paypal" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-gray-50 hover:border-gray-200"
                   }`}
                 >
-                  <CreditCard className={`w-6 h-6 ${paymentMethod === "card" ? "text-[#0D7490]" : "text-gray-400"}`} />
-                  <span className={`text-sm font-bold ${paymentMethod === "card" ? "text-[#0D7490]" : "text-gray-600"}`}>Credit Card</span>
+                  <CreditCard className={`w-6 h-6 ${paymentMethod === "paypal" ? "text-[#0D7490]" : "text-gray-400"}`} />
+                  <span className={`text-sm font-bold ${paymentMethod === "paypal" ? "text-[#0D7490]" : "text-gray-600"}`}>PayPal</span>
                 </button>
                 <button
                   onClick={() => setPaymentMethod("mpesa")}
@@ -323,22 +323,12 @@ export function SubscriptionPage() {
               </div>
 
               <div className="space-y-4">
-                {paymentMethod === "card" ? (
+                {paymentMethod === "paypal" ? (
                   <div className="space-y-4 animate-in fade-in duration-300">
-                    <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">Phone Number</label>
-                      <input 
-                        className="w-full px-4 h-12 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-white outline-none transition-all text-gray-900" 
-                        placeholder="254700000000" 
-                        type="tel"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                      />
-                    </div>
                     <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
                       <p className="text-[11px] text-blue-800 leading-relaxed font-medium">
-                        1. You will be redirected to a secure payment page.<br />
-                        2. Enter your card details on the hosted checkout.<br />
+                        1. You will be redirected to PayPal&apos;s secure checkout.<br />
+                        2. Log in or pay with your card via PayPal.<br />
                         3. Your subscription activates instantly upon confirmation.
                       </p>
                     </div>
