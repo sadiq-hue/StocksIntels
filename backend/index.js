@@ -6253,7 +6253,9 @@ app.get('/api/holdings', async (req, res) => {
     const brokerTickers = new Set(rows.filter(r => r.broker_connection_id > 0).map(r => r.ticker));
     const deduplicatedRows = rows.filter(r => r.broker_connection_id > 0 || !brokerTickers.has(r.ticker));
     for (const r of deduplicatedRows) {
-      const livePrice = await getLivePrice(r.market, r.ticker) || parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0;
+      const livePrice = r.broker_connection_id > 0
+        ? (parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0)
+        : (await getLivePrice(r.market, r.ticker) || parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0);
       const avgC = parseFloat(r.avg_cost) || 0;
       const shares = parseFloat(r.shares) || 0;
       const val = livePrice * shares;
