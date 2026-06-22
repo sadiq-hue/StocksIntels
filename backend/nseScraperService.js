@@ -1,6 +1,7 @@
 const axios = require('axios');
 
 const RAPIDAPI_HOST = 'nairobi-stock-exchange-nse.p.rapidapi.com';
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const SYMBOL_MAP = {
   KLG: 'KQ',
@@ -10,13 +11,15 @@ const SYMBOL_MAP = {
   UMEM: 'UMME',
 };
 
+let cache = null;
+let cacheTime = 0;
+
 function getApiKey() {
   return process.env.RAPIDAPI_KEY || '';
 }
 
-function mapTicker(ticker) {
-  const upper = ticker.replace('NSE:', '').toUpperCase();
-  return SYMBOL_MAP[upper] || upper;
+function isCacheValid() {
+  return cache && (Date.now() - cacheTime) < CACHE_TTL_MS;
 }
 
 function parseChange(changeStr) {
@@ -57,89 +60,67 @@ function parseStockResult(item, requestedSymbol) {
   };
 }
 
-async function fetchAllStocks() {
+function buildLookup(stocks) {
+  const lookup = {};
+  for (const s of stocks) {
+    const t = (s.ticker || '').toUpperCase();
+    lookup[t] = s;
+    const mapped = SYMBOL_MAP[t];
+    if (mapped) lookup[mapped] = s;
+  }
+  return lookup;
+}
+
+function lookupStock(lookup, symbol) {
+  const clean = symbol.replace('NSE:', '').toUpperCase();
+  return lookup[clean] || lookup[SYMBOL_MAP[clean]] || null;
+}
+
+async function refreshCache() {
+  if (isCacheValid()) return true;
   const key = getApiKey();
-  if (!key) return [];
-  const host = RAPIDAPI_HOST;
+  if (!key) return false;
   try {
-    const resp = await axios.get(`https://${host}/stocks`, {
-      headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
+    const resp = await axios.get(`https://${RAPIDAPI_HOST}/stocks`, {
+      headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': RAPIDAPI_HOST },
       timeout: 10000,
     });
     if (resp.data?.success && Array.isArray(resp.data?.data)) {
-      return resp.data.data;
+      cache = resp.data.data;
+      cacheTime = Date.now();
+      return true;
     }
-    return [];
+    return false;
   } catch (err) {
-    const status = err.response?.status;
-    if (status === 429) {
-      console.warn(`[nseScraperService] Rate limited (429) on fetchAllStocks`);
+    if (err.response?.status === 429) {
+      console.warn(`[nseScraperService] Rate limited (429) refreshing cache, using stale`);
     }
-    return [];
-  }
-}
-
-async function fetchSingleStock(ticker) {
-  const key = getApiKey();
-  if (!key) return null;
-  const mapped = mapTicker(ticker);
-  const host = RAPIDAPI_HOST;
-  try {
-    const resp = await axios.get(`https://${host}/stocks`, {
-      params: { search: mapped, limit: 1 },
-      headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
-      timeout: 10000,
-    });
-    if (resp.data?.success && Array.isArray(resp.data?.data) && resp.data.data.length > 0) {
-      return parseStockResult(resp.data.data[0], ticker);
-    }
-    return null;
-  } catch (err) {
-    const status = err.response?.status;
-    if (status === 429) {
-      console.warn(`[nseScraperService] Rate limited (429) on fetchSingleStock ${mapped}`);
-    }
-    return null;
+    return cache !== null;
   }
 }
 
 async function fetchNSEQuote(symbol) {
   if (!symbol || !symbol.startsWith('NSE:')) return null;
-  return fetchSingleStock(symbol);
+  await refreshCache();
+  if (!cache) return null;
+  const stock = lookupStock(buildLookup(cache), symbol);
+  return stock ? parseStockResult(stock, symbol) : null;
 }
 
 async function fetchBatchNSEQuotes(symbols) {
   const nseSymbols = symbols.filter(s => s.startsWith('NSE:'));
   if (!nseSymbols.length) return {};
-  const allStocks = await fetchAllStocks();
-  if (!allStocks.length) return {};
+  await refreshCache();
+  if (!cache) return {};
+  const lookup = buildLookup(cache);
   const map = {};
-  const lookup = {};
-  for (const s of allStocks) {
-    const t = (s.ticker || '').toUpperCase();
-    lookup[t] = s;
-    lookup[SYMBOL_MAP[t] || t] = s;
-  }
   for (const s of nseSymbols) {
-    const clean = s.replace('NSE:', '').toUpperCase();
-    for (const [key, stock] of Object.entries(lookup)) {
-      if (key === clean || clean === key || clean.endsWith(key)) {
-        const parsed = parseStockResult(stock, s);
-        if (parsed) {
-          parsed.symbol = s;
-          map[s] = parsed;
-        }
-        break;
-      }
-    }
-    if (!map[s]) {
-      const stock = lookup[clean];
-      if (stock) {
-        const parsed = parseStockResult(stock, s);
-        if (parsed) {
-          parsed.symbol = s;
-          map[s] = parsed;
-        }
+    const stock = lookupStock(lookup, s);
+    if (stock) {
+      const parsed = parseStockResult(stock, s);
+      if (parsed) {
+        parsed.symbol = s;
+        map[s] = parsed;
       }
     }
   }
