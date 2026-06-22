@@ -233,7 +233,7 @@ export function StockAnalysisPage() {
   const isPreMarket = marketState === 'PRE';
   const isPostMarket = marketState === 'POST';
   const isRegular = marketState === 'REGULAR';
-  const regularPrice = liveQuote?.regularMarketPrice ?? liveQuote?.previousClose ?? activeSelection.price;
+  const regularPrice = liveQuote?.regularMarketPrice ?? liveQuote?.price ?? liveQuote?.previousClose ?? activeSelection.price;
   const prePrice = liveQuote?.preMarketPrice;
   const postPrice = liveQuote?.postMarketPrice;
   const altPrice = prePrice ?? postPrice ?? null;
@@ -645,7 +645,7 @@ export function StockAnalysisPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-[11px] text-muted-foreground mb-1">
-                    {(liveQuote as any)?.exchange || (activeSelection.market === "nse" ? "NSE" : "NasdaqGS")}
+                    {(liveQuote as any)?.exchange && (liveQuote as any)?.exchange !== 'Global' ? (liveQuote as any)?.exchange : (activeSelection.market === "nse" ? "NSE" : "NasdaqGS")}
                     &nbsp;&mdash;&nbsp;Nasdaq Real Time Price &bull; {(liveQuote as any)?.currency || activeSelection.currency || "USD"}
                   </div>
                   <div className="text-3xl font-bold text-foreground">
