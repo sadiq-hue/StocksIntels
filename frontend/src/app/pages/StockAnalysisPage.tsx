@@ -694,10 +694,6 @@ export function StockAnalysisPage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[11px] text-muted-foreground mb-1">
-                    {(liveQuote as any)?.exchange && (liveQuote as any)?.exchange !== 'Global' ? (liveQuote as any)?.exchange : (activeSelection.market === "nse" ? "NSE" : "NasdaqGS")}
-                    &nbsp;&mdash;&nbsp;Nasdaq Real Time Price &bull; {(liveQuote as any)?.currency || activeSelection.currency || "USD"}
-                  </div>
                   <div className="text-3xl font-bold text-foreground">
                     {formatCurrency(activeSelection)}{formatPrice(regularPrice)}
                   </div>
@@ -712,21 +708,21 @@ export function StockAnalysisPage() {
                     {sessionLabel}: {formatSessionTime(liveQuote?.currentTradingPeriod?.regular?.end)}
                   </div>
                   {altPrice != null && (
-                    <div className="mt-2 pt-2 border-t border-border/40">
-                      <div className="text-lg font-bold text-foreground">
+                    <>
+                      <div className="text-2xl font-bold text-foreground mt-3">
                         {formatCurrency(activeSelection)}{formatPrice(altPrice)}
                       </div>
                       <div className={`flex items-center justify-end gap-1.5 ${
                         (altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"
                       }`}>
                         {altChangePct != null && altChangePct >= 0 ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
-                        <span className="font-semibold text-xs">{altChange != null ? `${altChange > 0 ? "+" : ""}${altChange.toFixed(2)}` : ""}</span>
-                        <span className="font-semibold text-xs">({altChangePct != null ? `${altChangePct > 0 ? "+" : ""}${altChangePct.toFixed(2)}%` : ""})</span>
+                        <span className="font-semibold">{altChange != null ? `${altChange > 0 ? "+" : ""}${altChange.toFixed(2)}` : ""}</span>
+                        <span className="font-semibold">({altChangePct != null ? `${altChangePct > 0 ? "+" : ""}${altChangePct.toFixed(2)}%` : ""})</span>
                       </div>
                       <div className="text-[11px] text-muted-foreground mt-0.5">
                         {altSessionLabel}: {formatAltTime(altTime)}
                       </div>
-                    </div>
+                    </>
                   )}
                 </div>
               </div>
