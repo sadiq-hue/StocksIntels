@@ -371,7 +371,25 @@ async function getStockQuote(symbol) {
     return cached;
   }
 
-  // 2. For NSE stocks, try myStocks cache first (background-refreshed)
+  // 2. For NSE stocks, try NSE Scraper API first (live, dedicated NSE source)
+  //    Then enrich with dayHigh/dayLow/previousClose from cached sources
+  if (!quote && symbol.startsWith('NSE:')) {
+    const { fetchNSEQuote } = require('./nseScraperService');
+    quote = await fetchNSEQuote(symbol);
+    if (quote) {
+      const msQ = await mystocks.getQuoteForSymbol(symbol).catch(() => null);
+      const afxQ = getAfxQuote(symbol);
+      const enrich = msQ || afxQ;
+      if (enrich) {
+        if (enrich.dayHigh != null) quote.dayHigh = enrich.dayHigh;
+        if (enrich.dayLow != null) quote.dayLow = enrich.dayLow;
+        if (enrich.previousClose != null) quote.previousClose = enrich.previousClose;
+        if (enrich.open != null) quote.open = enrich.open;
+      }
+    }
+  }
+
+  // 3. Fallback: myStocks cache (background-refreshed)
   if (!quote && symbol.startsWith('NSE:')) {
     const msQ = await mystocks.getQuoteForSymbol(symbol);
     if (msQ) {
@@ -379,7 +397,7 @@ async function getStockQuote(symbol) {
     }
   }
 
-  // 3. Try AFX cache (background refresh)
+  // 4. Fallback: AFX cache (background refresh)
   if (!quote && symbol.startsWith('NSE:')) {
     const afxQ = getAfxQuote(symbol);
     if (afxQ) {
@@ -387,19 +405,13 @@ async function getStockQuote(symbol) {
     }
   }
 
-  // 4. Try NSE Scraper API (iancenry RapidAPI — dedicated NSE source)
-  if (!quote && symbol.startsWith('NSE:')) {
-    const { fetchNSEQuote } = require('./nseScraperService');
-    quote = await fetchNSEQuote(symbol);
-  }
-
-  // 5. Try Yahoo-based RapidAPI for NSE stocks (individual fallback)
+  // 5. Fallback: Yahoo-based RapidAPI for NSE stocks
   if (!quote && symbol.startsWith('NSE:')) {
     const { fetchNSEQuote } = require('./rapidApiService');
     quote = await fetchNSEQuote(symbol);
   }
 
-  // 6. Try Yahoo/RapidAPI for global stocks
+  // 6. Yahoo/RapidAPI for global stocks
   if (!quote && !symbol.startsWith('NSE:')) {
     const { fetchGlobalQuote } = require('./rapidApiService');
     quote = await fetchGlobalQuote(symbol);
@@ -463,22 +475,36 @@ async function fetchLiveBatch(symbols) {
     fetchAfxQuotes().catch(() => {});
   }
 
-  // For NSE stocks: use myStocks cache (background-refreshed every 5 min from all 69 tickers)
+  // For NSE stocks: try NSE Scraper API first (live, dedicated NSE source)
+  // then enrich with dayHigh/dayLow/previousClose from cached sources
+  if (nseSymbols.length > 0) {
+    const { fetchBatchNSEQuotes } = require('./nseScraperService');
+    const nseScraperResults = await fetchBatchNSEQuotes(nseSymbols);
+    for (const [s, q] of Object.entries(nseScraperResults)) {
+      if (!q.dayHigh || !q.dayLow || !q.previousClose) {
+        const msQ = await mystocks.getQuoteForSymbol(s).catch(() => null);
+        const afxQ = getAfxQuote(s);
+        const enrich = msQ || afxQ;
+        if (enrich) {
+          if (!q.dayHigh && enrich.dayHigh) q.dayHigh = enrich.dayHigh;
+          if (!q.dayLow && enrich.dayLow) q.dayLow = enrich.dayLow;
+          if (!q.previousClose && enrich.previousClose) q.previousClose = enrich.previousClose;
+          if (!q.open && enrich.open) q.open = enrich.open;
+        }
+      }
+    }
+    results = { ...results, ...nseScraperResults };
+  }
+
+  // Fallback: myStocks cache for any NSE stocks still missing
   if (nseSymbols.length > 0) {
     for (const s of nseSymbols) {
+      if (results[s]) continue;
       const msQ = await mystocks.getQuoteForSymbol(s);
       if (msQ) {
         results[s] = { symbol: s.replace('NSE:', '').toUpperCase(), company_name: msQ.name, ...msQ };
       }
     }
-  }
-
-  // Fallback: NSE Scraper API (iancenry RapidAPI) for any NSE stocks still missing
-  const missingNse2 = nseSymbols.filter(s => !results[s]);
-  if (missingNse2.length > 0) {
-    const { fetchBatchNSEQuotes } = require('./nseScraperService');
-    const nseScraperResults = await fetchBatchNSEQuotes(missingNse2);
-    results = { ...results, ...nseScraperResults };
   }
 
   // Fallback: Yahoo-based RapidAPI for any NSE stocks still missing
