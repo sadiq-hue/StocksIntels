@@ -387,19 +387,25 @@ async function getStockQuote(symbol) {
     }
   }
 
-  // 4. Try RapidAPI for NSE stocks (individual fallback)
+  // 4. Try NSE Scraper API (iancenry RapidAPI — dedicated NSE source)
+  if (!quote && symbol.startsWith('NSE:')) {
+    const { fetchNSEQuote } = require('./nseScraperService');
+    quote = await fetchNSEQuote(symbol);
+  }
+
+  // 5. Try Yahoo-based RapidAPI for NSE stocks (individual fallback)
   if (!quote && symbol.startsWith('NSE:')) {
     const { fetchNSEQuote } = require('./rapidApiService');
     quote = await fetchNSEQuote(symbol);
   }
 
-  // 4. Try Yahoo/RapidAPI for global stocks
+  // 6. Try Yahoo/RapidAPI for global stocks
   if (!quote && !symbol.startsWith('NSE:')) {
     const { fetchGlobalQuote } = require('./rapidApiService');
     quote = await fetchGlobalQuote(symbol);
   }
 
-  // 5. Update Cache and return
+  // 7. Update Cache and return
   if (quote) {
     console.log(`[MarketService] Caching quote for ${symbol}:`, quote);
     quoteCache.set(symbol, quote);
@@ -467,7 +473,15 @@ async function fetchLiveBatch(symbols) {
     }
   }
 
-  // Fallback: RapidAPI for any NSE stocks still missing
+  // Fallback: NSE Scraper API (iancenry RapidAPI) for any NSE stocks still missing
+  const missingNse2 = nseSymbols.filter(s => !results[s]);
+  if (missingNse2.length > 0) {
+    const { fetchBatchNSEQuotes } = require('./nseScraperService');
+    const nseScraperResults = await fetchBatchNSEQuotes(missingNse2);
+    results = { ...results, ...nseScraperResults };
+  }
+
+  // Fallback: Yahoo-based RapidAPI for any NSE stocks still missing
   const missingNse = nseSymbols.filter(s => !results[s]);
   if (missingNse.length > 0 && RAPIDAPI_KEY) {
     const { fetchBatchNSEQuotes } = require('./rapidApiService');
