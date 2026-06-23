@@ -7334,6 +7334,45 @@ app.post('/api/payments/paypal-webhook', async (req, res) => {
   }
 });
 
+// --- Free Trial Routes ---
+app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
+  try {
+    const { plan } = req.body;
+    const userId = req.user.id;
+    if (!plan) return res.status(400).json({ error: 'Plan name required' });
+    const tier = plan.toLowerCase();
+    const validPlans = ['starter', 'premium', 'pro', 'institutional'];
+    if (!validPlans.includes(tier)) {
+      return res.status(400).json({ error: 'Invalid plan for trial' });
+    }
+    const userRes = await pool.query(
+      `SELECT subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE id = $1`,
+      [userId]
+    );
+    if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const userRow = userRes.rows[0];
+    const alreadyPaid = userRow.subscription_status === 'active' &&
+      userRow.subscription_tier !== 'free' &&
+      userRow.subscription_end_date &&
+      new Date(userRow.subscription_end_date) > new Date();
+    if (alreadyPaid) {
+      return res.status(400).json({ error: 'You already have an active subscription' });
+    }
+    const trialStart = userRow.trial_start_date || new Date();
+    const inTrial = new Date() - new Date(trialStart) < 7 * 24 * 60 * 60 * 1000;
+    const startDate = inTrial ? trialStart : new Date();
+    await pool.query(
+      `UPDATE users SET subscription_tier = $1, subscription_status = 'active', trial_start_date = $2 WHERE id = $3`,
+      [tier, startDate, userId]
+    );
+    console.log(`[TRIAL] Started: user=${userId} plan=${tier}`);
+    res.json({ success: true, message: `Free trial started for ${plan}!`, trial_end_date: new Date(new Date(startDate).getTime() + 7 * 24 * 60 * 60 * 1000) });
+  } catch (error) {
+    console.error('Start trial error:', error.message);
+    res.status(500).json({ error: 'Failed to start trial' });
+  }
+});
+
 // --- ML Model Routes ---
 app.get('/api/ml/info', async (req, res) => {
   res.json(await mlModel.getModelInfo());
@@ -8929,6 +8968,30 @@ initDatabase().then(() => {
               }
             } catch (e) {
               console.error(`[SUBSCRIPTION CRON] Failed to send expired email to ${user.email}:`, e.message);
+            }
+          }
+        }
+        // Expire free trials that have run past 7 days (trial users with no paid subscription_end_date)
+        const { rows: expiredTrials } = await pool.query(`
+          UPDATE users SET subscription_tier = 'free', subscription_status = 'active'
+          WHERE subscription_status = 'active' AND subscription_tier != 'free'
+            AND (subscription_end_date IS NULL OR subscription_end_date < CURRENT_TIMESTAMP)
+            AND trial_start_date IS NOT NULL
+            AND trial_start_date < CURRENT_TIMESTAMP - INTERVAL '7 days'
+          RETURNING id, full_name, email, subscription_tier
+        `);
+        if (expiredTrials.length > 0) {
+          console.log(`[SUBSCRIPTION CRON] Expired ${expiredTrials.length} trial(s)`);
+          for (const t of expiredTrials) {
+            try {
+              if (t.email) {
+                await sendSubscriptionExpiredEmail(t.email, {
+                  userName: t.full_name,
+                  planName: t.subscription_tier || 'Pro',
+                });
+              }
+            } catch (e) {
+              console.error(`[SUBSCRIPTION CRON] Failed to send trial expired email to ${t.email}:`, e.message);
             }
           }
         }

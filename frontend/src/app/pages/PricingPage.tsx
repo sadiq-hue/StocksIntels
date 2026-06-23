@@ -7,10 +7,14 @@ import {
   Shield, 
   Crown,
   ArrowRight,
-  HelpCircle
+  HelpCircle,
+  Loader2
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useAuth } from "../auth/AuthContext";
+import { toast } from "sonner";
+
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 const plans = [
   {
@@ -124,14 +128,57 @@ const faqs = [
 
 export function PricingPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [isYearly, setIsYearly] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [startingTrial, setStartingTrial] = useState<string | null>(null);
 
   const savingsPercent = (monthly: number, yearly: number) => {
     if (monthly === 0) return 0;
     const monthlyTotal = monthly * 12;
     return Math.round(((monthlyTotal - yearly) / monthlyTotal) * 100);
+  };
+
+  const handleTrialClick = async (planName: string) => {
+    if (!user) {
+      navigate(`/login?redirect=/pricing`);
+      return;
+    }
+    setStartingTrial(planName);
+    try {
+      const res = await fetch(`${API_URL}/payments/start-trial`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("stockintel_token")}` },
+        body: JSON.stringify({ plan: planName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to start trial");
+      await refreshUser();
+      toast.success(`Free trial started! Enjoy ${planName} for 7 days.`);
+      navigate("/app/dashboard");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to start trial");
+    } finally {
+      setStartingTrial(null);
+    }
+  };
+
+  const handlePlanClick = (planName: string) => {
+    if (planName === "Free") {
+      if (user) {
+        navigate("/subscribe/free");
+      } else {
+        navigate("/login?redirect=/subscribe/free");
+      }
+      return;
+    }
+    // Paid plans: go to subscription page
+    const period = isYearly ? "yearly" : "monthly";
+    if (user) {
+      navigate(`/subscribe/${planName.toLowerCase()}?period=${period}`);
+    } else {
+      navigate(`/login?redirect=/subscribe/${planName.toLowerCase()}%3Fperiod=${period}`);
+    }
   };
 
   return (
@@ -248,24 +295,37 @@ export function PricingPage() {
 
                   <Button
                     onClick={() => {
-                      const period = isYearly ? "yearly" : "monthly";
-                      if (user) {
-                        navigate(`/subscribe/${plan.name.toLowerCase()}?period=${period}`);
+                      if (plan.name === "Free") {
+                        if (user) {
+                          navigate("/subscribe/free");
+                        } else {
+                          navigate("/login?redirect=/subscribe/free");
+                        }
                       } else {
-                        navigate(`/login?redirect=/subscribe/${plan.name.toLowerCase()}%3Fperiod=${period}`);
+                        handleTrialClick(plan.name);
                       }
                     }}
+                    disabled={plan.name !== "Free" && startingTrial === plan.name}
                     className={`w-full py-6 text-base font-semibold mb-8 transition-all hover:-translate-y-0.5 ${
                       plan.popular
                         ? "bg-white text-gray-900 hover:bg-gray-100 shadow-xl"
                         : plan.ctaVariant === "default"
                         ? "bg-[#0D7490] hover:bg-[#0A5F7A] text-white shadow-lg shadow-[#0D7490]/25"
                         : "border-gray-300 text-gray-700 hover:bg-gray-50"
-                    }`}
+                    } ${plan.name !== "Free" && startingTrial === plan.name ? "opacity-70 cursor-not-allowed" : ""}`}
                     variant={plan.popular ? "default" : plan.ctaVariant}
                   >
-                    {plan.cta}
-                    <ArrowRight className="ml-2 w-4 h-4" />
+                    {startingTrial === plan.name ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        {plan.cta}
+                        <ArrowRight className="ml-2 w-4 h-4" />
+                      </>
+                    )}
                   </Button>
 
                   <div className="space-y-4">
@@ -399,11 +459,26 @@ export function PricingPage() {
                 Our team is here to help you find the perfect plan for your trading needs.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link to="/login">
-                  <Button size="lg" className="bg-white text-[#0D7490] hover:bg-gray-100 px-8 py-6 text-base font-semibold shadow-xl">
-                    Start Free Trial
-                  </Button>
-                </Link>
+                <Button size="lg" className="bg-white text-[#0D7490] hover:bg-gray-100 px-8 py-6 text-base font-semibold shadow-xl"
+                  onClick={() => {
+                    const planName = "Pro";
+                    if (user) {
+                      handleTrialClick(planName);
+                    } else {
+                      navigate("/login?redirect=/pricing");
+                    }
+                  }}
+                  disabled={startingTrial === "Pro"}
+                >
+                  {startingTrial === "Pro" ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    "Start Free Trial"
+                  )}
+                </Button>
                 <Button variant="outline" size="lg" className="border-white/30 text-white hover:bg-white/10 px-8 py-6 text-base">
                   Chat with Sales
                 </Button>
