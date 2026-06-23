@@ -130,6 +130,7 @@ interface PaperTradingContextValue {
   marketStatus: { nse: MarketStatusInfo; global: MarketStatusInfo } | null;
   error: string | null;
   refresh: () => Promise<void>;
+  refreshSilent: () => Promise<void>;
   placeOrder: (params: { ticker: string; name?: string; shares: number; type: "buy" | "sell"; market: string; sector?: string }) => Promise<TradeResult>;
   initAccount: (initialCapital?: number) => Promise<boolean>;
   resetAccount: (initialCapital?: number) => Promise<boolean>;
@@ -166,6 +167,23 @@ export function PaperTradingProvider({ children }: { children: ReactNode }) {
       if (tradesRes.ok) setTrades(await tradesRes.json());
     } catch {}
     setLoading(false);
+  }, [user]);
+
+  const refreshSilent = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [accountRes, tradesRes] = await Promise.all([
+        fetch(`${API_URL}/paper/account?userId=${user.id}`),
+        fetch(`${API_URL}/paper/trades?userId=${user.id}`),
+      ]);
+      if (accountRes.ok) {
+        const data = await accountRes.json();
+        setAccount(data.account);
+        setPositions(data.positions);
+        if (data.marketStatus) setMarketStatus(data.marketStatus);
+      }
+      if (tradesRes.ok) setTrades(await tradesRes.json());
+    } catch {}
   }, [user]);
 
   const placeOrder = useCallback(async (params) => {
@@ -238,7 +256,7 @@ export function PaperTradingProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   return (
-    <PaperTradingContext.Provider value={{ account, positions, trades, loading, placingOrder, marketStatus, error, refresh, placeOrder, initAccount, resetAccount, fetchStatement }}>
+    <PaperTradingContext.Provider value={{ account, positions, trades, loading, placingOrder, marketStatus, error, refresh, refreshSilent, placeOrder, initAccount, resetAccount, fetchStatement }}>
       {children}
     </PaperTradingContext.Provider>
   );

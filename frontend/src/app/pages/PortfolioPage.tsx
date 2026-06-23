@@ -177,13 +177,15 @@ export function PortfolioPage() {
   const paperSearchRef = useRef<HTMLDivElement>(null);
   const paperYahooSearchRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const { account: paperAccount, positions: paperPositions, trades: paperTrades, loading: paperLoading, placingOrder: paperPlacingOrder, marketStatus, refresh: refreshPaper, placeOrder, initAccount, resetAccount, fetchStatement } = usePaperTrading();
+  const { account: paperAccount, positions: paperPositions, trades: paperTrades, loading: paperLoading, placingOrder: paperPlacingOrder, marketStatus, refresh: refreshPaper, refreshSilent, placeOrder, initAccount, resetAccount, fetchStatement } = usePaperTrading();
 
   // Refs to store refresh callbacks so intervals don't reset on every render
   const refreshRef = useRef(refresh);
   const refreshPaperRef = useRef(refreshPaper);
+  const refreshPaperSilentRef = useRef(refreshSilent);
   useEffect(() => { refreshRef.current = refresh; }, [refresh]);
   useEffect(() => { refreshPaperRef.current = refreshPaper; }, [refreshPaper]);
+  useEffect(() => { refreshPaperSilentRef.current = refreshSilent; }, [refreshSilent]);
 
   const resetPaperOrder = () => setPaperOrder({ ticker: "", name: "", shares: "", market: "NSE", sector: "Other", currentPrice: "" });
 
@@ -282,21 +284,15 @@ export function PortfolioPage() {
     if (paperMode && user) refreshPaper();
   }, [paperMode, user]);
 
-  // Auto-refresh real portfolio every 15 seconds (with spinner)
+  // Background refresh every 15 seconds (silent — no spinner, no visible loading)
   useEffect(() => {
-    if (paperMode || !user) return;
+    if (!user) return;
     const interval = setInterval(() => {
-      setRefreshing(true);
-      refreshRef.current().finally(() => setRefreshing(false));
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [paperMode, user]);
-
-  // Auto-refresh paper trading portfolio every 15 seconds (with spinner)
-  useEffect(() => {
-    if (!paperMode || !user) return;
-    const interval = setInterval(() => {
-      refreshPaperRef.current();
+      if (paperMode) {
+        refreshPaperSilentRef.current();
+      } else {
+        refreshRef.current();
+      }
     }, 15000);
     return () => clearInterval(interval);
   }, [paperMode, user]);
