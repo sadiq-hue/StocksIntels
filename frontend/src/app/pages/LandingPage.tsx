@@ -679,7 +679,7 @@ export function LandingPage() {
                 <span className="text-3xl font-bold text-gray-900">$0</span>
                 <span className="text-gray-500 text-sm">/mo</span>
               </div>
-              <Link to="/subscribe/free">
+              <Link to="/pricing">
                 <Button variant="outline" className="w-full py-4 text-sm font-semibold mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all group-hover:border-[#0D7490]/30">
                   Get Started
                 </Button>
@@ -707,7 +707,7 @@ export function LandingPage() {
                 <span className="text-3xl font-bold text-gray-900">$4.99</span>
                 <span className="text-gray-500 text-sm">/mo</span>
               </div>
-              <Link to="/subscribe/starter">
+              <Link to="/pricing">
                 <Button variant="outline" className="w-full py-4 text-sm font-semibold mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all group-hover:border-[#0D7490]/30">
                   Start Free Trial
                 </Button>
@@ -735,7 +735,7 @@ export function LandingPage() {
                 <span className="text-3xl font-bold text-gray-900">$7.99</span>
                 <span className="text-gray-500 text-sm">/mo</span>
               </div>
-              <Link to="/subscribe/premium">
+              <Link to="/pricing">
                 <Button variant="outline" className="w-full py-4 text-sm font-semibold mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all group-hover:border-[#0D7490]/30">
                   Start Free Trial
                 </Button>
@@ -769,7 +769,7 @@ export function LandingPage() {
                 <span className="text-3xl font-bold">$14.99</span>
                 <span className="text-gray-400 text-sm">/mo</span>
               </div>
-              <Link to="/subscribe/pro">
+              <Link to="/pricing">
                 <Button className="w-full py-4 text-sm font-semibold mb-4 bg-white text-gray-900 hover:bg-gray-100 shadow-xl transition-all hover:shadow-2xl">
                   Start Pro Trial
                   <ArrowRight className="ml-2 w-4 h-4" />
