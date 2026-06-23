@@ -21,6 +21,8 @@ function toYahooSymbol(symbol) {
 }
 
 async function fetchYahooQuoteV8(yahooSymbol) {
+  // Skip v8 chart API for NSE stocks (.NR suffix) - it returns 404 for these
+  if (yahooSymbol.endsWith('.NR')) return null;
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=5d`;
   const resp = await Promise.race([
     axios.get(url, {
@@ -55,6 +57,8 @@ async function fetchYahooQuoteV8(yahooSymbol) {
 async function fetchYahooQuote(yahooSymbol) {
   let quote = await fetchYahooQuoteV8(yahooSymbol);
   if (quote) return quote;
+  // Skip yahoo-finance2 for NSE (.NR) - mystocks is more reliable
+  if (yahooSymbol.endsWith('.NR')) return null;
   try {
     const { default: YahooFinance } = await import('yahoo-finance2');
     const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
@@ -463,6 +467,37 @@ async function getStockQuote(symbol) {
   return null;
 }
 
+const CONCURRENCY = 25;
+const BATCH_TIMEOUT_MS = 25000;
+
+async function fetchQuoteForSymbol(s) {
+  let quote;
+  const yahooSymbol = toYahooSymbol(s);
+  quote = await fetchYahooQuote(yahooSymbol);
+
+  if (!quote && s.startsWith('NSE:')) {
+    const mystocks = require('./mystocksScraper');
+    const msq = await mystocks.getQuoteForSymbol(s);
+    if (msq) {
+      quote = {
+        price: msq.price,
+        change: msq.change || 0,
+        changePercent: msq.changePercent || 0,
+        volume: msq.volume || 0,
+        dayHigh: msq.dayHigh || msq.price,
+        dayLow: msq.dayLow || msq.price,
+        previousClose: msq.previousClose || msq.price,
+        company_name: msq.name || msq.ticker || yahooSymbol,
+        timestamp: Math.floor(Date.now() / 1000),
+        lastUpdated: new Date().toISOString(),
+        provider: 'mystocks',
+      };
+    }
+  }
+
+  return quote;
+}
+
 async function getQuotesBatch(symbols) {
   const results = {};
   const missing = [];
@@ -478,40 +513,33 @@ async function getQuotesBatch(symbols) {
 
   if (missing.length === 0) return results;
 
-  for (const s of missing) {
-    let quote;
-    const yahooSymbol = toYahooSymbol(s);
-    quote = await fetchYahooQuote(yahooSymbol);
+  let timedOut = false;
+  const overallTimer = setTimeout(() => {
+    timedOut = true;
+    console.warn(`[getQuotesBatch] global timeout after ${BATCH_TIMEOUT_MS}ms, partial results (${Object.keys(results).length}/${missing.length})`);
+  }, BATCH_TIMEOUT_MS);
 
-    if (!quote && s.startsWith('NSE:')) {
-      const mystocks = require('./mystocksScraper');
-      const msq = await mystocks.getQuoteForSymbol(s);
-      if (msq) {
-        quote = {
-          price: msq.price,
-          change: msq.change || 0,
-          changePercent: msq.changePercent || 0,
-          volume: msq.volume || 0,
-          dayHigh: msq.dayHigh || msq.price,
-          dayLow: msq.dayLow || msq.price,
-          previousClose: msq.previousClose || msq.price,
-          company_name: msq.name || msq.ticker || yahooSymbol,
-          timestamp: Math.floor(Date.now() / 1000),
-          lastUpdated: new Date().toISOString(),
-          provider: 'mystocks',
-        };
+  for (let i = 0; i < missing.length; i += CONCURRENCY) {
+    if (timedOut) break;
+    const batch = missing.slice(i, i + CONCURRENCY);
+    const batchResults = await Promise.allSettled(batch.map(s => fetchQuoteForSymbol(s)));
+
+    for (let j = 0; j < batch.length; j++) {
+      const s = batch[j];
+      const r = batchResults[j];
+      const quote = r.status === 'fulfilled' ? r.value : null;
+
+      if (quote) {
+        quoteCache.set(s, { ...quote, symbol: s });
+        results[s] = quoteCache.get(s);
+      } else {
+        const stale = quoteCache.get(s);
+        if (stale) results[s] = stale;
       }
-    }
-
-    if (quote) {
-      quoteCache.set(s, { ...quote, symbol: s });
-      results[s] = quoteCache.get(s);
-    } else {
-      const stale = quoteCache.get(s);
-      if (stale) results[s] = stale;
     }
   }
 
+  clearTimeout(overallTimer);
   return results;
 }
 

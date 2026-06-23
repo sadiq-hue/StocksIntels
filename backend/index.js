@@ -6252,11 +6252,18 @@ app.get('/api/holdings', async (req, res) => {
     // Deduplicate: if broker-synced holding exists for a ticker, exclude manual one
     const brokerTickers = new Set(rows.filter(r => r.broker_connection_id > 0).map(r => r.ticker));
     const deduplicatedRows = rows.filter(r => r.broker_connection_id > 0 || !brokerTickers.has(r.ticker));
-    for (const r of deduplicatedRows) {
+
+    // Fetch live prices in parallel for non-broker holdings
+    const livePrices = await Promise.allSettled(deduplicatedRows.map(r =>
+      r.broker_connection_id > 0
+        ? Promise.resolve(parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0)
+        : getLivePrice(r.market, r.ticker)
+    ));
+
+    deduplicatedRows.forEach((r, i) => {
       const isBroker = r.broker_connection_id > 0;
-      const livePrice = isBroker
-        ? (parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0)
-        : (await getLivePrice(r.market, r.ticker) || parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0);
+      const lp = livePrices[i].status === 'fulfilled' ? livePrices[i].value : null;
+      const livePrice = lp || parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0;
       const avgC = parseFloat(r.avg_cost) || 0;
       const shares = parseFloat(r.shares) || 0;
       const val = livePrice * shares;
@@ -6279,7 +6286,7 @@ app.get('/api/holdings', async (req, res) => {
         pnl_percent: String(pnlPct.toFixed(1)),
         is_positive: pnl >= 0,
       });
-    }
+    });
     const combinedValueKes = nseValue + globalValue * fxRate;
     res.json({ holdings: enrichedRows, fxRate, combinedValueKes: Math.round(combinedValueKes * 100) / 100 });
   } catch (err) {
