@@ -1,6 +1,10 @@
 const { KENYAN_STOCKS } = require('./newsService');
 const axios = require('axios');
 
+// Background NSE price cache from mystocks.co.ke
+const mystocks = require('./mystocksScraper');
+setTimeout(() => mystocks.startAutoRefresh(), 1000);
+
 const quoteCache = new Map();
 const MAX_QUOTE_AGE_MS = 5 * 60 * 1000;
 const YAHOO_TIMEOUT_MS = 8000;
@@ -423,8 +427,29 @@ async function getStockQuote(symbol) {
     return cached;
   }
 
+  let quote;
   const yahooSymbol = toYahooSymbol(symbol);
-  const quote = await fetchYahooQuote(yahooSymbol);
+  quote = await fetchYahooQuote(yahooSymbol);
+
+  if (!quote && symbol.startsWith('NSE:')) {
+    const mystocks = require('./mystocksScraper');
+    const msq = await mystocks.getQuoteForSymbol(symbol);
+    if (msq) {
+      quote = {
+        price: msq.price,
+        change: msq.change || 0,
+        changePercent: msq.changePercent || 0,
+        volume: msq.volume || 0,
+        dayHigh: msq.dayHigh || msq.price,
+        dayLow: msq.dayLow || msq.price,
+        previousClose: msq.previousClose || msq.price,
+        company_name: msq.name || msq.ticker || yahooSymbol,
+        timestamp: Math.floor(Date.now() / 1000),
+        lastUpdated: new Date().toISOString(),
+        provider: 'mystocks',
+      };
+    }
+  }
 
   if (quote) {
     quoteCache.set(symbol, { ...quote, symbol });
@@ -454,8 +479,30 @@ async function getQuotesBatch(symbols) {
   if (missing.length === 0) return results;
 
   for (const s of missing) {
+    let quote;
     const yahooSymbol = toYahooSymbol(s);
-    const quote = await fetchYahooQuote(yahooSymbol);
+    quote = await fetchYahooQuote(yahooSymbol);
+
+    if (!quote && s.startsWith('NSE:')) {
+      const mystocks = require('./mystocksScraper');
+      const msq = await mystocks.getQuoteForSymbol(s);
+      if (msq) {
+        quote = {
+          price: msq.price,
+          change: msq.change || 0,
+          changePercent: msq.changePercent || 0,
+          volume: msq.volume || 0,
+          dayHigh: msq.dayHigh || msq.price,
+          dayLow: msq.dayLow || msq.price,
+          previousClose: msq.previousClose || msq.price,
+          company_name: msq.name || msq.ticker || yahooSymbol,
+          timestamp: Math.floor(Date.now() / 1000),
+          lastUpdated: new Date().toISOString(),
+          provider: 'mystocks',
+        };
+      }
+    }
+
     if (quote) {
       quoteCache.set(s, { ...quote, symbol: s });
       results[s] = quoteCache.get(s);
