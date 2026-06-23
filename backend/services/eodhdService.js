@@ -52,7 +52,7 @@ async function getPortfolio(symbols, apiKey) {
 
 async function sync(apiKey, userId, pool) {
   const { rows } = await pool.query(
-    'SELECT ticker, name, shares, avg_cost, market FROM portfolio_holdings WHERE user_id = $1',
+    'SELECT ticker, name, shares, avg_cost, market FROM portfolio_holdings WHERE user_id = $1 AND (broker_connection_id IS NULL OR broker_connection_id = 0)',
     [userId]
   );
   const symbols = rows.map(r => ({
@@ -70,7 +70,7 @@ async function sync(apiKey, userId, pool) {
     for (const pos of positions) {
       await client.query(
         `UPDATE portfolio_holdings SET current_price = $1, updated_at = NOW()
-         WHERE user_id = $2 AND ticker = $3`,
+         WHERE user_id = $2 AND ticker = $3 AND (broker_connection_id IS NULL OR broker_connection_id = 0)`,
         [pos.current_price, userId, pos.symbol]
       );
     }
