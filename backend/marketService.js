@@ -1,22 +1,44 @@
 const { KENYAN_STOCKS } = require('./newsService');
-const { fetchNseQuotes: fetchAfxQuotes, getQuoteForSymbol: getAfxQuote } = require('./nseAfxScraper');
 
-// Background Apify refresh (runs every 5 min, never blocks requests)
-const apifyNse = require('./apifyNseService');
-apifyNse.startAutoRefresh();
-
-// Background myStocks refresh (primary NSE source from Railway)
-const mystocks = require('./mystocksScraper');
-mystocks.startAutoRefresh();
-
-const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
-
-// Unified Quote Cache
 const quoteCache = new Map();
-const MAX_QUOTE_AGE_MS = 5 * 60 * 1000; // 5 minutes cache for market data
+const MAX_QUOTE_AGE_MS = 5 * 60 * 1000;
+const YAHOO_TIMEOUT_MS = 8000;
 
+const NSE_YAHOO_SUFFIX = '.NR';
+const SYMBOL_OVERRIDES = { KLG: 'KQ.NR' };
 
+function toYahooSymbol(symbol) {
+  if (symbol.startsWith('NSE:')) {
+    const clean = symbol.replace('NSE:', '').toUpperCase();
+    return SYMBOL_OVERRIDES[clean] || `${clean}${NSE_YAHOO_SUFFIX}`;
+  }
+  return symbol.toUpperCase().replace(/\./g, '-');
+}
 
+async function fetchYahooQuote(yahooSymbol) {
+  const { default: YahooFinance } = await import('yahoo-finance2');
+  const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+  const q = await Promise.race([
+    yf.quote(yahooSymbol).catch(() => {}),
+    new Promise(r => setTimeout(r, YAHOO_TIMEOUT_MS)),
+  ]);
+  if (!q?.regularMarketPrice && !q?.regularMarketPreviousClose) return null;
+  const price = Number(q.regularMarketPrice ?? q.regularMarketPreviousClose);
+  return {
+    price,
+    change: Number(q.regularMarketChange ?? 0),
+    changePercent: Number(q.regularMarketChangePercent ?? 0),
+    volume: q.regularMarketVolume ?? 0,
+    dayHigh: Number(q.regularMarketDayHigh ?? price),
+    dayLow: Number(q.regularMarketDayLow ?? price),
+    previousClose: Number(q.regularMarketPreviousClose ?? price),
+    marketCap: q.marketCap ?? 0,
+    company_name: q.shortName || q.longName || yahooSymbol,
+    timestamp: Math.floor(Date.now() / 1000),
+    lastUpdated: new Date().toISOString(),
+    provider: 'yahoo',
+  };
+}
 
 /**
  * Shared name mapper for consistent display
@@ -356,171 +378,54 @@ function getCompanyName(symbol) {
   return names[ticker] || KENYAN_STOCKS[ticker] || ticker;
 }
 
-
-
-/**
- * Fetches real-time price data using a unified logic for both NSE and Global stocks.
- */
 async function getStockQuote(symbol) {
   if (!symbol) return null;
-  let quote;
-  
-  // 1. Check Cache (return stale data immediately, refresh in background)
+
   const cached = quoteCache.get(symbol);
   if (cached && (Date.now() - (cached.timestamp * 1000) < MAX_QUOTE_AGE_MS)) {
     return cached;
   }
 
-  // 2. For NSE stocks, run NSE Scraper and myStocks in parallel, then merge best fields
-  if (!quote && symbol.startsWith('NSE:')) {
-    const [nsQ, msQ] = await Promise.all([
-      require('./nseScraperService').fetchNSEQuote(symbol).catch(() => null),
-      mystocks.getQuoteForSymbol(symbol).catch(() => null),
-    ]);
-    const fxQ = getAfxQuote(symbol);
-    const enrich = msQ || fxQ;
-    if (nsQ) {
-      quote = nsQ;
-      if (enrich) {
-        if (enrich.dayHigh != null) quote.dayHigh = enrich.dayHigh;
-        if (enrich.dayLow != null) quote.dayLow = enrich.dayLow;
-        if (enrich.previousClose != null) quote.previousClose = enrich.previousClose;
-        if (enrich.open != null) quote.open = enrich.open;
-      }
-    } else if (enrich) {
-      quote = { symbol: symbol.replace('NSE:', '').toUpperCase(), company_name: enrich.name, ...enrich };
-    }
-  }
+  const yahooSymbol = toYahooSymbol(symbol);
+  const quote = await fetchYahooQuote(yahooSymbol);
 
-  // 3. Fallback: AFX cache (background refresh)
-  if (!quote && symbol.startsWith('NSE:')) {
-    const afxQ = getAfxQuote(symbol);
-    if (afxQ) {
-      quote = { ...afxQ, symbol: symbol.replace('NSE:', '').toUpperCase() };
-    }
-  }
-
-  // 5. Fallback: Yahoo-based RapidAPI for NSE stocks
-  if (!quote && symbol.startsWith('NSE:')) {
-    const { fetchNSEQuote } = require('./rapidApiService');
-    quote = await fetchNSEQuote(symbol);
-  }
-
-  // 6. Yahoo/RapidAPI for global stocks
-  if (!quote && !symbol.startsWith('NSE:')) {
-    const { fetchGlobalQuote } = require('./rapidApiService');
-    quote = await fetchGlobalQuote(symbol);
-  }
-
-  // 7. Update Cache and return
   if (quote) {
-    console.log(`[MarketService] Caching quote for ${symbol}:`, quote);
-    quoteCache.set(symbol, quote);
-    return quote;
+    quoteCache.set(symbol, { ...quote, symbol });
+    return quoteCache.get(symbol);
   }
 
-  // 8. Fallback: stale cache (all providers failed, keep last known price)
   if (cached) {
-    console.log(`[MarketService] Using stale cache for ${symbol}`);
     return cached;
   }
 
   return null;
 }
 
-/**
- * Fetches multiple stock quotes in batch.
- */
 async function getQuotesBatch(symbols) {
-  let results = {};
-  const missingSymbols = [];
+  const results = {};
+  const missing = [];
 
-  // Check cache first
   symbols.forEach(s => {
     const cached = quoteCache.get(s);
     if (cached && (Date.now() - (cached.timestamp * 1000) < MAX_QUOTE_AGE_MS)) {
       results[s] = cached;
     } else {
-      missingSymbols.push(s);
+      missing.push(s);
     }
   });
 
-  if (missingSymbols.length === 0) return results;
-  
-  const liveResults = await fetchLiveBatch(missingSymbols);
-  
-  // Merge live results (keep stale cache only if it was from a live provider)
-  symbols.forEach(s => {
-    if (liveResults[s]) {
-      quoteCache.set(s, liveResults[s]);
-      results[s] = liveResults[s];
-    } else if (!results[s]) {
+  if (missing.length === 0) return results;
+
+  for (const s of missing) {
+    const yahooSymbol = toYahooSymbol(s);
+    const quote = await fetchYahooQuote(yahooSymbol);
+    if (quote) {
+      quoteCache.set(s, { ...quote, symbol: s });
+      results[s] = quoteCache.get(s);
+    } else {
       const stale = quoteCache.get(s);
-      if (stale && stale.provider !== 'synthetic') {
-        results[s] = stale;
-      }
+      if (stale) results[s] = stale;
     }
-  });
-
-  return results;
-}
-
-async function fetchLiveBatch(symbols) {
-  let results = {};
-
-  const nseSymbols = symbols.filter(s => s.startsWith('NSE:'));
-  const globalSymbols = symbols.filter(s => !s.startsWith('NSE:'));
-
-  // Kick off AFX background refresh (non-blocking, for cache warmth)
-  if (nseSymbols.length > 0) {
-    fetchAfxQuotes().catch(() => {});
-  }
-
-  // For NSE stocks: try NSE Scraper API first (live, dedicated NSE source)
-  // then enrich with dayHigh/dayLow/previousClose from cached sources
-  if (nseSymbols.length > 0) {
-    const { fetchBatchNSEQuotes } = require('./nseScraperService');
-    const nseScraperResults = await fetchBatchNSEQuotes(nseSymbols);
-    for (const [s, q] of Object.entries(nseScraperResults)) {
-      if (!q.dayHigh || !q.dayLow || !q.previousClose) {
-        const msQ = await mystocks.getQuoteForSymbol(s).catch(() => null);
-        const afxQ = getAfxQuote(s);
-        const enrich = msQ || afxQ;
-        if (enrich) {
-          if (!q.dayHigh && enrich.dayHigh) q.dayHigh = enrich.dayHigh;
-          if (!q.dayLow && enrich.dayLow) q.dayLow = enrich.dayLow;
-          if (!q.previousClose && enrich.previousClose) q.previousClose = enrich.previousClose;
-          if (!q.open && enrich.open) q.open = enrich.open;
-        }
-      }
-    }
-    results = { ...results, ...nseScraperResults };
-  }
-
-  // Fallback: myStocks cache for any NSE stocks still missing
-  if (nseSymbols.length > 0) {
-    for (const s of nseSymbols) {
-      if (results[s]) continue;
-      const msQ = await mystocks.getQuoteForSymbol(s);
-      if (msQ) {
-        results[s] = { symbol: s.replace('NSE:', '').toUpperCase(), company_name: msQ.name, ...msQ };
-      }
-    }
-  }
-
-  // Fallback: Yahoo-based RapidAPI for any NSE stocks still missing
-  const missingNse = nseSymbols.filter(s => !results[s]);
-  if (missingNse.length > 0 && RAPIDAPI_KEY) {
-    const { fetchBatchNSEQuotes } = require('./rapidApiService');
-    const rapidResults = await fetchBatchNSEQuotes(missingNse);
-    results = { ...results, ...rapidResults };
-  }
-
-  // For global stocks: use existing batch service
-  if (globalSymbols.length > 0) {
-    const { fetchBatchGlobalQuotes } = require('./rapidApiService');
-    const yahooResults = await fetchBatchGlobalQuotes(globalSymbols);
-    results = { ...results, ...yahooResults };
   }
 
   return results;
