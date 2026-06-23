@@ -178,6 +178,7 @@ async function syncConnection(connectionId) {
 
     // Sync positions to portfolio_holdings so MT5 positions appear in stock portfolio
     try {
+      console.log(`[syncConnection] connection=${connectionId} brokerType=${conn.broker_type} rawPositions=${JSON.stringify(result.positions)}`);
       await syncPositionsToHoldings(pool, conn.user_id, connectionId, result.positions);
     } catch (posErr) {
       console.error(`Error syncing positions to holdings for connection ${connectionId}:`, posErr.message);
@@ -288,6 +289,8 @@ async function syncPositionsToHoldings(pool, userId, connectionId, positions) {
 
   if (!positions || positions.length === 0) return;
 
+  console.log(`[syncPositionsToHoldings] connection=${connectionId} positions=${JSON.stringify(positions)}`);
+
   // Insert each position as a holding
   for (const pos of positions) {
     const ticker = (pos.symbol || '').toUpperCase();
@@ -299,6 +302,8 @@ async function syncPositionsToHoldings(pool, userId, connectionId, positions) {
     const currentPriceRaw = pos.price_2 || pos.current_price || pos.current || pos.market_price || pos.last_price || null;
     const currentPrice = currentPriceRaw ? parseFloat(String(currentPriceRaw).replace(/[,\s]/g, '')) : null;
     const type = (pos.type || '').toLowerCase();
+
+    console.log(`[syncPositionsToHoldings] ticker=${ticker} volume=${volume} avgCost=${avgCost} currentPriceRaw=${currentPriceRaw} currentPrice=${currentPrice} type=${type} rawPos=${JSON.stringify(pos)}`);
 
     if (!volume || volume <= 0) continue;
 
