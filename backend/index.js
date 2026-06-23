@@ -7186,6 +7186,7 @@ app.post('/api/payments/paypal', async (req, res) => {
       currency: 'USD',
       description: `StocksIntels ${planName} ${period}`,
       externalReference: externalRef,
+      plan: planName,
     });
     await pool.query(
       `INSERT INTO payment_transactions (user_id, amount, currency, provider, phone_number, external_reference, status, plan_name, duration_months)
@@ -7289,18 +7290,20 @@ app.get('/api/payments/paypal-capture', async (req, res) => {
     if (status === 'success') {
       res.redirect(`${frontendUrl}/subscribe/${tier}?paypal=success`);
     } else {
-      res.redirect(`${frontendUrl}/subscribe?paypal=failed`);
+      res.redirect(`${frontendUrl}/pricing?paypal=failed`);
     }
   } catch (error) {
     console.error('PayPal capture error:', error.message);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.redirect(`${frontendUrl}/subscribe?paypal=failed`);
+    res.redirect(`${frontendUrl}/pricing?paypal=failed`);
   }
 });
 
 app.get('/api/payments/paypal-cancel', async (req, res) => {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-  res.redirect(`${frontendUrl}/subscribe?paypal=cancelled`);
+  const plan = req.query.plan || '';
+  const url = plan ? `${frontendUrl}/subscribe/${plan}?paypal=cancelled` : `${frontendUrl}/pricing?paypal=cancelled`;
+  res.redirect(url);
 });
 
 app.post('/api/payments/paypal-webhook', async (req, res) => {

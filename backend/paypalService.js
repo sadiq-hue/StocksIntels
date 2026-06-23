@@ -31,8 +31,9 @@ async function getAccessToken() {
   return accessToken;
 }
 
-async function createOrder({ amount, currency = 'USD', description, externalReference }) {
+async function createOrder({ amount, currency = 'USD', description, externalReference, plan }) {
   const token = await getAccessToken();
+  const planQ = plan ? `?plan=${encodeURIComponent(plan.toLowerCase())}&` : '?';
   const payload = {
     intent: 'CAPTURE',
     purchase_units: [{
@@ -49,8 +50,8 @@ async function createOrder({ amount, currency = 'USD', description, externalRefe
           payment_method_preference: 'IMMEDIATE_PAYMENT_REQUIRED',
           landing_page: 'LOGIN',
           user_action: 'PAY_NOW',
-          return_url: `${PAYPAL_RETURN_URL}/api/payments/paypal-capture`,
-          cancel_url: `${PAYPAL_RETURN_URL}/api/payments/paypal-cancel`,
+          return_url: `${PAYPAL_RETURN_URL}/api/payments/paypal-capture${planQ}token=`,
+          cancel_url: `${PAYPAL_RETURN_URL}/api/payments/paypal-cancel${planQ}`,
         },
       },
     },
