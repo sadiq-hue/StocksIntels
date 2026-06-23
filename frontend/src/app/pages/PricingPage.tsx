@@ -163,22 +163,28 @@ export function PricingPage() {
     }
   };
 
-  const handlePlanClick = (planName: string) => {
+  const handlePlanClick = async (planName: string) => {
     if (planName === "Free") {
-      if (user) {
-        navigate("/subscribe/free");
-      } else {
-        navigate("/login?redirect=/subscribe/free");
+      if (!user) {
+        navigate("/login?redirect=/app/dashboard");
+        return;
       }
+      try {
+        const res = await fetch(`${API_URL}/payments/activate-free`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("stockintel_token")}` },
+        });
+        if (!res.ok) throw new Error("Failed to activate free plan");
+        await refreshUser();
+        toast.success("Welcome to the Free plan!");
+      } catch (error) {
+        toast.error("Failed to activate free plan");
+      }
+      navigate("/app/dashboard");
       return;
     }
-    // Paid plans: go to subscription page
-    const period = isYearly ? "yearly" : "monthly";
-    if (user) {
-      navigate(`/subscribe/${planName.toLowerCase()}?period=${period}`);
-    } else {
-      navigate(`/login?redirect=/subscribe/${planName.toLowerCase()}%3Fperiod=${period}`);
-    }
+    // Paid plans: start a free trial directly (no payment details needed)
+    handleTrialClick(planName);
   };
 
   return (

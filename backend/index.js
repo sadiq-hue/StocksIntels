@@ -7373,6 +7373,22 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
   }
 });
 
+// --- Activate Free Plan ---
+app.post('/api/payments/activate-free', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    await pool.query(
+      `UPDATE users SET subscription_tier = 'free', subscription_status = 'active' WHERE id = $1`,
+      [userId]
+    );
+    console.log(`[FREE] Activated: user=${userId}`);
+    res.json({ success: true, message: 'Free plan activated!' });
+  } catch (error) {
+    console.error('Activate free error:', error.message);
+    res.status(500).json({ error: 'Failed to activate free plan' });
+  }
+});
+
 // --- ML Model Routes ---
 app.get('/api/ml/info', async (req, res) => {
   res.json(await mlModel.getModelInfo());
