@@ -1,4 +1,5 @@
 const { KENYAN_STOCKS } = require('./newsService');
+const axios = require('axios');
 
 const quoteCache = new Map();
 const MAX_QUOTE_AGE_MS = 5 * 60 * 1000;
@@ -12,32 +13,68 @@ function toYahooSymbol(symbol) {
     const clean = symbol.replace('NSE:', '').toUpperCase();
     return SYMBOL_OVERRIDES[clean] || `${clean}${NSE_YAHOO_SUFFIX}`;
   }
-  return symbol.toUpperCase().replace(/\./g, '-');
+  return symbol.toUpperCase();
+}
+
+async function fetchYahooQuoteV8(yahooSymbol) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=5d`;
+  const resp = await Promise.race([
+    axios.get(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      timeout: YAHOO_TIMEOUT_MS,
+    }).catch(() => null),
+    new Promise(r => setTimeout(r, YAHOO_TIMEOUT_MS + 1000)),
+  ]);
+  if (!resp?.data?.chart?.result?.[0]) return null;
+  const meta = resp.data.chart.result[0].meta || {};
+  if (!meta.regularMarketPrice && !meta.previousClose && !meta.chartPreviousClose) return null;
+  const price = Number(meta.regularMarketPrice ?? meta.previousClose ?? meta.chartPreviousClose);
+  const prevClose = Number(meta.previousClose ?? meta.chartPreviousClose ?? price);
+  const change = price - prevClose;
+  const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+  return {
+    price,
+    change,
+    changePercent,
+    volume: meta.regularMarketVolume ?? 0,
+    dayHigh: Number(meta.regularMarketDayHigh ?? meta.regularMarketPrice ?? price),
+    dayLow: Number(meta.regularMarketDayLow ?? meta.regularMarketPrice ?? price),
+    previousClose: prevClose,
+    marketCap: meta.marketCap ?? 0,
+    company_name: meta.shortName || meta.longName || yahooSymbol,
+    timestamp: Math.floor(Date.now() / 1000),
+    lastUpdated: new Date().toISOString(),
+    provider: 'yahoo-v8',
+  };
 }
 
 async function fetchYahooQuote(yahooSymbol) {
-  const { default: YahooFinance } = await import('yahoo-finance2');
-  const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-  const q = await Promise.race([
-    yf.quote(yahooSymbol).catch(() => {}),
-    new Promise(r => setTimeout(r, YAHOO_TIMEOUT_MS)),
-  ]);
-  if (!q?.regularMarketPrice && !q?.regularMarketPreviousClose) return null;
-  const price = Number(q.regularMarketPrice ?? q.regularMarketPreviousClose);
-  return {
-    price,
-    change: Number(q.regularMarketChange ?? 0),
-    changePercent: Number(q.regularMarketChangePercent ?? 0),
-    volume: q.regularMarketVolume ?? 0,
-    dayHigh: Number(q.regularMarketDayHigh ?? price),
-    dayLow: Number(q.regularMarketDayLow ?? price),
-    previousClose: Number(q.regularMarketPreviousClose ?? price),
-    marketCap: q.marketCap ?? 0,
-    company_name: q.shortName || q.longName || yahooSymbol,
-    timestamp: Math.floor(Date.now() / 1000),
-    lastUpdated: new Date().toISOString(),
-    provider: 'yahoo',
-  };
+  let quote = await fetchYahooQuoteV8(yahooSymbol);
+  if (quote) return quote;
+  try {
+    const { default: YahooFinance } = await import('yahoo-finance2');
+    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const q = await Promise.race([
+      yf.quote(yahooSymbol).catch(() => {}),
+      new Promise(r => setTimeout(r, YAHOO_TIMEOUT_MS)),
+    ]);
+    if (!q?.regularMarketPrice && !q?.regularMarketPreviousClose) return null;
+    const price = Number(q.regularMarketPrice ?? q.regularMarketPreviousClose);
+    return {
+      price,
+      change: Number(q.regularMarketChange ?? 0),
+      changePercent: Number(q.regularMarketChangePercent ?? 0),
+      volume: q.regularMarketVolume ?? 0,
+      dayHigh: Number(q.regularMarketDayHigh ?? price),
+      dayLow: Number(q.regularMarketDayLow ?? price),
+      previousClose: Number(q.regularMarketPreviousClose ?? price),
+      marketCap: q.marketCap ?? 0,
+      company_name: q.shortName || q.longName || yahooSymbol,
+      timestamp: Math.floor(Date.now() / 1000),
+      lastUpdated: new Date().toISOString(),
+      provider: 'yahoo',
+    };
+  } catch { return null; }
 }
 
 /**
