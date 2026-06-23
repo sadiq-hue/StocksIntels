@@ -1605,6 +1605,7 @@ export function PortfolioPage() {
                 <th className="text-right text-muted-foreground py-3 px-2 font-medium">Avg Cost</th>
                 <th className="text-right text-muted-foreground py-3 px-2 font-medium">Current</th>
                 <th className="text-right text-muted-foreground py-3 px-2 font-medium">Value</th>
+                <th className="text-right text-muted-foreground py-3 px-2 font-medium">P/L %</th>
                 <th className="text-right text-muted-foreground py-3 px-2 font-medium">P/L</th>
                 <th className="text-center text-muted-foreground py-3 px-2 font-medium w-20">Actions</th>
               </tr>
@@ -1612,7 +1613,7 @@ export function PortfolioPage() {
             <tbody>
               {filteredHoldings.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-8 text-muted-foreground text-sm">No holdings yet. {brokers.length > 0 ? 'Sync your broker accounts to see positions here.' : 'Add your first position or connect a broker account to start tracking.'}</td>
+                  <td colSpan={9} className="text-center py-8 text-muted-foreground text-sm">No holdings yet. {brokers.length > 0 ? 'Sync your broker accounts to see positions here.' : 'Add your first position or connect a broker account to start tracking.'}</td>
                 </tr>
               ) : (
                 filteredHoldings.map((h: any) => (
@@ -1647,12 +1648,12 @@ export function PortfolioPage() {
                     <td className="text-right py-3 px-2">
                       <span className={`flex items-center gap-1 justify-end font-medium ${h.isPositive ? 'text-green-600' : 'text-red-600'}`}>
                         {h.isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                        <span className="flex flex-col items-end leading-tight">
-                          <span>{h.pnl}</span>
-                          {h.pnlAmount !== undefined && (
-                            <span className="text-[10px] opacity-70">{h.isPositive ? '+' : '-'}{h.market === "NSE" ? "KES " : "$"}{h.pnlAmount}</span>
-                          )}
-                        </span>
+                        <span>{h.pnl}</span>
+                      </span>
+                    </td>
+                    <td className="text-right py-3 px-2">
+                      <span className={`font-medium ${h.isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                        {h.isPositive ? '+' : '-'}{h.market === "NSE" ? "KES " : "$"}{h.pnlAmount !== undefined ? h.pnlAmount : '0.00'}
                       </span>
                     </td>
                     <td className="text-center py-3 px-2">
