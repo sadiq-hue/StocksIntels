@@ -6242,7 +6242,7 @@ app.get('/api/holdings', async (req, res) => {
     const userId = req.query.userId;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
     const { rows } = await pool.query(
-      `SELECT id, user_id, ticker, name, shares, avg_cost, current_price, sector, market, broker_connection_id, created_at, updated_at
+      `SELECT id, user_id, ticker, name, shares, avg_cost, current_price, sector, market, broker_connection_id, broker_profit, created_at, updated_at
        FROM portfolio_holdings WHERE user_id = $1 ORDER BY ticker`,
       [userId]
     );
@@ -6253,14 +6253,21 @@ app.get('/api/holdings', async (req, res) => {
     const brokerTickers = new Set(rows.filter(r => r.broker_connection_id > 0).map(r => r.ticker));
     const deduplicatedRows = rows.filter(r => r.broker_connection_id > 0 || !brokerTickers.has(r.ticker));
     for (const r of deduplicatedRows) {
-      const livePrice = r.broker_connection_id > 0
+      const isBroker = r.broker_connection_id > 0;
+      const livePrice = isBroker
         ? (parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0)
         : (await getLivePrice(r.market, r.ticker) || parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0);
       const avgC = parseFloat(r.avg_cost) || 0;
       const shares = parseFloat(r.shares) || 0;
       const val = livePrice * shares;
-      const pnl = val - (avgC * shares);
-      const pnlPct = avgC > 0 ? ((livePrice - avgC) / avgC * 100) : 0;
+      const brokerPnl = parseFloat(r.broker_profit);
+      const pnl = isBroker && !isNaN(brokerPnl) ? brokerPnl : (val - (avgC * shares));
+      const pnlCost = isBroker && !isNaN(brokerPnl) && avgC > 0 && shares > 0
+        ? (avgC * shares)
+        : (avgC * shares);
+      const pnlPct = (isBroker && !isNaN(brokerPnl) && pnlCost > 0)
+        ? (brokerPnl / pnlCost * 100)
+        : (avgC > 0 ? ((livePrice - avgC) / avgC * 100) : 0);
       if (r.market === 'NSE') nseValue += val;
       else globalValue += val;
       enrichedRows.push({
@@ -7547,6 +7554,7 @@ async function initDatabase() {
     for (const c of holdingsCols) {
       try { await pool.query(`ALTER TABLE portfolio_holdings ADD COLUMN IF NOT EXISTS ${c}`); } catch (e) { /* ignore */ }
     }
+    try { await pool.query(`ALTER TABLE portfolio_holdings ADD COLUMN IF NOT EXISTS broker_profit NUMERIC(15,4) DEFAULT 0`); } catch (e) { /* ignore */ }
     try { await pool.query('ALTER TABLE portfolio_holdings ADD CONSTRAINT unique_user_ticker_broker UNIQUE (user_id, ticker, broker_connection_id)'); } catch (e) { /* constraint may already exist */ }
 
     await pool.query(`CREATE TABLE IF NOT EXISTS broker_connections (

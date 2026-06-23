@@ -309,11 +309,13 @@ async function syncPositionsToHoldings(pool, userId, connectionId, positions) {
 
     const sector = detectSector(ticker);
 
+    const brokerProfit = pos.profit ? parseFloat(String(pos.profit).replace(/[,\s]/g, '')) : null;
+
     await pool.query(
-      `INSERT INTO portfolio_holdings (user_id, ticker, name, shares, avg_cost, current_price, sector, market, broker_connection_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO portfolio_holdings (user_id, ticker, name, shares, avg_cost, current_price, sector, market, broker_connection_id, broker_profit)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (user_id, ticker, broker_connection_id) DO UPDATE
-         SET shares = $4, avg_cost = $5, current_price = $6, name = $3, sector = $7, market = $8, updated_at = NOW()`,
+         SET shares = $4, avg_cost = $5, current_price = $6, name = $3, sector = $7, market = $8, broker_profit = $10, updated_at = NOW()`,
       [
         userId,
         ticker,
@@ -324,6 +326,7 @@ async function syncPositionsToHoldings(pool, userId, connectionId, positions) {
         sector,
         'Global',
         connectionId,
+        brokerProfit !== null && !isNaN(brokerProfit) ? brokerProfit : 0,
       ]
     );
   }
