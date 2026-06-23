@@ -1453,7 +1453,7 @@ async function getLivePrice(market, ticker) {
   try {
     const quote = await Promise.race([
       getStockQuote(sym),
-      new Promise(resolve => setTimeout(() => resolve(null), 3000)),
+      new Promise(resolve => setTimeout(() => resolve(null), 15000)),
     ]);
     if (quote && quote.price) return quote.price;
   } catch {}
@@ -1466,7 +1466,7 @@ async function getLiveQuote(market, ticker) {
   try {
     const quote = await Promise.race([
       getStockQuote(sym),
-      new Promise(resolve => setTimeout(() => resolve(null), 3000)),
+      new Promise(resolve => setTimeout(() => resolve(null), 15000)),
     ]);
     if (quote && quote.price != null) return { price: quote.price, previousClose: quote.previousClose ?? quote.price };
   } catch {}

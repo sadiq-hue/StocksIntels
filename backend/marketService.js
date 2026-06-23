@@ -365,7 +365,7 @@ async function getStockQuote(symbol) {
   if (!symbol) return null;
   let quote;
   
-  // 1. Check Cache
+  // 1. Check Cache (return stale data immediately, refresh in background)
   const cached = quoteCache.get(symbol);
   if (cached && (Date.now() - (cached.timestamp * 1000) < MAX_QUOTE_AGE_MS)) {
     return cached;
@@ -417,6 +417,12 @@ async function getStockQuote(symbol) {
     console.log(`[MarketService] Caching quote for ${symbol}:`, quote);
     quoteCache.set(symbol, quote);
     return quote;
+  }
+
+  // 8. Fallback: stale cache (all providers failed, keep last known price)
+  if (cached) {
+    console.log(`[MarketService] Using stale cache for ${symbol}`);
+    return cached;
   }
 
   return null;

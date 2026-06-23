@@ -189,7 +189,7 @@ async function fetchGlobalQuote(symbol) {
   const rapidQuote = await fetchRapidAPIGlobal(symbol);
   if (rapidQuote) return rapidQuote;
 
-  // Final fallback: Twelve Data
+  // Fallback: Twelve Data
   try {
     const { fetchQuoteWithStats } = require('./twelveDataService');
     const tq = await fetchQuoteWithStats(symbol);
@@ -215,6 +215,54 @@ async function fetchGlobalQuote(symbol) {
       };
     }
   } catch {}
+
+  // Fallback: Google Finance scrape (free, no API key, works from cloud IPs)
+  try {
+    const gq = await fetchGoogleFinanceQuote(cleanSymbol);
+    if (gq) {
+      return {
+        symbol: cleanSymbol,
+        company_name: cleanSymbol,
+        price: gq.price,
+        currency: gq.currency || 'USD',
+        change: gq.change || 0,
+        changePercent: gq.changePercent || 0,
+        volume: 0,
+        dayHigh: gq.price,
+        dayLow: gq.price,
+        previousClose: gq.price,
+        marketCap: 0,
+        timestamp: Math.floor(Date.now() / 1000),
+        lastUpdated: new Date().toISOString(),
+        exchange: 'Global',
+        provider: 'google',
+      };
+    }
+  } catch {}
+
+  return null;
+}
+
+async function fetchGoogleFinanceQuote(symbol) {
+  const cheerio = require('cheerio');
+  const [base, exchange = 'NASDAQ'] = symbol.split(':');
+  const url = `https://www.google.com/finance/quote/${base}:${exchange}`;
+  const res = await axios.get(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+    timeout: 5000,
+  });
+  const $ = cheerio.load(res.data);
+  const priceEl = $('div[data-last-price]').first();
+  if (priceEl.length) {
+    const price = parseFloat(priceEl.attr('data-last-price'));
+    if (price && !isNaN(price)) return { price, currency: 'USD', change: 0, changePercent: 0 };
+  }
+  const scriptText = $('script').text();
+  const m = scriptText.match(/"price":(\d+(?:\.\d+)?)/);
+  if (m) {
+    const price = parseFloat(m[1]);
+    if (price && !isNaN(price)) return { price, currency: 'USD', change: 0, changePercent: 0 };
+  }
   return null;
 }
 
