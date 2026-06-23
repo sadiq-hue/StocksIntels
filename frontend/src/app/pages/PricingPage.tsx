@@ -300,17 +300,7 @@ export function PricingPage() {
                   </div>
 
                   <Button
-                    onClick={() => {
-                      if (plan.name === "Free") {
-                        if (user) {
-                          navigate("/subscribe/free");
-                        } else {
-                          navigate("/login?redirect=/subscribe/free");
-                        }
-                      } else {
-                        handleTrialClick(plan.name);
-                      }
-                    }}
+                    onClick={() => handlePlanClick(plan.name)}
                     disabled={plan.name !== "Free" && startingTrial === plan.name}
                     className={`w-full py-6 text-base font-semibold mb-8 transition-all hover:-translate-y-0.5 ${
                       plan.popular
