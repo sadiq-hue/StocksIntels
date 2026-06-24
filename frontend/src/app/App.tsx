@@ -33,6 +33,7 @@ import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
 import { SecurityPage } from "./pages/SecurityPage";
 import { DisclaimerPage } from "./pages/DisclaimerPage";
+import { AffiliatesPage } from "./pages/AffiliatesPage";
 
 
 function ProtectedRoute() {
@@ -132,6 +133,7 @@ const router = createBrowserRouter([
       { path: "bonds", element: <BondsPage /> },
       { path: "etfs", element: <ETFsPage /> },
       { path: "profile", element: <ProfilePage /> },
+      { path: "affiliates", element: <AffiliatesPage /> },
       { path: "support", element: <SupportCenterPage /> },
 
       { path: "*", element: <NotFoundPage /> },

@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Signal, PieChart, Star,
   LineChart, Newspaper, FileText, MessageSquare, Users,
   BarChart3, Briefcase, Layers, User, LifeBuoy, Cpu,
+  DollarSign,
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
@@ -57,6 +58,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       title: "Account",
       items: [
         { path: "/app/profile", icon: User, label: "Profile" },
+        { path: "/app/affiliates", icon: DollarSign, label: "Affiliates" },
         { path: "/app/support", icon: LifeBuoy, label: "Support Center" },
       ],
     },

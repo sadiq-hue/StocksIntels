@@ -1566,7 +1566,7 @@ app.post('/api/auth/send-verification-code', async (req, res) => {
 
 app.post('/api/auth/verify-email-and-register', async (req, res) => {
   try {
-    const { fullName, email, password, code } = req.body;
+    const { fullName, email, password, code, ref } = req.body;
     if (!fullName || !email || !password || !code) return res.status(400).json({ error: 'All fields required' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
     if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
@@ -1578,9 +1578,18 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
     );
     if (otpResult.rows.length === 0) return res.status(401).json({ error: 'Invalid or expired verification code' });
     const hashedPassword = await bcrypt.hash(password, 10);
+    // Handle referral code
+    let referredBy = null;
+    if (ref) {
+      const affRes = await pool.query(`SELECT id FROM affiliates WHERE referral_code = $1`, [ref.toUpperCase()]);
+      if (affRes.rows.length > 0) {
+        referredBy = affRes.rows[0].id;
+        console.log(`[AFFILIATE] Referral code ${ref} matched affiliate ${referredBy} for new user ${email}`);
+      }
+    }
     const result = await pool.query(
-      'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date) VALUES ($1, $2, $3, TRUE, NOW()) RETURNING id, full_name, email, role, is_verified, trader_type, created_at, subscription_tier, subscription_status, trial_start_date',
-      [fullName, email, hashedPassword]
+      'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date, referred_by) VALUES ($1, $2, $3, TRUE, NOW(), $4) RETURNING id, full_name, email, role, is_verified, trader_type, created_at, subscription_tier, subscription_status, trial_start_date',
+      [fullName, email, hashedPassword, referredBy]
     );
     await pool.query('UPDATE otp_codes SET used = TRUE WHERE id = $1', [otpResult.rows[0].id]);
     await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [result.rows[0].id]);
@@ -1595,16 +1604,25 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
 
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { fullName, email, password } = req.body;
+    const { fullName, email, password, ref } = req.body;
     if (!fullName || !email || !password) return res.status(400).json({ error: 'All fields required' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
     if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length > 0) return res.status(409).json({ error: 'Email already registered' });
     const hashedPassword = await bcrypt.hash(password, 10);
+    // Handle referral code
+    let referredBy = null;
+    if (ref) {
+      const affRes = await pool.query(`SELECT id FROM affiliates WHERE referral_code = $1`, [ref.toUpperCase()]);
+      if (affRes.rows.length > 0) {
+        referredBy = affRes.rows[0].id;
+        console.log(`[AFFILIATE] Referral code ${ref} matched affiliate ${referredBy} for new user ${email}`);
+      }
+    }
     const result = await pool.query(
-      'INSERT INTO users (full_name, email, password_hash, trial_start_date) VALUES ($1, $2, $3, NOW()) RETURNING id, full_name, email, role, created_at, subscription_tier, subscription_status, trial_start_date',
-      [fullName, email, hashedPassword]
+      'INSERT INTO users (full_name, email, password_hash, trial_start_date, referred_by) VALUES ($1, $2, $3, NOW(), $4) RETURNING id, full_name, email, role, created_at, subscription_tier, subscription_status, trial_start_date',
+      [fullName, email, hashedPassword, referredBy]
     );
     await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [result.rows[0].id]);
     sendWelcomeEmail(email, fullName).catch(err => console.error('[MAILER] Welcome email failed:', err.message));
@@ -6968,6 +6986,7 @@ app.post('/api/payments/callback', async (req, res) => {
               );
             }
             console.log(`Subscription activated: user=${targetUserId} tier=${tier} months=${months} end=${endDate.toISOString()}`);
+            await awardCommission(targetUserId, tier);
             // Send receipt email
             try {
               const userRes = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [targetUserId]);
@@ -7077,6 +7096,7 @@ app.get('/api/payments/status', async (req, res) => {
               } catch (emailErr) {
                 console.error('Payment receipt email error:', emailErr.message);
               }
+              await awardCommission(tx.rows[0].user_id, tier);
             }
             return res.json({ found: true, status: 'success', amount: tx.rows[0].amount, currency: tx.rows[0].currency, phoneNumber: tx.rows[0].phone_number, createdAt: tx.rows[0].created_at });
           }
@@ -7263,6 +7283,7 @@ app.get('/api/payments/paypal-capture', async (req, res) => {
           );
         }
         console.log(`PayPal subscription activated: user=${targetUserId} tier=${tier} months=${months} end=${endDate.toISOString()}`);
+        await awardCommission(targetUserId, tier);
         try {
           const userRes = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [targetUserId]);
           const { full_name: uName, email: uEmail } = userRes.rows[0] || {};
@@ -7408,6 +7429,126 @@ app.post('/api/payments/activate-free', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to activate free plan' });
   }
 });
+
+// --- Affiliate Program Routes ---
+function generateReferralCode(name) {
+  const prefix = name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase();
+  const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `${prefix}${suffix}`;
+}
+
+app.post('/api/affiliates/register', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const existing = await pool.query(`SELECT id FROM affiliates WHERE user_id = $1`, [userId]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'You are already registered as an affiliate' });
+    }
+    const userRes = await pool.query(`SELECT full_name FROM users WHERE id = $1`, [userId]);
+    const name = userRes.rows[0]?.full_name || 'User';
+    let referralCode = generateReferralCode(name);
+    let retries = 0;
+    while (retries < 5) {
+      const dup = await pool.query(`SELECT id FROM affiliates WHERE referral_code = $1`, [referralCode]);
+      if (dup.rows.length === 0) break;
+      referralCode = generateReferralCode(name);
+      retries++;
+    }
+    await pool.query(
+      `INSERT INTO affiliates (user_id, referral_code) VALUES ($1, $2)`,
+      [userId, referralCode]
+    );
+    const baseUrl = process.env.FRONTEND_URL || 'https://stocks-intels-frontend-7etg.vercel.app';
+    console.log(`[AFFILIATE] Registered: user=${userId} code=${referralCode}`);
+    res.json({
+      success: true,
+      referral_code: referralCode,
+      referral_link: `${baseUrl}/register?ref=${referralCode}`,
+    });
+  } catch (error) {
+    console.error('[AFFILIATE] Register error:', error.message);
+    res.status(500).json({ error: 'Failed to register as affiliate' });
+  }
+});
+
+app.get('/api/affiliates/stats', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const affRes = await pool.query(`SELECT * FROM affiliates WHERE user_id = $1`, [userId]);
+    if (affRes.rows.length === 0) {
+      return res.json({ registered: false });
+    }
+    const aff = affRes.rows[0];
+    const refRes = await pool.query(
+      `SELECT COUNT(*) as total, COALESCE(SUM(commission_amount), 0) as earned
+       FROM referrals WHERE affiliate_id = $1 AND status = 'paid'`,
+      [aff.id]
+    );
+    const pendingRes = await pool.query(
+      `SELECT COUNT(*) as total FROM referrals WHERE affiliate_id = $1 AND status = 'pending'`,
+      [aff.id]
+    );
+    const baseUrl = process.env.FRONTEND_URL || 'https://stocks-intels-frontend-7etg.vercel.app';
+    res.json({
+      registered: true,
+      referral_code: aff.referral_code,
+      referral_link: `${baseUrl}/register?ref=${aff.referral_code}`,
+      total_earned: parseFloat(aff.total_earned) || 0,
+      pending_balance: parseFloat(aff.pending_balance) || 0,
+      paid_out: parseFloat(aff.paid_out) || 0,
+      total_referrals: parseInt(refRes.rows[0].total) || 0,
+      pending_referrals: parseInt(pendingRes.rows[0].total) || 0,
+    });
+  } catch (error) {
+    console.error('[AFFILIATE] Stats error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch affiliate stats' });
+  }
+});
+
+app.get('/api/affiliates/referrals', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const affRes = await pool.query(`SELECT id FROM affiliates WHERE user_id = $1`, [userId]);
+    if (affRes.rows.length === 0) return res.json([]);
+    const refs = await pool.query(
+      `SELECT r.id, r.subscription_tier, r.commission_amount, r.status, r.created_at, r.paid_at,
+              u.full_name, u.email, u.created_at as user_signed_up
+       FROM referrals r JOIN users u ON u.id = r.referred_user_id
+       WHERE r.affiliate_id = $1 ORDER BY r.created_at DESC`,
+      [affRes.rows[0].id]
+    );
+    res.json(refs.rows);
+  } catch (error) {
+    console.error('[AFFILIATE] Referrals error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch referrals' });
+  }
+});
+
+// --- Award commission when a referred user subscribes ---
+async function awardCommission(userId, tier) {
+  try {
+    const userRes = await pool.query(`SELECT referred_by FROM users WHERE id = $1`, [userId]);
+    if (!userRes.rows[0]?.referred_by) return;
+    const affiliateId = userRes.rows[0].referred_by;
+    const rates = { starter: 1.00, premium: 2.00, pro: 5.00, institutional: 20.00 };
+    const amount = rates[tier?.toLowerCase()] || 0;
+    if (amount <= 0) return;
+    await pool.query(
+      `INSERT INTO referrals (affiliate_id, referred_user_id, subscription_tier, commission_amount, status)
+       VALUES ($1, $2, $3, $4, 'paid')
+       ON CONFLICT (referred_user_id) DO UPDATE
+         SET status = 'paid', commission_amount = EXCLUDED.commission_amount, paid_at = NOW()`,
+      [affiliateId, userId, tier, amount]
+    );
+    await pool.query(
+      `UPDATE affiliates SET total_earned = total_earned + $1, pending_balance = pending_balance + $1 WHERE id = $2`,
+      [amount, affiliateId]
+    );
+    console.log(`[AFFILIATE] Commission $${amount} awarded affiliate ${affiliateId} for user ${userId} (${tier})`);
+  } catch (e) {
+    console.error('[AFFILIATE] awardCommission error:', e.message);
+  }
+}
 
 // --- ML Model Routes ---
 app.get('/api/ml/info', async (req, res) => {
@@ -8273,6 +8414,32 @@ async function initDatabase() {
 
     await pool.query(`ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS plan_name VARCHAR(50)`);
     await pool.query(`ALTER TABLE payment_transactions ADD COLUMN IF NOT EXISTS duration_months INTEGER DEFAULT 1`);
+
+    // --- Affiliate Program Tables ---
+    await pool.query(`CREATE TABLE IF NOT EXISTS affiliates (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+      referral_code VARCHAR(20) NOT NULL UNIQUE,
+      total_earned NUMERIC(10,2) DEFAULT 0,
+      pending_balance NUMERIC(10,2) DEFAULT 0,
+      paid_out NUMERIC(10,2) DEFAULT 0,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS referrals (
+      id SERIAL PRIMARY KEY,
+      affiliate_id INTEGER REFERENCES affiliates(id) ON DELETE CASCADE,
+      referred_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+      subscription_tier VARCHAR(50),
+      commission_amount NUMERIC(10,2) DEFAULT 0,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'paid', 'cancelled')),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      paid_at TIMESTAMP WITH TIME ZONE
+    );`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by INTEGER REFERENCES affiliates(id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_referrals_affiliate_id ON referrals(affiliate_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_referrals_referred_user_id ON referrals(referred_user_id)`);
+
     const planCount = await pool.query('SELECT COUNT(*) FROM subscription_plans');
     if (parseInt(planCount.rows[0].count) === 0) {
       await pool.query(`INSERT INTO subscription_plans (name, description, price_kes, price_usd, features) VALUES

@@ -100,6 +100,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/app";
+  const refParam = searchParams.get("ref") || undefined;
   const { login, register, sendVerificationCode, verifyEmailAndRegister, forgotPassword, resetPassword, sendOtp, verifyOtp, requestLoginOtp, verifyLoginOtp } = useAuth();
   const [mode, setMode] = useState<AuthMode>("login");
   const [regStage, setRegStage] = useState<RegStage>("form");
@@ -192,7 +193,7 @@ export function LoginPage() {
         if (pwStrength < 3) { setError("Password is too weak — include uppercase, lowercase, number or symbol"); return; }
         setIsLoading(true);
         try {
-          await verifyEmailAndRegister(fullName.trim(), email, password, verifyCode);
+          await verifyEmailAndRegister(fullName.trim(), email, password, verifyCode, refParam);
           navigate(redirectTo);
         } catch (err) { setError(err instanceof Error ? err.message : "Verification or registration failed"); }
         finally { setIsLoading(false); }
@@ -256,7 +257,7 @@ export function LoginPage() {
       const decoded = jwtDecode<DecodedToken>(credentialResponse.credential);
       try { setIsLoading(true); await login(decoded.email, "google_oauth_" + decoded.sub); }
       catch {
-        try { await register(decoded.name, decoded.email, "google_oauth_" + decoded.sub); }
+        try { await register(decoded.name, decoded.email, "google_oauth_" + decoded.sub, refParam); }
         catch { setError("Account exists. Try logging in with email/password."); setIsLoading(false); return; }
       }
       setIsLoading(false); navigate(redirectTo);
