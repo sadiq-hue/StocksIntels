@@ -1591,6 +1591,15 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
       'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date, referred_by) VALUES ($1, $2, $3, TRUE, NOW(), $4) RETURNING id, full_name, email, role, is_verified, trader_type, created_at, subscription_tier, subscription_status, trial_start_date',
       [fullName, email, hashedPassword, referredBy]
     );
+    // Create pending referral record
+    if (referredBy) {
+      await pool.query(
+        `INSERT INTO referrals (affiliate_id, referred_user_id, status)
+         VALUES ($1, $2, 'pending')
+         ON CONFLICT (referred_user_id) DO NOTHING`,
+        [referredBy, result.rows[0].id]
+      );
+    }
     await pool.query('UPDATE otp_codes SET used = TRUE WHERE id = $1', [otpResult.rows[0].id]);
     await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [result.rows[0].id]);
     sendWelcomeEmail(email, fullName).catch(err => console.error('[MAILER] Welcome email failed:', err.message));
@@ -1624,6 +1633,15 @@ app.post('/api/auth/register', async (req, res) => {
       'INSERT INTO users (full_name, email, password_hash, trial_start_date, referred_by) VALUES ($1, $2, $3, NOW(), $4) RETURNING id, full_name, email, role, created_at, subscription_tier, subscription_status, trial_start_date',
       [fullName, email, hashedPassword, referredBy]
     );
+    // Create pending referral record
+    if (referredBy) {
+      await pool.query(
+        `INSERT INTO referrals (affiliate_id, referred_user_id, status)
+         VALUES ($1, $2, 'pending')
+         ON CONFLICT (referred_user_id) DO NOTHING`,
+        [referredBy, result.rows[0].id]
+      );
+    }
     await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [result.rows[0].id]);
     sendWelcomeEmail(email, fullName).catch(err => console.error('[MAILER] Welcome email failed:', err.message));
     const token = generateToken(result.rows[0].id);
@@ -8439,6 +8457,15 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by INTEGER REFERENCES affiliates(id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_referrals_affiliate_id ON referrals(affiliate_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_referrals_referred_user_id ON referrals(referred_user_id)`);
+
+    // Backfill referral records for users who signed up with a referral code before affiliate tables existed
+    await pool.query(`
+      INSERT INTO referrals (affiliate_id, referred_user_id, status)
+      SELECT u.referred_by, u.id, 'pending'
+      FROM users u
+      WHERE u.referred_by IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM referrals r WHERE r.referred_user_id = u.id)
+    `);
 
     const planCount = await pool.query('SELECT COUNT(*) FROM subscription_plans');
     if (parseInt(planCount.rows[0].count) === 0) {
