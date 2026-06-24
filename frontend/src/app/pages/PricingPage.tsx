@@ -14,8 +14,6 @@ import { Button } from "../components/ui/button";
 import { useAuth } from "../auth/AuthContext";
 import { toast } from "sonner";
 
-const API_URL = import.meta.env.VITE_API_URL || "/api";
-
 const plans = [
   {
     name: "Free",
@@ -128,16 +126,18 @@ const faqs = [
 
 export function PricingPage() {
   const navigate = useNavigate();
-  const { user, refreshUser } = useAuth();
+  const { user, apiFetch, updateUser, isLoading } = useAuth();
   const [isYearly, setIsYearly] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [startingTrial, setStartingTrial] = useState<string | null>(null);
 
-  const savingsPercent = (monthly: number, yearly: number) => {
-    if (monthly === 0) return 0;
-    const monthlyTotal = monthly * 12;
-    return Math.round(((monthlyTotal - yearly) / monthlyTotal) * 100);
-  };
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0D7490]" />
+      </div>
+    );
+  }
 
   const handleTrialClick = async (planName: string) => {
     if (!user) {
@@ -146,14 +146,14 @@ export function PricingPage() {
     }
     setStartingTrial(planName);
     try {
-      const res = await fetch(`${API_URL}/payments/start-trial`, {
+      const res = await apiFetch(`/payments/start-trial`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("stockintel_token")}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan: planName }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start trial");
-      await refreshUser();
+      updateUser(data.user);
       toast.success(`Free trial started! Enjoy ${planName} for 7 days.`);
       navigate("/app/dashboard");
     } catch (error) {
@@ -170,12 +170,13 @@ export function PricingPage() {
         return;
       }
       try {
-        const res = await fetch(`${API_URL}/payments/activate-free`, {
+        const res = await apiFetch(`/payments/activate-free`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("stockintel_token")}` },
+          headers: { "Content-Type": "application/json" },
         });
+        const data = await res.json();
         if (!res.ok) throw new Error("Failed to activate free plan");
-        await refreshUser();
+        updateUser(data.user);
         toast.success("Welcome to the Free plan!");
       } catch (error) {
         toast.error("Failed to activate free plan");
@@ -183,7 +184,6 @@ export function PricingPage() {
       navigate("/app/dashboard");
       return;
     }
-    // Paid plans: start a free trial directly (no payment details needed)
     handleTrialClick(planName);
   };
 

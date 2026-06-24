@@ -7361,12 +7361,12 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
     const trialStart = userRow.trial_start_date || new Date();
     const inTrial = new Date() - new Date(trialStart) < 7 * 24 * 60 * 60 * 1000;
     const startDate = inTrial ? trialStart : new Date();
-    await pool.query(
-      `UPDATE users SET subscription_tier = $1, subscription_status = 'active', trial_start_date = $2 WHERE id = $3`,
+    const updateRes = await pool.query(
+      `UPDATE users SET subscription_tier = $1, subscription_status = 'active', trial_start_date = $2 WHERE id = $3 RETURNING id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date`,
       [tier, startDate, userId]
     );
     console.log(`[TRIAL] Started: user=${userId} plan=${tier}`);
-    res.json({ success: true, message: `Free trial started for ${plan}!`, trial_end_date: new Date(new Date(startDate).getTime() + 7 * 24 * 60 * 60 * 1000) });
+    res.json({ success: true, message: `Free trial started for ${plan}!`, user: updateRes.rows[0] });
   } catch (error) {
     console.error('Start trial error:', error.message);
     res.status(500).json({ error: 'Failed to start trial' });
@@ -7377,12 +7377,12 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
 app.post('/api/payments/activate-free', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    await pool.query(
-      `UPDATE users SET subscription_tier = 'free', subscription_status = 'active' WHERE id = $1`,
+    const updateRes = await pool.query(
+      `UPDATE users SET subscription_tier = 'free', subscription_status = 'active' WHERE id = $1 RETURNING id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date`,
       [userId]
     );
     console.log(`[FREE] Activated: user=${userId}`);
-    res.json({ success: true, message: 'Free plan activated!' });
+    res.json({ success: true, message: 'Free plan activated!', user: updateRes.rows[0] });
   } catch (error) {
     console.error('Activate free error:', error.message);
     res.status(500).json({ error: 'Failed to activate free plan' });

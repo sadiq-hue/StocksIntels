@@ -41,6 +41,7 @@ interface AuthContextType {
   logout: () => void;
   refreshUser: () => Promise<void>;
   apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
+  updateUser: (user: UserInfo) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -229,8 +230,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const updateUser = (updated: UserInfo) => {
+    setUser(updated);
+    localStorage.setItem("stockintel_user", JSON.stringify(updated));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, sendOtp, verifyOtp, requestLoginOtp, verifyLoginOtp, sendVerificationCode, verifyEmailAndRegister, forgotPassword, resetPassword, logout, refreshUser, apiFetch }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, sendOtp, verifyOtp, requestLoginOtp, verifyLoginOtp, sendVerificationCode, verifyEmailAndRegister, forgotPassword, resetPassword, logout, refreshUser, apiFetch, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
