@@ -4,6 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const axios = require('axios');
 const bcrypt = require('bcryptjs');
 const { Server } = require('socket.io');
@@ -34,7 +35,7 @@ const path = require('path');
 const helmet = require('helmet');
 const { JSDOM } = require('jsdom');
 const createDOMPurify = require('dompurify');
-const { authenticateToken, requireAdmin, requireOwnership, generateToken } = require('./auth');
+const { authenticateToken, requireAdmin, requireOwnership, generateToken, generateRefreshToken, setRefreshCookie, clearRefreshCookie, revokeRefreshTokenByHash } = require('./auth');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const crypto = require('crypto');
@@ -109,11 +110,13 @@ app.use(helmet({
 
 app.use(cors({
   origin: corsOrigin,
+  credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 app.use(generalLimiter);
 app.use('/api/auth', authLimiter);
 app.use('/api/ai', aiLimiter);
@@ -1604,6 +1607,8 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
     await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [result.rows[0].id]);
     sendWelcomeEmail(email, fullName).catch(err => console.error('[MAILER] Welcome email failed:', err.message));
     const token = generateToken(result.rows[0].id);
+    const refreshToken = await generateRefreshToken(result.rows[0].id);
+    setRefreshCookie(res, refreshToken);
     res.status(201).json({ user: result.rows[0], token });
   } catch (error) {
     console.error('verify-email-and-register error:', error.message);
@@ -1645,6 +1650,8 @@ app.post('/api/auth/register', async (req, res) => {
     await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [result.rows[0].id]);
     sendWelcomeEmail(email, fullName).catch(err => console.error('[MAILER] Welcome email failed:', err.message));
     const token = generateToken(result.rows[0].id);
+    const refreshToken = await generateRefreshToken(result.rows[0].id);
+    setRefreshCookie(res, refreshToken);
     res.status(201).json({ user: result.rows[0], token });
   } catch (error) {
     console.error('Register error:', error && error.stack ? error.stack : error);
@@ -1751,6 +1758,8 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     }
     const user = userResult.rows[0];
     const token = generateToken(user.id);
+    const refreshToken = await generateRefreshToken(user.id);
+    setRefreshCookie(res, refreshToken);
     logUserActivity(user.id, email, user.full_name, 'login', null, req.ip);
     res.json({ user, token });
   } catch (error) {
@@ -1817,6 +1826,8 @@ app.post('/api/auth/login-verify-otp', async (req, res) => {
     if (!user.subscription_status) user.subscription_status = 'active';
     if (!user.trial_start_date) user.trial_start_date = user.created_at;
     const token = generateToken(user.id);
+    const refreshToken = await generateRefreshToken(user.id);
+    setRefreshCookie(res, refreshToken);
     const ip = getClientIp(req);
     await logUserActivity(user.id, email, user.full_name, 'login', null, ip);
     loginAttempts.delete(email.toLowerCase());
@@ -1857,6 +1868,8 @@ const { password_hash, ...safeUser } = user;
     if (!safeUser.trial_start_date) safeUser.trial_start_date = safeUser.created_at;
     // Admin logins via OTP only; this endpoint is for regular app users
     const token = generateToken(user.id);
+    const refreshToken = await generateRefreshToken(user.id);
+    setRefreshCookie(res, refreshToken);
     // Log successful login
     if (user.role === 'admin') {
       await logAdminAction(user.id, email, 'login_success', ip, ua, null, true);
@@ -1879,6 +1892,41 @@ app.post('/api/admin/logout', authenticateToken, requireAdmin, async (req, res) 
     await logAdminAction(req.user.id, req.user.email, 'logout', ip, ua, null, true);
     res.json({ message: 'Logged out' });
   } catch { res.json({ message: 'Logged out' }); }
+});
+
+// --- Refresh token & Logout ---
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const rawToken = req.cookies?.refresh_token;
+    if (!rawToken) return res.status(401).json({ error: 'No refresh token', code: 'NO_REFRESH_TOKEN' });
+    const { verifyRefreshToken } = require('./auth');
+    const userId = await verifyRefreshToken(rawToken);
+    if (!userId) return res.status(401).json({ error: 'Invalid or expired refresh token', code: 'INVALID_REFRESH_TOKEN' });
+    const token = generateToken(userId);
+    const userResult = await pool.query(
+      'SELECT id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date FROM users WHERE id = $1',
+      [userId]
+    );
+    if (userResult.rows.length === 0) return res.status(401).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
+    res.json({ user: userResult.rows[0], token });
+  } catch (error) {
+    console.error('[AUTH] Refresh error:', error.message);
+    res.status(401).json({ error: 'Refresh failed', code: 'REFRESH_FAILED' });
+  }
+});
+
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const rawToken = req.cookies?.refresh_token;
+    if (rawToken) {
+      await revokeRefreshTokenByHash(rawToken);
+    }
+    clearRefreshCookie(res);
+    res.json({ message: 'Logged out' });
+  } catch (error) {
+    console.error('[AUTH] Logout error:', error.message);
+    res.json({ message: 'Logged out' });
+  }
 });
 
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
@@ -8512,6 +8560,16 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by INTEGER REFERENCES affiliates(id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_referrals_affiliate_id ON referrals(affiliate_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_referrals_referred_user_id ON referrals(referred_user_id)`);
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS refresh_tokens (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      token_hash VARCHAR(64) NOT NULL,
+      expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+      revoked BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash)`);
 
     await pool.query(`CREATE TABLE IF NOT EXISTS affiliate_payouts (
       id SERIAL PRIMARY KEY,

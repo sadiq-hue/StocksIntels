@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -38,7 +38,7 @@ interface AuthContextType {
   verifyEmailAndRegister: (fullName: string, email: string, password: string, code: string, ref?: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<{ expiresIn: number }>;
   resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
   updateUser: (user: UserInfo) => void;
@@ -47,69 +47,125 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserInfo | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(() => {
+    try { return JSON.parse(localStorage.getItem("stockintel_user") || "null"); } catch { return null; }
+  });
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const tokenRef = useRef<string | null>(null);
+  const refreshPromise = useRef<Promise<string | null> | null>(null);
+
+  const doRefresh = useCallback(async (): Promise<string | null> => {
+    try {
+      const res = await fetch(`${API_URL}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.token) {
+        tokenRef.current = data.token;
+        setToken(data.token);
+        if (data.user) {
+          setUser(data.user);
+          localStorage.setItem("stockintel_user", JSON.stringify(data.user));
+        }
+        return data.token;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem("stockintel_token");
-    const storedUser = localStorage.getItem("stockintel_user");
-    if (storedToken && storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        setToken(storedToken);
-        setUser(parsed);
-        // Validate token by fetching /auth/me
-        fetch(`${API_URL}/auth/me`, {
-          headers: { Authorization: `Bearer ${storedToken}` },
-        })
-          .then(r => r.ok ? r.json() : Promise.reject('Not found'))
-          .then(data => {
+    let cancelled = false;
+    (async () => {
+      // Try refresh token cookie first
+      const newToken = await doRefresh();
+      if (cancelled) return;
+      if (newToken) {
+        setIsLoading(false);
+        return;
+      }
+      // Fall back to localStorage token (backward compat, will be removed later)
+      const storedToken = localStorage.getItem("stockintel_token");
+      const storedUser = localStorage.getItem("stockintel_user");
+      if (storedToken && storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          tokenRef.current = storedToken;
+          setToken(storedToken);
+          setUser(parsed);
+          const res = await fetch(`${API_URL}/auth/me`, {
+            headers: { Authorization: `Bearer ${storedToken}` },
+          });
+          if (res.ok) {
+            const data = await res.json();
             if (data.user) {
               setUser(data.user);
               localStorage.setItem("stockintel_user", JSON.stringify(data.user));
             }
-          })
-          .catch(() => {
-            localStorage.removeItem("stockintel_user");
+          } else {
+            // Token invalid, clear
             localStorage.removeItem("stockintel_token");
-            setUser(null);
             setToken(null);
-          })
-          .finally(() => setIsLoading(false));
-      } catch {
-        localStorage.removeItem("stockintel_user");
-        localStorage.removeItem("stockintel_token");
-        setIsLoading(false);
+            tokenRef.current = null;
+          }
+        } catch {
+          localStorage.removeItem("stockintel_token");
+          setToken(null);
+          tokenRef.current = null;
+        }
       }
-    } else {
       setIsLoading(false);
-    }
-  }, []);
+    })();
+    return () => { cancelled = true; };
+  }, [doRefresh]);
 
   const setUserAndStore = (u: UserInfo, t?: string) => {
     setUser(u);
     localStorage.setItem("stockintel_user", JSON.stringify(u));
     if (t) {
+      tokenRef.current = t;
       setToken(t);
-      localStorage.setItem("stockintel_token", t);
     }
   };
 
-  const apiFetch = async (url: string, options: RequestInit = {}) => {
+  // apiFetch with auto-refresh on 401
+  const apiFetch = useCallback(async (url: string, options: RequestInit = {}) => {
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string> || {}),
     };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    const currentToken = tokenRef.current;
+    if (currentToken) {
+      headers['Authorization'] = `Bearer ${currentToken}`;
     }
-    return fetch(`${API_URL}${url}`, { ...options, headers });
-  };
+    let res = await fetch(`${API_URL}${url}`, { ...options, credentials: 'include', headers });
+
+    // Auto-refresh on 401 TOKEN_EXPIRED
+    if (res.status === 401) {
+      const body = await res.clone().json().catch(() => ({}));
+      if (body.code === 'TOKEN_EXPIRED') {
+        if (!refreshPromise.current) {
+          refreshPromise.current = doRefresh();
+        }
+        const newToken = await refreshPromise.current;
+        refreshPromise.current = null;
+        if (newToken) {
+          headers['Authorization'] = `Bearer ${newToken}`;
+          res = await fetch(`${API_URL}${url}`, { ...options, credentials: 'include', headers });
+        }
+      }
+    }
+    return res;
+  }, [doRefresh]);
 
   const login = async (email: string, password: string) => {
     const res = await fetch(`${API_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: 'include',
       body: JSON.stringify({ email, password }),
     });
     const data = await res.json();
@@ -123,6 +179,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const res = await fetch(`${API_URL}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: 'include',
       body: JSON.stringify(body),
     });
     const data = await res.json();
@@ -143,6 +200,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const verifyOtp = async (email: string, code: string) => {
     const res = await fetch(`${API_URL}/auth/verify-otp`, {
       method: "POST", headers: { "Content-Type": "application/json" },
+      credentials: 'include',
       body: JSON.stringify({ email, code }),
     });
     const data = await res.json();
@@ -163,6 +221,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const verifyLoginOtp = async (email: string, code: string) => {
     const res = await fetch(`${API_URL}/auth/login-verify-otp`, {
       method: "POST", headers: { "Content-Type": "application/json" },
+      credentials: 'include',
       body: JSON.stringify({ email, code }),
     });
     const data = await res.json();
@@ -185,6 +244,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (ref) body.ref = ref;
     const res = await fetch(`${API_URL}/auth/verify-email-and-register`, {
       method: "POST", headers: { "Content-Type": "application/json" },
+      credentials: 'include',
       body: JSON.stringify(body),
     });
     const data = await res.json();
@@ -211,27 +271,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!res.ok) throw new Error(data.error || "Password reset failed");
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await fetch(`${API_URL}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch { /* ignore */ }
     setUser(null);
     setToken(null);
+    tokenRef.current = null;
     localStorage.removeItem("stockintel_user");
     localStorage.removeItem("stockintel_token");
   };
 
   const refreshUser = async () => {
-    if (!token) return;
+    const currentToken = tokenRef.current;
+    if (!currentToken) return;
     try {
       const res = await fetch(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${currentToken}` },
       });
       const data = await res.json();
       if (data.user) {
         setUser(data.user);
         localStorage.setItem("stockintel_user", JSON.stringify(data.user));
       }
-    } catch {
-      // silently ignore refresh errors
-    }
+    } catch { /* ignore */ }
   };
 
   const updateUser = (updated: UserInfo) => {
