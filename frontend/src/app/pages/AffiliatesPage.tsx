@@ -88,7 +88,9 @@ export function AffiliatesPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Registration failed");
-      setStats(data);
+      // Re-fetch stats to get full dashboard data
+      const statsRes = await apiFetch("/affiliates/stats");
+      if (statsRes.ok) setStats(await statsRes.json());
       const refRes = await apiFetch("/affiliates/referrals");
       if (refRes.ok) setReferrals(await refRes.json());
       toast.success("You are now an affiliate! Share your referral link to start earning.");

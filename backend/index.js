@@ -7463,7 +7463,7 @@ app.post('/api/affiliates/register', authenticateToken, async (req, res) => {
     res.json({
       success: true,
       referral_code: referralCode,
-      referral_link: `${baseUrl}/register?ref=${referralCode}`,
+      referral_link: `${baseUrl}/login?ref=${referralCode}`,
     });
   } catch (error) {
     console.error('[AFFILIATE] Register error:', error.message);
@@ -7492,7 +7492,7 @@ app.get('/api/affiliates/stats', authenticateToken, async (req, res) => {
     res.json({
       registered: true,
       referral_code: aff.referral_code,
-      referral_link: `${baseUrl}/register?ref=${aff.referral_code}`,
+      referral_link: `${baseUrl}/login?ref=${aff.referral_code}`,
       total_earned: parseFloat(aff.total_earned) || 0,
       pending_balance: parseFloat(aff.pending_balance) || 0,
       paid_out: parseFloat(aff.paid_out) || 0,
