@@ -15,13 +15,13 @@ export interface UserInfo {
   trial_start_date?: string | null;
 }
 
-export function getTrialInfo(user: UserInfo | null): { isWithinTrial: boolean; daysRemaining: number } {
-  if (!user?.trial_start_date) return { isWithinTrial: false, daysRemaining: 0 };
+export function getTrialInfo(user: UserInfo | null): { isWithinTrial: boolean; daysRemaining: number; canStartTrial: boolean } {
+  if (!user?.trial_start_date) return { isWithinTrial: false, daysRemaining: 0, canStartTrial: true };
   const start = new Date(user.trial_start_date);
   const now = new Date();
   const diffMs = now.getTime() - start.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  return { isWithinTrial: diffDays < 7, daysRemaining: Math.max(0, 7 - diffDays) };
+  return { isWithinTrial: diffDays < 7, daysRemaining: Math.max(0, 7 - diffDays), canStartTrial: false };
 }
 
 interface AuthContextType {
