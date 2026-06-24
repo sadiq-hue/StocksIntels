@@ -19,17 +19,22 @@ const API_URL = import.meta.env.VITE_API_URL || "/api";
 function TrialBanner() {
   const { user } = useAuth();
   if (!user) return null;
-  const hasPaid = user.subscription_status === 'active' && user.subscription_tier !== 'free' && user.subscription_tier !== null && user.subscription_tier !== undefined;
-  if (hasPaid) return null;
   const trialInfo = getTrialInfo(user);
   if (!trialInfo.isWithinTrial) return null;
-
+  // User is within trial — show banner regardless of tier (they might be trialing a paid plan)
+  const planLabel = user.subscription_tier && user.subscription_tier !== 'free'
+    ? user.subscription_tier.charAt(0).toUpperCase() + user.subscription_tier.slice(1)
+    : null;
   const colorClass = trialInfo.daysRemaining <= 2 ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-amber-50 border-amber-200 text-amber-700';
 
   return (
     <Link to="/pricing" className={`block w-full text-center text-xs font-semibold px-4 py-2 border-b ${colorClass} hover:opacity-90 transition-opacity`}>
       <Clock className="w-3 h-3 inline-block mr-1 -mt-0.5" />
-      Free trial ends in <span className="underline font-bold">{trialInfo.daysRemaining} day{trialInfo.daysRemaining !== 1 ? 's' : ''}</span> — Subscribe to continue
+      {planLabel ? (
+        <>{planLabel} trial ends in <span className="underline font-bold">{trialInfo.daysRemaining} day{trialInfo.daysRemaining !== 1 ? 's' : ''}</span> — Subscribe to continue</>
+      ) : (
+        <>Free trial ends in <span className="underline font-bold">{trialInfo.daysRemaining} day{trialInfo.daysRemaining !== 1 ? 's' : ''}</span> — Subscribe to continue</>
+      )}
     </Link>
   );
 }
