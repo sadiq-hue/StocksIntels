@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Copy, Check, Users, DollarSign, Link, BarChart3, Gift, ArrowRight, Loader2, ExternalLink, ChevronRight } from "lucide-react";
+import { Copy, Check, Users, DollarSign, Link, BarChart3, Gift, ArrowRight, Loader2, Wallet, Banknote, Clock } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { toast } from "sonner";
@@ -34,6 +34,27 @@ const commissionRates = [
   { tier: "Institutional", rate: "$20", per: "referral" },
 ];
 
+interface Payout {
+  id: number;
+  amount: string;
+  payment_method: string;
+  payment_details: string;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  processed_at: string | null;
+}
+
+const payoutStatusBadge = (status: string) => {
+  const styles: Record<string, string> = {
+    pending: "bg-yellow-100 text-yellow-700",
+    approved: "bg-blue-100 text-blue-700",
+    paid: "bg-emerald-100 text-emerald-700",
+    rejected: "bg-red-100 text-red-600",
+  };
+  return styles[status] || "bg-gray-100 text-gray-600";
+};
+
 const statusBadge = (status: string) => {
   const styles: Record<string, string> = {
     paid: "bg-emerald-100 text-emerald-700",
@@ -47,19 +68,24 @@ export function AffiliatesPage() {
   const { user, apiFetch } = useAuth();
   const [stats, setStats] = useState<AffiliateStats | null>(null);
   const [referrals, setReferrals] = useState<Referral[]>([]);
+  const [payouts, setPayouts] = useState<Payout[]>([]);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<"referrals" | "commissions">("referrals");
+  const [activeTab, setActiveTab] = useState<"referrals" | "commissions" | "payouts">("referrals");
   const [registrantName, setRegistrantName] = useState("");
   const [registrantEmail, setRegistrantEmail] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("mpesa");
+  const [paymentDetails, setPaymentDetails] = useState("");
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, referralsRes] = await Promise.all([
+        const [statsRes, referralsRes, payoutsRes] = await Promise.all([
           apiFetch("/affiliates/stats"),
           apiFetch("/affiliates/referrals"),
+          apiFetch("/affiliates/payouts"),
         ]);
         if (statsRes.ok) {
           const data = await statsRes.json();
@@ -68,6 +94,10 @@ export function AffiliatesPage() {
         if (referralsRes.ok) {
           const data = await referralsRes.json();
           setReferrals(data);
+        }
+        if (payoutsRes.ok) {
+          const data = await payoutsRes.json();
+          setPayouts(data);
         }
       } catch {
         // silently fail
@@ -89,10 +119,14 @@ export function AffiliatesPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Registration failed");
       // Re-fetch stats to get full dashboard data
-      const statsRes = await apiFetch("/affiliates/stats");
+      const [statsRes, refRes, payoutsRes] = await Promise.all([
+        apiFetch("/affiliates/stats"),
+        apiFetch("/affiliates/referrals"),
+        apiFetch("/affiliates/payouts"),
+      ]);
       if (statsRes.ok) setStats(await statsRes.json());
-      const refRes = await apiFetch("/affiliates/referrals");
       if (refRes.ok) setReferrals(await refRes.json());
+      if (payoutsRes.ok) setPayouts(await payoutsRes.json());
       toast.success("You are now an affiliate! Share your referral link to start earning.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to register as affiliate");
@@ -106,6 +140,36 @@ export function AffiliatesPage() {
     setCopied(true);
     toast.success("Referral link copied!");
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleWithdraw = async () => {
+    if (!paymentDetails.trim()) {
+      toast.error("Please enter your payment details");
+      return;
+    }
+    setWithdrawing(true);
+    try {
+      const res = await apiFetch("/affiliates/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payment_method: paymentMethod, payment_details: paymentDetails }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Withdrawal failed");
+      toast.success(data.message || "Withdrawal request submitted!");
+      // Refresh stats and payouts
+      const [statsRes, payoutsRes] = await Promise.all([
+        apiFetch("/affiliates/stats"),
+        apiFetch("/affiliates/payouts"),
+      ]);
+      if (statsRes.ok) setStats(await statsRes.json());
+      if (payoutsRes.ok) setPayouts(await payoutsRes.json());
+      setPaymentDetails("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to request withdrawal");
+    } finally {
+      setWithdrawing(false);
+    }
   };
 
   const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
@@ -282,7 +346,18 @@ export function AffiliatesPage() {
             }`}
           >
             <DollarSign className="size-4" />
-            Commission Rates
+            Commissions
+          </button>
+          <button
+            onClick={() => setActiveTab("payouts")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === "payouts"
+                ? "bg-white text-gray-900 shadow-sm border"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <Wallet className="size-4" />
+            Payouts
           </button>
         </div>
 
@@ -333,7 +408,7 @@ export function AffiliatesPage() {
               </table>
             </div>
           </Card>
-        ) : (
+        ) : activeTab === "commissions" ? (
           <div className="grid md:grid-cols-2 gap-4">
             {commissionRates.map((c) => (
               <Card key={c.tier} className="border-gray-100 p-6 flex items-center justify-between">
@@ -344,6 +419,93 @@ export function AffiliatesPage() {
                 <p className="text-2xl font-bold text-[#0D7490]">{c.rate}</p>
               </Card>
             ))}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Withdraw Form */}
+            {(stats.pending_balance || 0) >= 20 && (
+              <Card className="border-gray-100 p-6">
+                <h3 className="text-sm font-semibold text-gray-900 mb-1">Request Withdrawal</h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  Your balance of <span className="font-semibold text-gray-700">{formatCurrency(stats.pending_balance || 0)}</span> is ready for withdrawal (minimum $20)
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 mb-3">
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="w-full sm:w-48 px-4 h-10 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-white outline-none transition-all text-sm text-gray-900"
+                  >
+                    <option value="mpesa">M-Pesa</option>
+                    <option value="airtel">Airtel Money</option>
+                    <option value="paypal">PayPal</option>
+                    <option value="bank">Bank Transfer</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Phone number or payment details"
+                    value={paymentDetails}
+                    onChange={(e) => setPaymentDetails(e.target.value)}
+                    className="flex-1 px-4 h-10 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-white outline-none transition-all text-sm text-gray-900"
+                  />
+                </div>
+                <Button
+                  onClick={handleWithdraw}
+                  disabled={withdrawing}
+                  className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
+                >
+                  {withdrawing ? (
+                    <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Requesting...</span>
+                  ) : (
+                    <span className="flex items-center gap-2"><Banknote className="w-4 h-4" /> Request Withdrawal</span>
+                  )}
+                </Button>
+              </Card>
+            )}
+
+            {/* Payout History */}
+            <Card className="border-gray-100 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100">
+                <h3 className="text-sm font-semibold text-gray-900">Payout History</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50/80">
+                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Amount</th>
+                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Method</th>
+                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Details</th>
+                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payouts.length > 0 ? (
+                      payouts.map((p) => (
+                        <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                          <td className="px-6 py-4 font-semibold text-gray-900">${parseFloat(p.amount).toFixed(2)}</td>
+                          <td className="px-6 py-4 text-gray-600 capitalize">{p.payment_method}</td>
+                          <td className="px-6 py-4 text-gray-600">{p.payment_details}</td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex text-[11px] font-semibold px-2 py-1 rounded-md ${payoutStatusBadge(p.status)}`}>
+                              {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-gray-500">{new Date(p.created_at).toLocaleDateString()}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                          <Clock className="w-8 h-8 mx-auto mb-3 text-gray-300" />
+                          <p className="text-sm font-medium">No payouts yet</p>
+                          <p className="text-xs mt-1">Earn commissions from referrals to request a withdrawal</p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
         )}
       </div>

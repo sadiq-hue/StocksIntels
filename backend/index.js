@@ -7542,6 +7542,61 @@ app.get('/api/affiliates/referrals', authenticateToken, async (req, res) => {
   }
 });
 
+// --- Affiliate Withdrawal ---
+app.post('/api/affiliates/withdraw', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { payment_method, payment_details } = req.body;
+    if (!payment_method || !payment_details) {
+      return res.status(400).json({ error: 'Payment method and details are required' });
+    }
+    const affRes = await pool.query(`SELECT id, pending_balance FROM affiliates WHERE user_id = $1`, [userId]);
+    if (affRes.rows.length === 0) return res.status(400).json({ error: 'Not registered as an affiliate' });
+    const aff = affRes.rows[0];
+    const balance = parseFloat(aff.pending_balance) || 0;
+    if (balance < 20) return res.status(400).json({ error: 'Minimum withdrawal is $20' });
+    // Check for existing pending payout
+    const pendingPayout = await pool.query(
+      `SELECT id FROM affiliate_payouts WHERE affiliate_id = $1 AND status = 'pending'`,
+      [aff.id]
+    );
+    if (pendingPayout.rows.length > 0) {
+      return res.status(400).json({ error: 'You already have a pending withdrawal request' });
+    }
+    await pool.query(
+      `INSERT INTO affiliate_payouts (affiliate_id, amount, payment_method, payment_details, status)
+       VALUES ($1, $2, $3, $4, 'pending')`,
+      [aff.id, balance, payment_method, payment_details]
+    );
+    await pool.query(
+      `UPDATE affiliates SET pending_balance = 0 WHERE id = $1`,
+      [aff.id]
+    );
+    console.log(`[AFFILIATE] Withdrawal requested: affiliate=${aff.id} amount=$${balance}`);
+    res.json({ success: true, message: 'Withdrawal request submitted. We will process it shortly.' });
+  } catch (error) {
+    console.error('[AFFILIATE] Withdraw error:', error.message);
+    res.status(500).json({ error: 'Failed to process withdrawal request' });
+  }
+});
+
+app.get('/api/affiliates/payouts', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const affRes = await pool.query(`SELECT id FROM affiliates WHERE user_id = $1`, [userId]);
+    if (affRes.rows.length === 0) return res.json([]);
+    const payouts = await pool.query(
+      `SELECT id, amount, payment_method, payment_details, status, notes, created_at, processed_at
+       FROM affiliate_payouts WHERE affiliate_id = $1 ORDER BY created_at DESC`,
+      [affRes.rows[0].id]
+    );
+    res.json(payouts.rows);
+  } catch (error) {
+    console.error('[AFFILIATE] Payouts error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch payouts' });
+  }
+});
+
 // --- Award commission when a referred user subscribes ---
 async function awardCommission(userId, tier) {
   try {
@@ -8457,6 +8512,19 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by INTEGER REFERENCES affiliates(id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_referrals_affiliate_id ON referrals(affiliate_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_referrals_referred_user_id ON referrals(referred_user_id)`);
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS affiliate_payouts (
+      id SERIAL PRIMARY KEY,
+      affiliate_id INTEGER REFERENCES affiliates(id) ON DELETE CASCADE,
+      amount NUMERIC(10,2) NOT NULL,
+      payment_method VARCHAR(50),
+      payment_details VARCHAR(255),
+      status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'approved', 'paid', 'rejected')),
+      notes TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      processed_at TIMESTAMP WITH TIME ZONE
+    );`);
 
     // Backfill referral records for users who signed up with a referral code before affiliate tables existed
     await pool.query(`
