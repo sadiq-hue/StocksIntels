@@ -283,6 +283,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     tokenRef.current = null;
     localStorage.removeItem("stockintel_user");
     localStorage.removeItem("stockintel_token");
+    // Clear dismissed trial banner flags so it reappears on next login
+    Object.keys(localStorage).filter(k => k.startsWith('trial_banner_dismissed_')).forEach(k => localStorage.removeItem(k));
   };
 
   const refreshUser = async () => {
