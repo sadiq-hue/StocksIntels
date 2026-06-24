@@ -423,11 +423,10 @@ export function AffiliatesPage() {
         ) : (
           <div className="space-y-6">
             {/* Withdraw Form */}
-            {(stats.pending_balance || 0) >= 20 && (
-              <Card className="border-gray-100 p-6">
+            <Card className="border-gray-100 p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-1">Request Withdrawal</h3>
                 <p className="text-xs text-gray-500 mb-4">
-                  Your balance of <span className="font-semibold text-gray-700">{formatCurrency(stats.pending_balance || 0)}</span> is ready for withdrawal (minimum $20)
+                  Your balance of <span className="font-semibold text-gray-700">{formatCurrency(stats.pending_balance || 0)}</span> is ready for withdrawal (minimum $1)
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 mb-3">
                   <select
@@ -460,7 +459,6 @@ export function AffiliatesPage() {
                   )}
                 </Button>
               </Card>
-            )}
 
             {/* Payout History */}
             <Card className="border-gray-100 overflow-hidden">

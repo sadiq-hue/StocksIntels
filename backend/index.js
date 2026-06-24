@@ -7554,7 +7554,7 @@ app.post('/api/affiliates/withdraw', authenticateToken, async (req, res) => {
     if (affRes.rows.length === 0) return res.status(400).json({ error: 'Not registered as an affiliate' });
     const aff = affRes.rows[0];
     const balance = parseFloat(aff.pending_balance) || 0;
-    if (balance < 20) return res.status(400).json({ error: 'Minimum withdrawal is $20' });
+    if (balance < 0) return res.status(400).json({ error: 'Minimum withdrawal is $1' });
     // Check for existing pending payout
     const pendingPayout = await pool.query(
       `SELECT id FROM affiliate_payouts WHERE affiliate_id = $1 AND status = 'pending'`,
