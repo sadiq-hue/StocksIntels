@@ -7346,11 +7346,12 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid plan for trial' });
     }
     const userRes = await pool.query(
-      `SELECT subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE id = $1`,
+      `SELECT id, full_name, email, subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE id = $1`,
       [userId]
     );
     if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     const userRow = userRes.rows[0];
+
     const alreadyPaid = userRow.subscription_status === 'active' &&
       userRow.subscription_tier !== 'free' &&
       userRow.subscription_end_date &&
@@ -7358,6 +7359,27 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
     if (alreadyPaid) {
       return res.status(400).json({ error: 'You already have an active subscription' });
     }
+
+    // One trial per person: check if this account's trial already expired
+    if (userRow.trial_start_date) {
+      const expired = new Date() - new Date(userRow.trial_start_date) >= 7 * 24 * 60 * 60 * 1000;
+      if (expired) {
+        return res.status(400).json({ error: 'Your free trial has already ended. Please subscribe to continue.' });
+      }
+    }
+
+    // Cross-account check: prevent same name from getting multiple trials across different accounts
+    const nameMatch = await pool.query(
+      `SELECT id, trial_start_date FROM users WHERE full_name = $1 AND id != $2 AND trial_start_date IS NOT NULL`,
+      [userRow.full_name, userId]
+    );
+    for (const match of nameMatch.rows) {
+      const matchExpired = new Date() - new Date(match.trial_start_date) >= 7 * 24 * 60 * 60 * 1000;
+      if (matchExpired) {
+        return res.status(400).json({ error: 'A trial has already been used under this name. Each person gets one trial only.' });
+      }
+    }
+
     const trialStart = userRow.trial_start_date || new Date();
     const inTrial = new Date() - new Date(trialStart) < 7 * 24 * 60 * 60 * 1000;
     const startDate = inTrial ? trialStart : new Date();
