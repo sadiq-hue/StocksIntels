@@ -7370,7 +7370,7 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
 
     // Cross-account check: prevent same name from getting multiple trials across different accounts
     const nameMatch = await pool.query(
-      `SELECT id, trial_start_date FROM users WHERE full_name = $1 AND id != $2 AND trial_start_date IS NOT NULL`,
+      `SELECT id, trial_start_date FROM users WHERE LOWER(full_name) = LOWER($1) AND id != $2 AND trial_start_date IS NOT NULL`,
       [userRow.full_name, userId]
     );
     for (const match of nameMatch.rows) {
