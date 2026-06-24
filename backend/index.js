@@ -7369,15 +7369,13 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
     }
 
     // Cross-account check: prevent same name from getting multiple trials across different accounts
+    // Only matches accounts that have actually started a paid-plan trial (not just signed up)
     const nameMatch = await pool.query(
-      `SELECT id, trial_start_date FROM users WHERE LOWER(full_name) = LOWER($1) AND id != $2 AND trial_start_date IS NOT NULL`,
+      `SELECT id FROM users WHERE LOWER(full_name) = LOWER($1) AND id != $2 AND trial_start_date IS NOT NULL AND subscription_tier != 'free'`,
       [userRow.full_name, userId]
     );
-    for (const match of nameMatch.rows) {
-      const matchExpired = new Date() - new Date(match.trial_start_date) >= 7 * 24 * 60 * 60 * 1000;
-      if (matchExpired) {
-        return res.status(400).json({ error: 'A trial has already been used under this name. Each person gets one trial only.' });
-      }
+    if (nameMatch.rows.length > 0) {
+      return res.status(400).json({ error: 'A trial has already been used under this name. Each person gets one trial only.' });
     }
 
     const trialStart = userRow.trial_start_date || new Date();
