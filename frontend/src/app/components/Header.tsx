@@ -1,4 +1,4 @@
-import { Bell, User, Activity, Settings, LogOut, UserCircle, Check, ArrowUp, ArrowDown, Clock, Sun, Moon, Menu } from "lucide-react";
+import { Bell, User, Activity, Settings, LogOut, UserCircle, Check, ArrowUp, ArrowDown, Clock, Sun, Moon, Menu, X } from "lucide-react";
 import { StockSearchBar } from "./StockSearchBar";
 import { Link, useNavigate } from "react-router";
 import { useState, useRef, useEffect } from "react";
@@ -21,21 +21,36 @@ function TrialBanner() {
   if (!user) return null;
   const trialInfo = getTrialInfo(user);
   if (!trialInfo.isWithinTrial) return null;
-  // User is within trial — show banner regardless of tier (they might be trialing a paid plan)
+  const [dismissed, setDismissed] = useState(() =>
+    localStorage.getItem(`trial_banner_dismissed_${user.id}`) === 'true'
+  );
+  if (dismissed) return null;
   const planLabel = user.subscription_tier && user.subscription_tier !== 'free'
     ? user.subscription_tier.charAt(0).toUpperCase() + user.subscription_tier.slice(1)
     : null;
   const colorClass = trialInfo.daysRemaining <= 2 ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-amber-50 border-amber-200 text-amber-700';
 
+  const handleDismiss = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    localStorage.setItem(`trial_banner_dismissed_${user.id}`, 'true');
+    setDismissed(true);
+  };
+
   return (
-    <Link to="/pricing" className={`block w-full text-center text-xs font-semibold px-4 py-2 border-b ${colorClass} hover:opacity-90 transition-opacity`}>
-      <Clock className="w-3 h-3 inline-block mr-1 -mt-0.5" />
-      {planLabel ? (
-        <>{planLabel} trial ends in <span className="underline font-bold">{trialInfo.daysRemaining} day{trialInfo.daysRemaining !== 1 ? 's' : ''}</span> — Subscribe to continue</>
-      ) : (
-        <>Free trial ends in <span className="underline font-bold">{trialInfo.daysRemaining} day{trialInfo.daysRemaining !== 1 ? 's' : ''}</span> — Subscribe to continue</>
-      )}
-    </Link>
+    <div className={`relative w-full text-center text-xs font-semibold px-8 py-2 border-b ${colorClass}`}>
+      <Link to="/pricing" className="hover:opacity-90 transition-opacity">
+        <Clock className="w-3 h-3 inline-block mr-1 -mt-0.5" />
+        {planLabel ? (
+          <>{planLabel} trial ends in <span className="underline font-bold">{trialInfo.daysRemaining} day{trialInfo.daysRemaining !== 1 ? 's' : ''}</span> — Subscribe to continue</>
+        ) : (
+          <>Free trial ends in <span className="underline font-bold">{trialInfo.daysRemaining} day{trialInfo.daysRemaining !== 1 ? 's' : ''}</span> — Subscribe to continue</>
+        )}
+      </Link>
+      <button onClick={handleDismiss} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-black/5 transition-colors" aria-label="Dismiss">
+        <X className="w-3.5 h-3.5" />
+      </button>
+    </div>
   );
 }
 
