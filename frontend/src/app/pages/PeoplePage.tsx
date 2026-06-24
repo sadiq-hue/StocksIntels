@@ -38,6 +38,16 @@ function getInitials(name: string): string {
   return name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
 }
 
+function obfuscateCount(n: number): string {
+  if (n === 0) return "0";
+  if (n <= 5) return "5+";
+  if (n <= 20) return "20+";
+  if (n <= 50) return "50+";
+  if (n <= 100) return "100+";
+  if (n <= 500) return "500+";
+  return "500+";
+}
+
 function formatFollowers(count: number): string {
   if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
   return count.toString();
@@ -182,19 +192,19 @@ export function PeoplePage() {
         <Card className="p-4 border-border bg-card">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center"><Users className="w-5 h-5 text-blue-600" /></div>
-            <div><p className="text-2xl font-bold text-foreground">{people.length}</p><p className="text-xs text-muted-foreground">Total Members</p></div>
+            <div><p className="text-2xl font-bold text-foreground">{obfuscateCount(people.length)}</p><p className="text-xs text-muted-foreground">Total Members</p></div>
           </div>
         </Card>
         <Card className="p-4 border-border bg-card">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center"><Circle className="w-5 h-5 fill-green-500 text-green-500" /></div>
-            <div><p className="text-2xl font-bold text-foreground">{onlineCount}</p><p className="text-xs text-muted-foreground">Online Now</p></div>
+            <div><p className="text-2xl font-bold text-foreground">{obfuscateCount(onlineCount)}</p><p className="text-xs text-muted-foreground">Online Now</p></div>
           </div>
         </Card>
         <Card className="p-4 border-border bg-card">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center"><Medal className="w-5 h-5 text-purple-600" /></div>
-            <div><p className="text-2xl font-bold text-foreground">{verifiedCount}</p><p className="text-xs text-muted-foreground">Verified Pros</p></div>
+            <div><p className="text-2xl font-bold text-foreground">{obfuscateCount(verifiedCount)}</p><p className="text-xs text-muted-foreground">Verified Pros</p></div>
           </div>
         </Card>
       </div>

@@ -286,7 +286,7 @@ app.get('/api/admin/dashboard', async (req, res) => {
       losses: signalPredictions.rows[0].losses,
       totalSignals: signalHistory.rows[0].cnt,
     });
-  } catch (err) { console.error('Admin dashboard error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin dashboard error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.get('/api/admin/users', async (req, res) => {
@@ -321,7 +321,7 @@ app.get('/api/admin/users', async (req, res) => {
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `, userParams);
     res.json({ users: userResult.rows, total, page, limit });
-  } catch (err) { console.error('Admin users error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin users error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.get('/api/admin/users/:id', async (req, res) => {
@@ -346,7 +346,7 @@ app.get('/api/admin/users/:id', async (req, res) => {
       notificationsCount: notifRes.rows[0].cnt,
       subscription: subRes.rows[0] || null,
     });
-  } catch (err) { console.error('Admin user detail error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin user detail error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.post('/api/admin/users/:id/role', async (req, res) => {
@@ -357,7 +357,7 @@ app.post('/api/admin/users/:id/role', async (req, res) => {
     const result = await pool.query('UPDATE users SET role = $1 WHERE id = $2 RETURNING id, full_name, email, role, trader_type, is_verified', [role, id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     res.json(result.rows[0]);
-  } catch (err) { console.error('Admin set role error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin set role error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.put('/api/admin/users/:id/toggle-verify', async (req, res) => {
@@ -366,7 +366,7 @@ app.put('/api/admin/users/:id/toggle-verify', async (req, res) => {
     const result = await pool.query('UPDATE users SET is_verified = NOT is_verified WHERE id = $1 RETURNING id, full_name, email, role, is_verified', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     res.json(result.rows[0]);
-  } catch (err) { console.error('Admin toggle verify error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin toggle verify error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Signals API ──
@@ -386,7 +386,7 @@ app.get('/api/admin/signals/stats', async (req, res) => {
       bySector: bySector.rows,
       lastGenerated: latest.rows[0].last_generated,
     });
-  } catch (err) { console.error('Admin signals stats error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin signals stats error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.get('/api/admin/signals', async (req, res) => {
@@ -420,7 +420,7 @@ app.get('/api/admin/signals', async (req, res) => {
       LIMIT $${idx++} OFFSET $${idx}
     `, dataParams);
     res.json({ signals: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
-  } catch (err) { console.error('Admin signals error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin signals error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Signal Detail ──
@@ -430,7 +430,7 @@ app.get('/api/admin/signals/:id', async (req, res) => {
     const result = await pool.query('SELECT * FROM signal_history WHERE id = $1', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Signal not found' });
     res.json(result.rows[0]);
-  } catch (err) { console.error('Admin signal detail error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin signal detail error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Signal Update ──
@@ -452,7 +452,7 @@ app.put('/api/admin/signals/:id', async (req, res) => {
     const result = await pool.query(`UPDATE signal_history SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Signal not found' });
     res.json(result.rows[0]);
-  } catch (err) { console.error('Admin signal update error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin signal update error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Signal Delete ──
@@ -462,7 +462,7 @@ app.delete('/api/admin/signals/:id', async (req, res) => {
     const result = await pool.query('DELETE FROM signal_history WHERE id = $1 RETURNING id', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Signal not found' });
     res.json({ success: true });
-  } catch (err) { console.error('Admin signal delete error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin signal delete error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Generate Signals ──
@@ -497,7 +497,7 @@ app.post('/api/admin/signals/generate', async (req, res) => {
 
     const historyCount = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_history').catch(() => ({ rows: [{ cnt: 0 }] }));
     res.json({ success: true, count: signals.length, notifications: signals.length > 0, source: hasLiveData ? 'live_quotes' : 'force_cached', signalHistoryRows: historyCount.rows[0].cnt });
-  } catch (err) { console.error('Admin generate signals error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin generate signals error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Subscribers ──
@@ -517,7 +517,7 @@ app.get('/api/admin/subscribers', async (req, res) => {
       ) combined
     `);
     res.json({ plans: plansResult.rows, totalSubscribers: totalResult.rows[0].cnt });
-  } catch (err) { console.error('Admin subscribers error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin subscribers error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.get('/api/admin/subscriptions', async (req, res) => {
@@ -557,7 +557,7 @@ app.get('/api/admin/subscriptions', async (req, res) => {
       ORDER BY created_at DESC LIMIT $1 OFFSET $2
     `, [limit, offset]);
     res.json({ subscriptions: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
-  } catch (err) { console.error('Admin subscriptions error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin subscriptions error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Portfolio History ──
@@ -574,7 +574,7 @@ app.get('/api/admin/portfolio-history', async (req, res) => {
       ORDER BY p.snapshot_date DESC LIMIT $1 OFFSET $2
     `, [limit, offset]);
     res.json({ history: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
-  } catch (err) { console.error('Admin portfolio-history error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin portfolio-history error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Payments ──
@@ -591,7 +591,7 @@ app.get('/api/admin/payments', async (req, res) => {
       ORDER BY p.created_at DESC LIMIT $1 OFFSET $2
     `, [limit, offset]);
     res.json({ transactions: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
-  } catch (err) { console.error('Admin payments error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin payments error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Support Tickets ──
@@ -612,7 +612,7 @@ app.get('/api/admin/support-tickets', async (req, res) => {
     const counts = { open: 0, in_progress: 0, resolved: 0, closed: 0 };
     statusCounts.rows.forEach(r => { if (counts[r.status] !== undefined) counts[r.status] = r.cnt; });
     res.json({ tickets: dataResult.rows, total: countResult.rows[0].cnt, page, limit, statusCounts: counts });
-  } catch (err) { console.error('Admin tickets error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin tickets error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Groups ──
@@ -625,7 +625,7 @@ app.get('/api/admin/groups', async (req, res) => {
       FROM trading_groups g ORDER BY g.name
     `);
     res.json({ groups: dataResult.rows });
-  } catch (err) { console.error('Admin groups error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin groups error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Messages ──
@@ -652,7 +652,7 @@ app.get('/api/admin/messages', async (req, res) => {
       ORDER BY m.created_at DESC LIMIT $${idx} OFFSET $${idx + 1}
     `, dataParams);
     res.json({ messages: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
-  } catch (err) { console.error('Admin messages error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin messages error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Broker Accounts ──
@@ -667,7 +667,7 @@ app.get('/api/admin/broker-accounts', async (req, res) => {
       ORDER BY bc.created_at DESC
     `);
     res.json({ connections: dataResult.rows });
-  } catch (err) { console.error('Admin broker-accounts error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin broker-accounts error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin User Activity ──
@@ -687,7 +687,7 @@ app.get('/api/admin/activity/recent', async (req, res) => {
       dataParams
     );
     res.json({ activities: dataResult.rows, total: countResult.rows[0].cnt });
-  } catch (err) { console.error('Admin activity error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin activity error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Followers ──
@@ -701,7 +701,7 @@ app.get('/api/admin/followers', async (req, res) => {
       ORDER BY f.created_at DESC
     `);
     res.json({ followers: dataResult.rows });
-  } catch (err) { console.error('Admin followers error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin followers error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin User Update ──
@@ -719,7 +719,7 @@ app.put('/api/admin/users/:id', async (req, res) => {
     const result = await pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params);
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     res.json(result.rows[0]);
-  } catch (err) { console.error('Admin update user error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin update user error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Delete User ──
@@ -742,7 +742,7 @@ app.delete('/api/admin/users/:id', async (req, res) => {
     const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     res.json({ success: true });
-  } catch (err) { console.error('Admin delete user error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin delete user error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Reset Password ──
@@ -759,7 +759,7 @@ app.post('/api/admin/users/:id/reset-password', async (req, res) => {
     console.log(`[OTP] Admin password reset code for ${email}: ${code}`);
     await sendResetCode(email, code).catch(e => console.error('[MAILER] admin reset-password failed:', e.message));
     res.json({ message: 'Password reset email sent' });
-  } catch (err) { console.error('Admin reset password error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin reset password error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Subscription Plans CRUD ──
@@ -770,7 +770,7 @@ app.get('/api/admin/subscription-plans', async (req, res) => {
       FROM subscription_plans sp ORDER BY sp.id
     `);
     res.json({ plans: result.rows });
-  } catch (err) { console.error('Admin subscription-plans error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin subscription-plans error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.post('/api/admin/subscription-plans', async (req, res) => {
@@ -782,7 +782,7 @@ app.post('/api/admin/subscription-plans', async (req, res) => {
       [name, description || '', price_kes, price_usd || 0, features ? JSON.stringify(features) : '[]', duration_months || 1]
     );
     res.status(201).json(result.rows[0]);
-  } catch (err) { console.error('Admin create plan error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin create plan error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.put('/api/admin/subscription-plans/:id', async (req, res) => {
@@ -801,7 +801,7 @@ app.put('/api/admin/subscription-plans/:id', async (req, res) => {
     const result = await pool.query(`UPDATE subscription_plans SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Plan not found' });
     res.json(result.rows[0]);
-  } catch (err) { console.error('Admin update plan error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin update plan error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.delete('/api/admin/subscription-plans/:id', async (req, res) => {
@@ -810,7 +810,7 @@ app.delete('/api/admin/subscription-plans/:id', async (req, res) => {
     const result = await pool.query('DELETE FROM subscription_plans WHERE id = $1 RETURNING id', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Plan not found' });
     res.json({ success: true });
-  } catch (err) { console.error('Admin delete plan error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin delete plan error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Subscription Management ──
@@ -859,7 +859,7 @@ app.put('/api/admin/subscriptions/:id', async (req, res) => {
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Subscription not found' });
     res.json(result.rows[0]);
-  } catch (err) { console.error('Admin update subscription error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin update subscription error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Support Tickets Update ──
@@ -884,7 +884,7 @@ app.put('/api/admin/support-tickets/:id', async (req, res) => {
     const result = await pool.query(`UPDATE support_tickets SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`, params);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Ticket not found' });
     res.json(result.rows[0]);
-  } catch (err) { console.error('Admin update ticket error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin update ticket error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.get('/api/admin/support-tickets/:id', async (req, res) => {
@@ -893,7 +893,7 @@ app.get('/api/admin/support-tickets/:id', async (req, res) => {
     const result = await pool.query('SELECT * FROM support_tickets WHERE id = $1', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Ticket not found' });
     res.json({ ticket: result.rows[0] });
-  } catch (err) { console.error('Admin ticket detail error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin ticket detail error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.get('/api/admin/support-tickets/:id/messages', async (req, res) => {
@@ -901,7 +901,7 @@ app.get('/api/admin/support-tickets/:id/messages', async (req, res) => {
     const { id } = req.params;
     const messages = await pool.query('SELECT * FROM support_messages WHERE ticket_id = $1 ORDER BY created_at ASC', [id]);
     res.json({ messages: messages.rows });
-  } catch (err) { console.error('Admin ticket messages error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin ticket messages error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.post('/api/admin/support-tickets/:id/messages', async (req, res) => {
@@ -920,7 +920,7 @@ app.post('/api/admin/support-tickets/:id/messages', async (req, res) => {
     );
     await pool.query('UPDATE support_tickets SET updated_at = CURRENT_TIMESTAMP, status = $1 WHERE id = $2', ['in_progress', id]);
     res.status(201).json(result.rows[0]);
-  } catch (err) { console.error('Admin ticket reply error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin ticket reply error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Groups Management ──
@@ -933,7 +933,7 @@ app.post('/api/admin/groups', async (req, res) => {
       [id, name, description || '', icon || '', topic || 'General']
     );
     res.status(201).json(result.rows[0]);
-  } catch (err) { console.error('Admin create group error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin create group error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.put('/api/admin/groups/:id', async (req, res) => {
@@ -950,7 +950,7 @@ app.put('/api/admin/groups/:id', async (req, res) => {
     const result = await pool.query(`UPDATE trading_groups SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Group not found' });
     res.json(result.rows[0]);
-  } catch (err) { console.error('Admin update group error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin update group error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.delete('/api/admin/groups/:id', async (req, res) => {
@@ -959,7 +959,7 @@ app.delete('/api/admin/groups/:id', async (req, res) => {
     const result = await pool.query('DELETE FROM trading_groups WHERE id = $1 RETURNING id', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Group not found' });
     res.json({ success: true });
-  } catch (err) { console.error('Admin delete group error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin delete group error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.get('/api/admin/groups/:id/members', async (req, res) => {
@@ -973,7 +973,7 @@ app.get('/api/admin/groups/:id/members', async (req, res) => {
       ORDER BY gm.joined_at DESC
     `, [id]);
     res.json({ members: result.rows });
-  } catch (err) { console.error('Admin group members error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin group members error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Delete Message ──
@@ -986,7 +986,7 @@ app.delete('/api/admin/messages/:id', async (req, res) => {
     await pool.query('DELETE FROM messages WHERE id = $1', [id]);
     try { io.emit('message_deleted', { messageId: id, groupId: message.group_id }); } catch {}
     res.json({ success: true });
-  } catch (err) { console.error('Admin delete message error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin delete message error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Broker Snapshots ──
@@ -998,7 +998,7 @@ app.get('/api/admin/broker-accounts/:id/snapshots', async (req, res) => {
       [id]
     );
     res.json({ snapshots: result.rows });
-  } catch (err) { console.error('Admin broker snapshots error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin broker snapshots error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Stocks ──
@@ -1022,7 +1022,7 @@ app.get('/api/admin/stocks', async (req, res) => {
       [...params, limit, offset]
     );
     res.json({ stocks: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
-  } catch (err) { console.error('Admin stocks error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin stocks error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.get('/api/admin/stocks/:id', async (req, res) => {
@@ -1031,7 +1031,7 @@ app.get('/api/admin/stocks/:id', async (req, res) => {
     const result = await pool.query('SELECT * FROM stocks WHERE id = $1', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Stock not found' });
     res.json(result.rows[0]);
-  } catch (err) { console.error('Admin stock detail error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin stock detail error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.put('/api/admin/stocks/:id', async (req, res) => {
@@ -1050,7 +1050,7 @@ app.put('/api/admin/stocks/:id', async (req, res) => {
     const result = await pool.query(`UPDATE stocks SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`, params);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Stock not found' });
     res.json(result.rows[0]);
-  } catch (err) { console.error('Admin update stock error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin update stock error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.delete('/api/admin/stocks/:id', async (req, res) => {
@@ -1059,7 +1059,7 @@ app.delete('/api/admin/stocks/:id', async (req, res) => {
     const result = await pool.query('DELETE FROM stocks WHERE id = $1 RETURNING id', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Stock not found' });
     res.json({ success: true });
-  } catch (err) { console.error('Admin delete stock error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin delete stock error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Notifications ──
@@ -1076,7 +1076,7 @@ app.get('/api/admin/notifications', async (req, res) => {
       ORDER BY n.created_at DESC LIMIT $1 OFFSET $2
     `, [limit, offset]);
     res.json({ notifications: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
-  } catch (err) { console.error('Admin notifications error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin notifications error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Signal Outcomes ──
@@ -1099,7 +1099,7 @@ app.get('/api/admin/signal-outcomes', async (req, res) => {
        FROM signal_outcomes`
     );
     res.json({ outcomes: dataResult.rows, total: countResult.rows[0].cnt, page, limit, stats: statsResult.rows[0] });
-  } catch (err) { console.error('Admin signal outcomes error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Admin signal outcomes error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 const port = process.env.PORT || 3001;
@@ -1933,7 +1933,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     res.json({ user: req.user });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -2033,7 +2033,7 @@ app.post('/api/activity/log', async (req, res) => {
     await logUserActivity(userId, user.rows[0].email, user.rows[0].full_name, action, details, req.ip);
     res.json({ ok: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -2750,7 +2750,7 @@ app.get('/api/quote/:symbol', async (req, res) => {
     if (!quote) return res.status(404).json({ error: 'Symbol not found' });
     res.json(quote);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -2761,7 +2761,7 @@ app.get('/api/quotes', async (req, res) => {
     const quotes = await Promise.all(symbols.map(s => getStockQuote(s.trim().toUpperCase()).catch(() => null)));
     res.json(quotes.filter(Boolean));
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -2769,8 +2769,8 @@ app.get('/api/quotes', async (req, res) => {
 app.post('/api/upload', authenticateToken, (req, res) => {
   upload.single('file')(req, res, (err) => {
     if (err) {
-      if (err instanceof multer.MulterError) return res.status(400).json({ error: err.message });
-      return res.status(400).json({ error: err.message });
+      if (err instanceof multer.MulterError) return res.status(400).json({ error: err.message, code: 'FILE_ERROR' });
+      return res.status(400).json({ error: 'File upload failed', code: 'FILE_ERROR' });
     }
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
     const baseUrl = `${req.protocol}://${req.get('host')}`;
@@ -2798,7 +2798,7 @@ app.put('/api/messages/:id', authenticateToken, async (req, res) => {
       io.to(room).emit('message_edited', msg);
     }
     res.json(msg);
-  } catch (err) { console.error('Edit message error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Edit message error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.delete('/api/messages/:id', authenticateToken, async (req, res) => {
@@ -2816,7 +2816,7 @@ app.delete('/api/messages/:id', authenticateToken, async (req, res) => {
       io.to(room).emit('message_deleted', { id: Number(id) });
     }
     res.json({ success: true });
-  } catch (err) { console.error('Delete message error:', err.message); res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('Delete message error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // Public signal engine backfill endpoint (no auth required for admin debugging)
@@ -2827,7 +2827,8 @@ app.post('/api/signals/engine/backfill', async (req, res) => {
     const counts = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_outcomes').catch(() => ({ rows: [{ cnt: 0 }] }));
     res.json({ success: true, signalOutcomes: counts.rows[0].cnt });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[Backfill]', error.message);
+    res.status(500).json({ success: false, error: 'Backfill failed' });
   }
 });
 
@@ -2844,7 +2845,8 @@ app.post('/api/signals/engine/backtest/historical', async (req, res) => {
     const counts = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_outcomes').catch(() => ({ rows: [{ cnt: 0 }] }));
     res.json({ success: true, result, signalOutcomes: counts.rows[0].cnt });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[Historical backtest]', error.message);
+    res.status(500).json({ success: false, error: 'Backtest failed' });
   }
 });
 
@@ -2901,7 +2903,7 @@ app.get('/api/signals/engine/diagnostics', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -2947,7 +2949,7 @@ app.get('/api/signals', async (req, res) => {
     res.json({ success: true, signals });
     generateSignals(null, false).catch(() => {});
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -2956,7 +2958,7 @@ app.get('/api/signals/summary', async (req, res) => {
     const summary = await getSignalsSummary();
     res.json(summary);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -2967,7 +2969,7 @@ app.get('/api/signal/:symbol', async (req, res) => {
     if (!signal) return res.status(404).json({ error: 'No signal found' });
     res.json(signal);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -2982,7 +2984,7 @@ app.get('/api/signals/backtest', async (req, res) => {
     });
     res.json({ success: true, stats });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3001,7 +3003,7 @@ app.get('/api/signals/forward-test', async (req, res) => {
     const stats = await getForwardTestStats();
     res.json({ success: true, stats });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3010,7 +3012,7 @@ app.post('/api/signals/forward-test/resolve', async (req, res) => {
     const result = await resolveAllForwardPredictions();
     res.json({ success: true, ...result });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3023,7 +3025,7 @@ app.get('/api/signals/audit', async (req, res) => {
     });
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3032,7 +3034,7 @@ app.get('/api/signals/engine/config', async (req, res) => {
     const view = req.query.view || 'full';
     res.json({ success: true, config: getEngineConfig(view) });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3041,7 +3043,7 @@ app.put('/api/signals/engine/config', async (req, res) => {
     const config = updateEngineConfig(req.body);
     res.json({ success: true, config });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3050,7 +3052,7 @@ app.get('/api/signals/engine/health', async (req, res) => {
     const health = getEngineHealth();
     res.json({ success: true, health });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3060,7 +3062,7 @@ app.get('/api/company/:symbol/profile', async (req, res) => {
     const profile = await getCompanyProfile(symbol);
     res.json(profile || {});
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3074,7 +3076,7 @@ app.get('/api/company/:symbol/financials', async (req, res) => {
     ]);
     res.json({ incomeStatement: income, balanceSheet: balance, cashFlow: cashflow });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3086,7 +3088,7 @@ app.get('/api/news', async (req, res) => {
     const news = await getAllNews(limit, category);
     res.json(news);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3095,7 +3097,7 @@ app.get('/api/news/summary', async (req, res) => {
     const summary = await getNewsSummary();
     res.json(summary);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3103,7 +3105,7 @@ app.get('/api/news/kenyan', async (req, res) => {
   try {
     res.json({ stocks: KENYAN_STOCKS });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3114,7 +3116,7 @@ app.get('/api/news/hot', async (req, res) => {
     const hotNews = news.filter(a => a.hot).slice(0, limit);
     res.json(hotNews);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3177,7 +3179,7 @@ app.post('/api/watchlist', async (req, res) => {
       setMemoryWatchlist(userId, items);
       return res.status(201).json(entry);
     }
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3543,7 +3545,7 @@ app.get('/api/portfolio/:userId', async (req, res) => {
     );
     res.json({ holdings: holdings.rows, account: account.rows[0] || null });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3555,7 +3557,7 @@ app.get('/api/portfolio/:userId/holdings', async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3565,7 +3567,7 @@ app.get('/api/portfolio/:userId/account', async (req, res) => {
     const result = await pool.query('SELECT * FROM paper_accounts WHERE user_id = $1', [userId]);
     res.json(result.rows[0] || null);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3582,7 +3584,7 @@ app.post('/api/portfolio/holdings', async (req, res) => {
     snapshotPortfolioValue(user_id).catch(() => {});
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3591,7 +3593,7 @@ app.delete('/api/portfolio/holdings/:id', async (req, res) => {
     await pool.query('DELETE FROM portfolio_holdings WHERE id = $1', [req.params.id]);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3617,7 +3619,7 @@ app.post('/api/trade', async (req, res) => {
     });
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3630,7 +3632,7 @@ app.get('/api/trades/:userId', async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3658,7 +3660,7 @@ app.post('/api/broker-connections', async (req, res) => {
     res.status(201).json(connection);
   } catch (error) {
     console.error('Error creating broker connection:', error.message);
-    res.status(500).json({ error: error.message || 'Failed to create broker connection' });
+    res.status(500).json({ error: 'Failed to create broker connection' });
   }
 });
 
@@ -3735,7 +3737,7 @@ app.post('/api/broker-connections/parse-email', async (req, res) => {
     const parsed = parseBrokerEmail(emailText);
     res.json({ success: true, parsed });
   } catch (error) {
-    res.status(500).json({ error: error.message || 'Failed to parse email' });
+    res.status(500).json({ error: 'Failed to parse email' });
   }
 });
 
@@ -3746,7 +3748,8 @@ app.post('/api/broker-connections/validate', async (req, res) => {
     const result = await brokerService.validateConnection(brokerType || 'generic', apiKey || '', apiSecret || '', config || {});
     res.json(result);
   } catch (error) {
-    res.json({ valid: false, error: error.message });
+    console.error('[Broker validate]', error.message);
+    res.json({ valid: false, error: 'Validation failed' });
   }
 });
 
@@ -3764,7 +3767,7 @@ app.post('/api/broker-connections/:id/sync', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error syncing broker connection:', error.message);
-    res.status(500).json({ error: error.message || 'Failed to sync broker connection' });
+    res.status(500).json({ error: 'Failed to sync broker connection' });
   }
 });
 
@@ -3877,7 +3880,7 @@ app.post('/api/groups', async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating group:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3891,7 +3894,7 @@ app.get('/api/groups/:groupId/messages', async (req, res) => {
     );
     res.json(result.rows.reverse());
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3908,7 +3911,7 @@ app.post('/api/groups/:groupId/messages', async (req, res) => {
     io.to(`group:${groupId}`).emit('receive_message', msg);
     res.status(201).json(msg);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3979,7 +3982,7 @@ app.get('/api/chat/:userId/:otherUserId', async (req, res) => {
     );
     res.json(result.rows.reverse());
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -3994,7 +3997,7 @@ app.get('/api/conversations/:userId/:otherUserId', async (req, res) => {
     );
     res.json(result.rows.reverse());
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4010,7 +4013,7 @@ app.post('/api/chat/send', async (req, res) => {
     io.to(`user:${recipient_id}`).emit('receive_message', msg);
     res.status(201).json(msg);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4025,7 +4028,7 @@ app.get('/api/notifications/:userId', async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4034,7 +4037,7 @@ app.post('/api/notifications/:id/read', async (req, res) => {
     await pool.query('UPDATE notifications SET read = true WHERE id = $1', [req.params.id]);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4045,7 +4048,7 @@ app.post('/api/notifications/read-all', async (req, res) => {
     await pool.query('UPDATE notifications SET read = true WHERE user_id = $1', [userId]);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4066,7 +4069,7 @@ app.get('/api/financials/status', async (req, res) => {
       message: 'Financial data providers: Yahoo Finance, FMP, SEC EDGAR, SimFin',
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4079,7 +4082,8 @@ app.get('/api/financials/:symbol', async (req, res) => {
     const report = await getFinancialReport(symbol, period, limit, provider);
     res.json(report);
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message, lastUpdated: new Date().toISOString() });
+    console.error('[Financial report]', error.message);
+    res.status(500).json({ success: false, error: 'Failed to fetch financial report', lastUpdated: new Date().toISOString() });
   }
 });
 
@@ -4089,7 +4093,7 @@ app.get('/api/financials/:symbol/income', async (req, res) => {
     const data = await getIncomeStatement(symbol);
     res.json(data || []);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4099,7 +4103,7 @@ app.get('/api/financials/:symbol/balance', async (req, res) => {
     const data = await getBalanceSheet(symbol);
     res.json(data || []);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4109,7 +4113,7 @@ app.get('/api/financials/:symbol/cashflow', async (req, res) => {
     const data = await getCashFlowStatement(symbol);
     res.json(data || []);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4119,7 +4123,7 @@ app.get('/api/financials/:symbol/metrics', async (req, res) => {
     const data = await getKeyMetrics(symbol);
     res.json(data || []);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4130,7 +4134,7 @@ app.get('/api/financials/:symbol/dividends', async (req, res) => {
     const data = await getDividendHistory(symbol, limit);
     res.json({ success: true, data: data || [] });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4140,7 +4144,7 @@ app.get('/api/bonds', async (req, res) => {
     const bonds = await getBonds(req.query.market || 'kenya');
     res.json(bonds);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4149,7 +4153,7 @@ app.get('/api/bonds/summary', async (req, res) => {
     const summary = await getBondSummary();
     res.json(summary);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4159,7 +4163,7 @@ app.get('/api/bonds/:id', async (req, res) => {
     if (!bond) return res.status(404).json({ error: 'Bond not found' });
     res.json(bond);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4169,7 +4173,7 @@ app.get('/api/bonds/:type/access', async (req, res) => {
     const access = await getMarketAccess(req.params.type, market);
     res.json({ type: req.params.type, market, methods: access || [] });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4179,7 +4183,7 @@ app.get('/api/etfs', async (req, res) => {
     const etfs = await getETFs(req.query.market || 'all');
     res.json(etfs);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4188,7 +4192,7 @@ app.get('/api/etfs/summary', async (req, res) => {
     const summary = await getETFSummary();
     res.json(summary);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4198,7 +4202,7 @@ app.get('/api/etfs/:ticker', async (req, res) => {
     if (!etf) return res.status(404).json({ error: 'ETF not found' });
     res.json(etf);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4208,7 +4212,7 @@ app.get('/api/fx/rate', async (req, res) => {
     const rate = await fxService.getRate();
     res.json({ rate });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4218,7 +4222,7 @@ app.get('/api/fx/convert', async (req, res) => {
     const result = await fxService.convert(parseFloat(amount), from, to);
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4242,7 +4246,7 @@ app.get('/api/market/nse', async (req, res) => {
     }));
     res.json(filtered);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4252,7 +4256,7 @@ app.get('/api/market/us', async (req, res) => {
     const quotes = await Promise.all(symbols.map(s => getStockQuote(s).catch(() => null)));
     res.json(quotes.filter(Boolean));
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4265,7 +4269,7 @@ app.get('/api/user/sentiment-preference', async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     res.json({ optedIn: result.rows[0].sentiment_opt_in || false });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4290,7 +4294,7 @@ app.post('/api/user/send-test-portfolio', requireOwnership, async (req, res) => 
     }
   } catch (error) {
     console.error('send-test-portfolio error:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4315,7 +4319,7 @@ app.post('/api/user/send-test-paper-portfolio', requireOwnership, async (req, re
     }
   } catch (error) {
     console.error('send-test-paper-portfolio error:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4326,7 +4330,7 @@ app.post('/api/user/sentiment-preference', async (req, res) => {
     await pool.query('UPDATE users SET sentiment_opt_in = $1 WHERE id = $2', [optedIn, userId]);
     res.json({ success: true, optedIn: !!optedIn });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4358,7 +4362,7 @@ app.post('/api/user/send-test-sentiment', async (req, res) => {
     res.json({ success: true, message: 'Test sentiment email sent' });
   } catch (error) {
     console.error('send-test-sentiment error:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4381,7 +4385,7 @@ app.post('/api/user/send-test-hot-news', async (req, res) => {
     }
   } catch (error) {
     console.error('send-test-hot-news error:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4406,7 +4410,7 @@ app.post('/api/test/send-receipt', async (req, res) => {
     res.json({ success: true, message: `Test receipt sent to ${email}` });
   } catch (error) {
     console.error('send-test-receipt error:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4424,7 +4428,7 @@ app.post('/api/test/send-expiry-reminder', async (req, res) => {
     res.json({ success: true, message: `Test expiry reminder sent to ${email}` });
   } catch (error) {
     console.error('send-test-expiry-reminder error:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4440,7 +4444,7 @@ app.post('/api/test/send-expired', async (req, res) => {
     res.json({ success: true, message: `Test expired notice sent to ${email}` });
   } catch (error) {
     console.error('send-test-expired error:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4458,7 +4462,7 @@ app.get('/api/users/search', async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4471,7 +4475,7 @@ app.get('/api/users/:userId/followers', async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4484,7 +4488,7 @@ app.get('/api/users/:userId/following', async (req, res) => {
     );
     res.json(result.rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4497,7 +4501,7 @@ app.post('/api/users/follow', async (req, res) => {
     );
     res.status(201).json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4510,7 +4514,7 @@ app.delete('/api/users/unfollow', async (req, res) => {
     );
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -4518,7 +4522,7 @@ app.get('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { rows } = await pool.query(
-      'SELECT id, full_name, email, created_at, updated_at FROM users WHERE id = $1',
+      'SELECT id, full_name, email, created_at, updated_at, visible_in_directory FROM users WHERE id = $1',
       [id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
@@ -4532,15 +4536,16 @@ app.get('/api/users/:id', async (req, res) => {
 app.put('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, email, trader_type } = req.body;
+    const { full_name, email, trader_type, visible_in_directory } = req.body;
     const fields = []; const params = []; let idx = 1;
     if (full_name !== undefined) { fields.push(`full_name = $${idx++}`); params.push(full_name); }
     if (email !== undefined) { fields.push(`email = $${idx++}`); params.push(email); }
     if (trader_type !== undefined) { fields.push(`trader_type = $${idx++}`); params.push(trader_type); }
+    if (visible_in_directory !== undefined) { fields.push(`visible_in_directory = $${idx++}`); params.push(visible_in_directory); }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
     params.push(id);
     const result = await pool.query(
-      `UPDATE users SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${idx} RETURNING id, full_name, email, trader_type, created_at, updated_at`,
+      `UPDATE users SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${idx} RETURNING id, full_name, email, trader_type, visible_in_directory, created_at, updated_at`,
       params
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
@@ -4588,6 +4593,7 @@ app.get('/api/people', async (req, res) => {
               COALESCE(f.follower_count, 0) as followers
        FROM users u
        LEFT JOIN (SELECT followee_id, COUNT(*)::int as follower_count FROM followers GROUP BY followee_id) f ON f.followee_id = u.id
+       WHERE u.visible_in_directory = true
        ORDER BY u.full_name`
     );
     const people = result.rows.map(u => ({
@@ -4600,7 +4606,7 @@ app.get('/api/people', async (req, res) => {
     console.error('Error fetching people:', err.message);
     try {
       const result = await pool.query(
-        'SELECT id, full_name, email, role, trader_type, is_verified FROM users ORDER BY full_name'
+        'SELECT id, full_name, email, role, trader_type, is_verified FROM users WHERE visible_in_directory = true ORDER BY full_name'
       );
       const people = result.rows.map(u => ({
         ...u,
@@ -4789,7 +4795,7 @@ app.get('/api/screener/criteria', async (req, res) => {
       totalStocks: signals.length,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -5047,7 +5053,7 @@ app.get('/api/earnings/criteria', async (req, res) => {
     const criteria = await getEarningsCriteria();
     res.json(criteria);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -6396,7 +6402,7 @@ app.post('/api/holdings', async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error adding holding:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -6412,7 +6418,7 @@ app.put('/api/holdings/:id', async (req, res) => {
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Error updating holding:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -6423,7 +6429,7 @@ app.delete('/api/holdings/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting holding:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -6449,7 +6455,7 @@ app.post('/api/holdings/bulk', async (req, res) => {
     res.status(201).json({ imported: results.length });
   } catch (error) {
     console.error('Error bulk importing holdings:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -6785,7 +6791,7 @@ app.post('/api/paper/orders', async (req, res) => {
     });
   } catch (error) {
     console.error('Error placing paper order:', error.message);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
 
@@ -6981,7 +6987,8 @@ app.post('/api/payments/mpesa-push', async (req, res) => {
     });
   } catch (error) {
     console.error('M-Pesa STK push error:', error.response?.status, JSON.stringify(error.response?.data), error.message, error.stack);
-    res.status(500).json({ error: 'Failed to initiate payment. Please try again.', detail: error.response?.data || error.message });
+    console.error('[M-Pesa] STK push error:', error.response?.status, JSON.stringify(error.response?.data));
+    res.status(500).json({ error: 'Failed to initiate payment. Please try again.' });
   }
 });
 
@@ -7234,7 +7241,7 @@ app.post('/api/payments/resend-receipt', authenticateToken, async (req, res) => 
     res.json({ success: true, message: 'Receipt resent' });
   } catch (error) {
     console.error('Resend receipt error:', error.message);
-    res.status(500).json({ error: 'Failed to resend receipt', detail: error.message });
+    res.status(500).json({ error: 'Failed to resend receipt' });
   }
 });
 
@@ -8650,6 +8657,7 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_start_date TIMESTAMP WITH TIME ZONE`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_end_date TIMESTAMP WITH TIME ZONE`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_start_date TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS visible_in_directory BOOLEAN DEFAULT true`);
     // Grant existing free users a trial from their signup date
     await pool.query(`UPDATE users SET trial_start_date = created_at WHERE trial_start_date IS NULL AND subscription_tier = 'free'`);
     // Set default duration_months for existing plans that don't have it
@@ -9082,6 +9090,39 @@ async function sendDailySentimentReports() {
   }
 }
 
+// ── Error handling infrastructure ──────────────────────────────
+
+const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+class AppError extends Error {
+  constructor(message, { statusCode = 500, code = 'INTERNAL_ERROR' } = {}) {
+    super(message);
+    this.statusCode = statusCode;
+    this.code = code;
+    this.isOperational = true;
+  }
+}
+
+// 404 handler — must be after all routes
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Not found', code: 'NOT_FOUND' });
+});
+
+// Global error middleware — must be after 404 handler
+app.use((err, _req, res, _next) => {
+  if (err instanceof AppError) {
+    return res.status(err.statusCode).json({ error: err.message, code: err.code });
+  }
+  if (err.code === 'LIMIT_FILE_SIZE' || err.message?.startsWith('File type not allowed')) {
+    return res.status(400).json({ error: err.message, code: 'FILE_ERROR' });
+  }
+  if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+    return res.status(401).json({ error: 'Invalid or expired token', code: 'TOKEN_INVALID' });
+  }
+  console.error('[UNEXPECTED]', err.stack || err.message);
+  res.status(500).json({ error: 'An unexpected error occurred', code: 'INTERNAL_ERROR' });
+});
+
 // ── SPA fallback: serve index.html for all non-API routes ────────
 // Only enabled when the backend is co-located with a built frontend.
 if (serveFrontend) {
@@ -9113,19 +9154,13 @@ server.on('error', (err) => {
   }
 });
 
+process.on('unhandledRejection', (reason) => {
+  console.error('[UNHANDLED REJECTION]', reason instanceof Error ? reason.stack : reason);
+});
+
 process.on('uncaughtException', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    startRetries++;
-    if (startRetries > MAX_START_RETRIES) {
-      console.error(`Port ${port} is still in use after ${MAX_START_RETRIES} retries. Exiting.`);
-      process.exit(1);
-    }
-    console.error(`Port ${port} is in use. Retrying in 3s... (attempt ${startRetries}/${MAX_START_RETRIES})`);
-    setTimeout(() => server.listen(port, '0.0.0.0'), 3000);
-  } else {
-    console.error('Uncaught exception:', err.message);
-    process.exit(1);
-  }
+  console.error('[UNCAUGHT EXCEPTION]', err.stack || err.message);
+  process.exit(1);
 });
 
 initDatabase().then(() => {

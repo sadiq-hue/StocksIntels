@@ -41,6 +41,7 @@ export function SettingsPage() {
     trader_type: user?.trader_type || "",
     experience: "",
     avatar: "",
+    visible_in_directory: true,
   });
   const [originalProfile, setOriginalProfile] = useState({ ...profile });
   const [loading, setLoading] = useState(false);
@@ -711,6 +712,33 @@ export function SettingsPage() {
                     <Switch 
                       checked={privacy.showPortfolio}
                       onCheckedChange={(checked) => handlePrivacyChange("showPortfolio", checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                    <div>
+                      <div className="text-gray-900 font-medium">Show in Community Directory</div>
+                      <div className="text-gray-600 text-sm">Appear in the traders directory and be discoverable</div>
+                    </div>
+                    <Switch 
+                      checked={profile.visible_in_directory}
+                      onCheckedChange={async (checked) => {
+                        setProfile(p => ({ ...p, visible_in_directory: checked }));
+                        if (user?.id) {
+                          try {
+                            const res = await fetch(`${API_BASE_URL}/users/${user.id}`, {
+                              method: "PUT",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ visible_in_directory: checked }),
+                            });
+                            if (!res.ok) throw new Error();
+                            toast.success(checked ? "You are now visible in the directory" : "You are now hidden from the directory");
+                          } catch {
+                            setProfile(p => ({ ...p, visible_in_directory: !checked }));
+                            toast.error("Failed to update visibility");
+                          }
+                        }
+                      }}
                     />
                   </div>
                 </div>
