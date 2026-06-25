@@ -7011,7 +7011,7 @@ app.post('/api/payments/callback', async (req, res) => {
       );
       if (status === 'success') {
         const tx = await pool.query(
-          'SELECT id, user_id, phone_number, plan_name, duration_months FROM payment_transactions WHERE payhero_reference = $1 OR external_reference = $1',
+          'SELECT id, user_id, phone_number, plan_name, duration_months, amount FROM payment_transactions WHERE payhero_reference = $1 OR external_reference = $1',
           [reference]
         );
         if (tx.rows.length > 0) {
