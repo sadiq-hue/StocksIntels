@@ -271,8 +271,10 @@ export function LandingPage() {
       </header>
 
       {/* HERO */}
-      <section ref={heroRef} className="relative pt-32 pb-20 lg:pt-40 lg:pb-28 overflow-hidden bg-gradient-to-b from-white via-[#f8fcfe] to-white">
-        <div className="absolute inset-0 -z-10">
+      <section ref={heroRef} className="relative pt-32 pb-20 lg:pt-40 lg:pb-28 overflow-hidden bg-gradient-to-b from-white via-[#f2fafd] to-white">
+        <div className="absolute inset-0">
+          {/* Colorful gradient base */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#0D7490]/5 via-transparent to-[#0EA5E9]/5" />
           <StockChartBg />
           <div className="absolute top-[-20%] right-[-10%] w-[1000px] h-[1000px] bg-gradient-to-bl from-[#0D7490]/12 via-[#0EA5E9]/6 to-transparent rounded-full blur-3xl animate-pulse-slow" />
           <div className="absolute bottom-[-20%] left-[-10%] w-[800px] h-[800px] bg-gradient-to-tr from-[#0EA5E9]/12 via-[#0D7490]/6 to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
@@ -318,7 +320,7 @@ export function LandingPage() {
           }} />
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="max-w-3xl mx-auto text-center">
             <p className="text-[#0D7490] text-sm font-semibold mb-4">
               AI-powered trading intelligence for NSE and global equities
