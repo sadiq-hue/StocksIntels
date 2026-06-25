@@ -8,14 +8,16 @@ import {
 import { Button } from "../components/ui/button";
 
 const floatingShapes = [
-  { size: 60, top: "10%", left: "5%", delay: 0, depth: 1, color: "rgba(13,116,144,0.15)", rotate: 15 },
-  { size: 40, top: "20%", right: "8%", delay: 0.5, depth: 2, color: "rgba(14,165,233,0.1)", rotate: 30 },
-  { size: 80, top: "55%", left: "2%", delay: 1, depth: 3, color: "rgba(13,116,144,0.08)", rotate: 45 },
-  { size: 35, top: "65%", right: "12%", delay: 1.5, depth: 1, color: "rgba(14,165,233,0.12)", rotate: 60 },
-  { size: 50, top: "35%", left: "15%", delay: 0.8, depth: 2, color: "rgba(13,116,144,0.1)", rotate: 90 },
-  { size: 25, top: "75%", left: "20%", delay: 2, depth: 1, color: "rgba(14,165,233,0.15)", rotate: 10 },
-  { size: 45, top: "15%", left: "50%", delay: 0.3, depth: 3, color: "rgba(13,116,144,0.07)", rotate: 120 },
-  { size: 30, top: "45%", right: "20%", delay: 1.2, depth: 2, color: "rgba(14,165,233,0.1)", rotate: 75 },
+  { size: 80, top: "8%", left: "3%", delay: 0, depth: 1, color: "rgba(13,116,144,0.25)", rotate: 15, border: "rgba(13,116,144,0.4)" },
+  { size: 50, top: "18%", right: "5%", delay: 1.2, depth: 3, color: "rgba(14,165,233,0.2)", rotate: 40, border: "rgba(14,165,233,0.35)" },
+  { size: 110, top: "50%", left: "1%", delay: 0.7, depth: 2, color: "rgba(13,116,144,0.18)", rotate: 60, border: "rgba(13,116,144,0.3)" },
+  { size: 45, top: "70%", right: "3%", delay: 1.8, depth: 1, color: "rgba(14,165,233,0.22)", rotate: 25, border: "rgba(14,165,233,0.4)" },
+  { size: 65, top: "35%", left: "12%", delay: 0.3, depth: 3, color: "rgba(13,116,144,0.2)", rotate: 80, border: "rgba(13,116,144,0.35)" },
+  { size: 35, top: "82%", left: "18%", delay: 2.2, depth: 2, color: "rgba(14,165,233,0.25)", rotate: 10, border: "rgba(14,165,233,0.45)" },
+  { size: 55, top: "12%", left: "45%", delay: 0.5, depth: 3, color: "rgba(13,116,144,0.15)", rotate: 120, border: "rgba(13,116,144,0.3)" },
+  { size: 40, top: "42%", right: "15%", delay: 1.5, depth: 2, color: "rgba(14,165,233,0.2)", rotate: 70, border: "rgba(14,165,233,0.35)" },
+  { size: 70, top: "60%", left: "30%", delay: 0.9, depth: 1, color: "rgba(13,116,144,0.15)", rotate: 35, border: "rgba(13,116,144,0.25)" },
+  { size: 25, top: "28%", right: "22%", delay: 2.5, depth: 3, color: "rgba(14,165,233,0.3)", rotate: 90, border: "rgba(14,165,233,0.5)" },
 ];
 
 const features = [
@@ -212,31 +214,41 @@ export function LandingPage() {
       {/* HERO */}
       <section ref={heroRef} className="relative pt-32 pb-20 lg:pt-40 lg:pb-28 overflow-hidden">
         <div className="absolute inset-0 -z-10">
-          <div className="absolute top-[-20%] right-[-10%] w-[1000px] h-[1000px] bg-gradient-to-bl from-[#0D7490]/10 via-[#0EA5E9]/5 to-transparent rounded-full blur-3xl animate-pulse-slow" />
-          <div className="absolute bottom-[-20%] left-[-10%] w-[800px] h-[800px] bg-gradient-to-tr from-[#0EA5E9]/10 via-[#0D7490]/5 to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
+          <div className="absolute top-[-20%] right-[-10%] w-[1000px] h-[1000px] bg-gradient-to-bl from-[#0D7490]/15 via-[#0EA5E9]/8 to-transparent rounded-full blur-3xl animate-pulse-slow" />
+          <div className="absolute bottom-[-20%] left-[-10%] w-[800px] h-[800px] bg-gradient-to-tr from-[#0EA5E9]/15 via-[#0D7490]/8 to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
           {/* 3D Floating Shapes */}
           {floatingShapes.map((shape, i) => {
-            const depthFactor = shape.depth * 15;
+            const depthFactor = shape.depth * 8;
             const tx = (mousePos.x - window.innerWidth / 2) / depthFactor;
             const ty = (mousePos.y - window.innerHeight / 2) / depthFactor;
+            const borderRadius = shape.rotate % 90 < 20 ? "50%" : shape.rotate % 90 < 50 ? "40% 60% 60% 40% / 60% 30% 70% 40%" : "30% 70% 50% 50% / 50% 40% 60% 50%";
             return (
               <div
                 key={i}
-                className="absolute hidden lg:block"
+                className="absolute"
                 style={{
                   top: shape.top,
                   left: shape.left ?? undefined,
                   right: shape.right ?? undefined,
                   width: shape.size,
                   height: shape.size,
-                  borderRadius: shape.rotate % 90 < 30 ? "50%" : "30% 70% 70% 30% / 30% 30% 70% 70%",
-                  background: shape.color,
-                  transform: `perspective(800px) rotateX(${shape.rotate}deg) rotateY(${shape.rotate * 0.5}deg) translate3d(${tx}px, ${ty}px, ${shape.depth * 30}px)`,
-                  animation: `float-3d ${6 + shape.delay * 2}s ease-in-out infinite`,
+                  animation: `float-3d ${8 + shape.delay * 1.5}s ease-in-out infinite`,
                   animationDelay: `${shape.delay}s`,
-                  willChange: "transform",
                 }}
-              />
+              >
+                <div
+                  className="w-full h-full"
+                  style={{
+                    borderRadius,
+                    background: `radial-gradient(circle at 30% 30%, ${shape.color}, transparent)`,
+                    border: `1px solid ${shape.border}`,
+                    boxShadow: `0 0 50px ${shape.color}`,
+                    transform: `perspective(600px) rotateX(${Math.sin(i * 1.5) * 15 + 10}deg) rotateY(${Math.cos(i * 1.2) * 20}deg) translate3d(${tx}px, ${ty}px, ${shape.depth * 50}px)`,
+                    willChange: "transform",
+                    backdropFilter: "blur(4px)",
+                  }}
+                />
+              </div>
             );
           })}
           {/* Grid overlay */}
