@@ -20,6 +20,10 @@ function TrialBanner() {
   const { user } = useAuth();
   const navigate = useNavigate();
   if (!user) return null;
+  const hasPaid = user.subscription_status === 'active' &&
+    user.subscription_tier && user.subscription_tier !== 'free' &&
+    user.subscription_end_date && new Date(user.subscription_end_date) > new Date();
+  if (hasPaid) return null;
   const trialInfo = getTrialInfo(user);
   const [dismissed, setDismissed] = useState(() =>
     localStorage.getItem(`trial_banner_dismissed_${user.id}`) === 'true'

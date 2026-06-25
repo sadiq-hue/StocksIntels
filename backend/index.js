@@ -216,7 +216,7 @@ app.post('/api/admin/verify-otp', async (req, res) => {
     }
     await pool.query('UPDATE otp_codes SET used = TRUE WHERE id = $1', [result.rows[0].id]);
     const userResult = await pool.query(
-      'SELECT id, full_name, email, role, is_verified, created_at, subscription_tier, subscription_status, trial_start_date FROM users WHERE email = $1',
+      'SELECT id, full_name, email, role, is_verified, created_at, subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE email = $1',
       [email]
     );
     if (userResult.rows.length === 0 || userResult.rows[0].role !== 'admin') {
@@ -1591,7 +1591,7 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
       }
     }
     const result = await pool.query(
-      'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date, referred_by) VALUES ($1, $2, $3, TRUE, NOW(), $4) RETURNING id, full_name, email, role, is_verified, trader_type, created_at, subscription_tier, subscription_status, trial_start_date',
+      'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date, referred_by) VALUES ($1, $2, $3, TRUE, NOW(), $4) RETURNING id, full_name, email, role, is_verified, trader_type, created_at, subscription_tier, subscription_status, trial_start_date, subscription_end_date',
       [fullName, email, hashedPassword, referredBy]
     );
     // Create pending referral record
@@ -1748,10 +1748,10 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     );
     if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid or expired OTP' });
     await pool.query('UPDATE otp_codes SET used = TRUE WHERE id = $1', [result.rows[0].id]);
-    let userResult = await pool.query('SELECT id, full_name, email, role, trader_type, is_verified, created_at, subscription_tier, subscription_status, trial_start_date FROM users WHERE email = $1', [email]);
+    let userResult = await pool.query('SELECT id, full_name, email, role, trader_type, is_verified, created_at, subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE email = $1', [email]);
     if (userResult.rows.length === 0) {
       userResult = await pool.query(
-        'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date) VALUES ($1, $2, $3, TRUE, NOW()) RETURNING id, full_name, email, role, trader_type, is_verified, created_at, trial_start_date',
+        'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date) VALUES ($1, $2, $3, TRUE, NOW()) RETURNING id, full_name, email, role, trader_type, is_verified, created_at, trial_start_date, subscription_end_date',
         [email, email, 'otp_only']
       );
       await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [userResult.rows[0].id]);
@@ -1817,7 +1817,7 @@ app.post('/api/auth/login-verify-otp', async (req, res) => {
     if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid or expired OTP' });
     await pool.query('UPDATE otp_codes SET used = TRUE WHERE id = $1', [result.rows[0].id]);
     const userResult = await pool.query(
-      'SELECT id, full_name, email, role, trader_type, is_verified, created_at, subscription_tier, subscription_status, trial_start_date FROM users WHERE email = $1',
+      'SELECT id, full_name, email, role, trader_type, is_verified, created_at, subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE email = $1',
       [email]
     );
     if (userResult.rows.length === 0) return res.status(401).json({ error: 'User not found' });
@@ -1904,7 +1904,7 @@ app.post('/api/auth/refresh', async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Invalid or expired refresh token', code: 'INVALID_REFRESH_TOKEN' });
     const token = generateToken(userId);
     const userResult = await pool.query(
-      'SELECT id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date FROM users WHERE id = $1',
+      'SELECT id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE id = $1',
       [userId]
     );
     if (userResult.rows.length === 0) return res.status(401).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
@@ -7476,7 +7476,7 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
     const inTrial = new Date() - new Date(trialStart) < 7 * 24 * 60 * 60 * 1000;
     const startDate = inTrial ? trialStart : new Date();
     const updateRes = await pool.query(
-      `UPDATE users SET subscription_tier = $1, subscription_status = 'active', trial_start_date = $2 WHERE id = $3 RETURNING id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date`,
+      `UPDATE users SET subscription_tier = $1, subscription_status = 'active', trial_start_date = $2 WHERE id = $3 RETURNING id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date, subscription_end_date`,
       [tier, startDate, userId]
     );
     console.log(`[TRIAL] Started: user=${userId} plan=${tier}`);
@@ -7492,7 +7492,7 @@ app.post('/api/payments/activate-free', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const updateRes = await pool.query(
-      `UPDATE users SET subscription_tier = 'free', subscription_status = 'active' WHERE id = $1 RETURNING id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date`,
+      `UPDATE users SET subscription_tier = 'free', subscription_status = 'active' WHERE id = $1 RETURNING id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date, subscription_end_date`,
       [userId]
     );
     console.log(`[FREE] Activated: user=${userId}`);

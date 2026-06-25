@@ -13,6 +13,7 @@ export interface UserInfo {
   subscription_tier?: string;
   subscription_status?: string;
   trial_start_date?: string | null;
+  subscription_end_date?: string | null;
 }
 
 export function getTrialInfo(user: UserInfo | null): { isWithinTrial: boolean; daysRemaining: number; canStartTrial: boolean } {

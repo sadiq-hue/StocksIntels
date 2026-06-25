@@ -79,7 +79,7 @@ async function authenticateToken(req, res, next) {
     }
     const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     const userResult = await pool.query(
-      'SELECT id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date FROM users WHERE id = $1',
+      'SELECT id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE id = $1',
       [decoded.userId]
     );
     if (userResult.rows.length === 0) {
