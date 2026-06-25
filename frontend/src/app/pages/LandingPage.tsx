@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "react-router";
 import {
   ArrowRight, BarChart3, Menu, X, Star, Users, Award,
@@ -6,6 +6,68 @@ import {
   ChevronRight, Clock, TrendingUp,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
+
+function StockChartBg() {
+  const path = useMemo(() => {
+    const points = [
+      { x: 0, y: 70 }, { x: 5, y: 65 }, { x: 10, y: 68 }, { x: 15, y: 55 }, { x: 20, y: 58 },
+      { x: 25, y: 45 }, { x: 30, y: 50 }, { x: 35, y: 40 }, { x: 40, y: 35 }, { x: 45, y: 38 },
+      { x: 50, y: 30 }, { x: 55, y: 33 }, { x: 60, y: 28 }, { x: 65, y: 32 }, { x: 70, y: 25 },
+      { x: 75, y: 20 }, { x: 80, y: 22 }, { x: 85, y: 18 }, { x: 90, y: 15 }, { x: 95, y: 18 },
+      { x: 100, y: 12 },
+    ];
+    const d = points.map((p, i) => {
+      if (i === 0) return `M ${p.x} ${p.y}`;
+      const prev = points[i - 1];
+      const cx = (prev.x + p.x) / 2;
+      const cy = (prev.y + p.y) / 2;
+      return `Q ${cx} ${cy} ${p.x} ${p.y}`;
+    }).join(" ");
+    return d;
+  }, []);
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <svg
+        className="absolute bottom-0 left-0 w-full h-[80%] opacity-[0.07]"
+        viewBox="0 0 100 80"
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#0D7490" stopOpacity="0.6" />
+            <stop offset="100%" stopColor="#0D7490" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={`${path} L 100 80 L 0 80 Z`} fill="url(#chart-gradient)" />
+        <path
+          d={path}
+          fill="none"
+          stroke="#0D7490"
+          strokeWidth="0.4"
+          className="animate-chart-draw"
+          strokeDasharray="200"
+          strokeDashoffset="200"
+        />
+      </svg>
+      <svg
+        className="absolute bottom-0 right-0 w-[60%] h-[60%] opacity-[0.04]"
+        viewBox="0 0 100 80"
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <linearGradient id="chart-gradient-2" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#0EA5E9" stopOpacity="0" />
+            <stop offset="50%" stopColor="#0EA5E9" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="#0EA5E9" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={`M 0 60 Q 20 50 40 55 T 80 30 T 100 25 L 100 80 L 0 80 Z`} fill="url(#chart-gradient-2)" />
+        <path d="M 0 60 Q 20 50 40 55 T 80 30 T 100 25" fill="none" stroke="#0EA5E9" strokeWidth="0.3" />
+      </svg>
+    </div>
+  );
+}
 
 const floatingShapes = [
   { size: 80, top: "8%", left: "3%", delay: 0, depth: 1, color: "rgba(13,116,144,0.25)", rotate: 15, border: "rgba(13,116,144,0.4)" },
@@ -212,10 +274,11 @@ export function LandingPage() {
       </header>
 
       {/* HERO */}
-      <section ref={heroRef} className="relative pt-32 pb-20 lg:pt-40 lg:pb-28 overflow-hidden">
+      <section ref={heroRef} className="relative pt-32 pb-20 lg:pt-40 lg:pb-28 overflow-hidden bg-gradient-to-b from-white via-[#f8fcfe] to-white">
         <div className="absolute inset-0 -z-10">
-          <div className="absolute top-[-20%] right-[-10%] w-[1000px] h-[1000px] bg-gradient-to-bl from-[#0D7490]/15 via-[#0EA5E9]/8 to-transparent rounded-full blur-3xl animate-pulse-slow" />
-          <div className="absolute bottom-[-20%] left-[-10%] w-[800px] h-[800px] bg-gradient-to-tr from-[#0EA5E9]/15 via-[#0D7490]/8 to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
+          <StockChartBg />
+          <div className="absolute top-[-20%] right-[-10%] w-[1000px] h-[1000px] bg-gradient-to-bl from-[#0D7490]/12 via-[#0EA5E9]/6 to-transparent rounded-full blur-3xl animate-pulse-slow" />
+          <div className="absolute bottom-[-20%] left-[-10%] w-[800px] h-[800px] bg-gradient-to-tr from-[#0EA5E9]/12 via-[#0D7490]/6 to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
           {/* 3D Floating Shapes */}
           {floatingShapes.map((shape, i) => {
             const depthFactor = shape.depth * 8;
@@ -316,7 +379,11 @@ export function LandingPage() {
       </section>
 
       {/* FEATURES */}
-      <section id="features" className="py-20 lg:py-28 bg-gray-50/80" ref={setSectionRef(2)}>
+      <section id="features" className="relative py-20 lg:py-28 bg-gray-50/80 overflow-hidden" ref={setSectionRef(2)}>
+        <div className="absolute inset-0 opacity-[0.02]" style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
+          backgroundSize: "40px 40px",
+        }} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className={`text-center max-w-3xl mx-auto mb-14 transition-all duration-700 ${visibleSections.has(2) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Tools that help you trade NSE and global stocks better</h2>
@@ -373,7 +440,11 @@ export function LandingPage() {
       </section>
 
       {/* WHY CHOOSE US */}
-      <section className="py-20 lg:py-28 bg-gray-50/80" ref={setSectionRef(4)}>
+      <section className="relative py-20 lg:py-28 bg-gray-50/80 overflow-hidden" ref={setSectionRef(4)}>
+        <div className="absolute inset-0 opacity-[0.015]" style={{
+          backgroundImage: `linear-gradient(45deg, #0D7490 1px, transparent 1px)`,
+          backgroundSize: "50px 50px",
+        }} />
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(4) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="max-w-3xl mx-auto mb-14">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Built for traders in Kenya, not Silicon Valley</h2>
@@ -426,7 +497,11 @@ export function LandingPage() {
       </section>
 
       {/* PRICING */}
-      <section id="pricing" className="py-20 lg:py-28 bg-gray-50/80" ref={setSectionRef(6)}>
+      <section id="pricing" className="relative py-20 lg:py-28 bg-gray-50/80 overflow-hidden" ref={setSectionRef(6)}>
+        <div className="absolute inset-0 opacity-[0.015]" style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
+          backgroundSize: "30px 30px",
+        }} />
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(6) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="text-center max-w-3xl mx-auto mb-14">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Simple pricing. Free trial included.</h2>

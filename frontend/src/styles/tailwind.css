@@ -20,6 +20,11 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes chart-draw {
+  from { stroke-dashoffset: 200; }
+  to { stroke-dashoffset: 0; }
+}
+
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -35,6 +40,10 @@
 
 @utility animate-fade-in-up {
   animation: fade-in-up 0.7s ease-out forwards;
+}
+
+@utility animate-chart-draw {
+  animation: chart-draw 2s ease-out forwards;
 }
 
 @utility animate-fade-in {
