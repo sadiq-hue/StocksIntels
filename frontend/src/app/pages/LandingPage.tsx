@@ -29,13 +29,13 @@ function StockChartBg() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       <svg
-        className="absolute bottom-0 left-0 w-full h-[80%] opacity-[0.07]"
+        className="absolute bottom-0 left-0 w-full h-[80%] opacity-[0.2]"
         viewBox="0 0 100 80"
         preserveAspectRatio="none"
       >
         <defs>
           <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#0D7490" stopOpacity="0.6" />
+            <stop offset="0%" stopColor="#0D7490" stopOpacity="0.4" />
             <stop offset="100%" stopColor="#0D7490" stopOpacity="0" />
           </linearGradient>
         </defs>
@@ -44,42 +44,39 @@ function StockChartBg() {
           d={path}
           fill="none"
           stroke="#0D7490"
-          strokeWidth="0.4"
-          className="animate-chart-draw"
-          strokeDasharray="200"
-          strokeDashoffset="200"
+          strokeWidth="1"
         />
       </svg>
       <svg
-        className="absolute bottom-0 right-0 w-[60%] h-[60%] opacity-[0.04]"
+        className="absolute bottom-0 right-0 w-[60%] h-[60%] opacity-[0.12]"
         viewBox="0 0 100 80"
         preserveAspectRatio="none"
       >
         <defs>
           <linearGradient id="chart-gradient-2" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stopColor="#0EA5E9" stopOpacity="0" />
-            <stop offset="50%" stopColor="#0EA5E9" stopOpacity="0.5" />
+            <stop offset="50%" stopColor="#0EA5E9" stopOpacity="0.6" />
             <stop offset="100%" stopColor="#0EA5E9" stopOpacity="0" />
           </linearGradient>
         </defs>
         <path d={`M 0 60 Q 20 50 40 55 T 80 30 T 100 25 L 100 80 L 0 80 Z`} fill="url(#chart-gradient-2)" />
-        <path d="M 0 60 Q 20 50 40 55 T 80 30 T 100 25" fill="none" stroke="#0EA5E9" strokeWidth="0.3" />
+        <path d="M 0 60 Q 20 50 40 55 T 80 30 T 100 25" fill="none" stroke="#0EA5E9" strokeWidth="0.8" />
       </svg>
     </div>
   );
 }
 
 const floatingShapes = [
-  { size: 80, top: "8%", left: "3%", delay: 0, depth: 1, color: "rgba(13,116,144,0.25)", rotate: 15, border: "rgba(13,116,144,0.4)" },
-  { size: 50, top: "18%", right: "5%", delay: 1.2, depth: 3, color: "rgba(14,165,233,0.2)", rotate: 40, border: "rgba(14,165,233,0.35)" },
-  { size: 110, top: "50%", left: "1%", delay: 0.7, depth: 2, color: "rgba(13,116,144,0.18)", rotate: 60, border: "rgba(13,116,144,0.3)" },
-  { size: 45, top: "70%", right: "3%", delay: 1.8, depth: 1, color: "rgba(14,165,233,0.22)", rotate: 25, border: "rgba(14,165,233,0.4)" },
-  { size: 65, top: "35%", left: "12%", delay: 0.3, depth: 3, color: "rgba(13,116,144,0.2)", rotate: 80, border: "rgba(13,116,144,0.35)" },
-  { size: 35, top: "82%", left: "18%", delay: 2.2, depth: 2, color: "rgba(14,165,233,0.25)", rotate: 10, border: "rgba(14,165,233,0.45)" },
-  { size: 55, top: "12%", left: "45%", delay: 0.5, depth: 3, color: "rgba(13,116,144,0.15)", rotate: 120, border: "rgba(13,116,144,0.3)" },
-  { size: 40, top: "42%", right: "15%", delay: 1.5, depth: 2, color: "rgba(14,165,233,0.2)", rotate: 70, border: "rgba(14,165,233,0.35)" },
-  { size: 70, top: "60%", left: "30%", delay: 0.9, depth: 1, color: "rgba(13,116,144,0.15)", rotate: 35, border: "rgba(13,116,144,0.25)" },
-  { size: 25, top: "28%", right: "22%", delay: 2.5, depth: 3, color: "rgba(14,165,233,0.3)", rotate: 90, border: "rgba(14,165,233,0.5)" },
+  { size: 80, top: "8%", left: "3%", delay: 0, depth: 1, color: "rgba(13,116,144,0.35)", rotate: 15, border: "rgba(13,116,144,0.5)" },
+  { size: 50, top: "18%", right: "5%", delay: 1.2, depth: 3, color: "rgba(14,165,233,0.3)", rotate: 40, border: "rgba(14,165,233,0.45)" },
+  { size: 110, top: "50%", left: "1%", delay: 0.7, depth: 2, color: "rgba(13,116,144,0.25)", rotate: 60, border: "rgba(13,116,144,0.4)" },
+  { size: 45, top: "70%", right: "3%", delay: 1.8, depth: 1, color: "rgba(14,165,233,0.35)", rotate: 25, border: "rgba(14,165,233,0.5)" },
+  { size: 65, top: "35%", left: "12%", delay: 0.3, depth: 3, color: "rgba(13,116,144,0.3)", rotate: 80, border: "rgba(13,116,144,0.45)" },
+  { size: 35, top: "82%", left: "18%", delay: 2.2, depth: 2, color: "rgba(14,165,233,0.35)", rotate: 10, border: "rgba(14,165,233,0.55)" },
+  { size: 55, top: "12%", left: "45%", delay: 0.5, depth: 3, color: "rgba(13,116,144,0.25)", rotate: 120, border: "rgba(13,116,144,0.4)" },
+  { size: 40, top: "42%", right: "15%", delay: 1.5, depth: 2, color: "rgba(14,165,233,0.3)", rotate: 70, border: "rgba(14,165,233,0.45)" },
+  { size: 70, top: "60%", left: "30%", delay: 0.9, depth: 1, color: "rgba(13,116,144,0.25)", rotate: 35, border: "rgba(13,116,144,0.35)" },
+  { size: 25, top: "28%", right: "22%", delay: 2.5, depth: 3, color: "rgba(14,165,233,0.4)", rotate: 90, border: "rgba(14,165,233,0.6)" },
 ];
 
 const features = [
