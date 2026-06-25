@@ -374,6 +374,23 @@ export function LandingPage() {
               </div>
             </div>
           </div>
+          {/* Markets we cover */}
+          <div className="mt-16 pt-8 border-t border-gray-100">
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-widest mb-5 text-center">Markets we cover</p>
+            <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
+              {[
+                { label: "NSE", sub: "Nairobi Securities Exchange", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
+                { label: "NYSE", sub: "New York Stock Exchange", color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200" },
+                { label: "NASDAQ", sub: "Nasdaq Stock Market", color: "text-indigo-700", bg: "bg-indigo-50", border: "border-indigo-200" },
+                { label: "LSE", sub: "London Stock Exchange", color: "text-purple-700", bg: "bg-purple-50", border: "border-purple-200" },
+              ].map((m) => (
+                <div key={m.label} className={`flex items-center gap-3 px-4 py-2.5 rounded-lg ${m.bg} ${m.border} border`}>
+                  <span className={`font-black text-lg tracking-tight ${m.color}`}>{m.label}</span>
+                  <span className="text-xs text-gray-500 hidden sm:block">{m.sub}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
