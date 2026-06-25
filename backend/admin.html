@@ -990,16 +990,19 @@ async function fetchUsers() {
     if (d.users.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">No users found</td></tr>';
     } else {
-      tbody.innerHTML = d.users.map(u => `
+      tbody.innerHTML = d.users.map(u => {
+        const isPaid = u.subscription_status === 'active' && u.subscription_tier && u.subscription_tier !== 'free';
+        const subColor = isPaid ? 'pill-active' : (u.subscription_tier === 'free' ? 'pill-free' : 'bg-blue-100 text-blue-800');
+        return `
         <tr class="user-row ${selectedUserId === u.id ? 'selected' : ''}" onclick="selectUser(${u.id})">
           <td class="font-medium text-gray-900">${esc(u.full_name)}</td>
           <td class="text-gray-500">${esc(u.email)}</td>
           <td><span class="pill ${u.role === 'admin' ? 'pill-admin' : 'pill-trader'}">${esc(u.role)}</span></td>
-          <td class="text-gray-500">${esc(u.trader_type)}</td>
+          <td class="text-gray-500">${esc(u.trader_type) || '-'}</td>
           <td><span class="pill ${u.is_verified ? 'pill-verified' : 'pill-unverified'}">${u.is_verified ? 'Yes' : 'No'}</span></td>
-          <td><span class="pill ${u.subscription_status === 'active' ? 'pill-active' : 'pill-free'}">${esc(u.subscription_tier)}</span></td>
-        </tr>
-      `).join('');
+          <td><span class="pill ${subColor}">${esc(u.subscription_tier) || 'none'}</span></td>
+        </tr>`;
+      }).join('');
     }
     renderUsersPagination(d.total, d.page, d.limit);
   } catch {}
@@ -1075,7 +1078,7 @@ async function selectUser(id) {
             <div><span class="text-gray-500">Role</span><p><span class="pill ${u.role === 'admin' ? 'pill-admin' : 'pill-trader'}">${esc(u.role)}</span></p></div>
             <div><span class="text-gray-500">Trader Type</span><p class="text-gray-900">${esc(u.trader_type)}</p></div>
             <div><span class="text-gray-500">Verified</span><p><span class="pill ${u.is_verified ? 'pill-verified' : 'pill-unverified'}">${u.is_verified ? 'Yes' : 'No'}</span></p></div>
-            <div><span class="text-gray-500">Subscription</span><p class="text-gray-900">${esc(u.subscription_tier)} (${esc(u.subscription_status)})</p></div>
+            <div><span class="text-gray-500">Subscription</span><p class="text-gray-900">${esc(u.subscription_tier) || 'none'} ${u.subscription_status ? '(' + esc(u.subscription_status) + ')' : ''}</p></div>
             <div><span class="text-gray-500">Joined</span><p class="text-gray-900">${formatDate(u.created_at)}</p></div>
             <div><span class="text-gray-500">Notifications</span><p class="text-gray-900">${d.notificationsCount}</p></div>
           </div>
@@ -1089,8 +1092,10 @@ async function selectUser(id) {
             </select></div>
             <div><span class="text-gray-500">Subscription Tier</span><select id="editSubTier" class="input-field mt-1">
               <option value="free" ${u.subscription_tier === 'free' ? 'selected' : ''}>Free</option>
+              <option value="starter" ${u.subscription_tier === 'starter' ? 'selected' : ''}>Starter</option>
+              <option value="premium" ${u.subscription_tier === 'premium' ? 'selected' : ''}>Premium</option>
               <option value="pro" ${u.subscription_tier === 'pro' ? 'selected' : ''}>Pro</option>
-              <option value="enterprise" ${u.subscription_tier === 'enterprise' ? 'selected' : ''}>Enterprise</option>
+              <option value="institutional" ${u.subscription_tier === 'institutional' ? 'selected' : ''}>Institutional</option>
             </select></div>
             <div class="col-span-2 flex gap-2 mt-2">
               <button class="btn btn-primary" onclick="saveUserEdit(${u.id})">Save</button>
@@ -2121,6 +2126,7 @@ function timeAgo(dateStr) {
 }
 
 function esc(text) {
+  if (text == null) return '';
   const d = document.createElement('div');
   d.textContent = text;
   return d.innerHTML;
