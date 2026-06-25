@@ -315,7 +315,7 @@ app.get('/api/admin/users', async (req, res) => {
       LEFT JOIN paper_accounts pa ON pa.user_id = u.id
       LEFT JOIN (SELECT user_id, COUNT(*)::int as trades_count FROM paper_trades GROUP BY user_id) pt ON pt.user_id = u.id
       LEFT JOIN (SELECT user_id, COUNT(*)::int as holdings_count FROM portfolio_holdings GROUP BY user_id) ph ON ph.user_id = u.id
-      LEFT JOIN (SELECT user_id, COUNT(*)::int as watchlist_count FROM watchlists GROUP BY user_id) wl ON wl.user_id = u.id
+      LEFT JOIN (SELECT user_id, COUNT(*)::int as watchlist_count FROM watchlist_items GROUP BY user_id) wl ON wl.user_id = u.id
       ${whereClause}
       ORDER BY u.created_at DESC
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}

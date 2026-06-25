@@ -987,7 +987,7 @@ async function fetchUsers() {
     usersTotal = d.total;
     document.getElementById('userCount').textContent = d.total + ' users';
     const tbody = document.getElementById('usersTableBody');
-    if (d.users.length === 0) {
+    if (!d.users || d.users.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">No users found</td></tr>';
     } else {
       tbody.innerHTML = d.users.map(u => {
@@ -1005,7 +1005,7 @@ async function fetchUsers() {
       }).join('');
     }
     renderUsersPagination(d.total, d.page, d.limit);
-  } catch {}
+  } catch (e) { console.error('fetchUsers error:', e); }
 }
 
 function renderUsersPagination(total, page, limit) {
