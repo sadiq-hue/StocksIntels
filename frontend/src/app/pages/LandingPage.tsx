@@ -215,8 +215,8 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap justify-between items-center gap-4 h-16 md:h-20">
             <Link to="/" className="flex items-center gap-2.5 group">
-              <div className="w-9 h-9 md:w-10 md:h-10 bg-[#0D7490] rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-all duration-300">
-                <span className="text-white font-bold text-sm">SI</span>
+              <div className="w-9 h-9 md:w-10 md:h-10 bg-[#0D7490] rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-all duration-300 overflow-hidden">
+                <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5 md:w-6 md:h-6" />
               </div>
               <span className="text-xl md:text-2xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
             </Link>
@@ -762,8 +762,8 @@ export function LandingPage() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8 lg:gap-12 mb-10">
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2 mb-3 group">
-                <div className="w-8 h-8 bg-[#0D7490] rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                  <span className="text-white font-bold text-xs">SI</span>
+                <div className="w-8 h-8 bg-[#0D7490] rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300 overflow-hidden">
+                  <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
                 </div>
                 <span className="text-base font-bold">StocksIntels</span>
               </Link>
