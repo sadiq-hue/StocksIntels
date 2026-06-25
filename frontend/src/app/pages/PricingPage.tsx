@@ -11,7 +11,7 @@ import {
   Loader2
 } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth, getTrialInfo } from "../auth/AuthContext";
 import { toast } from "sonner";
 
 const plans = [
@@ -130,6 +130,7 @@ export function PricingPage() {
   const [isYearly, setIsYearly] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [startingTrial, setStartingTrial] = useState<string | null>(null);
+  const trialInfo = getTrialInfo(user);
 
   if (isLoading) {
     return (
@@ -182,6 +183,10 @@ export function PricingPage() {
         toast.error("Failed to activate free plan");
       }
       navigate("/app/dashboard");
+      return;
+    }
+    if (user && trialInfo.isWithinTrial) {
+      navigate(`/subscribe/${planName.toLowerCase()}`);
       return;
     }
     handleTrialClick(planName);
@@ -318,7 +323,7 @@ export function PricingPage() {
                       </>
                     ) : (
                       <>
-                        {plan.cta}
+                        {user && trialInfo.isWithinTrial && plan.name !== "Free" ? `Subscribe to ${plan.name}` : plan.cta}
                         <ArrowRight className="ml-2 w-4 h-4" />
                       </>
                     )}
