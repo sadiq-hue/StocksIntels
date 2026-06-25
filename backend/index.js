@@ -1102,6 +1102,124 @@ app.get('/api/admin/signal-outcomes', async (req, res) => {
   } catch (err) { console.error('Admin signal outcomes error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
+// --- Admin Affiliates ---
+app.get('/api/admin/affiliates', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
+    const countResult = await pool.query('SELECT COUNT(*)::int as cnt FROM affiliates');
+    const dataResult = await pool.query(
+      `SELECT a.id, a.user_id, a.referral_code, a.created_at, a.total_earned, a.pending_balance, a.paid_out,
+              u.full_name, u.email,
+              (SELECT COUNT(*) FROM referrals WHERE affiliate_id = a.id) as referral_count,
+              (SELECT COUNT(*) FROM referrals WHERE affiliate_id = a.id AND status = 'paid') as paid_referrals
+       FROM affiliates a JOIN users u ON u.id = a.user_id
+       ORDER BY a.created_at DESC LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    const statsResult = await pool.query(
+      `SELECT COUNT(*)::int as total_affiliates,
+              COALESCE(SUM(total_earned), 0) as total_earned,
+              COALESCE(SUM(pending_balance), 0) as total_pending,
+              COALESCE(SUM(paid_out), 0) as total_paid_out,
+              (SELECT COUNT(*) FROM referrals) as total_referrals,
+              (SELECT COUNT(*) FROM referrals WHERE status = 'paid') as paid_referrals
+       FROM affiliates`
+    );
+    res.json({ affiliates: dataResult.rows, total: countResult.rows[0].cnt, page, limit, stats: statsResult.rows[0] });
+  } catch (err) { console.error('Admin affiliates error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+app.get('/api/admin/affiliates/referrals', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
+    const countResult = await pool.query('SELECT COUNT(*)::int as cnt FROM referrals');
+    const dataResult = await pool.query(
+      `SELECT r.id, r.subscription_tier, r.commission_amount, r.status, r.created_at, r.paid_at,
+              r.affiliate_id, r.referred_user_id,
+              aff.referral_code, aff_user.full_name as affiliate_name, aff_user.email as affiliate_email,
+              ref_user.full_name as referred_name, ref_user.email as referred_email
+       FROM referrals r
+       JOIN affiliates aff ON aff.id = r.affiliate_id
+       JOIN users aff_user ON aff_user.id = aff.user_id
+       JOIN users ref_user ON ref_user.id = r.referred_user_id
+       ORDER BY r.created_at DESC LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json({ referrals: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
+  } catch (err) { console.error('Admin referrals error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+app.get('/api/admin/affiliates/payouts', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+    const offset = (page - 1) * limit;
+    const countResult = await pool.query('SELECT COUNT(*)::int as cnt FROM affiliate_payouts');
+    const dataResult = await pool.query(
+      `SELECT p.id, p.amount, p.payment_method, p.payment_details, p.status, p.notes, p.created_at, p.processed_at,
+              a.referral_code, u.full_name, u.email
+       FROM affiliate_payouts p
+       JOIN affiliates a ON a.id = p.affiliate_id
+       JOIN users u ON u.id = a.user_id
+       ORDER BY p.created_at DESC LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    const statsResult = await pool.query(
+      `SELECT COUNT(*)::int as total,
+              COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0)::int as pending_count,
+              COALESCE(SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END), 0)::int as approved_count,
+              COALESCE(SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END), 0)::int as paid_count,
+              COALESCE(SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END), 0)::int as rejected_count,
+              COALESCE(SUM(amount), 0) as total_amount,
+              COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pending_amount
+       FROM affiliate_payouts`
+    );
+    res.json({ payouts: dataResult.rows, total: countResult.rows[0].cnt, page, limit, stats: statsResult.rows[0] });
+  } catch (err) { console.error('Admin payouts error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+app.put('/api/admin/affiliates/payouts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, notes } = req.body;
+    if (!['approved', 'rejected', 'paid'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be approved, rejected, or paid' });
+    }
+    // Get payout info
+    const payoutRes = await pool.query(
+      `SELECT p.id, p.amount, p.status as current_status, p.affiliate_id
+       FROM affiliate_payouts p WHERE p.id = $1`,
+      [id]
+    );
+    if (payoutRes.rows.length === 0) return res.status(404).json({ error: 'Payout not found' });
+    const payout = payoutRes.rows[0];
+    if (payout.current_status !== 'pending') {
+      return res.status(400).json({ error: 'Payout is already ' + payout.current_status });
+    }
+    await pool.query(
+      `UPDATE affiliate_payouts SET status = $1, notes = $2, processed_at = NOW() WHERE id = $3`,
+      [status, notes || null, id]
+    );
+    if (status === 'paid') {
+      await pool.query(
+        `UPDATE affiliates SET paid_out = paid_out + $1 WHERE id = $2`,
+        [payout.amount, payout.affiliate_id]
+      );
+    } else if (status === 'rejected') {
+      await pool.query(
+        `UPDATE affiliates SET pending_balance = pending_balance + $1 WHERE id = $2`,
+        [payout.amount, payout.affiliate_id]
+      );
+    }
+    console.log(`[AFFILIATE] Payout ${id} ${status} by admin`);
+    res.json({ success: true, message: `Payout ${status}` });
+  } catch (err) { console.error('Admin payout update error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
 const port = process.env.PORT || 3001;
 app.get(['/admin', '/admin/*'], (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));

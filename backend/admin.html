@@ -154,6 +154,10 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
         Payments
       </div>
+      <div class="nav-item" data-tab="affiliates" onclick="switchTab('affiliates')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Affiliates
+      </div>
       <div class="nav-item" data-tab="stocks" onclick="switchTab('stocks')">
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3zm4 3h.01M12 8h.01M16 6h.01M8 14h.01M12 12h.01M16 10h.01M8 18h.01M12 16h.01M16 14h.01"/></svg>
         Stocks
@@ -629,6 +633,66 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       <div id="paymentsPagination" class="flex items-center justify-center gap-2 py-4"></div>
     </div>
 
+    <!-- Tab: Affiliates -->
+    <div id="tab-affiliates" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-900">Affiliates</h1>
+        <span id="affiliateTotalLabel" class="text-sm text-gray-500"></span>
+      </div>
+      <div class="grid grid-cols-4 gap-4">
+        <div class="stat-card"><div class="stat-value text-[#0D7490]" id="affStatAffiliates">-</div><div class="stat-label">Total Affiliates</div></div>
+        <div class="stat-card"><div class="stat-value text-emerald-600" id="affStatReferrals">-</div><div class="stat-label">Total Referrals</div></div>
+        <div class="stat-card"><div class="stat-value text-amber-600" id="affStatPaid">-</div><div class="stat-label">Paid Referrals</div></div>
+        <div class="stat-card"><div class="stat-value text-[#0D7490]" id="affStatEarned">-</div><div class="stat-label">Total Earned</div></div>
+      </div>
+
+      <!-- Affiliates table -->
+      <div class="flex items-center gap-3">
+        <button class="tab-btn active" data-aff-tab="affiliates" onclick="switchAffTab('affiliates')">Affiliates</button>
+        <button class="tab-btn" data-aff-tab="referrals" onclick="switchAffTab('referrals')">Referrals</button>
+        <button class="tab-btn" data-aff-tab="payouts" onclick="switchAffTab('payouts')">Payout Requests</button>
+      </div>
+
+      <!-- Affiliates list -->
+      <div id="aff-tab-affiliates" class="space-y-4">
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
+          <table class="w-full">
+            <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Code</th><th>Referrals</th><th>Paid Ref</th><th>Earned</th><th>Pending</th><th>Paid Out</th><th>Since</th></tr></thead>
+            <tbody id="affiliatesTableBody"></tbody>
+          </table>
+        </div>
+        <div id="affiliatesPagination" class="flex items-center justify-center gap-2 py-4"></div>
+      </div>
+
+      <!-- Referrals list -->
+      <div id="aff-tab-referrals" class="hidden space-y-4">
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
+          <table class="w-full">
+            <thead><tr><th>Affiliate</th><th>Referred User</th><th>Plan</th><th>Commission</th><th>Status</th><th>Date</th></tr></thead>
+            <tbody id="affReferralsTableBody"></tbody>
+          </table>
+        </div>
+        <div id="affReferralsPagination" class="flex items-center justify-center gap-2 py-4"></div>
+      </div>
+
+      <!-- Payout requests -->
+      <div id="aff-tab-payouts" class="hidden space-y-4">
+        <div class="grid grid-cols-4 gap-4 mb-4">
+          <div class="stat-card"><div class="stat-value text-amber-600" id="payoutStatPending">-</div><div class="stat-label">Pending</div></div>
+          <div class="stat-card"><div class="stat-value text-[#0D7490]" id="payoutStatApproved">-</div><div class="stat-label">Approved</div></div>
+          <div class="stat-card"><div class="stat-value text-emerald-600" id="payoutStatPaid">-</div><div class="stat-label">Paid</div></div>
+          <div class="stat-card"><div class="stat-value text-red-600" id="payoutStatRejected">-</div><div class="stat-label">Rejected</div></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
+          <table class="w-full">
+            <thead><tr><th>Affiliate</th><th>Email</th><th>Amount</th><th>Method</th><th>Details</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+            <tbody id="affPayoutsTableBody"></tbody>
+          </table>
+        </div>
+        <div id="affPayoutsPagination" class="flex items-center justify-center gap-2 py-4"></div>
+      </div>
+    </div>
+
     <!-- Tab: Stocks -->
     <div id="tab-stocks" class="flex-1 hidden overflow-hidden flex-col">
       <div class="admin-header flex items-center justify-between shrink-0">
@@ -856,8 +920,9 @@ function switchTab(tab) {
   if (tab === 'notifications') fetchNotifications();
   if (tab === 'followers') fetchFollowers();
   if (tab === 'user-activity') { fetchUserActivity(); }
+  if (tab === 'affiliates') { fetchAffiliateStats(); fetchAffiliates(); }
 }
-['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','stocks','signal-outcomes','notifications','followers','user-activity'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
+['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
 
 // ── Dashboard ──
 async function fetchDashboard() {
@@ -2714,6 +2779,175 @@ async function fetchUserActivity(page) {
     setInterval(fetchStocks, 60000);
   }
 })();
+
+// ── Affiliates ──
+let _affiliatePage = 0;
+const AFFILIATE_PAGE_SIZE = 50;
+let _affiliateCurrentTab = 'affiliates';
+
+function switchAffTab(tab) {
+  _affiliateCurrentTab = tab;
+  document.querySelectorAll('[data-aff-tab]').forEach(el => el.classList.remove('active'));
+  document.querySelector(`[data-aff-tab="${tab}"]`).classList.add('active');
+  ['affiliates', 'referrals', 'payouts'].forEach(t => {
+    document.getElementById('aff-tab-' + t).classList.toggle('hidden', t !== tab);
+  });
+  if (tab === 'referrals') fetchAffiliateReferrals();
+  if (tab === 'payouts') fetchAffiliatePayouts();
+}
+
+async function fetchAffiliateStats() {
+  try {
+    const res = await fetch('/api/admin/affiliates?limit=1');
+    const data = await res.json();
+    if (!res.ok || !data.stats) return;
+    const s = data.stats;
+    document.getElementById('affStatAffiliates').textContent = s.total_affiliates;
+    document.getElementById('affStatReferrals').textContent = s.total_referrals;
+    document.getElementById('affStatPaid').textContent = s.paid_referrals;
+    document.getElementById('affStatEarned').textContent = '$' + parseFloat(s.total_earned).toFixed(2);
+  } catch (e) {}
+}
+
+async function fetchAffiliates(page) {
+  _affiliatePage = page !== undefined ? page : 0;
+  try {
+    const res = await fetch('/api/admin/affiliates?limit=' + AFFILIATE_PAGE_SIZE + '&offset=' + (_affiliatePage * AFFILIATE_PAGE_SIZE));
+    const data = await res.json();
+    if (!res.ok) { document.getElementById('affiliatesTableBody').innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Failed to load</td></tr>'; return; }
+    document.getElementById('affiliateTotalLabel').textContent = data.total + ' total';
+    document.getElementById('affiliatesTableBody').innerHTML = data.affiliates.map(a => `
+      <tr class="hover:bg-gray-50">
+        <td class="text-sm text-gray-500">${a.id}</td>
+        <td class="text-sm font-medium">${a.full_name || '-'}</td>
+        <td class="text-sm text-gray-500">${a.email || '-'}</td>
+        <td class="text-sm font-mono">${a.referral_code || '-'}</td>
+        <td class="text-sm">${a.referral_count || 0}</td>
+        <td class="text-sm">${a.paid_referrals || 0}</td>
+        <td class="text-sm font-medium text-emerald-600">$${parseFloat(a.total_earned || 0).toFixed(2)}</td>
+        <td class="text-sm text-amber-600">$${parseFloat(a.pending_balance || 0).toFixed(2)}</td>
+        <td class="text-sm text-gray-600">$${parseFloat(a.paid_out || 0).toFixed(2)}</td>
+        <td class="text-sm text-gray-500">${a.created_at ? new Date(a.created_at).toLocaleDateString() : '-'}</td>
+      </tr>
+    `).join('');
+    renderAffPagination(document.getElementById('affiliatesPagination'), data.total, AFFILIATE_PAGE_SIZE, _affiliatePage, fetchAffiliates);
+  } catch (e) { document.getElementById('affiliatesTableBody').innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">Error loading</td></tr>'; }
+}
+
+async function fetchAffiliateReferrals(page) {
+  const p = page !== undefined ? page : 0;
+  try {
+    const res = await fetch('/api/admin/affiliates/referrals?limit=' + AFFILIATE_PAGE_SIZE + '&offset=' + (p * AFFILIATE_PAGE_SIZE));
+    const data = await res.json();
+    if (!res.ok) { document.getElementById('affReferralsTableBody').innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">Failed to load</td></tr>'; return; }
+    document.getElementById('affReferralsTableBody').innerHTML = data.referrals.map(r => `
+      <tr>
+        <td class="text-sm">${r.affiliate_name || '-'}<br><span class="text-xs text-gray-400">${r.referral_code}</span></td>
+        <td class="text-sm">${r.referred_name || '-'}<br><span class="text-xs text-gray-400">${r.referred_email}</span></td>
+        <td class="text-sm">${r.subscription_tier || '-'}</td>
+        <td class="text-sm font-medium">$${parseFloat(r.commission_amount || 0).toFixed(2)}</td>
+        <td class="text-sm">${statusPill(r.status)}</td>
+        <td class="text-sm text-gray-500">${r.created_at ? new Date(r.created_at).toLocaleDateString() : '-'}</td>
+      </tr>
+    `).join('');
+    renderAffPagination(document.getElementById('affReferralsPagination'), data.total, AFFILIATE_PAGE_SIZE, p, fetchAffiliateReferrals);
+  } catch (e) { document.getElementById('affReferralsTableBody').innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">Error loading</td></tr>'; }
+}
+
+async function fetchAffiliatePayouts(page) {
+  const p = page !== undefined ? page : 0;
+  try {
+    const res = await fetch('/api/admin/affiliates/payouts?limit=' + AFFILIATE_PAGE_SIZE + '&offset=' + (p * AFFILIATE_PAGE_SIZE));
+    const data = await res.json();
+    if (!res.ok) { document.getElementById('affPayoutsTableBody').innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-8">Failed to load</td></tr>'; return; }
+    if (data.stats) {
+      document.getElementById('payoutStatPending').textContent = data.stats.pending_count;
+      document.getElementById('payoutStatApproved').textContent = data.stats.approved_count;
+      document.getElementById('payoutStatPaid').textContent = data.stats.paid_count;
+      document.getElementById('payoutStatRejected').textContent = data.stats.rejected_count;
+    }
+    document.getElementById('affPayoutsTableBody').innerHTML = data.payouts.map(p => `
+      <tr>
+        <td class="text-sm font-medium">${p.full_name || '-'}</td>
+        <td class="text-sm text-gray-500">${p.email || '-'}</td>
+        <td class="text-sm font-medium">$${parseFloat(p.amount || 0).toFixed(2)}</td>
+        <td class="text-sm">${p.payment_method || '-'}</td>
+        <td class="text-sm text-gray-500 max-w-[120px] truncate" title="${p.payment_details || ''}">${p.payment_details || '-'}</td>
+        <td class="text-sm">${statusPill(p.status)}</td>
+        <td class="text-sm text-gray-500">${p.created_at ? new Date(p.created_at).toLocaleDateString() : '-'}</td>
+        <td class="text-sm">${p.status === 'pending' ? `
+          <button class="btn btn-primary text-xs py-1 px-2" onclick="approvePayout(${p.id})">Approve</button>
+          <button class="btn btn-danger text-xs py-1 px-2 ml-1" onclick="rejectPayout(${p.id})">Reject</button>
+        ` : p.status === 'approved' ? `
+          <button class="btn btn-primary text-xs py-1 px-2" onclick="markPayoutPaid(${p.id})">Mark Paid</button>
+        ` : '-'}</td>
+      </tr>
+    `).join('');
+    renderAffPagination(document.getElementById('affPayoutsPagination'), data.total, AFFILIATE_PAGE_SIZE, p, fetchAffiliatePayouts);
+  } catch (e) { document.getElementById('affPayoutsTableBody').innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-8">Error loading</td></tr>'; }
+}
+
+async function approvePayout(id) {
+  try {
+    const res = await fetch('/api/admin/affiliates/payouts/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'approved' })
+    });
+    const data = await res.json();
+    if (!res.ok) return alert(data.error || 'Failed');
+    fetchAffiliatePayouts();
+  } catch (e) { alert('Error'); }
+}
+
+async function rejectPayout(id) {
+  const notes = prompt('Reason for rejection (optional):');
+  try {
+    const res = await fetch('/api/admin/affiliates/payouts/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'rejected', notes: notes || '' })
+    });
+    const data = await res.json();
+    if (!res.ok) return alert(data.error || 'Failed');
+    fetchAffiliatePayouts();
+  } catch (e) { alert('Error'); }
+}
+
+async function markPayoutPaid(id) {
+  try {
+    const res = await fetch('/api/admin/affiliates/payouts/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paid' })
+    });
+    const data = await res.json();
+    if (!res.ok) return alert(data.error || 'Failed');
+    fetchAffiliatePayouts();
+  } catch (e) { alert('Error'); }
+}
+
+function statusPill(status) {
+  const colors = {
+    pending: 'bg-amber-100 text-amber-800',
+    paid: 'bg-emerald-100 text-emerald-800',
+    approved: 'bg-blue-100 text-blue-800',
+    rejected: 'bg-red-100 text-red-800',
+    cancelled: 'bg-gray-100 text-gray-600',
+  };
+  return '<span class="pill ' + (colors[status] || 'bg-gray-100 text-gray-600') + '">' + (status || 'unknown') + '</span>';
+}
+
+function renderAffPagination(containerId, total, pageSize, currentPage, fetchFn) {
+  const totalPages = Math.ceil(total / pageSize);
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  let html = '';
+  if (currentPage > 0) html += '<button class="btn btn-secondary py-1 px-3 text-xs" onclick="' + fetchFn + '(' + (currentPage - 1) + ')">Prev</button>';
+  html += '<span class="text-xs text-gray-500 mx-2">Page ' + (currentPage + 1) + ' of ' + Math.max(totalPages, 1) + '</span>';
+  if (currentPage + 1 < totalPages) html += '<button class="btn btn-secondary py-1 px-3 text-xs" onclick="' + fetchFn + '(' + (currentPage + 1) + ')">Next</button>';
+  container.innerHTML = html;
+}
 </script>
 </body>
 </html>
