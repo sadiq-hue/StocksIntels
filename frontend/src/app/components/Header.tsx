@@ -89,12 +89,6 @@ export function Header() {
       <header className="sticky top-0 z-30 bg-background border-b border-border px-4 md:px-6 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Link to="/" className="hidden md:flex items-center gap-2 mr-2 shrink-0">
-              <div className="w-8 h-8 bg-[#0D7490] rounded-lg flex items-center justify-center overflow-hidden">
-                <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
-              </div>
-              <span className="text-base font-bold text-foreground">StocksIntels</span>
-            </Link>
             <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
               <SheetTrigger asChild>
                 <button className="md:hidden p-2 hover:bg-muted rounded-lg transition-colors">
