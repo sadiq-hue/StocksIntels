@@ -206,7 +206,7 @@ export function PortfolioPage() {
     const timer = setTimeout(async () => {
       setSearchingStock(true);
       try {
-        const res = await fetch(`${API_URL}/stocks/search?q=${encodeURIComponent(newHolding.ticker)}`);
+        const res = await apiFetch(`${API_URL}/stocks/search?q=${encodeURIComponent(newHolding.ticker)}`);
         if (res.ok) setStockSuggestions(await res.json());
       } catch {} finally { setSearchingStock(false); }
     }, 200);
@@ -216,7 +216,7 @@ export function PortfolioPage() {
       if (newHolding.ticker.trim().length < 2) { setYahooSuggestions([]); return; }
       setSearchingYahoo(true);
       try {
-        const res = await fetch(`${API_URL}/stocks/search/yahoo?q=${encodeURIComponent(newHolding.ticker)}`);
+        const res = await apiFetch(`${API_URL}/stocks/search/yahoo?q=${encodeURIComponent(newHolding.ticker)}`);
         if (res.ok) {
           const data = await res.json();
           setYahooSuggestions((data || []).slice(0, 6).map((r: any) => ({
@@ -251,7 +251,7 @@ export function PortfolioPage() {
     const timer = setTimeout(async () => {
       setPaperSearching(true);
       try {
-        const res = await fetch(`${API_URL}/stocks/search?q=${encodeURIComponent(paperOrder.ticker)}`);
+        const res = await apiFetch(`${API_URL}/stocks/search?q=${encodeURIComponent(paperOrder.ticker)}`);
         if (res.ok) setPaperSearchResults(await res.json());
       } catch {} finally { setPaperSearching(false); }
     }, 200);
@@ -260,7 +260,7 @@ export function PortfolioPage() {
       if (paperOrder.ticker.trim().length < 2) { setPaperYahooResults([]); return; }
       setPaperSearchingYahoo(true);
       try {
-        const res = await fetch(`${API_URL}/stocks/search/yahoo?q=${encodeURIComponent(paperOrder.ticker)}`);
+        const res = await apiFetch(`${API_URL}/stocks/search/yahoo?q=${encodeURIComponent(paperOrder.ticker)}`);
         if (res.ok) {
           const data = await res.json();
           setPaperYahooResults((data || []).slice(0, 6).map((r: any) => ({
@@ -299,7 +299,7 @@ export function PortfolioPage() {
 
   // Fetch live FX rate for USD/KES conversion (refreshes every 5 min)
   useEffect(() => {
-    const fetchFx = () => fetch(`${API_URL}/fx/rate`)
+    const fetchFx = () => apiFetch(`${API_URL}/fx/rate`)
       .then(r => r.ok ? r.json() : { usdToKes: 130 })
       .then(data => setCurrentFxRate(data.usdToKes))
       .catch(() => {});
@@ -324,7 +324,7 @@ export function PortfolioPage() {
     if (localBrokers.length > 0) setBrokerConnections(localBrokers);
 
     if (user) {
-      fetch(`${API_URL}/broker-connections?userId=${user.id}`)
+      apiFetch(`${API_URL}/broker-connections?userId=${user.id}`)
         .then(r => r.ok ? r.json() : [])
         .then(apiBrokers => {
           const merged = localBrokers.map(lb => {
@@ -354,7 +354,7 @@ export function PortfolioPage() {
   const loadRecommendations = async () => {
     try {
       const userIdParam = user?.id ? `?userId=${user.id}` : '';
-      const res = await fetch(`${API_URL}/signals${userIdParam}`);
+      const res = await apiFetch(`${API_URL}/signals${userIdParam}`);
       const data = await res.json();
       if (data?.signals && Array.isArray(data.signals)) {
         const mapped = data.signals
@@ -535,7 +535,7 @@ export function PortfolioPage() {
     if (user) {
       setIsValidating(true);
       try {
-        const valRes = await fetch(`${API_URL}/broker-connections/validate`, {
+        const valRes = await apiFetch(`${API_URL}/broker-connections/validate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -595,7 +595,7 @@ export function PortfolioPage() {
           apiSecret: newBroker.password,
           config,
         };
-        const res = await fetch(`${API_URL}/broker-connections`, {
+        const res = await apiFetch(`${API_URL}/broker-connections`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -616,7 +616,7 @@ export function PortfolioPage() {
     }
     if (broker.dbId) {
       try {
-        const syncRes = await fetch(`${API_URL}/broker-connections/${broker.dbId}/sync`, { method: "POST" });
+        const syncRes = await apiFetch(`${API_URL}/broker-connections/${broker.dbId}/sync`, { method: "POST" });
         if (syncRes.ok) {
           const syncData = await syncRes.json();
           broker.accountInfo = syncData.account || undefined;
@@ -648,7 +648,7 @@ export function PortfolioPage() {
 
   const handleDisconnectBroker = async (id: string, dbId?: number) => {
     if (dbId && user) {
-      try { await fetch(`${API_URL}/broker-connections/${dbId}?userId=${user.id}`, { method: "DELETE" }); } catch {}
+      try { await apiFetch(`${API_URL}/broker-connections/${dbId}?userId=${user.id}`, { method: "DELETE" }); } catch {}
     }
     const filtered = brokers.filter(b => b.id !== id);
     saveBrokers(filtered);
@@ -659,7 +659,7 @@ export function PortfolioPage() {
     if (!broker.dbId) return;
     setBrokers(prev => prev.map(b => b.id === broker.id ? { ...b, syncStatus: "syncing" as const } : b));
     try {
-      const res = await fetch(`${API_URL}/broker-connections/${broker.dbId}/sync`, { method: "POST" });
+      const res = await apiFetch(`${API_URL}/broker-connections/${broker.dbId}/sync`, { method: "POST" });
       if (res.ok) {
         const data = await res.json();
         const updated = brokers.map(b => b.id === broker.id ? {
@@ -697,7 +697,7 @@ export function PortfolioPage() {
 
     if (user) {
       try {
-        const res = await fetch(`${API_URL}/holdings`, {
+        const res = await apiFetch(`${API_URL}/holdings`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -726,7 +726,7 @@ export function PortfolioPage() {
     const h = showEditHolding;
     if (user && h.id) {
       try {
-        await fetch(`${API_URL}/holdings/${h.id}`, {
+        await apiFetch(`${API_URL}/holdings/${h.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -746,7 +746,7 @@ export function PortfolioPage() {
 
   const handleDeleteHolding = async (holding: Holding) => {
     if (user && holding.id) {
-      try { await fetch(`${API_URL}/holdings/${holding.id}`, { method: "DELETE" }); } catch {}
+      try { await apiFetch(`${API_URL}/holdings/${holding.id}`, { method: "DELETE" }); } catch {}
     }
     await refresh();
   };
@@ -771,7 +771,7 @@ export function PortfolioPage() {
       market: h.market,
     }));
     try {
-      const res = await fetch(`${API_URL}/ai/portfolio-advice`, {
+      const res = await apiFetch(`${API_URL}/ai/portfolio-advice`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ holdings: allHoldings }),
@@ -1093,7 +1093,7 @@ export function PortfolioPage() {
                             setPaperOrder(prev => ({ ...prev, ticker: s.ticker, name: s.name, sector: s.sector, market: s.market as "NSE" | "Global" }));
                             try {
                               const marketParam = s.market === "NSE" ? "?market=nse" : "";
-                              const res = await fetch(`${API_URL}/stock/${s.ticker}${marketParam}`);
+                              const res = await apiFetch(`${API_URL}/stock/${s.ticker}${marketParam}`);
                               if (res.ok) {
                                 const data = await res.json();
                                 if (data?.price) setPaperOrder(prev => ({ ...prev, currentPrice: String(data.price) }));
@@ -1116,7 +1116,7 @@ export function PortfolioPage() {
                                 setPaperYahooResults([]);
                                 setPaperOrder(prev => ({ ...prev, ticker: s.ticker, name: s.name, sector: s.sector, market: s.market as "NSE" | "Global" }));
                                 try {
-                                  const res = await fetch(`${API_URL}/stock/${s.ticker}`);
+                                  const res = await apiFetch(`${API_URL}/stock/${s.ticker}`);
                                   if (res.ok) {
                                     const data = await res.json();
                                     if (data?.price) setPaperOrder(prev => ({ ...prev, currentPrice: String(data.price) }));
@@ -1960,7 +1960,7 @@ export function PortfolioPage() {
                         setNewHolding(prev => ({ ...prev, ticker: s.ticker, name: s.name, sector: s.sector, market: s.market as "NSE" | "Global" }));
                         try {
                           const marketParam = s.market === "NSE" ? "?market=nse" : "";
-                          const res = await fetch(`${API_URL}/stock/${s.ticker}${marketParam}`);
+                          const res = await apiFetch(`${API_URL}/stock/${s.ticker}${marketParam}`);
                           if (res.ok) {
                             const data = await res.json();
                             if (data?.price) setNewHolding(prev => ({ ...prev, avgCost: String(data.price) }));
@@ -1983,7 +1983,7 @@ export function PortfolioPage() {
                             setYahooSuggestions([]);
                             setNewHolding(prev => ({ ...prev, ticker: s.ticker, name: s.name, sector: s.sector, market: s.market as "NSE" | "Global" }));
                             try {
-                              const res = await fetch(`${API_URL}/stock/${s.ticker}`);
+                              const res = await apiFetch(`${API_URL}/stock/${s.ticker}`);
                               if (res.ok) {
                                 const data = await res.json();
                                 if (data?.price) setNewHolding(prev => ({ ...prev, avgCost: String(data.price) }));
@@ -2139,7 +2139,7 @@ export function PortfolioPage() {
                   if (!emailText.trim()) return;
                   setIsParsing(true);
                   try {
-                    const res = await fetch(`${API_URL}/broker-connections/parse-email`, {
+                    const res = await apiFetch(`${API_URL}/broker-connections/parse-email`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ emailText: emailText.trim() }),
@@ -2715,7 +2715,7 @@ export function PortfolioPage() {
                       try {
                         const valid = batchRows.filter(r => r.ticker.trim() && r.shares && r.avgCost);
                         if (valid.length === 0) { alert("No valid rows to import."); return; }
-                        const res = await fetch(`${API_URL}/holdings/bulk`, {
+                        const res = await apiFetch(`${API_URL}/holdings/bulk`, {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ userId: user?.id, holdings: valid.map(r => ({ ticker: r.ticker, name: r.name, shares: parseFloat(r.shares), avgCost: parseFloat(r.avgCost), sector: r.sector, market: r.market })) }),
@@ -2869,7 +2869,7 @@ export function PortfolioPage() {
                           try {
                             const valid = csvData.filter(r => r.ticker && parseFloat(r.shares) > 0 && parseFloat(r.avgCost) > 0);
                             if (valid.length === 0) { setImportResult({ type: "error", message: "No valid rows (ticker, shares > 0, avgCost > 0 required)." }); setImportingManual(false); return; }
-                            const res = await fetch(`${API_URL}/holdings/bulk`, {
+                            const res = await apiFetch(`${API_URL}/holdings/bulk`, {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({ userId: user?.id, holdings: valid.map(r => ({ ticker: r.ticker, name: r.name, shares: parseFloat(r.shares), avgCost: parseFloat(r.avgCost), sector: r.sector, market: r.market })) }),
@@ -3394,7 +3394,7 @@ export function PortfolioPage() {
             {selectedBroker?.dbId && (
               <Button variant="outline" onClick={async () => {
                 try {
-                  const res = await fetch(`${API_URL}/broker-connections/${selectedBroker.dbId}/sync`, { method: "POST" });
+                  const res = await apiFetch(`${API_URL}/broker-connections/${selectedBroker.dbId}/sync`, { method: "POST" });
                   if (res.ok) {
                     const data = await res.json();
                     setBrokers(prev => prev.map(b => b.id === selectedBroker.id ? {
