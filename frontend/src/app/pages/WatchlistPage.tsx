@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { kenyanStocks, globalStocks, type StockListItem } from "../data/stockUniverses";
 import { useAuth } from "../auth/AuthContext";
 import type { Signal } from "../types/signals";
+import { authFetch } from "../auth/tokenStore";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -50,8 +51,8 @@ export function WatchlistPage() {
         return;
       }
       const [watchlistRes, signalsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/watchlist?userId=${userId}`),
-        fetch(`${API_BASE_URL}/signals`)
+        authFetch(`${API_BASE_URL}/watchlist?userId=${userId}`),
+        authFetch(`${API_BASE_URL}/signals`)
       ]);
 
       if (!watchlistRes.ok) {
@@ -87,7 +88,7 @@ export function WatchlistPage() {
   const handleAddStock = async (symbol: string, name: string) => {
     setIsAdding(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/watchlist`, {
+      const res = await authFetch(`${API_BASE_URL}/watchlist`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -117,7 +118,7 @@ export function WatchlistPage() {
 
   const handleRemove = async (id: number) => {
     try {
-      await fetch(`${API_BASE_URL}/watchlist/${id}`, { method: 'DELETE' });
+      await authFetch(`${API_BASE_URL}/watchlist/${id}`, { method: 'DELETE' });
       setStocks(stocks.filter(s => s.id !== id));
       toast.success("Removed from watchlist");
     } catch (err) {

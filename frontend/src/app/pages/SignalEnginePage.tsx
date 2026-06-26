@@ -13,6 +13,7 @@ import {
   Clock, Cpu, Zap, Server, Database, Play,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
+import { authFetch } from "../auth/tokenStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -81,7 +82,7 @@ function BacktestPanel() {
     try {
       const params = new URLSearchParams({ days, limit: "500" });
       if (signalType && signalType !== "all") params.set("signal", signalType);
-      const res = await fetch(`${API_URL}/signals/backtest?${params}${userIdParam}`);
+      const res = await authFetch(`${API_URL}/signals/backtest?${params}${userIdParam}`);
       const data = await res.json();
       if (data.success) setStats(data.stats);
     } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -237,7 +238,7 @@ function ForwardTestPanel() {
   const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/signals/forward-test${userIdParam}`);
+      const res = await authFetch(`${API_URL}/signals/forward-test${userIdParam}`);
       const data = await res.json();
       if (data.success) setStats(data.stats);
     } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -251,7 +252,7 @@ function ForwardTestPanel() {
       if (predFilter === "resolved") params.set("resolved", "true");
       else if (predFilter === "pending") params.set("resolved", "false");
       if (selectedSymbol !== "all") params.set("symbol", selectedSymbol);
-      const res = await fetch(`${API_URL}/signals/forward-test?${params}${userIdParam ? '&' + userIdParam.replace('?', '') : ''}`);
+      const res = await authFetch(`${API_URL}/signals/forward-test?${params}${userIdParam ? '&' + userIdParam.replace('?', '') : ''}`);
       const data = await res.json();
       if (data.success) { setPredictions(data.predictions); setPredTotal(data.total); }
     } catch (e) { console.error(e); }
@@ -264,7 +265,7 @@ function ForwardTestPanel() {
     setResolving(true);
     setResolveResult(null);
     try {
-      const res = await fetch(`${API_URL}/signals/forward-test/resolve${userIdParam}`, { method: "POST" });
+      const res = await authFetch(`${API_URL}/signals/forward-test/resolve${userIdParam}`, { method: "POST" });
       const data = await res.json();
       if (data.success) setResolveResult(data);
       await fetchStats();
@@ -507,7 +508,7 @@ function AuditLogPanel() {
     try {
       const params = new URLSearchParams({ limit: String(perPage), offset: String(page * perPage) });
       if (typeFilter && typeFilter !== "all") params.set("type", typeFilter);
-      const res = await fetch(`${API_URL}/signals/audit?${params}`);
+      const res = await authFetch(`${API_URL}/signals/audit?${params}`);
       const data = await res.json();
       setResult(data);
     } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -597,7 +598,7 @@ function ConfigPanel() {
   const fetchConfig = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/signals/engine/config`);
+      const res = await authFetch(`${API_URL}/signals/engine/config`);
       const data = await res.json();
       if (data.success) setConfig(data.config);
     } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -620,7 +621,7 @@ function ConfigPanel() {
     setSaving(true);
     setMessage("");
     try {
-      const res = await fetch(`${API_URL}/signals/engine/config`, {
+      const res = await authFetch(`${API_URL}/signals/engine/config`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
@@ -723,7 +724,7 @@ function HealthPanel() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/signals/engine/health`);
+      const res = await authFetch(`${API_URL}/signals/engine/health`);
       const data = await res.json();
       if (data.success) setHealth(data.health);
     } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -844,7 +845,7 @@ function DiagnosticsPanel() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/signals/engine/diagnostics`);
+      const res = await authFetch(`${API_URL}/signals/engine/diagnostics`);
       const json = await res.json();
       if (json.success) setData(json.diagnostics);
     } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -853,7 +854,7 @@ function DiagnosticsPanel() {
   const runBacktest = useCallback(async () => {
     setBacktestLoading(true);
     try {
-      const res = await fetch(`${API_URL}/signals/engine/backtest/historical?days=90&maxHoldDays=5&maxSignals=1000`, { method: 'POST' });
+      const res = await authFetch(`${API_URL}/signals/engine/backtest/historical?days=90&maxHoldDays=5&maxSignals=1000`, { method: 'POST' });
       const json = await res.json();
       if (json.success) {
         setBacktestResult({ ...json.result, signalOutcomes: json.signalOutcomes });

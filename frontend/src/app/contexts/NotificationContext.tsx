@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { getSocket } from "../services/socketService";
 import { useAuth } from "../auth/AuthContext";
 import { formatNotificationTime } from "../utils/timeFormat";
+import { authFetch } from "../auth/tokenStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -37,7 +38,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/notifications?userId=${user.id}`);
+      const res = await authFetch(`${API_URL}/notifications?userId=${user.id}`);
       const data = await res.json();
       setNotifications(data.notifications || []);
       setUnread(data.unread || 0);
@@ -82,7 +83,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const markRead = useCallback(async (id: number) => {
     try {
-      await fetch(`${API_URL}/notifications/${id}/read`, { method: "POST" });
+      await authFetch(`${API_URL}/notifications/${id}/read`, { method: "POST" });
       setNotifications(prev => {
         const n = prev.find(x => x.id === id);
         if (n && !n.read) setUnread(p => Math.max(0, p - 1));
@@ -94,7 +95,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const markAllRead = useCallback(async () => {
     if (!user?.id) return;
     try {
-      await fetch(`${API_URL}/notifications/read-all`, {
+      await authFetch(`${API_URL}/notifications/read-all`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id }),

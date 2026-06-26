@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useStockData } from "./StockDataContext";
+import { authFetch } from "../auth/tokenStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -114,7 +115,7 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/holdings?userId=${user.id}`);
+      const res = await authFetch(`${API_URL}/holdings?userId=${user.id}`);
       if (res.ok) {
         const data = await res.json();
         const holdingsArr = Array.isArray(data) ? data : (data.holdings || []);
@@ -157,7 +158,7 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     setBrokerLoading(true);
     try {
-      const res = await fetch(`${API_URL}/broker-connections?userId=${user.id}`);
+      const res = await authFetch(`${API_URL}/broker-connections?userId=${user.id}`);
       if (res.ok) {
         const data = await res.json();
         const apiData = Array.isArray(data) ? data : [];

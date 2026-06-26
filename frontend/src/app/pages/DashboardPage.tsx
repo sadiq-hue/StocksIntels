@@ -17,6 +17,7 @@ import { usePortfolioData } from "../contexts/PortfolioDataContext";
 import { kenyanStocks, globalStocks } from "../data/stockUniverses";
 import { fetchAllNews, type NewsArticle } from "../services/newsService";
 import type { Signal } from "../types/signals";
+import { authFetch } from "../auth/tokenStore";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -158,7 +159,7 @@ export function DashboardPage() {
     if (!user?.id) return;
     setPerfLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/portfolio/performance?userId=${user.id}&period=${period}`);
+      const res = await authFetch(`${API_BASE}/portfolio/performance?userId=${user.id}&period=${period}`);
       const json: PerformanceResponse = await res.json();
       if (json.data?.length) {
         setPerfData(json.data);
@@ -178,7 +179,7 @@ export function DashboardPage() {
   useEffect(() => {
     let cancelled = false;
     const fetchPulse = () =>
-      fetch(`${API_BASE}/market/pulse`)
+      authFetch(`${API_BASE}/market/pulse`)
         .then(r => r.json())
         .then(data => { if (!cancelled) setPulse(data); })
         .catch(() => {});
@@ -191,7 +192,7 @@ export function DashboardPage() {
     let cancelled = false;
     const fetchMovers = async () => {
       try {
-        const res = await fetch(`${API_BASE}/market/movers`);
+        const res = await authFetch(`${API_BASE}/market/movers`);
         const data = await res.json();
         if (cancelled) return;
         const combined = data.combined || { gainers: [], losers: [] };
@@ -210,7 +211,7 @@ export function DashboardPage() {
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
-    fetch(`${API_BASE}/watchlist?userId=${user.id}`)
+    authFetch(`${API_BASE}/watchlist?userId=${user.id}`)
       .then(r => r.json())
       .then(items => { if (!cancelled) setWatchlistItems(items || []); })
       .catch(() => {});
@@ -347,7 +348,7 @@ export function DashboardPage() {
 
   const fetchSignals = useCallback(() => {
     const userIdParam = user?.id ? `?userId=${user.id}` : '';
-    fetch(`${import.meta.env.VITE_API_URL || "/api"}/signals${userIdParam}`)
+    authFetch(`${import.meta.env.VITE_API_URL || "/api"}/signals${userIdParam}`)
       .then(r => r.json())
       .then(data => { if (data.success) setSignals(data.signals); })
       .catch(() => {});

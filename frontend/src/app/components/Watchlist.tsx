@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Star, TrendingUp, TrendingDown, MoreVertical, Loader2, PlusCircle } from "lucide-react";
 import { Link } from "react-router";
 import { useAuth } from "../auth/AuthContext";
+import { authFetch } from "../auth/tokenStore";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -24,11 +25,11 @@ export function Watchlist() {
       try {
         const userIdParam = user?.id ? `?userId=${user.id}` : '';
         // Fetch saved items and their current market data
-        const res = await fetch(`${API_BASE_URL}/watchlist${userIdParam}`);
+        const res = await authFetch(`${API_BASE_URL}/watchlist${userIdParam}`);
         const data = await res.json();
         
         // Fetch signals for these items to enrich the UI
-        const signalsRes = await fetch(`${API_BASE_URL}/signals${userIdParam}`);
+        const signalsRes = await authFetch(`${API_BASE_URL}/signals${userIdParam}`);
         const signalsData = await signalsRes.json();
         
         const enrichedItems = data.map((item: any) => {

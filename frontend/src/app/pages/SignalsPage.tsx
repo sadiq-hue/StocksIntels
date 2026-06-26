@@ -14,6 +14,7 @@ import {
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../auth/AuthContext";
 import type { Signal as StockSignal } from "../types/signals";
+import { authFetch } from "../auth/tokenStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -115,7 +116,7 @@ export function SignalsPage() {
     try {
       setLoading(true);
       const userIdParam = user?.id ? `?userId=${user.id}` : '';
-      const res = await fetch(`${API_URL}/signals${userIdParam}`);
+      const res = await authFetch(`${API_URL}/signals${userIdParam}`);
       const data = await res.json();
       if (data.success) { setSignals(data.signals); setLastUpdated(new Date().toLocaleString()); }
     } catch (e) { console.error("Signals fetch error:", e); } finally { setLoading(false); }
