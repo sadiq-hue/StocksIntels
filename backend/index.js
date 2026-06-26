@@ -4512,22 +4512,24 @@ app.post('/api/user/send-test-hot-news', async (req, res) => {
 // --- Test Receipt Email ---
 app.post('/api/test/send-receipt', async (req, res) => {
   try {
-    const { email, userName } = req.body;
+    const { email, userName, paymentMethod = 'M-Pesa' } = req.body;
     if (!email) return res.status(400).json({ error: 'email required' });
+    const method = paymentMethod === 'PayPal' ? 'PayPal' : 'M-Pesa';
+    const amount = method === 'PayPal' ? 29.00 : parseFloat((3770 / USD_TO_KES_RATE).toFixed(2));
     await sendPaymentReceiptEmail(email, {
       userName: userName || 'Test User',
       planName: 'Pro',
-      amount: parseFloat((3770 / USD_TO_KES_RATE).toFixed(2)),
+      amount,
       currency: 'USD',
       period: 'yearly',
       durationMonths: 12,
-      paymentMethod: 'M-Pesa',
+      paymentMethod: method,
       transactionRef: 'TEST-REF-' + Date.now(),
       paidAt: new Date(),
       startDate: new Date(),
       endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
     });
-    res.json({ success: true, message: `Test receipt sent to ${email}` });
+    res.json({ success: true, message: `Test receipt sent to ${email} (${method})` });
   } catch (error) {
     console.error('send-test-receipt error:', error.message);
     res.status(500).json({ error: 'An unexpected error occurred' });
