@@ -69,10 +69,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <div className="p-6">
         <div className="flex items-center gap-3">
           <div className="bg-[#0D7490] p-2 rounded-lg">
-            <img src="/logo1.jpg" alt="StocksIntels" className="w-6 h-6" />
+            <img src="/logo1.jpg" alt="" className="w-6 h-6" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-sidebar-foreground font-semibold">StocksIntels</h1>
             <p className="text-muted-foreground text-xs">African & Global Markets</p>
           </div>
         </div>

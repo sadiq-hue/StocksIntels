@@ -216,7 +216,7 @@ export function LandingPage() {
           <div className="flex flex-wrap justify-between items-center gap-4 h-16 md:h-20">
             <Link to="/" className="flex items-center gap-2.5 group">
               <div className="w-9 h-9 md:w-10 md:h-10 bg-[#0D7490] rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-all duration-300 overflow-hidden">
-                <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5 md:w-6 md:h-6" />
+                <img src="/logo1.jpg" alt="" className="w-5 h-5 md:w-6 md:h-6" />
               </div>
               <span className="text-xl md:text-2xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
             </Link>
