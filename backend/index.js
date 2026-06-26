@@ -4892,54 +4892,25 @@ app.get('/api/stock/:symbol/holders', async (req, res) => {
         });
       }
 
-      // Get cookies from Yahoo homepage (follow redirect)
-      const cookieHeader = await new Promise((resolve, reject) => {
-        const opts = {
-          hostname: 'fc.yahoo.com',
-          path: '/',
-          method: 'GET',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-          },
-          timeout: 15000,
-        };
-        const req = https.request(opts, (res) => {
-          const allCookies = new Set();
-          const add = (c) => { (Array.isArray(c) ? c : [c]).forEach(s => { const p = s.split(';')[0]; if (p) allCookies.add(p); }); };
-          add(res.headers['set-cookie']);
-          // Follow redirect
-          const location = res.headers['location'];
-          if (location && res.statusCode >= 301 && res.statusCode <= 308) {
-            const locUrl = new URL(location.startsWith('http') ? location : `https://fc.yahoo.com${location}`);
-            const req2 = https.request({
-              hostname: locUrl.hostname,
-              path: locUrl.pathname + locUrl.search,
-              method: 'GET',
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-              },
-              timeout: 15000,
-            }, (res2) => {
-              add(res2.headers['set-cookie']);
-              res2.on('data', () => {});
-              res2.on('end', () => resolve([...allCookies].join('; ')));
-            });
-            req2.on('error', reject);
-            req2.on('timeout', () => { req2.destroy(); reject(new Error('timeout')); });
-            req2.end();
-          } else {
-            res.on('data', () => {});
-            res.on('end', () => resolve([...allCookies].join('; ')));
-          }
-        });
-        req.on('error', reject);
-        req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-        req.end();
+      // Get cookie + crumb using axios (already works on Railway)
+      const cookieResp = await axios.get('https://fc.yahoo.com/', {
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
+        timeout: 15000,
+        maxRedirects: 3,
+        withCredentials: true,
       });
+      const setCookies = cookieResp.headers['set-cookie'] || [];
+      const cookieStr = (Array.isArray(setCookies) ? setCookies : [setCookies])
+        .filter(Boolean)
+        .map(s => s.split(';')[0])
+        .join('; ');
+      // Get crumb using axios
+      const crumbResp = await axios.get('https://query2.finance.yahoo.com/v1/test/getcrumb', {
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': cookieStr },
+        timeout: 10000,
+      });
+      const crumb = (typeof crumbResp.data === 'string' ? crumbResp.data : '').trim();
+      if (!crumb) throw new Error('no crumb');
 
       // Get crumb
       const crumbResp = await httpsGet('/v1/test/getcrumb', cookieHeader);
