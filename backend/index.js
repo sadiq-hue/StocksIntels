@@ -4804,43 +4804,36 @@ app.get('/api/stock/:symbol/history', async (req, res) => {
 app.get('/api/stock/:symbol/holders', async (req, res) => {
   try {
     const symbol = req.params.symbol.toUpperCase().replace('NSE:', '');
-    if (symbol.startsWith('NSE') || symbol.endsWith('.NR')) {
+    if (symbol.endsWith('.NR')) {
       return res.json({ holders: [], topHolders: [], source: 'unsupported' });
     }
-    const yahooSymbol = symbol.includes('.') ? symbol : symbol;
     const { default: YahooFinance } = await import('yahoo-finance2');
     const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-    const [institutional, fundHolders] = await Promise.allSettled([
-      yf.institutionalHolders(yahooSymbol).catch(() => null),
-      yf.fundHolders(yahooSymbol).catch(() => null),
-    ]);
+    const summary = await yf.quoteSummary(symbol, { modules: ['institutionOwnership', 'fundOwnership'] });
     const holders = [];
-    const seen = new Set();
-    if (institutional.status === 'fulfilled' && Array.isArray(institutional.value)) {
-      for (const h of institutional.value) {
-        const name = h.holder || h.name || h.entity || '';
-        if (!name || seen.has(name)) continue;
-        seen.add(name);
+    if (summary?.institutionOwnership?.ownershipList) {
+      for (const item of summary.institutionOwnership.ownershipList) {
+        if (!item?.holder?.name) continue;
         holders.push({
-          holder: name,
-          shares: h.shares || h.reportedShares || 0,
-          pctHeld: h.percentHeld ? parseFloat((h.percentHeld * 100).toFixed(1)) : null,
-          dateOfReport: h.reportDate || h.date || null,
-          value: h.value || 0,
+          holder: item.holder.name,
+          shares: item.shares || 0,
+          pctHeld: item.pctHeld ? parseFloat((item.pctHeld * 100).toFixed(1)) : null,
+          dateOfReport: item.reportDate || item.asOfDate || null,
+          value: item.value || 0,
         });
       }
     }
-    if (fundHolders.status === 'fulfilled' && Array.isArray(fundHolders.value)) {
-      for (const h of fundHolders.value) {
-        const name = h.holder || h.name || h.entity || '';
-        if (!name || seen.has(name)) continue;
-        seen.add(name);
+    if (summary?.fundOwnership?.ownershipList) {
+      for (const item of summary.fundOwnership.ownershipList) {
+        if (!item?.holder?.name) continue;
+        const existing = holders.find(h => h.holder === item.holder.name);
+        if (existing) continue;
         holders.push({
-          holder: name,
-          shares: h.shares || h.reportedShares || 0,
-          pctHeld: h.percentHeld ? parseFloat((h.percentHeld * 100).toFixed(1)) : null,
-          dateOfReport: h.reportDate || h.date || null,
-          value: h.value || 0,
+          holder: item.holder.name,
+          shares: item.shares || 0,
+          pctHeld: item.pctHeld ? parseFloat((item.pctHeld * 100).toFixed(1)) : null,
+          dateOfReport: item.reportDate || item.asOfDate || null,
+          value: item.value || 0,
         });
       }
     }
