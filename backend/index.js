@@ -4809,40 +4809,42 @@ app.get('/api/stock/:symbol/holders', async (req, res) => {
     }
     const { default: YahooFinance } = await import('yahoo-finance2');
     const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-    const summary = await yf.quoteSummary(symbol, { modules: ['institutionOwnership', 'fundOwnership'] });
+    const summary = await Promise.race([
+      yf.quoteSummary(symbol, { modules: ['institutionOwnership', 'fundOwnership'] }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('Yahoo Finance timeout')), 25000)),
+    ]);
     const holders = [];
-    if (summary?.institutionOwnership?.ownershipList) {
-      for (const item of summary.institutionOwnership.ownershipList) {
-        if (!item?.holder?.name) continue;
-        holders.push({
-          holder: item.holder.name,
-          shares: item.shares || 0,
-          pctHeld: item.pctHeld ? parseFloat((item.pctHeld * 100).toFixed(1)) : null,
-          dateOfReport: item.reportDate || item.asOfDate || null,
-          value: item.value || 0,
-        });
-      }
+    const list = summary?.institutionOwnership?.ownershipList || [];
+    for (const item of list) {
+      const name = item.organization || (item.holder && item.holder.name) || '';
+      if (!name) continue;
+      holders.push({
+        holder: name,
+        shares: item.position || item.shares || 0,
+        pctHeld: item.pctHeld != null ? parseFloat((item.pctHeld * 100).toFixed(1)) : null,
+        dateOfReport: item.reportDate || null,
+        value: item.value || 0,
+      });
     }
-    if (summary?.fundOwnership?.ownershipList) {
-      for (const item of summary.fundOwnership.ownershipList) {
-        if (!item?.holder?.name) continue;
-        const existing = holders.find(h => h.holder === item.holder.name);
-        if (existing) continue;
-        holders.push({
-          holder: item.holder.name,
-          shares: item.shares || 0,
-          pctHeld: item.pctHeld ? parseFloat((item.pctHeld * 100).toFixed(1)) : null,
-          dateOfReport: item.reportDate || item.asOfDate || null,
-          value: item.value || 0,
-        });
-      }
+    const fundList = summary?.fundOwnership?.ownershipList || [];
+    for (const item of fundList) {
+      const name = item.organization || (item.holder && item.holder.name) || '';
+      if (!name) continue;
+      if (holders.some(h => h.holder === name)) continue;
+      holders.push({
+        holder: name,
+        shares: item.position || item.shares || 0,
+        pctHeld: item.pctHeld != null ? parseFloat((item.pctHeld * 100).toFixed(1)) : null,
+        dateOfReport: item.reportDate || null,
+        value: item.value || 0,
+      });
     }
     const topHolders = holders
       .sort((a, b) => (parseFloat(b.shares) || 0) - (parseFloat(a.shares) || 0))
       .slice(0, 10);
     res.json({ holders: topHolders, topHolders, source: 'yahoo' });
   } catch (error) {
-    console.error(`Error fetching holders for ${req.params.symbol}:`, error.message);
+    console.error(`Error fetching holders for ${req.params.symbol}: ${error.message}`);
     res.json({ holders: [], topHolders: [], source: 'error' });
   }
 });
