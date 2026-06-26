@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import { useAuth } from "../auth/AuthContext";
+import { authFetch } from "../auth/tokenStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -155,8 +156,8 @@ export function PaperTradingProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const [accountRes, tradesRes] = await Promise.all([
-        fetch(`${API_URL}/paper/account?userId=${user.id}`),
-        fetch(`${API_URL}/paper/trades?userId=${user.id}`),
+        authFetch(`${API_URL}/paper/account?userId=${user.id}`),
+        authFetch(`${API_URL}/paper/trades?userId=${user.id}`),
       ]);
       if (accountRes.ok) {
         const data = await accountRes.json();
@@ -173,8 +174,8 @@ export function PaperTradingProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     try {
       const [accountRes, tradesRes] = await Promise.all([
-        fetch(`${API_URL}/paper/account?userId=${user.id}`),
-        fetch(`${API_URL}/paper/trades?userId=${user.id}`),
+        authFetch(`${API_URL}/paper/account?userId=${user.id}`),
+        authFetch(`${API_URL}/paper/trades?userId=${user.id}`),
       ]);
       if (accountRes.ok) {
         const data = await accountRes.json();
@@ -191,7 +192,7 @@ export function PaperTradingProvider({ children }: { children: ReactNode }) {
     setPlacingOrder(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/paper/orders`, {
+      const res = await authFetch(`${API_URL}/paper/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -223,7 +224,7 @@ export function PaperTradingProvider({ children }: { children: ReactNode }) {
   const initAccount = useCallback(async (initialCapital?: number) => {
     if (!user) return false;
     try {
-      const res = await fetch(`${API_URL}/paper/account/init`, {
+      const res = await authFetch(`${API_URL}/paper/account/init`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, initialCapital }),
@@ -236,7 +237,7 @@ export function PaperTradingProvider({ children }: { children: ReactNode }) {
   const resetAccount = useCallback(async (initialCapital?: number) => {
     if (!user) return false;
     try {
-      const res = await fetch(`${API_URL}/paper/reset`, {
+      const res = await authFetch(`${API_URL}/paper/reset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, initialCapital }),
@@ -249,7 +250,7 @@ export function PaperTradingProvider({ children }: { children: ReactNode }) {
   const fetchStatement = useCallback(async () => {
     if (!user) return null;
     try {
-      const res = await fetch(`${API_URL}/paper/statement?userId=${user.id}`);
+      const res = await authFetch(`${API_URL}/paper/statement?userId=${user.id}`);
       if (res.ok) return await res.json();
     } catch {}
     return null;

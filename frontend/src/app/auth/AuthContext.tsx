@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
-import { setToken as setStoreToken } from './tokenStore';
+import { setToken as setStoreToken, patchGlobalFetch } from './tokenStore';
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -84,6 +84,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      patchGlobalFetch();
       // Try refresh token cookie first
       const newToken = await doRefresh();
       if (cancelled) return;
