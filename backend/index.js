@@ -4858,87 +4858,32 @@ app.get('/api/stock/:symbol/holders', async (req, res) => {
       console.error(`Finnhub holders error for ${symbol}: ${fhErr.message}`);
     }
 
-    // Fallback: direct yahoo finance http request
+    // Fallback: yahoo-finance2 quoteSummary
     try {
-      const https = require('https');
-
-      const YAHOO_HOST = 'query2.finance.yahoo.com';
-
-      function httpsGet(path, cookie = '') {
-        return new Promise((resolve, reject) => {
-          const opts = {
-            hostname: YAHOO_HOST,
-            path,
-            method: 'GET',
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': 'application/json',
-              'Accept-Language': 'en-US,en;q=0.9',
-              'Cookie': cookie,
-            },
-            timeout: 15000,
-          };
-          const req = https.request(opts, (res) => {
-            let data = '';
-            res.on('data', (chunk) => (data += chunk));
-            res.on('end', () => {
-              try { resolve(JSON.parse(data)); }
-              catch { reject(new Error('parse failed')); }
-            });
-          });
-          req.on('error', reject);
-          req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-          req.end();
-        });
+      const { default: YahooFinance } = await import('yahoo-finance2');
+      // Try alternate query host (query1 might work where query2 doesn't on Railway)
+      const yf2 = new YahooFinance({ suppressNotices: ['yahooSurvey'], YF_QUERY_HOST: 'query1.finance.yahoo.com' });
+      const summary = await yf2.quoteSummary(symbol, { modules: ['institutionOwnership', 'fundOwnership'] }, { validateResult: false });
+      if (summary) {
+        const rawNum = (v, def = 0) => { if (v == null) return def; if (typeof v === 'object') return v.raw != null ? v.raw : def; return v || def; };
+        const fmtDate = (v) => { if (!v) return null; if (typeof v === 'object') return v.fmt || null; if (typeof v === 'number') return new Date(v * 1000).toISOString().slice(0, 10); return String(v).slice(0, 10); };
+        const pct = (v) => { if (v == null) return null; const r = rawNum(v); return r != null ? parseFloat((r * 100).toFixed(1)) : null; };
+        const holders = [];
+        for (const item of (summary?.institutionOwnership?.ownershipList || [])) {
+          const name = item.organization || '';
+          if (!name) continue;
+          holders.push({ holder: name, shares: rawNum(item.position), pctHeld: pct(item.pctHeld), dateOfReport: fmtDate(item.reportDate), value: rawNum(item.value) });
+        }
+        for (const item of (summary?.fundOwnership?.ownershipList || [])) {
+          const name = item.organization || '';
+          if (!name || holders.some(h => h.holder === name)) continue;
+          holders.push({ holder: name, shares: rawNum(item.position), pctHeld: pct(item.pctHeld), dateOfReport: fmtDate(item.reportDate), value: rawNum(item.value) });
+        }
+        const topHolders = holders.sort((a, b) => (b.shares || 0) - (a.shares || 0)).slice(0, 10);
+        if (topHolders.length > 0) return res.json({ holders: topHolders, topHolders, source: 'yahoo' });
       }
-
-      // Get cookie + crumb using axios (already works on Railway)
-      const cookieResp = await axios.get('https://fc.yahoo.com/', {
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'text/html' },
-        timeout: 15000,
-        maxRedirects: 3,
-        withCredentials: true,
-      });
-      const setCookies = cookieResp.headers['set-cookie'] || [];
-      const cookieStr = (Array.isArray(setCookies) ? setCookies : [setCookies])
-        .filter(Boolean)
-        .map(s => s.split(';')[0])
-        .join('; ');
-      // Get crumb using axios
-      const crumbResp = await axios.get('https://query2.finance.yahoo.com/v1/test/getcrumb', {
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': cookieStr },
-        timeout: 10000,
-      });
-      const crumb = (typeof crumbResp.data === 'string' ? crumbResp.data : '').trim();
-      if (!crumb) throw new Error('no crumb');
-
-      // Get crumb
-      const crumbResp = await httpsGet('/v1/test/getcrumb', cookieHeader);
-      const crumb = typeof crumbResp === 'string' ? crumbResp.trim() : '';
-      if (!crumb) throw new Error('no crumb');
-
-      // Fetch holders
-      const qs = `modules=institutionOwnership,fundOwnership&crumb=${encodeURIComponent(crumb)}`;
-      const summary = await httpsGet(`/v10/finance/quoteSummary/${symbol}?${qs}`);
-      const rawNum = (v, def = 0) => { if (v == null) return def; if (typeof v === 'object') return v.raw != null ? v.raw : def; return v || def; };
-      const fmtDate = (v) => { if (!v) return null; if (typeof v === 'object') return v.fmt || null; if (typeof v === 'number') return new Date(v * 1000).toISOString().slice(0, 10); return String(v).slice(0, 10); };
-      const pct = (v) => { if (v == null) return null; const r = rawNum(v); return r != null ? parseFloat((r * 100).toFixed(1)) : null; };
-      const holders = [];
-      for (const item of (summary?.quoteSummary?.result?.[0]?.institutionOwnership?.ownershipList || [])) {
-        const name = item.organization || '';
-        if (!name) continue;
-        holders.push({ holder: name, shares: rawNum(item.position), pctHeld: pct(item.pctHeld), dateOfReport: fmtDate(item.reportDate), value: rawNum(item.value) });
-      }
-      for (const item of (summary?.quoteSummary?.result?.[0]?.fundOwnership?.ownershipList || [])) {
-        const name = item.organization || '';
-        if (!name || holders.some(h => h.holder === name)) continue;
-        holders.push({ holder: name, shares: rawNum(item.position), pctHeld: pct(item.pctHeld), dateOfReport: fmtDate(item.reportDate), value: rawNum(item.value) });
-      }
-      const topHolders = holders.sort((a, b) => (b.shares || 0) - (a.shares || 0)).slice(0, 10);
-      if (topHolders.length > 0) return res.json({ holders: topHolders, topHolders, source: 'yahoo' });
-      console.error(`Yahoo holders empty for ${symbol}: no holders in response`);
     } catch (yhErr) {
-      console.error(`Yahoo direct error for ${symbol}: ${yhErr.message}`);
+      console.error(`Yahoo holders error for ${symbol}: ${yhErr.message}`);
     }
 
     res.json({ holders: [], topHolders: [], source: 'unavailable' });

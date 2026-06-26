@@ -196,7 +196,7 @@ export function AffiliatesPage() {
               Our program rewards you for helping grow the community.
             </p>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8">
               {commissionRates.map((c) => (
                 <div key={c.tier} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                   <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{c.tier}</p>
@@ -282,7 +282,7 @@ export function AffiliatesPage() {
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
           <Card className="border shadow-sm p-5">
             <div className="flex items-center gap-2 mb-3">
               <div className="size-8 rounded-lg bg-emerald-100 flex items-center justify-center">
@@ -325,40 +325,42 @@ export function AffiliatesPage() {
         </div>
 
         {/* Tabbed Section */}
-        <div className="flex items-center gap-1 p-1 bg-gray-100/80 border rounded-lg w-full sm:w-auto mb-6">
-          <button
-            onClick={() => setActiveTab("referrals")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-              activeTab === "referrals"
-                ? "bg-white text-gray-900 shadow-sm border"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <Users className="size-4" />
-            Referrals
-          </button>
-          <button
-            onClick={() => setActiveTab("commissions")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-              activeTab === "commissions"
-                ? "bg-white text-gray-900 shadow-sm border"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <DollarSign className="size-4" />
-            Commissions
-          </button>
-          <button
-            onClick={() => setActiveTab("payouts")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-              activeTab === "payouts"
-                ? "bg-white text-gray-900 shadow-sm border"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <Wallet className="size-4" />
-            Payouts
-          </button>
+        <div className="overflow-x-auto mb-6">
+          <div className="flex items-center gap-1 p-1 bg-gray-100/80 border rounded-lg w-full min-w-0">
+            <button
+              onClick={() => setActiveTab("referrals")}
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
+                activeTab === "referrals"
+                  ? "bg-white text-gray-900 shadow-sm border"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <Users className="size-3.5 sm:size-4" />
+              Referrals
+            </button>
+            <button
+              onClick={() => setActiveTab("commissions")}
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
+                activeTab === "commissions"
+                  ? "bg-white text-gray-900 shadow-sm border"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <DollarSign className="size-3.5 sm:size-4" />
+              Commissions
+            </button>
+            <button
+              onClick={() => setActiveTab("payouts")}
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
+                activeTab === "payouts"
+                  ? "bg-white text-gray-900 shadow-sm border"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              <Wallet className="size-3.5 sm:size-4" />
+              Payouts
+            </button>
+          </div>
         </div>
 
         {activeTab === "referrals" ? (
