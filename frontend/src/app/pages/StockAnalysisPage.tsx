@@ -192,6 +192,17 @@ export function StockAnalysisPage() {
   const [companyProfile, setCompanyProfile] = useState<any>(null);
   const [yahooPremarket, setYahooPremarket] = useState<Record<string, any> | null>(null);
 
+  // Holders data
+  interface Holder {
+    holder: string;
+    shares: number;
+    dateOfReport?: string;
+    pctHeld?: number;
+    value?: number;
+  }
+  const [holders, setHolders] = useState<Holder[]>([]);
+  const [etfHolders, setEtfHolders] = useState<Holder[]>([]);
+
   const { getQuote, quotes } = useRealtimeQuotes();
 
   const activeSelection = stockUniverse.find((s) => s.ticker === selectedStock.ticker) || selectedStock;
@@ -208,6 +219,21 @@ export function StockAnalysisPage() {
       setLiveQuote(q as LiveQuote);
     }
   }, [activeSelection.ticker, quotes]);
+
+  // Fetch holders when selected stock changes
+  useEffect(() => {
+    const ticker = activeSelection.ticker;
+    let active = true;
+    fetch(`${API_URL}/stock/${encodeURIComponent(ticker)}/holders`)
+      .then(r => r.json())
+      .then(data => {
+        if (!active) return;
+        setHolders(data.topHolders || []);
+        setEtfHolders(data.etfHolders || []);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [activeSelection.ticker]);
 
   // Direct fallback: poll stock-specific endpoint for live data (bypasses context)
   useEffect(() => {
@@ -638,6 +664,29 @@ export function StockAnalysisPage() {
               </div>
             </div>
           </Card>
+
+          {/* Holders */}
+          {holders.length > 0 && (
+            <Card className="border shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Building2 className="size-4 text-muted-foreground" />
+                <h3 className="font-semibold text-sm text-foreground">Top Holders</h3>
+              </div>
+              <div className="space-y-2">
+                {holders.map((h, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground truncate">{h.holder}</p>
+                      <p className="text-muted-foreground">
+                        {h.pctHeld ? `${h.pctHeld.toFixed(1)}%` : `${(h.shares || 0).toLocaleString()} shares`}
+                      </p>
+                    </div>
+                    <span className="text-muted-foreground ml-2">{h.dateOfReport?.slice(0, 10) || ''}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
 
         {/* Main Content */}

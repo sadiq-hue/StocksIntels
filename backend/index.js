@@ -4801,6 +4801,40 @@ app.get('/api/stock/:symbol/history', async (req, res) => {
   }
 });
 
+app.get('/api/stock/:symbol/holders', async (req, res) => {
+  try {
+    const symbol = req.params.symbol.toUpperCase().replace('NSE:', '');
+    const FMP_API_KEY = process.env.FMP_API_KEY || '';
+    if (!FMP_API_KEY) {
+      return res.json({ holders: [], topHolders: [], source: 'unavailable' });
+    }
+    const { fmp } = require('./apiClient');
+    const [institutionalRes, etfRes] = await Promise.allSettled([
+      fmp.get(`https://financialmodelingprep.com/stable/institutional-holders`, {
+        params: { symbol, apikey: FMP_API_KEY },
+      }),
+      fmp.get(`https://financialmodelingprep.com/stable/etf-holders`, {
+        params: { symbol, apikey: FMP_API_KEY },
+      }),
+    ]);
+    const institutional = institutionalRes.status === 'fulfilled' && Array.isArray(institutionalRes.value.data)
+      ? institutionalRes.value.data.slice(0, 15)
+      : [];
+    const etfHolders = etfRes.status === 'fulfilled' && Array.isArray(etfRes.value.data)
+      ? etfRes.value.data.slice(0, 15)
+      : [];
+    // Combine: institutional holders are the main ones, ETFs supplement
+    const holders = institutional;
+    const topHolders = [...holders]
+      .sort((a, b) => (parseFloat(b.shares) || 0) - (parseFloat(a.shares) || 0))
+      .slice(0, 10);
+    res.json({ holders, topHolders, etfHolders, source: 'fmp' });
+  } catch (error) {
+    console.error(`Error fetching holders for ${req.params.symbol}:`, error.message);
+    res.json({ holders: [], topHolders: [], etfHolders: [], source: 'error' });
+  }
+});
+
 app.get('/api/stocks', async (req, res) => {
   try {
     const brief = req.query.brief === 'true';
