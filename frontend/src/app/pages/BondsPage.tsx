@@ -178,9 +178,9 @@ export function BondsPage() {
           <button onClick={() => setMarket("kenya")} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${market === "kenya" ? "bg-[#0D7490] text-white" : "text-muted-foreground hover:text-foreground"}`}>Kenya</button>
           <button onClick={() => setMarket("global")} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${market === "global" ? "bg-[#0D7490] text-white" : "text-muted-foreground hover:text-foreground"}`}>Global</button>
         </div>
-        <div className="flex bg-muted rounded-lg p-1">
+        <div className="flex bg-muted rounded-lg p-1 overflow-x-auto">
           {["all", "Government", "Infrastructure", "Corporate", "T-Bill"].map(t => (
-            <button key={t} onClick={() => setTypeFilter(t)} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${typeFilter === t ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{t === "all" ? "All" : t}</button>
+            <button key={t} onClick={() => setTypeFilter(t)} className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap ${typeFilter === t ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{t === "all" ? "All" : t}</button>
           ))}
         </div>
         <div className="relative flex-1 max-w-xs ml-auto">
@@ -219,7 +219,7 @@ export function BondsPage() {
                     <Badge className={getRatingColor(bond.rating)}>{bond.rating}</Badge>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase font-semibold">Coupon</p>
                       <p className="text-sm font-bold text-foreground">{bond.coupon}%</p>

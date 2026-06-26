@@ -754,7 +754,7 @@ export function StockAnalysisPage() {
               </div>
 
               {/* Key Stats Bar */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-7 gap-2 mb-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mb-6">
                 <div className="sm:col-span-1 md:col-span-2 rounded-lg bg-muted/50 p-3 border">
                   <div className="text-[11px] font-medium text-muted-foreground mb-1">Current Price</div>
                   <div className={`text-xl md:text-2xl font-bold ${displayChange >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>

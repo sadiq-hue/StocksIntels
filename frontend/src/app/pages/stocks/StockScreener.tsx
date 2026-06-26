@@ -502,7 +502,7 @@ export function StockScreener() {
                     <span className="text-muted-foreground">Overall Score</span>
                     <ScoreBar score={stock.score} />
                   </div>
-                  <div className="grid grid-cols-4 gap-1 mt-1.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 mt-1.5">
                     {[
                       { label: "Fund", score: stock.fundamentalScore },
                       { label: "Tech", score: stock.technicalScore },

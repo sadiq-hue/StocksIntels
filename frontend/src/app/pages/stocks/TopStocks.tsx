@@ -83,7 +83,7 @@ export function TopStocks() {
           <h2 className="text-lg font-bold text-foreground">Top Stocks</h2>
           <p className="text-sm text-muted-foreground truncate">Top performing stocks across all categories</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 overflow-x-auto flex-nowrap pb-1">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <input
