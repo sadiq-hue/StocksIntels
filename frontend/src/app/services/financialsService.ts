@@ -1,3 +1,5 @@
+import { getToken } from "../auth/tokenStore";
+
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 export type DataProvider = "auto" | "sec-edgar" | "simfin" | "fmp" | "yahoo-finance" | "synthetic";
@@ -193,7 +195,10 @@ function appendUserId(url: string): string {
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(appendUserId(url));
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const response = await fetch(appendUserId(url), { headers });
   if (!response.ok) {
     const text = await response.text();
     throw new Error(text || `Request failed with status ${response.status}`);

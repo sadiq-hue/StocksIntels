@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
+import { setToken as setStoreToken } from './tokenStore';
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -67,6 +68,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (data.token) {
         tokenRef.current = data.token;
         setToken(data.token);
+        setStoreToken(data.token);
         if (data.user) {
           setUser(data.user);
           localStorage.setItem("stockintel_user", JSON.stringify(data.user));
@@ -97,7 +99,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const parsed = JSON.parse(storedUser);
           tokenRef.current = storedToken;
           setToken(storedToken);
-          setUser(parsed);
+          setStoreToken(storedToken);
           const res = await fetch(`${API_URL}/auth/me`, {
             headers: { Authorization: `Bearer ${storedToken}` },
           });
@@ -112,11 +114,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             localStorage.removeItem("stockintel_token");
             setToken(null);
             tokenRef.current = null;
+            setStoreToken(null);
           }
         } catch {
           localStorage.removeItem("stockintel_token");
           setToken(null);
           tokenRef.current = null;
+          setStoreToken(null);
         }
       }
       setIsLoading(false);
@@ -130,6 +134,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (t) {
       tokenRef.current = t;
       setToken(t);
+      setStoreToken(t);
     }
   };
 
@@ -282,6 +287,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(null);
     setToken(null);
     tokenRef.current = null;
+    setStoreToken(null);
     localStorage.removeItem("stockintel_user");
     localStorage.removeItem("stockintel_token");
     // Clear dismissed trial banner flags so it reappears on next login
