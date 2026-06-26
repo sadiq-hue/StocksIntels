@@ -4836,26 +4836,91 @@ app.get('/api/stock/:symbol/holders', async (req, res) => {
       }
     }
 
-    // Fallback: yahoo-finance2 quoteSummary
+    // Fallback: direct yahoo finance http request
     try {
-      const { default: YahooFinance } = await import('yahoo-finance2');
-      const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'], YF_QUERY_HOST: 'query1.finance.yahoo.com' });
-      const summary = await yf.quoteSummary(symbol, { modules: ['institutionOwnership', 'fundOwnership'] });
+      const https = require('https');
+      const http = require('http');
+      const urlMod = require('url');
+
+      const YAHOO_HOST = 'query2.finance.yahoo.com';
+
+      function httpsGet(path, cookie = '') {
+        return new Promise((resolve, reject) => {
+          const opts = {
+            hostname: YAHOO_HOST,
+            path,
+            method: 'GET',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'application/json',
+              'Accept-Language': 'en-US,en;q=0.9',
+              'Cookie': cookie,
+            },
+            timeout: 15000,
+          };
+          const req = https.request(opts, (res) => {
+            let data = '';
+            res.on('data', (chunk) => (data += chunk));
+            res.on('end', () => {
+              try { resolve(JSON.parse(data)); }
+              catch { reject(new Error('parse failed')); }
+            });
+          });
+          req.on('error', reject);
+          req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+          req.end();
+        });
+      }
+
+      // Get cookies from Yahoo homepage
+      const cookieHeader = await new Promise((resolve, reject) => {
+        const opts = {
+          hostname: 'finance.yahoo.com',
+          path: `/quote/${symbol}`,
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          timeout: 15000,
+        };
+        const req = https.request(opts, (res) => {
+          const c = res.headers['set-cookie'] || [];
+          const parsed = (Array.isArray(c) ? c : [c]).map(s => s.split(';')[0]).filter(Boolean).join('; ');
+          // Drain response
+          res.on('data', () => {});
+          res.on('end', () => resolve(parsed));
+        });
+        req.on('error', reject);
+        req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+        req.end();
+      });
+
+      // Get crumb
+      const crumbResp = await httpsGet('/v1/test/getcrumb', cookieHeader);
+      const crumb = typeof crumbResp === 'string' ? crumbResp.trim() : '';
+      if (!crumb) throw new Error('no crumb');
+
+      // Fetch holders
+      const qs = `modules=institutionOwnership,fundOwnership&crumb=${encodeURIComponent(crumb)}`;
+      const summary = await httpsGet(`/v10/finance/quoteSummary/${symbol}?${qs}`);
       const holders = [];
-      for (const item of (summary?.institutionOwnership?.ownershipList || [])) {
-        const name = item.organization || (item.holder && item.holder.name) || '';
+      for (const item of (summary?.quoteSummary?.result?.[0]?.institutionOwnership?.ownershipList || [])) {
+        const name = item.organization || '';
         if (!name) continue;
-        holders.push({ holder: name, shares: item.position || item.shares || 0, pctHeld: item.pctHeld != null ? parseFloat((item.pctHeld * 100).toFixed(1)) : null, dateOfReport: item.reportDate || null, value: item.value || 0 });
+        holders.push({ holder: name, shares: item.position || 0, pctHeld: item.pctHeld != null ? parseFloat((item.pctHeld * 100).toFixed(1)) : null, dateOfReport: item.reportDate || null, value: item.value || 0 });
       }
-      for (const item of (summary?.fundOwnership?.ownershipList || [])) {
-        const name = item.organization || (item.holder && item.holder.name) || '';
+      for (const item of (summary?.quoteSummary?.result?.[0]?.fundOwnership?.ownershipList || [])) {
+        const name = item.organization || '';
         if (!name || holders.some(h => h.holder === name)) continue;
-        holders.push({ holder: name, shares: item.position || item.shares || 0, pctHeld: item.pctHeld != null ? parseFloat((item.pctHeld * 100).toFixed(1)) : null, dateOfReport: item.reportDate || null, value: item.value || 0 });
+        holders.push({ holder: name, shares: item.position || 0, pctHeld: item.pctHeld != null ? parseFloat((item.pctHeld * 100).toFixed(1)) : null, dateOfReport: item.reportDate || null, value: item.value || 0 });
       }
-      const topHolders = holders.sort((a, b) => (parseFloat(b.shares) || 0) - (parseFloat(a.shares) || 0)).slice(0, 10);
+      const topHolders = holders.sort((a, b) => (b.shares || 0) - (a.shares || 0)).slice(0, 10);
       if (topHolders.length > 0) return res.json({ holders: topHolders, topHolders, source: 'yahoo' });
+      console.error(`Yahoo holders empty for ${symbol}: no holders in response`);
     } catch (yhErr) {
-      console.error(`Yahoo holders error for ${symbol}: ${yhErr.message}`);
+      console.error(`Yahoo direct error for ${symbol}: ${yhErr.message}`);
     }
 
     res.json({ holders: [], topHolders: [], source: 'unavailable' });
