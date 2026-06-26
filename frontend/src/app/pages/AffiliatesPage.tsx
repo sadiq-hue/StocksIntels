@@ -269,7 +269,7 @@ export function AffiliatesPage() {
               </div>
               <Button
                 onClick={() => handleCopy(stats.referral_link!)}
-                className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white shrink-0"
+                className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white shrink-0 sm:w-auto w-full"
               >
                 {copied ? (
                   <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Copied</span>
@@ -411,7 +411,7 @@ export function AffiliatesPage() {
             </div>
           </Card>
         ) : activeTab === "commissions" ? (
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-2 gap-3 sm:gap-4">
             {commissionRates.map((c) => (
               <Card key={c.tier} className="border-gray-100 p-6 flex items-center justify-between">
                 <div>
@@ -446,7 +446,7 @@ export function AffiliatesPage() {
                     placeholder="Phone number or payment details"
                     value={paymentDetails}
                     onChange={(e) => setPaymentDetails(e.target.value)}
-                    className="flex-1 px-4 h-10 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-white outline-none transition-all text-sm text-gray-900"
+                    className="w-full px-4 h-10 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-white outline-none transition-all text-sm text-gray-900"
                   />
                 </div>
                 <Button
