@@ -4836,11 +4836,31 @@ app.get('/api/stock/:symbol/holders', async (req, res) => {
       }
     }
 
+    // Fallback: try finnhub ownership API
+    try {
+      const finnhubKey = process.env.FINNHUB_API_KEY || process.env.VITE_FINNHUB_KEY || '';
+      if (finnhubKey) {
+        const { finnhub } = require('./apiClient');
+        const resp = await finnhub.get('https://finnhub.io/api/v1/stock/ownership', { params: { symbol, token: finnhubKey } });
+        const data = resp.data;
+        if (data && Array.isArray(data.ownership)) {
+          const holders = data.ownership.slice(0, 10).map(h => ({
+            holder: h.investor?.name || h.holder || h.name || '',
+            shares: h.position || h.shares || 0,
+            pctHeld: h.percentHolding != null ? parseFloat((h.percentHolding * 100).toFixed(1)) : null,
+            dateOfReport: h.reportDate || null,
+            value: h.marketValue || h.value || 0,
+          })).filter(h => h.holder);
+          if (holders.length > 0) return res.json({ holders, topHolders: holders, source: 'finnhub' });
+        }
+      }
+    } catch (fhErr) {
+      console.error(`Finnhub holders error for ${symbol}: ${fhErr.message}`);
+    }
+
     // Fallback: direct yahoo finance http request
     try {
       const https = require('https');
-      const http = require('http');
-      const urlMod = require('url');
 
       const YAHOO_HOST = 'query2.finance.yahoo.com';
 
