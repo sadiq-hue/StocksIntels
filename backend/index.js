@@ -40,6 +40,8 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const crypto = require('crypto');
 
+const USD_TO_KES_RATE = 130;
+
 const uploadStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, path.join(__dirname, 'uploads')),
   filename: (_req, file, cb) => {
@@ -4515,8 +4517,8 @@ app.post('/api/test/send-receipt', async (req, res) => {
     await sendPaymentReceiptEmail(email, {
       userName: userName || 'Test User',
       planName: 'Pro',
-      amount: 3770,
-      currency: 'KES',
+      amount: parseFloat((3770 / USD_TO_KES_RATE).toFixed(2)),
+      currency: 'USD',
       period: 'yearly',
       durationMonths: 12,
       paymentMethod: 'M-Pesa',
@@ -7186,8 +7188,8 @@ app.post('/api/payments/callback', async (req, res) => {
                 await sendPaymentReceiptEmail(uEmail, {
                   userName: uName,
                   planName: plan_name || 'Pro',
-                  amount: tx.rows[0].amount,
-                  currency: 'KES',
+                  amount: parseFloat((tx.rows[0].amount / USD_TO_KES_RATE).toFixed(2)),
+                  currency: 'USD',
                   period: months === 12 ? 'yearly' : 'monthly',
                   durationMonths: months,
                   paymentMethod: 'M-Pesa',
@@ -7270,11 +7272,15 @@ app.get('/api/payments/status', async (req, res) => {
                 const userRes = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [tx.rows[0].user_id]);
                 const { full_name: uName, email: uEmail } = userRes.rows[0] || {};
                 if (uEmail) {
+                  const rawCurrency = tx.rows[0].currency || 'KES';
+                  const usdAmount = rawCurrency === 'KES'
+                    ? parseFloat((tx.rows[0].amount / USD_TO_KES_RATE).toFixed(2))
+                    : tx.rows[0].amount;
                   await sendPaymentReceiptEmail(uEmail, {
                     userName: uName,
                     planName: tx.rows[0].plan_name || 'Pro',
-                    amount: tx.rows[0].amount,
-                    currency: tx.rows[0].currency,
+                    amount: usdAmount,
+                    currency: 'USD',
                     period: months === 12 ? 'yearly' : 'monthly',
                     durationMonths: months,
                     paymentMethod: 'M-Pesa',
@@ -7342,11 +7348,15 @@ app.post('/api/payments/resend-receipt', authenticateToken, async (req, res) => 
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + months);
 
+    const rawCur = transaction.currency || 'KES';
+    const receiptAmount = rawCur === 'KES'
+      ? parseFloat((transaction.amount / USD_TO_KES_RATE).toFixed(2))
+      : transaction.amount;
     await sendPaymentReceiptEmail(req.user.email, {
       userName: req.user.full_name,
       planName: transaction.plan_name || 'Pro',
-      amount: transaction.amount,
-      currency: transaction.currency,
+      amount: receiptAmount,
+      currency: 'USD',
       period: months === 12 ? 'yearly' : 'monthly',
       durationMonths: months,
       paymentMethod: transaction.provider || 'M-Pesa',
@@ -7377,7 +7387,6 @@ app.get('/api/payments/plans', async (req, res) => {
 
 // --- PayPal Payment Routes ---
 // Convert USD to KES for display, but charge in USD via PayPal
-const USD_TO_KES_RATE = 130;
 
 app.post('/api/payments/paypal', async (req, res) => {
   try {
@@ -7482,8 +7491,8 @@ app.get('/api/payments/paypal-capture', async (req, res) => {
             await sendPaymentReceiptEmail(uEmail, {
               userName: uName,
               planName: plan_name || 'Pro',
-              amount: amount * USD_TO_KES_RATE,
-              currency: 'KES',
+              amount: amount,
+              currency: 'USD',
               period: months === 12 ? 'yearly' : 'monthly',
               durationMonths: months,
               paymentMethod: 'PayPal',
