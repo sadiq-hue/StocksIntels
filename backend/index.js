@@ -4807,42 +4807,58 @@ app.get('/api/stock/:symbol/holders', async (req, res) => {
     if (symbol.endsWith('.NR')) {
       return res.json({ holders: [], topHolders: [], source: 'unsupported' });
     }
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-    const summary = await Promise.race([
-      yf.quoteSummary(symbol, { modules: ['institutionOwnership', 'fundOwnership'] }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('Yahoo Finance timeout')), 25000)),
-    ]);
-    const holders = [];
-    const list = summary?.institutionOwnership?.ownershipList || [];
-    for (const item of list) {
-      const name = item.organization || (item.holder && item.holder.name) || '';
-      if (!name) continue;
-      holders.push({
-        holder: name,
-        shares: item.position || item.shares || 0,
-        pctHeld: item.pctHeld != null ? parseFloat((item.pctHeld * 100).toFixed(1)) : null,
-        dateOfReport: item.reportDate || null,
-        value: item.value || 0,
-      });
+
+    // Try FMP first (if API key is configured)
+    const FMP_API_KEY = process.env.FMP_API_KEY || process.env.FINANCIALS_PROVIDER || '';
+    if (FMP_API_KEY && FMP_API_KEY.length > 10) {
+      try {
+        const { fmp } = require('./apiClient');
+        const [institutionalRes, etfRes] = await Promise.allSettled([
+          fmp.get(`https://financialmodelingprep.com/stable/institutional-holders`, {
+            params: { symbol, apikey: FMP_API_KEY },
+          }),
+          fmp.get(`https://financialmodelingprep.com/stable/etf-holders`, {
+            params: { symbol, apikey: FMP_API_KEY },
+          }),
+        ]);
+        const institutional = institutionalRes.status === 'fulfilled' && Array.isArray(institutionalRes.value.data)
+          ? institutionalRes.value.data.slice(0, 15)
+          : [];
+        if (institutional.length > 0) {
+          const topHolders = [...institutional]
+            .sort((a, b) => (parseFloat(b.shares) || 0) - (parseFloat(a.shares) || 0))
+            .slice(0, 10)
+            .map(h => ({ holder: h.holder || '', shares: parseFloat(h.shares) || 0, pctHeld: h.pctHeld, dateOfReport: h.dateOfReport || h.reportDate, value: h.value }));
+          return res.json({ holders: topHolders, topHolders, source: 'fmp' });
+        }
+      } catch (fmpErr) {
+        console.error(`FMP holders error for ${symbol}: ${fmpErr.message}`);
+      }
     }
-    const fundList = summary?.fundOwnership?.ownershipList || [];
-    for (const item of fundList) {
-      const name = item.organization || (item.holder && item.holder.name) || '';
-      if (!name) continue;
-      if (holders.some(h => h.holder === name)) continue;
-      holders.push({
-        holder: name,
-        shares: item.position || item.shares || 0,
-        pctHeld: item.pctHeld != null ? parseFloat((item.pctHeld * 100).toFixed(1)) : null,
-        dateOfReport: item.reportDate || null,
-        value: item.value || 0,
-      });
+
+    // Fallback: yahoo-finance2 quoteSummary
+    try {
+      const { default: YahooFinance } = await import('yahoo-finance2');
+      const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'], YF_QUERY_HOST: 'query1.finance.yahoo.com' });
+      const summary = await yf.quoteSummary(symbol, { modules: ['institutionOwnership', 'fundOwnership'] });
+      const holders = [];
+      for (const item of (summary?.institutionOwnership?.ownershipList || [])) {
+        const name = item.organization || (item.holder && item.holder.name) || '';
+        if (!name) continue;
+        holders.push({ holder: name, shares: item.position || item.shares || 0, pctHeld: item.pctHeld != null ? parseFloat((item.pctHeld * 100).toFixed(1)) : null, dateOfReport: item.reportDate || null, value: item.value || 0 });
+      }
+      for (const item of (summary?.fundOwnership?.ownershipList || [])) {
+        const name = item.organization || (item.holder && item.holder.name) || '';
+        if (!name || holders.some(h => h.holder === name)) continue;
+        holders.push({ holder: name, shares: item.position || item.shares || 0, pctHeld: item.pctHeld != null ? parseFloat((item.pctHeld * 100).toFixed(1)) : null, dateOfReport: item.reportDate || null, value: item.value || 0 });
+      }
+      const topHolders = holders.sort((a, b) => (parseFloat(b.shares) || 0) - (parseFloat(a.shares) || 0)).slice(0, 10);
+      if (topHolders.length > 0) return res.json({ holders: topHolders, topHolders, source: 'yahoo' });
+    } catch (yhErr) {
+      console.error(`Yahoo holders error for ${symbol}: ${yhErr.message}`);
     }
-    const topHolders = holders
-      .sort((a, b) => (parseFloat(b.shares) || 0) - (parseFloat(a.shares) || 0))
-      .slice(0, 10);
-    res.json({ holders: topHolders, topHolders, source: 'yahoo' });
+
+    res.json({ holders: [], topHolders: [], source: 'unavailable' });
   } catch (error) {
     console.error(`Error fetching holders for ${req.params.symbol}: ${error.message}`);
     res.json({ holders: [], topHolders: [], source: 'error' });
