@@ -842,7 +842,7 @@ export function LandingPage() {
           </div>
 
           <div className="border-t border-gray-800 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p className="text-gray-600 text-xs">2026 StocksIntels. Built for Kenyan traders.</p>
+            <p className="text-gray-600 text-xs">2026 StocksIntels. Built for NSE & global traders.</p>
             <button onClick={scrollToTop} className="w-7 h-7 bg-gray-800 hover:bg-[#0D7490] rounded-lg flex items-center justify-center transition-all duration-300 cursor-pointer">
               <ChevronUp className="w-3 h-3 text-gray-400" />
             </button>
