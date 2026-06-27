@@ -205,8 +205,57 @@ export function LandingPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const renderFloatingShapes = () => floatingShapes.map((shape, i) => {
+    const depthFactor = shape.depth * 8;
+    const tx = (mousePos.x - window.innerWidth / 2) / depthFactor;
+    const ty = (mousePos.y - window.innerHeight / 2) / depthFactor;
+    const borderRadius = shape.rotate % 90 < 20 ? "50%" : shape.rotate % 90 < 50 ? "40% 60% 60% 40% / 60% 30% 70% 40%" : "30% 70% 50% 50% / 50% 40% 60% 50%";
+    return (
+      <div
+        key={i}
+        className="absolute"
+        style={{
+          top: shape.top,
+          left: shape.left ?? undefined,
+          right: shape.right ?? undefined,
+          width: shape.size,
+          height: shape.size,
+          animation: `float-3d ${8 + shape.delay * 1.5}s ease-in-out infinite`,
+          animationDelay: `${shape.delay}s`,
+        }}
+      >
+        <div
+          className="w-full h-full"
+          style={{
+            borderRadius,
+            background: `radial-gradient(circle at 30% 30%, ${shape.color}, transparent)`,
+            border: `1px solid ${shape.border}`,
+            boxShadow: `0 0 30px ${shape.color}`,
+            transform: `perspective(600px) rotateX(${Math.sin(i * 1.5) * 15 + 10}deg) rotateY(${Math.cos(i * 1.2) * 20}deg) translate3d(${tx}px, ${ty}px, ${shape.depth * 50}px)`,
+            willChange: "transform",
+            backdropFilter: "blur(4px)",
+          }}
+        />
+      </div>
+    );
+  });
+
   return (
-    <div className="min-h-screen bg-white selection:bg-[#0D7490]/20">
+    <div className="min-h-screen bg-white selection:bg-[#0D7490]/20 relative">
+      {/* Full-page floating shapes background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0D7490]/3 via-transparent to-[#0EA5E9]/3" />
+        {/* 3D Floating Shapes across full page */}
+        {renderFloatingShapes()}
+        {/* Grid overlay */}
+        <div className="absolute inset-0 opacity-[0.02]" style={{
+          backgroundImage: `linear-gradient(rgba(13,116,144,1) 1px, transparent 1px), linear-gradient(90deg, rgba(13,116,144,1) 1px, transparent 1px)`,
+          backgroundSize: "60px 60px",
+        }} />
+        {/* Large gradient blobs */}
+        <div className="absolute top-[-15%] right-[-5%] w-[1000px] h-[1000px] bg-gradient-to-bl from-[#0D7490]/12 via-[#0EA5E9]/6 to-transparent rounded-full blur-3xl animate-pulse-slow" />
+        <div className="absolute bottom-[-15%] left-[-5%] w-[800px] h-[800px] bg-gradient-to-tr from-[#0EA5E9]/12 via-[#0D7490]/6 to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
+      </div>
 
       {/* HEADER */}
       <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-700 ${
@@ -278,41 +327,6 @@ export function LandingPage() {
           <StockChartBg />
           <div className="absolute top-[-20%] right-[-10%] w-[1000px] h-[1000px] bg-gradient-to-bl from-[#0D7490]/12 via-[#0EA5E9]/6 to-transparent rounded-full blur-3xl animate-pulse-slow" />
           <div className="absolute bottom-[-20%] left-[-10%] w-[800px] h-[800px] bg-gradient-to-tr from-[#0EA5E9]/12 via-[#0D7490]/6 to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
-          {/* 3D Floating Shapes */}
-          {floatingShapes.map((shape, i) => {
-            const depthFactor = shape.depth * 8;
-            const tx = (mousePos.x - window.innerWidth / 2) / depthFactor;
-            const ty = (mousePos.y - window.innerHeight / 2) / depthFactor;
-            const borderRadius = shape.rotate % 90 < 20 ? "50%" : shape.rotate % 90 < 50 ? "40% 60% 60% 40% / 60% 30% 70% 40%" : "30% 70% 50% 50% / 50% 40% 60% 50%";
-            return (
-              <div
-                key={i}
-                className="absolute"
-                style={{
-                  top: shape.top,
-                  left: shape.left ?? undefined,
-                  right: shape.right ?? undefined,
-                  width: shape.size,
-                  height: shape.size,
-                  animation: `float-3d ${8 + shape.delay * 1.5}s ease-in-out infinite`,
-                  animationDelay: `${shape.delay}s`,
-                }}
-              >
-                <div
-                  className="w-full h-full"
-                  style={{
-                    borderRadius,
-                    background: `radial-gradient(circle at 30% 30%, ${shape.color}, transparent)`,
-                    border: `1px solid ${shape.border}`,
-                    boxShadow: `0 0 30px ${shape.color}`,
-                    transform: `perspective(600px) rotateX(${Math.sin(i * 1.5) * 15 + 10}deg) rotateY(${Math.cos(i * 1.2) * 20}deg) translate3d(${tx}px, ${ty}px, ${shape.depth * 50}px)`,
-                    willChange: "transform",
-                    backdropFilter: "blur(4px)",
-                  }}
-                />
-              </div>
-            );
-          })}
           {/* Grid overlay */}
           <div className="absolute inset-0 opacity-[0.03]" style={{
             backgroundImage: `linear-gradient(rgba(13,116,144,1) 1px, transparent 1px), linear-gradient(90deg, rgba(13,116,144,1) 1px, transparent 1px)`,
