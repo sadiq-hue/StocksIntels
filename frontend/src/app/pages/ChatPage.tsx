@@ -600,21 +600,11 @@ export function ChatPage() {
     }
   };
 
-  const handlePeerSelect = (peerId: number) => {
-    if (selectedGroup) leaveGroup(selectedGroup);
-    setChatMode("people");
-    setSelectedPeer(peerId);
-    setSelectedGroup(null);
-    setGroupView("list");
-    setShowMobileSidebar(false);
-  };
-
   const getLastMessage = (id: string, mode: "group" | "people") => {
     return null;
   };
 
   const filteredGroups = groups.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  const filteredPeers = peers.filter(p => p.full_name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   if (authLoading || loading) {
     return (
@@ -645,29 +635,18 @@ export function ChatPage() {
           <div>
             <h3 className="text-foreground mb-4 flex items-center gap-2">
               <Users className="w-5 h-5" />
-              {chatMode === "group" ? "Trading Groups" : "People"}
+              Trading Groups
             </h3>
-            <div className="flex items-center gap-2 mb-4">
-              <button onClick={() => { setChatMode("group"); setSelectedPeer(null); }}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition ${
-                  chatMode === "group" ? "bg-[#0D7490] text-white shadow-sm" : "bg-muted text-foreground hover:bg-accent"
-                }`}>Groups</button>
-              <button onClick={() => { if (selectedGroup) leaveGroup(selectedGroup); setChatMode("people"); setSelectedGroup(null); }}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition ${
-                  chatMode === "people" ? "bg-[#0D7490] text-white shadow-sm" : "bg-muted text-foreground hover:bg-accent"
-                }`}>People</button>
-            </div>
             <div className="relative mb-4">
               <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-              <Input placeholder={chatMode === "group" ? "Search groups..." : "Search people..."}
+              <Input placeholder="Search groups..."
                 value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 bg-muted border-border" />
             </div>
           </div>
 
           <div className="space-y-1 overflow-y-auto flex-1 -mx-4 px-4">
-            {chatMode === "group"
-              ? (filteredGroups.length === 0 ? (
+            {filteredGroups.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">No groups found</div>
                 ) : (
                   filteredGroups.map((group) => (
@@ -690,39 +669,7 @@ export function ChatPage() {
                       </div>
                     </button>
                   ))
-                ))
-              : (filteredPeers.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground text-sm">No people found</div>
-                ) : (
-                  filteredPeers.map((peer) => (
-                    <button key={peer.id} onClick={() => handlePeerSelect(peer.id)}
-                      className={`w-full text-left p-3 rounded-xl transition-all ${
-                        selectedPeer === peer.id ? "bg-[#0D7490] text-white shadow-sm" : "text-foreground hover:bg-accent"
-                      }`}>
-                      <div className="flex items-center gap-3">
-                        <div className="relative flex-shrink-0">
-                          <Avatar className={`w-10 h-10 ${selectedPeer === peer.id ? "ring-2 ring-white/50" : ""}`}>
-                            <AvatarFallback className={selectedPeer === peer.id ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}>
-                              {getInitials(peer.full_name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${
-                            peer.online ? "bg-green-500" : "bg-gray-400"
-                          }`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium truncate">{peer.full_name}</span>
-                          </div>
-                          <p className={`text-xs truncate ${selectedPeer === peer.id ? "text-white/70" : "text-muted-foreground"}`}>
-                            {formatLastSeen(peer.last_seen, peer.online)}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  ))
-                ))
-            }
+                )}
           </div>
         </Card>
 
@@ -738,26 +685,17 @@ export function ChatPage() {
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              {chatMode === "group" ? (
+              {chatMode === "group" && (
                 <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-lg">
                   {GROUP_ICONS[selectedGroup || ""] || <Hash className="w-5 h-5 text-[#0D7490]" />}
                 </div>
-              ) : currentPeer ? (
-                <div className="relative">
-                  <Avatar className="w-10 h-10">
-                    <AvatarFallback className="bg-muted text-muted-foreground">{getInitials(currentPeer.full_name)}</AvatarFallback>
-                  </Avatar>
-                  {currentPeer.online && <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />}
-                </div>
-              ) : null}
+              )}
               <div className="min-w-0">
                 <h3 className="text-foreground font-semibold truncate">
-                  {chatMode === "group" ? currentGroup?.name || "Select a group" : currentPeer?.full_name || "Select a person"}
+                  {currentGroup?.name || "Select a group"}
                 </h3>
                 <p className="text-muted-foreground text-xs truncate">
-                  {chatMode === "group"
-                    ? `${currentGroup?.members || 0} members · ${currentGroup?.online_members || 0} online`
-                    : formatLastSeen(currentPeer?.last_seen ?? null, currentPeer?.online ?? false)}
+                  {currentGroup ? `${currentGroup.members} members · ${currentGroup.online_members || 0} online` : ""}
                 </p>
               </div>
             </div>
@@ -768,11 +706,11 @@ export function ChatPage() {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
-            {!selectedGroup && !selectedPeer ? (
+            {!selectedGroup ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                 <MessageSquare className="w-12 h-12 mb-3 text-muted-foreground" />
                 <p className="text-sm font-medium text-muted-foreground">Select a conversation</p>
-                <p className="text-xs mt-1">Choose a group or person to start chatting</p>
+                <p className="text-xs mt-1">Choose a group to start chatting</p>
               </div>
             ) : chatMode === "group" && groupView === "detail" && currentGroup ? (
               <div className="h-full overflow-y-auto px-4 py-4">
@@ -1044,10 +982,7 @@ export function ChatPage() {
                 <Paperclip className="w-4 h-4" />
               </button>
               <Input value={messageText} onChange={handleInputChange}
-                placeholder={chatMode === "group"
-                  ? "Type a message or mention a stock ticker (e.g. SCOM)..."
-                  : `Message ${currentPeer?.full_name || "someone"}...`
-                }
+                placeholder="Type a message or mention a stock ticker (e.g. SCOM)..."
                 className="flex-1 bg-muted border-border text-foreground focus-visible:ring-[#0D7490]" />
               <Button type="submit" disabled={(!messageText.trim() && !pendingFile) || uploadingFile}
                 className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-5 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl">
@@ -1059,7 +994,7 @@ export function ChatPage() {
 
         {/* Right sidebar */}
         <Card className="lg:col-span-3 bg-card border-border p-4 overflow-y-auto hidden lg:block">
-          {chatMode === "group" && currentGroup ? (
+          {currentGroup ? (
             <>
               {/* Stock Mentions */}
               <div className="mb-4">
@@ -1317,39 +1252,7 @@ export function ChatPage() {
                   )}
                 </div>
               </div>
-            </>
-          ) : (
-            <>
-              <div className="mb-6">
-                <h3 className="text-foreground mb-4 font-semibold flex items-center gap-2">
-                  <Circle className="w-4 h-4 fill-green-500 text-green-500" />
-                  Online Members
-                </h3>
-                <div className="space-y-2">
-                  {peers.filter(p => p.online).length === 0 ? (
-                    <p className="text-muted-foreground text-sm text-center py-4">No users online</p>
-                  ) : (
-                    peers.filter(p => p.online).map(peer => (
-                      <button key={peer.id} onClick={() => handlePeerSelect(peer.id)}
-                        className={`w-full text-left p-3 rounded-xl transition-all ${
-                          selectedPeer === peer.id ? "bg-[#E8F4F8] border border-[#0D7490]" : "bg-muted border border-border hover:border-border"
-                        }`}>
-                        <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Avatar className="w-8 h-8">
-                              <AvatarFallback className="text-xs bg-green-100 text-green-700">{getInitials(peer.full_name)}</AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm font-medium text-foreground truncate">{peer.full_name}</span>
-                          </div>
-                          <span className="text-xs text-green-600 font-medium shrink-0">Online</span>
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            </>
-          )}
+            </>          ) : null}
         </Card>
       </div>
     </div>
