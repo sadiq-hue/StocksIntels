@@ -6,6 +6,7 @@ import {
   ChevronRight, Clock, TrendingUp,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
+import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 
 function StockChartBg() {
   const path = useMemo(() => {
@@ -165,6 +166,7 @@ export function LandingPage() {
   const heroRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [visibleSections, setVisibleSections] = useState<Set<number>>(new Set());
+  const { getQuote } = useRealtimeQuotes();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -337,30 +339,36 @@ export function LandingPage() {
         {/* Stock Ticker Strip */}
         <div className="relative z-10 mb-12 overflow-hidden">
           <div className="flex whitespace-nowrap animate-[ticker_30s_linear_infinite]">
-            {[
-              { sym: "SCOM", price: "17.50", change: "+2.3%", up: true },
-              { sym: "EQTY", price: "48.25", change: "+1.1%", up: true },
-              { sym: "KCB", price: "52.80", change: "-0.4%", up: false },
-              { sym: "AAPL", price: "198.50", change: "+3.2%", up: true },
-              { sym: "TSLA", price: "248.90", change: "-1.5%", up: false },
-              { sym: "MSFT", price: "425.60", change: "+0.8%", up: true },
-              { sym: "GOOGL", price: "175.30", change: "+1.7%", up: true },
-              { sym: "EABL", price: "62.00", change: "+0.5%", up: true },
-              { sym: "NVDA", price: "880.20", change: "+4.1%", up: true },
-              { sym: "AMZN", price: "185.40", change: "+2.0%", up: true },
-            ].concat([
-              { sym: "SCOM", price: "17.50", change: "+2.3%", up: true },
-              { sym: "EQTY", price: "48.25", change: "+1.1%", up: true },
-              { sym: "KCB", price: "52.80", change: "-0.4%", up: false },
-              { sym: "AAPL", price: "198.50", change: "+3.2%", up: true },
-              { sym: "TSLA", price: "248.90", change: "-1.5%", up: false },
-            ]).map((s, i) => (
-              <div key={i} className="flex items-center gap-2 px-5 py-1.5 bg-white/60 backdrop-blur-sm border border-gray-100 rounded-lg mx-1.5 shrink-0">
-                <span className="font-bold text-xs text-gray-900">{s.sym}</span>
-                <span className="text-xs text-gray-600">${s.price}</span>
-                <span className={`text-xs font-semibold ${s.up ? "text-emerald-600" : "text-red-500"}`}>{s.change}</span>
-              </div>
-            ))}
+            {(() => {
+              const tickerSymbols = [
+                { sym: "SCOM", display: "SCOM", fallback: "17.50", fallbackChange: "+2.3%", up: true },
+                { sym: "EQTY", display: "EQTY", fallback: "48.25", fallbackChange: "+1.1%", up: true },
+                { sym: "KCB", display: "KCB", fallback: "52.80", fallbackChange: "-0.4%", up: false },
+                { sym: "AAPL", display: "AAPL", fallback: "198.50", fallbackChange: "+3.2%", up: true },
+                { sym: "TSLA", display: "TSLA", fallback: "248.90", fallbackChange: "-1.5%", up: false },
+                { sym: "MSFT", display: "MSFT", fallback: "425.60", fallbackChange: "+0.8%", up: true },
+                { sym: "GOOGL", display: "GOOGL", fallback: "175.30", fallbackChange: "+1.7%", up: true },
+                { sym: "EABL", display: "EABL", fallback: "62.00", fallbackChange: "+0.5%", up: true },
+                { sym: "NVDA", display: "NVDA", fallback: "880.20", fallbackChange: "+4.1%", up: true },
+                { sym: "AMZN", display: "AMZN", fallback: "185.40", fallbackChange: "+2.0%", up: true },
+              ];
+              const items = tickerSymbols.map(t => {
+                const q = getQuote(t.sym) || getQuote(`NSE:${t.sym}`);
+                return {
+                  sym: t.display,
+                  price: q?.price ? q.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : t.fallback,
+                  change: q?.changePercent != null ? `${q.changePercent >= 0 ? '+' : ''}${q.changePercent.toFixed(1)}%` : t.fallbackChange,
+                  up: q?.changePercent != null ? q.changePercent >= 0 : t.up,
+                };
+              });
+              return [...items, ...items].map((s, i) => (
+                <div key={i} className="flex items-center gap-2 px-5 py-1.5 bg-white/60 backdrop-blur-sm border border-gray-100 rounded-lg mx-1.5 shrink-0">
+                  <span className="font-bold text-xs text-gray-900">{s.sym}</span>
+                  <span className="text-xs text-gray-600">${s.price}</span>
+                  <span className={`text-xs font-semibold ${s.up ? "text-emerald-600" : "text-red-500"}`}>{s.change}</span>
+                </div>
+              ));
+            })()}
           </div>
         </div>
 
@@ -414,22 +422,28 @@ export function LandingPage() {
             {/* Right: Stock Cards */}
             <div className="hidden lg:block relative">
               {/* Main dashboard card */}
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl shadow-[#0D7490]/10 p-6 relative">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5 text-emerald-600" />
+              {(() => {
+                const scom = getQuote("SCOM") || getQuote("NSE:SCOM");
+                const price = scom?.price ?? 17.50;
+                const chg = scom?.changePercent ?? 2.3;
+                const isUp = chg >= 0;
+                return (
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl shadow-[#0D7490]/10 p-6 relative">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 ${isUp ? 'bg-emerald-100' : 'bg-red-100'} rounded-xl flex items-center justify-center`}>
+                        <TrendingUp className={`w-5 h-5 ${isUp ? 'text-emerald-600' : 'text-red-600'}`} />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900">SCOM</p>
+                        <p className="text-xs text-gray-500">Safaricom PLC</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-gray-900">SCOM</p>
-                      <p className="text-xs text-gray-500">Safaricom PLC</p>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-gray-900">KES {price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      <p className={`text-sm font-semibold ${isUp ? 'text-emerald-600' : 'text-red-600'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}% today</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-gray-900">KES 17.50</p>
-                    <p className="text-sm font-semibold text-emerald-600">+2.3% today</p>
-                  </div>
-                </div>
                 {/* Mini chart */}
                 <svg className="w-full h-24" viewBox="0 0 400 80">
                   <defs>
@@ -450,43 +464,35 @@ export function LandingPage() {
                   <span>Now</span>
                 </div>
               </div>
+                );
+              })()}
 
               {/* Floating mini cards */}
-              <div className="absolute -top-6 -right-4 bg-white rounded-xl border border-gray-200 shadow-xl p-3 animate-[float-3d_6s_ease-in-out_infinite]">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-gray-900">AAPL</p>
-                    <p className="text-[10px] font-semibold text-emerald-600">+3.2%</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="absolute -bottom-4 -left-6 bg-white rounded-xl border border-gray-200 shadow-xl p-3 animate-[float-3d_7s_ease-in-out_infinite] animation-delay-1s">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-gray-900">NVDA</p>
-                    <p className="text-[10px] font-semibold text-emerald-600">+4.1%</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="absolute top-1/2 -right-8 bg-white rounded-xl border border-gray-200 shadow-xl p-3 animate-[float-3d_8s_ease-in-out_infinite] animation-delay-2s">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-gray-900">EQTY</p>
-                    <p className="text-[10px] font-semibold text-emerald-600">+1.1%</p>
-                  </div>
-                </div>
-              </div>
+              {(() => {
+                const cards = [
+                  { sym: "AAPL", fallback: "+3.2", color: "blue", anim: "animate-[float-3d_6s_ease-in-out_infinite]", pos: "-top-6 -right-4" },
+                  { sym: "NVDA", fallback: "+4.1", color: "purple", anim: "animate-[float-3d_7s_ease-in-out_infinite] animation-delay-1s", pos: "-bottom-4 -left-6" },
+                  { sym: "EQTY", fallback: "+1.1", color: "emerald", anim: "animate-[float-3d_8s_ease-in-out_infinite] animation-delay-2s", pos: "top-1/2 -right-8" },
+                ];
+                return cards.map(c => {
+                  const q = getQuote(c.sym);
+                  const chg = q?.changePercent ?? parseFloat(c.fallback);
+                  const isUp = chg >= 0;
+                  return (
+                    <div key={c.sym} className={`absolute ${c.pos} bg-white rounded-xl border border-gray-200 shadow-xl p-3 ${c.anim}`}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-8 h-8 bg-${c.color}-100 rounded-lg flex items-center justify-center`}>
+                          <TrendingUp className={`w-4 h-4 text-${c.color}-600`} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-900">{c.sym}</p>
+                          <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}%</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
 
