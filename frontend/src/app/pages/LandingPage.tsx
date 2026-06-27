@@ -68,16 +68,16 @@ function StockChartBg() {
 }
 
 const floatingShapes = [
-  { size: 80, top: "8%", left: "3%", delay: 0, depth: 1, color: "rgba(13,116,144,0.025)", rotate: 15, border: "rgba(13,116,144,0.04)" },
-  { size: 50, top: "18%", right: "5%", delay: 1.2, depth: 3, color: "rgba(14,165,233,0.02)", rotate: 40, border: "rgba(14,165,233,0.035)" },
-  { size: 110, top: "50%", left: "1%", delay: 0.7, depth: 2, color: "rgba(13,116,144,0.02)", rotate: 60, border: "rgba(13,116,144,0.03)" },
-  { size: 45, top: "70%", right: "3%", delay: 1.8, depth: 1, color: "rgba(14,165,233,0.025)", rotate: 25, border: "rgba(14,165,233,0.04)" },
-  { size: 65, top: "35%", left: "12%", delay: 0.3, depth: 3, color: "rgba(13,116,144,0.02)", rotate: 80, border: "rgba(13,116,144,0.035)" },
-  { size: 35, top: "82%", left: "18%", delay: 2.2, depth: 2, color: "rgba(14,165,233,0.025)", rotate: 10, border: "rgba(14,165,233,0.04)" },
-  { size: 55, top: "12%", left: "45%", delay: 0.5, depth: 3, color: "rgba(13,116,144,0.02)", rotate: 120, border: "rgba(13,116,144,0.03)" },
-  { size: 40, top: "42%", right: "15%", delay: 1.5, depth: 2, color: "rgba(14,165,233,0.02)", rotate: 70, border: "rgba(14,165,233,0.035)" },
-  { size: 70, top: "60%", left: "30%", delay: 0.9, depth: 1, color: "rgba(13,116,144,0.02)", rotate: 35, border: "rgba(13,116,144,0.025)" },
-  { size: 25, top: "28%", right: "22%", delay: 2.5, depth: 3, color: "rgba(14,165,233,0.03)", rotate: 90, border: "rgba(14,165,233,0.05)" },
+  { type: "card", symbol: "SCOM", price: "17.50", change: "+2.3%", up: true, top: "10%", left: "2%", delay: 0 },
+  { type: "arrow", up: true, top: "25%", right: "4%", delay: 1.2 },
+  { type: "card", symbol: "AAPL", price: "198.50", change: "+3.2%", up: true, top: "48%", left: "1%", delay: 0.7 },
+  { type: "badge", text: "BUY", top: "68%", right: "3%", delay: 1.8 },
+  { type: "card", symbol: "NVDA", price: "880.20", change: "+4.1%", up: true, top: "15%", left: "11%", delay: 0.3 },
+  { type: "arrow", up: false, top: "82%", left: "16%", delay: 2.2 },
+  { type: "card", symbol: "EQTY", price: "48.25", change: "+1.1%", up: true, top: "38%", left: "6%", delay: 0.5 },
+  { type: "badge", text: "SELL", top: "58%", right: "7%", delay: 1.5 },
+  { type: "card", symbol: "TSLA", price: "248.90", change: "-1.5%", up: false, top: "78%", right: "2%", delay: 0.9 },
+  { type: "arrow", up: true, top: "42%", right: "9%", delay: 2.5 },
 ];
 
 const features = [
@@ -208,55 +208,49 @@ export function LandingPage() {
   };
 
   const renderFloatingShapes = () => floatingShapes.map((shape, i) => {
-    const depthFactor = shape.depth * 8;
+    const depthFactor = 3 + i * 0.5;
     const tx = (mousePos.x - window.innerWidth / 2) / depthFactor;
     const ty = (mousePos.y - window.innerHeight / 2) / depthFactor;
-    const borderRadius = shape.rotate % 90 < 20 ? "50%" : shape.rotate % 90 < 50 ? "40% 60% 60% 40% / 60% 30% 70% 40%" : "30% 70% 50% 50% / 50% 40% 60% 50%";
-    return (
-      <div
-        key={i}
-        className="absolute"
-        style={{
-          top: shape.top,
-          left: shape.left ?? undefined,
-          right: shape.right ?? undefined,
-          width: shape.size,
-          height: shape.size,
-          animation: `float-3d ${8 + shape.delay * 1.5}s ease-in-out infinite`,
-          animationDelay: `${shape.delay}s`,
-        }}
-      >
-        <div
-          className="w-full h-full"
-          style={{
-            borderRadius,
-            background: `radial-gradient(circle at 30% 30%, ${shape.color}, transparent)`,
-            border: `1px solid ${shape.border}`,
-            boxShadow: `0 0 30px ${shape.color}`,
-            transform: `perspective(600px) rotateX(${Math.sin(i * 1.5) * 15 + 10}deg) rotateY(${Math.cos(i * 1.2) * 20}deg) translate3d(${tx}px, ${ty}px, ${shape.depth * 50}px)`,
-            willChange: "transform",
-            backdropFilter: "blur(4px)",
-          }}
-        />
-      </div>
-    );
+    const animStyle = { animation: `float-3d ${8 + shape.delay * 1.5}s ease-in-out infinite`, animationDelay: `${shape.delay}s` };
+    const parallaxStyle = { transform: `translate3d(${tx}px, ${ty}px, 0)`, willChange: "transform" as const };
+
+    if (shape.type === "card") {
+      return (
+        <div key={i} className="absolute opacity-70" style={{ top: shape.top, left: shape.left ?? undefined, right: shape.right ?? undefined, ...animStyle }}>
+          <div className="bg-white/80 backdrop-blur-sm border border-gray-200/60 rounded-lg px-3 py-2 shadow-lg shadow-gray-900/5" style={parallaxStyle}>
+            <p className="text-[10px] font-bold text-gray-900">{shape.symbol}</p>
+            <p className="text-[9px] text-gray-500">${shape.price}</p>
+            <p className={`text-[9px] font-semibold ${shape.up ? 'text-emerald-600' : 'text-red-500'}`}>{shape.change}</p>
+          </div>
+        </div>
+      );
+    }
+    if (shape.type === "arrow") {
+      return (
+        <div key={i} className="absolute opacity-60" style={{ top: shape.top, left: shape.left ?? undefined, right: shape.right ?? undefined, ...animStyle }}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${shape.up ? 'bg-emerald-100' : 'bg-red-100'}`} style={parallaxStyle}>
+            <TrendingUp className={`w-4 h-4 ${shape.up ? 'text-emerald-600' : 'text-red-500 rotate-180'}`} />
+          </div>
+        </div>
+      );
+    }
+    if (shape.type === "badge") {
+      return (
+        <div key={i} className="absolute opacity-70" style={{ top: shape.top, left: shape.left ?? undefined, right: shape.right ?? undefined, ...animStyle }}>
+          <div className={`px-3 py-1 rounded-full text-[10px] font-bold shadow-lg ${shape.text === 'BUY' ? 'bg-emerald-500/90 text-white shadow-emerald-200' : 'bg-red-500/90 text-white shadow-red-200'}`} style={parallaxStyle}>
+            {shape.text}
+          </div>
+        </div>
+      );
+    }
+    return null;
   });
 
   return (
     <div className="min-h-screen bg-white selection:bg-[#0D7490]/20 relative">
-      {/* Full-page floating shapes background */}
+      {/* Full-page floating stock elements */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0D7490]/1 via-transparent to-[#0EA5E9]/1" />
-        {/* 3D Floating Shapes across full page */}
         {renderFloatingShapes()}
-        {/* Grid overlay */}
-        <div className="absolute inset-0 opacity-[0.008]" style={{
-          backgroundImage: `linear-gradient(rgba(13,116,144,1) 1px, transparent 1px), linear-gradient(90deg, rgba(13,116,144,1) 1px, transparent 1px)`,
-          backgroundSize: "60px 60px",
-        }} />
-        {/* Large gradient blobs */}
-        <div className="absolute top-[-15%] right-[-5%] w-[1000px] h-[1000px] bg-gradient-to-bl from-[#0D7490]/2 via-[#0EA5E9]/1 to-transparent rounded-full blur-3xl animate-pulse-slow" />
-        <div className="absolute bottom-[-15%] left-[-5%] w-[800px] h-[800px] bg-gradient-to-tr from-[#0EA5E9]/2 via-[#0D7490]/1 to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
       </div>
 
       {/* HEADER */}
