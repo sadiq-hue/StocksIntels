@@ -334,62 +334,180 @@ export function LandingPage() {
           }} />
         </div>
 
+        {/* Stock Ticker Strip */}
+        <div className="relative z-10 mb-12 overflow-hidden">
+          <div className="flex whitespace-nowrap animate-[ticker_30s_linear_infinite]">
+            {[
+              { sym: "SCOM", price: "17.50", change: "+2.3%", up: true },
+              { sym: "EQTY", price: "48.25", change: "+1.1%", up: true },
+              { sym: "KCB", price: "52.80", change: "-0.4%", up: false },
+              { sym: "AAPL", price: "198.50", change: "+3.2%", up: true },
+              { sym: "TSLA", price: "248.90", change: "-1.5%", up: false },
+              { sym: "MSFT", price: "425.60", change: "+0.8%", up: true },
+              { sym: "GOOGL", price: "175.30", change: "+1.7%", up: true },
+              { sym: "EABL", price: "62.00", change: "+0.5%", up: true },
+              { sym: "NVDA", price: "880.20", change: "+4.1%", up: true },
+              { sym: "AMZN", price: "185.40", change: "+2.0%", up: true },
+            ].concat([
+              { sym: "SCOM", price: "17.50", change: "+2.3%", up: true },
+              { sym: "EQTY", price: "48.25", change: "+1.1%", up: true },
+              { sym: "KCB", price: "52.80", change: "-0.4%", up: false },
+              { sym: "AAPL", price: "198.50", change: "+3.2%", up: true },
+              { sym: "TSLA", price: "248.90", change: "-1.5%", up: false },
+            ]).map((s, i) => (
+              <div key={i} className="flex items-center gap-2 px-5 py-1.5 bg-white/60 backdrop-blur-sm border border-gray-100 rounded-lg mx-1.5 shrink-0">
+                <span className="font-bold text-xs text-gray-900">{s.sym}</span>
+                <span className="text-xs text-gray-600">${s.price}</span>
+                <span className={`text-xs font-semibold ${s.up ? "text-emerald-600" : "text-red-500"}`}>{s.change}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="max-w-3xl mx-auto text-center">
-            <p className="text-[#0D7490] text-sm font-semibold mb-4">
-              AI-powered trading intelligence for NSE and global equities
-            </p>
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            {/* Left: Text */}
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#0D7490]/10 rounded-full mb-6">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs font-semibold text-[#0D7490]">Live market data</span>
+              </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-[1.1] tracking-tight">
-              NSE & global stock market intelligence, portfolio tracking, and market data — all in one place
-            </h1>
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-[1.1] tracking-tight">
+                Trade smarter with{" "}
+                <span className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] bg-clip-text text-transparent">AI-powered</span>{" "}
+                stock intelligence
+              </h1>
 
-            <p className="text-lg sm:text-xl text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
-              AI-powered buy and sell recommendations on Safaricom, Equity, KCB, Apple, Tesla, and 10,000+ stocks across NSE, NYSE, and NASDAQ.
-              Real-time prices, portfolio analytics, and paper trading. Built for Kenyan traders.
-            </p>
+              <p className="text-lg sm:text-xl text-gray-600 mb-8 max-w-xl leading-relaxed">
+                Real-time prices, buy/sell signals, and portfolio tracking for{" "}
+                <span className="font-semibold text-gray-900">10,000+ stocks</span> across NSE, NYSE, NASDAQ, and LSE. From Safaricom to Tesla.
+              </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/login">
-                <Button size="lg" className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-0.5 font-semibold">
-                  Start Free Trial
-                  <ArrowRight className="ml-2 w-5 h-5" />
-                </Button>
-              </Link>
-              <a href="#features">
-                <Button variant="outline" size="lg" className="border-gray-300 text-gray-700 hover:bg-gray-50 px-8 py-6 text-base font-medium">
-                  See How It Works
-                </Button>
-              </a>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <Link to="/login">
+                  <Button size="lg" className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-0.5 font-semibold">
+                    Start Free Trial
+                    <ArrowRight className="ml-2 w-5 h-5" />
+                  </Button>
+                </Link>
+                <a href="#features">
+                  <Button variant="outline" size="lg" className="border-gray-300 text-gray-700 hover:bg-gray-50 px-8 py-6 text-base font-medium">
+                    See How It Works
+                  </Button>
+                </a>
+              </div>
+
+              <div className="mt-8 flex flex-wrap items-center gap-6 text-gray-400">
+                {["Real-time data", "AI-powered insights", "Portfolio tracking"].map((item) => (
+                  <div key={item} className="flex items-center gap-2 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-gray-400">
-              {["Real-time data", "AI-powered insights", "Portfolio tracking"].map((item) => (
-                <div key={item} className="flex items-center gap-2 text-sm">
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  <span>{item}</span>
+            {/* Right: Stock Cards */}
+            <div className="hidden lg:block relative">
+              {/* Main dashboard card */}
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl shadow-[#0D7490]/10 p-6 relative">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                      <TrendingUp className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900">SCOM</p>
+                      <p className="text-xs text-gray-500">Safaricom PLC</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-gray-900">KES 17.50</p>
+                    <p className="text-sm font-semibold text-emerald-600">+2.3% today</p>
+                  </div>
                 </div>
-              ))}
-            </div>
+                {/* Mini chart */}
+                <svg className="w-full h-24" viewBox="0 0 400 80">
+                  <defs>
+                    <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#0D7490" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="#0D7490" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M0 60 Q20 55 40 58 T80 50 T120 45 T160 48 T200 35 T240 38 T280 30 T320 32 T360 25 T400 20 L400 80 L0 80 Z" fill="url(#heroGrad)" />
+                  <path d="M0 60 Q20 55 40 58 T80 50 T120 45 T160 48 T200 35 T240 38 T280 30 T320 32 T360 25 T400 20" fill="none" stroke="#0D7490" strokeWidth="2.5" />
+                  <circle cx="400" cy="20" r="4" fill="#0D7490" />
+                </svg>
+                <div className="flex items-center justify-between mt-2 text-xs text-gray-400">
+                  <span>9:30 AM</span>
+                  <span>10:15 AM</span>
+                  <span>11:00 AM</span>
+                  <span>12:30 PM</span>
+                  <span>Now</span>
+                </div>
+              </div>
 
-            {/* Quick stats */}
-            <div className="mt-12 grid grid-cols-3 gap-6 max-w-lg mx-auto">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">10,000+</p>
-                <p className="text-sm text-gray-500">stocks across NSE, NYSE, NASDAQ</p>
+              {/* Floating mini cards */}
+              <div className="absolute -top-6 -right-4 bg-white rounded-xl border border-gray-200 shadow-xl p-3 animate-[float-3d_6s_ease-in-out_infinite]">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-900">AAPL</p>
+                    <p className="text-[10px] font-semibold text-emerald-600">+3.2%</p>
+                  </div>
+                </div>
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">7</p>
-                <p className="text-sm text-gray-500">days free trial</p>
+
+              <div className="absolute -bottom-4 -left-6 bg-white rounded-xl border border-gray-200 shadow-xl p-3 animate-[float-3d_7s_ease-in-out_infinite] animation-delay-1s">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-900">NVDA</p>
+                    <p className="text-[10px] font-semibold text-emerald-600">+4.1%</p>
+                  </div>
+                </div>
               </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">KES</p>
-                <p className="text-sm text-gray-500">local currency support</p>
+
+              <div className="absolute top-1/2 -right-8 bg-white rounded-xl border border-gray-200 shadow-xl p-3 animate-[float-3d_8s_ease-in-out_infinite] animation-delay-2s">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-900">EQTY</p>
+                    <p className="text-[10px] font-semibold text-emerald-600">+1.1%</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Quick stats */}
+          <div className="mt-16 grid grid-cols-3 gap-6 max-w-2xl mx-auto">
+            <div className="text-center">
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900">10,000+</p>
+              <p className="text-sm text-gray-500">stocks across 4 exchanges</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900">7</p>
+              <p className="text-sm text-gray-500">days free trial</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl sm:text-3xl font-bold text-[#0D7490]">KES</p>
+              <p className="text-sm text-gray-500">local currency support</p>
+            </div>
+          </div>
+
           {/* Markets we cover */}
-          <div className="mt-16 pt-8 border-t border-gray-100">
+          <div className="mt-12 pt-8 border-t border-gray-100">
             <p className="text-xs text-gray-400 font-medium uppercase tracking-widest mb-5 text-center">Markets we cover</p>
             <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
               {[
