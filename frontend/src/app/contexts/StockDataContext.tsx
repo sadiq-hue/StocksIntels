@@ -48,11 +48,20 @@ export function StockDataProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       // Fetch signals (price/analysis) and comprehensive stock list in parallel
+      // brief=true returns trimmed data publicly; full signals require auth
       const [signalsRes, listRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/stocks`),
-        fetch(`${API_BASE_URL}/stocks/list`),
+        fetch(`${API_BASE_URL}/stocks?brief=true`),
+        fetch(`${API_BASE_URL}/stocks/list`).catch(() => new Response(null, { status: 500 })),
       ]);
-      if (!signalsRes.ok) throw new Error(`HTTP ${signalsRes.status}`);
+      if (!signalsRes.ok) {
+        if (signalsRes.status === 401) {
+          setAllStocks([]);
+          setAllSymbols([]);
+          setLoading(false);
+          return;
+        }
+        throw new Error(`HTTP ${signalsRes.status}`);
+      }
       const signals = await signalsRes.json();
       let listData: any[] = [];
       if (listRes.ok) {

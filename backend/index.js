@@ -124,6 +124,17 @@ app.use('/api/auth', authLimiter);
 app.use('/api/ai', aiLimiter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Prevent NoSQL-style operator injection in query parameters
+// e.g. ?symbol[$ne]=null makes req.query.symbol an object
+app.use((req, res, next) => {
+  for (const [key, value] of Object.entries(req.query)) {
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      return res.status(400).json({ error: 'Invalid query parameter format' });
+    }
+  }
+  next();
+});
+
 // Structured request logging
 const logger = require('./logger');
 if (process.env.NODE_ENV !== 'production' || process.env.LOG_REQUESTS) {
@@ -2939,8 +2950,8 @@ app.delete('/api/messages/:id', authenticateToken, async (req, res) => {
   } catch (err) { console.error('Delete message error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
-// Public signal engine backfill endpoint (no auth required for admin debugging)
-app.post('/api/signals/engine/backfill', async (req, res) => {
+// Signal engine backfill endpoint
+app.post('/api/signals/engine/backfill', authenticateToken, async (req, res) => {
   try {
     const { backfillOutcomesFromHistory } = require('./signalService');
     await backfillOutcomesFromHistory(req.query.days ? parseInt(req.query.days) : 30, req.query.limit ? parseInt(req.query.limit) : 500);
@@ -2952,8 +2963,8 @@ app.post('/api/signals/engine/backfill', async (req, res) => {
   }
 });
 
-// Public historical backtest endpoint: evaluates signal_history against OHLC history
-app.post('/api/signals/engine/backtest/historical', async (req, res) => {
+// Historical backtest endpoint: evaluates signal_history against OHLC history
+app.post('/api/signals/engine/backtest/historical', authenticateToken, async (req, res) => {
   try {
     const { runHistoricalBacktest } = require('./signalService');
     const result = await runHistoricalBacktest({
@@ -2970,8 +2981,8 @@ app.post('/api/signals/engine/backtest/historical', async (req, res) => {
   }
 });
 
-// Public signal engine diagnostics endpoint (no auth required for debugging)
-app.get('/api/signals/engine/diagnostics', async (req, res) => {
+// Signal engine diagnostics endpoint
+app.get('/api/signals/engine/diagnostics', authenticateToken, async (req, res) => {
   try {
     const now = new Date();
     const day = now.getDay();
@@ -4893,7 +4904,13 @@ app.get('/api/stock/:symbol/holders', async (req, res) => {
   }
 });
 
-app.get('/api/stocks', async (req, res) => {
+// Require auth for full stock signals, allow brief=true for public landing page
+function requireAuthForFullStocks(req, res, next) {
+  if (req.query.brief === 'true') return next();
+  authenticateToken(req, res, next);
+}
+
+app.get('/api/stocks', requireAuthForFullStocks, async (req, res) => {
   try {
     const brief = req.query.brief === 'true';
     const now = Date.now();
@@ -4922,7 +4939,7 @@ app.get('/api/stocks', async (req, res) => {
 });
 
 // Returns all stocks from the database (comprehensive list of NSE + Global)
-app.get('/api/stocks/list', async (req, res) => {
+app.get('/api/stocks/list', authenticateToken, async (req, res) => {
   try {
     const { market } = req.query;
     let query = 'SELECT ticker, name, sector, market, currency FROM stocks WHERE is_active = true';
