@@ -68,16 +68,16 @@ function StockChartBg() {
 }
 
 const floatingShapes = [
-  { size: 80, top: "8%", left: "3%", delay: 0, depth: 1, color: "rgba(13,116,144,0.04)", rotate: 15, border: "rgba(13,116,144,0.07)" },
-  { size: 50, top: "18%", right: "5%", delay: 1.2, depth: 3, color: "rgba(14,165,233,0.03)", rotate: 40, border: "rgba(14,165,233,0.06)" },
-  { size: 110, top: "50%", left: "1%", delay: 0.7, depth: 2, color: "rgba(13,116,144,0.03)", rotate: 60, border: "rgba(13,116,144,0.05)" },
-  { size: 45, top: "70%", right: "3%", delay: 1.8, depth: 1, color: "rgba(14,165,233,0.04)", rotate: 25, border: "rgba(14,165,233,0.07)" },
-  { size: 65, top: "35%", left: "12%", delay: 0.3, depth: 3, color: "rgba(13,116,144,0.03)", rotate: 80, border: "rgba(13,116,144,0.06)" },
-  { size: 35, top: "82%", left: "18%", delay: 2.2, depth: 2, color: "rgba(14,165,233,0.04)", rotate: 10, border: "rgba(14,165,233,0.07)" },
-  { size: 55, top: "12%", left: "45%", delay: 0.5, depth: 3, color: "rgba(13,116,144,0.03)", rotate: 120, border: "rgba(13,116,144,0.05)" },
-  { size: 40, top: "42%", right: "15%", delay: 1.5, depth: 2, color: "rgba(14,165,233,0.03)", rotate: 70, border: "rgba(14,165,233,0.06)" },
-  { size: 70, top: "60%", left: "30%", delay: 0.9, depth: 1, color: "rgba(13,116,144,0.03)", rotate: 35, border: "rgba(13,116,144,0.04)" },
-  { size: 25, top: "28%", right: "22%", delay: 2.5, depth: 3, color: "rgba(14,165,233,0.04)", rotate: 90, border: "rgba(14,165,233,0.08)" },
+  { size: 80, top: "8%", left: "3%", delay: 0, depth: 1, color: "rgba(13,116,144,0.025)", rotate: 15, border: "rgba(13,116,144,0.04)" },
+  { size: 50, top: "18%", right: "5%", delay: 1.2, depth: 3, color: "rgba(14,165,233,0.02)", rotate: 40, border: "rgba(14,165,233,0.035)" },
+  { size: 110, top: "50%", left: "1%", delay: 0.7, depth: 2, color: "rgba(13,116,144,0.02)", rotate: 60, border: "rgba(13,116,144,0.03)" },
+  { size: 45, top: "70%", right: "3%", delay: 1.8, depth: 1, color: "rgba(14,165,233,0.025)", rotate: 25, border: "rgba(14,165,233,0.04)" },
+  { size: 65, top: "35%", left: "12%", delay: 0.3, depth: 3, color: "rgba(13,116,144,0.02)", rotate: 80, border: "rgba(13,116,144,0.035)" },
+  { size: 35, top: "82%", left: "18%", delay: 2.2, depth: 2, color: "rgba(14,165,233,0.025)", rotate: 10, border: "rgba(14,165,233,0.04)" },
+  { size: 55, top: "12%", left: "45%", delay: 0.5, depth: 3, color: "rgba(13,116,144,0.02)", rotate: 120, border: "rgba(13,116,144,0.03)" },
+  { size: 40, top: "42%", right: "15%", delay: 1.5, depth: 2, color: "rgba(14,165,233,0.02)", rotate: 70, border: "rgba(14,165,233,0.035)" },
+  { size: 70, top: "60%", left: "30%", delay: 0.9, depth: 1, color: "rgba(13,116,144,0.02)", rotate: 35, border: "rgba(13,116,144,0.025)" },
+  { size: 25, top: "28%", right: "22%", delay: 2.5, depth: 3, color: "rgba(14,165,233,0.03)", rotate: 90, border: "rgba(14,165,233,0.05)" },
 ];
 
 const features = [
@@ -246,17 +246,17 @@ export function LandingPage() {
     <div className="min-h-screen bg-white selection:bg-[#0D7490]/20 relative">
       {/* Full-page floating shapes background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0D7490]/1.5 via-transparent to-[#0EA5E9]/1.5" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0D7490]/1 via-transparent to-[#0EA5E9]/1" />
         {/* 3D Floating Shapes across full page */}
         {renderFloatingShapes()}
         {/* Grid overlay */}
-        <div className="absolute inset-0 opacity-[0.01]" style={{
+        <div className="absolute inset-0 opacity-[0.008]" style={{
           backgroundImage: `linear-gradient(rgba(13,116,144,1) 1px, transparent 1px), linear-gradient(90deg, rgba(13,116,144,1) 1px, transparent 1px)`,
           backgroundSize: "60px 60px",
         }} />
         {/* Large gradient blobs */}
-        <div className="absolute top-[-15%] right-[-5%] w-[1000px] h-[1000px] bg-gradient-to-bl from-[#0D7490]/4 via-[#0EA5E9]/2 to-transparent rounded-full blur-3xl animate-pulse-slow" />
-        <div className="absolute bottom-[-15%] left-[-5%] w-[800px] h-[800px] bg-gradient-to-tr from-[#0EA5E9]/4 via-[#0D7490]/2 to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
+        <div className="absolute top-[-15%] right-[-5%] w-[1000px] h-[1000px] bg-gradient-to-bl from-[#0D7490]/2 via-[#0EA5E9]/1 to-transparent rounded-full blur-3xl animate-pulse-slow" />
+        <div className="absolute bottom-[-15%] left-[-5%] w-[800px] h-[800px] bg-gradient-to-tr from-[#0EA5E9]/2 via-[#0D7490]/1 to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
       </div>
 
       {/* HEADER */}
@@ -327,8 +327,8 @@ export function LandingPage() {
           {/* Colorful gradient base */}
           <div className="absolute inset-0 bg-gradient-to-br from-[#0D7490]/5 via-transparent to-[#0EA5E9]/5" />
           <StockChartBg />
-          <div className="absolute top-[-20%] right-[-10%] w-[1000px] h-[1000px] bg-gradient-to-bl from-[#0D7490]/4 via-[#0EA5E9]/2 to-transparent rounded-full blur-3xl animate-pulse-slow" />
-          <div className="absolute bottom-[-20%] left-[-10%] w-[800px] h-[800px] bg-gradient-to-tr from-[#0EA5E9]/4 via-[#0D7490]/2 to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
+          <div className="absolute top-[-20%] right-[-10%] w-[1000px] h-[1000px] bg-gradient-to-bl from-[#0D7490]/2.5 via-[#0EA5E9]/1 to-transparent rounded-full blur-3xl animate-pulse-slow" />
+          <div className="absolute bottom-[-20%] left-[-10%] w-[800px] h-[800px] bg-gradient-to-tr from-[#0EA5E9]/2.5 via-[#0D7490]/1 to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: "2s" }} />
           {/* Grid overlay */}
           <div className="absolute inset-0 opacity-[0.03]" style={{
             backgroundImage: `linear-gradient(rgba(13,116,144,1) 1px, transparent 1px), linear-gradient(90deg, rgba(13,116,144,1) 1px, transparent 1px)`,
