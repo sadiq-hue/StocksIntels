@@ -16,30 +16,10 @@ import { toast } from "sonner";
 
 const plans = [
   {
-    name: "Free",
-    description: "For casual investors",
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    icon: Zap,
-    popular: false,
-    features: [
-      { text: "Delayed data on select markets", included: true },
-      { text: "1 AI signal per day", included: true },
-      { text: "Basic watchlist", included: true },
-      { text: "Stock screener", included: false },
-      { text: "Portfolio tracking", included: false },
-      { text: "Advanced charting", included: false },
-      { text: "Risk analysis", included: false },
-      { text: "API access", included: false },
-    ],
-    cta: "Get Started Free",
-    ctaVariant: "outline" as const,
-  },
-  {
     name: "Starter",
     description: "For retail investors",
-    monthlyPrice: 4.99,
-    yearlyPrice: 49.99,
+    monthlyPrice: 10,
+    yearlyPrice: 99.99,
     icon: Zap,
     popular: false,
     features: [
@@ -52,14 +32,14 @@ const plans = [
       { text: "Risk analysis tools", included: false },
       { text: "Unlimited signals", included: false },
     ],
-    cta: "Start Free Trial",
+    cta: "Start 7-Day Trial for $1",
     ctaVariant: "default" as const,
   },
   {
     name: "Premium",
     description: "For NSE-focused traders",
-    monthlyPrice: 7.99,
-    yearlyPrice: 79.99,
+    monthlyPrice: 49,
+    yearlyPrice: 499,
     icon: Shield,
     popular: false,
     features: [
@@ -72,14 +52,14 @@ const plans = [
       { text: "Advanced charting", included: false },
       { text: "Risk scoring", included: false },
     ],
-    cta: "Start Free Trial",
+    cta: "Start 7-Day Trial for $1",
     ctaVariant: "outline" as const,
   },
   {
     name: "Pro",
     description: "For active traders",
-    monthlyPrice: 14.99,
-    yearlyPrice: 149.99,
+    monthlyPrice: 20,
+    yearlyPrice: 199,
     icon: Shield,
     popular: true,
     features: [
@@ -92,7 +72,7 @@ const plans = [
       { text: "API access", included: false },
       { text: "White-label analytics", included: false },
     ],
-    cta: "Start Pro Trial",
+    cta: "Start 7-Day Trial for $1",
     ctaVariant: "default" as const,
   },
 ];
@@ -104,7 +84,7 @@ const faqs = [
   },
   {
     question: "Is there a free trial for paid plans?",
-    answer: "Absolutely. Starter, NSE Pro, and Pro plans come with a 7-day free trial. No credit card required to start.",
+    answer: "Yes! Start your 7-day trial for just $1 — a small commitment fee to ensure serious users. You'll get full access to your chosen plan for 7 days.",
   },
   {
     question: "What payment methods do you accept?",
@@ -112,7 +92,7 @@ const faqs = [
   },
   {
     question: "How does M-Pesa pricing work?",
-    answer: "M-Pesa amounts are in KES: Starter 649 KES/mo, NSE Pro 1,039 KES/mo, Pro 1,949 KES/mo. You'll receive an STK push on your phone to confirm.",
+    answer: "M-Pesa amounts are in KES: Starter 1,299 KES/mo, Premium 6,499 KES/mo, Pro 2,599 KES/mo. You'll receive an STK push on your phone to confirm.",
   },
   {
     question: "What's the difference between Premium and Pro?",
@@ -130,6 +110,7 @@ export function PricingPage() {
   const [isYearly, setIsYearly] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [startingTrial, setStartingTrial] = useState<string | null>(null);
+  const [payingCommitment, setPayingCommitment] = useState(false);
   const trialInfo = getTrialInfo(user);
 
   if (isLoading) {
@@ -140,10 +121,38 @@ export function PricingPage() {
     );
   }
 
+  const handlePayCommitment = async () => {
+    if (!user) { navigate('/login?redirect=/pricing'); return; }
+    setPayingCommitment(true);
+    try {
+      const res = await apiFetch('/payments/commitment-fee', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to process commitment fee');
+      updateUser({ ...user, commitment_fee_paid: true });
+      toast.success('Commitment fee paid! Now start your trial.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to process commitment fee');
+    } finally {
+      setPayingCommitment(false);
+    }
+  };
+
   const handleTrialClick = async (planName: string) => {
     if (!user) {
       navigate(`/login?redirect=/pricing`);
       return;
+    }
+    // Check if commitment fee has been paid
+    if (!(user as any).commitment_fee_paid) {
+      try {
+        const res = await apiFetch('/payments/commitment-fee', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        updateUser({ ...user, commitment_fee_paid: true });
+      } catch (error) {
+        toast.error('Please pay the $1 commitment fee to start your trial.');
+        return;
+      }
     }
     setStartingTrial(planName);
     try {
@@ -155,7 +164,7 @@ export function PricingPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start trial");
       updateUser(data.user);
-      toast.success(`Free trial started! Enjoy ${planName} for 7 days.`);
+      toast.success(`7-day trial started! $1 commitment fee applied.`);
       navigate("/app/dashboard");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to start trial");
@@ -165,27 +174,12 @@ export function PricingPage() {
   };
 
   const handlePlanClick = async (planName: string) => {
-    if (planName === "Free") {
-      if (!user) {
-        navigate("/login?redirect=/app/dashboard");
-        return;
-      }
-      try {
-        const res = await apiFetch(`/payments/activate-free`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error("Failed to activate free plan");
-        updateUser(data.user);
-        toast.success("Welcome to the Free plan!");
-      } catch (error) {
-        toast.error("Failed to activate free plan");
-      }
-      navigate("/app/dashboard");
+    if (!user) {
+      navigate(`/login?redirect=/pricing`);
       return;
     }
-    if (user && trialInfo.isWithinTrial) {
+    // Start trial with $1 commitment fee, or subscribe if already in trial
+    if (trialInfo.isWithinTrial) {
       navigate(`/subscribe/${planName.toLowerCase()}`);
       return;
     }
@@ -379,7 +373,6 @@ export function PricingPage() {
                 <thead>
                   <tr className="border-b border-gray-100">
                     <th className="text-left py-4 px-6 text-sm font-semibold text-gray-900">Feature</th>
-                    <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">Free</th>
                     <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">Starter</th>
                     <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">Premium</th>
                     <th className="text-center py-4 px-6 text-sm font-semibold text-[#0D7490] bg-[#0D7490]/5">Pro</th>
@@ -387,22 +380,21 @@ export function PricingPage() {
                 </thead>
                 <tbody>
                   {[
-                    { name: "Market data", free: "Delayed", starter: "African + Global", premium: "African + Global", pro: "All markets" },
-                    { name: "NSE signals", free: "1/day", starter: "5/day", premium: "Unlimited", pro: "Unlimited" },
-                    { name: "Global signals", free: "1/day", starter: "5/day", premium: "10/day", pro: "Unlimited" },
-                    { name: "Stock screener", free: "—", starter: "✓", premium: "Advanced NSE", pro: "✓" },
-                    { name: "Technical analysis", free: "—", starter: "Basic", premium: "NSE-focused", pro: "Advanced" },
-                    { name: "Portfolio tracking", free: "—", starter: "Basic", premium: "Basic", pro: "Advanced" },
-                    { name: "Charting", free: "—", starter: "Basic", premium: "Basic", pro: "Advanced" },
-                    { name: "Risk scoring", free: "—", starter: "—", premium: "—", pro: "✓" },
-                    { name: "API access", free: "—", starter: "—", premium: "—", pro: "—" },
-                    { name: "Support", free: "—", starter: "Email", premium: "Email", pro: "Priority" },
-                    { name: "Price (USD)", free: "$0", starter: "$4.99/mo", premium: "$7.99/mo", pro: "$14.99/mo" },
-                    { name: "Price (KES)", free: "Free", starter: "649/mo", premium: "1,039/mo", pro: "1,949/mo" },
+                    { name: "Market data", starter: "African + Global", premium: "African + Global", pro: "All markets" },
+                    { name: "NSE signals", starter: "5/day", premium: "Unlimited", pro: "Unlimited" },
+                    { name: "Global signals", starter: "5/day", premium: "10/day", pro: "Unlimited" },
+                    { name: "Stock screener", starter: "✓", premium: "Advanced NSE", pro: "✓" },
+                    { name: "Technical analysis", starter: "Basic", premium: "NSE-focused", pro: "Advanced" },
+                    { name: "Portfolio tracking", starter: "Basic", premium: "Basic", pro: "Advanced" },
+                    { name: "Charting", starter: "Basic", premium: "Basic", pro: "Advanced" },
+                    { name: "Risk scoring", starter: "—", premium: "—", pro: "✓" },
+                    { name: "API access", starter: "—", premium: "—", pro: "—" },
+                    { name: "Support", starter: "Email", premium: "Email", pro: "Priority" },
+                    { name: "Price (USD)", starter: "$10/mo", premium: "$49/mo", pro: "$20/mo" },
+                    { name: "Price (KES)", starter: "1,299/mo", premium: "1,039/mo", pro: "1,949/mo" },
                   ].map((row, idx) => (
                     <tr key={row.name} className={idx % 2 === 0 ? "bg-gray-50/50" : ""}>
                       <td className="py-4 px-6 text-sm text-gray-700">{row.name}</td>
-                      <td className="py-4 px-6 text-center text-sm text-gray-600">{row.free}</td>
                       <td className="py-4 px-6 text-center text-sm text-gray-600">{row.starter}</td>
                       <td className="py-4 px-6 text-center text-sm text-gray-600">{row.premium}</td>
                       <td className="py-4 px-6 text-center text-sm font-medium text-[#0D7490] bg-[#0D7490]/5">{row.pro}</td>

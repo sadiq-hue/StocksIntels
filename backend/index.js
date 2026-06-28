@@ -845,7 +845,7 @@ app.put('/api/admin/subscriptions/:id', async (req, res) => {
       if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
       params.push(userId);
       const result = await pool.query(
-        `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} RETURNING id, subscription_status, subscription_tier, subscription_start_date, subscription_end_date`,
+        `UPDATE users SET ${fields.join(', ')} WHERE id = $${idx} RETURNING id, subscription_status, subscription_tier, subscription_start_date, subscription_end_date, commitment_fee_paid`,
         params
       );
       if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
@@ -1722,7 +1722,7 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
       }
     }
     const result = await pool.query(
-      'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date, referred_by) VALUES ($1, $2, $3, TRUE, NOW(), $4) RETURNING id, full_name, email, role, is_verified, trader_type, created_at, subscription_tier, subscription_status, trial_start_date, subscription_end_date',
+      'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date, referred_by) VALUES ($1, $2, $3, TRUE, NOW(), $4) RETURNING id, full_name, email, role, is_verified, trader_type, created_at, subscription_tier, subscription_status, trial_start_date, subscription_end_date, commitment_fee_paid',
       [fullName, email, hashedPassword, referredBy]
     );
     // Create pending referral record
@@ -1882,7 +1882,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     let userResult = await pool.query('SELECT id, full_name, email, role, trader_type, is_verified, created_at, subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE email = $1', [email]);
     if (userResult.rows.length === 0) {
       userResult = await pool.query(
-        'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date) VALUES ($1, $2, $3, TRUE, NOW()) RETURNING id, full_name, email, role, trader_type, is_verified, created_at, trial_start_date, subscription_end_date',
+        'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date) VALUES ($1, $2, $3, TRUE, NOW()) RETURNING id, full_name, email, role, trader_type, is_verified, created_at, trial_start_date, subscription_end_date, commitment_fee_paid',
         [email, email, 'otp_only']
       );
       await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [userResult.rows[0].id]);
@@ -2035,7 +2035,7 @@ app.post('/api/auth/refresh', async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Invalid or expired refresh token', code: 'INVALID_REFRESH_TOKEN' });
     const token = generateToken(userId);
     const userResult = await pool.query(
-      'SELECT id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE id = $1',
+      'SELECT id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date, subscription_end_date, commitment_fee_paid FROM users WHERE id = $1',
       [userId]
     );
     if (userResult.rows.length === 0) return res.status(401).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
@@ -2199,7 +2199,7 @@ const FAQ_ITEMS = [
   { question: "What settings can I change?", answer: "In **Settings** you can: edit your profile (name, email, phone, bio, location, trader type, experience level), manage notification preferences (price alerts, signals, news, portfolio, chat), toggle appearance (dark mode, compact view), change your password, and set privacy controls.", category: "account" },
   { question: "How do notifications work?", answer: "You'll receive notifications for new trading signals, price alerts, and system updates. The bell icon in the header shows unread count. Click to view all, mark individual as read, or mark all read. Real-time updates arrive via WebSocket.", category: "account" },
   { question: "How do I connect a broker?", answer: "Go to **Settings > Brokers** to connect real brokerage accounts. Supported: Alpaca, Interactive Brokers (IBKR), MetaTrader 5, OANDA, Tradier, and manual entry for African brokers like AIB-AXYS and Hisa. Credentials are encrypted with AES-256-GCM.", category: "account" },
-  { question: "What subscription plans are available?", answer: "We offer **Free** ($0) for casual investors, **Starter** ($4.99/mo) for real-time African + global data with the stock screener, **Premium** ($7.99/mo) for unlimited NSE signals + 10 global/day, **Pro** ($14.99/mo) for unlimited everything with advanced charting and risk scoring, and **Institutional** (custom from $200/mo) for brokers and funds. Pay via M-Pesa or card.", category: "account" },
+  { question: "What subscription plans are available?", answer: "We offer **Starter** ($10/mo) for real-time African + global data with the stock screener, **Premium** ($7.99/mo) for unlimited NSE signals + 10 global/day, **Pro** ($14.99/mo) for unlimited everything with advanced charting and risk scoring, and **Institutional** (custom from $200/mo) for brokers and funds. Start a 7-day trial for just $1. Pay via M-Pesa or card.", category: "account" },
   { question: "How do M-Pesa payments work?", answer: "On the subscription page, select M-Pesa as your payment method. Enter your M-Pesa phone number and you'll receive an STK push prompt on your phone. Confirm the payment and your subscription activates immediately.", category: "account" },
   { question: "What is the AI Insights page?", answer: "**AI Insights** is a conversational AI analyst. Ask questions like 'Analyze Safaricom trend', 'Best NSE momentum stocks', or 'Outlook for banking sector'. It responds with data-driven market analysis.", category: "signals" },
   { question: "How does sector analysis work?", answer: "The **Sectors** page shows performance by sector/industry with bar charts. Filter by NSE or Global markets. Each sector shows leading stocks, sentiment indicators, and volume analysis.", category: "markets" },
@@ -2431,7 +2431,7 @@ const KNOWLEDGE_BASE = [
   },
   {
     keywords: ['subscription', 'plan', 'pricing', 'upgrade', 'downgrade', 'starter', 'pro', 'enterprise', 'institutional', 'premium', 'cost', 'price', 'monthly', 'free'],
-    answer: 'Plans: **Free** ($0), **Starter** ($4.99/mo) with real-time African + global data + screener, **Premium** ($7.99/mo) for unlimited NSE + 10 global signals/day, **Pro** ($14.99/mo) for unlimited everything + charting + risk scoring, and **Institutional** (from $200/mo) for teams. Pay via **M-Pesa** or **card**.',
+    answer: 'Plans: **Starter** ($10/mo) with real-time African + global data + screener, **Premium** ($7.99/mo) for unlimited NSE + 10 global signals/day, **Pro** ($14.99/mo) for unlimited everything + charting + risk scoring, and **Institutional** (from $200/mo) for teams. Start a 7-day trial for just $1. Pay via **M-Pesa** or **card**.',
     category: 'account',
   },
   {
@@ -7666,7 +7666,7 @@ app.post('/api/payments/paypal-webhook', async (req, res) => {
   }
 });
 
-// --- Free Trial Routes ---
+// --- Trial Routes ($1 commitment fee) ---
 app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
   try {
     const { plan } = req.body;
@@ -7678,11 +7678,20 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid plan for trial' });
     }
     const userRes = await pool.query(
-      `SELECT id, full_name, email, subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE id = $1`,
+      `SELECT id, full_name, email, subscription_tier, subscription_status, trial_start_date, subscription_end_date, commitment_fee_paid FROM users WHERE id = $1`,
       [userId]
     );
     if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     const userRow = userRes.rows[0];
+
+    // Check if $1 commitment fee has been paid
+    if (!userRow.commitment_fee_paid) {
+      return res.status(402).json({
+        error: 'Commitment fee required',
+        code: 'COMMITMENT_FEE_REQUIRED',
+        message: 'Please pay the $1 commitment fee to start your 7-day trial.'
+      });
+    }
 
     const alreadyPaid = userRow.subscription_status === 'active' &&
       userRow.subscription_tier !== 'free' &&
@@ -7696,12 +7705,11 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
     if (userRow.trial_start_date) {
       const expired = new Date() - new Date(userRow.trial_start_date) >= 7 * 24 * 60 * 60 * 1000;
       if (expired) {
-        return res.status(400).json({ error: 'Your free trial has already ended. Please subscribe to continue.' });
+        return res.status(400).json({ error: 'Your trial has already ended. Please subscribe to continue.' });
       }
     }
 
-    // Cross-account check: prevent same name from getting multiple trials across different accounts
-    // Only matches accounts that have actually started a paid-plan trial (not just signed up)
+    // Cross-account check: prevent same name from getting multiple trials
     const nameMatch = await pool.query(
       `SELECT id FROM users WHERE LOWER(full_name) = LOWER($1) AND id != $2 AND trial_start_date IS NOT NULL AND subscription_tier != 'free'`,
       [userRow.full_name, userId]
@@ -7714,31 +7722,47 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
     const inTrial = new Date() - new Date(trialStart) < 7 * 24 * 60 * 60 * 1000;
     const startDate = inTrial ? trialStart : new Date();
     const updateRes = await pool.query(
-      `UPDATE users SET subscription_tier = $1, subscription_status = 'active', trial_start_date = $2 WHERE id = $3 RETURNING id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date, subscription_end_date`,
+      `UPDATE users SET subscription_tier = $1, subscription_status = 'active', trial_start_date = $2 WHERE id = $3 RETURNING id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date, subscription_end_date, commitment_fee_paid`,
       [tier, startDate, userId]
     );
     console.log(`[TRIAL] Started: user=${userId} plan=${tier}`);
-    res.json({ success: true, message: `Free trial started for ${plan}!`, user: updateRes.rows[0] });
+    res.json({ success: true, message: `7-day trial started for ${plan}! $1 commitment fee applied.`, user: updateRes.rows[0] });
   } catch (error) {
     console.error('Start trial error:', error.message);
     res.status(500).json({ error: 'Failed to start trial' });
   }
 });
 
-// --- Activate Free Plan ---
-app.post('/api/payments/activate-free', authenticateToken, async (req, res) => {
+// Pay $1 commitment fee to unlock the 7-day trial
+app.post('/api/payments/commitment-fee', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const updateRes = await pool.query(
-      `UPDATE users SET subscription_tier = 'free', subscription_status = 'active' WHERE id = $1 RETURNING id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date, subscription_end_date`,
+    const userRes = await pool.query(`SELECT commitment_fee_paid FROM users WHERE id = $1`, [userId]);
+    if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    if (userRes.rows[0].commitment_fee_paid) {
+      return res.json({ success: true, message: 'Commitment fee already paid.' });
+    }
+    // Record the $1 commitment fee transaction
+    await pool.query(
+      `INSERT INTO payment_transactions (user_id, amount, currency, provider, status, plan_name)
+       VALUES ($1, 1, 'USD', 'commitment_fee', 'success', 'Trial Commitment Fee')`,
       [userId]
     );
-    console.log(`[FREE] Activated: user=${userId}`);
-    res.json({ success: true, message: 'Free plan activated!', user: updateRes.rows[0] });
+    await pool.query(
+      `UPDATE users SET commitment_fee_paid = true WHERE id = $1`,
+      [userId]
+    );
+    console.log(`[COMMITMENT] Paid: user=${userId}`);
+    res.json({ success: true, message: 'Commitment fee paid! Start your 7-day trial now.' });
   } catch (error) {
-    console.error('Activate free error:', error.message);
-    res.status(500).json({ error: 'Failed to activate free plan' });
+    console.error('Commitment fee error:', error.message);
+    res.status(500).json({ error: 'Failed to process commitment fee' });
   }
+});
+
+// --- Activate Free Plan ---
+app.post('/api/payments/activate-free', authenticateToken, async (_req, res) => {
+  res.status(400).json({ error: 'Free plan is no longer available. Start a 7-day trial for $1.' });
 });
 
 // --- Affiliate Program Routes ---
@@ -8841,23 +8865,21 @@ async function initDatabase() {
     const planCount = await pool.query('SELECT COUNT(*) FROM subscription_plans');
     if (parseInt(planCount.rows[0].count) === 0) {
       await pool.query(`INSERT INTO subscription_plans (name, description, price_kes, price_usd, features) VALUES
-        ('Free', 'New and casual investors', 0, 0, $1::jsonb),
-        ('Starter', 'For retail investors', 649, 4.99, $2::jsonb),
-        ('Premium', 'For NSE-focused traders', 1039, 7.99, $3::jsonb),
-        ('Pro', 'For active traders', 1949, 14.99, $4::jsonb),
-        ('Institutional', 'For brokers, funds and advisors', 26000, 200, $5::jsonb)
+        ('Starter', 'For retail investors', 1299, 10, $1::jsonb),
+        ('Premium', 'For NSE-focused traders', 6499, 49, $2::jsonb),
+        ('Pro', 'For active traders', 2599, 20, $3::jsonb),
+        ('Institutional', 'For brokers, funds and advisors', 26000, 200, $4::jsonb)
       `, [
-        JSON.stringify(['Delayed data on select markets', '1 AI signal per day', 'Basic watchlist']),
         JSON.stringify(['Real-time African + global data', '5 AI signals per day', 'Stock screener', 'Portfolio tracking']),
         JSON.stringify(['Unlimited NSE signals', '10 global signals/day', 'Advanced NSE screener', 'NSE technical analysis', 'Email support']),
         JSON.stringify(['Unlimited AI signals', 'All African + global markets', 'Advanced charting', 'Risk scoring', 'Priority support']),
         JSON.stringify(['API access', 'White-label analytics', 'Dedicated support', 'Team seats', 'Custom data feeds']),
       ]);
     } else {
-      await pool.query(`UPDATE subscription_plans SET price_kes = 649, price_usd = 4.99, description = 'For retail investors', features = $1::jsonb WHERE name = 'Starter'`, [
+      await pool.query(`UPDATE subscription_plans SET price_kes = 1299, price_usd = 10, description = 'For retail investors', features = $1::jsonb WHERE name = 'Starter'`, [
         JSON.stringify(['Real-time African + global data', '5 AI signals per day', 'Stock screener', 'Portfolio tracking']),
       ]);
-      await pool.query(`UPDATE subscription_plans SET price_kes = 1949, price_usd = 14.99, description = 'For active traders', features = $1::jsonb WHERE name = 'Pro'`, [
+      await pool.query(`UPDATE subscription_plans SET price_kes = 2599, price_usd = 20, description = 'For active traders', features = $1::jsonb WHERE name = 'Pro'`, [
         JSON.stringify(['Unlimited AI signals', 'All African + global market data', 'Advanced charting', 'Risk scoring', 'Priority support']),
       ]);
       await pool.query(`UPDATE subscription_plans SET name = 'Institutional', price_kes = 26000, price_usd = 200, description = 'For brokers, funds and advisors', features = $1::jsonb WHERE name = 'Enterprise'`, [
@@ -8872,21 +8894,17 @@ async function initDatabase() {
       } else {
         const premiumExists = await pool.query(`SELECT id FROM subscription_plans WHERE name = 'Premium'`);
         if (premiumExists.rows.length === 0) {
-          await pool.query(`INSERT INTO subscription_plans (name, description, price_kes, price_usd, features) VALUES ('Premium', 'For NSE-focused traders', 1039, 7.99, $1::jsonb)`, [
+          await pool.query(`INSERT INTO subscription_plans (name, description, price_kes, price_usd, features) VALUES ('Premium', 'For NSE-focused traders', 6499, 49, $1::jsonb)`, [
             JSON.stringify(['Unlimited NSE signals', '10 global signals/day', 'Advanced NSE screener', 'NSE technical analysis', 'Email support']),
           ]);
         } else {
-          await pool.query(`UPDATE subscription_plans SET description = 'For NSE-focused traders', features = $1::jsonb WHERE name = 'Premium'`, [
+          await pool.query(`UPDATE subscription_plans SET description = 'For NSE-focused traders', price_kes = 6499, price_usd = 49, features = $1::jsonb WHERE name = 'Premium'`, [
             JSON.stringify(['Unlimited NSE signals', '10 global signals/day', 'Advanced NSE screener', 'NSE technical analysis', 'Email support']),
           ]);
         }
       }
-      const freeExists = await pool.query(`SELECT id FROM subscription_plans WHERE LOWER(name) = 'free'`);
-      if (freeExists.rows.length === 0) {
-        await pool.query(`INSERT INTO subscription_plans (name, description, price_kes, price_usd, features) VALUES ('Free', 'New and casual investors', 0, 0, $1::jsonb)`, [
-          JSON.stringify(['Delayed data on select markets', '1 AI signal per day', 'Basic watchlist']),
-        ]);
-      }
+      // Remove Free plan if it exists
+      await pool.query(`DELETE FROM subscription_plans WHERE LOWER(name) = 'free'`);
     }
 
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR(50) DEFAULT 'free'`);
@@ -8896,6 +8914,7 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_end_date TIMESTAMP WITH TIME ZONE`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_start_date TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS visible_in_directory BOOLEAN DEFAULT true`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS commitment_fee_paid BOOLEAN DEFAULT false`);
     // Grant existing free users a trial from their signup date
     await pool.query(`UPDATE users SET trial_start_date = created_at WHERE trial_start_date IS NULL AND subscription_tier = 'free'`);
     // Set default duration_months for existing plans that don't have it

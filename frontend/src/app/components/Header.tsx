@@ -38,7 +38,7 @@ function TrialBanner() {
       <div className="relative w-full text-center text-xs font-semibold px-8 py-2 border-b bg-blue-50 border-blue-200 text-blue-700">
         <button onClick={() => navigate('/pricing')} className="hover:opacity-90 transition-opacity">
           <Clock className="w-3 h-3 inline-block mr-1 -mt-0.5" />
-          Start your 7-day free trial — Unlock premium features
+          Start your 7-day trial for $1 — Unlock premium features
         </button>
         <button onClick={(e) => { e.stopPropagation(); localStorage.setItem(`trial_banner_dismissed_${user.id}`, 'true'); setDismissed(true); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-black/5 transition-colors" aria-label="Dismiss">
           <X className="w-3.5 h-3.5" />

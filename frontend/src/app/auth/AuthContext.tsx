@@ -15,6 +15,7 @@ export interface UserInfo {
   subscription_status?: string;
   trial_start_date?: string | null;
   subscription_end_date?: string | null;
+  commitment_fee_paid?: boolean;
 }
 
 export function getTrialInfo(user: UserInfo | null): { isWithinTrial: boolean; daysRemaining: number; canStartTrial: boolean } {

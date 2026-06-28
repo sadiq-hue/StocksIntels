@@ -114,7 +114,7 @@ const features = [
 ];
 
 const steps = [
-  { step: "01", title: "Create Your Account", description: "Sign up with your email. No credit card needed for the 7-day trial." },
+  { step: "01", title: "Create Your Account", description: "Sign up with your email. Start your trial with just $1." },
   { step: "02", title: "Explore the Markets", description: "Browse NSE and US stocks, check AI insights, set up your watchlist. Start with paper trading if you are new." },
   { step: "03", title: "Trade with Confidence", description: "Use AI market intelligence alongside your own research. Track your performance and refine your strategy over time." },
 ];
@@ -153,7 +153,7 @@ const whyChoose = [
 const faqs = [
   { q: "Which NSE stocks does StocksIntels cover?", a: "We cover all actively traded NSE stocks including Safaricom (SCOM), Equity Group (EQTY), KCB Group (KCB), EABL (EABL), Co-op Bank (COOP), Absa Kenya (ABSA), BAT Kenya (BAT), and 50+ more. Global stocks on NYSE and NASDAQ are also available." },
   { q: "How accurate is the AI market intelligence?", a: "Our models achieve around 70-75% directional accuracy on NSE stocks. We do not claim 92% — no honest provider does. We show you our reasoning and let you decide." },
-  { q: "Can I try before I pay?", a: "Yes. Every paid plan comes with a 7-day free trial. No credit card required. You also get a free plan with limited daily insights if you want to test the waters." },
+  { q: "Can I try before I pay?", a: "Yes. Every paid plan comes with a 7-day trial for just $1 — a small commitment fee to ensure serious users. You'll get full access to your chosen plan for 7 days." },
   { q: "Do I need a broker account?", a: "Not to start. The paper trading feature gives you KES 1M in virtual cash to practice. When you are ready, you can connect your broker or trade manually based on the recommendations." },
   { q: "Is there a mobile app?", a: "The web app works on mobile browsers. We do not have an iOS or Android app yet but the site is fully responsive and works on phone screens." },
 ];
@@ -473,7 +473,7 @@ export function LandingPage() {
             </div>
             <div className="text-center">
               <p className="text-2xl sm:text-3xl font-bold text-gray-900">7</p>
-              <p className="text-sm text-gray-500">days free trial</p>
+              <p className="text-sm text-gray-500">days trial</p>
             </div>
             <div className="text-center">
               <p className="text-2xl sm:text-3xl font-bold text-[#0D7490]">KES</p>
@@ -627,47 +627,23 @@ export function LandingPage() {
         }} />
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(6) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Simple pricing. Free trial included.</h2>
-            <p className="text-lg text-gray-600">Start with the free plan or try any paid plan for 7 days at no cost.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Simple pricing. Start with a $1 trial.</h2>
+            <p className="text-lg text-gray-600">Try any paid plan for 7 days with a $1 commitment fee.</p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
-            {/* Free */}
-            <div className="bg-white rounded-xl p-6 border border-gray-200 hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
-              style={{ animation: `fade-in-up 0.5s ease-out 0s forwards`, opacity: 0 }}>
-              <h3 className="text-xl font-bold text-gray-900 mb-1">Free</h3>
-              <p className="text-sm text-gray-500 mb-4">Casual browsing</p>
-              <div className="mb-4">
-                <span className="text-3xl font-bold text-gray-900">$0</span>
-                <span className="text-gray-500 text-sm">/mo</span>
-              </div>
-              <Link to="/pricing">
-                <Button variant="outline" className="w-full mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer">
-                  Get Started
-                </Button>
-              </Link>
-              <div className="space-y-2">
-                {["Delayed NSE data", "1 AI insight per day", "Basic watchlist"].map((f) => (
-                  <div key={f} className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                    <span className="text-xs text-gray-700">{f}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
             {/* Starter */}
             <div className="bg-white rounded-xl p-6 border border-gray-200 hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
-              style={{ animation: `fade-in-up 0.5s ease-out 0.1s forwards`, opacity: 0 }}>
+              style={{ animation: `fade-in-up 0.5s ease-out 0s forwards`, opacity: 0 }}>
               <h3 className="text-xl font-bold text-gray-900 mb-1">Starter</h3>
               <p className="text-sm text-gray-500 mb-4">Retail investors</p>
               <div className="mb-4">
-                <span className="text-3xl font-bold text-gray-900">$4.99</span>
+                <span className="text-3xl font-bold text-gray-900">$10</span>
                 <span className="text-gray-500 text-sm">/mo</span>
               </div>
               <Link to="/pricing">
                 <Button variant="outline" className="w-full mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer">
-                  Start Free Trial
+                  Start Trial for $1
                 </Button>
               </Link>
               <div className="space-y-2">
@@ -682,16 +658,16 @@ export function LandingPage() {
 
             {/* Premium */}
             <div className="bg-white rounded-xl p-6 border border-gray-200 hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
-              style={{ animation: `fade-in-up 0.5s ease-out 0.2s forwards`, opacity: 0 }}>
+              style={{ animation: `fade-in-up 0.5s ease-out 0.1s forwards`, opacity: 0 }}>
               <h3 className="text-xl font-bold text-gray-900 mb-1">Premium</h3>
               <p className="text-sm text-gray-500 mb-4">NSE-focused traders</p>
               <div className="mb-4">
-                <span className="text-3xl font-bold text-gray-900">$7.99</span>
+                <span className="text-3xl font-bold text-gray-900">$49</span>
                 <span className="text-gray-500 text-sm">/mo</span>
               </div>
               <Link to="/pricing">
                 <Button variant="outline" className="w-full mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer">
-                  Start Free Trial
+                  Start Trial for $1
                 </Button>
               </Link>
               <div className="space-y-2">
@@ -706,7 +682,7 @@ export function LandingPage() {
 
             {/* Pro */}
             <div className="bg-gray-900 text-white rounded-xl p-6 border border-gray-900 shadow-xl scale-[1.02] z-10 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500"
-              style={{ animation: `fade-in-up 0.5s ease-out 0.3s forwards`, opacity: 0 }}>
+              style={{ animation: `fade-in-up 0.5s ease-out 0.2s forwards`, opacity: 0 }}>
               <div className="mb-2">
                 <span className="bg-[#0D7490] text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                   Most Popular
@@ -715,12 +691,12 @@ export function LandingPage() {
               <h3 className="text-xl font-bold mb-1">Pro</h3>
               <p className="text-sm text-gray-400 mb-4">Active traders</p>
               <div className="mb-4">
-                <span className="text-3xl font-bold">$14.99</span>
+                <span className="text-3xl font-bold">$20</span>
                 <span className="text-gray-400 text-sm">/mo</span>
               </div>
               <Link to="/pricing">
                 <Button className="w-full mb-4 bg-white text-gray-900 hover:bg-gray-100 shadow-xl font-semibold cursor-pointer">
-                  Start Pro Trial
+                  Start Trial for $1
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </Link>
@@ -843,14 +819,14 @@ export function LandingPage() {
           backgroundSize: "40px 40px",
         }} />
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4 tracking-tight">Start your free trial today</h2>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4 tracking-tight">Start your trial today — just $1</h2>
           <p className="text-lg text-white/80 mb-8 max-w-2xl mx-auto leading-relaxed">
-            No credit card required. Cancel anytime. Join other Kenyan traders using AI-powered market intelligence for NSE and global stocks.
+            $1 commitment fee for 7 days. Cancel anytime. Join other Kenyan traders using AI-powered market intelligence for NSE and global stocks.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/login">
               <Button size="lg" className="bg-white text-[#0D7490] hover:bg-gray-100 px-10 py-6 text-base font-bold shadow-2xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-3xl cursor-pointer">
-                Start Free Trial
+                Start Trial for $1
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>

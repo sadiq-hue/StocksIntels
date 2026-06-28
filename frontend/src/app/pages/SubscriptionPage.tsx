@@ -7,31 +7,24 @@ import { toast } from "sonner";
 import { useAuth } from "../auth/AuthContext";
 
 const planDetails = {
-  free: {
-    name: "Free",
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    icon: Zap,
-    features: ["Delayed data on select markets", "1 AI signal per day", "Basic watchlist"],
-  },
   starter: {
     name: "Starter",
-    monthlyPrice: 4.99,
-    yearlyPrice: 49.99,
+    monthlyPrice: 10,
+    yearlyPrice: 99.99,
     icon: Zap,
     features: ["Real-time African + global data", "5 AI signals per day", "Stock screener", "Portfolio tracking", "Email support"],
   },
   premium: {
     name: "Premium",
-    monthlyPrice: 7.99,
-    yearlyPrice: 79.99,
+    monthlyPrice: 49,
+    yearlyPrice: 499,
     icon: Shield,
     features: ["Unlimited NSE AI signals", "10 global signals per day", "African + global market data", "Advanced NSE screener", "NSE technical analysis", "Email support"],
   },
   pro: {
     name: "Pro",
-    monthlyPrice: 14.99,
-    yearlyPrice: 149.99,
+    monthlyPrice: 20,
+    yearlyPrice: 199,
     icon: Shield,
     features: ["Unlimited AI signals", "All African + global market data", "Advanced charting", "Risk scoring & analysis", "Priority support"],
   },
@@ -85,13 +78,6 @@ export function SubscriptionPage() {
     setIsLoading(true);
 
     try {
-      if (price === 0) {
-        setIsSuccess(true);
-        toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
-        setIsLoading(false);
-        return;
-      }
-
       if (paymentMethod === "mpesa") {
         const cleanedPhone = phoneNumber.replace(/\+/g, "").trim();
         if (!cleanedPhone.match(/^(?:254|0)(7\d{8}|1\d{8,9})$/)) {
