@@ -709,36 +709,6 @@ export function LandingPage() {
                 ))}
               </div>
             </div>
-
-            {/* Pro */}
-            <div className="bg-gray-900 text-white rounded-xl p-6 border border-gray-900 shadow-xl scale-[1.02] z-10 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500"
-              style={{ animation: `fade-in-up 0.5s ease-out 0.2s forwards`, opacity: 0 }}>
-              <div className="mb-2">
-                <span className="bg-[#0D7490] text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                  Most Popular
-                </span>
-              </div>
-              <h3 className="text-xl font-bold mb-1">Pro</h3>
-              <p className="text-sm text-gray-400 mb-4">Active traders</p>
-              <div className="mb-4">
-                <span className="text-3xl font-bold">$19.9</span>
-                <span className="text-gray-400 text-sm">/mo</span>
-              </div>
-              <Link to="/pricing">
-                <Button className="w-full mb-4 bg-white text-gray-900 hover:bg-gray-100 shadow-xl font-semibold cursor-pointer">
-                  Start Trial
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </Link>
-              <div className="space-y-2">
-                {["Unlimited AI insights", "NSE + global data", "Advanced charting", "Risk scoring"].map((f) => (
-                  <div key={f} className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-white/70 flex-shrink-0" />
-                    <span className="text-xs text-gray-200">{f}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
 
           <div className="text-center mt-10">
