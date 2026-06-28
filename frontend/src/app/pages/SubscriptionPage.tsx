@@ -9,8 +9,8 @@ import { useAuth } from "../auth/AuthContext";
 const planDetails = {
   starter: {
     name: "Starter",
-    monthlyPrice: 10,
-    yearlyPrice: 99.99,
+    monthlyPrice: 9.9,
+    yearlyPrice: 99,
     icon: Zap,
     features: ["Real-time African + global data", "5 AI signals per day", "Stock screener", "Portfolio tracking", "Email support"],
   },

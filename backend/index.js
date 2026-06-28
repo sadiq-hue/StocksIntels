@@ -7726,7 +7726,7 @@ app.post('/api/payments/start-trial', authenticateToken, async (req, res) => {
       [tier, startDate, userId]
     );
     console.log(`[TRIAL] Started: user=${userId} plan=${tier}`);
-    res.json({ success: true, message: `7-day trial started for ${plan}! $1 commitment fee applied.`, user: updateRes.rows[0] });
+    res.json({ success: true, message: `7-day trial started for ${plan}!`, user: updateRes.rows[0] });
   } catch (error) {
     console.error('Start trial error:', error.message);
     res.status(500).json({ error: 'Failed to start trial' });
@@ -8865,9 +8865,9 @@ async function initDatabase() {
     const planCount = await pool.query('SELECT COUNT(*) FROM subscription_plans');
     if (parseInt(planCount.rows[0].count) === 0) {
       await pool.query(`INSERT INTO subscription_plans (name, description, price_kes, price_usd, features) VALUES
-        ('Starter', 'For retail investors', 1299, 10, $1::jsonb),
-        ('Premium', 'For NSE-focused traders', 6499, 49, $2::jsonb),
-        ('Pro', 'For active traders', 2599, 20, $3::jsonb),
+        ('Starter', 'For retail investors', 1299, 9.9, $1::jsonb),
+        ('Premium', 'For NSE-focused traders', 6499, 49.9, $2::jsonb),
+        ('Pro', 'For active traders', 2599, 19.9, $3::jsonb),
         ('Institutional', 'For brokers, funds and advisors', 26000, 200, $4::jsonb)
       `, [
         JSON.stringify(['Real-time African + global data', '5 AI signals per day', 'Stock screener', 'Portfolio tracking']),
@@ -8876,10 +8876,10 @@ async function initDatabase() {
         JSON.stringify(['API access', 'White-label analytics', 'Dedicated support', 'Team seats', 'Custom data feeds']),
       ]);
     } else {
-      await pool.query(`UPDATE subscription_plans SET price_kes = 1299, price_usd = 10, description = 'For retail investors', features = $1::jsonb WHERE name = 'Starter'`, [
+      await pool.query(`UPDATE subscription_plans SET price_kes = 1299, price_usd = 9.9, description = 'For retail investors', features = $1::jsonb WHERE name = 'Starter'`, [
         JSON.stringify(['Real-time African + global data', '5 AI signals per day', 'Stock screener', 'Portfolio tracking']),
       ]);
-      await pool.query(`UPDATE subscription_plans SET price_kes = 2599, price_usd = 20, description = 'For active traders', features = $1::jsonb WHERE name = 'Pro'`, [
+      await pool.query(`UPDATE subscription_plans SET price_kes = 2599, price_usd = 19.9, description = 'For active traders', features = $1::jsonb WHERE name = 'Pro'`, [
         JSON.stringify(['Unlimited AI signals', 'All African + global market data', 'Advanced charting', 'Risk scoring', 'Priority support']),
       ]);
       await pool.query(`UPDATE subscription_plans SET name = 'Institutional', price_kes = 26000, price_usd = 200, description = 'For brokers, funds and advisors', features = $1::jsonb WHERE name = 'Enterprise'`, [
@@ -8898,7 +8898,7 @@ async function initDatabase() {
             JSON.stringify(['Unlimited NSE signals', '10 global signals/day', 'Advanced NSE screener', 'NSE technical analysis', 'Email support']),
           ]);
         } else {
-          await pool.query(`UPDATE subscription_plans SET description = 'For NSE-focused traders', price_kes = 6499, price_usd = 49, features = $1::jsonb WHERE name = 'Premium'`, [
+          await pool.query(`UPDATE subscription_plans SET description = 'For NSE-focused traders', price_kes = 6499, price_usd = 49.9, features = $1::jsonb WHERE name = 'Premium'`, [
             JSON.stringify(['Unlimited NSE signals', '10 global signals/day', 'Advanced NSE screener', 'NSE technical analysis', 'Email support']),
           ]);
         }
