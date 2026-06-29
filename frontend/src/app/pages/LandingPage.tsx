@@ -310,30 +310,30 @@ export function LandingPage() {
           <div className="flex whitespace-nowrap animate-[ticker_30s_linear_infinite]">
             {(() => {
               const tickerSymbols = [
-                { sym: "SCOM", display: "SCOM", fallback: "17.50", fallbackChange: "+2.3%", up: true },
-                { sym: "EQTY", display: "EQTY", fallback: "48.25", fallbackChange: "+1.1%", up: true },
-                { sym: "KCB", display: "KCB", fallback: "52.80", fallbackChange: "-0.4%", up: false },
-                { sym: "AAPL", display: "AAPL", fallback: "198.50", fallbackChange: "+3.2%", up: true },
-                { sym: "TSLA", display: "TSLA", fallback: "248.90", fallbackChange: "-1.5%", up: false },
-                { sym: "MSFT", display: "MSFT", fallback: "425.60", fallbackChange: "+0.8%", up: true },
-                { sym: "GOOGL", display: "GOOGL", fallback: "175.30", fallbackChange: "+1.7%", up: true },
-                { sym: "EABL", display: "EABL", fallback: "62.00", fallbackChange: "+0.5%", up: true },
-                { sym: "NVDA", display: "NVDA", fallback: "880.20", fallbackChange: "+4.1%", up: true },
-                { sym: "AMZN", display: "AMZN", fallback: "185.40", fallbackChange: "+2.0%", up: true },
+                { sym: "SCOM", fallback: "17.50", fallbackChange: "+0.0%", up: true, isNse: true },
+                { sym: "EQTY", fallback: "79.25", fallbackChange: "+0.0%", up: true, isNse: true },
+                { sym: "KCB", fallback: "76.75", fallbackChange: "+0.0%", up: true, isNse: true },
+                { sym: "EABL", fallback: "263.50", fallbackChange: "+0.0%", up: true, isNse: true },
+                { sym: "AAPL", fallback: "283.72", fallbackChange: "-4.5%", up: false, isNse: false },
+                { sym: "TSLA", fallback: "391.59", fallbackChange: "-3.3%", up: false, isNse: false },
+                { sym: "MSFT", fallback: "377.86", fallbackChange: "+2.9%", up: true, isNse: false },
+                { sym: "GOOGL", fallback: "347.11", fallbackChange: "-0.7%", up: false, isNse: false },
+                { sym: "NVDA", fallback: "192.87", fallbackChange: "+0.0%", up: true, isNse: false },
               ];
               const items = tickerSymbols.map(t => {
                 const q = getQuote(t.sym) || getQuote(`NSE:${t.sym}`);
                 return {
-                  sym: t.display,
+                  sym: t.sym,
                   price: q?.price ? q.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : t.fallback,
                   change: q?.changePercent != null ? `${q.changePercent >= 0 ? '+' : ''}${q.changePercent.toFixed(1)}%` : t.fallbackChange,
                   up: q?.changePercent != null ? q.changePercent >= 0 : t.up,
+                  currency: t.isNse ? "KSh" : "$",
                 };
               });
               return [...items, ...items].map((s, i) => (
                 <div key={i} className="flex items-center gap-2 px-5 py-1.5 bg-white/60 backdrop-blur-sm border border-gray-100 rounded-lg mx-1.5 shrink-0">
                   <span className="font-bold text-xs text-gray-900">{s.sym}</span>
-                  <span className="text-xs text-gray-600">${s.price}</span>
+                  <span className="text-xs text-gray-600">{s.currency}{s.price}</span>
                   <span className={`text-xs font-semibold ${s.up ? "text-emerald-600" : "text-red-500"}`}>{s.change}</span>
                 </div>
               ));
