@@ -22,45 +22,32 @@ type AuthMode = "login" | "register" | "forgot" | "reset" | "otp-login";
 type RegStage = "form" | "verify";
 type OtpStage = "send" | "verify";
 
-function FloatingOrbs() {
+const floatingShapes = [
+  { size: 60, top: "8%", left: "3%", delay: 0, depth: 1 },
+  { size: 40, top: "18%", right: "5%", delay: 1.2, depth: 3 },
+  { size: 90, top: "50%", left: "1%", delay: 0.7, depth: 2 },
+  { size: 35, top: "70%", right: "3%", delay: 1.8, depth: 1 },
+  { size: 50, top: "35%", left: "12%", delay: 0.3, depth: 3 },
+  { size: 30, top: "82%", left: "18%", delay: 2.2, depth: 2 },
+  { size: 45, top: "12%", left: "45%", delay: 0.5, depth: 3 },
+  { size: 35, top: "42%", right: "15%", delay: 1.5, depth: 2 },
+  { size: 55, top: "60%", left: "30%", delay: 0.9, depth: 1 },
+  { size: 25, top: "28%", right: "22%", delay: 2.5, depth: 3 },
+];
+
+function StockChartBg() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {[...Array(6)].map((_, i) => (
-        <motion.div key={i} className="absolute rounded-full bg-white/5"
-          style={{ width: Math.random() * 300 + 100, height: Math.random() * 300 + 100, left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%` }}
-          animate={{ x: [0, Math.random() * 100 - 50, 0], y: [0, Math.random() * 100 - 50, 0], scale: [1, 1.2, 1] }}
-          transition={{ duration: Math.random() * 10 + 10, repeat: Infinity, ease: "easeInOut" }} />
-      ))}
-    </div>
-  );
-}
-
-function FloatingMarkets() {
-  const items = [
-    { id: 'ngx', label: 'NGX', sub: '₦' },
-    { id: 'jse', label: 'JSE', sub: 'R' },
-    { id: 'nse', label: 'NSE', sub: 'KSh' },
-    { id: 'egx', label: 'EGX', sub: 'EGP' },
-    // global markets
-    { id: 'nyse', label: 'NYSE', sub: '$' },
-    { id: 'nasdaq', label: 'NASDAQ', sub: '$' },
-    { id: 'lse', label: 'LSE', sub: '£' },
-    { id: 'hkex', label: 'HKEX', sub: 'HK$' },
-    { id: 'tse', label: 'TSE', sub: '¥' },
-  ];
-  return (
-    <div className="absolute inset-0 pointer-events-none">
-      {items.map((it, i) => (
-        <motion.div key={it.id} className="absolute flex items-center gap-2 bg-white/80 text-gray-800 text-xs px-3 py-1 rounded-full shadow-sm"
-          style={{ left: `${10 + (i * 80) / items.length}%`, top: `${8 + (i * 13) % 60}%`, transform: 'translateX(-50%)' }}
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: [0.85, 1, 0.85], y: [ -4, 4, -4 ] }}
-          transition={{ repeat: Infinity, duration: 7 + i * 1.2, ease: 'easeInOut', delay: i * 0.35 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" className="shrink-0" xmlns="http://www.w3.org/2000/svg"><path fill="#0B69A3" d="M12 2C7.03 2 3 6.03 3 11c0 4.97 4.03 9 9 9s9-4.03 9-9c0-4.97-4.03-9-9-9zm3 12h-2v2h-2v-2H9v-2h2V9h2v2h2v2z"/></svg>
-          <div className="font-semibold">{it.label}</div>
-          <div className="text-[10px] text-gray-500">{it.sub}</div>
-        </motion.div>
-      ))}
+      <svg className="absolute bottom-0 left-0 w-full h-[80%] opacity-[0.08]" viewBox="0 0 100 80" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="login-chart-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#0D7490" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="#0D7490" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d="M0 60 Q20 50 40 55 T80 45 T120 35 T160 48 T200 30 T240 25 T280 28 T320 20 T360 22 T400 15 L400 80 L0 80 Z" fill="url(#login-chart-grad)" />
+        <path d="M0 60 Q20 50 40 55 T80 45 T120 35 T160 48 T200 30 T240 25 T280 28 T320 20 T360 22 T400 15" fill="none" stroke="#0D7490" strokeWidth="0.5" />
+      </svg>
     </div>
   );
 }
@@ -84,12 +71,12 @@ function CompactHero() {
   return (
     <div className="mb-4 text-center">
       <div className="mx-auto flex flex-wrap items-center justify-center gap-3">
-        <div className="w-10 h-10 bg-gradient-to-br from-[#0B69A3] to-[#2D8FD6] rounded-xl flex items-center justify-center shadow-sm">
+        <div className="w-10 h-10 bg-gradient-to-br from-[#0D7490] to-[#14A9B9] rounded-xl flex items-center justify-center shadow-sm">
           <img src="/logo1.jpg" alt="logo" className="w-6 h-6" />
         </div>
         <div className="text-left min-w-0">
           <div className="text-gray-700 text-sm font-semibold">StocksIntels</div>
-          <div className="text-[#0B69A3] text-2xl font-extrabold leading-tight">StocksIntels</div>
+          <div className="text-[#0D7490] text-2xl font-extrabold leading-tight">StocksIntels</div>
         </div>
       </div>
       <p className="text-gray-500 text-xs mt-2">Welcome back</p>
@@ -121,6 +108,13 @@ export function LoginPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
+  const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 });
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => setMousePos({ x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight });
+    window.addEventListener("mousemove", handler);
+    return () => window.removeEventListener("mousemove", handler);
+  }, []);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -287,14 +281,25 @@ export function LoginPage() {
     "pl-10 pr-3 h-10 bg-gray-50/80 border-2 text-gray-900 rounded-xl transition-all duration-200",
     "placeholder:text-gray-400",
     focusedField === fieldName
-      ? "border-[#0B69A3] bg-white shadow-md shadow-[#0B69A3]/8 ring-4 ring-[#0B69A3]/5"
+      ? "border-[#0D7490] bg-white shadow-md shadow-[#0D7490]/8 ring-4 ring-[#0D7490]/5"
       : "border-gray-200 hover:border-gray-300",
     error && "border-red-300 focus:border-red-500"
   );
 
   return (
-    <div className="min-h-screen overflow-auto overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100 flex">
-      <FloatingMarkets />
+    <div className="min-h-screen overflow-auto overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-gray-50 flex relative">
+      <StockChartBg />
+      {floatingShapes.map((s, i) => (
+        <div key={i} className="absolute rounded-full bg-[#0D7490]/[0.06] animate-float-3d pointer-events-none"
+          style={{
+            width: s.size, height: s.size,
+            top: `calc(${s.top} + ${(mousePos.y - 0.5) * (s.depth || 1) * 20}px)`,
+            left: s.left ? `calc(${s.left} + ${(mousePos.x - 0.5) * (s.depth || 1) * 20}px)` : undefined,
+            right: s.right ? `calc(${s.right} + ${(0.5 - mousePos.x) * (s.depth || 1) * 20}px)` : undefined,
+            animationDelay: `${s.delay}s`,
+          }}
+        />
+      ))}
       <div className="flex-1 flex items-center justify-center p-4 lg:p-8 relative">
         <div className="w-full max-w-sm relative z-10">
           <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
@@ -341,7 +346,7 @@ export function LoginPage() {
                     <div className="space-y-1.5">
                       <label className="text-gray-700 text-sm font-semibold block ml-1">Email Address</label>
                       <div className="relative">
-                        <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                        <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-gray-400"}`} />
                         <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
                           onFocus={() => setFocusedField("email")} onBlur={() => setFocusedField(null)}
                           className={inputClasses("email")} required autoComplete="email" disabled={(mode === "register" && regStage === "verify") || (mode === "login" && loginStage === "otp")} />
@@ -353,12 +358,12 @@ export function LoginPage() {
                           <div className="flex flex-wrap items-center justify-between gap-2 ml-1">
                             <label className="text-gray-700 text-sm font-semibold">Password</label>
                             <button type="button" onClick={() => { setMode("forgot"); clear(); }}
-                              className="text-xs text-[#0B69A3] hover:text-[#2D8FD6] font-semibold hover:underline">
+                              className="text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold hover:underline">
                               Forgot password?
                             </button>
                           </div>
                           <div className="relative">
-                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0D7490]" : "text-gray-400"}`} />
                             <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
                               onFocus={() => setFocusedField("password")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("password"), "pr-8 h-10")} required autoComplete="current-password" />
@@ -369,12 +374,12 @@ export function LoginPage() {
                           </div>
                         </div>
                         <Button type="submit" disabled={isLoading || !email || !password}
-                          className="w-full h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                          className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                           {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending OTP...</span>
                             : <span className="flex items-center gap-2">Sign In <ArrowRight className="w-4 h-4" /></span>}
                         </Button>
                         <button type="button" onClick={() => { setMode("otp-login"); setOtpStage("send"); setOtpCode(""); clear(); }}
-                          className="w-full text-xs text-[#0B69A3] hover:text-[#2D8FD6] font-semibold text-center">
+                          className="w-full text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold text-center">
                           Sign in with OTP only
                         </button>
                       </>
@@ -384,7 +389,7 @@ export function LoginPage() {
                         <div className="space-y-1.5">
                           <label className="text-gray-700 text-sm font-semibold block ml-1">One-Time Password</label>
                           <div className="relative">
-                            <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-gray-400"}`} />
                             <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                               onFocus={() => setFocusedField("otpCode")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("otpCode"), "text-center text-2xl tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
@@ -392,18 +397,18 @@ export function LoginPage() {
                           {countdown > 0 && <p className="text-xs text-gray-400 text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                           {countdown === 0 && (
                             <button type="button" onClick={handleResendLoginOtp} disabled={isLoading}
-                              className="w-full text-xs text-[#0B69A3] hover:text-[#2D8FD6] font-semibold text-center disabled:opacity-50">
+                              className="w-full text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold text-center disabled:opacity-50">
                               {isLoading ? "Resending..." : "Didn't receive it? Resend OTP"}
                             </button>
                           )}
                         </div>
                         <Button type="submit" disabled={isLoading || otpCode.length < 6}
-                          className="w-full h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                          className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                           {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Verifying...</span>
                             : <span className="flex items-center gap-2">Verify & Sign In <ArrowRight className="w-4 h-4" /></span>}
                         </Button>
                         <button type="button" onClick={() => { setLoginStage("password"); setOtpCode(""); clear(); }}
-                          className="w-full text-xs text-[#0B69A3] hover:text-[#2D8FD6] font-semibold text-center">
+                          className="w-full text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold text-center">
                           Back to password
                         </button>
                       </>
@@ -413,7 +418,7 @@ export function LoginPage() {
                         <div className="space-y-1.5">
                           <label className="text-gray-700 text-sm font-semibold block ml-1">Email Address</label>
                           <div className="relative">
-                            <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-gray-400"}`} />
                             <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
                               onFocus={() => setFocusedField("email")} onBlur={() => setFocusedField(null)}
                               className={inputClasses("email")} required autoComplete="email" disabled={otpStage === "verify"} />
@@ -423,7 +428,7 @@ export function LoginPage() {
                           <div className="space-y-1.5">
                             <label className="text-gray-700 text-sm font-semibold block ml-1">One-Time Password</label>
                             <div className="relative">
-                              <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                              <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-gray-400"}`} />
                               <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                                 onFocus={() => setFocusedField("otpCode")} onBlur={() => setFocusedField(null)}
                                 className={cn(inputClasses("otpCode"), "text-center text-2xl tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
@@ -432,20 +437,20 @@ export function LoginPage() {
                           </div>
                         )}
                         <Button type="submit" disabled={isLoading || (otpStage === "send" ? !email : otpCode.length < 6)}
-                          className="w-full h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                          className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                           {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
                             : otpStage === "send" ? <span className="flex items-center gap-2">Send OTP <ArrowRight className="w-4 h-4" /></span>
                             : <span className="flex items-center gap-2">Verify & Sign In <ArrowRight className="w-4 h-4" /></span>}
                         </Button>
                         <button type="button" onClick={() => { setMode("login"); setLoginStage("password"); setOtpStage("send"); setOtpCode(""); clear(); }}
-                          className="w-full text-xs text-[#0B69A3] hover:text-[#2D8FD6] font-semibold text-center">
+                          className="w-full text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold text-center">
                           Sign in with password instead
                         </button>
                       </>
                     )}
                     {mode === "register" && regStage === "form" && (
                       <Button type="submit" disabled={isLoading || !email}
-                        className="w-full h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                        className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                         {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
                           : <span className="flex items-center gap-2">Send Verification Code <ArrowRight className="w-4 h-4" /></span>}
                       </Button>
@@ -455,7 +460,7 @@ export function LoginPage() {
                         <div className="space-y-1.5">
                           <label className="text-gray-700 text-sm font-semibold block ml-1">Verification Code</label>
                           <div className="relative">
-                            <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "vcode" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "vcode" ? "text-[#0D7490]" : "text-gray-400"}`} />
                             <Input type="text" placeholder="000000" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                               onFocus={() => setFocusedField("vcode")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("vcode"), "text-center text-2xl tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
@@ -465,7 +470,7 @@ export function LoginPage() {
                         <div className="space-y-1.5">
                           <label className="text-gray-700 text-sm font-semibold block ml-1">Full Name</label>
                           <div className="relative">
-                            <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "name" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "name" ? "text-[#0D7490]" : "text-gray-400"}`} />
                             <Input type="text" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)}
                               onFocus={() => setFocusedField("name")} onBlur={() => setFocusedField(null)}
                               className={inputClasses("name")} required />
@@ -474,7 +479,7 @@ export function LoginPage() {
                         <div className="space-y-1.5">
                           <label className="text-gray-700 text-sm font-semibold block ml-1">Password</label>
                           <div className="relative">
-                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0D7490]" : "text-gray-400"}`} />
                             <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
                               onFocus={() => setFocusedField("password")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("password"), "pr-8 h-10")} required minLength={8} autoComplete="new-password" />
@@ -499,7 +504,7 @@ export function LoginPage() {
                         <div className="space-y-1.5">
                           <label className="text-gray-700 text-sm font-semibold block ml-1">Confirm Password</label>
                           <div className="relative">
-                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "cpw" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "cpw" ? "text-[#0D7490]" : "text-gray-400"}`} />
                             <Input type={showConfirmPw ? "text" : "password"} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
                               onFocus={() => setFocusedField("cpw")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("cpw"), "pr-8 h-10")} required minLength={8} autoComplete="new-password" />
@@ -514,11 +519,11 @@ export function LoginPage() {
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => { setRegStage("form"); setVerifyCode(""); setError(null); }}
-                            className="w-full sm:w-1/3 h-10 text-sm text-gray-500 hover:text-[#0B69A3] font-semibold border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
+                            className="w-full sm:w-1/3 h-10 text-sm text-gray-500 hover:text-[#0D7490] font-semibold border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
                             Back
                           </button>
                           <Button type="submit" disabled={isLoading || verifyCode.length < 6 || !fullName.trim() || password.length < 8 || password !== confirmPassword || pwStrength < 3}
-                            className="flex-1 h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                            className="flex-1 h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                             {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Creating account...</span>
                               : <span className="flex items-center gap-2">Create Account <ArrowRight className="w-4 h-4" /></span>}
                           </Button>
@@ -538,12 +543,12 @@ export function LoginPage() {
                         className={inputClasses("email")} required autoComplete="email" />
                     </div>
                     <Button type="submit" disabled={isLoading}
-                      className="w-full mt-3 h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all disabled:opacity-70 text-sm">
+                      className="w-full mt-3 h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all disabled:opacity-70 text-sm">
                       {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
                         : <span className="flex items-center gap-2">Send Reset Code <ArrowRight className="w-4 h-4" /></span>}
                     </Button>
                     <button type="button" onClick={() => { setMode("login"); setLoginStage("password"); clear(); }}
-                      className="w-full text-sm text-[#AEB7C2] hover:text-[#0B69A3] font-semibold text-center">
+                      className="w-full text-sm text-[#AEB7C2] hover:text-[#0D7490] font-semibold text-center">
                       Back to sign in
                     </button>
                   </div>
@@ -554,7 +559,7 @@ export function LoginPage() {
                     <div className="space-y-1.5">
                       <label className="text-gray-700 text-sm font-semibold block ml-1">Reset Code</label>
                       <div className="relative">
-                        <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "code" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                        <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "code" ? "text-[#0D7490]" : "text-gray-400"}`} />
                         <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                           onFocus={() => setFocusedField("code")} onBlur={() => setFocusedField(null)}
                           className={cn(inputClasses("code"), "text-center text-2xl tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
@@ -563,7 +568,7 @@ export function LoginPage() {
                     <div className="space-y-1.5">
                       <label className="text-gray-700 text-sm font-semibold block ml-1">New Password</label>
                       <div className="relative">
-                        <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "pw" ? "text-[#0B69A3]" : "text-gray-400"}`} />
+                        <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "pw" ? "text-[#0D7490]" : "text-gray-400"}`} />
                           <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
                             onFocus={() => setFocusedField("pw")} onBlur={() => setFocusedField(null)}
                             className={cn(inputClasses("pw"), "pr-8 h-10")} required minLength={6} />
@@ -575,12 +580,12 @@ export function LoginPage() {
                     </div>
                     {countdown > 0 && <p className="text-xs text-gray-400 text-center">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                     <Button type="submit" disabled={isLoading || otpCode.length < 6 || newPassword.length < 6}
-                      className="w-full h-10 bg-gradient-to-r from-[#0B69A3] to-[#2D8FD6] hover:from-[#0A5F8E] hover:to-[#0B69A3] text-white font-semibold rounded-xl shadow transition-all disabled:opacity-70 text-sm">
+                      className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all disabled:opacity-70 text-sm">
                       {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Resetting...</span>
                         : <span className="flex items-center gap-2">Reset Password <ArrowRight className="w-4 h-4" /></span>}
                     </Button>
                     <button type="button" onClick={() => { setMode("forgot"); setOtpCode(""); setNewPassword(""); clear(); }}
-                      className="w-full text-sm text-[#AEB7C2] hover:text-[#0B69A3] font-semibold text-center">
+                      className="w-full text-sm text-[#AEB7C2] hover:text-[#0D7490] font-semibold text-center">
                       Resend code
                     </button>
                   </>
@@ -628,7 +633,7 @@ export function LoginPage() {
                   <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="mt-0 text-center text-gray-500 text-xs flex items-center justify-center gap-2">
                     <span className="text-xs text-gray-500">{mode === "register" ? "Already have an account?" : "Don't have an account?"}</span>
                       <button type="button" onClick={() => { setMode(mode === "register" ? "login" : "register"); setLoginStage("password"); setRegStage("form"); setVerifyCode(""); setError(null); }}
-                      className="text-[#0B69A3] hover:text-[#2D8FD6] font-medium text-xs transition-colors">
+                      className="text-[#0D7490] hover:text-[#14A9B9] font-medium text-xs transition-colors">
                       {mode === "register" ? "Sign in" : "Create one now"}
                     </button>
                   </motion.p>
