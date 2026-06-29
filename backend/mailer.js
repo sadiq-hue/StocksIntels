@@ -654,4 +654,279 @@ async function sendSubscriptionExpiredEmail(email, data) {
   return sendViaTransport({ to: email, subject, html, label: 'Expired notice' });
 }
 
-module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail };
+// ── Section render helpers ──
+
+function section(title, bodyHtml) {
+  if (!bodyHtml) return '';
+  return `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
+      <div style="background:${BRAND_COLOR};color:#ffffff;padding:10px 14px;font-size:13px;font-weight:600">${title}</div>
+      <div style="padding:14px;font-size:13px;color:${TEXT_MED};line-height:1.7">${bodyHtml}</div>
+    </div>`;
+}
+
+function gainerTable(title, rows) {
+  const r = (rows || []).slice(0, 6).map(s => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${s.symbol}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${GREEN}">+${s.changePercent?.toFixed(2) || '0.00'}%</td></tr>`).join('');
+  return `<div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden"><div style="background:${GREEN};color:#ffffff;padding:8px 12px;font-size:12px;font-weight:600">${title}</div><table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px"><thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Name</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Chg</th></tr></thead><tbody>${r || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No data</td></tr>'}</tbody></table></div>`;
+}
+
+function loserTable(title, rows) {
+  const r = (rows || []).slice(0, 6).map(s => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${s.symbol}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${RED}">${s.changePercent?.toFixed(2) || '0.00'}%</td></tr>`).join('');
+  return `<div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden"><div style="background:${RED};color:#ffffff;padding:8px 12px;font-size:12px;font-weight:600">${title}</div><table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px"><thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Name</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Chg</th></tr></thead><tbody>${r || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No data</td></tr>'}</tbody></table></div>`;
+}
+
+// ── 1. WEEKLY MARKET DIGEST ──
+
+async function sendWeeklyDigestEmail(email, data) {
+  const {
+    userName, dateStr,
+    nseGainers, nseLosers, globalGainers, globalLosers,
+    newsHeadlines, totalSignals,
+    nseSummary, storyOfWeek, milestone,
+    globalTheme, macroBackdrop, whatToWatch,
+    nseGlobalConnection,
+  } = data;
+
+  const subject = `Your Weekly Market Digest — ${dateStr}`;
+
+  const newsRows = (newsHeadlines || []).slice(0, 8).map(n =>
+    `<tr><td style="padding:6px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_DARK};line-height:1.5">${n.headline}</td><td style="padding:6px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_LIGHT};text-align:right">${n.source || ''}</td></tr>`
+  ).join('');
+
+  const html = baseWrapper(`
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:20px;font-weight:700;color:${TEXT_DARK}">Weekly Market Digest</div>
+      <div style="font-size:13px;color:${TEXT_MED}">${dateStr}</div>
+      ${userName ? `<div style="font-size:14px;color:${TEXT_MED};margin-top:8px">Hello ${userName}</div>` : ''}
+    </div>
+
+    ${totalSignals !== undefined ? `
+    <div style="background:linear-gradient(135deg,${BRAND_COLOR}10,${BRAND_COLOR}05);border:1px solid ${BRAND_COLOR}30;border-radius:10px;padding:16px;margin-bottom:20px;text-align:center">
+      <div style="font-size:28px;font-weight:800;color:${BRAND_COLOR}">${totalSignals}</div>
+      <div style="font-size:12px;color:${TEXT_MED}">Active AI Signals This Week</div>
+    </div>` : ''}
+
+    ${section('NSE — What Happened Last Week', nseSummary || '' )}
+    ${section('Story of the Week', storyOfWeek || '')}
+    ${section('Milestone to Note', milestone || '')}
+
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:16px">
+      <tr>
+        <td style="width:50%;padding:0 6px 0 0;vertical-align:top">${gainerTable('NSE Top Gainers', nseGainers)}</td>
+        <td style="width:50%;padding:0 0 0 6px;vertical-align:top">${loserTable('NSE Top Losers', nseLosers)}</td>
+      </tr>
+    </table>
+
+    ${section('Global Markets — Key Themes This Week', globalTheme || '')}
+    ${section('Macro Backdrop', macroBackdrop || '')}
+    ${section('What to Watch This Week', whatToWatch || '')}
+
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:16px">
+      <tr>
+        <td style="width:50%;padding:0 6px 0 0;vertical-align:top">${gainerTable('Global Top Gainers', globalGainers)}</td>
+        <td style="width:50%;padding:0 0 0 6px;vertical-align:top">${loserTable('Global Top Losers', globalLosers)}</td>
+      </tr>
+    </table>
+
+    ${section('NSE — Global Connection', nseGlobalConnection || '')}
+
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
+      <div style="background:${BRAND_COLOR};color:#ffffff;padding:10px 14px;font-size:13px;font-weight:600">Top Market News</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
+        ${newsRows || '<tr><td style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No recent news</td></tr>'}
+      </table>
+    </div>
+
+    <div style="text-align:center;margin-top:8px">
+      <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:700">EXPLORE FULL PLATFORM \u2192</a>
+    </div>
+  `, `<meta name="referrer" content="no-referrer" />`);
+
+  return sendViaTransport({ to: email, subject, html, label: 'Weekly digest' });
+}
+
+// ── 2. DAILY MARKET BRIEF ──
+
+async function sendDailyBriefEmail(email, data) {
+  const {
+    userName, dateStr,
+    indices, yesterdayTopMovers, aiSignal, aiSignalContext,
+    globalIndices, globalToNseConnection, calendar, analystTake,
+  } = data;
+
+  const subject = `Daily Market Brief — ${dateStr}`;
+
+  function indexRow(label, value, change, signal) {
+    const sigColor = signal === 'BULLISH' ? GREEN : signal === 'BEARISH' ? RED : AMBER;
+    const chgColor = change && change.startsWith('+') ? GREEN : change && change.startsWith('-') ? RED : TEXT_MED;
+    return `<tr><td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:13px;font-weight:600;color:${TEXT_DARK}">${label}</td><td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:right;color:${TEXT_DARK}">${value || '--'}</td><td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:right;color:${chgColor}">${change || '--'}</td><td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:11px;text-align:center;color:#ffffff;background:${sigColor};border-radius:4px;font-weight:600">${signal || '--'}</td></tr>`;
+  }
+
+  const indexRows = ((indices || []).slice(0, 5)).map(i => indexRow(i.label, i.value, i.change, i.signal)).join('');
+
+  const moverRows = (yesterdayTopMovers || []).slice(0, 6).map(m =>
+    `<tr><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${m.symbol}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${m.company}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${m.change?.startsWith('+') ? GREEN : RED}">${m.change || '--'}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${TEXT_MED}">${m.volume || '--'}</td></tr>`
+  ).join('');
+
+  const globalRows = ((globalIndices || []).slice(0, 4)).map(g =>
+    `<tr><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${g.label}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${TEXT_DARK}">${g.value || '--'}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${g.change?.startsWith('+') ? GREEN : RED}">${g.change || '--'}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${g.keyDriver || ''}</td></tr>`
+  ).join('');
+
+  const calRows = ((calendar || []).slice(0, 5)).map(c =>
+    `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${c.time || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_DARK}">${c.event || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:11px;text-align:center"><span style="background:${c.impact === 'HIGH' ? RED : c.impact === 'MEDIUM' ? AMBER : BG_LIGHT};color:${c.impact === 'HIGH' ? '#fff' : c.impact === 'MEDIUM' ? '#fff' : TEXT_MED};padding:2px 8px;border-radius:3px;font-weight:600;font-size:10px">${c.impact || ''}</span></td></tr>`
+  ).join('');
+
+  const html = baseWrapper(`
+    <div style="text-align:center;margin-bottom:20px;border-bottom:1px solid ${BORDER};padding-bottom:16px">
+      <div style="font-size:11px;color:${TEXT_LIGHT};text-transform:uppercase;letter-spacing:1px">StocksIntels</div>
+      <div style="font-size:20px;font-weight:700;color:${TEXT_DARK};margin-top:4px">Daily Market Brief</div>
+      <div style="font-size:12px;color:${TEXT_MED}">${dateStr} \u2022 Published 7:00am EAT</div>
+      ${userName ? `<div style="font-size:13px;color:${TEXT_MED};margin-top:8px">Morning ${userName} \u2014 your edge before the NSE opens at 9:30am.</div>` : ''}
+    </div>
+
+    <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Today\u2019s Market Snapshot</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin-bottom:20px;font-size:12px;border:1px solid ${BORDER};border-radius:8px;overflow:hidden">
+      <thead><tr style="background:${BG_LIGHT}"><th style="padding:6px 10px;text-align:left;color:${TEXT_MED}">Market</th><th style="padding:6px 10px;text-align:right;color:${TEXT_MED}">Close</th><th style="padding:6px 10px;text-align:right;color:${TEXT_MED}">Chg</th><th style="padding:6px 10px;text-align:center;color:${TEXT_MED}">Signal</th></tr></thead>
+      <tbody>${indexRows || '<tr><td colspan="4" style="padding:12px;text-align:center;color:#94a3b8">Index data loading...</td></tr>'}</tbody>
+    </table>
+
+    <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Yesterday\u2019s Top Movers</div>
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Company</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Change</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Volume</th></tr></thead>
+        <tbody>${moverRows || '<tr><td colspan="4" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No movers data</td></tr>'}</tbody>
+      </table>
+    </div>
+
+    ${section('AI Signal of the Day', aiSignal ? `<div style="font-size:14px;color:${TEXT_DARK};margin-bottom:8px">${aiSignal}</div>${aiSignalContext ? `<div style="font-size:12px;color:${TEXT_LIGHT};border-top:1px solid ${BORDER};padding-top:8px;margin-top:8px"><strong>WHY IT MATTERS:</strong> ${aiSignalContext}</div>` : ''}` : '')}
+
+    <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px;margin-top:4px">Global Overnight</div>
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Index</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Close</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Change</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Key Driver</th></tr></thead>
+        <tbody>${globalRows || '<tr><td colspan="4" style="padding:12px;text-align:center;color:#94a3b8">No data</td></tr>'}</tbody>
+      </table>
+    </div>
+
+    ${section('Global-to-NSE Connection', globalToNseConnection || '')}
+
+    ${calendar && calendar.length ? `
+    <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Today\u2019s Calendar</div>
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Time (EAT)</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Event</th><th style="padding:4px 8px;text-align:center;color:${TEXT_MED}">Impact</th></tr></thead>
+        <tbody>${calRows}</tbody>
+      </table>
+    </div>` : ''}
+
+    ${section('Analyst Take', analystTake || '')}
+
+    <div style="text-align:center;margin-top:8px;border-top:1px solid ${BORDER};padding-top:16px">
+      <div style="font-size:12px;color:${TEXT_LIGHT};margin-bottom:12px">Explore full signals and analysis on the StocksIntels platform.</div>
+      <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">VISIT PLATFORM \u2192</a>
+    </div>
+  `, `<meta name="referrer" content="no-referrer" />`);
+
+  return sendViaTransport({ to: email, subject, html, label: 'Daily brief' });
+}
+
+// ── 3. EARNINGS & CORPORATE ACTIONS ──
+
+async function sendEarningsReportEmail(email, data) {
+  const {
+    userName, dateStr,
+    earningsCalendar, earningsResults, corporateActions, globalEarnings,
+  } = data;
+
+  const subject = `Earnings & Corporate Actions — ${dateStr}`;
+
+  const calRows = ((earningsCalendar || []).slice(0, 12)).map(e =>
+    `<tr><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${e.date || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${e.company || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_LIGHT}">${e.exchange || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${e.period || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;text-align:center"><span style="background:${e.aiExpectation === 'BEAT' ? GREEN + '20' : e.aiExpectation === 'MISS' ? RED + '20' : AMBER + '20'};color:${e.aiExpectation === 'BEAT' ? GREEN : e.aiExpectation === 'MISS' ? RED : AMBER};padding:2px 8px;border-radius:3px;font-weight:700;font-size:10px">${e.aiExpectation || '--'}</span></td></tr>`
+  ).join('');
+
+  function earningsBlock(r) {
+    if (!r) return '';
+    const verdictColor = r.verdict === 'BEAT' ? GREEN : r.verdict === 'MISS' ? RED : AMBER;
+    return `
+      <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
+        <div style="background:${BG_LIGHT};padding:10px 14px;border-bottom:1px solid ${BORDER}">
+          <div style="font-size:14px;font-weight:700;color:${TEXT_DARK}">${r.ticker || ''} — ${r.company || ''}</div>
+          <div style="font-size:11px;color:${TEXT_LIGHT}">${r.exchange || ''} \u2022 ${r.period || ''}</div>
+        </div>
+        <div style="padding:12px 14px;border-bottom:1px solid ${BORDER}">
+          <div style="text-align:center;margin-bottom:10px"><span style="background:${verdictColor};color:#ffffff;padding:4px 16px;border-radius:4px;font-size:13px;font-weight:700">AI VERDICT: ${r.verdict || '--'}</span></div>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:12px">
+            <tr><td style="padding:4px 0;color:${TEXT_MED}">Revenue</td><td style="padding:4px 0;text-align:right;font-weight:600;color:${TEXT_DARK}">${r.revenue || '--'}</td></tr>
+            <tr><td style="padding:4px 0;color:${TEXT_MED}">Net Profit</td><td style="padding:4px 0;text-align:right;font-weight:600;color:${TEXT_DARK}">${r.netProfit || '--'}</td></tr>
+            <tr><td style="padding:4px 0;color:${TEXT_MED}">EPS</td><td style="padding:4px 0;text-align:right;font-weight:600;color:${TEXT_DARK}">${r.eps || '--'}</td></tr>
+            <tr><td style="padding:4px 0;color:${TEXT_MED}">vs Estimate</td><td style="padding:4px 0;text-align:right;font-weight:600;color:${(r.vsEstimate || '').startsWith('+') ? GREEN : RED}">${r.vsEstimate || '--'}</td></tr>
+          </table>
+        </div>
+        <div style="padding:12px 14px;border-bottom:1px solid ${BORDER}">
+          <div style="font-size:12px;color:${TEXT_MED};line-height:1.7">${r.aiAnalysis || 'No analysis available.'}</div>
+        </div>
+        <div style="padding:10px 14px;font-size:11px;color:${TEXT_MED}">
+          <strong>SIGNAL</strong> Short-term: <span style="color:${r.shortTermSignal === 'BULLISH' ? GREEN : r.shortTermSignal === 'BEARISH' ? RED : AMBER}">${r.shortTermSignal || '--'}</span>
+          ${r.dividend ? ` \u2022 <strong>Dividend:</strong> ${r.dividend}` : ''}
+          ${r.watchPrice ? ` \u2022 <strong>Watch price:</strong> ${r.watchPrice}` : ''}
+        </div>
+      </div>`;
+  }
+
+  const caRows = ((corporateActions || []).slice(0, 10)).map(a =>
+    `<tr><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${a.date || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${a.company || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_LIGHT}">${a.exchange || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${BRAND_COLOR};font-weight:600">${a.actionType || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${a.details || ''}</td></tr>`
+  ).join('');
+
+  const geRows = ((globalEarnings || []).slice(0, 5)).map(g =>
+    `<tr><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${g.ticker || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${g.company || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;text-align:center"><span style="background:${g.result === 'BEAT' ? GREEN + '20' : g.result === 'MISS' ? RED + '20' : AMBER + '20'};color:${g.result === 'BEAT' ? GREEN : g.result === 'MISS' ? RED : AMBER};padding:2px 8px;border-radius:3px;font-weight:700;font-size:10px">${g.result || '--'}</span></td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED};line-height:1.4">${g.africaImpact || ''}</td></tr>`
+  ).join('');
+
+  const html = baseWrapper(`
+    <div style="text-align:center;margin-bottom:24px;border-bottom:1px solid ${BORDER};padding-bottom:16px">
+      <div style="font-size:11px;color:${TEXT_LIGHT};text-transform:uppercase;letter-spacing:1px">StocksIntels</div>
+      <div style="font-size:20px;font-weight:700;color:${TEXT_DARK};margin-top:4px">Earnings & Corporate Actions</div>
+      <div style="font-size:12px;color:${TEXT_MED}">${dateStr} \u2022 Covering: NSE, NGX, GSE, JSE + Global</div>
+      ${userName ? `<div style="font-size:13px;color:${TEXT_MED};margin-top:6px">Hello ${userName}</div>` : ''}
+    </div>
+
+    <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Earnings Calendar</div>
+    <div style="font-size:11px;color:${TEXT_LIGHT};margin-bottom:10px">Companies reporting results this period across covered exchanges:</div>
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Date</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Company</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Exch</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Period</th><th style="padding:4px 8px;text-align:center;color:${TEXT_MED}">AI Expectation</th></tr></thead>
+        <tbody>${calRows || '<tr><td colspan="5" style="padding:12px;text-align:center;color:#94a3b8">No upcoming earnings</td></tr>'}</tbody>
+      </table>
+    </div>
+
+    <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Results Summaries</div>
+    <div style="font-size:11px;color:${TEXT_LIGHT};margin-bottom:10px">AI-generated summaries of key results reported this period:</div>
+    ${(earningsResults || []).slice(0, 5).map(r => earningsBlock(r)).join('') || '<div style="background:${BG_LIGHT};border-radius:10px;padding:18px;margin-bottom:20px;text-align:center;font-size:13px;color:${TEXT_MED}">No results yet this period.</div>'}
+
+    ${corporateActions && corporateActions.length ? `
+    <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Corporate Actions Alert</div>
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Date</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Company</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Exch</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Action</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Details</th></tr></thead>
+        <tbody>${caRows}</tbody>
+      </table>
+    </div>` : ''}
+
+    ${globalEarnings && globalEarnings.length ? `
+    <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Global Earnings — Africa Impact Watch</div>
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
+        <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Ticker</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Company</th><th style="padding:4px 8px;text-align:center;color:${TEXT_MED}">Result</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Africa Impact</th></tr></thead>
+        <tbody>${geRows}</tbody>
+      </table>
+    </div>` : ''}
+
+    <div style="text-align:center;margin-top:8px;border-top:1px solid ${BORDER};padding-top:16px">
+      <div style="font-size:12px;color:${TEXT_LIGHT};margin-bottom:12px">Full earnings data, AI verdicts, and corporate action calendar on the StocksIntels platform.</div>
+      <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/stocks" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">VIEW EARNINGS \u2192</a>
+    </div>
+  `, `<meta name="referrer" content="no-referrer" />`);
+
+  return sendViaTransport({ to: email, subject, html, label: 'Earnings report' });
+}
+
+module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendViaTransport };

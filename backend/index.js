@@ -9,6 +9,7 @@ const axios = require('axios');
 const bcrypt = require('bcryptjs');
 const { Server } = require('socket.io');
 const { getAllNews, getNewsSummary, getAggregatedSentiment, KENYAN_STOCKS, STOCK_SYMBOLS } = require('./newsService');
+const { generateWeeklyDigestContent, generateDailyBriefContent, generateEarningsContent } = require('./contentGenerator');
 const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions, getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats, getForwardTestPredictions, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig } = require('./signalService');
@@ -17,7 +18,8 @@ const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
 const signalPublisher = require('./signalPublisher');
 const { createSignalNotifications } = require('./signalPublisher');
-const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail } = require('./mailer');
+const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail } = require('./mailer');
+const emailSequenceService = require('./emailSequenceService');
 const cron = require('node-cron');
 const {
   getCompanyProfile, getQuote, getIncomeStatement, getBalanceSheet,
@@ -1737,6 +1739,7 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
     await pool.query('UPDATE otp_codes SET used = TRUE WHERE id = $1', [otpResult.rows[0].id]);
     await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [result.rows[0].id]);
     sendWelcomeEmail(email, fullName).catch(err => console.error('[MAILER] Welcome email failed:', err.message));
+    emailSequenceService.enrollUserInOnboarding(result.rows[0].id).catch(err => console.error('[EMAIL SEQ] Onboarding enrollment failed:', err.message));
     const token = generateToken(result.rows[0].id);
     const refreshToken = await generateRefreshToken(result.rows[0].id);
     setRefreshCookie(res, refreshToken);
@@ -1780,6 +1783,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
     await pool.query('INSERT INTO paper_accounts (user_id) VALUES ($1)', [result.rows[0].id]);
     sendWelcomeEmail(email, fullName).catch(err => console.error('[MAILER] Welcome email failed:', err.message));
+    emailSequenceService.enrollUserInOnboarding(result.rows[0].id).catch(err => console.error('[EMAIL SEQ] Onboarding enrollment failed:', err.message));
     const token = generateToken(result.rows[0].id);
     const refreshToken = await generateRefreshToken(result.rows[0].id);
     setRefreshCookie(res, refreshToken);
@@ -2165,6 +2169,98 @@ app.post('/api/activity/log', async (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// --- Stock Tracking Routes (for conversion prompts) ---
+
+app.post('/api/stock-tracking/view', authenticateToken, async (req, res) => {
+  try {
+    const { ticker } = req.body;
+    if (!ticker) return res.status(400).json({ error: 'ticker required' });
+    const userId = req.user.userId;
+    await pool.query(
+      `INSERT INTO user_stock_views (user_id, ticker, viewed_date)
+       VALUES ($1, $2, CURRENT_DATE)
+       ON CONFLICT (user_id, ticker, viewed_date) DO NOTHING`,
+      [userId, ticker.toUpperCase()]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to record stock view' });
+  }
+});
+
+app.get('/api/stock-tracking/consecutive-days', authenticateToken, async (req, res) => {
+  try {
+    const { ticker } = req.query;
+    if (!ticker) return res.status(400).json({ error: 'ticker query param required' });
+    const userId = req.user.userId;
+    const result = await pool.query(`
+      SELECT viewed_date, COUNT(*) OVER () as total_days,
+             viewed_date = CURRENT_DATE as viewed_today
+      FROM user_stock_views
+      WHERE user_id = $1 AND ticker = $2
+        AND viewed_date >= CURRENT_DATE - INTERVAL '5 days'
+      ORDER BY viewed_date DESC
+    `, [userId, ticker.toUpperCase()]);
+    const days = result.rows.map(r => r.viewed_date);
+    let consecutiveCount = 0;
+    for (let i = 0; i < days.length; i++) {
+      const expectedDate = new Date();
+      expectedDate.setDate(expectedDate.getDate() - i);
+      const dayStr = expectedDate.toISOString().split('T')[0];
+      if (new Date(days[i]).toISOString().split('T')[0] === dayStr) {
+        consecutiveCount++;
+      } else {
+        break;
+      }
+    }
+    const user = await pool.query('SELECT subscription_tier, subscription_status FROM users WHERE id = $1', [userId]);
+    const isFreeUser = !user.rows[0] || user.rows[0].subscription_tier === 'free';
+    res.json({
+      ticker: ticker.toUpperCase(),
+      consecutiveDays: consecutiveCount,
+      qualifiesForPrompt: consecutiveCount >= 3 && isFreeUser,
+      viewedToday: result.rows.some(r => {
+        const today = new Date().toISOString().split('T')[0];
+        return new Date(r.viewed_date).toISOString().split('T')[0] === today;
+      }),
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to check consecutive days' });
+  }
+});
+
+app.post('/api/stock-tracking/dismiss-prompt', authenticateToken, async (req, res) => {
+  try {
+    const { ticker } = req.body;
+    const userId = req.user.userId;
+    await pool.query(
+      `INSERT INTO user_dismissed_prompts (user_id, prompt_type, ticker)
+       VALUES ($1, 'consecutive_view', $2)
+       ON CONFLICT (user_id, prompt_type, ticker) DO NOTHING`,
+      [userId, ticker ? ticker.toUpperCase() : null]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to dismiss prompt' });
+  }
+});
+
+app.get('/api/stock-tracking/prompt-status', authenticateToken, async (req, res) => {
+  try {
+    const { ticker } = req.query;
+    const userId = req.user.userId;
+    if (!ticker) return res.json({ dismissed: false });
+    const result = await pool.query(
+      `SELECT id FROM user_dismissed_prompts
+       WHERE user_id = $1 AND prompt_type = 'consecutive_view' AND ticker = $2`,
+      [userId, ticker.toUpperCase()]
+    );
+    res.json({ dismissed: result.rows.length > 0 });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to check prompt status' });
   }
 });
 
@@ -4465,6 +4561,78 @@ app.post('/api/user/sentiment-preference', async (req, res) => {
   }
 });
 
+// --- Weekly Digest Preference ---
+app.get('/api/user/weekly-digest-preference', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const result = await pool.query('SELECT weekly_digest_opt_in FROM users WHERE id = $1', [userId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ optedIn: result.rows[0].weekly_digest_opt_in !== false });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+app.post('/api/user/weekly-digest-preference', async (req, res) => {
+  try {
+    const { userId, optedIn } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    await pool.query('UPDATE users SET weekly_digest_opt_in = $1 WHERE id = $2', [optedIn, userId]);
+    res.json({ success: true, optedIn: !!optedIn });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// --- Daily Brief Preference ---
+app.get('/api/user/daily-brief-preference', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const result = await pool.query('SELECT daily_brief_opt_in FROM users WHERE id = $1', [userId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ optedIn: result.rows[0].daily_brief_opt_in !== false });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+app.post('/api/user/daily-brief-preference', async (req, res) => {
+  try {
+    const { userId, optedIn } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    await pool.query('UPDATE users SET daily_brief_opt_in = $1 WHERE id = $2', [optedIn, userId]);
+    res.json({ success: true, optedIn: !!optedIn });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// --- Earnings Report Preference ---
+app.get('/api/user/earnings-report-preference', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const result = await pool.query('SELECT earnings_report_opt_in FROM users WHERE id = $1', [userId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ optedIn: result.rows[0].earnings_report_opt_in !== false });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+app.post('/api/user/earnings-report-preference', async (req, res) => {
+  try {
+    const { userId, optedIn } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    await pool.query('UPDATE users SET earnings_report_opt_in = $1 WHERE id = $2', [optedIn, userId]);
+    res.json({ success: true, optedIn: !!optedIn });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
 app.post('/api/user/send-test-sentiment', async (req, res) => {
   try {
     let { userId, email, fullName } = req.body;
@@ -4516,6 +4684,75 @@ app.post('/api/user/send-test-hot-news', async (req, res) => {
     }
   } catch (error) {
     console.error('send-test-hot-news error:', error.message);
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// --- Weekly Digest "Send Now" ---
+app.post('/api/user/send-test-digest', async (req, res) => {
+  try {
+    let { userId, email, fullName } = req.body;
+    if (userId) {
+      const result = await pool.query('SELECT id, full_name, email FROM users WHERE id = $1', [userId]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      email = result.rows[0].email;
+      fullName = result.rows[0].full_name;
+    }
+    if (!email) return res.status(400).json({ error: 'email or userId required' });
+    const sent = await sendWeeklyDigestToUser(userId ? parseInt(userId) : null, email, fullName);
+    if (sent) {
+      res.json({ success: true, message: 'Weekly digest sent to ' + email });
+    } else {
+      res.json({ success: false, message: 'Could not send digest (no market data available)' });
+    }
+  } catch (error) {
+    console.error('send-test-digest error:', error.message);
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// --- Daily Brief "Send Now" ---
+app.post('/api/user/send-test-brief', async (req, res) => {
+  try {
+    let { userId, email, fullName } = req.body;
+    if (userId) {
+      const result = await pool.query('SELECT id, full_name, email FROM users WHERE id = $1', [userId]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      email = result.rows[0].email;
+      fullName = result.rows[0].full_name;
+    }
+    if (!email) return res.status(400).json({ error: 'email or userId required' });
+    const sent = await sendDailyBriefToUser(userId ? parseInt(userId) : null, email, fullName);
+    if (sent) {
+      res.json({ success: true, message: 'Daily brief sent to ' + email });
+    } else {
+      res.json({ success: false, message: 'Could not send daily brief' });
+    }
+  } catch (error) {
+    console.error('send-test-brief error:', error.message);
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// --- Earnings Report "Send Now" ---
+app.post('/api/user/send-test-earnings', async (req, res) => {
+  try {
+    let { userId, email, fullName } = req.body;
+    if (userId) {
+      const result = await pool.query('SELECT id, full_name, email FROM users WHERE id = $1', [userId]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      email = result.rows[0].email;
+      fullName = result.rows[0].full_name;
+    }
+    if (!email) return res.status(400).json({ error: 'email or userId required' });
+    const sent = await sendEarningsReportToUser(userId ? parseInt(userId) : null, email, fullName);
+    if (sent) {
+      res.json({ success: true, message: 'Earnings report sent to ' + email });
+    } else {
+      res.json({ success: false, message: 'Could not send earnings report' });
+    }
+  } catch (error) {
+    console.error('send-test-earnings error:', error.message);
     res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
@@ -8070,6 +8307,10 @@ async function initDatabase() {
 
     // Sentiment email opt-in column
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sentiment_opt_in BOOLEAN DEFAULT false`);
+    // Weekly digest opt-out column (default true = opted in)
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_opt_in BOOLEAN DEFAULT true`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_brief_opt_in BOOLEAN DEFAULT true`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS earnings_report_opt_in BOOLEAN DEFAULT true`);
 
     await pool.query(`CREATE TABLE IF NOT EXISTS watchlist_items (
       id SERIAL PRIMARY KEY, symbol VARCHAR(20) NOT NULL,
@@ -9347,6 +9588,178 @@ async function sendDailySentimentReports() {
   }
 }
 
+async function sendWeeklyDigestToUser(userId, email, fullName) {
+  try {
+    const [summaryRes, moversRes, newsRes, editorial] = await Promise.all([
+      axios.get(`http://localhost:${port}/api/ai/market-summary`).then(r => r.data).catch(() => null),
+      axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({})),
+      axios.get(`http://localhost:${port}/api/news?limit=15`).then(r => r.data).catch(() => ({})),
+      generateWeeklyDigestContent().catch(() => ({})),
+    ]);
+    const dateStr = new Date().toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    const newsHeadlines = (newsRes.news || newsRes.articles || []).slice(0, 8).map(a => ({
+      headline: a.headline || a.title || '',
+      source: a.source || a.sourceName || '',
+    }));
+    await sendWeeklyDigestEmail(email, {
+      userName: fullName || 'Trader',
+      dateStr,
+      nseGainers: moversRes?.nse?.gainers?.slice(0, 6) || [],
+      nseLosers: moversRes?.nse?.losers?.slice(0, 6) || [],
+      globalGainers: moversRes?.global?.gainers?.slice(0, 6) || [],
+      globalLosers: moversRes?.global?.losers?.slice(0, 6) || [],
+      newsHeadlines,
+      totalSignals: summaryRes?.signals?.total || 0,
+      nseSummary: editorial.nseSummary || '',
+      storyOfWeek: editorial.storyOfWeek || '',
+      milestone: editorial.milestone || '',
+      globalTheme: editorial.globalTheme || '',
+      macroBackdrop: editorial.macroBackdrop || '',
+      whatToWatch: editorial.whatToWatch || '',
+      nseGlobalConnection: editorial.nseGlobalConnection || '',
+    });
+    console.log(`[DIGEST] Weekly digest sent to ${email}`);
+    return true;
+  } catch (e) {
+    console.error(`[DIGEST] Error for ${email}:`, e.message);
+    return false;
+  }
+}
+
+async function sendWeeklyDigestReports() {
+  try {
+    const { rows: users } = await pool.query(
+      `SELECT id, full_name, email FROM users WHERE weekly_digest_opt_in = true`
+    );
+    if (users.length === 0) { console.log('[DIGEST] No opted-in users'); return; }
+    console.log(`[DIGEST] Sending weekly digests to ${users.length} users...`);
+    for (const user of users) {
+      try {
+        await sendWeeklyDigestToUser(user.id, user.email, user.full_name);
+      } catch (e) {
+        console.error(`[DIGEST] Error for user ${user.id}:`, e.message);
+      }
+    }
+    console.log('[DIGEST] Weekly digest round finished');
+  } catch (e) {
+    console.error('[DIGEST] Error:', e.message);
+  }
+}
+
+// ── 2. DAILY MARKET BRIEF ──
+
+async function sendDailyBriefToUser(userId, email, fullName) {
+  try {
+    const [moversRes, editorial] = await Promise.all([
+      axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({})),
+      generateDailyBriefContent().catch(() => ({})),
+    ]);
+    const dateStr = new Date().toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    const indices = editorial?.indices?.length ? editorial.indices : [
+      { label: 'NSE 20', value: '--', change: '--', signal: '--' },
+      { label: 'NASI', value: '--', change: '--', signal: '--' },
+      { label: 'NGX ASI', value: '--', change: '--', signal: '--' },
+      { label: 'S&P 500', value: '--', change: '--', signal: '--' },
+      { label: 'USD/KES', value: '--', change: '--', signal: '--' },
+    ];
+
+    const combinedMovers = moversRes?.combined?.gainers || moversRes?.combined || [];
+    const yesterdayTopMovers = editorial?.yesterdayTopMovers?.length ? editorial.yesterdayTopMovers : (Array.isArray(combinedMovers) ? combinedMovers.slice(0, 6).map(m => ({
+      symbol: m.symbol || '--',
+      company: m.company_name || '',
+      change: m.changePercent ? (m.isPositive ? '+' : '') + m.changePercent.toFixed(2) + '%' : '--',
+      volume: m.volume?.toLocaleString() || '--',
+    })) : []);
+
+    await sendDailyBriefEmail(email, {
+      userName: fullName || 'Trader',
+      dateStr,
+      indices,
+      yesterdayTopMovers,
+      aiSignal: editorial.aiSignal || null,
+      aiSignalContext: editorial.aiSignalContext || '',
+      globalIndices: editorial?.globalIndices?.length ? editorial.globalIndices : [
+        { label: 'S&P 500', value: '--', change: '--', keyDriver: 'Overnight data pending' },
+        { label: 'Nasdaq 100', value: '--', change: '--', keyDriver: 'Overnight data pending' },
+        { label: 'Dow Jones', value: '--', change: '--', keyDriver: 'Overnight data pending' },
+        { label: 'Russell 2000', value: '--', change: '--', keyDriver: 'Overnight data pending' },
+      ],
+      globalToNseConnection: editorial.globalToNseConnection || 'Global market movements overnight can set the tone for NSE open. Watch for any significant gap-ups or gap-downs in the first 30 minutes of trading.',
+      calendar: editorial.calendar || [],
+      analystTake: editorial.analystTake || '',
+    });
+    console.log(`[BRIEF] Daily brief sent to ${email}`);
+    return true;
+  } catch (e) {
+    console.error(`[BRIEF] Error for ${email}:`, e.message);
+    return false;
+  }
+}
+
+async function sendDailyBriefReports() {
+  try {
+    const { rows: users } = await pool.query(
+      `SELECT id, full_name, email FROM users WHERE daily_brief_opt_in = true`
+    );
+    if (users.length === 0) { console.log('[BRIEF] No opted-in users'); return; }
+    console.log(`[BRIEF] Sending daily briefs to ${users.length} users...`);
+    for (const user of users) {
+      try { await sendDailyBriefToUser(user.id, user.email, user.full_name); }
+      catch (e) { console.error(`[BRIEF] Error for user ${user.id}:`, e.message); }
+    }
+    console.log('[BRIEF] Daily brief round finished');
+  } catch (e) {
+    console.error('[BRIEF] Error:', e.message);
+  }
+}
+
+// ── 3. EARNINGS & CORPORATE ACTIONS ──
+
+async function sendEarningsReportToUser(userId, email, fullName) {
+  try {
+    const dateStr = new Date().toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    const editorial = await generateEarningsContent().catch(() => ({}));
+
+    await sendEarningsReportEmail(email, {
+      userName: fullName || 'Trader',
+      dateStr,
+      earningsCalendar: editorial.earningsCalendar || [],
+      earningsResults: editorial.earningsResults || [],
+      corporateActions: editorial.corporateActions || [],
+      globalEarnings: editorial.globalEarnings || [],
+    });
+    console.log(`[EARNINGS] Earnings report sent to ${email}`);
+    return true;
+  } catch (e) {
+    console.error(`[EARNINGS] Error for ${email}:`, e.message);
+    return false;
+  }
+}
+
+async function sendEarningsReportReports() {
+  try {
+    const { rows: users } = await pool.query(
+      `SELECT id, full_name, email FROM users WHERE earnings_report_opt_in = true`
+    );
+    if (users.length === 0) { console.log('[EARNINGS] No opted-in users'); return; }
+    console.log(`[EARNINGS] Sending earnings reports to ${users.length} users...`);
+    for (const user of users) {
+      try { await sendEarningsReportToUser(user.id, user.email, user.full_name); }
+      catch (e) { console.error(`[EARNINGS] Error for user ${user.id}:`, e.message); }
+    }
+    console.log('[EARNINGS] Earnings report round finished');
+  } catch (e) {
+    console.error('[EARNINGS] Error:', e.message);
+  }
+}
+
 // ── Error handling infrastructure ──────────────────────────────
 
 const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -9646,5 +10059,38 @@ initDatabase().then(() => {
       } catch (err) { console.error('[SUBSCRIPTION CRON] Error:', err.message); }
     });
     console.log('[SUBSCRIPTION CRON] Expiry check scheduled every hour');
+
+    // Schedule email sequence processing every 6 hours
+    cron.schedule('0 */6 * * *', async () => {
+      console.log('[EMAIL SEQ CRON] Processing pending onboarding emails...');
+      try {
+        const sent = await emailSequenceService.processPendingEmails();
+        console.log(`[EMAIL SEQ CRON] Sent ${sent} onboarding email(s)`);
+      } catch (err) {
+        console.error('[EMAIL SEQ CRON] Error:', err.message);
+      }
+    });
+    console.log('[EMAIL SEQ CRON] Onboarding email processing scheduled every 6 hours');
+
+    // Schedule weekly market digest every Sunday at 8 AM EAT (05:00 UTC)
+    cron.schedule('0 5 * * 0', () => {
+      console.log('[DIGEST CRON] Running weekly market digest...');
+      sendWeeklyDigestReports();
+    });
+    console.log('[DIGEST CRON] Weekly market digest scheduled for Sunday at 8 AM EAT');
+
+    // Schedule daily market brief every weekday at 7 AM EAT (04:00 UTC)
+    cron.schedule('0 4 * * 1-5', () => {
+      console.log('[BRIEF CRON] Running daily market brief...');
+      sendDailyBriefReports();
+    });
+    console.log('[BRIEF CRON] Daily market brief scheduled Mon-Fri at 7 AM EAT');
+
+    // Schedule earnings report every Friday at 10 AM EAT (07:00 UTC)
+    cron.schedule('0 7 * * 5', () => {
+      console.log('[EARNINGS CRON] Running earnings report...');
+      sendEarningsReportReports();
+    });
+    console.log('[EARNINGS CRON] Earnings report scheduled Friday at 10 AM EAT');
   });
 });

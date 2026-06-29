@@ -74,6 +74,9 @@ export function SettingsPage() {
   });
   
   const [saving, setSaving] = useState(false);
+  const [weeklyDigestOptedIn, setWeeklyDigestOptedIn] = useState(true);
+  const [dailyBriefOptedIn, setDailyBriefOptedIn] = useState(true);
+  const [earningsReportOptedIn, setEarningsReportOptedIn] = useState(true);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [sendingReport, setSendingReport] = useState<string | null>(null);
@@ -106,6 +109,22 @@ export function SettingsPage() {
       }
     };
     fetchProfileData();
+
+    // Load email preferences
+    if (user?.id) {
+      fetch(`${API_BASE_URL}/user/weekly-digest-preference?userId=${user.id}`)
+        .then(r => r.json())
+        .then(d => { if (d.optedIn !== undefined) setWeeklyDigestOptedIn(d.optedIn); })
+        .catch(() => {});
+      fetch(`${API_BASE_URL}/user/daily-brief-preference?userId=${user.id}`)
+        .then(r => r.json())
+        .then(d => { if (d.optedIn !== undefined) setDailyBriefOptedIn(d.optedIn); })
+        .catch(() => {});
+      fetch(`${API_BASE_URL}/user/earnings-report-preference?userId=${user.id}`)
+        .then(r => r.json())
+        .then(d => { if (d.optedIn !== undefined) setEarningsReportOptedIn(d.optedIn); })
+        .catch(() => {});
+    }
   }, [user?.id]);
 
   const handleSaveProfile = async () => {
@@ -239,6 +258,12 @@ export function SettingsPage() {
         ? `${API_BASE_URL}/user/send-test-portfolio`
         : reportType === 'paper'
         ? `${API_BASE_URL}/user/send-test-paper-portfolio`
+        : reportType === 'digest'
+        ? `${API_BASE_URL}/user/send-test-digest`
+        : reportType === 'brief'
+        ? `${API_BASE_URL}/user/send-test-brief`
+        : reportType === 'earnings'
+        ? `${API_BASE_URL}/user/send-test-earnings`
         : `${API_BASE_URL}/user/send-test-hot-news`;
       
       const body = {
@@ -264,6 +289,54 @@ export function SettingsPage() {
       toast.error(err.message || "Failed to send report");
     } finally {
       setSendingReport(null);
+    }
+  };
+
+  const handleWeeklyDigestToggle = async (checked: boolean) => {
+    setWeeklyDigestOptedIn(checked);
+    try {
+      const res = await fetch(`${API_BASE_URL}/user/weekly-digest-preference`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user?.id, optedIn: checked }),
+      });
+      if (!res.ok) throw new Error("Failed to update preference");
+      toast.success(checked ? "Weekly digest subscribed" : "Weekly digest unsubscribed");
+    } catch {
+      setWeeklyDigestOptedIn(!checked);
+      toast.error("Failed to update preference");
+    }
+  };
+
+  const handleDailyBriefToggle = async (checked: boolean) => {
+    setDailyBriefOptedIn(checked);
+    try {
+      const res = await fetch(`${API_BASE_URL}/user/daily-brief-preference`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user?.id, optedIn: checked }),
+      });
+      if (!res.ok) throw new Error("Failed to update preference");
+      toast.success(checked ? "Daily brief subscribed" : "Daily brief unsubscribed");
+    } catch {
+      setDailyBriefOptedIn(!checked);
+      toast.error("Failed to update preference");
+    }
+  };
+
+  const handleEarningsReportToggle = async (checked: boolean) => {
+    setEarningsReportOptedIn(checked);
+    try {
+      const res = await fetch(`${API_BASE_URL}/user/earnings-report-preference`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user?.id, optedIn: checked }),
+      });
+      if (!res.ok) throw new Error("Failed to update preference");
+      toast.success(checked ? "Earnings report subscribed" : "Earnings report unsubscribed");
+    } catch {
+      setEarningsReportOptedIn(!checked);
+      toast.error("Failed to update preference");
     }
   };
 
@@ -571,6 +644,105 @@ export function SettingsPage() {
                       "Send Now"
                     )}
                   </Button>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 md:col-span-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Globe className="w-5 h-5 text-[#0D7490]" />
+                    <div className="text-gray-900 font-medium">Weekly Market Digest</div>
+                  </div>
+                  <div className="text-gray-600 text-sm mb-3">
+                    Weekly roundup of top gainers/losers, market news, and AI signals from African and global markets. Sent every Sunday at 8 AM EAT.
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={weeklyDigestOptedIn}
+                        onCheckedChange={handleWeeklyDigestToggle}
+                      />
+                      <span className="text-sm text-gray-600">{weeklyDigestOptedIn ? 'Subscribed' : 'Unsubscribed'}</span>
+                    </div>
+                    <Button
+                      onClick={() => handleSendReport("digest")}
+                      disabled={sendingReport !== null}
+                      className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
+                    >
+                      {sendingReport === "digest" ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        "Send Now"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 md:col-span-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-5 h-5 text-[#0D7490]" />
+                    <div className="text-gray-900 font-medium">Daily Market Brief</div>
+                  </div>
+                  <div className="text-gray-600 text-sm mb-3">
+                    Morning briefing with index snapshots, yesterday's top movers, AI signal of the day, global overnight data, and analyst take. Sent weekdays at 7 AM EAT.
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={dailyBriefOptedIn}
+                        onCheckedChange={handleDailyBriefToggle}
+                      />
+                      <span className="text-sm text-gray-600">{dailyBriefOptedIn ? 'Subscribed' : 'Unsubscribed'}</span>
+                    </div>
+                    <Button
+                      onClick={() => handleSendReport("brief")}
+                      disabled={sendingReport !== null}
+                      className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
+                    >
+                      {sendingReport === "brief" ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        "Send Now"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 md:col-span-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <BarChart3 className="w-5 h-5 text-[#0D7490]" />
+                    <div className="text-gray-900 font-medium">Earnings & Corporate Actions</div>
+                  </div>
+                  <div className="text-gray-600 text-sm mb-3">
+                    Earnings calendar, AI-powered results summaries, corporate actions alerts, and global earnings with Africa impact. Sent every Friday at 10 AM EAT.
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={earningsReportOptedIn}
+                        onCheckedChange={handleEarningsReportToggle}
+                      />
+                      <span className="text-sm text-gray-600">{earningsReportOptedIn ? 'Subscribed' : 'Unsubscribed'}</span>
+                    </div>
+                    <Button
+                      onClick={() => handleSendReport("earnings")}
+                      disabled={sendingReport !== null}
+                      className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
+                    >
+                      {sendingReport === "earnings" ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        "Send Now"
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

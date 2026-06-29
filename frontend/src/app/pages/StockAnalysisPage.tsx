@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
+
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import {
   Select,
@@ -19,7 +20,7 @@ import { Link, useParams, useNavigate } from "react-router";
 import {
   TrendingUp, TrendingDown, Search, Star, BarChart3, Building2,
   DollarSign, Activity, ArrowUpDown, Sparkles, TrendingUpIcon,
-  ChevronLeft, ChevronRight, Loader2, ExternalLink,
+  ChevronLeft, ChevronRight, Loader2, ExternalLink, X, Zap,
 } from "lucide-react";
 import { globalStocks, kenyanStocks, type StockListItem, type StockMarket } from "../data/stockUniverses";
 import {
@@ -30,6 +31,7 @@ import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import type { Signal as SharedSignal } from "../types/signals";
 import { TradingViewChart } from "../components/TradingViewChart";
 import { FinancialMetrics } from "../components/FinancialMetrics";
+import { useAuth } from "../auth/AuthContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -274,6 +276,59 @@ export function StockAnalysisPage() {
     const id = setInterval(fetchPremarket, 60000);
     return () => { active = false; clearInterval(id); };
   }, [activeSelection.ticker]);
+
+  // ── Stock view tracking for conversion prompts ──
+  const { user } = useAuth();
+  const [showProPrompt, setShowProPrompt] = useState(false);
+  const [promptDismissed, setPromptDismissed] = useState(false);
+  const [promptTicker, setPromptTicker] = useState<string | null>(null);
+
+  useEffect(() => {
+    const ticker = activeSelection.ticker;
+    if (!ticker || !user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await fetch(`${API_URL}/stock-tracking/view`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ ticker }),
+        });
+        if (cancelled) return;
+        const statusRes = await fetch(`${API_URL}/stock-tracking/prompt-status?ticker=${encodeURIComponent(ticker)}`, {
+          credentials: 'include',
+        });
+        const statusData = await statusRes.json();
+        if (statusData.dismissed) {
+          setPromptDismissed(true);
+          return;
+        }
+        const res = await fetch(`${API_URL}/stock-tracking/consecutive-days?ticker=${encodeURIComponent(ticker)}`, {
+          credentials: 'include',
+        });
+        const data = await res.json();
+        if (!cancelled && data.qualifiesForPrompt && !statusData.dismissed) {
+          setShowProPrompt(true);
+          setPromptTicker(data.ticker);
+        }
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [activeSelection.ticker, user]);
+
+  const dismissPrompt = useCallback(async () => {
+    setShowProPrompt(false);
+    setPromptDismissed(true);
+    try {
+      await fetch(`${API_URL}/stock-tracking/dismiss-prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ticker: promptTicker }),
+      });
+    } catch { /* silent */ }
+  }, [promptTicker]);
 
   // Yahoo pre-market data for the current ticker (from Yahoo Finance directly, never generic)
   const yahooData = (yahooPremarket && activeSelection.ticker ? yahooPremarket[activeSelection.ticker] : null) || null;
@@ -691,6 +746,41 @@ export function StockAnalysisPage() {
 
         {/* Main Content */}
         <div className="xl:col-span-3 space-y-6">
+          {/* Pro upgrade prompt */}
+          {showProPrompt && promptTicker && (
+            <div className="bg-gradient-to-r from-[#0D7490] to-[#0a5f8a] rounded-lg shadow-lg p-4 flex items-start gap-3">
+              <div className="shrink-0 mt-0.5">
+                <Zap className="size-5 text-yellow-300" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">
+                  You've been watching {promptTicker} — Pro users get real-time signals and sentiment alerts on this stock.
+                </p>
+                <div className="flex items-center gap-3 mt-2">
+                  <Link
+                    to="/pricing"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#0D7490] hover:bg-yellow-300 transition-colors"
+                  >
+                    <Zap className="size-3.5" />
+                    See Pro Plans
+                  </Link>
+                  <button
+                    onClick={dismissPrompt}
+                    className="text-xs text-white/70 hover:text-white transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={dismissPrompt}
+                className="shrink-0 text-white/50 hover:text-white transition-colors"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          )}
+
           {/* Stock Header */}
           <Card className="border shadow-sm overflow-hidden">
             <div className="p-6">
