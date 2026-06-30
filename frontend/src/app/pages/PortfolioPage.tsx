@@ -1871,7 +1871,7 @@ export function PortfolioPage() {
               </div>
 
               {/* Key Metrics */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
                   <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Diversification</div>
                   <div className={`text-2xl font-bold ${portfolioAdvice.diversification.score >= 70 ? 'text-emerald-600' : portfolioAdvice.diversification.score >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
@@ -1882,9 +1882,9 @@ export function PortfolioPage() {
                       style={{ width: `${portfolioAdvice.diversification.score}%` }} />
                   </div>
                 </div>
-                <div className="p-3 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
+                <div className="p-3 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center overflow-hidden">
                   <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Risk Level</div>
-                  <div className={`text-lg font-bold ${portfolioAdvice.riskAssessment.startsWith('Low') ? 'text-emerald-600' : portfolioAdvice.riskAssessment.startsWith('Moderate') ? 'text-amber-600' : 'text-red-600'}`}>
+                  <div className={`text-lg font-bold break-words ${portfolioAdvice.riskAssessment.startsWith('Low') ? 'text-emerald-600' : portfolioAdvice.riskAssessment.startsWith('Moderate') ? 'text-amber-600' : 'text-red-600'}`}>
                     {portfolioAdvice.riskAssessment.split(' —')[0]}
                   </div>
                   <div className="mt-1 text-[11px] text-muted-foreground leading-tight">
@@ -2457,7 +2457,7 @@ export function PortfolioPage() {
               </div>
 
               {/* Key Metrics */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-4 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
                   <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Diversification</div>
                   <div className={`text-3xl font-bold ${portfolioAdvice.diversification.score >= 70 ? 'text-emerald-600' : portfolioAdvice.diversification.score >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
@@ -2469,9 +2469,9 @@ export function PortfolioPage() {
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-2">{portfolioAdvice.diversification.message}</div>
                 </div>
-                <div className="p-4 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
+                <div className="p-4 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center overflow-hidden">
                   <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Risk Level</div>
-                  <div className={`text-2xl font-bold ${portfolioAdvice.riskAssessment.startsWith('Low') ? 'text-emerald-600' : portfolioAdvice.riskAssessment.startsWith('Moderate') ? 'text-amber-600' : 'text-red-600'}`}>
+                  <div className={`text-2xl font-bold break-words ${portfolioAdvice.riskAssessment.startsWith('Low') ? 'text-emerald-600' : portfolioAdvice.riskAssessment.startsWith('Moderate') ? 'text-amber-600' : 'text-red-600'}`}>
                     {portfolioAdvice.riskAssessment.split(' —')[0]}
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-2 leading-tight">
