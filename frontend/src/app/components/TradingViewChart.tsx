@@ -15,46 +15,58 @@ export function TradingViewChart({ symbol, market, theme = "light" }: TradingVie
     : symbol.includes(":") ? symbol : symbol;
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    function createWidget() {
+      if (typeof TradingView === "undefined" || widgetRef.current) return;
+      widgetRef.current = new TradingView.widget({
+        container_id: container.id,
+        symbol: tvSymbol,
+        interval: "D",
+        timezone: "exchange",
+        theme,
+        style: "1",
+        locale: "en",
+        toolbar_bg: theme === "dark" ? "#1e222d" : "#f1f3f6",
+        enable_publishing: false,
+        hide_side_toolbar: false,
+        allow_symbol_change: false,
+        save_image: false,
+        height: 480,
+        width: "100%",
+        studies: [
+          "RSI@tv-basicstudies",
+          "MACD@tv-basicstudies",
+          "BB@tv-basicstudies",
+          "Volume@tv-basicstudies",
+        ],
+        disabled_features: [
+          "use_localstorage_for_settings",
+          "header_symbol_search",
+        ],
+        overrides: {
+          "paneProperties.background": theme === "dark" ? "#1e222d" : "#ffffff",
+          "paneProperties.vertGridProperties.color": theme === "dark" ? "#2a2e39" : "#e5e7eb",
+          "paneProperties.horzGridProperties.color": theme === "dark" ? "#2a2e39" : "#e5e7eb",
+        },
+      });
+    }
+
+    if (typeof TradingView !== "undefined") {
+      createWidget();
+      return () => {
+        if (widgetRef.current) {
+          try { widgetRef.current.remove(); } catch {}
+          widgetRef.current = null;
+        }
+      };
+    }
 
     const script = document.createElement("script");
     script.src = "https://s3.tradingview.com/tv.js";
     script.async = true;
-    script.onload = () => {
-      if (typeof TradingView !== "undefined" && containerRef.current) {
-        widgetRef.current = new TradingView.widget({
-          container_id: containerRef.current.id,
-          symbol: tvSymbol,
-          interval: "D",
-          timezone: "exchange",
-          theme,
-          style: "1",
-          locale: "en",
-          toolbar_bg: theme === "dark" ? "#1e222d" : "#f1f3f6",
-          enable_publishing: false,
-          hide_side_toolbar: false,
-          allow_symbol_change: false,
-          save_image: false,
-          height: 480,
-          width: "100%",
-          studies: [
-            "RSI@tv-basicstudies",
-            "MACD@tv-basicstudies",
-            "BB@tv-basicstudies",
-            "Volume@tv-basicstudies",
-          ],
-          disabled_features: [
-            "use_localstorage_for_settings",
-            "header_symbol_search",
-          ],
-          overrides: {
-            "paneProperties.background": theme === "dark" ? "#1e222d" : "#ffffff",
-            "paneProperties.vertGridProperties.color": theme === "dark" ? "#2a2e39" : "#e5e7eb",
-            "paneProperties.horzGridProperties.color": theme === "dark" ? "#2a2e39" : "#e5e7eb",
-          },
-        });
-      }
-    };
+    script.onload = createWidget;
     document.head.appendChild(script);
 
     return () => {
