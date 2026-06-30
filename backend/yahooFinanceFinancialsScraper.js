@@ -1,4 +1,5 @@
 const axios = require('axios');
+const yahooService = require('./yahooService');
 const yahooFinanceCache = new Map();
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
@@ -68,196 +69,16 @@ function computeTTM(items, valueKeys) {
   return results.reverse(); // most recent first
 }
 
-// Normalize Yahoo v10 API response: flatten { raw, fmt } → scalar values
-function normalizeYahooResponse(data) {
-  if (!data || typeof data !== 'object') return data;
-  if (data.raw !== undefined) return data.raw;
-  const result = Array.isArray(data) ? [] : {};
-  for (const [key, val] of Object.entries(data)) {
-    result[key] = normalizeYahooResponse(val);
-  }
-  return result;
-}
 
-// Helper: call Yahoo Finance API directly through a proxy or CORS relay
-async function fetchYahooViaProxy(symbol) {
-  const proxyService = require('./proxyService');
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}`;
 
-  // Try direct proxy agents first
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const proxy = proxyService.getRandomProxy();
-    if (!proxy) break;
-    const agent = proxyService.createProxyAgent(proxy);
-    if (!agent) continue;
-    try {
-      const resp = await axios.get(url, {
-        params: { modules: 'assetProfile,financialData,defaultKeyStatistics,summaryProfile' },
-        httpsAgent: agent,
-        timeout: 8000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-          'Accept': 'application/json',
-        },
-      });
-      const result = resp.data?.quoteSummary?.result?.[0];
-      if (result?.financialData?.marketCap?.raw) return normalizeYahooResponse(result);
-    } catch {}
-  }
-
-  // Fallback: try free CORS proxy relays (no agent needed)
-  try {
-    const params = new URLSearchParams({ modules: 'assetProfile,financialData,defaultKeyStatistics,summaryProfile' });
-    const data = await proxyService.fetchViaCorsProxy(url + '?' + params.toString());
-    const result = data?.quoteSummary?.result?.[0];
-    if (result?.financialData?.marketCap?.raw) return normalizeYahooResponse(result);
-  } catch {}
-
-  return null;
-}
-
-// Fetch current price and basic trade data from Yahoo Finance chart API via proxy or CORS relay
 async function fetchPriceViaProxy(symbol) {
-  const proxyService = require('./proxyService');
-
-  // Try direct proxy agents first
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const proxy = proxyService.getRandomProxy();
-    if (!proxy) break;
-    const agent = proxyService.createProxyAgent(proxy);
-    if (!agent) continue;
-    try {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
-      const resp = await axios.get(url, {
-        params: { interval: '1d', range: '1d', includePreMarket: 'true' },
-        httpsAgent: agent,
-        timeout: 8000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'application/json',
-        },
-      });
-      const result = resp.data?.chart?.result?.[0];
-      const meta = result?.meta;
-      if (meta?.regularMarketPrice) {
-        return {
-          price: meta.regularMarketPrice,
-          previousClose: meta.chartPreviousClose || meta.regularMarketPrice,
-          currency: meta.currency || 'USD',
-          exchange: meta.exchangeName || '',
-          marketCap: meta.marketCap || 0,
-          symbol: symbol.toUpperCase(),
-          companyName: meta.shortName || meta.longName || '',
-          regularMarketPrice: meta.regularMarketPrice,
-          regularMarketPreviousClose: meta.chartPreviousClose || meta.regularMarketPrice,
-          preMarketPrice: meta.preMarketPrice ?? null,
-          preMarketChange: meta.preMarketChange ?? null,
-          preMarketChangePercent: meta.preMarketChangePercent ?? null,
-          preMarketTime: meta.preMarketTime ?? null,
-          postMarketPrice: meta.postMarketPrice ?? null,
-          postMarketChange: meta.postMarketChange ?? null,
-          postMarketChangePercent: meta.postMarketChangePercent ?? null,
-          postMarketTime: meta.postMarketTime ?? null,
-          currentTradingPeriod: result?.meta?.currentTradingPeriod || null,
-          marketState: meta.marketState || 'REGULAR',
-        };
-      }
-    } catch {}
-  }
-
-  // Fallback: try free CORS proxy relays (no agent needed)
-  try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
-    const params = new URLSearchParams({ interval: '1d', range: '1d', includePreMarket: 'true' });
-    const data = await proxyService.fetchViaCorsProxy(url + '?' + params.toString());
-    const result = data?.chart?.result?.[0];
-    const meta = result?.meta;
-    if (meta?.regularMarketPrice) {
-      return {
-        price: meta.regularMarketPrice,
-        previousClose: meta.chartPreviousClose || meta.regularMarketPrice,
-        currency: meta.currency || 'USD',
-        exchange: meta.exchangeName || '',
-        marketCap: meta.marketCap || 0,
-        symbol: symbol.toUpperCase(),
-        companyName: meta.shortName || meta.longName || '',
-        regularMarketPrice: meta.regularMarketPrice,
-        regularMarketPreviousClose: meta.chartPreviousClose || meta.regularMarketPrice,
-        preMarketPrice: meta.preMarketPrice ?? null,
-        preMarketChange: meta.preMarketChange ?? null,
-        preMarketChangePercent: meta.preMarketChangePercent ?? null,
-        preMarketTime: meta.preMarketTime ?? null,
-        postMarketPrice: meta.postMarketPrice ?? null,
-        postMarketChange: meta.postMarketChange ?? null,
-        postMarketChangePercent: meta.postMarketChangePercent ?? null,
-        postMarketTime: meta.postMarketTime ?? null,
-        currentTradingPeriod: result?.meta?.currentTradingPeriod || null,
-        marketState: meta.marketState || 'REGULAR',
-      };
-    }
-  } catch {}
-
-  // Last resort: direct request to Yahoo chart API (may work from some cloud regions)
-  try {
-    const resp = await axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`, {
-      params: { interval: '1d', range: '1d', includePreMarket: 'true' },
-      timeout: 5000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-      },
-    });
-    const result = resp.data?.chart?.result?.[0];
-    const meta = result?.meta;
-    if (meta?.regularMarketPrice) {
-      return {
-        price: meta.regularMarketPrice,
-        previousClose: meta.chartPreviousClose || meta.regularMarketPrice,
-        currency: meta.currency || 'USD',
-        exchange: meta.exchangeName || '',
-        marketCap: meta.marketCap || 0,
-        symbol: symbol.toUpperCase(),
-        companyName: meta.shortName || meta.longName || '',
-        regularMarketPrice: meta.regularMarketPrice,
-        regularMarketPreviousClose: meta.chartPreviousClose || meta.regularMarketPrice,
-        preMarketPrice: meta.preMarketPrice ?? null,
-        preMarketChange: meta.preMarketChange ?? null,
-        preMarketChangePercent: meta.preMarketChangePercent ?? null,
-        preMarketTime: meta.preMarketTime ?? null,
-        postMarketPrice: meta.postMarketPrice ?? null,
-        postMarketChange: meta.postMarketChange ?? null,
-        postMarketChangePercent: meta.postMarketChangePercent ?? null,
-        postMarketTime: meta.postMarketTime ?? null,
-        currentTradingPeriod: result?.meta?.currentTradingPeriod || null,
-        marketState: meta.marketState || 'REGULAR',
-      };
-    }
-  } catch {}
-
-  return null;
+  return yahooService.fetchPriceViaProxy(symbol);
 }
 
 async function fetchPreMarketBatch(symbols) {
-  if (!symbols || symbols.length === 0) return {};
-  const results = {};
-  const batches = [];
-  for (let i = 0; i < symbols.length; i += 10) {
-    batches.push(symbols.slice(i, i + 10));
-  }
-  for (const batch of batches) {
-    const promises = batch.map(async (sym) => {
-      try {
-        const data = await fetchPriceViaProxy(sym);
-        if (data) results[sym.toUpperCase()] = data;
-      } catch {}
-    });
-    await Promise.all(promises);
-    if (batches.length > 1) await new Promise(r => setTimeout(r, 200));
-  }
-  return results;
+  return yahooService.fetchPreMarketBatch(symbols);
 }
 
-// Fetch quote-like summary from multiple sources: Twelve Data → Yahoo via proxy → RapidAPI
 async function fetchQuoteSummary(symbol, modules) {
   const cacheKey = `yh_quoteSummary_${symbol}_${modules.join(',')}`;
   const cached = cacheGet(cacheKey);
@@ -273,35 +94,10 @@ async function fetchQuoteSummary(symbol, modules) {
     }
   } catch {}
 
-  // 2. Try Yahoo Finance API directly through a free proxy pool
+  // 2. Try consolidated Yahoo service (proxy pool → CORS relay → yahoo-finance2 → RapidAPI)
   try {
-    const yahooData = await fetchYahooViaProxy(symbol);
+    const yahooData = await yahooService.fetchQuoteSummary(symbol, modules);
     if (yahooData) return cacheSet(cacheKey, yahooData);
-  } catch {}
-
-  // 3. Fallback: RapidAPI Yahoo proxy (may be exhausted)
-  const key = process.env.RAPIDAPI_KEY;
-  let host = (process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com').trim();
-  host = host.replace(/^https?:\/\//, '');
-  if (key && host) {
-    try {
-      const resp = await axios.get(`https://${host}/api/v1/markets/stock/modules`, {
-        params: { symbol, module: 'financialData,defaultKeyStatistics,summaryProfile,assetProfile' },
-        headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
-        timeout: 10000,
-      });
-      if (resp.data?.financialData?.marketCap) {
-        return cacheSet(cacheKey, resp.data);
-      }
-    } catch {}
-  }
-
-  // 4. Last resort: try yahoo-finance2 directly (may be blocked, but worth trying)
-  try {
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-    const qs = await yf.quoteSummary(symbol, { modules });
-    if (qs?.financialData?.marketCap) return cacheSet(cacheKey, qs);
   } catch {}
 
   return null;

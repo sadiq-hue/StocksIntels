@@ -1,5 +1,5 @@
 const { KENYAN_STOCKS } = require('./newsService');
-const axios = require('axios');
+const yahooService = require('./yahooService');
 
 // Background NSE price cache from mystocks.co.ke
 const mystocks = require('./mystocksScraper');
@@ -7,83 +7,6 @@ setTimeout(() => mystocks.startAutoRefresh(), 1000);
 
 const quoteCache = new Map();
 const MAX_QUOTE_AGE_MS = 5 * 60 * 1000;
-const YAHOO_TIMEOUT_MS = 8000;
-
-const NSE_YAHOO_SUFFIX = '.NR';
-const SYMBOL_OVERRIDES = { KLG: 'KQ.NR' };
-
-function toYahooSymbol(symbol) {
-  if (symbol.startsWith('NSE:')) {
-    const clean = symbol.replace('NSE:', '').toUpperCase();
-    return SYMBOL_OVERRIDES[clean] || `${clean}${NSE_YAHOO_SUFFIX}`;
-  }
-  return symbol.toUpperCase();
-}
-
-async function fetchYahooQuoteV8(yahooSymbol) {
-  // Skip v8 chart API for NSE stocks (.NR suffix) - it returns 404 for these
-  if (yahooSymbol.endsWith('.NR')) return null;
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=5d`;
-  const resp = await Promise.race([
-    axios.get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: YAHOO_TIMEOUT_MS,
-    }).catch(() => null),
-    new Promise(r => setTimeout(r, YAHOO_TIMEOUT_MS + 1000)),
-  ]);
-  if (!resp?.data?.chart?.result?.[0]) return null;
-  const meta = resp.data.chart.result[0].meta || {};
-  if (!meta.regularMarketPrice && !meta.previousClose && !meta.chartPreviousClose) return null;
-  const price = Number(meta.regularMarketPrice ?? meta.previousClose ?? meta.chartPreviousClose);
-  const prevClose = Number(meta.previousClose ?? meta.chartPreviousClose ?? price);
-  const change = price - prevClose;
-  const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
-  return {
-    price,
-    change,
-    changePercent,
-    volume: meta.regularMarketVolume ?? 0,
-    dayHigh: Number(meta.regularMarketDayHigh ?? meta.regularMarketPrice ?? price),
-    dayLow: Number(meta.regularMarketDayLow ?? meta.regularMarketPrice ?? price),
-    previousClose: prevClose,
-    marketCap: meta.marketCap ?? 0,
-    company_name: meta.shortName || meta.longName || yahooSymbol,
-    timestamp: Math.floor(Date.now() / 1000),
-    lastUpdated: new Date().toISOString(),
-    provider: 'yahoo-v8',
-  };
-}
-
-async function fetchYahooQuote(yahooSymbol) {
-  let quote = await fetchYahooQuoteV8(yahooSymbol);
-  if (quote) return quote;
-  // Skip yahoo-finance2 for NSE (.NR) - mystocks is more reliable
-  if (yahooSymbol.endsWith('.NR')) return null;
-  try {
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-    const q = await Promise.race([
-      yf.quote(yahooSymbol).catch(() => {}),
-      new Promise(r => setTimeout(r, YAHOO_TIMEOUT_MS)),
-    ]);
-    if (!q?.regularMarketPrice && !q?.regularMarketPreviousClose) return null;
-    const price = Number(q.regularMarketPrice ?? q.regularMarketPreviousClose);
-    return {
-      price,
-      change: Number(q.regularMarketChange ?? 0),
-      changePercent: Number(q.regularMarketChangePercent ?? 0),
-      volume: q.regularMarketVolume ?? 0,
-      dayHigh: Number(q.regularMarketDayHigh ?? price),
-      dayLow: Number(q.regularMarketDayLow ?? price),
-      previousClose: Number(q.regularMarketPreviousClose ?? price),
-      marketCap: q.marketCap ?? 0,
-      company_name: q.shortName || q.longName || yahooSymbol,
-      timestamp: Math.floor(Date.now() / 1000),
-      lastUpdated: new Date().toISOString(),
-      provider: 'yahoo',
-    };
-  } catch { return null; }
-}
 
 /**
  * Shared name mapper for consistent display
@@ -431,9 +354,7 @@ async function getStockQuote(symbol) {
     return cached;
   }
 
-  let quote;
-  const yahooSymbol = toYahooSymbol(symbol);
-  quote = await fetchYahooQuote(yahooSymbol);
+  let quote = await yahooService.fetchQuote(symbol);
 
   if (!quote && symbol.startsWith('NSE:')) {
     const mystocks = require('./mystocksScraper');
@@ -447,7 +368,7 @@ async function getStockQuote(symbol) {
         dayHigh: msq.dayHigh || msq.price,
         dayLow: msq.dayLow || msq.price,
         previousClose: msq.previousClose || msq.price,
-        company_name: msq.name || msq.ticker || yahooSymbol,
+        company_name: msq.name || msq.ticker || symbol,
         timestamp: Math.floor(Date.now() / 1000),
         lastUpdated: new Date().toISOString(),
         provider: 'mystocks',
@@ -471,9 +392,7 @@ const CONCURRENCY = 25;
 const BATCH_TIMEOUT_MS = 25000;
 
 async function fetchQuoteForSymbol(s) {
-  let quote;
-  const yahooSymbol = toYahooSymbol(s);
-  quote = await fetchYahooQuote(yahooSymbol);
+  let quote = await yahooService.fetchQuote(s);
 
   if (!quote && s.startsWith('NSE:')) {
     const mystocks = require('./mystocksScraper');
@@ -487,7 +406,7 @@ async function fetchQuoteForSymbol(s) {
         dayHigh: msq.dayHigh || msq.price,
         dayLow: msq.dayLow || msq.price,
         previousClose: msq.previousClose || msq.price,
-        company_name: msq.name || msq.ticker || yahooSymbol,
+        company_name: msq.name || msq.ticker || s,
         timestamp: Math.floor(Date.now() / 1000),
         lastUpdated: new Date().toISOString(),
         provider: 'mystocks',
