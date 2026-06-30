@@ -6,8 +6,6 @@ interface TradingViewChartProps {
   theme?: "light" | "dark";
 }
 
-const TV_SCRIPT_URL = "https://s3.tradingview.com/tv.js";
-
 function createWidget(containerId: string, symbol: string, theme: string) {
   if (typeof TradingView === "undefined") return null;
   return new TradingView.widget({
@@ -53,34 +51,32 @@ export function TradingViewChart({ symbol, market, theme = "light" }: TradingVie
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const id = containerRef.current.id;
+
+    function init() {
+      if (containerRef.current && typeof TradingView !== "undefined") {
+        widgetRef.current = createWidget(containerRef.current.id, tvSymbol, theme);
+      }
+    }
 
     if (typeof TradingView !== "undefined") {
-      widgetRef.current = createWidget(id, tvSymbol, theme);
-      return;
-    }
-
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${TV_SCRIPT_URL}"]`);
-    if (existing) {
-      existing.addEventListener("load", () => {
-        if (containerRef.current) {
-          widgetRef.current = createWidget(id, tvSymbol, theme);
+      init();
+      return () => {
+        if (widgetRef.current) {
+          try { widgetRef.current.remove(); } catch {}
+          widgetRef.current = null;
         }
-      }, { once: true });
-      return;
+      };
     }
 
-    const script = document.createElement("script");
-    script.src = TV_SCRIPT_URL;
-    script.async = true;
-    script.onload = () => {
-      if (containerRef.current) {
-        widgetRef.current = createWidget(id, tvSymbol, theme);
+    const check = setInterval(() => {
+      if (typeof TradingView !== "undefined") {
+        clearInterval(check);
+        init();
       }
-    };
-    document.head.appendChild(script);
+    }, 300);
 
     return () => {
+      clearInterval(check);
       if (widgetRef.current) {
         try { widgetRef.current.remove(); } catch {}
         widgetRef.current = null;

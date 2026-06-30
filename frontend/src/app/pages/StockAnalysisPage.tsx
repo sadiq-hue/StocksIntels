@@ -720,28 +720,6 @@ export function StockAnalysisPage() {
             </div>
           </Card>
 
-          {/* Holders */}
-          {holders.length > 0 && (
-            <Card className="border shadow-sm p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Building2 className="size-4 text-muted-foreground" />
-                <h3 className="font-semibold text-sm text-foreground">Top Holders</h3>
-              </div>
-              <div className="space-y-2">
-                {holders.map((h, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-foreground truncate">{h.holder}</p>
-                      <p className="text-muted-foreground">
-                        {h.pctHeld ? `${h.pctHeld.toFixed(1)}%` : `${(h.shares || 0).toLocaleString()} shares`}
-                      </p>
-                    </div>
-                    <span className="text-muted-foreground ml-2">{h.dateOfReport?.slice(0, 10) || ''}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
         </div>
 
         {/* Main Content */}
@@ -1348,6 +1326,31 @@ export function StockAnalysisPage() {
             {/* Financial Health */}
             <FinancialMetrics symbol={activeSelection.ticker} sector={activeSelection.sector} />
           </div>
+
+          {/* Holders */}
+          {holders.length > 0 && (
+            <Card className="border shadow-sm">
+              <div className="p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Building2 className="size-4 text-muted-foreground" />
+                  <h3 className="font-semibold text-sm text-foreground">Top Holders</h3>
+                </div>
+                <div className="space-y-2">
+                  {holders.map((h, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-foreground truncate">{h.holder}</p>
+                        <p className="text-muted-foreground">
+                          {h.pctHeld ? `${h.pctHeld.toFixed(1)}%` : `${(h.shares || 0).toLocaleString()} shares`}
+                        </p>
+                      </div>
+                      <span className="text-muted-foreground ml-2">{h.dateOfReport?.slice(0, 10) || ''}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          )}
         </div>
       </div>
     </div>
