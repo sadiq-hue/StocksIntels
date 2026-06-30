@@ -140,6 +140,25 @@ export function SubscriptionPage() {
         };
 
         await poll();
+      } else if (paymentMethod === "crypto") {
+        const res = await fetch(`${API_URL}/payments/crypto`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: price,
+            currency: "USD",
+            plan: selectedPlan.name,
+            userId: user?.id,
+            durationMonths,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Failed to create crypto checkout");
+        }
+
+        window.location.href = data.checkoutUrl;
       } else {
         const res = await fetch(`${API_URL}/payments/paypal`, {
           method: "POST",

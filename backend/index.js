@@ -7644,9 +7644,9 @@ app.get('/api/payments/status', async (req, res) => {
                     paidAt: new Date(),
                     startDate,
                     endDate,
-                  });
-                }
-              } catch (emailErr) {
+});
+
+
                 console.error('Payment receipt email error:', emailErr.message);
               }
               await awardCommission(tx.rows[0].user_id, tier);
@@ -7908,6 +7908,35 @@ app.post('/api/payments/paypal-webhook', async (req, res) => {
   } catch (error) {
     console.error('PayPal webhook error:', error.message);
     res.json({ received: true });
+  }
+});
+
+// --- Crypto (Triple-A) Checkout ---
+app.post('/api/payments/crypto', async (req, res) => {
+  try {
+    const { amount, currency, plan, userId, durationMonths } = req.body;
+    if (!amount) {
+      return res.status(400).json({ error: 'Amount is required' });
+    }
+    const planName = plan || 'Subscription';
+    const period = durationMonths === 12 ? 'Yearly' : 'Monthly';
+    const externalRef = `CRYPTO-${Date.now()}-${String(Math.random()).slice(2, 8)}`;
+
+    // TODO: Integrate Triple-A API — replace with actual checkout URL
+    // Triple-A docs: https://www.triple-a.io/api/docs
+    const checkoutUrl = `https://checkout.triple-a.io?reference=${externalRef}&amount=${amount}&currency=${currency || 'USD'}&description=StocksIntels ${planName} ${period}`;
+
+    await pool.query(
+      `INSERT INTO payment_transactions (user_id, amount, currency, provider, external_reference, status, plan_name, duration_months)
+       VALUES ($1, $2, $3, 'crypto', $4, 'pending', $5, $6)
+       ON CONFLICT (external_reference) DO NOTHING`,
+      [userId || null, amount, currency || 'USD', externalRef, planName, durationMonths || 1]
+    );
+
+    res.json({ success: true, checkoutUrl, reference: externalRef });
+  } catch (error) {
+    console.error('Crypto checkout error:', error.message);
+    res.status(500).json({ error: 'Failed to create crypto checkout' });
   }
 });
 
