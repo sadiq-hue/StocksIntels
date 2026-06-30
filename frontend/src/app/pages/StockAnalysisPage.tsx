@@ -31,6 +31,7 @@ import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import type { Signal as SharedSignal } from "../types/signals";
 
 import { FinancialMetrics } from "../components/FinancialMetrics";
+import { TradingViewChart } from "../components/TradingViewChart";
 import { useAuth } from "../auth/AuthContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
@@ -908,7 +909,9 @@ export function StockAnalysisPage() {
               </div>
 
               {/* Chart */}
-              {chartLoading && chartHistory.length === 0 ? (
+              {activeSelection.market === "global" ? (
+                <TradingViewChart symbol={activeSelection.ticker} market={activeSelection.market} />
+              ) : chartLoading && chartHistory.length === 0 ? (
                 <div className="flex items-center justify-center h-[340px] text-sm text-muted-foreground">
                   <Loader2 className="size-5 animate-spin mr-2" /> Loading price history...
                 </div>
