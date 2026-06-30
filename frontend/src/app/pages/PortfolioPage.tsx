@@ -3074,7 +3074,7 @@ export function PortfolioPage() {
                             <span className="font-medium text-foreground">{p.ticker}</span>
                             <div className="flex items-center gap-2">
                               <span className="text-muted-foreground">{p.market === 'NSE' ? 'KES ' : '$'}{p.pnl.toFixed(2)}</span>
-                              <span className="text-green-600 font-medium">+{p.pnlPercent}%</span>
+                              <span className="text-green-600 font-medium">{p.pnlPercent >= 0 ? '+' : ''}{p.pnlPercent}%</span>
                             </div>
                           </div>
                         ))}

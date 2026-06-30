@@ -3610,11 +3610,10 @@ app.get('/api/portfolio/statement', requireOwnership, async (req, res) => {
       .map(([sector, value]) => ({ sector, value, pct: totalValue > 0 ? Math.round((value / totalValue) * 100) : 0 }))
       .sort((a, b) => b.value - a.value);
 
-    // Best/worst performers (skip broker positions)
+    // Best/worst performers (skip broker positions, non-zero P&L)
     const sortedByPnl = [...holdings].filter(h => !h._brokerName).sort((a, b) => b.pnlPercent - a.pnlPercent);
-    const performers = sortedByPnl.filter(h => h.pnlPercent !== 0);
-    const bestPerformers = performers.slice(0, 5);
-    const worstPerformers = performers.slice(-5).reverse();
+    const bestPerformers = sortedByPnl.filter(h => h.pnlPercent > 0).slice(0, 5);
+    const worstPerformers = sortedByPnl.filter(h => h.pnlPercent < 0).slice(-5).reverse();
 
     // Value history
     const valueHistory = (historyRes.rows || []).map(r => {
@@ -9311,11 +9310,10 @@ async function sendDailyPortfolioReports() {
         const sectorMap = {};
         for (const h of holdings) { const vk = h.market === 'NSE' ? h.value : h.value * fxRate; sectorMap[h.sector] = (sectorMap[h.sector] || 0) + vk; }
         const sa = Object.entries(sectorMap).map(([s, v]) => ({ sector: s, value: v, pct: tv > 0 ? Math.round((v / tv) * 100) : 0 })).sort((a, b) => b.value - a.value);
-        const sp = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent).filter(h => h.pnlPercent !== 0);
         await sendPortfolioReportEmail(user.email, {
           userName: user.full_name, generatedAt: new Date().toISOString(),
           summary: { totalValue: Math.round(tv * 100) / 100, totalCost: Math.round(tc * 100) / 100, totalPnL: Math.round((tv - tc) * 100) / 100, pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0 },
-          holdings, sectorAllocation: sa, bestPerformers: sp.slice(0, 5), worstPerformers: sp.slice(-5).reverse(), fxRate,
+          holdings, sectorAllocation: sa, bestPerformers: sp.filter(h => h.pnlPercent > 0).slice(0, 5), worstPerformers: sp.filter(h => h.pnlPercent < 0).slice(-5).reverse(), fxRate,
         });
         console.log(`[DAILY REPORT] Report sent to ${user.email}`);
       } catch (e) { console.error(`[DAILY REPORT] Error for user ${user.id}:`, e.message); }
@@ -9376,7 +9374,7 @@ async function sendDailyPaperTradingReports() {
             totalPnL: Math.round((tv - tc) * 100) / 100,
             pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0,
           },
-          holdings, sectorAllocation: sa, bestPerformers: sp.slice(0, 5), worstPerformers: sp.slice(-5).reverse(), fxRate,
+          holdings, sectorAllocation: sa, bestPerformers: sp.filter(h => h.pnlPercent > 0).slice(0, 5), worstPerformers: sp.filter(h => h.pnlPercent < 0).slice(-5).reverse(), fxRate,
         });
         console.log(`[PAPER DAILY REPORT] Report sent to ${user.email}`);
       } catch (e) { console.error(`[PAPER DAILY REPORT] Error for user ${user.id}:`, e.message); }
@@ -9419,11 +9417,11 @@ async function sendPortfolioReportToUser(userId, email, fullName) {
         const sectorMap = {};
         for (const h of holdings) { const vk = h.market === 'NSE' ? h.value : h.value * fxRate; sectorMap[h.sector] = (sectorMap[h.sector] || 0) + vk; }
         const sa = Object.entries(sectorMap).map(([s, v]) => ({ sector: s, value: v, pct: tv > 0 ? Math.round((v / tv) * 100) : 0 })).sort((a, b) => b.value - a.value);
-        const sp = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent).filter(h => h.pnlPercent !== 0);
+        const sortedPnl = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent);
         await sendPortfolioReportEmail(email, {
           userName: fullName, generatedAt: new Date().toISOString(),
           summary: { totalValue: Math.round(tv * 100) / 100, totalCost: Math.round(tc * 100) / 100, totalPnL: Math.round((tv - tc) * 100) / 100, pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0 },
-          holdings, sectorAllocation: sa, bestPerformers: sp.slice(0, 5), worstPerformers: sp.slice(-5).reverse(), fxRate,
+          holdings, sectorAllocation: sa, bestPerformers: sortedPnl.filter(h => h.pnlPercent > 0).slice(0, 5), worstPerformers: sortedPnl.filter(h => h.pnlPercent < 0).slice(-5).reverse(), fxRate,
         });
     console.log(`[SINGLE REPORT] Real portfolio report sent to ${email}`);
     return true;
@@ -9480,7 +9478,7 @@ async function sendPaperTradingReportToUser(userId, email, fullName) {
         totalPnL: Math.round((tv - tc) * 100) / 100,
         pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0,
       },
-      holdings, sectorAllocation: sa, bestPerformers: sp.slice(0, 5), worstPerformers: sp.slice(-5).reverse(), fxRate,
+      holdings, sectorAllocation: sa, bestPerformers: sp.filter(h => h.pnlPercent > 0).slice(0, 5), worstPerformers: sp.filter(h => h.pnlPercent < 0).slice(-5).reverse(), fxRate,
     });
     console.log(`[SINGLE REPORT] Paper trading report sent to ${email}`);
     return true;

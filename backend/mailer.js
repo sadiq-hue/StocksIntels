@@ -309,7 +309,7 @@ async function sendPortfolioReportEmail(email, data) {
 
   const bestRows = (bestPerformers || []).slice(0, 5).map(h => `<tr>
     <td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_DARK}">${h.ticker}</td>
-    <td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${GREEN}">+${h.pnlPercent?.toFixed(1) || '0.0'}%</td>
+    <td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${GREEN}">${h.pnlPercent >= 0 ? '+' : ''}${h.pnlPercent?.toFixed(1) || '0.0'}%</td>
   </tr>`).join('');
 
   const worstRows = (worstPerformers || []).slice(0, 5).map(h => `<tr>
