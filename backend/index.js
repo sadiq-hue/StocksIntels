@@ -3482,6 +3482,7 @@ app.get('/api/portfolio/statement', requireOwnership, async (req, res) => {
     let brokerHoldings = [];
     let brokerEquity = 0;
     let brokerBalance = 0;
+    const brokerPositionTickers = new Set();
     try {
       const brokerConns = await pool.query(
         'SELECT id, account_name, config, api_key FROM broker_connections WHERE user_id = $1 AND connected = true ORDER BY id DESC',
@@ -3513,6 +3514,12 @@ app.get('/api/portfolio/statement', requireOwnership, async (req, res) => {
         for (const s of snapRes.rows) {
           brokerEquity += parseFloat(s.equity) || 0;
           brokerBalance += parseFloat(s.balance) || 0;
+          // Collect tickers from broker positions to avoid double-counting manual holdings
+          const brokerPositions = typeof s.positions === 'string' ? JSON.parse(s.positions) : (s.positions || []);
+          for (const pos of brokerPositions) {
+            const ticker = (pos.symbol || pos.ticker || '').toUpperCase().trim();
+            if (ticker) brokerPositionTickers.add(ticker);
+          }
           // Trade history
           const th = typeof s.trade_history === 'string' ? JSON.parse(s.trade_history) : (s.trade_history || []);
           for (const t of th) {
@@ -3561,6 +3568,8 @@ app.get('/api/portfolio/statement', requireOwnership, async (req, res) => {
 
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
+      // Skip manual holdings that are already tracked inside a linked broker account
+      if (brokerPositionTickers.has(r.ticker.toUpperCase().trim())) continue;
       const { price: livePrice, previousClose } = liveQuotes[i];
       const avgC = parseFloat(r.avg_cost) || 0;
       const shares = parseFloat(r.shares) || 0;
