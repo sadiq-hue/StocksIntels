@@ -19,12 +19,12 @@ const DEFAULTS = {
   },
 
   weights: {
-    fundamental: 0.35,
-    technical: 0.35,
-    financial: 0.10,
-    macro: 0.05,
-    ml_probability: 0.00,
-    confidence: 0.15,
+    fundamental: 0.30,
+    technical: 0.30,
+    financial: 0.08,
+    macro: 0.04,
+    ml_probability: 0.15,
+    confidence: 0.13,
     auto_optimize: false,
     optimize_frequency_hours: 24,
   },
@@ -248,13 +248,6 @@ async function loadFromDb() {
     }
     if (Object.keys(dbConfig).length > 0) {
       _config = mergeDeep(deepClone(DEFAULTS), dbConfig);
-      // Migration: remove ml_probability from stored weights and regime_adaptation
-      if (_config.weights && _config.weights.ml_probability > 0) {
-        _config.weights = { ...DEFAULTS.weights };
-        await persistToDb('weights', _config.weights);
-        await persistToDb('regime_adaptation', DEFAULTS.regime_adaptation);
-        console.log('[EngineConfig] Migrated weights and regime_adaptation — removed ml_probability');
-      }
     } else {
       // No config in DB yet — persist defaults so API edits survive restarts
       for (const key of Object.keys(DEFAULTS)) {
@@ -375,23 +368,7 @@ async function sendWebhook(url, payload) {
   }
 }
 
-// Wire up circuit breaker events to webhook
-const pyBridge = require('./pythonBridge');
-pyBridge.emitter.on('circuitTrip', (data) => {
-  const webhookUrl = _config.alerts?.circuitBreakerWebhook || _config.alerts?.webhookUrl;
-  if (webhookUrl) {
-    sendWebhook(webhookUrl, { event: 'circuit_trip', ...data, time: new Date().toISOString() });
-  }
-  console.warn(`[ALERT] Circuit breaker TRIPPED — ${data.totalTrips} trips total. Last error: ${data.lastError}`);
-});
-
-pyBridge.emitter.on('circuitReset', (data) => {
-  const webhookUrl = _config.alerts?.webhookUrl;
-  if (webhookUrl) {
-    sendWebhook(webhookUrl, { event: 'circuit_reset', ...data, time: new Date().toISOString() });
-  }
-  console.log('[ALERT] Circuit breaker RESET — ML predictions resuming');
-});
+// ML is offloaded to Modal serverless — circuit breaker not needed
 
 module.exports = {
   getConfig,
