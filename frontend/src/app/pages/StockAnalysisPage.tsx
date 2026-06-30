@@ -29,7 +29,7 @@ import {
 import { fetchStockHistory, type PriceBar } from "../services/marketDataService";
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import type { Signal as SharedSignal } from "../types/signals";
-import { TradingViewChart } from "../components/TradingViewChart";
+
 import { FinancialMetrics } from "../components/FinancialMetrics";
 import { useAuth } from "../auth/AuthContext";
 
@@ -908,9 +908,7 @@ export function StockAnalysisPage() {
               </div>
 
               {/* Chart */}
-              {activeSelection.market === "global" ? (
-                <TradingViewChart symbol={activeSelection.ticker} market={activeSelection.market} />
-              ) : chartLoading && chartHistory.length === 0 ? (
+              {chartLoading && chartHistory.length === 0 ? (
                 <div className="flex items-center justify-center h-[340px] text-sm text-muted-foreground">
                   <Loader2 className="size-5 animate-spin mr-2" /> Loading price history...
                 </div>
@@ -1022,7 +1020,7 @@ export function StockAnalysisPage() {
                 </div>
               )}
 
-              {activeSelection.market !== "global" && chartData.length > 0 && (
+              {chartData.length > 0 && (
                 <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 pt-4 border-t border-border">
                   <div className="flex items-center gap-2">
                     <div className="size-3 rounded-sm bg-[#0D7490]" />
