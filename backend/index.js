@@ -31,6 +31,7 @@ const { fetchAnalystData } = require('./analystService');
 const fxService = require('./fxService');
 const payheroService = require('./payheroService');
 const paypalService = require('./paypalService');
+const tripleAService = require('./tripleAService');
 const indicesService = require('./indicesService');
 const { generalLimiter, authLimiter, marketDataLimiter, aiLimiter } = require('./rateLimiter');
 const path = require('path');
@@ -7919,12 +7920,15 @@ app.post('/api/payments/crypto', async (req, res) => {
       return res.status(400).json({ error: 'Amount is required' });
     }
     const planName = plan || 'Subscription';
-    const period = durationMonths === 12 ? 'Yearly' : 'Monthly';
     const externalRef = `CRYPTO-${Date.now()}-${String(Math.random()).slice(2, 8)}`;
 
-    // TODO: Integrate Triple-A API — replace with actual checkout URL
-    // Triple-A docs: https://www.triple-a.io/api/docs
-    const checkoutUrl = `https://checkout.triple-a.io?reference=${externalRef}&amount=${amount}&currency=${currency || 'USD'}&description=StocksIntels ${planName} ${period}`;
+    const result = await tripleAService.createCheckoutSession({
+      amount,
+      currency: currency || 'USD',
+      reference: externalRef,
+      plan: planName,
+      durationMonths: durationMonths || 1,
+    });
 
     await pool.query(
       `INSERT INTO payment_transactions (user_id, amount, currency, provider, external_reference, status, plan_name, duration_months)
@@ -7933,10 +7937,44 @@ app.post('/api/payments/crypto', async (req, res) => {
       [userId || null, amount, currency || 'USD', externalRef, planName, durationMonths || 1]
     );
 
-    res.json({ success: true, checkoutUrl, reference: externalRef });
+    res.json({ success: true, checkoutUrl: result.checkoutUrl, reference: externalRef });
   } catch (error) {
     console.error('Crypto checkout error:', error.message);
     res.status(500).json({ error: 'Failed to create crypto checkout' });
+  }
+});
+
+// --- Triple-A Webhook ---
+app.post('/api/payments/crypto-webhook', async (req, res) => {
+  try {
+    const event = req.body;
+    const sessionId = event.session_id || event.data?.session_id;
+    const status = event.status || event.data?.status;
+    const reference = event.reference || event.data?.reference;
+    const eventType = event.event || event.event_type || '';
+
+    console.log(`[CRYPTO WEBHOOK] event=${eventType} session=${sessionId} status=${status} ref=${reference}`);
+
+    if (['payment.completed', 'checkout.completed', 'success'].includes(status?.toLowerCase()) && reference) {
+      await pool.query(
+        `UPDATE payment_transactions SET status = 'success', callback_data = $1, updated_at = NOW()
+         WHERE external_reference = $2 AND status = 'pending'`,
+        [JSON.stringify(event), reference]
+      );
+      console.log(`[CRYPTO] Payment confirmed: ref=${reference}`);
+    } else if (['payment.failed', 'payment.cancelled', 'failed', 'cancelled'].includes(status?.toLowerCase()) && reference) {
+      await pool.query(
+        `UPDATE payment_transactions SET status = 'failed', callback_data = $1, updated_at = NOW()
+         WHERE external_reference = $2 AND status = 'pending'`,
+        [JSON.stringify(event), reference]
+      );
+      console.log(`[CRYPTO] Payment failed: ref=${reference}`);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Crypto webhook error:', error.message);
+    res.json({ received: true });
   }
 });
 

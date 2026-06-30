@@ -48,15 +48,16 @@ export function SubscriptionPage() {
   const [paymentRef, setPaymentRef] = useState("");
   const [pollStatus, setPollStatus] = useState<"idle" | "waiting" | "success" | "failed">("idle");
 
-  // Handle PayPal return redirect
+  // Handle PayPal & Crypto return redirects
   useEffect(() => {
     const paypalStatus = searchParams.get("paypal");
-    if (paypalStatus === "success") {
+    const cryptoStatus = searchParams.get("crypto");
+    if (paypalStatus === "success" || cryptoStatus === "success") {
       setIsSuccess(true);
       refreshUser().then(() => {});
       toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
-    } else if (paypalStatus === "failed" || paypalStatus === "cancelled") {
-      toast.error(paypalStatus === "cancelled" ? "PayPal checkout was cancelled." : "Payment failed. Please try again.");
+    } else if (paypalStatus === "failed" || paypalStatus === "cancelled" || cryptoStatus === "cancelled") {
+      toast.error(paypalStatus === "cancelled" || cryptoStatus === "cancelled" ? "Checkout was cancelled." : "Payment failed. Please try again.");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
