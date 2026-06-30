@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, Navigate, useNavigate, useSearchParams } from "react-router";
-import { Check, CreditCard, Landmark, ArrowRight, Shield, Zap, Crown, Loader2, CheckCircle2, X } from "lucide-react";
+import { Check, CreditCard, Landmark, ArrowRight, Shield, Zap, Crown, Loader2, CheckCircle2, X, Bitcoin } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { toast } from "sonner";
@@ -41,7 +41,7 @@ export function SubscriptionPage() {
   const { planId } = useParams<{ planId: string }>();
   const [searchParams] = useSearchParams();
   const period = searchParams.get("period") === "yearly" ? "yearly" : "monthly";
-  const [paymentMethod, setPaymentMethod] = useState<"paypal" | "mpesa">("paypal");
+  const [paymentMethod, setPaymentMethod] = useState<"paypal" | "mpesa" | "crypto">("paypal");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -287,7 +287,7 @@ export function SubscriptionPage() {
                 Payment Method
               </h2>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
                 <button
                   onClick={() => setPaymentMethod("paypal")}
                   className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
@@ -306,6 +306,15 @@ export function SubscriptionPage() {
                   <Landmark className={`w-6 h-6 ${paymentMethod === "mpesa" ? "text-[#0D7490]" : "text-gray-400"}`} />
                   <span className={`text-sm font-bold ${paymentMethod === "mpesa" ? "text-[#0D7490]" : "text-gray-600"}`}>M-Pesa</span>
                 </button>
+                <button
+                  onClick={() => setPaymentMethod("crypto")}
+                  className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
+                    paymentMethod === "crypto" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-gray-50 hover:border-gray-200"
+                  }`}
+                >
+                  <Bitcoin className={`w-6 h-6 ${paymentMethod === "crypto" ? "text-[#0D7490]" : "text-gray-400"}`} />
+                  <span className={`text-sm font-bold ${paymentMethod === "crypto" ? "text-[#0D7490]" : "text-gray-600"}`}>Crypto</span>
+                </button>
               </div>
 
               <div className="space-y-4">
@@ -319,7 +328,7 @@ export function SubscriptionPage() {
                       </p>
                     </div>
                   </div>
-                ) : (
+                ) : paymentMethod === "mpesa" ? (
                   <div className="space-y-4 animate-in fade-in duration-300">
                     <div>
                       <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">M-Pesa Phone Number</label>
@@ -336,6 +345,44 @@ export function SubscriptionPage() {
                         1. You will receive an M-Pesa STK push on your phone.<br />
                         2. Enter your M-Pesa PIN to authorize the payment.<br />
                         3. Your subscription will be activated instantly upon confirmation.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4 animate-in fade-in duration-300">
+                    <div className="p-4 bg-amber-50 rounded-lg border border-amber-100">
+                      <p className="text-xs text-amber-800 leading-relaxed font-medium mb-3">
+                        Use the same network to deposit and withdraw funds. This is needed to avoid payment loss. Note, the lowest-fee option isn't always the best choice for you.
+                      </p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-amber-200">
+                              <th className="text-left py-2 pr-4 font-bold text-amber-900">Ticker</th>
+                              <th className="text-left py-2 pr-4 font-bold text-amber-900">Name</th>
+                              <th className="text-left py-2 font-bold text-amber-900">Network</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[
+                              { ticker: "BTC", name: "Bitcoin", network: "Bitcoin, Lightning network" },
+                              { ticker: "ETH", name: "Ethereum", network: "Ethereum network" },
+                              { ticker: "USDT", name: "Tether", network: "ERC20, TRC20" },
+                              { ticker: "USDC", name: "USD Coin", network: "ERC20" },
+                            ].map((c) => (
+                              <tr key={c.ticker} className="border-b border-amber-100">
+                                <td className="py-2 pr-4 font-bold text-amber-900">{c.ticker}</td>
+                                <td className="py-2 pr-4 text-amber-800">{c.name}</td>
+                                <td className="py-2 text-amber-800">{c.network}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
+                      <p className="text-[11px] text-purple-800 leading-relaxed font-medium">
+                        You'll be redirected to Triple-A to complete your purchase.
                       </p>
                     </div>
                   </div>
