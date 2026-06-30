@@ -416,6 +416,7 @@ export function StockAnalysisPage() {
   const [chartHistory, setChartHistory] = useState<PriceBar[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartPeriod, setChartPeriod] = useState("6M");
+  const [tvFailed, setTvFailed] = useState(false);
   const historySource = chartHistory.length > 0 ? 'live' : 'none';
 
   const periodToRange = (period: string): string => {
@@ -430,6 +431,7 @@ export function StockAnalysisPage() {
 
   useEffect(() => {
     let cancelled = false;
+    setTvFailed(false);
     setChartLoading(true);
     const symbol = activeSelection.market === "nse"
       ? `${activeSelection.ticker}.NSE`
@@ -909,8 +911,8 @@ export function StockAnalysisPage() {
               </div>
 
               {/* Chart */}
-              {activeSelection.market === "global" ? (
-                <TradingViewChart symbol={activeSelection.ticker} market={activeSelection.market} />
+              {activeSelection.market === "global" && !tvFailed ? (
+                <TradingViewChart symbol={activeSelection.ticker} market={activeSelection.market} onError={() => setTvFailed(true)} />
               ) : chartLoading && chartHistory.length === 0 ? (
                 <div className="flex items-center justify-center h-[340px] text-sm text-muted-foreground">
                   <Loader2 className="size-5 animate-spin mr-2" /> Loading price history...
