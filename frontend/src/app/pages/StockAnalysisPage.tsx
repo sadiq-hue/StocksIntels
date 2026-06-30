@@ -559,7 +559,7 @@ export function StockAnalysisPage() {
       {/* Main Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* Sidebar */}
-        <div className="xl:col-span-1">
+        <div className="xl:col-span-1 space-y-4">
           <Card className="border shadow-sm xl:sticky xl:top-6 xl:max-h-[calc(100vh-5rem)] flex flex-col">
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
@@ -606,7 +606,7 @@ export function StockAnalysisPage() {
                 </div>
               </div>
             </div>
-            <div className="p-2 space-y-1 min-h-0 flex-1 overflow-y-auto">
+            <div className="p-3 space-y-1 min-h-0 flex-1 overflow-y-auto">
               {paginatedStocks.length > 0 ? (
                 paginatedStocks.map((stock) => {
                   const isActive = activeSelection.ticker === stock.ticker;
@@ -783,7 +783,7 @@ export function StockAnalysisPage() {
 
           {/* Stock Header */}
           <Card className="border shadow-sm overflow-hidden">
-            <div className="p-6">
+            <div className="p-5">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
                 <div className="flex items-center gap-4">
                   <div className="flex size-14 items-center justify-center rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-sm">
@@ -864,7 +864,7 @@ export function StockAnalysisPage() {
 
           {/* Chart */}
           <Card className="border shadow-sm overflow-hidden">
-            <div className="p-6">
+            <div className="p-5">
               {/* Header */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <div>
@@ -894,7 +894,7 @@ export function StockAnalysisPage() {
 
               {/* Key Stats Bar */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mb-6">
-                <div className="sm:col-span-1 md:col-span-2 rounded-lg bg-muted/50 p-3 border">
+                <div className="sm:col-span-1 md:col-span-2 rounded-lg bg-muted/50 p-2.5 border">
                   <div className="text-[11px] font-medium text-muted-foreground mb-1">Current Price</div>
                   <div className={`text-xl md:text-2xl font-bold ${displayChange >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                     {formatCurrency(activeSelection)}{formatPrice(currentPrice)}
