@@ -7645,9 +7645,9 @@ app.get('/api/payments/status', async (req, res) => {
                     paidAt: new Date(),
                     startDate,
                     endDate,
-});
-
-
+                  });
+                }
+              } catch (emailErr) {
                 console.error('Payment receipt email error:', emailErr.message);
               }
               await awardCommission(tx.rows[0].user_id, tier);
@@ -9907,12 +9907,13 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-initDatabase().then(() => {
-  server.listen(port, '0.0.0.0', async () => {
-    console.log(`Backend server running at http://localhost:${port}`);
-    try {
-      await queueService.connect();
-      queueService.onSignalUpdate((signal) => {
+// Start listening immediately so health checks pass even if DB init is slow
+server.listen(port, '0.0.0.0', async () => {
+  console.log(`Backend server running at http://localhost:${port}`);
+  try {
+    await initDatabase();
+    await queueService.connect();
+    queueService.onSignalUpdate((signal) => {
         if (signal.batch) {
           io.emit('signal:batch_update', signal);
           signal.signals.forEach(s => io.emit(`signal:update:${s.ticker}`, s));
@@ -10167,4 +10168,3 @@ initDatabase().then(() => {
     });
     console.log('[EARNINGS CRON] Earnings report scheduled Friday at 10 AM EAT');
   });
-});
