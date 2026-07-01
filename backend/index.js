@@ -1334,11 +1334,9 @@ app.get('/api/admin/audit', async (req, res) => {
     ]);
 
     // ── All-time totals ──
-    const [totalUsers, totalRevenue, totalSignups, trialUsers] = await Promise.all([
+    const [totalUsers, totalRevenue] = await Promise.all([
       pool.query('SELECT COUNT(*)::int as cnt FROM users'),
       pool.query("SELECT COALESCE(SUM(amount), 0) as total FROM payment_transactions WHERE status = 'success'"),
-      pool.query('SELECT COUNT(*)::int as cnt FROM users'),
-      pool.query("SELECT COUNT(*)::int as cnt FROM users WHERE trial_start_date IS NOT NULL AND trial_start_date >= CURRENT_TIMESTAMP - INTERVAL '${interval}'"),
     ]);
 
     // ── Previous period (for trend) ──
