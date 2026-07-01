@@ -9682,7 +9682,7 @@ async function sendDailyPortfolioReports() {
   try {
     const { rows: users } = await pool.query(
       `SELECT DISTINCT u.id, u.full_name, u.email FROM users u
-       LEFT JOIN broker_connections bc ON bc.user_id = u.id AND bc.connected = true
+       LEFT JOIN broker_connections bc ON bc.user_id = u.id
        LEFT JOIN portfolio_holdings ph ON ph.user_id = u.id
        WHERE bc.id IS NOT NULL OR ph.id IS NOT NULL`
     );
@@ -9702,29 +9702,32 @@ async function sendDailyPortfolioReports() {
              ORDER BY snapshot_at DESC
              LIMIT 1
            ) bas ON true
-           WHERE bc.user_id = $1 AND bc.connected = true`,
+           WHERE bc.user_id = $1`,
           [user.id]
         );
         if (brokers.length > 0) {
           const fxRate = await getFxRate();
           let totalEquity = 0, totalBalance = 0;
           const holdings = [];
+          let hasValidSnapshot = false;
           for (const broker of brokers) {
+            if (broker.balance !== null || broker.equity !== null) hasValidSnapshot = true;
             const equity = parseFloat(broker.equity) || 0;
             const balance = parseFloat(broker.balance) || 0;
             totalEquity += equity;
             totalBalance += balance;
             const positions = broker.positions || [];
             for (const pos of positions) {
-              const ticker = pos.symbol || '?';
+              const ticker = (pos.symbol || '').toString().toUpperCase();
+              if (!ticker) continue;
               const volume = parseFloat(pos.volume || '0');
               const price = parseFloat(pos.current_price || pos.price_2 || pos.price || '0');
               const profit = parseFloat(pos.profit || '0');
               const value = price * volume;
               const cost = value - profit;
               holdings.push({
-                ticker: ticker.toUpperCase(),
-                name: `${ticker.toUpperCase()} ${pos.type || ''}`.trim(),
+                ticker,
+                name: `${ticker} ${pos.type || ''}`.trim(),
                 shares: volume,
                 currentPrice: price,
                 value: value,
@@ -9735,25 +9738,29 @@ async function sendDailyPortfolioReports() {
             }
           }
           // Deduplicate broker positions by ticker
-          const merged = deduplicateHoldings(holdings);
-          holdings.length = 0;
-          holdings.push(...merged);
-          if (holdings.length === 0) {
-            holdings.push({
-              ticker: 'ACCOUNT', name: 'Trading Account', shares: 1,
-              currentPrice: totalEquity, value: totalEquity, pnl: totalEquity - totalBalance,
-              pnlPercent: totalBalance > 0 ? Math.round(((totalEquity - totalBalance) / totalBalance * 100) * 10) / 10 : 0,
-              sector: 'Trading', market: 'Global', currency: 'USD',
+          if (hasValidSnapshot) {
+            const merged = deduplicateHoldings(holdings);
+            holdings.length = 0;
+            holdings.push(...merged);
+            if (holdings.length === 0) {
+              holdings.push({
+                ticker: 'ACCOUNT', name: 'Trading Account', shares: 1,
+                currentPrice: totalEquity, value: totalEquity, pnl: totalEquity - totalBalance,
+                pnlPercent: totalBalance > 0 ? Math.round(((totalEquity - totalBalance) / totalBalance * 100) * 10) / 10 : 0,
+                sector: 'Trading', market: 'Global', currency: 'USD',
+              });
+            }
+            const tv = totalEquity * fxRate, tc = totalBalance * fxRate;
+            const sp = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent);
+            await sendPortfolioReportEmail(user.email, {
+              userName: user.full_name, generatedAt: new Date().toISOString(),
+              summary: { totalValue: Math.round(tv * 100) / 100, totalCost: Math.round(tc * 100) / 100, totalPnL: Math.round((tv - tc) * 100) / 100, pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0 },
+              holdings, sectorAllocation: [], bestPerformers: sp.filter(h => h.pnlPercent > 0).slice(0, 5), worstPerformers: sp.filter(h => h.pnlPercent < 0).slice(-5).reverse(), fxRate,
             });
+            console.log(`[DAILY REPORT] Broker report sent to ${user.email}`);
+          } else {
+            console.log(`[DAILY REPORT] User ${user.id} has broker but no valid snapshots yet`);
           }
-          const tv = totalEquity * fxRate, tc = totalBalance * fxRate;
-          const sp = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent);
-          await sendPortfolioReportEmail(user.email, {
-            userName: user.full_name, generatedAt: new Date().toISOString(),
-            summary: { totalValue: Math.round(tv * 100) / 100, totalCost: Math.round(tc * 100) / 100, totalPnL: Math.round((tv - tc) * 100) / 100, pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0 },
-            holdings, sectorAllocation: [], bestPerformers: sp.filter(h => h.pnlPercent > 0).slice(0, 5), worstPerformers: sp.filter(h => h.pnlPercent < 0).slice(-5).reverse(), fxRate,
-          });
-          console.log(`[DAILY REPORT] Broker report sent to ${user.email}`);
         } else {
           const { rows } = await pool.query(
             `SELECT id, ticker, name, shares, avg_cost, current_price, sector, market, broker_connection_id FROM portfolio_holdings WHERE user_id = $1 ORDER BY ticker`,
@@ -9904,29 +9911,32 @@ async function sendPortfolioReportToUser(userId, email, fullName) {
          ORDER BY snapshot_at DESC
          LIMIT 1
        ) bas ON true
-       WHERE bc.user_id = $1 AND bc.connected = true`,
+       WHERE bc.user_id = $1`,
       [userId]
     );
     if (brokers.length > 0) {
       const fxRate = await getFxRate();
       let totalEquity = 0, totalBalance = 0;
       const holdings = [];
+      let hasValidSnapshot = false;
       for (const broker of brokers) {
+        if (broker.balance !== null || broker.equity !== null) hasValidSnapshot = true;
         const equity = parseFloat(broker.equity) || 0;
         const balance = parseFloat(broker.balance) || 0;
         totalEquity += equity;
         totalBalance += balance;
         const positions = broker.positions || [];
         for (const pos of positions) {
-          const ticker = pos.symbol || '?';
+          const ticker = (pos.symbol || '').toString().toUpperCase();
+          if (!ticker) continue;
           const volume = parseFloat(pos.volume || '0');
           const price = parseFloat(pos.current_price || pos.price_2 || pos.price || '0');
           const profit = parseFloat(pos.profit || '0');
           const value = price * volume;
           const cost = value - profit;
           holdings.push({
-            ticker: ticker.toUpperCase(),
-            name: `${ticker.toUpperCase()} ${pos.type || ''}`.trim(),
+            ticker,
+            name: `${ticker} ${pos.type || ''}`.trim(),
             shares: volume, currentPrice: price, value: value, pnl: profit,
             pnlPercent: cost > 0 ? Math.round((profit / cost * 100) * 10) / 10 : 0,
             sector: 'Trading', market: 'Global', currency: 'USD',
@@ -9934,26 +9944,30 @@ async function sendPortfolioReportToUser(userId, email, fullName) {
         }
       }
       // Deduplicate broker positions by ticker
-      const merged = deduplicateHoldings(holdings);
-      holdings.length = 0;
-      holdings.push(...merged);
-      if (holdings.length === 0) {
-        holdings.push({
-          ticker: 'ACCOUNT', name: 'Trading Account', shares: 1,
-          currentPrice: totalEquity, value: totalEquity, pnl: totalEquity - totalBalance,
-          pnlPercent: totalBalance > 0 ? Math.round(((totalEquity - totalBalance) / totalBalance * 100) * 10) / 10 : 0,
-          sector: 'Trading', market: 'Global', currency: 'USD',
+      if (hasValidSnapshot) {
+        const merged = deduplicateHoldings(holdings);
+        holdings.length = 0;
+        holdings.push(...merged);
+        if (holdings.length === 0) {
+          holdings.push({
+            ticker: 'ACCOUNT', name: 'Trading Account', shares: 1,
+            currentPrice: totalEquity, value: totalEquity, pnl: totalEquity - totalBalance,
+            pnlPercent: totalBalance > 0 ? Math.round(((totalEquity - totalBalance) / totalBalance * 100) * 10) / 10 : 0,
+            sector: 'Trading', market: 'Global', currency: 'USD',
+          });
+        }
+        const tv = totalEquity * fxRate, tc = totalBalance * fxRate;
+        const sp = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent);
+        await sendPortfolioReportEmail(email, {
+          userName: fullName, generatedAt: new Date().toISOString(),
+          summary: { totalValue: Math.round(tv * 100) / 100, totalCost: Math.round(tc * 100) / 100, totalPnL: Math.round((tv - tc) * 100) / 100, pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0 },
+          holdings, sectorAllocation: [], bestPerformers: sp.filter(h => h.pnlPercent > 0).slice(0, 5), worstPerformers: sp.filter(h => h.pnlPercent < 0).slice(-5).reverse(), fxRate,
         });
+        console.log(`[SINGLE REPORT] Broker portfolio report sent to ${email}`);
+        return true;
       }
-      const tv = totalEquity * fxRate, tc = totalBalance * fxRate;
-      const sp = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent);
-      await sendPortfolioReportEmail(email, {
-        userName: fullName, generatedAt: new Date().toISOString(),
-        summary: { totalValue: Math.round(tv * 100) / 100, totalCost: Math.round(tc * 100) / 100, totalPnL: Math.round((tv - tc) * 100) / 100, pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0 },
-        holdings, sectorAllocation: [], bestPerformers: sp.filter(h => h.pnlPercent > 0).slice(0, 5), worstPerformers: sp.filter(h => h.pnlPercent < 0).slice(-5).reverse(), fxRate,
-      });
-      console.log(`[SINGLE REPORT] Broker portfolio report sent to ${email}`);
-      return true;
+      console.log(`[SINGLE REPORT] Broker exists but no valid snapshot for user ${userId}`);
+      return false;
     }
     const { rows } = await pool.query(
       `SELECT id, ticker, name, shares, avg_cost, current_price, sector, market, broker_connection_id FROM portfolio_holdings WHERE user_id = $1 ORDER BY ticker`,
