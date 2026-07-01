@@ -54,8 +54,12 @@ export function SubscriptionPage() {
     const cryptoStatus = searchParams.get("crypto");
     if (paypalStatus === "success" || cryptoStatus === "success") {
       setIsSuccess(true);
-      refreshUser().then(() => {});
       toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
+      let attempts = 0;
+      const poll = setInterval(() => {
+        refreshUser();
+        if (++attempts >= 10) clearInterval(poll);
+      }, 2000);
     } else if (paypalStatus === "failed" || paypalStatus === "cancelled" || cryptoStatus === "cancelled") {
       toast.error(paypalStatus === "cancelled" || cryptoStatus === "cancelled" ? "Checkout was cancelled." : "Payment failed. Please try again.");
     }

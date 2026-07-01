@@ -1,6 +1,6 @@
 const { pool } = require('./db');
 const engineConfig = require('./engineConfig');
-const pyBridge = require('./pythonBridge');
+const modalBridge = require('./modalBridge');
 const EventEmitter = require('events');
 
 const FEATURES = ['fundamental', 'technical', 'financial', 'macro', 'confidence', 'regimeVal'];
@@ -156,22 +156,21 @@ function predictProbability(signal) {
 // Predict win probability from analysis results (called by _buildSignal)
 // Uses Python XGBoost when available, falls back to JS logistic regression
 async function predictWinProbability(fundamental, technical, macro, priceHistory, currentPrice, volume, symbol, sector, fundamentalsObj) {
-  const cfg = engineConfig.getConfig().python_ml || {};
-  if (cfg.enabled !== false) {
+  if (process.env.MODAL_URL) {
     try {
-      const result = await pyBridge.predict(
+      const result = await modalBridge.predict(
         symbol || 'UNKNOWN',
         sector || 'Unknown',
         priceHistory || [],
         priceHistory?.volumes || [],
         fundamentalsObj || {},
-        cfg.market_prices || [],
+        [],
       );
       if (result && typeof result.win_prob === 'number' && result.model_used !== 'fallback') {
         return result.win_prob;
       }
     } catch {
-      // Python unavailable — fall through to JS model
+      // Modal unavailable — fall through to JS model
     }
   }
 
@@ -236,14 +235,16 @@ async function _runBackgroundTraining() {
   const startedAt = Date.now();
   console.log('[ML] Background training started...');
 
-  // Fire-and-forget Python training (background, non-blocking)
-  pyBridge.train().then(pyResult => {
-    if (pyResult && pyResult.status !== 'error') {
-      console.log(`[ML] Python XGBoost training completed: ${pyResult.models_loaded || 0} models`);
-    }
-  }).catch(err => {
-    console.warn(`[ML] Python training failed (non-blocking): ${err.message}`);
-  });
+  // Fire-and-forget Modal training (background, non-blocking)
+  if (process.env.MODAL_URL) {
+    modalBridge.train().then(result => {
+      if (result && result.status === 'ok') {
+        console.log(`[ML] Modal XGBoost training completed: ${(result.models || []).length} models, ${result.samples} samples`);
+      }
+    }).catch(err => {
+      console.warn(`[ML] Modal training failed (non-blocking): ${err.message}`);
+    });
+  }
 
   // Train JS logistic regression as fallback
   try {
@@ -443,9 +444,9 @@ async function getModelInfo() {
     featureStats: _trainingStats.featureStats,
   };
   try {
-    info.python = await pyBridge.getStatus();
+    info.modal = await modalBridge.getStatus();
   } catch (err) {
-    info.python = { error: err.message, models_loaded: 0 };
+    info.modal = { error: err.message, models_loaded: 0 };
   }
   return info;
 }
@@ -455,4 +456,4 @@ function mlScoreAdjustment(signal) {
   return Math.round((prob - 0.5) * 2 * 20);
 }
 
-module.exports = { predictProbability, predictWinProbability, train, maybeRetrain, getModelInfo, mlScoreAdjustment, extractRawIndicators, calibrateConfidence, get pyBridge() { return pyBridge; }, emitter, get trainingInProgress() { return _trainingInProgress; }, get lastTrainError() { return _lastTrainError; } };
+module.exports = { predictProbability, predictWinProbability, train, maybeRetrain, getModelInfo, mlScoreAdjustment, extractRawIndicators, calibrateConfidence, get modalBridge() { return modalBridge; }, emitter, get trainingInProgress() { return _trainingInProgress; }, get lastTrainError() { return _lastTrainError; } };

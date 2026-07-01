@@ -102,12 +102,14 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://s3.tradingview.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://s3.tradingview.com", "https://*.tradingview.com"],
       scriptSrcAttr: ["'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
-      imgSrc: ["'self'", "data:", "https:"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://s3.tradingview.com"],
+      imgSrc: ["'self'", "data:", "https:", "https://*.tradingview.com"],
       connectSrc: ["'self'", "https:", "wss://*.tradingview.com", "https://*.tradingview.com"],
       frameSrc: ["'self'", "https://*.tradingview.com"],
+      workerSrc: ["'self'", "https://*.tradingview.com", "blob:"],
+      mediaSrc: ["'self'", "https://*.tradingview.com"],
       fontSrc: ["'self'", "https:", "data:"],
     },
   },
@@ -1960,7 +1962,6 @@ app.post('/api/auth/login-verify-otp', async (req, res) => {
     if (userResult.rows.length === 0) return res.status(401).json({ error: 'User not found' });
     const user = userResult.rows[0];
     if (!user.subscription_tier) user.subscription_tier = 'free';
-    if (!user.subscription_status) user.subscription_status = 'active';
     if (!user.trial_start_date) user.trial_start_date = user.created_at;
     const token = generateToken(user.id);
     const refreshToken = await generateRefreshToken(user.id);
@@ -2001,7 +2002,6 @@ app.post('/api/auth/login', async (req, res) => {
     }
 const { password_hash, ...safeUser } = user;
     if (!safeUser.subscription_tier) safeUser.subscription_tier = 'free';
-    if (!safeUser.subscription_status) safeUser.subscription_status = 'active';
     if (!safeUser.trial_start_date) safeUser.trial_start_date = safeUser.created_at;
     // Admin logins via OTP only; this endpoint is for regular app users
     const token = generateToken(user.id);
@@ -7957,12 +7957,67 @@ app.post('/api/payments/crypto-webhook', async (req, res) => {
     console.log(`[CRYPTO WEBHOOK] event=${eventType} session=${sessionId} status=${status} ref=${reference}`);
 
     if (['payment.completed', 'checkout.completed', 'success'].includes(status?.toLowerCase()) && reference) {
-      await pool.query(
+      const txResult = await pool.query(
         `UPDATE payment_transactions SET status = 'success', callback_data = $1, updated_at = NOW()
-         WHERE external_reference = $2 AND status = 'pending'`,
+         WHERE external_reference = $2 AND status = 'pending'
+         RETURNING id, user_id, plan_name, duration_months, provider`,
         [JSON.stringify(event), reference]
       );
-      console.log(`[CRYPTO] Payment confirmed: ref=${reference}`);
+      const tx = txResult.rows[0];
+      if (tx && tx.user_id) {
+        const tier = (tx.plan_name || 'pro').toLowerCase();
+        const months = parseInt(tx.duration_months) || 1;
+        const startDate = new Date();
+        const endDate = new Date(startDate);
+        endDate.setMonth(endDate.getMonth() + months);
+        const planRes = await pool.query(
+          'SELECT id FROM subscription_plans WHERE LOWER(name) = $1 LIMIT 1',
+          [tier]
+        );
+        const planId = planRes.rows[0]?.id || null;
+        const subRes = await pool.query(
+          `INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)
+           VALUES ($1, $2, 'active', $3, $4)
+           RETURNING id`,
+          [tx.user_id, planId, startDate, endDate]
+        );
+        const subscriptionId = subRes.rows[0]?.id || null;
+        await pool.query(
+          `UPDATE users SET subscription_tier = $1, subscription_status = 'active', subscription_start_date = $2, subscription_end_date = $3 WHERE id = $4`,
+          [tier, startDate, endDate, tx.user_id]
+        );
+        if (subscriptionId) {
+          await pool.query(
+            'UPDATE payment_transactions SET subscription_id = $1 WHERE id = $2',
+            [subscriptionId, tx.id]
+          );
+        }
+        console.log(`[CRYPTO] Subscription activated: user=${tx.user_id} tier=${tier} months=${months}`);
+        await awardCommission(tx.user_id, tier);
+        try {
+          const userRes = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [tx.user_id]);
+          const { full_name: uName, email: uEmail } = userRes.rows[0] || {};
+          if (uEmail) {
+            await sendPaymentReceiptEmail(uEmail, {
+              userName: uName,
+              planName: tx.plan_name || 'Pro',
+              amount: 0,
+              currency: 'USD',
+              period: months === 12 ? 'yearly' : 'monthly',
+              durationMonths: months,
+              paymentMethod: 'Crypto (Triple-A)',
+              transactionRef: reference,
+              paidAt: new Date(),
+              startDate,
+              endDate,
+            });
+          }
+        } catch (mailErr) {
+          console.error('[RECEIPT] Failed to send receipt email:', mailErr.message);
+        }
+      } else {
+        console.log(`[CRYPTO] Payment confirmed but no user_id on transaction: ref=${reference}`);
+      }
     } else if (['payment.failed', 'payment.cancelled', 'failed', 'cancelled'].includes(status?.toLowerCase()) && reference) {
       await pool.query(
         `UPDATE payment_transactions SET status = 'failed', callback_data = $1, updated_at = NOW()
@@ -9225,7 +9280,7 @@ async function initDatabase() {
     }
 
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR(50) DEFAULT 'free'`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20) DEFAULT 'active'`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20) DEFAULT 'free'`);
     await pool.query(`ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS duration_months INTEGER DEFAULT 1`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_start_date TIMESTAMP WITH TIME ZONE`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_end_date TIMESTAMP WITH TIME ZONE`);
@@ -9237,6 +9292,8 @@ async function initDatabase() {
     // Set default duration_months for existing plans that don't have it
     await pool.query(`UPDATE subscription_plans SET duration_months = 1 WHERE duration_months IS NULL`);
 
+    // Fix: Free-tier users should have 'free' status, not 'active' (was defaulting incorrectly)
+    await pool.query(`UPDATE users SET subscription_status = 'free' WHERE subscription_tier = 'free' AND subscription_status = 'active'`);
     // Seed subscription records for existing users with non-free tiers missing from subscriptions table
     await pool.query(`
       INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)

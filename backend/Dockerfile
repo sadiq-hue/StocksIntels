@@ -2,13 +2,7 @@ FROM mcr.microsoft.com/playwright:v1.60.0-jammy
 
 WORKDIR /app
 
-# Install Python + build deps for XGBoost
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip python3-venv build-essential cmake && \
-    rm -rf /var/lib/apt/lists/* && \
-    python3 -m venv /app/venv && \
-    /app/venv/bin/pip install --no-cache-dir xgboost numpy pandas scikit-learn
-
+# ML is offloaded to Modal serverless — no Python/ML deps needed
 # Install pnpm (workspace lockfile is used for deterministic installs)
 RUN npm install -g pnpm@10
 
@@ -23,8 +17,7 @@ RUN pnpm install --filter backend --prod --no-frozen-lockfile
 COPY backend/ ./backend/
 
 ENV NODE_ENV=production \
-    PORT=3001 \
-    PATH="/app/venv/bin:$PATH"
+    PORT=3001
 
 EXPOSE 3001
 
