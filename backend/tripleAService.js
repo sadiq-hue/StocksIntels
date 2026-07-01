@@ -1,4 +1,5 @@
 const axios = require('axios');
+const qs = require('querystring');
 
 const isSandbox = process.env.TRIPLE_A_MODE !== 'live';
 const TRIPLE_A_API = `https://api.triple-a.io/api/v2`;
@@ -10,16 +11,17 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const BACKEND_URL = process.env.BACKEND_URL || process.env.WEBHOOK_URL || 'https://stocksintels-backend.railway.app';
 
 async function getAccessToken() {
-  const basic = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
-  const res = await axios.post(`${TRIPLE_A_API}/oauth/token`, {
-    grant_type: 'client_credentials',
-  }, {
-    headers: {
-      'Authorization': `Basic ${basic}`,
-      'Content-Type': 'application/json',
-    },
-    timeout: 10000,
-  });
+  const res = await axios.post(`${TRIPLE_A_API}/oauth/token`,
+    qs.stringify({
+      client_id: CLIENT_ID,
+      grant_type: 'client_credentials',
+      client_secret: CLIENT_SECRET,
+    }),
+    {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      timeout: 10000,
+    }
+  );
   return res.data.access_token;
 }
 
@@ -30,7 +32,6 @@ async function createCheckoutSession({ amount, currency = 'USD', reference, plan
 
   const accessToken = await getAccessToken();
   const period = durationMonths === 12 ? 'Yearly' : 'Monthly';
-  const description = `StocksIntels ${plan || 'Subscription'} ${period}`;
   const planSlug = (plan || 'starter').toLowerCase();
 
   const body = {
@@ -38,13 +39,23 @@ async function createCheckoutSession({ amount, currency = 'USD', reference, plan
     merchant_key: MERCHANT_KEY || '',
     order_currency: currency,
     order_amount: Number(amount),
-    order_id: reference,
-    description,
     payer_id: reference,
-    notify_url: `${BACKEND_URL}/api/payments/crypto-webhook`,
+    payer_name: `StocksIntels ${plan || 'Subscription'} ${period}`,
+    payer_email: '',
     success_url: `${FRONTEND_URL}/subscribe/${planSlug}?crypto=success&ref=${reference}`,
     cancel_url: `${FRONTEND_URL}/subscribe/${planSlug}?crypto=cancelled`,
+    notify_url: `${BACKEND_URL}/api/payments/crypto-webhook`,
     sandbox: isSandbox,
+    cart: {
+      items: [
+        {
+          amount: Number(amount),
+          quantity: 1,
+          label: `StocksIntels ${plan || 'Subscription'} ${period}`,
+          sku: reference,
+        },
+      ],
+    },
     metadata: {
       plan: plan || 'Subscription',
       duration_months: durationMonths || 1,
@@ -63,7 +74,7 @@ async function createCheckoutSession({ amount, currency = 'USD', reference, plan
 
   return {
     checkoutUrl: res.data.checkout_url || res.data.hosted_url || res.data.url,
-    sessionId: res.data.session_id || res.data.id,
+    sessionId: res.data.session_id || res.data.id || res.data.payment_reference,
     reference: res.data.order_id || reference,
   };
 }
