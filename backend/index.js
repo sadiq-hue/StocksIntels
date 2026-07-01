@@ -781,6 +781,65 @@ app.post('/api/admin/users/:id/reset-password', async (req, res) => {
   } catch (err) { console.error('Admin reset password error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
+// ── Admin Manual Subscription Activation (fallback if auto fails) ──
+app.post('/api/admin/users/:id/activate-subscription', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { plan, duration_months } = req.body;
+    const tier = (plan || 'pro').toLowerCase();
+    const months = parseInt(duration_months) || 1;
+    const startDate = new Date();
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + months);
+
+    const userCheck = await pool.query('SELECT id, email FROM users WHERE id = $1', [id]);
+    if (userCheck.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+
+    await pool.query(`
+      UPDATE users SET
+        subscription_status = 'active',
+        subscription_tier = $1,
+        subscription_start_date = $2,
+        subscription_end_date = $3
+      WHERE id = $4
+    `, [tier, startDate, endDate, id]);
+
+    const existingSub = await pool.query(
+      'SELECT id FROM subscriptions WHERE user_id = $1 ORDER BY id DESC LIMIT 1', [id]
+    );
+    if (existingSub.rows.length > 0) {
+      await pool.query(`
+        UPDATE subscriptions SET
+          status = 'active',
+          plan_id = (SELECT id FROM subscription_plans WHERE LOWER(name) = $1 LIMIT 1),
+          start_date = $2,
+          end_date = $3,
+          updated_at = CURRENT_TIMESTAMP,
+          expiry_email_1_sent_at = NULL,
+          expiry_email_2_sent_at = NULL
+        WHERE id = $4
+      `, [tier, startDate, endDate, existingSub.rows[0].id]);
+    } else {
+      await pool.query(`
+        INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)
+        VALUES ($1, (SELECT id FROM subscription_plans WHERE LOWER(name) = $2 LIMIT 1), 'active', $3, $4)
+      `, [id, tier, startDate, endDate]);
+    }
+
+    res.json({
+      success: true,
+      user_id: Number(id),
+      tier,
+      start_date: startDate,
+      end_date: endDate,
+      duration_months: months,
+    });
+  } catch (err) {
+    console.error('Admin activate subscription error:', err.message);
+    res.status(500).json({ error: 'Failed to activate subscription' });
+  }
+});
+
 // ── Admin Subscription Plans CRUD ──
 app.get('/api/admin/subscription-plans', async (req, res) => {
   try {

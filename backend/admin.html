@@ -1106,6 +1106,7 @@ async function selectUser(id) {
             <button class="btn btn-primary" onclick="toggleVerify(${u.id})">${u.is_verified ? 'Unverify' : 'Verify'}</button>
             <button class="btn btn-secondary" onclick="changeRole(${u.id}, '${u.role === 'admin' ? 'trader' : 'admin'}')">Make ${u.role === 'admin' ? 'Trader' : 'Admin'}</button>
             <button class="btn btn-secondary" onclick="showUserEdit()">Edit</button>
+            <button class="btn btn-secondary" onclick="activateSubscription(${u.id})">Activate Subscription</button>
             <button class="btn btn-danger" onclick="deleteUser(${u.id})">Delete</button>
           </div>
           <div class="mt-2">
@@ -1221,6 +1222,29 @@ async function resetUserPassword(id) {
     if (res.ok) { toast('Password reset email sent', 'success'); }
     else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
   } catch { toast('Error sending reset', 'error'); }
+}
+
+async function activateSubscription(id) {
+  const tiers = ['starter', 'premium', 'pro', 'institutional'];
+  const user = usersData.find(u => u.id === id);
+  const current = (user ? user.subscription_tier : 'pro') || 'pro';
+  const plan = prompt('Plan tier (' + tiers.join(', ') + '):', current);
+  if (!plan || !tiers.includes(plan.toLowerCase())) { toast('Invalid plan', 'error'); return; }
+  const months = prompt('Duration in months:', '1');
+  if (!months || parseInt(months) < 1) { toast('Invalid duration', 'error'); return; }
+  if (!confirm('Activate ' + plan.toLowerCase() + ' for ' + months + ' month(s) for ' + (user ? user.full_name : id) + '?')) return;
+  try {
+    const res = await fetch('/api/admin/users/' + id + '/activate-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan, duration_months: parseInt(months) })
+    });
+    if (res.ok) {
+      toast('Subscription activated (' + plan.toLowerCase() + ', ' + months + 'mo)', 'success');
+      selectUser(id);
+      fetchUsers();
+    } else { const e = await res.json(); toast(e.error || 'Failed', 'error'); }
+  } catch { toast('Error activating subscription', 'error'); }
 }
 
 async function toggleVerify(id) {
