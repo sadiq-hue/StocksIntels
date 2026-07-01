@@ -171,6 +171,8 @@ const serveFrontend = fs.existsSync(frontendDist);
 if (serveFrontend) {
   app.use(express.static(frontendDist));
 }
+// Also serve public assets (logo, etc.) for admin panel
+app.use(express.static(path.join(__dirname, '..', 'frontend', 'public')));
 
 // ── Admin API Routes ─────────────────────────────────────────────
 // Extra security headers for admin endpoints
