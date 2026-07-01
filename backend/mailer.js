@@ -964,10 +964,6 @@ async function sendSubscriptionExpiryEmail1(email, data) {
       <a href="${process.env.APP_URL || 'http://localhost:5173'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700">RENEW MY SUBSCRIPTION</a>
     </div>
 
-    <div style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin-bottom:16px;font-style:italic">
-      Still on the fence? Reply to this email and tell me what would make StocksIntels more valuable for you. I read every response.
-    </div>
-
     <div style="font-size:13px;color:${TEXT_DARK};font-weight:600">StocksIntels Team.</div>
 
     <div style="font-size:12px;color:${TEXT_LIGHT};text-align:center;padding-top:16px;border-top:1px solid ${BORDER};margin-top:24px">
@@ -1020,10 +1016,6 @@ async function sendSubscriptionExpiryEmail2(email, data) {
 
     <div style="font-size:13px;color:${RED};line-height:1.5;margin-bottom:16px;text-align:center;font-weight:600">
       This offer expires in 48 hours. After that, it's back to standard pricing.
-    </div>
-
-    <div style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin-bottom:16px;font-style:italic">
-      If something didn't work for you — reply and tell me. I'm always improving the platform based on real feedback.
     </div>
 
     <div style="font-size:13px;color:${TEXT_DARK}">Sadiq Bathuru<br><span style="font-size:12px;color:${TEXT_LIGHT}">Founder, StocksIntels</span></div>

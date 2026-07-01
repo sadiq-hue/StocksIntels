@@ -10000,20 +10000,6 @@ server.listen(port, '0.0.0.0', async () => {
   console.log(`Backend server running at http://localhost:${port}`);
   try {
     await initDatabase();
-
-    // TEMP: Send test expiry emails on startup
-    (async () => {
-      try {
-        const testEmail = 'bathurusadiki01@gmail.com';
-        await sendSubscriptionExpiryEmail1(testEmail, { userName: 'Sadiq' });
-        console.log('[STARTUP] Test Expiry Email 1 sent');
-        await sendSubscriptionExpiryEmail2(testEmail, { userName: 'Sadiq' });
-        console.log('[STARTUP] Test Expiry Email 2 sent');
-      } catch (e) {
-        console.error('[STARTUP] Failed to send test expiry emails:', e.message);
-      }
-    })();
-
     await queueService.connect();
     queueService.onSignalUpdate((signal) => {
         if (signal.batch) {
