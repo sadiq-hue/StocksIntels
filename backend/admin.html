@@ -174,6 +174,10 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
         Followers
       </div>
+      <div class="nav-item" data-tab="audit" onclick="switchTab('audit')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Audit
+      </div>
       <div class="nav-item" data-tab="user-activity" onclick="switchTab('user-activity')">
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8V4m0 4a4 4 0 100 8 4 4 0 000-8zm-8 8a4 4 0 014-4h8a4 4 0 014 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2z"/></svg>
         User Activity
@@ -816,6 +820,37 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       </div>
       <div id="activityPagination" class="flex items-center justify-center gap-2 py-4"></div>
     </div>
+
+    <div id="tab-audit" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div class="flex items-center justify-between mb-4">
+        <h1 class="text-xl font-bold text-gray-900">Business Audit</h1>
+        <select id="auditPeriod" class="input-field text-sm py-1.5 w-32" onchange="fetchAudit()">
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="auditSummaryCards">
+        <div class="stat-card"><div class="stat-value" id="auditSignups">-</div><div class="stat-label">New Signups <span id="auditSignupsTrend" class="text-xs"></span></div></div>
+        <div class="stat-card"><div class="stat-value" id="auditChurned">-</div><div class="stat-label">Churned <span id="auditChurnedTrend" class="text-xs"></span></div></div>
+        <div class="stat-card"><div class="stat-value" id="auditRetention">-</div><div class="stat-label">Retention Rate</div></div>
+        <div class="stat-card"><div class="stat-value" id="auditActivePaid">-</div><div class="stat-label">Active Paid Users</div></div>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="stat-card"><div class="stat-value" id="auditRevenue">-</div><div class="stat-label">Revenue <span id="auditRevenueTrend" class="text-xs"></span></div></div>
+        <div class="stat-card"><div class="stat-value" id="auditTotalRevenue">-</div><div class="stat-label">Total Revenue (All Time)</div></div>
+        <div class="stat-card"><div class="stat-value" id="auditSuccessfulPmts">-</div><div class="stat-label">Successful Payments</div></div>
+        <div class="stat-card"><div class="stat-value" id="auditFailedPmts">-</div><div class="stat-label">Failed Payments</div></div>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="stat-card"><div class="stat-value" id="auditSubAttempts">-</div><div class="stat-label">Sub Attempts <span id="auditSubAttemptsTrend" class="text-xs"></span></div></div>
+        <div class="stat-card"><div class="stat-value" id="auditActiveSubs">-</div><div class="stat-label">New Active Subs</div></div>
+        <div class="stat-card"><div class="stat-value" id="auditExpiredSubs">-</div><div class="stat-label">New Expired Subs</div></div>
+        <div class="stat-card"><div class="stat-value" id="auditTotalUsers">-</div><div class="stat-label">Total Users (All Time)</div></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -921,8 +956,9 @@ function switchTab(tab) {
   if (tab === 'followers') fetchFollowers();
   if (tab === 'user-activity') { fetchUserActivity(); }
   if (tab === 'affiliates') { fetchAffiliateStats(); fetchAffiliates(); }
+  if (tab === 'audit') { fetchAudit(); }
 }
-['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
+['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','audit'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
 
 // ── Dashboard ──
 async function fetchDashboard() {
@@ -2523,6 +2559,36 @@ async function fetchFollowers() {
         </tr>
       `).join('');
     }
+  } catch {}
+}
+
+// ── Audit ──
+async function fetchAudit() {
+  const period = document.getElementById('auditPeriod').value;
+  try {
+    const res = await fetch('/api/admin/audit?period=' + period);
+    if (!res.ok) return;
+    const d = await res.json();
+    document.getElementById('auditSignups').textContent = d.current.signups;
+    document.getElementById('auditSignupsTrend').textContent = d.trends.signups > 0 ? ('\u2191 +' + d.trends.signups + '%') : (d.trends.signups < 0 ? '\u2193 ' + d.trends.signups + '%' : '');
+    document.getElementById('auditSignupsTrend').style.color = d.trends.signups >= 0 ? '#059669' : '#dc2626';
+    document.getElementById('auditChurned').textContent = d.current.churned;
+    document.getElementById('auditChurnedTrend').textContent = d.trends.churned > 0 ? ('\u2191 +' + d.trends.churned + '%') : (d.trends.churned < 0 ? '\u2193 ' + d.trends.churned + '%' : '');
+    document.getElementById('auditChurnedTrend').style.color = d.trends.churned <= 0 ? '#059669' : '#dc2626';
+    document.getElementById('auditRetention').textContent = d.retentionRate + '%';
+    document.getElementById('auditActivePaid').textContent = d.totals.activePaid;
+    document.getElementById('auditRevenue').textContent = '$' + Number(d.current.revenue).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2});
+    document.getElementById('auditRevenueTrend').textContent = d.trends.revenue > 0 ? ('\u2191 +' + d.trends.revenue + '%') : (d.trends.revenue < 0 ? '\u2193 ' + d.trends.revenue + '%' : '');
+    document.getElementById('auditRevenueTrend').style.color = d.trends.revenue >= 0 ? '#059669' : '#dc2626';
+    document.getElementById('auditTotalRevenue').textContent = '$' + Number(d.totals.revenue).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2});
+    document.getElementById('auditSuccessfulPmts').textContent = d.current.successfulPayments;
+    document.getElementById('auditFailedPmts').textContent = d.current.failedPayments;
+    document.getElementById('auditSubAttempts').textContent = d.current.subAttempts;
+    document.getElementById('auditSubAttemptsTrend').textContent = d.trends.subAttempts > 0 ? ('\u2191 +' + d.trends.subAttempts + '%') : (d.trends.subAttempts < 0 ? '\u2193 ' + d.trends.subAttempts + '%' : '');
+    document.getElementById('auditSubAttemptsTrend').style.color = d.trends.subAttempts >= 0 ? '#059669' : '#dc2626';
+    document.getElementById('auditActiveSubs').textContent = d.current.activeSubs;
+    document.getElementById('auditExpiredSubs').textContent = d.current.expiredSubs;
+    document.getElementById('auditTotalUsers').textContent = d.totals.users;
   } catch {}
 }
 

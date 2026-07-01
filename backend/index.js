@@ -1315,6 +1315,84 @@ app.put('/api/admin/affiliates/payouts/:id', async (req, res) => {
   } catch (err) { console.error('Admin payout update error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
+// ── Admin Audit (Weekly/Monthly churn, retention, signups, payments) ──
+app.get('/api/admin/audit', async (req, res) => {
+  try {
+    const period = req.query.period === 'monthly' ? 'month' : 'week';
+    const interval = `1 ${period}`;
+    const prevInterval = `2 ${period}`;
+
+    // Current period data
+    const [newSignups, churnedUsers, payments, subAttempts, activePaid, prevSignups, prevChurned, prevPayments, prevSubAttempts] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int as cnt FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+      pool.query(`SELECT COUNT(*)::int as cnt FROM subscriptions WHERE status = 'expired' AND updated_at >= CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+      pool.query(`SELECT COUNT(*)::int as total, COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as revenue, COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0)::int as successful, COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0)::int as failed, COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0)::int as pending FROM payment_transactions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+      pool.query(`SELECT COUNT(*)::int as total, COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0)::int as active, COALESCE(SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END), 0)::int as expired FROM subscriptions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+      pool.query(`SELECT COUNT(*)::int as cnt FROM users WHERE subscription_status = 'active' AND subscription_tier IS NOT NULL AND subscription_tier != 'free'`),
+      // Previous period data (for trend comparison)
+      pool.query(`SELECT COUNT(*)::int as cnt FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${prevInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+      pool.query(`SELECT COUNT(*)::int as cnt FROM subscriptions WHERE status = 'expired' AND updated_at >= CURRENT_TIMESTAMP - INTERVAL '${prevInterval}' AND updated_at < CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+      pool.query(`SELECT COUNT(*)::int as total, COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as revenue FROM payment_transactions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${prevInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+      pool.query(`SELECT COUNT(*)::int as total FROM subscriptions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${prevInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+    ]);
+
+    const totalUsers = await pool.query('SELECT COUNT(*)::int as cnt FROM users');
+    const totalRevenue = await pool.query("SELECT COALESCE(SUM(amount), 0) as total FROM payment_transactions WHERE status = 'success'");
+
+    const curr = {
+      signups: newSignups.rows[0].cnt,
+      churned: churnedUsers.rows[0].cnt,
+      payments: payments.rows[0].total,
+      revenue: parseFloat(payments.rows[0].revenue),
+      successfulPayments: payments.rows[0].successful,
+      failedPayments: payments.rows[0].failed,
+      pendingPayments: payments.rows[0].pending,
+      subAttempts: subAttempts.rows[0].total,
+      activeSubs: subAttempts.rows[0].active,
+      expiredSubs: subAttempts.rows[0].expired,
+    };
+    const prev = {
+      signups: prevSignups.rows[0].cnt,
+      churned: prevChurned.rows[0].cnt,
+      payments: prevPayments.rows[0].total,
+      revenue: parseFloat(prevPayments.rows[0].revenue),
+      subAttempts: prevSubAttempts.rows[0].total,
+    };
+
+    const activePaidCount = activePaid.rows[0].cnt;
+    const retentionRate = activePaidCount > 0
+      ? Math.round((1 - curr.churned / (activePaidCount + curr.churned)) * 100)
+      : 100;
+
+    const calcTrend = (currVal, prevVal) => {
+      if (prevVal === 0) return currVal > 0 ? 100 : 0;
+      return Math.round(((currVal - prevVal) / prevVal) * 100);
+    };
+
+    res.json({
+      period,
+      current: curr,
+      previous: prev,
+      totals: {
+        users: totalUsers.rows[0].cnt,
+        revenue: parseFloat(totalRevenue.rows[0].total),
+        activePaid: activePaidCount,
+      },
+      retentionRate,
+      trends: {
+        signups: calcTrend(curr.signups, prev.signups),
+        churned: calcTrend(curr.churned, prev.churned),
+        payments: calcTrend(curr.payments, prev.payments),
+        revenue: calcTrend(curr.revenue, prev.revenue),
+        subAttempts: calcTrend(curr.subAttempts, prev.subAttempts),
+      },
+    });
+  } catch (err) {
+    console.error('Admin audit error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch audit data' });
+  }
+});
+
 const port = process.env.PORT || 3001;
 app.get(['/admin', '/admin/*'], (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
