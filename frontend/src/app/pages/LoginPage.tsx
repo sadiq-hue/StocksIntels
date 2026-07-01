@@ -70,10 +70,10 @@ function FeatureCard({ icon: Icon, title, desc, delay }: { icon: React.ElementTy
 function CompactHero() {
   return (
     <div className="mb-4 text-center">
-      <div className="mx-auto flex flex-wrap items-center justify-center gap-3">
-        <div className="w-10 h-10 bg-gradient-to-br from-[#0D7490] to-[#14A9B9] rounded-xl flex items-center justify-center shadow-sm">
-          <img src="/logo1.jpg" alt="logo" className="w-6 h-6" />
-        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-[#0D7490] to-[#14A9B9] rounded-xl flex items-center justify-center shadow-sm overflow-hidden">
+            <img src="/logo1.jpg" alt="logo" className="size-full object-cover" />
+          </div>
         <div className="text-left min-w-0">
           <div className="text-gray-700 text-sm font-semibold">StocksIntels</div>
           <div className="text-[#0D7490] text-2xl font-extrabold leading-tight">StocksIntels</div>

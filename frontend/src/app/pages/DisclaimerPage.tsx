@@ -9,8 +9,8 @@ export function DisclaimerPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap justify-between items-center gap-4 h-16">
             <Link to="/" className="flex items-center gap-2">
-              <div className="w-9 h-9 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center shadow-lg shadow-[#0D7490]/20">
-                <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
+              <div className="size-9 rounded-xl overflow-hidden shadow-lg shadow-[#0D7490]/20">
+                <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
               </div>
               <span className="text-xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
             </Link>
@@ -77,8 +77,8 @@ export function DisclaimerPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-lg flex items-center justify-center">
-                <img src="/logo1.jpg" alt="StocksIntels" className="w-5 h-5" />
+              <div className="size-8 rounded-lg overflow-hidden">
+                <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
               </div>
               <span className="text-lg font-bold">StocksIntels</span>
             </div>
