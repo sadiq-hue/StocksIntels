@@ -25,7 +25,7 @@ import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, roc_auc_score
 
-from feature_engineering import compute_all_features, feature_list
+from backend.feature_engineering import compute_all_features, feature_list
 
 logging.basicConfig(level=logging.INFO, format='[ModalML] %(message)s')
 logger = logging.getLogger('modal_ml')

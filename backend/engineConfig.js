@@ -61,10 +61,10 @@ const DEFAULTS = {
       },
     },
     weights_per_regime: {
-      bull:     { fundamental: 0.40, technical: 0.30, confidence: 0.15, financial: 0.15 },
-      bear:     { fundamental: 0.25, technical: 0.40, confidence: 0.20, financial: 0.15 },
-      sideways: { fundamental: 0.30, technical: 0.35, confidence: 0.20, financial: 0.15 },
-      crash:    { fundamental: 0.40, technical: 0.25, confidence: 0.20, financial: 0.15 },
+      bull:     { fundamental: 0.30, technical: 0.25, financial: 0.10, macro: 0.05, ml_probability: 0.15, confidence: 0.15 },
+      bear:     { fundamental: 0.18, technical: 0.32, financial: 0.10, macro: 0.10, ml_probability: 0.15, confidence: 0.15 },
+      sideways: { fundamental: 0.23, technical: 0.27, financial: 0.10, macro: 0.05, ml_probability: 0.15, confidence: 0.20 },
+      crash:    { fundamental: 0.20, technical: 0.20, financial: 0.15, macro: 0.15, ml_probability: 0.15, confidence: 0.15 },
     },
   },
 
