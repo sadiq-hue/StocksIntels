@@ -1,8 +1,7 @@
 const axios = require('axios');
 
-const TRIPLE_A_API = process.env.TRIPLE_A_MODE === 'live'
-  ? 'https://api.triple-a.io/api/v1'
-  : 'https://api.sandbox.triple-a.io/api/v1';
+const isSandbox = process.env.TRIPLE_A_MODE !== 'live';
+const TRIPLE_A_API = `https://api.triple-a.io/api/v1`;
 
 const CLIENT_ID = process.env.TRIPLE_A_CLIENT_ID;
 const CLIENT_SECRET = process.env.TRIPLE_A_CLIENT_SECRET;
@@ -25,6 +24,7 @@ async function createCheckoutSession({ amount, currency = 'USD', reference, plan
     currency,
     reference,
     description,
+    sandbox: isSandbox,
     metadata: {
       plan: plan || 'Subscription',
       duration_months: durationMonths || 1,
