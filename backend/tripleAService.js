@@ -39,9 +39,8 @@ async function createCheckoutSession({ amount, currency = 'USD', reference, plan
     merchant_key: MERCHANT_KEY || '',
     order_currency: currency,
     order_amount: Number(amount),
+    order_id: reference,
     payer_id: reference,
-    payer_name: `StocksIntels ${plan || 'Subscription'} ${period}`,
-    payer_email: '',
     success_url: `${FRONTEND_URL}/subscribe/${planSlug}?crypto=success&ref=${reference}`,
     cancel_url: `${FRONTEND_URL}/subscribe/${planSlug}?crypto=cancelled`,
     notify_url: `${BACKEND_URL}/api/payments/crypto-webhook`,
@@ -64,13 +63,25 @@ async function createCheckoutSession({ amount, currency = 'USD', reference, plan
     },
   };
 
-  const res = await axios.post(`${TRIPLE_A_API}/payment`, body, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    timeout: 15000,
-  });
+  let res;
+  try {
+    res = await axios.post(`${TRIPLE_A_API}/payment`, body, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15000,
+    });
+  } catch (err) {
+    if (err.response) {
+      console.error('Triple-A API error:', {
+        status: err.response.status,
+        data: JSON.stringify(err.response.data),
+        headers: err.response.headers,
+      });
+    }
+    throw err;
+  }
 
   return {
     checkoutUrl: res.data.checkout_url || res.data.hosted_url || res.data.url,
