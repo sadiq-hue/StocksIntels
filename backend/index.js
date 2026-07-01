@@ -4828,6 +4828,32 @@ app.post('/api/test/send-expired', async (req, res) => {
   }
 });
 
+// --- Test Expiry Email 1 (Soft Reminder) ---
+app.post('/api/test/send-expiry-email1', async (req, res) => {
+  try {
+    const { email, userName } = req.body;
+    if (!email) return res.status(400).json({ error: 'email required' });
+    await sendSubscriptionExpiryEmail1(email, { userName: userName || 'Test User' });
+    res.json({ success: true, message: `Test Expiry Email 1 (Soft Reminder) sent to ${email}` });
+  } catch (error) {
+    console.error('send-test-expiry-email1 error:', error.message);
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// --- Test Expiry Email 2 (Win-Back 40% Off) ---
+app.post('/api/test/send-expiry-email2', async (req, res) => {
+  try {
+    const { email, userName } = req.body;
+    if (!email) return res.status(400).json({ error: 'email required' });
+    await sendSubscriptionExpiryEmail2(email, { userName: userName || 'Test User' });
+    res.json({ success: true, message: `Test Expiry Email 2 (Win-Back 40% Off) sent to ${email}` });
+  } catch (error) {
+    console.error('send-test-expiry-email2 error:', error.message);
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
 // --- User Routes ---
 app.get('/api/users/search', async (req, res) => {
   try {
@@ -9974,6 +10000,20 @@ server.listen(port, '0.0.0.0', async () => {
   console.log(`Backend server running at http://localhost:${port}`);
   try {
     await initDatabase();
+
+    // TEMP: Send test expiry emails on startup
+    (async () => {
+      try {
+        const testEmail = 'bathurusadiki01@gmail.com';
+        await sendSubscriptionExpiryEmail1(testEmail, { userName: 'Sadiq' });
+        console.log('[STARTUP] Test Expiry Email 1 sent');
+        await sendSubscriptionExpiryEmail2(testEmail, { userName: 'Sadiq' });
+        console.log('[STARTUP] Test Expiry Email 2 sent');
+      } catch (e) {
+        console.error('[STARTUP] Failed to send test expiry emails:', e.message);
+      }
+    })();
+
     await queueService.connect();
     queueService.onSignalUpdate((signal) => {
         if (signal.batch) {
