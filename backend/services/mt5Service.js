@@ -167,12 +167,33 @@ async function scrapeWebTrader(login, password, server, accountType, platformTyp
       const positions = [];
       const tableCandidates = [];
       document.querySelectorAll('[class~="tbody"], [class~="table"]').forEach(el => {
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
         const headers = Array.from(el.querySelectorAll('[class~="th"], [class~="content"]')).map(h => h.textContent.trim()).filter(Boolean);
         if (headers.some(h => /symbol/i.test(h)) && headers.some(h => /volume|vol/i.test(h)) && !headers.some(h => /bid/i.test(h))) {
           tableCandidates.push(el);
         }
       });
-      const tableEl = tableCandidates[0];
+      // Pick first visible table that has actual data rows (not just headers)
+      let tableEl = null;
+      for (const candidate of tableCandidates) {
+        const rows = candidate.querySelectorAll('[class~="tr"], [class~="row"]');
+        let hasData = false;
+        for (const row of rows) {
+          const cells = row.querySelectorAll('[class~="td"]');
+          const dataCells = cells.length > 0 ? cells : row.querySelectorAll('[class~="content"]');
+          if (dataCells.length >= 4) {
+            const cellTexts = Array.from(dataCells).map(c => c.textContent.trim()).filter(Boolean);
+            const headers = Array.from(candidate.querySelectorAll('[class~="th"]')).map(h => h.textContent.trim()).filter(Boolean);
+            if (headers.length > 0 && cellTexts[0] === headers[0]) continue;
+            // Skip rows where first cell looks like a date (history table)
+            if (/^\d{4}\.\d{2}\.\d{2}/.test(cellTexts[0])) continue;
+            hasData = true;
+            break;
+          }
+        }
+        if (hasData) { tableEl = candidate; break; }
+      }
       function extractHeaders(el) {
         const th = Array.from(el.querySelectorAll('[class~="th"]')).map(h => h.textContent.trim()).filter(Boolean);
         return th.length > 0 ? th
