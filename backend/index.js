@@ -7943,7 +7943,7 @@ app.post('/api/payments/crypto', async (req, res) => {
     res.json({ success: true, checkoutUrl: result.checkoutUrl, reference: externalRef });
   } catch (error) {
     console.error('Crypto checkout error:', error.message);
-    res.status(500).json({ error: 'Failed to create crypto checkout' });
+    res.status(500).json({ error: error.message || 'Failed to create crypto checkout' });
   }
 });
 
