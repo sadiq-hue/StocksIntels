@@ -8,7 +8,7 @@ const CLIENT_ID = process.env.TRIPLE_A_CLIENT_ID;
 const CLIENT_SECRET = process.env.TRIPLE_A_CLIENT_SECRET;
 const MERCHANT_KEY = process.env.TRIPLE_A_MERCHANT_KEY;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-const BACKEND_URL = process.env.BACKEND_URL || process.env.WEBHOOK_URL || 'https://stocksintels-backend.railway.app';
+const BACKEND_URL = process.env.BACKEND_URL || process.env.WEBHOOK_URL || 'https://stockintel-backend-production.up.railway.app';
 
 async function getAccessToken() {
   const res = await axios.post(`${TRIPLE_A_API}/oauth/token`,
