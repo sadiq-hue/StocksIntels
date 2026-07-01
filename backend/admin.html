@@ -822,33 +822,70 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
     </div>
 
     <div id="tab-audit" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h1 class="text-xl font-bold text-gray-900">Business Audit</h1>
-        <select id="auditPeriod" class="input-field text-sm py-1.5 w-32" onchange="fetchAudit()">
-          <option value="weekly">Weekly</option>
-          <option value="monthly">Monthly</option>
-        </select>
+        <div class="flex items-center gap-3">
+          <select id="auditPeriod" class="input-field text-sm py-1.5 w-28" onchange="fetchAudit()">
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+          <select id="auditRange" class="input-field text-sm py-1.5 w-20" onchange="fetchAudit()">
+            <option value="3">3</option>
+            <option value="6" selected>6</option>
+            <option value="12">12</option>
+          </select>
+          <label class="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none">
+            <input type="checkbox" id="auditAutoRefresh" onchange="toggleAuditAutoRefresh()" class="rounded">
+            Auto
+          </label>
+          <button class="btn btn-secondary text-xs py-1.5" onclick="fetchAudit()">Refresh</button>
+          <span id="auditTimestamp" class="text-xs text-gray-400"></span>
+        </div>
       </div>
 
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="auditSummaryCards">
-        <div class="stat-card"><div class="stat-value" id="auditSignups">-</div><div class="stat-label">New Signups <span id="auditSignupsTrend" class="text-xs"></span></div></div>
-        <div class="stat-card"><div class="stat-value" id="auditChurned">-</div><div class="stat-label">Churned <span id="auditChurnedTrend" class="text-xs"></span></div></div>
-        <div class="stat-card"><div class="stat-value" id="auditRetention">-</div><div class="stat-label">Retention Rate</div></div>
-        <div class="stat-card"><div class="stat-value" id="auditActivePaid">-</div><div class="stat-label">Active Paid Users</div></div>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div class="stat-card"><div class="stat-value text-lg" id="auditSignups">-</div><div class="stat-label">New Signups <span id="auditSignupsTrend" class="text-xs font-medium"></span></div></div>
+        <div class="stat-card"><div class="stat-value text-lg" id="auditChurned">-</div><div class="stat-label">Churned <span id="auditChurnedTrend" class="text-xs font-medium"></span></div></div>
+        <div class="stat-card"><div class="stat-value text-lg" id="auditRetention">-</div><div class="stat-label">Retention Rate</div></div>
+        <div class="stat-card"><div class="stat-value text-lg" id="auditConversion">-</div><div class="stat-label">Conversion Rate</div></div>
+        <div class="stat-card"><div class="stat-value text-lg" id="auditActivePaid">-</div><div class="stat-label">Active Paid</div></div>
       </div>
 
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="stat-card"><div class="stat-value" id="auditRevenue">-</div><div class="stat-label">Revenue <span id="auditRevenueTrend" class="text-xs"></span></div></div>
-        <div class="stat-card"><div class="stat-value" id="auditTotalRevenue">-</div><div class="stat-label">Total Revenue (All Time)</div></div>
-        <div class="stat-card"><div class="stat-value" id="auditSuccessfulPmts">-</div><div class="stat-label">Successful Payments</div></div>
-        <div class="stat-card"><div class="stat-value" id="auditFailedPmts">-</div><div class="stat-label">Failed Payments</div></div>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div class="stat-card"><div class="stat-value text-lg" id="auditRevenue">-</div><div class="stat-label">Revenue <span id="auditRevenueTrend" class="text-xs font-medium"></span></div></div>
+        <div class="stat-card"><div class="stat-value text-lg" id="auditArpu">-</div><div class="stat-label">Avg Revenue/User</div></div>
+        <div class="stat-card"><div class="stat-value text-lg" id="auditTotalRevenue">-</div><div class="stat-label">Total Revenue</div></div>
+        <div class="stat-card"><div class="stat-value text-lg" id="auditSuccessfulPmts">-</div><div class="stat-label">Succeeded</div></div>
+        <div class="stat-card"><div class="stat-value text-lg" id="auditFailedPmts">-</div><div class="stat-label">Failed</div></div>
       </div>
 
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="stat-card"><div class="stat-value" id="auditSubAttempts">-</div><div class="stat-label">Sub Attempts <span id="auditSubAttemptsTrend" class="text-xs"></span></div></div>
-        <div class="stat-card"><div class="stat-value" id="auditActiveSubs">-</div><div class="stat-label">New Active Subs</div></div>
-        <div class="stat-card"><div class="stat-value" id="auditExpiredSubs">-</div><div class="stat-label">New Expired Subs</div></div>
-        <div class="stat-card"><div class="stat-value" id="auditTotalUsers">-</div><div class="stat-label">Total Users (All Time)</div></div>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div class="stat-card"><div class="stat-value text-lg" id="auditSubAttempts">-</div><div class="stat-label">Sub Attempts <span id="auditSubAttemptsTrend" class="text-xs font-medium"></span></div></div>
+        <div class="stat-card"><div class="stat-value text-lg" id="auditActiveSubs">-</div><div class="stat-label">New Active Subs</div></div>
+        <div class="stat-card"><div class="stat-value text-lg" id="auditExpiredSubs">-</div><div class="stat-label">New Expired Subs</div></div>
+        <div class="stat-card"><div class="stat-value text-lg" id="auditTotalUsers">-</div><div class="stat-label">Total Users</div></div>
+        <div class="stat-card"><div class="stat-value text-lg" id="auditPendingPmts">-</div><div class="stat-label">Pending Pmt</div></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Payment by Provider</h3>
+          <div id="auditProviderBreakdown" class="text-sm text-gray-400">Loading...</div>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Revenue by Plan</h3>
+          <div id="auditPlanBreakdown" class="text-sm text-gray-400">Loading...</div>
+        </div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
+        <div class="p-4 border-b border-gray-100">
+          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Period Comparison</h3>
+        </div>
+        <table class="w-full text-sm">
+          <thead><tr><th>Period</th><th>Signups</th><th>Churned</th><th>Revenue</th><th>Sub Attempts</th><th>Payments OK</th><th>Failed</th></tr></thead>
+          <tbody id="auditHistoryBody"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -940,6 +977,12 @@ function switchTab(tab) {
   document.getElementById('tab-' + tab).classList.remove('hidden');
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.querySelector(`.nav-item[data-tab="${tab}"]`).classList.add('active');
+  // Clear audit auto-refresh when leaving audit tab
+  if (tab !== 'audit' && _auditTimer) {
+    clearInterval(_auditTimer);
+    _auditTimer = null;
+    document.getElementById('auditAutoRefresh').checked = false;
+  }
   if (tab === 'dashboard') fetchDashboard();
   if (tab === 'users') fetchUsers();
   if (tab === 'subscribers') { fetchSubscriptionPlans(); fetchSubscribers(); }
@@ -2563,32 +2606,87 @@ async function fetchFollowers() {
 }
 
 // ── Audit ──
+let _auditTimer = null;
+
+function toggleAuditAutoRefresh() {
+  if (document.getElementById('auditAutoRefresh').checked) {
+    _auditTimer = setInterval(fetchAudit, 30000);
+  } else {
+    clearInterval(_auditTimer);
+    _auditTimer = null;
+  }
+}
+
 async function fetchAudit() {
   const period = document.getElementById('auditPeriod').value;
+  const range = document.getElementById('auditRange').value;
   try {
-    const res = await fetch('/api/admin/audit?period=' + period);
+    const res = await fetch('/api/admin/audit?period=' + period + '&range=' + range);
     if (!res.ok) return;
     const d = await res.json();
+
+    const trendHtml = (val, reverse) => {
+      if (val === 0) return '<span class="text-gray-400">\u2014</span>';
+      const isUp = reverse ? val < 0 : val > 0;
+      const color = isUp ? '#059669' : '#dc2626';
+      const arrow = val > 0 ? '\u2191' : '\u2193';
+      return `<span style="color:${color}">${arrow} ${Math.abs(val)}%</span>`;
+    };
+
     document.getElementById('auditSignups').textContent = d.current.signups;
-    document.getElementById('auditSignupsTrend').textContent = d.trends.signups > 0 ? ('\u2191 +' + d.trends.signups + '%') : (d.trends.signups < 0 ? '\u2193 ' + d.trends.signups + '%' : '');
-    document.getElementById('auditSignupsTrend').style.color = d.trends.signups >= 0 ? '#059669' : '#dc2626';
+    document.getElementById('auditSignupsTrend').innerHTML = trendHtml(d.trends.signups);
     document.getElementById('auditChurned').textContent = d.current.churned;
-    document.getElementById('auditChurnedTrend').textContent = d.trends.churned > 0 ? ('\u2191 +' + d.trends.churned + '%') : (d.trends.churned < 0 ? '\u2193 ' + d.trends.churned + '%' : '');
-    document.getElementById('auditChurnedTrend').style.color = d.trends.churned <= 0 ? '#059669' : '#dc2626';
+    document.getElementById('auditChurnedTrend').innerHTML = trendHtml(d.trends.churned, true);
     document.getElementById('auditRetention').textContent = d.retentionRate + '%';
+    document.getElementById('auditConversion').textContent = d.conversionRate + '%';
     document.getElementById('auditActivePaid').textContent = d.totals.activePaid;
+
     document.getElementById('auditRevenue').textContent = '$' + Number(d.current.revenue).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2});
-    document.getElementById('auditRevenueTrend').textContent = d.trends.revenue > 0 ? ('\u2191 +' + d.trends.revenue + '%') : (d.trends.revenue < 0 ? '\u2193 ' + d.trends.revenue + '%' : '');
-    document.getElementById('auditRevenueTrend').style.color = d.trends.revenue >= 0 ? '#059669' : '#dc2626';
+    document.getElementById('auditRevenueTrend').innerHTML = trendHtml(d.trends.revenue);
+    document.getElementById('auditArpu').textContent = '$' + Number(d.arpu).toFixed(2);
     document.getElementById('auditTotalRevenue').textContent = '$' + Number(d.totals.revenue).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2});
     document.getElementById('auditSuccessfulPmts').textContent = d.current.successfulPayments;
     document.getElementById('auditFailedPmts').textContent = d.current.failedPayments;
+
     document.getElementById('auditSubAttempts').textContent = d.current.subAttempts;
-    document.getElementById('auditSubAttemptsTrend').textContent = d.trends.subAttempts > 0 ? ('\u2191 +' + d.trends.subAttempts + '%') : (d.trends.subAttempts < 0 ? '\u2193 ' + d.trends.subAttempts + '%' : '');
-    document.getElementById('auditSubAttemptsTrend').style.color = d.trends.subAttempts >= 0 ? '#059669' : '#dc2626';
+    document.getElementById('auditSubAttemptsTrend').innerHTML = trendHtml(d.trends.subAttempts);
     document.getElementById('auditActiveSubs').textContent = d.current.activeSubs;
     document.getElementById('auditExpiredSubs').textContent = d.current.expiredSubs;
     document.getElementById('auditTotalUsers').textContent = d.totals.users;
+    document.getElementById('auditPendingPmts').textContent = d.current.pendingPayments;
+
+    // Timestamp
+    document.getElementById('auditTimestamp').textContent = 'Updated ' + new Date(d.generatedAt).toLocaleTimeString();
+
+    // Provider breakdown
+    const providers = Object.keys(d.paymentByProvider);
+    document.getElementById('auditProviderBreakdown').innerHTML = providers.length > 0
+      ? providers.map(p => `<div class="flex justify-between py-1.5 border-b border-gray-50 last:border-0"><span class="text-gray-700 capitalize">${esc(p)}</span><span class="font-medium text-gray-900">${d.paymentByProvider[p].count} txns / $${Number(d.paymentByProvider[p].revenue).toFixed(2)}</span></div>`).join('')
+      : '<div class="text-gray-400">No payments this period</div>';
+
+    // Plan breakdown
+    const plans = Object.keys(d.paymentByPlan);
+    document.getElementById('auditPlanBreakdown').innerHTML = plans.length > 0
+      ? plans.map(p => `<div class="flex justify-between py-1.5 border-b border-gray-50 last:border-0"><span class="text-gray-700 capitalize">${esc(p)}</span><span class="font-medium text-gray-900">${d.paymentByPlan[p].count} subs / $${Number(d.paymentByPlan[p].revenue).toFixed(2)}</span></div>`).join('')
+      : '<div class="text-gray-400">No plan data this period</div>';
+
+    // History table
+    const tbody = document.getElementById('auditHistoryBody');
+    if (d.history.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-6">No history yet</td></tr>';
+    } else {
+      tbody.innerHTML = d.history.map(h => `
+        <tr class="border-b border-gray-50 hover:bg-gray-50">
+          <td class="font-medium text-gray-900">${esc(h.label)}</td>
+          <td class="text-gray-700">${h.signups}</td>
+          <td class="text-gray-700">${h.churned}</td>
+          <td class="text-gray-700">$${Number(h.revenue).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+          <td class="text-gray-700">${h.subattempts}</td>
+          <td class="text-gray-700">${h.successfulpayments}</td>
+          <td class="text-gray-700">${h.failedpayments}</td>
+        </tr>
+      `).join('');
+    }
   } catch {}
 }
 

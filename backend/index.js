@@ -1319,26 +1319,64 @@ app.put('/api/admin/affiliates/payouts/:id', async (req, res) => {
 app.get('/api/admin/audit', async (req, res) => {
   try {
     const period = req.query.period === 'monthly' ? 'month' : 'week';
+    const range = Math.min(12, Math.max(1, parseInt(req.query.range) || 6));
     const interval = `1 ${period}`;
-    const prevInterval = `2 ${period}`;
 
-    // Current period data
-    const [newSignups, churnedUsers, payments, subAttempts, activePaid, prevSignups, prevChurned, prevPayments, prevSubAttempts] = await Promise.all([
+    // ── Current period ──
+    const [newSignups, churnedUsers, payments, subAttempts, activePaid, providerBreakdown, planBreakdown] = await Promise.all([
       pool.query(`SELECT COUNT(*)::int as cnt FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
       pool.query(`SELECT COUNT(*)::int as cnt FROM subscriptions WHERE status = 'expired' AND updated_at >= CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
       pool.query(`SELECT COUNT(*)::int as total, COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as revenue, COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0)::int as successful, COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0)::int as failed, COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0)::int as pending FROM payment_transactions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
       pool.query(`SELECT COUNT(*)::int as total, COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0)::int as active, COALESCE(SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END), 0)::int as expired FROM subscriptions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
       pool.query(`SELECT COUNT(*)::int as cnt FROM users WHERE subscription_status = 'active' AND subscription_tier IS NOT NULL AND subscription_tier != 'free'`),
-      // Previous period data (for trend comparison)
-      pool.query(`SELECT COUNT(*)::int as cnt FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${prevInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
-      pool.query(`SELECT COUNT(*)::int as cnt FROM subscriptions WHERE status = 'expired' AND updated_at >= CURRENT_TIMESTAMP - INTERVAL '${prevInterval}' AND updated_at < CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
-      pool.query(`SELECT COUNT(*)::int as total, COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as revenue FROM payment_transactions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${prevInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
-      pool.query(`SELECT COUNT(*)::int as total FROM subscriptions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${prevInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+      pool.query(`SELECT provider, COUNT(*)::int as count, COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as revenue FROM payment_transactions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${interval}' GROUP BY provider`),
+      pool.query(`SELECT plan_name, COUNT(*)::int as count, COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as revenue FROM payment_transactions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${interval}' AND plan_name IS NOT NULL GROUP BY plan_name`),
     ]);
 
-    const totalUsers = await pool.query('SELECT COUNT(*)::int as cnt FROM users');
-    const totalRevenue = await pool.query("SELECT COALESCE(SUM(amount), 0) as total FROM payment_transactions WHERE status = 'success'");
+    // ── All-time totals ──
+    const [totalUsers, totalRevenue, totalSignups, trialUsers] = await Promise.all([
+      pool.query('SELECT COUNT(*)::int as cnt FROM users'),
+      pool.query("SELECT COALESCE(SUM(amount), 0) as total FROM payment_transactions WHERE status = 'success'"),
+      pool.query('SELECT COUNT(*)::int as cnt FROM users'),
+      pool.query("SELECT COUNT(*)::int as cnt FROM users WHERE trial_start_date IS NOT NULL AND trial_start_date >= CURRENT_TIMESTAMP - INTERVAL '${interval}'"),
+    ]);
 
+    // ── Previous period (for trend) ──
+    const twoInterval = `2 ${period}`;
+    const [prevSignups, prevChurned, prevPayments, prevSubAttempts] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int as cnt FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${twoInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+      pool.query(`SELECT COUNT(*)::int as cnt FROM subscriptions WHERE status = 'expired' AND updated_at >= CURRENT_TIMESTAMP - INTERVAL '${twoInterval}' AND updated_at < CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+      pool.query(`SELECT COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) as revenue FROM payment_transactions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${twoInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+      pool.query(`SELECT COUNT(*)::int as total FROM subscriptions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${twoInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${interval}'`),
+    ]);
+
+    // ── Period history (last N periods) ──
+    const historyPromises = [];
+    for (let i = 0; i < range; i++) {
+      const start = i + 1;
+      const end = i;
+      const startInterval = `${start} ${period}`;
+      const endInterval = end === 0 ? '0 seconds' : `${end} ${period}`;
+      const label = period === 'monthly'
+        ? new Date(Date.now() - i * 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+        : `Week -${i}`;
+      historyPromises.push(
+        pool.query(`
+          SELECT
+            '${label}' as label,
+            (SELECT COUNT(*)::int FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${startInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${endInterval}') as signups,
+            (SELECT COUNT(*)::int FROM subscriptions WHERE status = 'expired' AND updated_at >= CURRENT_TIMESTAMP - INTERVAL '${startInterval}' AND updated_at < CURRENT_TIMESTAMP - INTERVAL '${endInterval}') as churned,
+            (SELECT COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) FROM payment_transactions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${startInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${endInterval}') as revenue,
+            (SELECT COUNT(*)::int FROM subscriptions WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '${startInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${endInterval}') as subAttempts,
+            (SELECT COUNT(*)::int FROM payment_transactions WHERE status = 'success' AND created_at >= CURRENT_TIMESTAMP - INTERVAL '${startInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${endInterval}') as successfulPayments,
+            (SELECT COUNT(*)::int FROM payment_transactions WHERE status = 'failed' AND created_at >= CURRENT_TIMESTAMP - INTERVAL '${startInterval}' AND created_at < CURRENT_TIMESTAMP - INTERVAL '${endInterval}') as failedPayments
+        `)
+      );
+    }
+    const historyResults = await Promise.all(historyPromises);
+    const history = historyResults.map(r => r.rows[0]).reverse();
+
+    // ── Compute derived metrics ──
     const curr = {
       signups: newSignups.rows[0].cnt,
       churned: churnedUsers.rows[0].cnt,
@@ -1351,41 +1389,52 @@ app.get('/api/admin/audit', async (req, res) => {
       activeSubs: subAttempts.rows[0].active,
       expiredSubs: subAttempts.rows[0].expired,
     };
-    const prev = {
-      signups: prevSignups.rows[0].cnt,
-      churned: prevChurned.rows[0].cnt,
-      payments: prevPayments.rows[0].total,
-      revenue: parseFloat(prevPayments.rows[0].revenue),
-      subAttempts: prevSubAttempts.rows[0].total,
-    };
-
+    const prevRevenue = parseFloat(prevPayments.rows[0].revenue);
     const activePaidCount = activePaid.rows[0].cnt;
+    const allTimeUsers = totalUsers.rows[0].cnt;
+    const allTimeRevenue = parseFloat(totalRevenue.rows[0].total);
+
     const retentionRate = activePaidCount > 0
-      ? Math.round((1 - curr.churned / (activePaidCount + curr.churned)) * 100)
+      ? Math.round((1 - curr.churned / Math.max(1, activePaidCount + curr.churned)) * 100)
       : 100;
+    const conversionRate = curr.signups > 0
+      ? Math.round((curr.activeSubs / curr.signups) * 100)
+      : 0;
+    const arpu = curr.successfulPayments > 0
+      ? Math.round((curr.revenue / curr.successfulPayments) * 100) / 100
+      : 0;
 
     const calcTrend = (currVal, prevVal) => {
       if (prevVal === 0) return currVal > 0 ? 100 : 0;
       return Math.round(((currVal - prevVal) / prevVal) * 100);
     };
 
+    // ── Provider & plan breakdown ──
+    const paymentByProvider = {};
+    providerBreakdown.rows.forEach(r => { paymentByProvider[r.provider || 'unknown'] = { count: r.count, revenue: parseFloat(r.revenue) }; });
+    const paymentByPlan = {};
+    planBreakdown.rows.forEach(r => { paymentByPlan[r.plan_name || 'unknown'] = { count: r.count, revenue: parseFloat(r.revenue) }; });
+
     res.json({
       period,
+      range,
       current: curr,
-      previous: prev,
-      totals: {
-        users: totalUsers.rows[0].cnt,
-        revenue: parseFloat(totalRevenue.rows[0].total),
-        activePaid: activePaidCount,
-      },
+      previous: { signups: prevSignups.rows[0].cnt, churned: prevChurned.rows[0].cnt, revenue: prevRevenue, subAttempts: prevSubAttempts.rows[0].total },
+      totals: { users: allTimeUsers, revenue: allTimeRevenue, activePaid: activePaidCount },
       retentionRate,
+      conversionRate,
+      arpu,
       trends: {
-        signups: calcTrend(curr.signups, prev.signups),
-        churned: calcTrend(curr.churned, prev.churned),
-        payments: calcTrend(curr.payments, prev.payments),
-        revenue: calcTrend(curr.revenue, prev.revenue),
-        subAttempts: calcTrend(curr.subAttempts, prev.subAttempts),
+        signups: calcTrend(curr.signups, prevSignups.rows[0].cnt),
+        churned: calcTrend(curr.churned, prevChurned.rows[0].cnt),
+        revenue: calcTrend(curr.revenue, prevRevenue),
+        subAttempts: calcTrend(curr.subAttempts, prevSubAttempts.rows[0].total),
+        payments: calcTrend(curr.successfulPayments, history.length > 1 ? history[history.length - 2]?.successfulpayments || 0 : 0),
       },
+      history,
+      paymentByProvider,
+      paymentByPlan,
+      generatedAt: new Date().toISOString(),
     });
   } catch (err) {
     console.error('Admin audit error:', err.message);
