@@ -9737,19 +9737,42 @@ async function sendDailyPortfolioReports() {
               });
             }
           }
-          // Deduplicate broker positions by ticker
-          if (hasValidSnapshot) {
-            const merged = deduplicateHoldings(holdings);
-            holdings.length = 0;
-            holdings.push(...merged);
-            if (holdings.length === 0) {
-              holdings.push({
-                ticker: 'ACCOUNT', name: 'Trading Account', shares: 1,
-                currentPrice: totalEquity, value: totalEquity, pnl: totalEquity - totalBalance,
-                pnlPercent: totalBalance > 0 ? Math.round(((totalEquity - totalBalance) / totalBalance * 100) * 10) / 10 : 0,
-                sector: 'Trading', market: 'Global', currency: 'USD',
-              });
+          // Always show account summary holding (equity/balance is reliable)
+          holdings.length = 0;
+          if (totalEquity > 0 || totalBalance > 0) {
+            holdings.push({
+              ticker: 'ACCOUNT', name: 'Trading Account', shares: 1,
+              currentPrice: totalEquity, value: totalEquity, pnl: totalEquity - totalBalance,
+              pnlPercent: totalBalance > 0 ? Math.round(((totalEquity - totalBalance) / totalBalance * 100) * 10) / 10 : 0,
+              sector: 'Trading', market: 'Global', currency: 'USD',
+            });
+          }
+          // Only include open positions if sync also returned valid trade history (scrape worked correctly)
+          if (hasValidSnapshot && brokers.some(b => (b.trade_history || []).length > 0)) {
+            const validPositions = [];
+            for (const broker of brokers) {
+              for (const pos of (broker.positions || [])) {
+                const profit = parseFloat(pos.profit || '0');
+                const volume = parseFloat(pos.volume || '0');
+                const price = parseFloat(pos.current_price || pos.price_2 || pos.price || '0');
+                const value = price * volume;
+                if (profit !== 0 && value > 0 && volume > 0 && price > 1) {
+                  validPositions.push({
+                    ticker: (pos.symbol || '').toString().toUpperCase(),
+                    name: `${(pos.symbol || '').toString().toUpperCase()} ${pos.type || ''}`.trim(),
+                    shares: volume, currentPrice: price, value: value, pnl: profit,
+                    pnlPercent: (value - profit) > 0 ? Math.round((profit / (value - profit) * 100) * 10) / 10 : 0,
+                    sector: 'Trading', market: 'Global', currency: 'USD',
+                  });
+                }
+              }
             }
+            if (validPositions.length > 0) {
+              const merged = deduplicateHoldings(validPositions);
+              holdings.push(...merged);
+            }
+          }
+          if (hasValidSnapshot) {
             const tv = totalEquity * fxRate, tc = totalBalance * fxRate;
             const sp = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent);
             await sendPortfolioReportEmail(user.email, {
@@ -9943,19 +9966,42 @@ async function sendPortfolioReportToUser(userId, email, fullName) {
           });
         }
       }
-      // Deduplicate broker positions by ticker
-      if (hasValidSnapshot) {
-        const merged = deduplicateHoldings(holdings);
-        holdings.length = 0;
-        holdings.push(...merged);
-        if (holdings.length === 0) {
-          holdings.push({
-            ticker: 'ACCOUNT', name: 'Trading Account', shares: 1,
-            currentPrice: totalEquity, value: totalEquity, pnl: totalEquity - totalBalance,
-            pnlPercent: totalBalance > 0 ? Math.round(((totalEquity - totalBalance) / totalBalance * 100) * 10) / 10 : 0,
-            sector: 'Trading', market: 'Global', currency: 'USD',
-          });
+      // Always show account summary holding (equity/balance is reliable)
+      holdings.length = 0;
+      if (totalEquity > 0 || totalBalance > 0) {
+        holdings.push({
+          ticker: 'ACCOUNT', name: 'Trading Account', shares: 1,
+          currentPrice: totalEquity, value: totalEquity, pnl: totalEquity - totalBalance,
+          pnlPercent: totalBalance > 0 ? Math.round(((totalEquity - totalBalance) / totalBalance * 100) * 10) / 10 : 0,
+          sector: 'Trading', market: 'Global', currency: 'USD',
+        });
+      }
+      // Only include open positions if sync also returned valid trade history (scrape worked correctly)
+      if (hasValidSnapshot && brokers.some(b => (b.trade_history || []).length > 0)) {
+        const validPositions = [];
+        for (const broker of brokers) {
+          for (const pos of (broker.positions || [])) {
+            const profit = parseFloat(pos.profit || '0');
+            const volume = parseFloat(pos.volume || '0');
+            const price = parseFloat(pos.current_price || pos.price_2 || pos.price || '0');
+            const value = price * volume;
+            if (profit !== 0 && value > 0 && volume > 0 && price > 1) {
+              validPositions.push({
+                ticker: (pos.symbol || '').toString().toUpperCase(),
+                name: `${(pos.symbol || '').toString().toUpperCase()} ${pos.type || ''}`.trim(),
+                shares: volume, currentPrice: price, value: value, pnl: profit,
+                pnlPercent: (value - profit) > 0 ? Math.round((profit / (value - profit) * 100) * 10) / 10 : 0,
+                sector: 'Trading', market: 'Global', currency: 'USD',
+              });
+            }
+          }
         }
+        if (validPositions.length > 0) {
+          const merged = deduplicateHoldings(validPositions);
+          holdings.push(...merged);
+        }
+      }
+      if (hasValidSnapshot) {
         const tv = totalEquity * fxRate, tc = totalBalance * fxRate;
         const sp = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent);
         await sendPortfolioReportEmail(email, {
