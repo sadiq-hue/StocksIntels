@@ -6,6 +6,13 @@ import { Card } from "../components/ui/card";
 import { toast } from "sonner";
 import { useAuth } from "../auth/AuthContext";
 
+const cryptoOptions = [
+  { ticker: "BTC", name: "Bitcoin", networks: ["Bitcoin", "Lightning network"] },
+  { ticker: "ETH", name: "Ethereum", networks: ["Ethereum network"] },
+  { ticker: "USDT", name: "Tether", networks: ["ERC20", "TRC20"] },
+  { ticker: "USDC", name: "USD Coin", networks: ["ERC20"] },
+];
+
 const planDetails = {
   starter: {
     name: "Starter",
@@ -47,6 +54,7 @@ export function SubscriptionPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const [paymentRef, setPaymentRef] = useState("");
   const [pollStatus, setPollStatus] = useState<"idle" | "waiting" | "success" | "failed">("idle");
+  const [selectedCrypto, setSelectedCrypto] = useState<{ ticker: string; network: string }>({ ticker: "USDT", network: "ERC20" });
 
   // Handle PayPal & Crypto return redirects
   useEffect(() => {
@@ -155,6 +163,8 @@ export function SubscriptionPage() {
             plan: selectedPlan.name,
             userId: user?.id,
             durationMonths,
+            cryptoTicker: selectedCrypto.ticker,
+            cryptoNetwork: selectedCrypto.network,
           }),
         });
 
@@ -382,31 +392,77 @@ export function SubscriptionPage() {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-amber-200">
+                              <th className="w-8 py-2" />
                               <th className="text-left py-2 pr-4 font-bold text-amber-900">Ticker</th>
                               <th className="text-left py-2 pr-4 font-bold text-amber-900">Name</th>
                               <th className="text-left py-2 font-bold text-amber-900">Network</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {[
-                              { ticker: "BTC", name: "Bitcoin", network: "Bitcoin, Lightning network" },
-                              { ticker: "ETH", name: "Ethereum", network: "Ethereum network" },
-                              { ticker: "USDT", name: "Tether", network: "ERC20, TRC20" },
-                              { ticker: "USDC", name: "USD Coin", network: "ERC20" },
-                            ].map((c) => (
-                              <tr key={c.ticker} className="border-b border-amber-100">
-                                <td className="py-2 pr-4 font-bold text-amber-900">{c.ticker}</td>
-                                <td className="py-2 pr-4 text-amber-800">{c.name}</td>
-                                <td className="py-2 text-amber-800">{c.network}</td>
-                              </tr>
-                            ))}
+                            {cryptoOptions.map((c) => {
+                              const isSelected = selectedCrypto.ticker === c.ticker;
+                              return c.networks.length === 1 ? (
+                                <tr
+                                  key={c.ticker}
+                                  className={`border-b border-amber-100 cursor-pointer transition-colors ${isSelected ? "bg-amber-100" : "hover:bg-amber-50"}`}
+                                  onClick={() => setSelectedCrypto({ ticker: c.ticker, network: c.networks[0] })}
+                                >
+                                  <td className="py-2 pr-2">
+                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-[#0D7490]" : "border-gray-300"}`}>
+                                      {isSelected && <div className="w-2 h-2 rounded-full bg-[#0D7490]" />}
+                                    </div>
+                                  </td>
+                                  <td className="py-2 pr-4 font-bold text-amber-900">{c.ticker}</td>
+                                  <td className="py-2 pr-4 text-amber-800">{c.name}</td>
+                                  <td className="py-2 text-amber-800">{c.networks[0]}</td>
+                                </tr>
+                              ) : (
+                                <tr key={c.ticker}>
+                                  <td className="py-2 pr-2 align-top pt-3">
+                                    <div
+                                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center cursor-pointer ${isSelected ? "border-[#0D7490]" : "border-gray-300"}`}
+                                      onClick={() => setSelectedCrypto({ ticker: c.ticker, network: c.networks[0] })}
+                                    >
+                                      {isSelected && <div className="w-2 h-2 rounded-full bg-[#0D7490]" />}
+                                    </div>
+                                  </td>
+                                  <td className="py-2 pr-4 align-top pt-3 font-bold text-amber-900">{c.ticker}</td>
+                                  <td className="py-2 pr-4 align-top pt-3 text-amber-800">{c.name}</td>
+                                  <td className="py-2 text-amber-800">
+                                    {c.networks.length > 1 ? (
+                                      <div className="flex flex-col gap-1">
+                                        {c.networks.map((net) => {
+                                          const netSelected = isSelected && selectedCrypto.network === net;
+                                          return (
+                                            <button
+                                              key={net}
+                                              type="button"
+                                              className={`text-left px-2 py-1 rounded text-[11px] font-medium transition-colors ${
+                                                netSelected
+                                                  ? "bg-[#0D7490] text-white"
+                                                  : "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                              }`}
+                                              onClick={() => setSelectedCrypto({ ticker: c.ticker, network: net })}
+                                            >
+                                              {net}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      c.networks[0]
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
                     </div>
                     <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
                       <p className="text-[11px] text-purple-800 leading-relaxed font-medium">
-                        You'll be redirected to Triple-A to complete your purchase.
+                        You'll be redirected to Triple-A to complete your purchase with <strong>{selectedCrypto.ticker}</strong> on <strong>{selectedCrypto.network}</strong>.
                       </p>
                     </div>
                   </div>

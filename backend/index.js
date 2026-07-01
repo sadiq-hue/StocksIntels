@@ -7916,7 +7916,7 @@ app.post('/api/payments/paypal-webhook', async (req, res) => {
 // --- Crypto (Triple-A) Checkout ---
 app.post('/api/payments/crypto', async (req, res) => {
   try {
-    const { amount, currency, plan, userId, durationMonths } = req.body;
+    const { amount, currency, plan, userId, durationMonths, cryptoTicker, cryptoNetwork } = req.body;
     if (!amount) {
       return res.status(400).json({ error: 'Amount is required' });
     }
@@ -7929,6 +7929,8 @@ app.post('/api/payments/crypto', async (req, res) => {
       reference: externalRef,
       plan: planName,
       durationMonths: durationMonths || 1,
+      cryptoTicker,
+      cryptoNetwork,
     });
 
     await pool.query(
