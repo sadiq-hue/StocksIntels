@@ -54,6 +54,9 @@ async function createCheckoutSession({ amount, currency = 'USD', reference, plan
           sku: reference,
         },
       ],
+      shipping_cost: 0,
+      shipping_discount: 0,
+      tax_cost: 0,
     },
     metadata: {
       plan: plan || 'Subscription',
