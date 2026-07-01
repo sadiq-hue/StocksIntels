@@ -208,7 +208,7 @@ export function SubscriptionPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center gap-2">
-              <div className="size-9 rounded-xl overflow-hidden shadow-lg shadow-[#0D7490]/20">
+              <div className="size-9 overflow-hidden">
                 <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
               </div>
               <span className="text-xl font-bold text-gray-900 tracking-tight">StocksIntels</span>

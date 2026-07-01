@@ -192,7 +192,7 @@ export function PricingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center gap-2">
-              <div className="size-9 rounded-xl overflow-hidden shadow-lg shadow-[#0D7490]/20">
+              <div className="size-9 overflow-hidden">
                 <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
               </div>
               <span className="text-xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
@@ -485,7 +485,7 @@ export function PricingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="size-8 rounded-lg overflow-hidden">
+              <div className="size-8 overflow-hidden">
                 <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
               </div>
               <span className="text-lg font-bold">StocksIntels</span>

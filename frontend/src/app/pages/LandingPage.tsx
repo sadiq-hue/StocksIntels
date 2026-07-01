@@ -244,7 +244,7 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap justify-between items-center gap-4 h-16 md:h-20">
             <Link to="/" className="flex items-center gap-2.5 group">
-              <div className="size-9 md:size-10 rounded-xl overflow-hidden shadow-lg group-hover:scale-105 transition-all duration-300">
+              <div className="size-9 md:size-10 overflow-hidden">
                 <img src="/logo1.jpg" alt="" className="size-full object-cover" />
               </div>
               <span className="text-xl md:text-2xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
@@ -845,7 +845,7 @@ export function LandingPage() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8 lg:gap-12 mb-10">
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2 mb-3 group">
-                <div className="size-8 rounded-lg overflow-hidden group-hover:scale-110 transition-transform duration-300">
+                <div className="size-8 overflow-hidden">
                   <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
                 </div>
                 <span className="text-base font-bold">StocksIntels</span>

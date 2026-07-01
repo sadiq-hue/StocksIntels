@@ -71,7 +71,7 @@ function CompactHero() {
   return (
     <div className="mb-4 text-center">
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-[#0D7490] to-[#14A9B9] rounded-xl flex items-center justify-center shadow-sm overflow-hidden">
+          <div className="w-10 h-10 overflow-hidden">
             <img src="/logo1.jpg" alt="logo" className="size-full object-cover" />
           </div>
         <div className="text-left min-w-0">
