@@ -9699,7 +9699,7 @@ async function sendDailyPortfolioReports() {
         const brokerTickers = new Set(rows.filter(r => r.broker_connection_id > 0).map(r => r.ticker));
         const deduplicatedRows = rows.filter(r => r.broker_connection_id > 0 || !brokerTickers.has(r.ticker));
         for (const r of deduplicatedRows) {
-          const lp = await getLivePrice(r.market, r.ticker) || parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0;
+          const lp = parseFloat(r.current_price) || await getLivePrice(r.market, r.ticker) || parseFloat(r.avg_cost) || 0;
           const ac = parseFloat(r.avg_cost) || 0;
           const sh = parseFloat(r.shares) || 0;
           const val = lp * sh, cost = ac * sh;
@@ -9799,25 +9799,25 @@ async function sendPortfolioReportToUser(userId, email, fullName) {
       console.log(`[SINGLE REPORT] User ${userId} has no real portfolio holdings`);
       return false;
     }
-        const fxRate = await getFxRate();
-        const holdings = [];
-        let nseValue = 0, globalValue = 0, nseCost = 0, globalCost = 0;
-        // Deduplicate: if broker-synced holding exists for a ticker, exclude manual one
-        const brokerTickers = new Set(rows.filter(r => r.broker_connection_id > 0).map(r => r.ticker));
-        const deduplicatedRows = rows.filter(r => r.broker_connection_id > 0 || !brokerTickers.has(r.ticker));
-        for (const r of deduplicatedRows) {
-          const lp = await getLivePrice(r.market, r.ticker) || parseFloat(r.current_price) || parseFloat(r.avg_cost) || 0;
-          const ac = parseFloat(r.avg_cost) || 0;
-          const sh = parseFloat(r.shares) || 0;
-          const val = lp * sh, cost = ac * sh;
-          if (r.market === 'NSE') { nseValue += val; nseCost += cost; } else { globalValue += val; globalCost += cost; }
-          const currency = r.market === 'NSE' ? 'KES' : 'USD';
-          holdings.push({
-            ticker: r.ticker, name: r.name || r.ticker, shares: sh, currentPrice: lp,
-            value: val, pnl: val - cost, pnlPercent: cost > 0 ? Math.round(((val - cost) / cost * 100) * 10) / 10 : 0,
-            sector: r.sector || 'Other', market: r.market || 'NSE', currency,
-          });
-        }
+    const fxRate = await getFxRate();
+    const holdings = [];
+    let nseValue = 0, globalValue = 0, nseCost = 0, globalCost = 0;
+    // Deduplicate: if broker-synced holding exists for a ticker, exclude manual one
+    const brokerTickers = new Set(rows.filter(r => r.broker_connection_id > 0).map(r => r.ticker));
+    const deduplicatedRows = rows.filter(r => r.broker_connection_id > 0 || !brokerTickers.has(r.ticker));
+    for (const r of deduplicatedRows) {
+      const lp = parseFloat(r.current_price) || await getLivePrice(r.market, r.ticker) || parseFloat(r.avg_cost) || 0;
+      const ac = parseFloat(r.avg_cost) || 0;
+      const sh = parseFloat(r.shares) || 0;
+      const val = lp * sh, cost = ac * sh;
+      if (r.market === 'NSE') { nseValue += val; nseCost += cost; } else { globalValue += val; globalCost += cost; }
+      const currency = r.market === 'NSE' ? 'KES' : 'USD';
+      holdings.push({
+        ticker: r.ticker, name: r.name || r.ticker, shares: sh, currentPrice: lp,
+        value: val, pnl: val - cost, pnlPercent: cost > 0 ? Math.round(((val - cost) / cost * 100) * 10) / 10 : 0,
+        sector: r.sector || 'Other', market: r.market || 'NSE', currency,
+      });
+    }
         const tv = nseValue + globalValue * fxRate, tc = nseCost + globalCost * fxRate;
         const sectorMap = {};
         for (const h of holdings) { const vk = h.market === 'NSE' ? h.value : h.value * fxRate; sectorMap[h.sector] = (sectorMap[h.sector] || 0) + vk; }
