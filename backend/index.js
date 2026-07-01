@@ -18,7 +18,7 @@ const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
 const signalPublisher = require('./signalPublisher');
 const { createSignalNotifications } = require('./signalPublisher');
-const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail } = require('./mailer');
+const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail } = require('./mailer');
 const emailSequenceService = require('./emailSequenceService');
 const cron = require('node-cron');
 const {
@@ -9284,6 +9284,8 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR(50) DEFAULT 'free'`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20) DEFAULT 'free'`);
     await pool.query(`ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS duration_months INTEGER DEFAULT 1`);
+    await pool.query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS expiry_email_1_sent_at TIMESTAMP WITH TIME ZONE`);
+    await pool.query(`ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS expiry_email_2_sent_at TIMESTAMP WITH TIME ZONE`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_start_date TIMESTAMP WITH TIME ZONE`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_end_date TIMESTAMP WITH TIME ZONE`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_start_date TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
@@ -10116,6 +10118,7 @@ server.listen(port, '0.0.0.0', async () => {
     cron.schedule('0 * * * *', async () => {
       console.log('[SUBSCRIPTION CRON] Checking expired subscriptions...');
       try {
+        // ── Step 1: Expire subscriptions that just passed end_date ──
         const { rows: expired } = await pool.query(`
           UPDATE subscriptions SET status = 'expired', updated_at = CURRENT_TIMESTAMP
           WHERE status = 'active' AND end_date IS NOT NULL AND end_date < CURRENT_TIMESTAMP
@@ -10128,63 +10131,96 @@ server.listen(port, '0.0.0.0', async () => {
               `UPDATE users SET subscription_status = 'expired', subscription_tier = 'free' WHERE id = $1 AND subscription_status = 'active'`,
               [sub.user_id]
             );
-            // Send expired email
+            // Send Email 1 (Soft Reminder) + set sent timestamp
             try {
-              const userRes = await pool.query('SELECT full_name, email, subscription_tier FROM users WHERE id = $1', [sub.user_id]);
-              const { full_name, email, subscription_tier } = userRes.rows[0] || {};
+              const userRes = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [sub.user_id]);
+              const { full_name, email } = userRes.rows[0] || {};
               if (email) {
-                await sendSubscriptionExpiredEmail(email, {
-                  userName: full_name,
-                  planName: subscription_tier || 'Pro',
-                });
-                console.log(`[SUBSCRIPTION CRON] Expired email sent to ${email}`);
+                await pool.query('UPDATE subscriptions SET expiry_email_1_sent_at = CURRENT_TIMESTAMP WHERE id = $1', [sub.id]);
+                await sendSubscriptionExpiryEmail1(email, { userName: full_name || '' });
+                console.log(`[SUBSCRIPTION CRON] Expiry Email 1 sent to ${email}`);
               }
             } catch (e) {
-              console.error(`[SUBSCRIPTION CRON] Failed to send expired email to user ${sub.user_id}:`, e.message);
+              console.error(`[SUBSCRIPTION CRON] Failed to send Expiry Email 1 to user ${sub.user_id}:`, e.message);
             }
           }
         }
+
+        // ── Step 2: Send Email 1 to any expired subs that missed it (backfill) ──
+        const { rows: needEmail1 } = await pool.query(`
+          SELECT s.id, s.user_id, u.full_name, u.email
+          FROM subscriptions s
+          JOIN users u ON u.id = s.user_id
+          WHERE s.status = 'expired' AND s.expiry_email_1_sent_at IS NULL
+            AND u.email IS NOT NULL
+        `);
+        for (const sub of needEmail1) {
+          try {
+            await pool.query('UPDATE subscriptions SET expiry_email_1_sent_at = CURRENT_TIMESTAMP WHERE id = $1', [sub.id]);
+            await sendSubscriptionExpiryEmail1(sub.email, { userName: sub.full_name || '' });
+            console.log(`[SUBSCRIPTION CRON] Expiry Email 1 (backfill) sent to ${sub.email}`);
+          } catch (e) {
+            console.error(`[SUBSCRIPTION CRON] Failed backfill Email 1 for ${sub.email}:`, e.message);
+          }
+        }
+
+        // ── Step 3: Send Email 2 (Win-Back 40% off) to subs expired >= 48h after Email 1 ──
+        const { rows: readyEmail2 } = await pool.query(`
+          SELECT s.id, u.full_name, u.email
+          FROM subscriptions s
+          JOIN users u ON u.id = s.user_id
+          WHERE s.status = 'expired'
+            AND s.expiry_email_1_sent_at IS NOT NULL
+            AND s.expiry_email_2_sent_at IS NULL
+            AND s.expiry_email_1_sent_at <= CURRENT_TIMESTAMP - INTERVAL '48 hours'
+            AND u.email IS NOT NULL
+        `);
+        for (const sub of readyEmail2) {
+          try {
+            await pool.query('UPDATE subscriptions SET expiry_email_2_sent_at = CURRENT_TIMESTAMP WHERE id = $1', [sub.id]);
+            await sendSubscriptionExpiryEmail2(sub.email, { userName: sub.full_name || '' });
+            console.log(`[SUBSCRIPTION CRON] Expiry Email 2 (Win-Back) sent to ${sub.email}`);
+          } catch (e) {
+            console.error(`[SUBSCRIPTION CRON] Failed to send Expiry Email 2 to ${sub.email}:`, e.message);
+          }
+        }
+
         // Also catch users with expired end_date on the users table directly
         const { rows: expiredUsers } = await pool.query(`
           UPDATE users SET subscription_status = 'expired', subscription_tier = 'free'
           WHERE subscription_status = 'active' AND subscription_tier != 'free'
             AND subscription_end_date IS NOT NULL AND subscription_end_date < CURRENT_TIMESTAMP
-          RETURNING id, full_name, email, subscription_tier
+          RETURNING id, full_name, email
         `);
         if (expiredUsers.length > 0) {
           console.log(`[SUBSCRIPTION CRON] Expired ${expiredUsers.length} user(s) via users table`);
           for (const user of expiredUsers) {
             try {
               if (user.email) {
-                await sendSubscriptionExpiredEmail(user.email, {
-                  userName: user.full_name,
-                  planName: user.subscription_tier || 'Pro',
-                });
-                console.log(`[SUBSCRIPTION CRON] Expired email sent to ${user.email}`);
+                await sendSubscriptionExpiryEmail1(user.email, { userName: user.full_name || '' });
+                console.log(`[SUBSCRIPTION CRON] Expiry Email 1 sent to ${user.email} (users table)`);
               }
             } catch (e) {
               console.error(`[SUBSCRIPTION CRON] Failed to send expired email to ${user.email}:`, e.message);
             }
           }
         }
-        // Expire free trials that have run past 7 days (trial users with no paid subscription_end_date)
+
+        // Expire free trials that have run past 7 days
         const { rows: expiredTrials } = await pool.query(`
           UPDATE users SET subscription_tier = 'free', subscription_status = 'active'
           WHERE subscription_status = 'active' AND subscription_tier != 'free'
             AND (subscription_end_date IS NULL OR subscription_end_date < CURRENT_TIMESTAMP)
             AND trial_start_date IS NOT NULL
             AND trial_start_date < CURRENT_TIMESTAMP - INTERVAL '7 days'
-          RETURNING id, full_name, email, subscription_tier
+          RETURNING id, full_name, email
         `);
         if (expiredTrials.length > 0) {
           console.log(`[SUBSCRIPTION CRON] Expired ${expiredTrials.length} trial(s)`);
           for (const t of expiredTrials) {
             try {
               if (t.email) {
-                await sendSubscriptionExpiredEmail(t.email, {
-                  userName: t.full_name,
-                  planName: t.subscription_tier || 'Pro',
-                });
+                await sendSubscriptionExpiredEmail(t.email, { userName: t.full_name, planName: 'Pro Trial' });
               }
             } catch (e) {
               console.error(`[SUBSCRIPTION CRON] Failed to send trial expired email to ${t.email}:`, e.message);

@@ -929,4 +929,110 @@ async function sendEarningsReportEmail(email, data) {
   return sendViaTransport({ to: email, subject, html, label: 'Earnings report' });
 }
 
-module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendViaTransport };
+async function sendSubscriptionExpiryEmail1(email, data) {
+  const { userName } = data;
+  const subject = 'Your StocksIntels access has expired — here\'s what you\'re missing';
+  const html = baseWrapper(`
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:20px;font-weight:700;color:${TEXT_DARK}">Your Access Has Expired</div>
+      <div style="font-size:13px;color:${TEXT_MED}">Hi ${userName || 'there'},</div>
+    </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:20px">
+      Your StocksIntels subscription has expired — and the markets haven't stopped moving.
+    </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:16px">
+      While you've been away:
+    </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.8;padding-left:20px;margin-bottom:20px">
+      &bull; AI signals have been tracking momentum shifts across the NSE and NGX<br>
+      &bull; Sector rotations are underway across African and global markets<br>
+      &bull; Earnings results and corporate actions are rolling in
+    </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:24px">
+      None of that intelligence is reaching you right now.
+    </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:24px">
+      Renewing takes less than 2 minutes. Your watchlists, saved signals, and preferences are all still here — waiting.
+    </div>
+
+    <div style="text-align:center;margin-bottom:24px">
+      <a href="${process.env.APP_URL || 'http://localhost:5173'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700">RENEW MY SUBSCRIPTION</a>
+    </div>
+
+    <div style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin-bottom:16px;font-style:italic">
+      Still on the fence? Reply to this email and tell me what would make StocksIntels more valuable for you. I read every response.
+    </div>
+
+    <div style="font-size:13px;color:${TEXT_DARK};font-weight:600">StocksIntels Team.</div>
+
+    <div style="font-size:12px;color:${TEXT_LIGHT};text-align:center;padding-top:16px;border-top:1px solid ${BORDER};margin-top:24px">
+      Need help? Reply to this email or visit stocksintels.com/support
+    </div>
+  `);
+  return sendViaTransport({ to: email, subject, html, label: 'Expiry Email 1 - Soft Reminder' });
+}
+
+async function sendSubscriptionExpiryEmail2(email, data) {
+  const { userName } = data;
+  const subject = `${userName || 'Your'} access expired — come back at 40% off (48 hours only)`;
+  const html = baseWrapper(`
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:20px;font-weight:700;color:${TEXT_DARK}">Come Back at 40% Off</div>
+      <div style="font-size:13px;color:${TEXT_MED}">Hi ${userName || 'there'},</div>
+    </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:16px">
+      Your StocksIntels subscription expired 48 hours ago.
+    </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:16px">
+      We don't want you to lose your edge on African and global markets — so we're making it easy to come back.
+    </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:12px;font-weight:600">
+      For the next 48 hours: 40% off your first month back.
+    </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:16px">
+      That's Pro access for KES 1,500 instead of KES 2,500:
+    </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.8;padding-left:20px;margin-bottom:20px">
+      &bull; Real-time signals across NSE, NGX, GSE, JSE + global markets<br>
+      &bull; Full AI sentiment and fundamental analysis<br>
+      &bull; Multi-exchange comparison tools<br>
+      &bull; Unlimited watchlists and custom alerts
+    </div>
+
+    <div style="background:${AMBER}10;border:1px solid ${AMBER}30;border-radius:10px;padding:16px;text-align:center;margin-bottom:20px">
+      <div style="font-size:13px;color:${TEXT_MED};margin-bottom:4px">Use code at checkout</div>
+      <div style="font-size:28px;font-weight:800;color:${AMBER};letter-spacing:4px;font-family:monospace">COMEBACK40</div>
+    </div>
+
+    <div style="text-align:center;margin-bottom:24px">
+      <a href="${process.env.APP_URL || 'http://localhost:5173'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700">RENEW NOW — 40% OFF</a>
+    </div>
+
+    <div style="font-size:13px;color:${RED};line-height:1.5;margin-bottom:16px;text-align:center;font-weight:600">
+      This offer expires in 48 hours. After that, it's back to standard pricing.
+    </div>
+
+    <div style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin-bottom:16px;font-style:italic">
+      If something didn't work for you — reply and tell me. I'm always improving the platform based on real feedback.
+    </div>
+
+    <div style="font-size:13px;color:${TEXT_DARK}">Sadiq Bathuru<br><span style="font-size:12px;color:${TEXT_LIGHT}">Founder, StocksIntels</span></div>
+
+    <div style="font-size:12px;color:${TEXT_LIGHT};text-align:center;padding-top:16px;border-top:1px solid ${BORDER};margin-top:24px">
+      Need help? Reply to this email or visit stocksintels.com/support
+    </div>
+  `);
+  return sendViaTransport({ to: email, subject, html, label: 'Expiry Email 2 - Win-Back 40% Off' });
+}
+
+module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendViaTransport };
