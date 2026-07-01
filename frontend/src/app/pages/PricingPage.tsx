@@ -142,19 +142,18 @@ export function PricingPage() {
       navigate(`/login?redirect=/pricing`);
       return;
     }
-    // TODO: Enable $1 commitment fee post-MVP
     // Check if commitment fee has been paid
-    // if (!(user as any).commitment_fee_paid) {
-    //   try {
-    //     const res = await apiFetch('/payments/commitment-fee', { method: 'POST' });
-    //     const data = await res.json();
-    //     if (!res.ok) throw new Error(data.error || 'Failed');
-    //     updateUser({ ...user, commitment_fee_paid: true });
-    //   } catch (error) {
-    //     toast.error('Please pay the $1 commitment fee to start your trial.');
-    //     return;
-    //   }
-    // }
+    if (!(user as any).commitment_fee_paid) {
+      try {
+        const res = await apiFetch('/payments/commitment-fee', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        updateUser({ ...user, commitment_fee_paid: true });
+      } catch (error) {
+        toast.error('Please pay the $1 commitment fee to start your trial.');
+        return;
+      }
+    }
     setStartingTrial(planName);
     try {
       const res = await apiFetch(`/payments/start-trial`, {
@@ -179,8 +178,7 @@ export function PricingPage() {
       navigate(`/login?redirect=/pricing`);
       return;
     }
-    // Start trial
-    if (trialInfo.isWithinTrial) {
+    if (trialInfo.isWithinTrial || !trialInfo.canStartTrial) {
       navigate(`/subscribe/${planName.toLowerCase()}`);
       return;
     }

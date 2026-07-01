@@ -89,9 +89,9 @@ app.get('/readyz', async (_req, res) => {
   const checks = {};
   try { await pool.query('SELECT 1'); checks.db = 'ok'; } catch { checks.db = 'fail'; }
   try {
-    const pyBridge = require('./pythonBridge');
-    const breaker = pyBridge.getCircuitBreakerStatus();
-    checks.ml = breaker.cooldown ? 'degraded' : 'ok';
+    const modalBridge = require('./modalBridge');
+    const st = await modalBridge.health();
+    checks.ml = st && st.status === 'ok' ? 'ok' : 'degraded';
   } catch { checks.ml = 'unknown'; }
   const allOk = Object.values(checks).every(v => v === 'ok' || v === 'unknown');
   res.status(allOk ? 200 : 503).json({ status: allOk ? 'ok' : 'degraded', checks, uptime: process.uptime() });
@@ -102,11 +102,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://s3.tradingview.com"],
       scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https:"],
+      connectSrc: ["'self'", "https:", "wss://*.tradingview.com", "https://*.tradingview.com"],
+      frameSrc: ["'self'", "https://*.tradingview.com"],
       fontSrc: ["'self'", "https:", "data:"],
     },
   },
@@ -8257,8 +8258,8 @@ app.get('/api/ml/info', async (req, res) => {
   res.json(await mlModel.getModelInfo());
 });
 
-app.get('/api/ml/circuit-breaker', (req, res) => {
-  res.json(mlModel.pyBridge.getCircuitBreakerStatus());
+app.get('/api/ml/circuit-breaker', async (req, res) => {
+  res.json({ status: 'modal', details: await mlModel.modalBridge.health() });
 });
 
 app.post('/api/ml/train', async (req, res) => {
