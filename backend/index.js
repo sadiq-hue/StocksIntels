@@ -9734,6 +9734,10 @@ async function sendDailyPortfolioReports() {
               });
             }
           }
+          // Deduplicate broker positions by ticker
+          const merged = deduplicateHoldings(holdings);
+          holdings.length = 0;
+          holdings.push(...merged);
           if (holdings.length === 0) {
             holdings.push({
               ticker: 'ACCOUNT', name: 'Trading Account', shares: 1,
@@ -9774,7 +9778,14 @@ async function sendDailyPortfolioReports() {
               sector: r.sector || 'Other', market: r.market || 'NSE', currency,
             });
           }
-          const tv = nseValue + globalValue * fxRate, tc = nseCost + globalCost * fxRate;
+          const deduped = deduplicateHoldings(holdings);
+          holdings.length = 0;
+          holdings.push(...deduped);
+          let nseValue2 = 0, globalValue2 = 0, nseCost2 = 0, globalCost2 = 0;
+          for (const h of holdings) {
+            if (h.market === 'NSE') { nseValue2 += h.value; nseCost2 += h.value - h.pnl; } else { globalValue2 += h.value; globalCost2 += h.value - h.pnl; }
+          }
+          const tv = nseValue2 + globalValue2 * fxRate, tc = nseCost2 + globalCost2 * fxRate;
           const sectorMap = {};
           for (const h of holdings) { const vk = h.market === 'NSE' ? h.value : h.value * fxRate; sectorMap[h.sector] = (sectorMap[h.sector] || 0) + vk; }
           const sa = Object.entries(sectorMap).map(([s, v]) => ({ sector: s, value: v, pct: tv > 0 ? Math.round((v / tv) * 100) : 0 })).sort((a, b) => b.value - a.value);
@@ -9790,6 +9801,31 @@ async function sendDailyPortfolioReports() {
     }
     console.log('[DAILY REPORT] Finished');
   } catch (e) { console.error('[DAILY REPORT] Error:', e.message); }
+}
+
+// ── Deduplicate holdings by ticker (merge shares/value/cost, keep first name) ──
+function deduplicateHoldings(holdings) {
+  const map = {};
+  for (const h of holdings) {
+    const key = h.ticker.toUpperCase();
+    if (map[key]) {
+      const e = map[key];
+      const newShares = e.shares + h.shares;
+      const newValue = e.value + h.value;
+      e.shares = newShares;
+      e.value = newValue;
+      e.pnl = e.pnl + h.pnl;
+      e.currentPrice = newShares > 0 ? Math.round((newValue / newShares) * 100) / 100 : 0;
+    } else {
+      map[key] = { ...h };
+    }
+  }
+  const result = Object.values(map);
+  for (const h of result) {
+    const cost = h.value - h.pnl;
+    h.pnlPercent = cost > 0 ? Math.round((h.pnl / cost * 100) * 10) / 10 : 0;
+  }
+  return result;
 }
 
 // ── Daily Paper Trading Portfolio Report Scheduler ──
@@ -9897,6 +9933,10 @@ async function sendPortfolioReportToUser(userId, email, fullName) {
           });
         }
       }
+      // Deduplicate broker positions by ticker
+      const merged = deduplicateHoldings(holdings);
+      holdings.length = 0;
+      holdings.push(...merged);
       if (holdings.length === 0) {
         holdings.push({
           ticker: 'ACCOUNT', name: 'Trading Account', shares: 1,
@@ -9941,7 +9981,14 @@ async function sendPortfolioReportToUser(userId, email, fullName) {
         sector: r.sector || 'Other', market: r.market || 'NSE', currency,
       });
     }
-    const tv = nseValue + globalValue * fxRate, tc = nseCost + globalCost * fxRate;
+    const deduped = deduplicateHoldings(holdings);
+    holdings.length = 0;
+    holdings.push(...deduped);
+    let nseValue2 = 0, globalValue2 = 0, nseCost2 = 0, globalCost2 = 0;
+    for (const h of holdings) {
+      if (h.market === 'NSE') { nseValue2 += h.value; nseCost2 += h.value - h.pnl; } else { globalValue2 += h.value; globalCost2 += h.value - h.pnl; }
+    }
+    const tv = nseValue2 + globalValue2 * fxRate, tc = nseCost2 + globalCost2 * fxRate;
     const sectorMap = {};
     for (const h of holdings) { const vk = h.market === 'NSE' ? h.value : h.value * fxRate; sectorMap[h.sector] = (sectorMap[h.sector] || 0) + vk; }
     const sa = Object.entries(sectorMap).map(([s, v]) => ({ sector: s, value: v, pct: tv > 0 ? Math.round((v / tv) * 100) : 0 })).sort((a, b) => b.value - a.value);
