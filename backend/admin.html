@@ -59,7 +59,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
 @media(max-width:768px){
   .mobile-only{display:flex!important}
   .desktop-only{display:none!important}
-  #sidebar{position:fixed;top:0;left:0;z-index:50;height:100vh;width:280px;transform:translateX(-100%);transition:transform .25s ease}
+  #sidebar{position:fixed;top:0;left:0;z-index:50;height:100vh;width:280px;transform:translateX(-100%);transition:transform .25s ease;overflow-y:auto;-webkit-overflow-scrolling:touch}
   #sidebar.open{transform:translateX(0)}
   #mainContent{margin-left:0!important}
   .stat-card{padding:10px}
