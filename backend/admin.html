@@ -825,9 +825,17 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h1 class="text-xl font-bold text-gray-900">Business Audit</h1>
         <div class="flex items-center gap-3">
-          <select id="auditPeriod" class="input-field text-sm py-1.5 w-28" onchange="fetchAudit()">
+          <select id="auditPeriod" class="input-field text-sm py-1.5 w-28" onchange="onAuditPeriodChange()">
             <option value="weekly">Weekly</option>
             <option value="monthly">Monthly</option>
+          </select>
+          <select id="auditMonth" class="input-field text-sm py-1.5 w-28" style="display:none" onchange="fetchAudit()">
+            <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+            <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+            <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+            <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+          </select>
+          <select id="auditYear" class="input-field text-sm py-1.5 w-20" style="display:none" onchange="fetchAudit()">
           </select>
           <select id="auditRange" class="input-field text-sm py-1.5 w-20" onchange="fetchAudit()">
             <option value="3">3</option>
@@ -999,7 +1007,7 @@ function switchTab(tab) {
   if (tab === 'followers') fetchFollowers();
   if (tab === 'user-activity') { fetchUserActivity(); }
   if (tab === 'affiliates') { fetchAffiliateStats(); fetchAffiliates(); }
-  if (tab === 'audit') { fetchAudit(); }
+  if (tab === 'audit') { onAuditPeriodChange(); }
 }
 ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','audit'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
 
@@ -2617,11 +2625,36 @@ function toggleAuditAutoRefresh() {
   }
 }
 
+function onAuditPeriodChange() {
+  const isMonthly = document.getElementById('auditPeriod').value === 'monthly';
+  document.getElementById('auditMonth').style.display = isMonthly ? '' : 'none';
+  document.getElementById('auditYear').style.display = isMonthly ? '' : 'none';
+  if (isMonthly) {
+    const yearSel = document.getElementById('auditYear');
+    const curYear = new Date().getFullYear();
+    yearSel.innerHTML = '';
+    for (let y = curYear; y >= curYear - 5; y--) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      if (y === curYear) opt.selected = true;
+      yearSel.appendChild(opt);
+    }
+    document.getElementById('auditMonth').value = (new Date().getMonth() + 1).toString();
+  }
+  fetchAudit();
+}
+
 async function fetchAudit() {
   const period = document.getElementById('auditPeriod').value;
   const range = document.getElementById('auditRange').value;
+  let url = '/api/admin/audit?period=' + period + '&range=' + range;
+  if (period === 'monthly') {
+    url += '&month=' + document.getElementById('auditMonth').value;
+    url += '&year=' + document.getElementById('auditYear').value;
+  }
   try {
-    const res = await fetch('/api/admin/audit?period=' + period + '&range=' + range);
+    const res = await fetch(url);
     if (!res.ok) return;
     const d = await res.json();
 
