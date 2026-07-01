@@ -7088,24 +7088,9 @@ app.get('/api/holdings', async (req, res) => {
     const brokerTickers = new Set(rows.filter(r => r.broker_connection_id > 0).map(r => r.ticker));
     let deduplicatedRows = rows.filter(r => r.broker_connection_id > 0 || !brokerTickers.has(r.ticker));
 
-    // If user has active broker connections with any snapshots, exclude all broker-synced
-    // portfolio_holdings entries — actual broker positions/funds are shown via brokerTotals
-    // from snapshot data, not from stale portfolio_holdings.
-    const brokerConnIds = [...new Set(deduplicatedRows.filter(r => r.broker_connection_id > 0).map(r => r.broker_connection_id))];
-    if (brokerConnIds.length > 0) {
-      const { rows: snapRows } = await pool.query(
-        `SELECT DISTINCT ON (broker_connection_id) broker_connection_id
-         FROM broker_account_snapshots
-         WHERE broker_connection_id = ANY($1::int[])
-         ORDER BY broker_connection_id, snapshot_at DESC`,
-        [brokerConnIds]
-      );
-      const activeSnapConns = new Set(snapRows.map(r => r.broker_connection_id));
-      deduplicatedRows = deduplicatedRows.filter(r => {
-        if (!r.broker_connection_id) return true;
-        return !activeSnapConns.has(r.broker_connection_id);
-      });
-    }
+    // Broker-synced holdings are shown in the portfolio. The MT5 WebTrader scrape fix
+    // (visibility check in mt5Service.js) ensures only real open positions are returned,
+    // so stale entries like HEINEKEN/HSBC won't appear after the next sync.
 
     // Fetch live prices in parallel for non-broker holdings
     const livePrices = await Promise.allSettled(deduplicatedRows.map(r =>
