@@ -18,7 +18,7 @@ const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
 const signalPublisher = require('./signalPublisher');
 const { createSignalNotifications } = require('./signalPublisher');
-const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail } = require('./mailer');
+const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail } = require('./mailer');
 const emailSequenceService = require('./emailSequenceService');
 const cron = require('node-cron');
 const {
@@ -824,6 +824,23 @@ app.post('/api/admin/users/:id/activate-subscription', async (req, res) => {
         INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)
         VALUES ($1, (SELECT id FROM subscription_plans WHERE LOWER(name) = $2 LIMIT 1), 'active', $3, $4)
       `, [id, tier, startDate, endDate]);
+    }
+
+    // Send activation confirmation email
+    try {
+      const user = userCheck.rows[0];
+      const userInfo = await pool.query('SELECT full_name FROM users WHERE id = $1', [id]);
+      const userName = userInfo.rows[0]?.full_name || '';
+      await sendSubscriptionActivationEmail(user.email, {
+        userName,
+        planName: tier,
+        durationMonths: months,
+        startDate,
+        endDate,
+      });
+      console.log(`[ADMIN] Activation email sent to ${user.email}`);
+    } catch (emailErr) {
+      console.error('[ADMIN] Failed to send activation email:', emailErr.message);
     }
 
     res.json({

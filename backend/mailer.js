@@ -1027,4 +1027,66 @@ async function sendSubscriptionExpiryEmail2(email, data) {
   return sendViaTransport({ to: email, subject, html, label: 'Expiry Email 2 - Win-Back 40% Off' });
 }
 
-module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendViaTransport };
+async function sendSubscriptionActivationEmail(email, data) {
+  const { userName, planName, durationMonths, startDate, endDate } = data;
+  const features = {
+    starter: ['Real-time African + global market data', '5 AI signals per day', 'Stock screener', 'Portfolio tracking'],
+    premium: ['Unlimited NSE signals', '10 global signals/day', 'Advanced NSE screener', 'NSE technical analysis', 'Email support'],
+    pro: ['Unlimited AI signals', 'All African + global markets', 'Advanced charting', 'Risk scoring', 'Priority support'],
+    institutional: ['API access', 'White-label analytics', 'Dedicated support', 'Team seats', 'Custom data feeds'],
+  };
+  const planFeatures = features[planName?.toLowerCase()] || features.pro;
+  const subject = `Your StocksIntels ${planName || 'Pro'} subscription is now active`;
+  const html = baseWrapper(`
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:22px;font-weight:700;color:${GREEN}">Subscription Activated</div>
+      <div style="font-size:13px;color:${TEXT_MED};margin-top:4px">${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+      ${userName ? `<div style="font-size:14px;color:${TEXT_MED};margin-top:12px">Hello ${userName},</div>` : ''}
+    </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:20px">
+      Your StocksIntels subscription has been successfully activated. You now have full access to all the tools, data, and intelligence your plan includes.
+    </div>
+
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;padding:20px;margin-bottom:20px">
+      <div style="font-size:15px;font-weight:700;color:${TEXT_DARK};margin-bottom:12px">Plan Details</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:13px">
+        <tr><td style="padding:6px 0;color:${TEXT_MED}">Plan</td><td style="padding:6px 0;text-align:right;font-weight:700;color:${TEXT_DARK};text-transform:capitalize">${planName || 'Pro'}</td></tr>
+        <tr><td style="padding:6px 0;color:${TEXT_MED}">Duration</td><td style="padding:6px 0;text-align:right;color:${TEXT_DARK}">${durationMonths || 1} month${durationMonths > 1 ? 's' : ''}</td></tr>
+        <tr><td style="padding:6px 0;color:${TEXT_MED}">Start Date</td><td style="padding:6px 0;text-align:right;color:${TEXT_DARK}">${new Date(startDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</td></tr>
+        <tr><td style="padding:6px 0;color:${TEXT_MED}">End Date</td><td style="padding:6px 0;text-align:right;color:${TEXT_DARK}">${new Date(endDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</td></tr>
+        <tr><td style="padding:6px 0;color:${TEXT_MED}">Status</td><td style="padding:6px 0;text-align:right;font-weight:700;color:${GREEN}">Active</td></tr>
+      </table>
+    </div>
+
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;padding:20px;margin-bottom:20px">
+      <div style="font-size:15px;font-weight:700;color:${TEXT_DARK};margin-bottom:12px">What You Get</div>
+      <div style="font-size:13px;color:${TEXT_DARK};line-height:1.8">
+        ${planFeatures.map(f => `<div style="display:flex;align-items:flex-start;gap:8px;padding:4px 0">&bull; ${f}</div>`).join('')}
+      </div>
+    </div>
+
+    <div style="background:linear-gradient(135deg,${BRAND_COLOR}08,${BRAND_COLOR}04);border:1px solid ${BRAND_COLOR}20;border-radius:10px;padding:20px;margin-bottom:20px">
+      <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7">
+        <strong>Ready to start?</strong> Log in to your account to access real-time market data, AI-powered signals, portfolio tracking, and more.
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-bottom:20px">
+      <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700">GO TO DASHBOARD</a>
+    </div>
+
+    <div style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin-bottom:8px">
+      Need help getting started? Reply to this email or visit our support center. We're here to help you make the most of your subscription.
+    </div>
+
+    <div style="font-size:13px;color:${TEXT_DARK};font-weight:600;margin-top:8px">StocksIntels Team.</div>
+
+    <div style="font-size:12px;color:${TEXT_LIGHT};text-align:center;padding-top:16px;border-top:1px solid ${BORDER};margin-top:24px">
+      Need help? Reply to this email or visit stocksintels.com/support
+    </div>
+  `);
+  return sendViaTransport({ to: email, subject, html, label: 'Subscription activation' });
+}
+
+module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendViaTransport };
