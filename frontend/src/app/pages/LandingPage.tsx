@@ -354,14 +354,13 @@ export function LandingPage() {
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-[1.1] tracking-tight">
-                Trade smarter with{" "}
-                <span className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] bg-clip-text text-transparent">AI-powered</span>{" "}
-                stock intelligence
+                Your edge in{" "}
+                <span className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] bg-clip-text text-transparent">African and global</span>{" "}
+                markets.
               </h1>
 
               <p className="text-lg sm:text-xl text-gray-600 mb-8 max-w-xl leading-relaxed">
-                Real-time prices, market intelligence, and portfolio tracking for{" "}
-                <span className="font-semibold text-gray-900">10,000+ stocks</span> across NSE, NYSE, NASDAQ, and LSE. From Safaricom to Tesla.
+                We track price, volume, fundamentals, sentiment, and macro conditions across African and global exchanges — turning data into market intelligence you can act on.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4">
