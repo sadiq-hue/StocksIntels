@@ -70,7 +70,7 @@ export function DerivativesPage() {
     setLoading(true);
     fetch(`${API_BASE}/nse/corporate-actions?status=pending`)
       .then(r => r.json())
-      .then(setActions)
+      .then(data => { if (Array.isArray(data)) setActions(data); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

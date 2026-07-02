@@ -36,7 +36,7 @@ export function IpoPage() {
     setLoading(true);
     fetch(`${API_BASE}/nse/ipos`)
       .then(r => r.json())
-      .then(setIpos)
+      .then(data => { if (Array.isArray(data)) setIpos(data); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
