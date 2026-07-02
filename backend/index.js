@@ -5669,6 +5669,99 @@ app.get('/api/nse/corporate-actions', async (req, res) => {
   }
 });
 
+// --- Global IPOs ---
+app.get('/api/global/ipos', async (req, res) => {
+  try {
+    const { status } = req.query;
+    let query = 'SELECT * FROM global_ipos';
+    const params = [];
+    if (status) {
+      params.push(status);
+      query += ' WHERE status = $1';
+    }
+    query += ' ORDER BY listing_date DESC NULLS LAST, created_at DESC';
+    const result = await pool.query(query, params);
+    const marketService = require('./marketService');
+    const ipos = await Promise.all(result.rows.map(async (r) => {
+      let currentPrice = r.current_price;
+      let priceChange = null;
+      let priceChangePct = null;
+      if (r.ticker) {
+        try {
+          const quote = await marketService.getStockQuote(r.ticker);
+          if (quote) {
+            currentPrice = quote.price;
+            priceChange = quote.change;
+            priceChangePct = quote.changePercent;
+          }
+        } catch {}
+      }
+      return {
+        ...r,
+        listing_date: r.listing_date?.toISOString().split('T')[0],
+        created_at: r.created_at?.toISOString(),
+        current_price: currentPrice,
+        price_change: priceChange,
+        price_change_pct: priceChangePct,
+      };
+    }));
+    if (ipos.length === 0) {
+      const seed = [
+        { company_name: 'Global IPO Tracker', ticker: null, exchange: null, status: 'info', listing_date: null, offer_price: null, current_price: null, oversubscription_pct: null, description: 'No global IPO data at this time. Check back for new listings.', sector: null },
+      ];
+      return res.json(seed);
+    }
+    res.json(ipos);
+  } catch (err) {
+    console.error('Error fetching global IPOs:', err.message);
+    res.status(500).json({ error: 'Failed to fetch global IPOs' });
+  }
+});
+
+// --- Global Corporate Actions ---
+app.get('/api/global/corporate-actions', async (req, res) => {
+  try {
+    const { ticker, status } = req.query;
+    let query = 'SELECT * FROM global_corporate_actions';
+    const params = [];
+    const conditions = [];
+    if (ticker) { params.push(ticker.toUpperCase()); conditions.push(`ticker = $${params.length}`); }
+    if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
+    if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
+    query += ' ORDER BY event_date DESC NULLS LAST';
+    const result = await pool.query(query, params);
+    const marketService = require('./marketService');
+    const actions = await Promise.all(result.rows.map(async (r) => {
+      let currentPrice = null;
+      let priceChange = null;
+      let priceChangePct = null;
+      if (r.ticker) {
+        try {
+          const quote = await marketService.getStockQuote(r.ticker);
+          if (quote) {
+            currentPrice = quote.price;
+            priceChange = quote.change;
+            priceChangePct = quote.changePercent;
+          }
+        } catch {}
+      }
+      return {
+        ...r,
+        event_date: r.event_date?.toISOString().split('T')[0],
+        record_date: r.record_date?.toISOString().split('T')[0],
+        created_at: r.created_at?.toISOString(),
+        current_price: currentPrice,
+        price_change: priceChange,
+        price_change_pct: priceChangePct,
+      };
+    }));
+    res.json(actions);
+  } catch (err) {
+    console.error('Error fetching global corporate actions:', err.message);
+    res.status(500).json({ error: 'Failed to fetch global corporate actions' });
+  }
+});
+
 // --- Stock Screener Routes ---
 app.get('/api/screener/criteria', async (req, res) => {
   try {
@@ -9857,6 +9950,36 @@ async function initDatabase() {
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );`);
 
+    // ── Global IPOs table ──
+    await pool.query(`CREATE TABLE IF NOT EXISTS global_ipos (
+      id SERIAL PRIMARY KEY,
+      company_name VARCHAR(255) NOT NULL,
+      ticker VARCHAR(20),
+      exchange VARCHAR(50),
+      status VARCHAR(50) NOT NULL DEFAULT 'upcoming',
+      listing_date DATE,
+      offer_price DOUBLE PRECISION,
+      current_price DOUBLE PRECISION,
+      oversubscription_pct DOUBLE PRECISION,
+      description TEXT,
+      sector VARCHAR(100),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+
+    // ── Global corporate actions table ──
+    await pool.query(`CREATE TABLE IF NOT EXISTS global_corporate_actions (
+      id SERIAL PRIMARY KEY,
+      ticker VARCHAR(20) NOT NULL,
+      exchange VARCHAR(50),
+      action_type VARCHAR(100) NOT NULL,
+      title VARCHAR(500) NOT NULL,
+      description TEXT,
+      event_date DATE,
+      record_date DATE,
+      status VARCHAR(50) DEFAULT 'pending',
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+
     // Seed nse_ipos with known IPOs if empty
     try {
       const existingCount = await pool.query('SELECT COUNT(*) FROM nse_ipos');
@@ -9878,6 +10001,55 @@ async function initDatabase() {
       }
     } catch (seedErr) {
       console.error('[Seed] IPO seeding error:', seedErr.message);
+    }
+
+    // ── Seed global_ipos with notable historic global IPOs ──
+    try {
+      const existingGlobal = await pool.query('SELECT COUNT(*) FROM global_ipos');
+      if (parseInt(existingGlobal.rows[0].count, 10) === 0) {
+        const seedGlobal = [
+          { company_name: 'Arm Holdings', ticker: 'ARM', exchange: 'NASDAQ', status: 'listed', listing_date: '2023-09-14', offer_price: 51.00, oversubscription_pct: 1500, description: 'Arm Holdings staged the largest tech IPO of 2023, pricing at $51 per share. The SoftBank-backed chip designer\'s offering was oversubscribed over 15x, valuing the company at $54.5 billion.', sector: 'Semiconductors' },
+          { company_name: 'Rivian Automotive', ticker: 'RIVN', exchange: 'NASDAQ', status: 'listed', listing_date: '2021-11-10', offer_price: 78.00, oversubscription_pct: 300, description: 'Rivian\'s IPO was the largest of 2021 and the 6th-largest US IPO of all time. The EV maker raised $13.7 billion, with shares priced at $78 each.', sector: 'Automotive' },
+          { company_name: 'Reddit', ticker: 'RDDT', exchange: 'NYSE', status: 'listed', listing_date: '2024-03-21', offer_price: 34.00, oversubscription_pct: 500, description: 'Reddit\'s long-awaited IPO priced at $34 per share, with strong demand pushing the social media platform\'s valuation to $6.4 billion.', sector: 'Technology' },
+          { company_name: 'Facebook (Meta)', ticker: 'META', exchange: 'NASDAQ', status: 'listed', listing_date: '2012-05-18', offer_price: 38.00, oversubscription_pct: 2500, description: 'Facebook\'s 2012 IPO was one of the most anticipated in history. Despite a rocky start, Meta Platforms became one of the world\'s most valuable companies.', sector: 'Technology' },
+          { company_name: 'Alibaba Group', ticker: 'BABA', exchange: 'NYSE', status: 'listed', listing_date: '2014-09-19', offer_price: 68.00, oversubscription_pct: 2000, description: 'Alibaba\'s $25 billion IPO was the largest in history at the time. The Chinese e-commerce giant priced at $68 per share on the NYSE.', sector: 'E-Commerce' },
+          { company_name: 'Uber Technologies', ticker: 'UBER', exchange: 'NYSE', status: 'listed', listing_date: '2019-05-10', offer_price: 45.00, oversubscription_pct: 300, description: 'Uber\'s IPO was one of the most anticipated of 2019, pricing at $45 per share. Despite a lukewarm debut, Uber has since become profitable.', sector: 'Technology' },
+          { company_name: 'Snowflake', ticker: 'SNOW', exchange: 'NYSE', status: 'listed', listing_date: '2020-09-16', offer_price: 120.00, oversubscription_pct: 5000, description: 'Snowflake\'s IPO was the largest software IPO in history. The cloud data platform priced at $120 per share and more than doubled on its first day of trading.', sector: 'Software' },
+          { company_name: 'Saudi Aramco', ticker: '2222.SR', exchange: 'Tadawul', status: 'listed', listing_date: '2019-12-11', offer_price: 32.00, oversubscription_pct: 465, description: 'Saudi Aramco\'s $29.4 billion IPO was the largest in history. The state-owned oil giant listed on the Saudi Stock Exchange (Tadawul).', sector: 'Energy' },
+        ];
+        for (const ipo of seedGlobal) {
+          await pool.query(
+            'INSERT INTO global_ipos (company_name, ticker, exchange, status, listing_date, offer_price, oversubscription_pct, description, sector) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING',
+            [ipo.company_name, ipo.ticker, ipo.exchange, ipo.status, ipo.listing_date, ipo.offer_price, ipo.oversubscription_pct, ipo.description, ipo.sector]
+          );
+        }
+        console.log('[Seed] Inserted', seedGlobal.length, 'historic global IPOs');
+      }
+    } catch (seedErr) {
+      console.error('[Seed] Global IPO seeding error:', seedErr.message);
+    }
+
+    // ── Seed global_corporate_actions with notable upcoming/pending events ──
+    try {
+      const existingGlobalCA = await pool.query('SELECT COUNT(*) FROM global_corporate_actions');
+      if (parseInt(existingGlobalCA.rows[0].count, 10) === 0) {
+        const seedGlobalCA = [
+          { ticker: 'AAPL', exchange: 'NASDAQ', action_type: 'dividend', title: 'Apple Inc. - Quarterly Dividend of $0.25 per share', description: 'Apple announced a quarterly cash dividend of $0.25 per share. Ex-Date: 10 Feb 2026, Record: 11 Feb 2026, Payment: 18 Feb 2026.', event_date: '2026-02-10', record_date: '2026-02-11', status: 'pending' },
+          { ticker: 'MSFT', exchange: 'NASDAQ', action_type: 'dividend', title: 'Microsoft Corp. - Quarterly Dividend of $0.83 per share', description: 'Microsoft declared a quarterly dividend of $0.83 per share. Ex-Date: 17 Feb 2026, Record: 18 Feb 2026, Payment: 14 Mar 2026.', event_date: '2026-02-17', record_date: '2026-02-18', status: 'pending' },
+          { ticker: 'NVDA', exchange: 'NASDAQ', action_type: 'dividend', title: 'NVIDIA Corp. - Quarterly Dividend of $0.01 per share', description: 'NVIDIA declared a quarterly cash dividend of $0.01 per share. Ex-Date: 12 Mar 2026, Record: 13 Mar 2026, Payment: 28 Mar 2026.', event_date: '2026-03-12', record_date: '2026-03-13', status: 'pending' },
+          { ticker: 'JPM', exchange: 'NYSE', action_type: 'dividend', title: 'JPMorgan Chase - Quarterly Dividend of $1.40 per share', description: 'JPMorgan Chase declared a quarterly dividend of $1.40 per share. Ex-Date: 4 Apr 2026, Record: 5 Apr 2026, Payment: 20 Apr 2026.', event_date: '2026-04-04', record_date: '2026-04-05', status: 'pending' },
+          { ticker: 'KO', exchange: 'NYSE', action_type: 'dividend', title: 'Coca-Cola Co. - Quarterly Dividend of $0.51 per share', description: 'Coca-Cola declared a quarterly dividend of $0.51 per share. Ex-Date: 15 Mar 2026, Record: 16 Mar 2026, Payment: 1 Apr 2026.', event_date: '2026-03-15', record_date: '2026-03-16', status: 'pending' },
+        ];
+        for (const ca of seedGlobalCA) {
+          await pool.query(
+            'INSERT INTO global_corporate_actions (ticker, exchange, action_type, title, description, event_date, record_date, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING',
+            [ca.ticker, ca.exchange, ca.action_type, ca.title, ca.description, ca.event_date, ca.record_date, ca.status]
+          );
+        }
+        console.log('[Seed] Inserted', seedGlobalCA.length, 'global corporate actions');
+      }
+    } catch (seedErr) {
+      console.error('[Seed] Global corporate actions seeding error:', seedErr.message);
     }
 
     // Restore signal-engine in-memory state now that tables are guaranteed to exist

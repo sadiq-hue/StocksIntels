@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { TrendingUp, BookOpen, AlertTriangle, Info, GraduationCap, ArrowRight, BarChart3 } from "lucide-react";
+import { TrendingUp, BookOpen, AlertTriangle, Info, GraduationCap, ArrowRight, BarChart3, Globe } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 interface CorporateAction {
   id: number;
   ticker: string;
+  exchange?: string | null;
   action_type: string;
   title: string;
   description: string | null;
@@ -63,17 +64,22 @@ const concepts = [
 ];
 
 export function DerivativesPage() {
-  const [actions, setActions] = useState<CorporateAction[]>([]);
+  const [nseActions, setNseActions] = useState<CorporateAction[]>([]);
+  const [globalActions, setGlobalActions] = useState<CorporateAction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'nse' | 'global'>('nse');
 
   useEffect(() => {
     setLoading(true);
-    fetch(`${API_BASE}/nse/corporate-actions?status=pending`)
-      .then(r => r.json())
-      .then(data => { if (Array.isArray(data)) setActions(data); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch(`${API_BASE}/nse/corporate-actions?status=pending`)
+        .then(r => r.json()).then(d => { if (Array.isArray(d)) setNseActions(d); }).catch(() => {}),
+      fetch(`${API_BASE}/global/corporate-actions?status=pending`)
+        .then(r => r.json()).then(d => { if (Array.isArray(d)) setGlobalActions(d); }).catch(() => {}),
+    ]).finally(() => setLoading(false));
   }, []);
+
+  const actions = tab === 'nse' ? nseActions : globalActions;
 
   const sortedActions = [...actions].sort((a, b) => {
     if (!a.event_date) return 1;
@@ -89,7 +95,7 @@ export function DerivativesPage() {
         </div>
         <div>
           <h1 className="text-lg font-bold text-foreground">Derivatives & Corporate Actions</h1>
-          <p className="text-xs text-muted-foreground">Learn about NSE derivatives and track upcoming corporate events</p>
+          <p className="text-xs text-muted-foreground">Learn about derivatives and track corporate events across markets</p>
         </div>
       </div>
 
@@ -128,10 +134,22 @@ export function DerivativesPage() {
         })}
       </div>
 
+      {/* Tab Toggle */}
+      <div className="flex gap-1 bg-muted rounded-lg p-1 mb-4 w-fit">
+        <button onClick={() => setTab('nse')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${tab === 'nse' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+          NSE Events
+        </button>
+        <button onClick={() => setTab('global')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${tab === 'global' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+          <Globe className="size-3" /> Global Events
+        </button>
+      </div>
+
       {/* Upcoming Corporate Actions */}
       <div className="flex items-center gap-2 mb-3">
         <Info className="size-4 text-purple-600" />
-        <h2 className="text-sm font-semibold text-foreground">Upcoming Corporate Events</h2>
+        <h2 className="text-sm font-semibold text-foreground">
+          {tab === 'nse' ? 'NSE' : 'Global'} Corporate Events
+        </h2>
         {loading && <span className="text-xs text-muted-foreground ml-auto">Loading...</span>}
       </div>
 
@@ -149,6 +167,7 @@ export function DerivativesPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-semibold text-foreground">{action.ticker}</span>
+                  {action.exchange && <span className="text-[10px] text-muted-foreground">({action.exchange})</span>}
                   <Badge className="text-[10px] px-1.5 py-0 font-medium bg-purple-100 text-purple-700 border-purple-200">
                     {action.action_type}
                   </Badge>
@@ -157,7 +176,7 @@ export function DerivativesPage() {
                 {action.description && <p className="text-[11px] text-muted-foreground mt-0.5">{action.description}</p>}
                 {action.current_price != null && (
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[11px] font-medium text-foreground">KES {action.current_price.toFixed(2)}</span>
+                    <span className="text-[11px] font-medium text-foreground">${action.current_price.toFixed(2)}</span>
                     {action.price_change_pct != null && (
                       <span className={`text-[10px] font-medium ${action.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                         {action.price_change_pct >= 0 ? '+' : ''}{action.price_change_pct.toFixed(2)}%
