@@ -10016,6 +10016,13 @@ async function initDatabase() {
           { company_name: 'Uber Technologies', ticker: 'UBER', exchange: 'NYSE', status: 'listed', listing_date: '2019-05-10', offer_price: 45.00, oversubscription_pct: 300, description: 'Uber\'s IPO was one of the most anticipated of 2019, pricing at $45 per share. Despite a lukewarm debut, Uber has since become profitable.', sector: 'Technology' },
           { company_name: 'Snowflake', ticker: 'SNOW', exchange: 'NYSE', status: 'listed', listing_date: '2020-09-16', offer_price: 120.00, oversubscription_pct: 5000, description: 'Snowflake\'s IPO was the largest software IPO in history. The cloud data platform priced at $120 per share and more than doubled on its first day of trading.', sector: 'Software' },
           { company_name: 'Saudi Aramco', ticker: '2222.SR', exchange: 'Tadawul', status: 'listed', listing_date: '2019-12-11', offer_price: 32.00, oversubscription_pct: 465, description: 'Saudi Aramco\'s $29.4 billion IPO was the largest in history. The state-owned oil giant listed on the Saudi Stock Exchange (Tadawul).', sector: 'Energy' },
+          { company_name: 'Google (Alphabet)', ticker: 'GOOGL', exchange: 'NASDAQ', status: 'listed', listing_date: '2004-08-19', offer_price: 85.00, oversubscription_pct: 2000, description: 'Google\'s 2004 IPO was one of the most anticipated tech IPOs. The search giant raised $1.67 billion in a Dutch auction IPO, pricing at $85 per share.', sector: 'Technology' },
+          { company_name: 'Visa Inc.', ticker: 'V', exchange: 'NYSE', status: 'listed', listing_date: '2008-03-19', offer_price: 44.00, oversubscription_pct: 1500, description: 'Visa\'s $17.9 billion IPO was the largest US IPO in history at the time. The payments giant priced at $44 per share on the NYSE.', sector: 'Financial Services' },
+          { company_name: 'Robinhood Markets', ticker: 'HOOD', exchange: 'NASDAQ', status: 'listed', listing_date: '2021-07-29', offer_price: 38.00, oversubscription_pct: 1200, description: 'Robinhood\'s IPO was one of the most anticipated of 2021, with the retail trading platform pricing at $38 per share.', sector: 'Financial Technology' },
+          { company_name: 'Zoom Video Comm.', ticker: 'ZM', exchange: 'NASDAQ', status: 'listed', listing_date: '2019-04-18', offer_price: 36.00, oversubscription_pct: 3500, description: 'Zoom\'s 2019 IPO was a standout success. The video conferencing platform priced at $36 per share and more than doubled on its first day.', sector: 'Technology' },
+          { company_name: 'Snap Inc.', ticker: 'SNAP', exchange: 'NYSE', status: 'listed', listing_date: '2017-03-02', offer_price: 17.00, oversubscription_pct: 1200, description: 'Snap\'s $3.4 billion IPO was the largest tech IPO since Alibaba. The social media company priced at $17 per share on the NYSE.', sector: 'Technology' },
+          { company_name: 'Lyft Inc.', ticker: 'LYFT', exchange: 'NASDAQ', status: 'listed', listing_date: '2019-03-29', offer_price: 72.00, oversubscription_pct: 800, description: 'Lyft\'s 2019 IPO was the first ridesharing company to go public, pricing at $72 per share on the NASDAQ.', sector: 'Technology' },
+          { company_name: 'Peloton Interactive', ticker: 'PTON', exchange: 'NASDAQ', status: 'listed', listing_date: '2019-09-26', offer_price: 29.00, oversubscription_pct: 600, description: 'Peloton\'s 2019 IPO priced at $29 per share, with the connected fitness company raising $1.16 billion.', sector: 'Consumer Goods' },
         ];
         for (const ipo of seedGlobal) {
           await pool.query(
@@ -10027,6 +10034,31 @@ async function initDatabase() {
       }
     } catch (seedErr) {
       console.error('[Seed] Global IPO seeding error:', seedErr.message);
+    }
+
+    // ── Migration: insert additional global IPOs that may not have been seeded ──
+    try {
+      const extraGlobal = [
+        { company_name: 'Google (Alphabet)', ticker: 'GOOGL', exchange: 'NASDAQ', status: 'listed', listing_date: '2004-08-19', offer_price: 85.00, oversubscription_pct: 2000, description: 'Google\'s 2004 IPO was one of the most anticipated tech IPOs. The search giant raised $1.67 billion in a Dutch auction IPO, pricing at $85 per share.', sector: 'Technology' },
+        { company_name: 'Visa Inc.', ticker: 'V', exchange: 'NYSE', status: 'listed', listing_date: '2008-03-19', offer_price: 44.00, oversubscription_pct: 1500, description: 'Visa\'s $17.9 billion IPO was the largest US IPO in history at the time. The payments giant priced at $44 per share on the NYSE.', sector: 'Financial Services' },
+        { company_name: 'Robinhood Markets', ticker: 'HOOD', exchange: 'NASDAQ', status: 'listed', listing_date: '2021-07-29', offer_price: 38.00, oversubscription_pct: 1200, description: 'Robinhood\'s IPO was one of the most anticipated of 2021, with the retail trading platform pricing at $38 per share.', sector: 'Financial Technology' },
+        { company_name: 'Zoom Video Comm.', ticker: 'ZM', exchange: 'NASDAQ', status: 'listed', listing_date: '2019-04-18', offer_price: 36.00, oversubscription_pct: 3500, description: 'Zoom\'s 2019 IPO was a standout success. The video conferencing platform priced at $36 per share and more than doubled on its first day.', sector: 'Technology' },
+        { company_name: 'Snap Inc.', ticker: 'SNAP', exchange: 'NYSE', status: 'listed', listing_date: '2017-03-02', offer_price: 17.00, oversubscription_pct: 1200, description: 'Snap\'s $3.4 billion IPO was the largest tech IPO since Alibaba. The social media company priced at $17 per share on the NYSE.', sector: 'Technology' },
+        { company_name: 'Lyft Inc.', ticker: 'LYFT', exchange: 'NASDAQ', status: 'listed', listing_date: '2019-03-29', offer_price: 72.00, oversubscription_pct: 800, description: 'Lyft\'s 2019 IPO was the first ridesharing company to go public, pricing at $72 per share on the NASDAQ.', sector: 'Technology' },
+        { company_name: 'Peloton Interactive', ticker: 'PTON', exchange: 'NASDAQ', status: 'listed', listing_date: '2019-09-26', offer_price: 29.00, oversubscription_pct: 600, description: 'Peloton\'s 2019 IPO priced at $29 per share, with the connected fitness company raising $1.16 billion.', sector: 'Consumer Goods' },
+      ];
+      for (const ipo of extraGlobal) {
+        const exists = await pool.query('SELECT id FROM global_ipos WHERE ticker = $1', [ipo.ticker]);
+        if (exists.rows.length === 0) {
+          await pool.query(
+            'INSERT INTO global_ipos (company_name, ticker, exchange, status, listing_date, offer_price, oversubscription_pct, description, sector) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+            [ipo.company_name, ipo.ticker, ipo.exchange, ipo.status, ipo.listing_date, ipo.offer_price, ipo.oversubscription_pct, ipo.description, ipo.sector]
+          );
+        }
+      }
+      console.log('[Seed] Inserted extra global IPOs');
+    } catch (seedErr) {
+      console.error('[Seed] Extra global IPO migration error:', seedErr.message);
     }
 
     // ── Seed global_corporate_actions with notable upcoming/pending events ──
