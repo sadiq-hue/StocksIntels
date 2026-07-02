@@ -523,30 +523,55 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
     </div>
 
     <!-- Tab: Signals -->
-    <div id="tab-signals" class="flex-1 hidden overflow-hidden flex-col">
-      <div class="admin-header flex items-center justify-between shrink-0">
-        <h1 class="text-lg font-bold text-gray-900">Signals</h1>
-        <div class="flex items-center gap-3">
-          <span id="signalTotalLabel" class="text-sm text-gray-500"></span>
-          <span id="signalLastGen" class="text-xs text-gray-400"></span>
-          <button class="btn btn-primary text-xs" onclick="generateSignals(event)">
-            <svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-            Generate Signals
+    <div id="tab-signals" class="flex-1 hidden overflow-hidden flex-col" style="background:#f9fafb">
+      <div class="admin-header" style="background:linear-gradient(135deg,#fff,#fefce8);border-bottom:1px solid #e5e7eb;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#d97706,#f59e0b);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 2px 8px rgba(217,119,6,.25)">
+            <svg style="width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          </div>
+          <div>
+            <h1 style="font-size:18px;font-weight:700;color:#111827">Signals</h1>
+            <span id="signalTotalLabel" style="font-size:12px;color:#9ca3af">0 signals</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span id="signalLastGen" style="font-size:11px;color:#9ca3af"></span>
+          <button class="btn btn-primary" onclick="generateSignals(event)" style="font-size:12px;padding:7px 14px;border-radius:10px;background:linear-gradient(135deg,#d97706,#f59e0b);box-shadow:0 2px 6px rgba(217,119,6,.2)">
+            <svg style="width:14px;height:14px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            Generate
           </button>
         </div>
       </div>
       <!-- Stats -->
-      <div class="grid grid-cols-5 gap-3 p-4 shrink-0">
-        <div class="stat-card text-center"><div class="stat-value text-[#0D7490]" id="sigTotal">-</div><div class="stat-label">Total Signals</div></div>
-        <div class="stat-card text-center"><div class="stat-value text-emerald-600" id="sigTickers">-</div><div class="stat-label">Tickers</div></div>
-        <div class="stat-card text-center"><div class="stat-value text-amber-600" id="sigBuy">-</div><div class="stat-label">Buy</div></div>
-        <div class="stat-card text-center"><div class="stat-value text-red-600" id="sigSell">-</div><div class="stat-label">Sell</div></div>
-        <div class="stat-card text-center"><div class="stat-value text-gray-600" id="sigHold">-</div><div class="stat-label">Hold</div></div>
+      <div style="padding:14px 20px 6px 20px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+        <div class="stat-card" style="display:flex;align-items:center;gap:12px;text-align:left;padding:14px 16px">
+          <span style="width:36px;height:36px;border-radius:10px;background:#eff6ff;color:#0D7490;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📊</span>
+          <div><div class="stat-value text-[#0D7490]" id="sigTotal" style="font-size:20px">-</div><div class="stat-label" style="font-size:11px">Total Signals</div></div>
+        </div>
+        <div class="stat-card" style="display:flex;align-items:center;gap:12px;text-align:left;padding:14px 16px">
+          <span style="width:36px;height:36px;border-radius:10px;background:#f0fdf4;color:#059669;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🏷️</span>
+          <div><div class="stat-value text-emerald-600" id="sigTickers" style="font-size:20px">-</div><div class="stat-label" style="font-size:11px">Tickers</div></div>
+        </div>
+        <div class="stat-card" style="display:flex;align-items:center;gap:12px;text-align:left;padding:14px 16px">
+          <span style="width:36px;height:36px;border-radius:10px;background:#fef3c7;color:#d97706;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🟢</span>
+          <div><div class="stat-value text-amber-600" id="sigBuy" style="font-size:20px">-</div><div class="stat-label" style="font-size:11px">Buy</div></div>
+        </div>
+        <div class="stat-card" style="display:flex;align-items:center;gap:12px;text-align:left;padding:14px 16px">
+          <span style="width:36px;height:36px;border-radius:10px;background:#fef2f2;color:#dc2626;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🔴</span>
+          <div><div class="stat-value text-red-600" id="sigSell" style="font-size:20px">-</div><div class="stat-label" style="font-size:11px">Sell</div></div>
+        </div>
+        <div class="stat-card" style="display:flex;align-items:center;gap:12px;text-align:left;padding:14px 16px">
+          <span style="width:36px;height:36px;border-radius:10px;background:#f3f4f6;color:#4b5563;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⚪</span>
+          <div><div class="stat-value text-gray-600" id="sigHold" style="font-size:20px">-</div><div class="stat-label" style="font-size:11px">Hold</div></div>
+        </div>
       </div>
       <!-- Filters -->
-      <div class="px-4 pb-3 flex items-center gap-3 shrink-0 flex-wrap">
-        <input id="sigTickerInput" placeholder="Ticker..." class="input-field w-28" oninput="debounceSigFilter()">
-        <select id="sigSignalSelect" class="input-field w-26" onchange="debounceSigFilter()">
+      <div style="padding:8px 20px 14px 20px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="position:relative;flex:1;min-width:120px;max-width:160px">
+          <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:#9ca3af;pointer-events:none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input id="sigTickerInput" placeholder="Ticker..." class="input-field" oninput="debounceSigFilter()" style="padding-left:30px;font-size:13px;border-radius:8px;background:#f9fafb;border-color:#e5e7eb;height:36px">
+        </div>
+        <select id="sigSignalSelect" class="input-field" onchange="debounceSigFilter()" style="font-size:13px;border-radius:8px;background:#f9fafb;border-color:#e5e7eb;height:36px;width:120px">
           <option value="">All Signals</option>
           <option value="Buy">Buy</option>
           <option value="Accumulate">Accumulate</option>
@@ -554,31 +579,31 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
           <option value="Sell">Sell</option>
           <option value="Strong Sell">Strong Sell</option>
         </select>
-        <select id="sigMarketSelect" class="input-field w-22" onchange="debounceSigFilter()">
+        <select id="sigMarketSelect" class="input-field" onchange="debounceSigFilter()" style="font-size:13px;border-radius:8px;background:#f9fafb;border-color:#e5e7eb;height:36px;width:110px">
           <option value="">All Markets</option>
           <option value="NSE">NSE</option>
           <option value="NASDAQ">NASDAQ</option>
           <option value="NYSE">NYSE</option>
         </select>
-        <input id="sigSectorInput" placeholder="Sector..." class="input-field w-32" oninput="debounceSigFilter()">
-        <input id="sigDateFrom" type="date" class="input-field w-36" onchange="debounceSigFilter()">
-        <input id="sigDateTo" type="date" class="input-field w-36" onchange="debounceSigFilter()">
+        <input id="sigSectorInput" placeholder="Sector..." class="input-field" oninput="debounceSigFilter()" style="font-size:13px;border-radius:8px;background:#f9fafb;border-color:#e5e7eb;height:36px;width:120px">
+        <input id="sigDateFrom" type="date" class="input-field" onchange="debounceSigFilter()" style="font-size:13px;border-radius:8px;background:#f9fafb;border-color:#e5e7eb;height:36px;width:140px">
+        <input id="sigDateTo" type="date" class="input-field" onchange="debounceSigFilter()" style="font-size:13px;border-radius:8px;background:#f9fafb;border-color:#e5e7eb;height:36px;width:140px">
       </div>
       <!-- Table + Detail -->
       <div class="flex flex-1 min-h-0 relative">
-        <div id="signalsLeftPanel" class="w-full min-w-0 min-h-0" style="overflow-y:auto;height:100%">
-          <div style="overflow-x:auto;overflow-y:hidden">
-            <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;width:1600px">
+        <div id="signalsLeftPanel" class="w-full min-w-0 min-h-0" style="background:#f9fafb;overflow-y:auto;height:100%">
+          <div style="margin:0 20px 16px 20px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+            <div style="overflow-x:auto">
               <table style="width:1600px">
-              <thead><tr><th>Ticker</th><th>Signal</th><th>Conf.</th><th>Price</th><th>Chg %</th><th>Entry</th><th>Stop</th><th>T1</th><th>T2</th><th>Market</th><th>Timeframe</th><th>Generated</th><th></th></tr></thead>
-              <tbody id="signalsTableBody"></tbody>
-            </table>
+                <thead><tr><th style="padding:12px 14px">Ticker</th><th style="padding:12px 14px">Signal</th><th style="padding:12px 14px">Conf.</th><th style="padding:12px 14px">Price</th><th style="padding:12px 14px">Chg %</th><th style="padding:12px 14px">Entry</th><th style="padding:12px 14px">Stop</th><th style="padding:12px 14px">T1</th><th style="padding:12px 14px">T2</th><th style="padding:12px 14px">Market</th><th style="padding:12px 14px">Timeframe</th><th style="padding:12px 14px">Generated</th><th style="padding:12px 14px"></th></tr></thead>
+                <tbody id="signalsTableBody"></tbody>
+              </table>
+            </div>
           </div>
-          <div id="signalsPagination" class="flex items-center justify-center gap-2 py-4"></div>
+          <div id="signalsPagination" class="flex items-center justify-center gap-2 py-4" style="padding-bottom:24px"></div>
         </div>
-        <div id="signalDetailPanel" class="hidden" style="position:absolute;top:0;bottom:0;left:50%;right:0;overflow-y:auto;padding:1.25rem">
+        <div id="signalDetailPanel" class="hidden" style="position:absolute;top:0;bottom:0;left:50%;right:0;overflow-y:auto;padding:20px;background:#f9fafb;border-left:1px solid #e5e7eb">
           <div id="signalDetailContent"></div>
-          </div>
         </div>
       </div>
     </div>
@@ -614,27 +639,54 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
     </div>
 
     <!-- Tab: Portfolio History -->
-    <div id="tab-portfolio-history" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
-      <div class="flex items-center justify-between mb-2">
-        <h1 class="text-xl font-bold text-gray-900">Portfolio History</h1>
-        <div class="flex items-center gap-3">
-          <select id="portfolioUserFilter" class="input-field w-48 text-sm" onchange="fetchPortfolioHistory()">
-            <option value="">All Users</option>
-          </select>
+    <div id="tab-portfolio-history" class="flex-1 hidden min-h-0 scroll" style="background:linear-gradient(180deg,#f0f9ff 0%,#f9fafb 100%);padding:20px">
+      <div style="background:linear-gradient(135deg,#0D7490,#0EA5E9);border-radius:14px;padding:20px 24px;color:#fff;margin-bottom:20px;position:relative;overflow:hidden">
+        <div style="position:absolute;top:-20px;right:-20px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.06)"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center">
+              <svg style="width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            </div>
+            <div>
+              <h1 style="font-size:18px;font-weight:700">Portfolio History</h1>
+              <p style="font-size:13px;opacity:.85">Track user portfolio snapshots over time</p>
+            </div>
+          </div>
+          <div style="position:relative">
+            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:rgba(255,255,255,.6);pointer-events:none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            <select id="portfolioUserFilter" class="input-field" onchange="fetchPortfolioHistory()" style="padding-left:32px;font-size:13px;border-radius:8px;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);color:#fff;width:200px;height:36px;max-width:100%;cursor:pointer">
+              <option value="" style="color:#111827">All Users</option>
+            </select>
+          </div>
         </div>
       </div>
-      <div class="grid grid-cols-3 gap-4">
-        <div class="stat-card"><div class="stat-value text-[#0D7490]" id="portStatTotal">-</div><div class="stat-label">Total Snapshots</div></div>
-        <div class="stat-card"><div class="stat-value text-emerald-600" id="portStatUsers">-</div><div class="stat-label">Distinct Users</div></div>
-        <div class="stat-card"><div class="stat-value text-amber-600" id="portStatRange">-</div><div class="stat-label">Date Range</div></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+        <div class="stat-card" style="display:flex;align-items:center;gap:12px;padding:16px">
+          <span style="width:40px;height:40px;border-radius:10px;background:#eff6ff;color:#0D7490;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📸</span>
+          <div><div class="stat-value text-[#0D7490]" id="portStatTotal" style="font-size:22px">-</div><div class="stat-label" style="font-size:11px">Total Snapshots</div></div>
+        </div>
+        <div class="stat-card" style="display:flex;align-items:center;gap:12px;padding:16px">
+          <span style="width:40px;height:40px;border-radius:10px;background:#f0fdf4;color:#059669;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👥</span>
+          <div><div class="stat-value text-emerald-600" id="portStatUsers" style="font-size:22px">-</div><div class="stat-label" style="font-size:11px">Distinct Users</div></div>
+        </div>
+        <div class="stat-card" style="display:flex;align-items:center;gap:12px;padding:16px">
+          <span style="width:40px;height:40px;border-radius:10px;background:#fef3c7;color:#d97706;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📅</span>
+          <div><div class="stat-value text-amber-600" id="portStatRange" style="font-size:22px">-</div><div class="stat-label" style="font-size:11px">Date Range</div></div>
+        </div>
       </div>
-      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:auto;-webkit-overflow-scrolling:touch">
-        <table class="w-full" style="min-width:700px">
-          <thead><tr><th>User</th><th>Email</th><th>Total Value</th><th>Cash Balance</th><th>Invested</th><th>Market (KES/USD)</th><th>Snapshot Date</th></tr></thead>
-          <tbody id="portfolioHistoryTableBody"></tbody>
-        </table>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+        <div style="padding:14px 20px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:8px">
+          <svg style="width:14px;height:14px;color:#9ca3af" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+          <span style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Snapshot Records</span>
+        </div>
+        <div style="overflow:auto;-webkit-overflow-scrolling:touch">
+          <table class="w-full" style="min-width:700px">
+            <thead><tr><th style="padding:10px 20px">User</th><th style="padding:10px 20px">Email</th><th style="padding:10px 20px">Total Value</th><th style="padding:10px 20px">Cash Balance</th><th style="padding:10px 20px">Invested</th><th style="padding:10px 20px">Market</th><th style="padding:10px 20px">Snapshot Date</th></tr></thead>
+            <tbody id="portfolioHistoryTableBody"></tbody>
+          </table>
+        </div>
       </div>
-      <div id="portfolioHistoryPagination" class="flex items-center justify-center gap-2 py-4"></div>
+      <div id="portfolioHistoryPagination" class="flex items-center justify-center gap-2 py-4" style="padding-top:16px"></div>
     </div>
 
     <!-- Tab: Community -->
@@ -1605,6 +1657,7 @@ let editingSignalId = null;
 function closeSignalDetail() {
   selectedSignalId = null;
   document.getElementById('signalsLeftPanel').className = 'w-full min-w-0 min-h-0';
+  document.getElementById('signalsLeftPanel').style.overflowY = 'auto';
   document.getElementById('signalDetailPanel').classList.add('hidden');
   document.querySelectorAll('.signal-row').forEach(r => r.classList.remove('selected'));
 }
@@ -1662,21 +1715,29 @@ async function fetchSignals() {
       tbody.innerHTML = d.signals.map(s => {
         const sigClass = s.signal === 'Buy' || s.signal === 'Accumulate' ? 'pill-verified' : s.signal === 'Sell' || s.signal === 'Strong Sell' ? 'pill-unverified' : 'pill-free';
         const sel = selectedSignalId === s.id ? 'selected' : '';
-        return `<tr class="signal-row ${sel}" onclick="selectSignal(${s.id})">
-          <td class="font-medium text-gray-900 text-xs whitespace-nowrap">${esc(s.ticker)}</td>
-          <td class="whitespace-nowrap"><span class="pill ${sigClass} text-xs">${esc(s.signal)}</span></td>
-          <td class="text-gray-700 text-xs whitespace-nowrap">${s.confidence != null ? s.confidence + '%' : '-'}</td>
-          <td class="text-gray-700 text-xs whitespace-nowrap">${s.price != null ? Number(s.price).toFixed(2) : '-'}</td>
-          <td class="text-xs whitespace-nowrap ${s.change_pct != null ? (s.change_pct >= 0 ? 'text-emerald-600' : 'text-red-600') : 'text-gray-400'}">${s.change_pct != null ? (s.change_pct >= 0 ? '+' : '') + Number(s.change_pct).toFixed(2) + '%' : '-'}</td>
-          <td class="text-gray-700 text-xs whitespace-nowrap">${s.entry_price != null ? Number(s.entry_price).toFixed(2) : '-'}</td>
-          <td class="text-gray-700 text-xs whitespace-nowrap">${s.stop_loss != null ? Number(s.stop_loss).toFixed(2) : '-'}</td>
-          <td class="text-gray-700 text-xs whitespace-nowrap">${s.target1 != null ? Number(s.target1).toFixed(2) : '-'}</td>
-          <td class="text-gray-700 text-xs whitespace-nowrap">${s.target2 != null ? Number(s.target2).toFixed(2) : '-'}</td>
-          <td class="text-gray-500 text-xs whitespace-nowrap">${esc(s.market || '-')}</td>
-          <td class="text-gray-500 text-xs whitespace-nowrap">${esc(s.timeframe || '-')}</td>
-          <td class="text-gray-500 text-xs whitespace-nowrap">${formatDate(s.generated_at)}</td>
-          <td class="text-xs whitespace-nowrap">
-            <button onclick="event.stopPropagation();showSignalEdit(${s.id})" class="text-[#0D7490] hover:underline" title="Edit">Edit</button>
+        const tickerInitial = (s.ticker || '?').charAt(0);
+        const tickerColors = ['#0D7490','#059669','#d97706','#7c3aed','#dc2626','#0891b2','#db2777','#4f46e5'];
+        const tColor = tickerColors[Math.abs(s.id || 0) % tickerColors.length];
+        return `<tr class="signal-row ${sel}" style="cursor:pointer;transition:background .1s" onclick="selectSignal(${s.id})">
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="width:24px;height:24px;border-radius:6px;background:${tColor}15;color:${tColor};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">${tickerInitial}</span>
+              <span class="font-medium text-gray-900" style="font-size:13px">${esc(s.ticker)}</span>
+            </div>
+          </td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6"><span class="pill ${sigClass}" style="font-size:11px">${esc(s.signal)}</span></td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#374151">${s.confidence != null ? s.confidence + '%' : '-'}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#374151">${s.price != null ? Number(s.price).toFixed(2) : '-'}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;font-weight:500;${s.change_pct != null ? (s.change_pct >= 0 ? 'color:#059669' : 'color:#dc2626') : 'color:#9ca3af'}">${s.change_pct != null ? (s.change_pct >= 0 ? '+' : '') + Number(s.change_pct).toFixed(2) + '%' : '-'}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#374151">${s.entry_price != null ? Number(s.entry_price).toFixed(2) : '-'}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#dc2626">${s.stop_loss != null ? Number(s.stop_loss).toFixed(2) : '-'}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#059669">${s.target1 != null ? Number(s.target1).toFixed(2) : '-'}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#059669">${s.target2 != null ? Number(s.target2).toFixed(2) : '-'}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280">${esc(s.market || '-')}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280">${esc(s.timeframe || '-')}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280">${formatDate(s.generated_at)}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px">
+            <button onclick="event.stopPropagation();showSignalEdit(${s.id})" style="color:#0D7490;background:none;border:none;cursor:pointer;font-size:12px;font-weight:500;padding:2px 8px;border-radius:6px;white-space:nowrap">Edit</button>
           </td>
         </tr>`;
       }).join('');
@@ -1707,45 +1768,96 @@ async function selectSignal(id) {
     if (!res.ok) return;
     const s = await res.json();
     const sigClass = s.signal === 'Buy' || s.signal === 'Accumulate' ? 'pill-verified' : s.signal === 'Sell' || s.signal === 'Strong Sell' ? 'pill-unverified' : 'pill-free';
+    const tickerInitial = (s.ticker || '?').charAt(0);
     document.getElementById('signalDetailContent').innerHTML = `
-      <div class="space-y-4">
-        <div class="flex items-center gap-2 mb-2">
-          <button onclick="closeSignalDetail()" class="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors">
-            <svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-            Back to list
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <!-- Hero -->
+        <div style="background:linear-gradient(135deg,#d97706,#f59e0b);border-radius:14px;padding:20px;color:#fff;position:relative;overflow:hidden">
+          <div style="position:absolute;top:-20px;right:-20px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08)"></div>
+          <button onclick="closeSignalDetail()" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;opacity:.8;color:#fff;background:rgba(255,255,255,.15);border:none;border-radius:6px;padding:4px 10px;cursor:pointer;margin-bottom:14px">
+            <svg style="width:12px;height:12px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            Back
           </button>
-        </div>
-        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-3">
-              <span class="text-lg font-bold text-gray-900">${esc(s.ticker)}</span>
-              <span class="pill ${sigClass}">${esc(s.signal)}</span>
-              <span class="text-sm text-gray-500">${s.confidence != null ? s.confidence + '% confidence' : ''}</span>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:14px">
+              <span style="width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700">${tickerInitial}</span>
+              <div>
+                <h2 style="font-size:20px;font-weight:700">${esc(s.ticker)}</h2>
+                <span class="pill ${sigClass}" style="margin-top:4px;display:inline-block">${esc(s.signal)}</span>
+              </div>
             </div>
-            <div class="flex gap-2">
-              <button class="btn btn-secondary text-xs py-1 px-2" onclick="showSignalEdit(${s.id})">Edit</button>
-              <button class="btn btn-danger text-xs py-1 px-2" onclick="deleteSignalConfirm(${s.id})">Delete</button>
+            <div style="display:flex;gap:6px">
+              <button onclick="showSignalEdit(${s.id})" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:500">Edit</button>
+              <button onclick="deleteSignalConfirm(${s.id})" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-weight:500">Delete</button>
             </div>
           </div>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div><span class="text-gray-500 text-xs">Price</span><p class="font-medium text-gray-900">${s.price != null ? Number(s.price).toFixed(2) : '-'}</p></div>
-            <div><span class="text-gray-500 text-xs">Change</span><p class="font-medium ${s.change_pct >= 0 ? 'text-emerald-600' : 'text-red-600'}">${s.change_pct != null ? (s.change_pct >= 0 ? '+' : '') + Number(s.change_pct).toFixed(2) + '%' : '-'}</p></div>
-            <div><span class="text-gray-500 text-xs">Entry Price</span><p class="font-medium text-gray-900">${s.entry_price != null ? Number(s.entry_price).toFixed(2) : '-'}</p></div>
-            <div><span class="text-gray-500 text-xs">Stop Loss</span><p class="font-medium text-red-600">${s.stop_loss != null ? Number(s.stop_loss).toFixed(2) : '-'}</p></div>
-            <div><span class="text-gray-500 text-xs">Target 1</span><p class="font-medium text-emerald-600">${s.target1 != null ? Number(s.target1).toFixed(2) : '-'}</p></div>
-            <div><span class="text-gray-500 text-xs">Target 2</span><p class="font-medium text-emerald-600">${s.target2 != null ? Number(s.target2).toFixed(2) : '-'}</p></div>
-            <div><span class="text-gray-500 text-xs">Risk/Reward</span><p class="font-medium text-gray-900">${s.risk_reward != null ? s.risk_reward + ':1' : '-'}</p></div>
-            <div><span class="text-gray-500 text-xs">Market</span><p class="font-medium text-gray-900">${esc(s.market || '-')}</p></div>
-            <div><span class="text-gray-500 text-xs">Sector</span><p class="font-medium text-gray-900">${esc(s.sector || '-')}</p></div>
-            <div><span class="text-gray-500 text-xs">Timeframe</span><p class="font-medium text-gray-900">${esc(s.timeframe || '-')}</p></div>
-            <div><span class="text-gray-500 text-xs">Trade Type</span><p class="font-medium text-gray-900">${esc(s.trade_type || '-')}</p></div>
-            <div><span class="text-gray-500 text-xs">Generated</span><p class="font-medium text-gray-900">${formatDate(s.generated_at)}</p></div>
+        </div>
+
+        <!-- Signal Details -->
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #f3f4f6">
+            <svg style="width:16px;height:16px;color:#9ca3af" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Signal Details</span>
+            ${s.confidence != null ? `<span style="margin-left:auto;background:#fef3c7;color:#d97706;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:600">${s.confidence}% confidence</span>` : ''}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Price</span>
+              <p style="font-weight:600;color:#111827;margin-top:2px">${s.price != null ? Number(s.price).toFixed(2) : '-'}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Change</span>
+              <p style="font-weight:700;margin-top:2px;${s.change_pct >= 0 ? 'color:#059669' : 'color:#dc2626'}">${s.change_pct != null ? (s.change_pct >= 0 ? '+' : '') + Number(s.change_pct).toFixed(2) + '%' : '-'}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Entry Price</span>
+              <p style="font-weight:600;color:#111827;margin-top:2px">${s.entry_price != null ? Number(s.entry_price).toFixed(2) : '-'}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Stop Loss</span>
+              <p style="font-weight:600;color:#dc2626;margin-top:2px">${s.stop_loss != null ? Number(s.stop_loss).toFixed(2) : '-'}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Target 1</span>
+              <p style="font-weight:600;color:#059669;margin-top:2px">${s.target1 != null ? Number(s.target1).toFixed(2) : '-'}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Target 2</span>
+              <p style="font-weight:600;color:#059669;margin-top:2px">${s.target2 != null ? Number(s.target2).toFixed(2) : '-'}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Risk/Reward</span>
+              <p style="font-weight:600;color:#111827;margin-top:2px">${s.risk_reward != null ? s.risk_reward + ':1' : '-'}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Market</span>
+              <p style="font-weight:600;color:#111827;margin-top:2px">${esc(s.market || '-')}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Sector</span>
+              <p style="font-weight:600;color:#111827;margin-top:2px">${esc(s.sector || '-')}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Timeframe</span>
+              <p style="font-weight:600;color:#111827;margin-top:2px">${esc(s.timeframe || '-')}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Trade Type</span>
+              <p style="font-weight:600;color:#111827;margin-top:2px">${esc(s.trade_type || '-')}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Generated</span>
+              <p style="font-weight:600;color:#111827;margin-top:2px">${formatDate(s.generated_at)}</p>
+            </div>
           </div>
         </div>
         ${s.reason ? `
-        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
-          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Analysis</h3>
-          <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">${esc(s.reason)}</p>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #f3f4f6">
+            <svg style="width:16px;height:16px;color:#9ca3af" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Analysis</span>
+          </div>
+          <p style="font-size:13px;color:#374151;line-height:1.7;white-space:pre-wrap">${esc(s.reason)}</p>
         </div>` : ''}
       </div>
     `;
@@ -2221,17 +2333,24 @@ async function fetchPortfolioHistory() {
     if (rows.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">No portfolio history found</td></tr>';
     } else {
-      tbody.innerHTML = rows.map(r => `
-        <tr>
-          <td class="font-medium text-gray-900 text-sm">${esc(r.full_name || '')}</td>
-          <td class="text-gray-500 text-xs">${esc(r.email || '')}</td>
-          <td class="text-gray-700">${Number(r.total_value || 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-          <td class="text-gray-700">${Number(r.cash_balance || 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-          <td class="text-gray-700">${Number(r.invested_value || 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
-          <td class="text-gray-500 text-xs">${r.market || '-'}</td>
-          <td class="text-gray-500 text-xs">${formatDate(r.snapshot_date)}</td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = rows.map(r => {
+        const initial = (r.full_name || '?').charAt(0).toUpperCase();
+        return `
+        <tr style="transition:background .1s">
+          <td style="padding:10px 20px;border-bottom:1px solid #f3f4f6">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:28px;height:28px;border-radius:8px;background:#eff6ff;color:#0D7490;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">${initial}</span>
+              <span style="font-weight:600;color:#111827;font-size:13px">${esc(r.full_name || '')}</span>
+            </div>
+          </td>
+          <td style="padding:10px 20px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280">${esc(r.email || '')}</td>
+          <td style="padding:10px 20px;border-bottom:1px solid #f3f4f6;font-weight:600;color:#111827;font-size:13px">${Number(r.total_value || 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+          <td style="padding:10px 20px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151">${Number(r.cash_balance || 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+          <td style="padding:10px 20px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#374151">${Number(r.invested_value || 0).toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+          <td style="padding:10px 20px;border-bottom:1px solid #f3f4f6"><span style="background:#f3f4f6;color:#4b5563;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:500">${r.market || '-'}</span></td>
+          <td style="padding:10px 20px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280">${formatDate(r.snapshot_date)}</td>
+        </tr>`;
+      }).join('');
     }
     renderPortPagination(d.total, d.page, d.limit);
   } catch {}
