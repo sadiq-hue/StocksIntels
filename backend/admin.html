@@ -22,9 +22,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .user-row{cursor:pointer;transition:background .1s}
 .user-row:hover{background:#f9fafb}
 .user-row.selected{background:#eff6ff}
-.stat-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px}
-.stat-value{font-size:28px;font-weight:700}
-.stat-label{font-size:13px;color:#6b7280;margin-top:4px}
+.stat-card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:18px 20px;transition:all .2s;position:relative;overflow:hidden}
+.stat-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.06);border-color:#d1d5db;transform:translateY(-1px)}
+.stat-card .card-icon{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;margin-bottom:10px;font-size:16px}
+.stat-value{font-size:26px;font-weight:700;line-height:1.2}
+.stat-label{font-size:12px;color:#6b7280;margin-top:2px;font-weight:500}
+.section-header{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;padding:4px 0 12px 0;border-bottom:2px solid #f3f4f6;margin-bottom:16px}
+.section-header svg{width:16px;height:16px;opacity:.6}
+.dash-welcome{background:linear-gradient(135deg,#0D7490,#0EA5E9);border-radius:16px;padding:24px 28px;color:#fff;margin-bottom:24px}
+.dash-welcome h1{font-size:22px;font-weight:700}
+.dash-welcome p{font-size:14px;opacity:.85;margin-top:4px}
+.dash-welcome .time{font-size:12px;opacity:.7;margin-top:8px}
 th{text-align:left;padding:10px 12px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb}
 td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
 .pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:500}
@@ -255,83 +263,150 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
     </div>
 
     <!-- Tab: Dashboard -->
-    <div id="tab-dashboard" class="flex-1 min-h-0 scroll p-6 space-y-6">
-      <div class="flex items-center justify-between mb-2">
-        <h1 class="text-xl font-bold text-gray-900">Dashboard</h1>
-        <span id="lastUpdated" class="text-xs text-gray-400"></span>
-      </div>
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <div class="stat-card">
-          <div class="stat-value text-[#0D7490]" id="statTotalUsers">-</div>
-          <div class="stat-label">Total Users</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-emerald-600" id="statNewToday">-</div>
-          <div class="stat-label">New Today</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-amber-600" id="statTotalTrades">-</div>
-          <div class="stat-label">Total Trades</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-violet-600" id="statSubscriptions">-</div>
-          <div class="stat-label">Active Subscriptions</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-cyan-600" id="statPortfolioValue">-</div>
-          <div class="stat-label">Portfolio Value (KES)</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-pink-600" id="statChatMessages">-</div>
-          <div class="stat-label">Support Messages</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-orange-600" id="statSubscriptionsTotal">-</div>
-          <div class="stat-label">Subscriptions</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-red-600" id="statTickets">-</div>
-          <div class="stat-label">Support Tickets</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-indigo-600" id="statGroups">-</div>
-          <div class="stat-label">Groups</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-teal-600" id="statMessages">-</div>
-          <div class="stat-label">Messages</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-blue-600" id="statBrokerConnections">-</div>
-          <div class="stat-label">Broker Connections</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-purple-600" id="statPortfolioSnapshots">-</div>
-          <div class="stat-label">Portfolio Snapshots</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-green-600" id="statPredictions">-</div>
-          <div class="stat-label">Predictions</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-yellow-600" id="statWinRate">-</div>
-          <div class="stat-label">Win Rate</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-blue-600" id="statWins">-</div>
-          <div class="stat-label">Wins / Losses</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value text-gray-600" id="statSignalsGenerated">-</div>
-          <div class="stat-label">Signals Generated</div>
+    <div id="tab-dashboard" class="flex-1 min-h-0 scroll p-6" style="background:linear-gradient(180deg,#f0f9ff 0%,#f9fafb 100%)">
+      <!-- Welcome Header -->
+      <div class="dash-welcome">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <h1>👋 Good morning, Admin</h1>
+            <p>Here's what's happening with your platform today.</p>
+          </div>
+          <span id="lastUpdated" class="time" style="text-align:right;white-space:nowrap"></span>
         </div>
       </div>
-      <div>
-        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Recent Registrations</h2>
-        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:auto;-webkit-overflow-scrolling:touch">
+
+      <!-- Section 1: Users & Activity -->
+      <div class="mb-6">
+        <div class="section-header">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/></svg>
+          Users &amp; Activity
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="stat-card">
+            <div class="card-icon" style="background:#eff6ff;color:#0D7490">👥</div>
+            <div class="stat-value text-[#0D7490]" id="statTotalUsers">-</div>
+            <div class="stat-label">Total Users</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-icon" style="background:#ecfdf5;color:#059669">🆕</div>
+            <div class="stat-value text-emerald-600" id="statNewToday">-</div>
+            <div class="stat-label">New Today</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-icon" style="background:#fef3c7;color:#d97706">📊</div>
+            <div class="stat-value text-amber-600" id="statTotalTrades">-</div>
+            <div class="stat-label">Total Trades</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-icon" style="background:#ede9fe;color:#7c3aed">🔄</div>
+            <div class="stat-value text-violet-600" id="statSubscriptions">-</div>
+            <div class="stat-label">Active Subs</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Financial & Performance -->
+      <div class="mb-6">
+        <div class="section-header">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Financial &amp; Performance
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="stat-card">
+            <div class="card-icon" style="background:#ecfeff;color:#0891b2">💰</div>
+            <div class="stat-value text-cyan-600" id="statPortfolioValue">-</div>
+            <div class="stat-label">Portfolio Value (KES)</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-icon" style="background:#fff7ed;color:#ea580c">📦</div>
+            <div class="stat-value text-orange-600" id="statSubscriptionsTotal">-</div>
+            <div class="stat-label">Total Subscriptions</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-icon" style="background:#eff6ff;color:#2563eb">🏆</div>
+            <div class="stat-value text-blue-600" id="statWins">-</div>
+            <div class="stat-label">Wins / Losses</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-icon" style="background:#fefce8;color:#ca8a04">🎯</div>
+            <div class="stat-value text-yellow-600" id="statWinRate">-</div>
+            <div class="stat-label">Win Rate</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3: Platform & Engagement -->
+      <div class="mb-6">
+        <div class="section-header">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          Platform &amp; Engagement
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="stat-card">
+            <div class="card-icon" style="background:#eef2ff;color:#4f46e5">👥</div>
+            <div class="stat-value text-indigo-600" id="statGroups">-</div>
+            <div class="stat-label">Groups</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-icon" style="background:#f0fdf4;color:#16a34a">💬</div>
+            <div class="stat-value text-teal-600" id="statMessages">-</div>
+            <div class="stat-label">Messages</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-icon" style="background:#fdf2f8;color:#db2777">💭</div>
+            <div class="stat-value text-pink-600" id="statChatMessages">-</div>
+            <div class="stat-label">Chat Messages</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-icon" style="background:#fef2f2;color:#dc2626">🎫</div>
+            <div class="stat-value text-red-600" id="statTickets">-</div>
+            <div class="stat-label">Support Tickets</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 4: System & Intelligence -->
+      <div class="mb-6">
+        <div class="section-header">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
+          System &amp; Intelligence
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="stat-card">
+            <div class="card-icon" style="background:#f0f5ff;color:#2563eb">🔗</div>
+            <div class="stat-value text-blue-600" id="statBrokerConnections">-</div>
+            <div class="stat-label">Broker Connections</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-icon" style="background:#f5f3ff;color:#7c3aed">📸</div>
+            <div class="stat-value text-purple-600" id="statPortfolioSnapshots">-</div>
+            <div class="stat-label">Portfolio Snapshots</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-icon" style="background:#f0fdf4;color:#16a34a">🔮</div>
+            <div class="stat-value text-green-600" id="statPredictions">-</div>
+            <div class="stat-label">Predictions</div>
+          </div>
+          <div class="stat-card">
+            <div class="card-icon" style="background:#f9fafb;color:#4b5563">📡</div>
+            <div class="stat-value text-gray-600" id="statSignalsGenerated">-</div>
+            <div class="stat-label">Signals Generated</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Registrations -->
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+        <div style="padding:16px 20px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between">
+          <h3 style="font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;gap:8px">
+            <svg style="width:14px;height:14px;opacity:.6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+            Recent Registrations
+          </h3>
+        </div>
+        <div style="overflow:auto;-webkit-overflow-scrolling:touch">
           <table class="w-full" style="min-width:500px">
-            <thead><tr><th>Name</th><th>Email</th><th>Verified</th><th>Date</th></tr></thead>
-            <tbody id="recentRegTable"></tbody>
+            <thead><tr><th style="padding:10px 20px">Name</th><th style="padding:10px 20px">Email</th><th style="padding:10px 20px">Verified</th><th style="padding:10px 20px">Date</th></tr></thead>
+            <tbody id="recentRegTable" style="font-size:14px"></tbody>
           </table>
         </div>
       </div>
