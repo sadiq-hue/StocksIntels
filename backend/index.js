@@ -2090,11 +2090,35 @@ const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 60 * 1000; // 1 minute
 const LOGIN_BAN_MS = 15 * 60 * 1000; // 15 minute lockout
 function getClientIp(req) {
-  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress || 'unknown';
+  // Cloudflare sends the real IP in CF-Connecting-IP
+  const cf = req.headers['cf-connecting-ip'];
+  if (cf && cf !== 'unknown') return cf.trim();
+  // Standard proxy forwarding
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) {
+    // x-forwarded-for format: "client, proxy1, proxy2" — first entry is the real client
+    const ip = xff.split(',')[0]?.trim();
+    if (ip && ip !== 'unknown') return ip;
+  }
+  return req.ip || req.connection?.remoteAddress || 'unknown';
 }
 
 async function geoIpLookup(ip) {
   if (!ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return null;
+  // Try ip-api.com first (no API key needed, accurate for most regions)
+  try {
+    const res = await axios.get(`http://ip-api.com/json/${ip}`, { timeout: 3000 });
+    if (res.data && res.data.status === 'success') {
+      return {
+        country: res.data.country || null,
+        city: res.data.city || null,
+        region: res.data.regionName || null,
+        latitude: res.data.lat || null,
+        longitude: res.data.lon || null,
+      };
+    }
+  } catch { /* fall through */ }
+  // Fallback to ipapi.co
   try {
     const res = await axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 3000 });
     if (res.data && res.data.error !== true) {

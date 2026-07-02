@@ -8,20 +8,31 @@ async function backfillGeo() {
   console.log(`Found ${rows.length} users to backfill`);
   let done = 0, fail = 0;
   for (const u of rows) {
+    let geo = null;
+    // Try ip-api.com first
     try {
-      const res = await axios.get(`https://ipapi.co/${u.ip_address}/json/`, { timeout: 5000 });
-      if (res.data && res.data.error !== true) {
-        await pool.query(
-          `UPDATE users SET country = $1, city = $2, region = $3, latitude = $4, longitude = $5 WHERE id = $6`,
-          [res.data.country_name || null, res.data.city || null, res.data.region || null, res.data.latitude || null, res.data.longitude || null, u.id]
-        );
-        console.log(`  [${++done}] ${u.email} -> ${[res.data.city, res.data.region, res.data.country_name].filter(Boolean).join(', ') || '?'}`);
-      } else {
-        console.log(`  [x] ${u.email} -> api error: ${JSON.stringify(res.data)}`);
-        fail++;
+      const r = await axios.get(`http://ip-api.com/json/${u.ip_address}`, { timeout: 5000 });
+      if (r.data && r.data.status === 'success') {
+        geo = { country: r.data.country, city: r.data.city, region: r.data.regionName, latitude: r.data.lat, longitude: r.data.lon };
       }
-    } catch (e) {
-      console.log(`  [x] ${u.email} -> ${e.message}`);
+    } catch { /* fall through */ }
+    // Fallback to ipapi.co
+    if (!geo) {
+      try {
+        const r = await axios.get(`https://ipapi.co/${u.ip_address}/json/`, { timeout: 5000 });
+        if (r.data && r.data.error !== true) {
+          geo = { country: r.data.country_name, city: r.data.city, region: r.data.region, latitude: r.data.latitude, longitude: r.data.longitude };
+        }
+      } catch { /* fall through */ }
+    }
+    if (geo) {
+      await pool.query(
+        `UPDATE users SET country = $1, city = $2, region = $3, latitude = $4, longitude = $5 WHERE id = $6`,
+        [geo.country, geo.city, geo.region, geo.latitude, geo.longitude, u.id]
+      );
+      console.log(`  [${++done}] ${u.email} -> ${[geo.city, geo.region, geo.country].filter(Boolean).join(', ') || '?'}`);
+    } else {
+      console.log(`  [x] ${u.email} -> lookup failed`);
       fail++;
     }
     if (rows.length > 1) await new Promise(r => setTimeout(r, 200));
