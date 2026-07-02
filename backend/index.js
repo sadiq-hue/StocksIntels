@@ -1972,7 +1972,7 @@ app.post('/api/auth/send-verification-code', async (req, res) => {
 
 app.post('/api/auth/verify-email-and-register', async (req, res) => {
   try {
-    const { fullName, email, password, code, ref } = req.body;
+    const { fullName, email, password, code, ref, lat, lng } = req.body;
     if (!fullName || !email || !password || !code) return res.status(400).json({ error: 'All fields required' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
     if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
@@ -1998,8 +1998,9 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
       'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date, referred_by, ip_address) VALUES ($1, $2, $3, TRUE, NOW(), $4, $5) RETURNING id, full_name, email, role, is_verified, trader_type, created_at, subscription_tier, subscription_status, trial_start_date, subscription_end_date, commitment_fee_paid, ip_address',
       [fullName, email, hashedPassword, referredBy, ip]
     );
-    // Geo-lookup in background
-    geoIpLookup(ip).then(geo => {
+    // Geo-lookup: prefer client-side coordinates, fall back to IP
+    const geoPromise = (lat && lng) ? reverseGeoCode(parseFloat(lat), parseFloat(lng)) : geoIpLookup(ip);
+    geoPromise.then(geo => {
       if (geo) {
         pool.query(
           'UPDATE users SET country = $1, city = $2, region = $3, latitude = $4, longitude = $5 WHERE id = $6',
@@ -2032,7 +2033,7 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
 
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { fullName, email, password, ref } = req.body;
+    const { fullName, email, password, ref, lat, lng } = req.body;
     if (!fullName || !email || !password) return res.status(400).json({ error: 'All fields required' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
     if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
@@ -2053,8 +2054,9 @@ app.post('/api/auth/register', async (req, res) => {
       'INSERT INTO users (full_name, email, password_hash, trial_start_date, referred_by, ip_address) VALUES ($1, $2, $3, NOW(), $4, $5) RETURNING id, full_name, email, role, created_at, subscription_tier, subscription_status, trial_start_date, ip_address',
       [fullName, email, hashedPassword, referredBy, ip]
     );
-    // Geo-lookup in background
-    geoIpLookup(ip).then(geo => {
+    // Geo-lookup: prefer client-side coordinates, fall back to IP
+    const geoPromise = (lat && lng) ? reverseGeoCode(parseFloat(lat), parseFloat(lng)) : geoIpLookup(ip);
+    geoPromise.then(geo => {
       if (geo) {
         pool.query(
           'UPDATE users SET country = $1, city = $2, region = $3, latitude = $4, longitude = $5 WHERE id = $6',
@@ -2137,6 +2139,28 @@ async function geoIpLookup(ip) {
     return null;
   } catch { return null; }
 }
+
+async function reverseGeoCode(lat, lng) {
+  if (lat == null || lng == null) return null;
+  try {
+    const res = await axios.get(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`, {
+      timeout: 5000,
+      headers: { 'User-Agent': 'StocksIntels/1.0' },
+    });
+    if (res.data && res.data.address) {
+      const a = res.data.address;
+      return {
+        country: a.country || null,
+        city: a.city || a.town || a.village || a.municipality || null,
+        region: a.state || a.region || null,
+        latitude: lat,
+        longitude: lng,
+      };
+    }
+    return null;
+  } catch { return null; }
+}
+
 function checkLoginRateLimit(email, ip) {
   const key = email.toLowerCase();
   const now = Date.now();

@@ -181,9 +181,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserAndStore(data.user, data.token);
   };
 
-  const register = async (fullName: string, email: string, password: string, ref?: string) => {
-    const body: Record<string, string> = { fullName, email, password };
+  const register = async (fullName: string, email: string, password: string, ref?: string, lat?: number, lng?: number) => {
+    const body: Record<string, string | number> = { fullName, email, password };
     if (ref) body.ref = ref;
+    if (lat != null && lng != null) { body.lat = lat; body.lng = lng; }
     const res = await fetch(`${API_URL}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -247,9 +248,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { expiresIn: data.expiresIn };
   };
 
-  const verifyEmailAndRegister = async (fullName: string, email: string, password: string, code: string, ref?: string) => {
-    const body: Record<string, string> = { fullName, email, password, code };
+  const verifyEmailAndRegister = async (fullName: string, email: string, password: string, code: string, ref?: string, lat?: number, lng?: number) => {
+    const body: Record<string, string | number> = { fullName, email, password, code };
     if (ref) body.ref = ref;
+    if (lat != null && lng != null) { body.lat = lat; body.lng = lng; }
     const res = await fetch(`${API_URL}/auth/verify-email-and-register`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       credentials: 'include',

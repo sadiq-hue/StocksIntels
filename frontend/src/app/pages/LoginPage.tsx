@@ -17,6 +17,17 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function getBrowserCoords(): Promise<{ lat: number; lng: number } | null> {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: 5000, enableHighAccuracy: false }
+    );
+  });
+}
+
 type DecodedToken = { sub: string; name: string; email: string; picture: string };
 type AuthMode = "login" | "register" | "forgot" | "reset" | "otp-login";
 type RegStage = "form" | "verify";
@@ -186,8 +197,10 @@ export function LoginPage() {
         if (password !== confirmPassword) { setError("Passwords do not match"); return; }
         if (pwStrength < 3) { setError("Password is too weak — include uppercase, lowercase, number or symbol"); return; }
         setIsLoading(true);
+        // Try browser geolocation for accurate location
+        const coords = await getBrowserCoords();
         try {
-          await verifyEmailAndRegister(fullName.trim(), email, password, verifyCode, refParam);
+          await verifyEmailAndRegister(fullName.trim(), email, password, verifyCode, refParam, coords?.lat, coords?.lng);
           navigate(redirectTo);
         } catch (err) { setError(err instanceof Error ? err.message : "Verification or registration failed"); }
         finally { setIsLoading(false); }
@@ -251,7 +264,8 @@ export function LoginPage() {
       const decoded = jwtDecode<DecodedToken>(credentialResponse.credential);
       try { setIsLoading(true); await login(decoded.email, "google_oauth_" + decoded.sub); }
       catch {
-        try { await register(decoded.name, decoded.email, "google_oauth_" + decoded.sub, refParam); }
+        const coords = await getBrowserCoords();
+        try { await register(decoded.name, decoded.email, "google_oauth_" + decoded.sub, refParam, coords?.lat, coords?.lng); }
         catch { setError("Account exists. Try logging in with email/password."); setIsLoading(false); return; }
       }
       setIsLoading(false); navigate(redirectTo);
