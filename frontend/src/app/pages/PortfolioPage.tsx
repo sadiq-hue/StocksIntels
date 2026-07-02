@@ -158,6 +158,7 @@ export function PortfolioPage() {
   const [isParsing, setIsParsing] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [showPaperBuy, setShowPaperBuy] = useState(false);
+  const [paperStartingUsd, setPaperStartingUsd] = useState(10000);
   const [showBrokerDetail, setShowBrokerDetail] = useState(false);
   const [selectedBroker, setSelectedBroker] = useState<Broker | null>(null);
   const [showPaperSell, setShowPaperSell] = useState<PaperPosition | null>(null);
@@ -891,9 +892,22 @@ export function PortfolioPage() {
             <Card className="bg-card border-border p-8 text-center">
               <Play className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
               <h3 className="text-lg font-semibold text-foreground mb-1">Start Paper Trading</h3>
-              <p className="text-muted-foreground text-sm mb-4">Practice trading with KES 1,000,000 virtual cash. No real money involved.</p>
-              <Button onClick={async () => { const ok = await initAccount(); if (ok) refreshPaper(); }} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
-                <Play className="w-4 h-4" /> Start with KES 1,000,000
+              <p className="text-muted-foreground text-sm mb-4">Practice trading with virtual cash. No real money involved.</p>
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <label className="text-sm text-muted-foreground">Starting Balance:</label>
+                <select
+                  value={paperStartingUsd}
+                  onChange={(e) => setPaperStartingUsd(Number(e.target.value))}
+                  className="input-field text-sm py-1.5 px-3 w-auto"
+                >
+                  {[10000, 15000, 20000, 25000, 30000, 50000, 75000, 100000].map((amt) => (
+                    <option key={amt} value={amt}>${amt.toLocaleString()}</option>
+                  ))}
+                </select>
+                <span className="text-xs text-muted-foreground">(${paperStartingUsd.toLocaleString()} / KES {(paperStartingUsd * 130).toLocaleString()})</span>
+              </div>
+              <Button onClick={async () => { const ok = await initAccount(paperStartingUsd); if (ok) refreshPaper(); }} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
+                <Play className="w-4 h-4" /> Start with ${paperStartingUsd.toLocaleString()}
               </Button>
             </Card>
           ) : paperLoading ? (
@@ -1270,12 +1284,25 @@ export function PortfolioPage() {
             <DialogContent className="sm:max-w-sm">
               <DialogHeader>
                 <DialogTitle>Reset Paper Account</DialogTitle>
-                <DialogDescription>This will delete all positions and trade history, and start with a fresh KES 1,000,000 balance.</DialogDescription>
+                <DialogDescription>This will delete all positions and trade history, and start with a fresh balance.</DialogDescription>
               </DialogHeader>
+              <div className="flex items-center gap-2 py-2">
+                <label className="text-sm text-muted-foreground">New Balance:</label>
+                <select
+                  value={paperStartingUsd}
+                  onChange={(e) => setPaperStartingUsd(Number(e.target.value))}
+                  className="input-field text-sm py-1.5 px-3 w-auto"
+                >
+                  {[10000, 15000, 20000, 25000, 30000, 50000, 75000, 100000].map((amt) => (
+                    <option key={amt} value={amt}>${amt.toLocaleString()}</option>
+                  ))}
+                </select>
+                <span className="text-xs text-muted-foreground">(${paperStartingUsd.toLocaleString()} / KES {(paperStartingUsd * 130).toLocaleString()})</span>
+              </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowPaperReset(false)} className="border-border">Cancel</Button>
                 <Button onClick={async () => {
-                  await resetAccount();
+                  await resetAccount(paperStartingUsd);
                   setShowPaperReset(false);
                 }} className="bg-red-600 hover:bg-red-700 text-white gap-2">
                   <RotateCcw className="w-4 h-4" /> Reset

@@ -133,8 +133,8 @@ interface PaperTradingContextValue {
   refresh: () => Promise<void>;
   refreshSilent: () => Promise<void>;
   placeOrder: (params: { ticker: string; name?: string; shares: number; type: "buy" | "sell"; market: string; sector?: string }) => Promise<TradeResult>;
-  initAccount: (initialCapital?: number) => Promise<boolean>;
-  resetAccount: (initialCapital?: number) => Promise<boolean>;
+  initAccount: (initialCapitalUsd?: number) => Promise<boolean>;
+  resetAccount: (initialCapitalUsd?: number) => Promise<boolean>;
   fetchStatement: () => Promise<StatementData | null>;
 }
 
@@ -221,26 +221,26 @@ export function PaperTradingProvider({ children }: { children: ReactNode }) {
     }
   }, [user, refresh]);
 
-  const initAccount = useCallback(async (initialCapital?: number) => {
+  const initAccount = useCallback(async (initialCapitalUsd?: number) => {
     if (!user) return false;
     try {
       const res = await authFetch(`${API_URL}/paper/account/init`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, initialCapital }),
+        body: JSON.stringify({ userId: user.id, initialCapitalUsd }),
       });
       if (res.ok) { await refresh(); return true; }
       return false;
     } catch { return false; }
   }, [user, refresh]);
 
-  const resetAccount = useCallback(async (initialCapital?: number) => {
+  const resetAccount = useCallback(async (initialCapitalUsd?: number) => {
     if (!user) return false;
     try {
       const res = await authFetch(`${API_URL}/paper/reset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, initialCapital }),
+        body: JSON.stringify({ userId: user.id, initialCapitalUsd }),
       });
       if (res.ok) { await refresh(); return true; }
       return false;

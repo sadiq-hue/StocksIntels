@@ -7328,6 +7328,28 @@ app.get('/api/paper/account', async (req, res) => {
   }
 });
 
+app.post('/api/paper/account/init', async (req, res) => {
+  try {
+    const { userId, initialCapitalUsd } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+    const existing = await pool.query('SELECT id FROM paper_accounts WHERE user_id = $1', [userId]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Account already exists. Use reset to reinitialize.' });
+    }
+    const usdAmount = Math.min(100000, Math.max(10000, parseFloat(initialCapitalUsd) || 10000));
+    const kesAmount = usdAmount * USD_TO_KES_RATE;
+    const { rows } = await pool.query(
+      `INSERT INTO paper_accounts (user_id, cash_balance, initial_capital, cash_balance_usd, initial_capital_usd)
+       VALUES ($1, $2, $2, $3, $3) RETURNING *`,
+      [userId, kesAmount, usdAmount]
+    );
+    res.json({ account: rows[0] });
+  } catch (err) {
+    console.error('Error initializing paper account:', err.message);
+    res.status(500).json({ error: 'Failed to initialize paper account' });
+  }
+});
+
 function generateBenchmarkHistory(nseCurrent, spCurrent, days) {
   const points = Math.min(60, Math.max(10, Math.ceil(days / (days <= 30 ? 1 : days <= 90 ? 7 : 30))));
   const result = [];
@@ -7644,10 +7666,10 @@ app.get('/api/paper/statement', requireOwnership, async (req, res) => {
 
 app.post('/api/paper/reset', async (req, res) => {
   try {
-    const { userId, initialCapital } = req.body;
+    const { userId, initialCapitalUsd } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
-    const capKes = parseFloat(initialCapital) || 1000000.00;
-    const capUsd = 10000.00;
+    const capUsd = Math.min(100000, Math.max(10000, parseFloat(initialCapitalUsd) || 10000));
+    const capKes = capUsd * USD_TO_KES_RATE;
     await pool.query('DELETE FROM paper_trades WHERE user_id = $1', [userId]);
     await pool.query('DELETE FROM paper_positions WHERE user_id = $1', [userId]);
     await pool.query('DELETE FROM paper_accounts WHERE user_id = $1', [userId]);
