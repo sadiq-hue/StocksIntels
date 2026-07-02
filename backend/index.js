@@ -2096,14 +2096,14 @@ function getClientIp(req) {
 async function geoIpLookup(ip) {
   if (!ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return null;
   try {
-    const res = await axios.get(`http://ip-api.com/json/${ip}`, { timeout: 3000 });
-    if (res.data && res.data.status === 'success') {
+    const res = await axios.get(`https://ipapi.co/${ip}/json/`, { timeout: 3000 });
+    if (res.data && res.data.error !== true) {
       return {
-        country: res.data.country || null,
+        country: res.data.country_name || null,
         city: res.data.city || null,
-        region: res.data.regionName || null,
-        latitude: res.data.lat || null,
-        longitude: res.data.lon || null,
+        region: res.data.region || null,
+        latitude: res.data.latitude || null,
+        longitude: res.data.longitude || null,
       };
     }
     return null;

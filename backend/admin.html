@@ -1635,10 +1635,6 @@ async function selectUser(id) {
               <p style="font-weight:600;color:#111827;margin-top:2px">${d.notificationsCount}</p>
             </div>
             <div style="background:#f9fafb;border-radius:8px;padding:10px">
-              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">IP Address</span>
-              <p style="font-weight:600;color:#111827;margin-top:2px;font-family:monospace;font-size:12px">${esc(u.ip_address) || '-'}</p>
-            </div>
-            <div style="background:#f9fafb;border-radius:8px;padding:10px">
               <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Location</span>
               <p style="font-weight:600;color:#111827;margin-top:2px">${[u.city, u.region, u.country].filter(Boolean).join(', ') || '-'}</p>
             </div>
