@@ -7247,17 +7247,13 @@ app.get('/api/paper/account', async (req, res) => {
     const userId = req.query.userId;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
     let { rows } = await pool.query('SELECT * FROM paper_accounts WHERE user_id = $1', [userId]);
-    let account;
-    if (rows.length === 0) {
-      const init = await pool.query(
-        `INSERT INTO paper_accounts (user_id, cash_balance, initial_capital, cash_balance_usd, initial_capital_usd)
-         VALUES ($1, 1000000.00, 1000000.00, 10000.00, 10000.00) RETURNING *`,
-        [userId]
-      );
-      account = init.rows[0];
-    } else {
-      account = rows[0];
+    if (rows.length === 0 || rows[0].initial_capital === null) {
+      if (rows.length > 0) {
+        await pool.query('DELETE FROM paper_accounts WHERE user_id = $1', [userId]);
+      }
+      return res.json({ account: null, positions: [], marketStatus: { nse: isMarketOpen('NSE'), global: isMarketOpen('Global') } });
     }
+    const account = rows[0];
     const pos = await pool.query(
       'SELECT id, ticker, name, shares, avg_cost, market, sector FROM paper_positions WHERE user_id = $1 ORDER BY ticker',
       [userId]
