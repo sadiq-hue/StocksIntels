@@ -919,12 +919,12 @@ export function PortfolioPage() {
                 <Card className="bg-card border-border p-4">
                   <div className="text-muted-foreground text-xs mb-1">KES Balance (NSE)</div>
                   <div className="text-foreground text-xl font-bold">KES {paperAccount.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  <div className="text-muted-foreground text-xs mt-1">Initial: KES {paperAccount.initialCapital.toLocaleString()}</div>
+                  <div className="text-muted-foreground text-xs mt-1 flex items-center gap-1">Initial: KES {paperAccount.initialCapital.toLocaleString()} <button onClick={() => setShowPaperReset(true)} className="text-[#0D7490] hover:underline font-medium ml-1">Change</button></div>
                 </Card>
                 <Card className="bg-card border-border p-4">
                   <div className="text-muted-foreground text-xs mb-1">USD Balance (Global)</div>
                   <div className="text-foreground text-xl font-bold">${paperAccount.cashBalanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  <div className="text-muted-foreground text-xs mt-1">Initial: ${paperAccount.initialCapitalUsd.toLocaleString()}</div>
+                  <div className="text-muted-foreground text-xs mt-1 flex items-center gap-1">Initial: ${paperAccount.initialCapitalUsd.toLocaleString()} <button onClick={() => setShowPaperReset(true)} className="text-[#0D7490] hover:underline font-medium ml-1">Change</button></div>
                 </Card>
                 <Card className="bg-card border-border p-4">
                   <div className="text-muted-foreground text-xs mb-1">Portfolio Value (KES)</div>
