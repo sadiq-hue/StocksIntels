@@ -51,7 +51,7 @@ export function StocksPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col md:flex-row">
+    <div className="h-full flex flex-col md:flex-row">
       {/* Mobile header */}
       <div className="md:hidden flex items-center justify-between p-3 border-b bg-card">
         <div className="flex items-center gap-2.5">
