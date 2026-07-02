@@ -34,6 +34,8 @@ import { TermsPage } from "./pages/TermsPage";
 import { SecurityPage } from "./pages/SecurityPage";
 import { DisclaimerPage } from "./pages/DisclaimerPage";
 import { AffiliatesPage } from "./pages/AffiliatesPage";
+import { IpoPage } from "./pages/IpoPage";
+import { DerivativesPage } from "./pages/DerivativesPage";
 
 
 function ProtectedRoute() {
@@ -131,6 +133,8 @@ const router = createBrowserRouter([
       { path: "settings", element: <SettingsPage /> },
       { path: "sectors", element: <SectorsPage /> },
       { path: "bonds", element: <BondsPage /> },
+      { path: "ipos", element: <IpoPage /> },
+      { path: "derivatives", element: <DerivativesPage /> },
       { path: "etfs", element: <ETFsPage /> },
       { path: "profile", element: <ProfilePage /> },
       { path: "affiliates", element: <AffiliatesPage /> },
