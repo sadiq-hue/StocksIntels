@@ -63,7 +63,7 @@ const upload = multer({
 });
 
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', true);
 const server = http.createServer(app);
 
 // Support single origin or comma-separated list (e.g. "https://app.netlify.app,http://localhost:5173")
@@ -2090,16 +2090,20 @@ const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_WINDOW_MS = 60 * 1000; // 1 minute
 const LOGIN_BAN_MS = 15 * 60 * 1000; // 15 minute lockout
 function getClientIp(req) {
-  // Cloudflare sends the real IP in CF-Connecting-IP
+  // 1. Cloudflare sends the real IP in CF-Connecting-IP
   const cf = req.headers['cf-connecting-ip'];
   if (cf && cf !== 'unknown') return cf.trim();
-  // Standard proxy forwarding
+  // 2. x-forwarded-for — standard proxy header
   const xff = req.headers['x-forwarded-for'];
   if (xff) {
-    // x-forwarded-for format: "client, proxy1, proxy2" — first entry is the real client
+    // Format: "client, proxy1, proxy2" — first entry is the real client
     const ip = xff.split(',')[0]?.trim();
-    if (ip && ip !== 'unknown') return ip;
+    if (ip && ip !== 'unknown' && !ip.startsWith('10.') && !ip.startsWith('172.16.') && !ip.startsWith('192.168.')) return ip;
   }
+  // 3. x-real-ip — used by Nginx & some hosting platforms
+  const xri = req.headers['x-real-ip'];
+  if (xri && xri !== 'unknown') return xri.trim();
+  // 4. Express req.ip (respects trust proxy setting)
   return req.ip || req.connection?.remoteAddress || 'unknown';
 }
 
