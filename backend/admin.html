@@ -1016,79 +1016,207 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       <div id="activityPagination" class="flex items-center justify-center gap-2 py-4"></div>
     </div>
 
-    <div id="tab-audit" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
-      <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <h1 class="text-xl font-bold text-gray-900">Business Audit</h1>
-        <div class="flex items-center gap-3">
-          <select id="auditPeriod" class="input-field text-sm py-1.5 w-28" onchange="onAuditPeriodChange()">
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-          </select>
-          <select id="auditMonth" class="input-field text-sm py-1.5 w-28" style="display:none" onchange="fetchAudit()">
-            <option value="1">January</option><option value="2">February</option><option value="3">March</option>
-            <option value="4">April</option><option value="5">May</option><option value="6">June</option>
-            <option value="7">July</option><option value="8">August</option><option value="9">September</option>
-            <option value="10">October</option><option value="11">November</option><option value="12">December</option>
-          </select>
-          <select id="auditYear" class="input-field text-sm py-1.5 w-20" style="display:none" onchange="fetchAudit()">
-          </select>
-          <select id="auditRange" class="input-field text-sm py-1.5 w-20" onchange="fetchAudit()">
-            <option value="3">3</option>
-            <option value="6" selected>6</option>
-            <option value="12">12</option>
-          </select>
-          <label class="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none">
-            <input type="checkbox" id="auditAutoRefresh" onchange="toggleAuditAutoRefresh()" class="rounded">
-            Auto
-          </label>
-          <button class="btn btn-secondary text-xs py-1.5" onclick="fetchAudit()">Refresh</button>
-          <span id="auditTimestamp" class="text-xs text-gray-400"></span>
+    <div id="tab-audit" class="flex-1 hidden min-h-0 scroll" style="background:linear-gradient(180deg,#f5f3ff 0%,#f9fafb 100%);padding:20px">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);border-radius:14px;padding:20px 24px;color:#fff;margin-bottom:20px;position:relative;overflow:hidden">
+        <div style="position:absolute;top:-30px;right:-10px;width:160px;height:160px;border-radius:50%;background:rgba(255,255,255,.06)"></div>
+        <div style="position:absolute;bottom:-40px;left:30%;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.04)"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;position:relative;z-index:1">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center">
+              <svg style="width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            </div>
+            <div>
+              <h1 style="font-size:18px;font-weight:700">Business Audit</h1>
+              <p style="font-size:13px;opacity:.85">Track key metrics and performance trends</p>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <select id="auditPeriod" class="input-field" onchange="onAuditPeriodChange()" style="font-size:12px;height:34px;border-radius:8px;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);color:#fff;width:auto;min-width:80px;cursor:pointer">
+              <option value="weekly" style="color:#111827">Weekly</option>
+              <option value="monthly" style="color:#111827">Monthly</option>
+            </select>
+            <select id="auditMonth" class="input-field" style="display:none;font-size:12px;height:34px;border-radius:8px;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);color:#fff;width:auto;min-width:100px;cursor:pointer" onchange="fetchAudit()">
+              <option value="1" style="color:#111827">Jan</option><option value="2" style="color:#111827">Feb</option><option value="3" style="color:#111827">Mar</option>
+              <option value="4" style="color:#111827">Apr</option><option value="5" style="color:#111827">May</option><option value="6" style="color:#111827">Jun</option>
+              <option value="7" style="color:#111827">Jul</option><option value="8" style="color:#111827">Aug</option><option value="9" style="color:#111827">Sep</option>
+              <option value="10" style="color:#111827">Oct</option><option value="11" style="color:#111827">Nov</option><option value="12" style="color:#111827">Dec</option>
+            </select>
+            <select id="auditYear" class="input-field" style="display:none;font-size:12px;height:34px;border-radius:8px;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);color:#fff;width:auto;min-width:70px;cursor:pointer" onchange="fetchAudit()">
+            </select>
+            <select id="auditRange" class="input-field" onchange="fetchAudit()" style="font-size:12px;height:34px;border-radius:8px;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.25);color:#fff;width:auto;min-width:60px;cursor:pointer">
+              <option value="3" style="color:#111827">3</option>
+              <option value="6" selected style="color:#111827">6</option>
+              <option value="12" style="color:#111827">12</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:rgba(255,255,255,.8);cursor:pointer;user-select:none;white-space:nowrap">
+              <input type="checkbox" id="auditAutoRefresh" onchange="toggleAuditAutoRefresh()" style="accent-color:#fff;width:14px;height:14px;border-radius:3px">
+              Auto
+            </label>
+            <button onclick="fetchAudit()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;padding:5px 14px;font-size:12px;cursor:pointer;font-weight:500;white-space:nowrap">Refresh</button>
+            <span id="auditTimestamp" style="font-size:11px;opacity:.7;white-space:nowrap"></span>
+          </div>
         </div>
       </div>
 
-      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        <div class="stat-card"><div class="stat-value text-lg" id="auditSignups">-</div><div class="stat-label">New Signups <span id="auditSignupsTrend" class="text-xs font-medium"></span></div></div>
-        <div class="stat-card"><div class="stat-value text-lg" id="auditChurned">-</div><div class="stat-label">Churned <span id="auditChurnedTrend" class="text-xs font-medium"></span></div></div>
-        <div class="stat-card"><div class="stat-value text-lg" id="auditRetention">-</div><div class="stat-label">Retention Rate</div></div>
-        <div class="stat-card"><div class="stat-value text-lg" id="auditConversion">-</div><div class="stat-label">Conversion Rate</div></div>
-        <div class="stat-card"><div class="stat-value text-lg" id="auditActivePaid">-</div><div class="stat-label">Active Paid</div></div>
-      </div>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        <div class="stat-card"><div class="stat-value text-lg" id="auditRevenue">-</div><div class="stat-label">Revenue <span id="auditRevenueTrend" class="text-xs font-medium"></span></div></div>
-        <div class="stat-card"><div class="stat-value text-lg" id="auditArpu">-</div><div class="stat-label">Avg Revenue/User</div></div>
-        <div class="stat-card"><div class="stat-value text-lg" id="auditTotalRevenue">-</div><div class="stat-label">Total Revenue</div></div>
-        <div class="stat-card"><div class="stat-value text-lg" id="auditSuccessfulPmts">-</div><div class="stat-label">Succeeded</div></div>
-        <div class="stat-card"><div class="stat-value text-lg" id="auditFailedPmts">-</div><div class="stat-label">Failed</div></div>
-      </div>
-
-      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-        <div class="stat-card"><div class="stat-value text-lg" id="auditSubAttempts">-</div><div class="stat-label">Sub Attempts <span id="auditSubAttemptsTrend" class="text-xs font-medium"></span></div></div>
-        <div class="stat-card"><div class="stat-value text-lg" id="auditActiveSubs">-</div><div class="stat-label">New Active Subs</div></div>
-        <div class="stat-card"><div class="stat-value text-lg" id="auditExpiredSubs">-</div><div class="stat-label">New Expired Subs</div></div>
-        <div class="stat-card"><div class="stat-value text-lg" id="auditTotalUsers">-</div><div class="stat-label">Total Users</div></div>
-        <div class="stat-card"><div class="stat-value text-lg" id="auditPendingPmts">-</div><div class="stat-label">Pending Pmt</div></div>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
-          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Payment by Provider</h3>
-          <div id="auditProviderBreakdown" class="text-sm text-gray-400">Loading...</div>
+      <!-- Section: Growth -->
+      <div style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #f3f4f6">
+          <svg style="width:16px;height:16px;color:#9ca3af" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+          <span style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Growth</span>
         </div>
-        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
-          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Revenue by Plan</h3>
-          <div id="auditPlanBreakdown" class="text-sm text-gray-400">Loading...</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.03em">Signups</span>
+              <span style="font-size:10px;color:#059669;font-weight:600" id="auditSignupsTrend"></span>
+            </div>
+            <div class="stat-value" style="font-size:22px;color:#7c3aed" id="auditSignups">-</div>
+            <div class="stat-label" style="font-size:11px">New Signups</div>
+          </div>
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.03em">Churned</span>
+              <span style="font-size:10px;color:#dc2626;font-weight:600" id="auditChurnedTrend"></span>
+            </div>
+            <div class="stat-value" style="font-size:22px;color:#dc2626" id="auditChurned">-</div>
+            <div class="stat-label" style="font-size:11px">Churned</div>
+          </div>
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:36px;height:36px;border-radius:10px;background:#f0fdf4;color:#059669;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📈</span>
+              <div><div class="stat-value" style="font-size:20px;color:#059669" id="auditRetention">-</div><div class="stat-label" style="font-size:11px">Retention Rate</div></div>
+            </div>
+          </div>
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:36px;height:36px;border-radius:10px;background:#fef3c7;color:#d97706;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🎯</span>
+              <div><div class="stat-value" style="font-size:20px;color:#d97706" id="auditConversion">-</div><div class="stat-label" style="font-size:11px">Conversion Rate</div></div>
+            </div>
+          </div>
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:36px;height:36px;border-radius:10px;background:#eff6ff;color:#0D7490;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">💳</span>
+              <div><div class="stat-value" style="font-size:20px;color:#0D7490" id="auditActivePaid">-</div><div class="stat-label" style="font-size:11px">Active Paid</div></div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
-        <div class="p-4 border-b border-gray-100">
-          <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Period Comparison</h3>
+      <!-- Section: Revenue -->
+      <div style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #f3f4f6">
+          <svg style="width:16px;height:16px;color:#9ca3af" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Revenue</span>
         </div>
-        <table class="w-full text-sm">
-          <thead><tr><th>Period</th><th>Signups</th><th>Churned</th><th>Revenue</th><th>Sub Attempts</th><th>Payments OK</th><th>Failed</th></tr></thead>
-          <tbody id="auditHistoryBody"></tbody>
-        </table>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.03em">Revenue</span>
+              <span style="font-size:10px;color:#059669;font-weight:600" id="auditRevenueTrend"></span>
+            </div>
+            <div class="stat-value" style="font-size:22px;color:#059669" id="auditRevenue">-</div>
+            <div class="stat-label" style="font-size:11px">Revenue</div>
+          </div>
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:36px;height:36px;border-radius:10px;background:#f0fdf4;color:#059669;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">👤</span>
+              <div><div class="stat-value" style="font-size:20px;color:#059669" id="auditArpu">-</div><div class="stat-label" style="font-size:11px">Avg Rev/User</div></div>
+            </div>
+          </div>
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:36px;height:36px;border-radius:10px;background:#eff6ff;color:#0D7490;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">💰</span>
+              <div><div class="stat-value" style="font-size:20px;color:#0D7490" id="auditTotalRevenue">-</div><div class="stat-label" style="font-size:11px">Total Revenue</div></div>
+            </div>
+          </div>
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:36px;height:36px;border-radius:10px;background:#f0fdf4;color:#059669;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">✅</span>
+              <div><div class="stat-value" style="font-size:20px;color:#059669" id="auditSuccessfulPmts">-</div><div class="stat-label" style="font-size:11px">Succeeded</div></div>
+            </div>
+          </div>
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:36px;height:36px;border-radius:10px;background:#fef2f2;color:#dc2626;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">❌</span>
+              <div><div class="stat-value" style="font-size:20px;color:#dc2626" id="auditFailedPmts">-</div><div class="stat-label" style="font-size:11px">Failed</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section: Subscriptions -->
+      <div style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #f3f4f6">
+          <svg style="width:16px;height:16px;color:#9ca3af" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Subscriptions</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.03em">Attempts</span>
+              <span style="font-size:10px;color:#059669;font-weight:600" id="auditSubAttemptsTrend"></span>
+            </div>
+            <div class="stat-value" style="font-size:22px;color:#d97706" id="auditSubAttempts">-</div>
+            <div class="stat-label" style="font-size:11px">Sub Attempts</div>
+          </div>
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:36px;height:36px;border-radius:10px;background:#f0fdf4;color:#059669;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🆕</span>
+              <div><div class="stat-value" style="font-size:20px;color:#059669" id="auditActiveSubs">-</div><div class="stat-label" style="font-size:11px">New Active Subs</div></div>
+            </div>
+          </div>
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:36px;height:36px;border-radius:10px;background:#fef2f2;color:#dc2626;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⏰</span>
+              <div><div class="stat-value" style="font-size:20px;color:#dc2626" id="auditExpiredSubs">-</div><div class="stat-label" style="font-size:11px">New Expired</div></div>
+            </div>
+          </div>
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:36px;height:36px;border-radius:10px;background:#eff6ff;color:#0D7490;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">👥</span>
+              <div><div class="stat-value" style="font-size:20px;color:#0D7490" id="auditTotalUsers">-</div><div class="stat-label" style="font-size:11px">Total Users</div></div>
+            </div>
+          </div>
+          <div class="stat-card" style="padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:36px;height:36px;border-radius:10px;background:#fef3c7;color:#d97706;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⏳</span>
+              <div><div class="stat-value" style="font-size:20px;color:#d97706" id="auditPendingPmts">-</div><div class="stat-label" style="font-size:11px">Pending Pmt</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Breakdowns -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #f3f4f6">
+            <svg style="width:16px;height:16px;color:#9ca3af" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            <span style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Payment by Provider</span>
+          </div>
+          <div id="auditProviderBreakdown" style="font-size:13px;color:#9ca3af">Loading...</div>
+        </div>
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #f3f4f6">
+            <svg style="width:16px;height:16px;color:#9ca3af" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            <span style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Revenue by Plan</span>
+          </div>
+          <div id="auditPlanBreakdown" style="font-size:13px;color:#9ca3af">Loading...</div>
+        </div>
+      </div>
+
+      <!-- Period Comparison -->
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+        <div style="padding:14px 20px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:8px">
+          <svg style="width:14px;height:14px;color:#9ca3af" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+          <span style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Period Comparison</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="w-full" style="font-size:13px">
+            <thead><tr><th style="padding:10px 20px">Period</th><th style="padding:10px 20px">Signups</th><th style="padding:10px 20px">Churned</th><th style="padding:10px 20px">Revenue</th><th style="padding:10px 20px">Sub Attempts</th><th style="padding:10px 20px">Payments OK</th><th style="padding:10px 20px">Failed</th></tr></thead>
+            <tbody id="auditHistoryBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
