@@ -100,8 +100,15 @@ async function authenticateToken(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.user || req.user.role !== 'admin') {
+  if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'super_admin')) {
     return res.status(403).json({ error: 'Admin access required.', code: 'ADMIN_REQUIRED' });
+  }
+  next();
+}
+
+function requireSuperAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'super_admin') {
+    return res.status(403).json({ error: 'Super admin access required.', code: 'SUPER_ADMIN_REQUIRED' });
   }
   next();
 }
@@ -111,7 +118,7 @@ function requireOwnership(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ error: 'Authentication required.', code: 'NO_USER' });
   }
-  if (req.user.role === 'admin') {
+  if (req.user.role === 'admin' || req.user.role === 'super_admin') {
     return next();
   }
   if (!requestedUserId || String(req.user.id) !== String(requestedUserId)) {
@@ -123,6 +130,7 @@ function requireOwnership(req, res, next) {
 module.exports = {
   authenticateToken,
   requireAdmin,
+  requireSuperAdmin,
   requireOwnership,
   generateToken,
   generateRefreshToken,

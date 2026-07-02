@@ -38,7 +38,7 @@ const path = require('path');
 const helmet = require('helmet');
 const { JSDOM } = require('jsdom');
 const createDOMPurify = require('dompurify');
-const { authenticateToken, requireAdmin, requireOwnership, generateToken, generateRefreshToken, setRefreshCookie, clearRefreshCookie, revokeRefreshTokenByHash } = require('./auth');
+const { authenticateToken, requireAdmin, requireSuperAdmin, requireOwnership, generateToken, generateRefreshToken, setRefreshCookie, clearRefreshCookie, revokeRefreshTokenByHash } = require('./auth');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const crypto = require('crypto');
@@ -203,7 +203,7 @@ app.post('/api/admin/send-otp', async (req, res) => {
       await logAdminAction(null, email, 'otp_failed', ip, ua, { reason: 'user_not_found' }, false);
       return res.status(401).json({ error: 'No account found with this email' });
     }
-    if (user.rows[0].role !== 'admin') {
+    if (user.rows[0].role !== 'admin' && user.rows[0].role !== 'super_admin') {
       await logAdminAction(user.rows[0].id, email, 'otp_denied', ip, ua, { reason: 'not_admin' }, false);
       return res.status(403).json({ error: 'Admin access required.' });
     }
@@ -240,7 +240,7 @@ app.post('/api/admin/verify-otp', async (req, res) => {
       'SELECT id, full_name, email, role, is_verified, created_at, subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE email = $1',
       [email]
     );
-    if (userResult.rows.length === 0 || userResult.rows[0].role !== 'admin') {
+    if (userResult.rows.length === 0 || (userResult.rows[0].role !== 'admin' && userResult.rows[0].role !== 'super_admin')) {
       return res.status(403).json({ error: 'Admin access required.' });
     }
     const user = userResult.rows[0];
@@ -374,11 +374,36 @@ app.post('/api/admin/users/:id/role', async (req, res) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
-    if (!role || !['admin', 'trader'].includes(role)) return res.status(400).json({ error: 'Role must be "admin" or "trader"' });
+    if (!role || !['admin', 'trader', 'super_admin'].includes(role)) return res.status(400).json({ error: 'Role must be "admin", "trader", or "super_admin"' });
+    if (role === 'super_admin' && req.user.role !== 'super_admin') return res.status(403).json({ error: 'Only super admins can assign super_admin role' });
     const result = await pool.query('UPDATE users SET role = $1 WHERE id = $2 RETURNING id, full_name, email, role, trader_type, is_verified', [role, id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     res.json(result.rows[0]);
   } catch (err) { console.error('Admin set role error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+// ── Admin Platform Settings API ──
+app.get('/api/admin/settings', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT key, value, updated_at FROM platform_settings ORDER BY key');
+    res.json({ settings: result.rows });
+  } catch (err) { console.error('Admin get settings error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+app.put('/api/admin/settings', requireSuperAdmin, async (req, res) => {
+  try {
+    const { settings } = req.body;
+    if (!settings || !Array.isArray(settings)) return res.status(400).json({ error: 'settings must be an array of {key, value} objects' });
+    for (const s of settings) {
+      if (!s.key) continue;
+      await pool.query(
+        'INSERT INTO platform_settings (key, value, updated_at) VALUES ($1, $2, CURRENT_TIMESTAMP) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = CURRENT_TIMESTAMP',
+        [s.key, String(s.value)]
+      );
+    }
+    const result = await pool.query('SELECT key, value, updated_at FROM platform_settings ORDER BY key');
+    res.json({ settings: result.rows });
+  } catch (err) { console.error('Admin save settings error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 app.put('/api/admin/users/:id/toggle-verify', async (req, res) => {
@@ -1959,6 +1984,7 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
     );
     if (otpResult.rows.length === 0) return res.status(401).json({ error: 'Invalid or expired verification code' });
     const hashedPassword = await bcrypt.hash(password, 10);
+    const ip = getClientIp(req);
     // Handle referral code
     let referredBy = null;
     if (ref) {
@@ -1969,9 +1995,18 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
       }
     }
     const result = await pool.query(
-      'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date, referred_by) VALUES ($1, $2, $3, TRUE, NOW(), $4) RETURNING id, full_name, email, role, is_verified, trader_type, created_at, subscription_tier, subscription_status, trial_start_date, subscription_end_date, commitment_fee_paid',
-      [fullName, email, hashedPassword, referredBy]
+      'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date, referred_by, ip_address) VALUES ($1, $2, $3, TRUE, NOW(), $4, $5) RETURNING id, full_name, email, role, is_verified, trader_type, created_at, subscription_tier, subscription_status, trial_start_date, subscription_end_date, commitment_fee_paid, ip_address',
+      [fullName, email, hashedPassword, referredBy, ip]
     );
+    // Geo-lookup in background
+    geoIpLookup(ip).then(geo => {
+      if (geo) {
+        pool.query(
+          'UPDATE users SET country = $1, city = $2, region = $3, latitude = $4, longitude = $5 WHERE id = $6',
+          [geo.country, geo.city, geo.region, geo.latitude, geo.longitude, result.rows[0].id]
+        ).catch(e => console.error('[GEO] Update failed:', e.message));
+      }
+    });
     // Create pending referral record
     if (referredBy) {
       await pool.query(
@@ -2004,6 +2039,7 @@ app.post('/api/auth/register', async (req, res) => {
     const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (existing.rows.length > 0) return res.status(409).json({ error: 'Email already registered' });
     const hashedPassword = await bcrypt.hash(password, 10);
+    const ip = getClientIp(req);
     // Handle referral code
     let referredBy = null;
     if (ref) {
@@ -2014,9 +2050,18 @@ app.post('/api/auth/register', async (req, res) => {
       }
     }
     const result = await pool.query(
-      'INSERT INTO users (full_name, email, password_hash, trial_start_date, referred_by) VALUES ($1, $2, $3, NOW(), $4) RETURNING id, full_name, email, role, created_at, subscription_tier, subscription_status, trial_start_date',
-      [fullName, email, hashedPassword, referredBy]
+      'INSERT INTO users (full_name, email, password_hash, trial_start_date, referred_by, ip_address) VALUES ($1, $2, $3, NOW(), $4, $5) RETURNING id, full_name, email, role, created_at, subscription_tier, subscription_status, trial_start_date, ip_address',
+      [fullName, email, hashedPassword, referredBy, ip]
     );
+    // Geo-lookup in background
+    geoIpLookup(ip).then(geo => {
+      if (geo) {
+        pool.query(
+          'UPDATE users SET country = $1, city = $2, region = $3, latitude = $4, longitude = $5 WHERE id = $6',
+          [geo.country, geo.city, geo.region, geo.latitude, geo.longitude, result.rows[0].id]
+        ).catch(e => console.error('[GEO] Update failed:', e.message));
+      }
+    });
     // Create pending referral record
     if (referredBy) {
       await pool.query(
@@ -2046,6 +2091,23 @@ const LOGIN_WINDOW_MS = 60 * 1000; // 1 minute
 const LOGIN_BAN_MS = 15 * 60 * 1000; // 15 minute lockout
 function getClientIp(req) {
   return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress || 'unknown';
+}
+
+async function geoIpLookup(ip) {
+  if (!ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return null;
+  try {
+    const res = await axios.get(`http://ip-api.com/json/${ip}`, { timeout: 3000 });
+    if (res.data && res.data.status === 'success') {
+      return {
+        country: res.data.country || null,
+        city: res.data.city || null,
+        region: res.data.regionName || null,
+        latitude: res.data.lat || null,
+        longitude: res.data.lon || null,
+      };
+    }
+    return null;
+  } catch { return null; }
 }
 function checkLoginRateLimit(email, ip) {
   const key = email.toLowerCase();
@@ -9819,6 +9881,12 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_start_date TIMESTAMP WITH TIME ZONE DEFAULT NOW()`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS visible_in_directory BOOLEAN DEFAULT true`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS commitment_fee_paid BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45) DEFAULT NULL`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS country VARCHAR(100) DEFAULT NULL`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100) DEFAULT NULL`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS region VARCHAR(100) DEFAULT NULL`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS latitude NUMERIC(10,7) DEFAULT NULL`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS longitude NUMERIC(10,7) DEFAULT NULL`);
     // Grant existing free users a trial from their signup date
     await pool.query(`UPDATE users SET trial_start_date = created_at WHERE trial_start_date IS NULL AND subscription_tier = 'free'`);
     // Set default duration_months for existing plans that don't have it
@@ -10082,6 +10150,55 @@ async function initDatabase() {
       }
     } catch (seedErr) {
       console.error('[Seed] Global corporate actions seeding error:', seedErr.message);
+    }
+
+    // ── Platform settings table ──
+    await pool.query(`CREATE TABLE IF NOT EXISTS platform_settings (
+      key VARCHAR(100) PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+
+    // Seed default platform settings if empty
+    try {
+      const existingSettings = await pool.query('SELECT COUNT(*) FROM platform_settings');
+      if (parseInt(existingSettings.rows[0].count, 10) === 0) {
+        const defaults = [
+          { key: 'platform_name', value: 'StocksIntels' },
+          { key: 'default_currency', value: 'KES' },
+          { key: 'maintenance_mode', value: 'false' },
+          { key: 'new_user_registration', value: 'true' },
+          { key: 'default_subscription_tier', value: 'free' },
+          { key: 'affiliate_commission_pct', value: '10' },
+          { key: 'signal_confidence_threshold', value: '70' },
+          { key: 'admin_email', value: 'admin@stocksintels.com' },
+          { key: 'max_portfolio_watchlist', value: '50' },
+          { key: 'system_announcement', value: '' },
+        ];
+        for (const s of defaults) {
+          await pool.query(
+            'INSERT INTO platform_settings (key, value) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [s.key, s.value]
+          );
+        }
+        console.log('[Seed] Inserted', defaults.length, 'default platform settings');
+      }
+    } catch (seedErr) {
+      console.error('[Seed] Platform settings seeding error:', seedErr.message);
+    }
+
+    // ── Migration: Promote first admin user to super_admin ──
+    try {
+      const existingSuper = await pool.query("SELECT id FROM users WHERE role = 'super_admin' LIMIT 1");
+      if (existingSuper.rows.length === 0) {
+        const firstAdmin = await pool.query("SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1");
+        if (firstAdmin.rows.length > 0) {
+          await pool.query("UPDATE users SET role = 'super_admin' WHERE id = $1", [firstAdmin.rows[0].id]);
+          console.log('[Migration] Promoted user', firstAdmin.rows[0].id, 'to super_admin');
+        }
+      }
+    } catch (migErr) {
+      console.error('[Migration] Super admin promotion error:', migErr.message);
     }
 
     // Restore signal-engine in-memory state now that tables are guaranteed to exist

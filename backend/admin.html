@@ -14,6 +14,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .scroll{overflow-y:auto}
 .scroll::-webkit-scrollbar{width:4px}
 .scroll::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
+.tab-loading{position:absolute;top:0;left:0;right:0;height:3px;background:#e5e7eb;z-index:10;overflow:hidden;display:none}
+.tab-loading-bar{height:100%;width:30%;background:#0D7490;border-radius:2px;animation:loadingSlide 1s ease-in-out infinite}
+@keyframes loadingSlide{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
 .nav-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:8px;cursor:pointer;color:#6b7280;transition:all .15s;font-size:14px;font-weight:500}
 .nav-item:hover{background:#f3f4f6;color:#111827}
 .nav-item.active{background:#eff6ff;color:#0D7490;font-weight:600}
@@ -38,6 +41,7 @@ th{text-align:left;padding:10px 12px;font-size:12px;font-weight:600;color:#6b728
 td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
 .pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:500}
 .pill-admin{background:#f3e8ff;color:#7c3aed}
+.pill-super-admin{background:#fef3c7;color:#92400e;border:1px solid #fbbf24}
 .pill-trader{background:#eff6ff;color:#2563eb}
 .pill-verified{background:#d1fae5;color:#065f46}
 .pill-unverified{background:#fef3c7;color:#92400e}
@@ -82,7 +86,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
   .p-6{padding:12px!important}
 
   /* Side detail panels - static stacking on mobile */
-  #userDetailPanel,#ticketDetailPanel,#signalDetailPanel{position:static!important;left:auto!important;right:auto!important;border-top:1px solid #e5e7eb;max-height:50vh;padding:12px!important}
+  #userDetailPanel,#ticketDetailPanel,#signalDetailPanel{position:static!important;left:auto!important;right:auto!important;border-top:1px solid #e5e7eb;max-height:50vh;padding:12px!important;border-left:none!important;overflow-y:auto!important}
   #usersLeftPanel,#ticketsLeftPanel,#signalsLeftPanel{width:100%!important}
   #usersLayout,#ticketsLayout,#tab-signals>.flex-1.min-h-0.relative{flex-direction:column!important}
   #usersLeftPanel,#ticketsLeftPanel{border-right:none!important}
@@ -99,6 +103,9 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
   /* Signals filter row - stack inputs */
   #tab-signals .flex-wrap.gap-3{gap:4px}
   #tab-signals .input-field{width:100%!important;margin-bottom:4px}
+
+  /* Settings tab grid - single column on mobile */
+  #tab-settings #settingsContainer{grid-template-columns:1fr!important}
 
   /* Chat tab - stack vertically */
   #tab-chat>.flex{flex-direction:column!important}
@@ -139,7 +146,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       <div class="space-y-4">
         <div id="loginEmailGroup">
           <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-          <input id="loginEmailInput" type="email" class="input-field" placeholder="bathurusadiki01@gmail.com" autocomplete="email" onkeydown="if(event.key==='Enter')handleSendOtp()">
+          <input id="loginEmailInput" type="email" class="input-field" placeholder="admin@example.com" autocomplete="email" onkeydown="if(event.key==='Enter')handleSendOtp()">
         </div>
         <div id="loginOtpGroup" class="hidden">
           <label class="block text-sm font-medium text-gray-700 mb-1">One-Time Password</label>
@@ -235,6 +242,10 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Audit
       </div>
+      <div class="nav-item hidden" data-tab="settings" id="navSettings" onclick="switchTab('settings')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Settings
+      </div>
       <div class="nav-item" data-tab="user-activity" onclick="switchTab('user-activity')">
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8V4m0 4a4 4 0 100 8 4 4 0 000-8zm-8 8a4 4 0 014-4h8a4 4 0 014 4v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2z"/></svg>
         User Activity
@@ -256,7 +267,8 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
   <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeMobileSidebar()"></div>
 
   <!-- Main Content -->
-  <div id="mainContent" class="flex-1 flex flex-col min-w-0">
+  <div id="mainContent" class="flex-1 flex flex-col min-w-0" style="position:relative">
+    <div class="tab-loading" id="tabLoading"><div class="tab-loading-bar"></div></div>
     <!-- Mobile header with hamburger -->
     <div class="mobile-only hamburger-btn" onclick="toggleMobileSidebar()" style="position:sticky;top:0;z-index:30;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:8px;padding:12px 16px">
       <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -269,7 +281,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       <div class="dash-welcome">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <div>
-            <h1>👋 Good morning, Admin</h1>
+            <h1 id="greetingText">👋 Loading...</h1>
             <p>Here's what's happening with your platform today.</p>
           </div>
           <span id="lastUpdated" class="time" style="text-align:right;white-space:nowrap"></span>
@@ -594,7 +606,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <div id="signalsLeftPanel" class="w-full min-w-0 min-h-0" style="background:#f9fafb;overflow-y:auto;height:100%">
           <div style="margin:0 20px 16px 20px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)">
             <div style="overflow-x:auto">
-              <table style="width:1600px">
+              <table class="w-full" style="min-width:900px">
                 <thead><tr><th style="padding:12px 14px">Ticker</th><th style="padding:12px 14px">Signal</th><th style="padding:12px 14px">Conf.</th><th style="padding:12px 14px">Price</th><th style="padding:12px 14px">Chg %</th><th style="padding:12px 14px">Entry</th><th style="padding:12px 14px">Stop</th><th style="padding:12px 14px">T1</th><th style="padding:12px 14px">T2</th><th style="padding:12px 14px">Market</th><th style="padding:12px 14px">Timeframe</th><th style="padding:12px 14px">Generated</th><th style="padding:12px 14px"></th></tr></thead>
                 <tbody id="signalsTableBody"></tbody>
               </table>
@@ -1219,6 +1231,41 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         </div>
       </div>
     </div>
+
+    <!-- Tab: Settings -->
+    <div id="tab-settings" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div style="background:linear-gradient(135deg,#4f46e5,#6366f1);border-radius:14px;padding:20px 24px;color:#fff;margin-bottom:4px;position:relative;overflow:hidden">
+        <div style="position:absolute;top:-30px;right:-10px;width:160px;height:160px;border-radius:50%;background:rgba(255,255,255,.06)"></div>
+        <div style="display:flex;align-items:center;gap:12px;position:relative;z-index:1">
+          <div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center">
+            <svg style="width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </div>
+          <div>
+            <h1 style="font-size:18px;font-weight:700">Platform Settings</h1>
+            <p id="settingsSubtitle" style="font-size:13px;opacity:.85">Read-only view</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="settingsSuperAdminBanner" class="hidden" style="background:#fef3c7;border:1px solid #fbbf24;border-radius:10px;padding:12px 16px;font-size:13px;color:#92400e;display:flex;align-items:center;gap:8px">
+        <svg class="size-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+        <span>You are in read-only mode. Only super admins can modify settings.</span>
+      </div>
+
+      <div id="settingsSavedToast" class="hidden" style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:10px;padding:12px 16px;font-size:13px;color:#065f46;display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <svg class="size-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        <span>Settings saved successfully.</span>
+      </div>
+
+      <div id="settingsContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
+        <!-- Populated by JS -->
+      </div>
+
+      <div id="settingsActionBar" class="hidden" style="display:flex;justify-content:flex-end;gap:8px;padding-top:8px;border-top:1px solid #e5e7eb">
+        <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1265,6 +1312,16 @@ function toast(msg, type) {
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+
+function showTabLoading() {
+  const el = document.getElementById('tabLoading');
+  if (el) el.style.display = 'block';
+}
+
+function hideTabLoading() {
+  const el = document.getElementById('tabLoading');
+  if (el) el.style.display = 'none';
 }
 
 // ── Socket IO ──
@@ -1321,6 +1378,10 @@ function switchTab(tab) {
   document.getElementById('tab-' + tab).classList.remove('hidden');
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.querySelector(`.nav-item[data-tab="${tab}"]`).classList.add('active');
+  showTabLoading();
+  // Auto-hide loading bar after 2.5s fallback
+  if (window._tabLoadingTimer) clearTimeout(window._tabLoadingTimer);
+  window._tabLoadingTimer = setTimeout(hideTabLoading, 2500);
   // Clear audit auto-refresh when leaving audit tab
   if (tab !== 'audit' && _auditTimer) {
     clearInterval(_auditTimer);
@@ -1344,8 +1405,9 @@ function switchTab(tab) {
   if (tab === 'user-activity') { fetchUserActivity(); }
   if (tab === 'affiliates') { fetchAffiliateStats(); fetchAffiliates(); }
   if (tab === 'audit') { onAuditPeriodChange(); }
+  if (tab === 'settings') { fetchSettings(); }
 }
-['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','audit'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
+['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','audit','settings'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
 
 // ── Dashboard ──
 async function fetchDashboard() {
@@ -1383,7 +1445,8 @@ async function fetchDashboard() {
         </tr>
       `).join('');
     }
-  } catch {}
+    hideTabLoading();
+  } catch { hideTabLoading(); }
 }
 
 // ── Users ──
@@ -1426,7 +1489,7 @@ async function fetchUsers() {
             <span class="font-medium text-gray-900" style="font-size:14px">${esc(u.full_name)}</span>
           </td>
           <td style="padding:10px 16px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280">${esc(u.email)}</td>
-          <td style="padding:10px 16px;border-bottom:1px solid #f3f4f6"><span class="pill ${u.role === 'admin' ? 'pill-admin' : 'pill-trader'}">${esc(u.role)}</span></td>
+          <td style="padding:10px 16px;border-bottom:1px solid #f3f4f6"><span class="pill ${u.role === 'super_admin' ? 'pill-super-admin' : u.role === 'admin' ? 'pill-admin' : 'pill-trader'}">${esc(u.role)}</span></td>
           <td style="padding:10px 16px;border-bottom:1px solid #f3f4f6;font-size:13px;color:#6b7280">${esc(u.trader_type) || '-'}</td>
           <td style="padding:10px 16px;border-bottom:1px solid #f3f4f6"><span class="pill ${u.is_verified ? 'pill-verified' : 'pill-unverified'}">${u.is_verified ? 'Verified' : 'Unverified'}</span></td>
           <td style="padding:10px 16px;border-bottom:1px solid #f3f4f6"><span class="pill ${subColor}">${esc(u.subscription_tier) || 'free'}</span></td>
@@ -1456,12 +1519,19 @@ function closeUserDetail() {
   document.querySelectorAll('.user-row').forEach(r => r.classList.remove('selected'));
 }
 
+function scrollToPanel(el) {
+  if (window.innerWidth < 768) {
+    setTimeout(function() { el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 100);
+  }
+}
+
 async function selectUser(id) {
   if (selectedUserId === id) { closeUserDetail(); return; }
   selectedUserId = id;
   document.getElementById('usersLeftPanel').className = 'w-1/2 border-r border-gray-200';
   document.getElementById('usersLeftPanel').style.overflowY = 'auto';
   document.getElementById('userDetailPanel').classList.remove('hidden');
+  scrollToPanel(document.getElementById('userDetailPanel'));
   document.getElementById('userDetailContent').innerHTML = '<div class="flex items-center justify-center py-12"><div class="size-5 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin"></div></div>';
   document.querySelectorAll('.user-row').forEach(r => r.classList.remove('selected'));
   const row = document.querySelector(`.user-row[onclick*="selectUser(${id})"]`);
@@ -1538,7 +1608,7 @@ async function selectUser(id) {
             </div>
             <div style="background:#f9fafb;border-radius:8px;padding:10px">
               <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Role</span>
-              <p style="margin-top:2px"><span class="pill ${u.role === 'admin' ? 'pill-admin' : 'pill-trader'}">${esc(u.role)}</span></p>
+              <p style="margin-top:2px"><span class="pill ${u.role === 'super_admin' ? 'pill-super-admin' : u.role === 'admin' ? 'pill-admin' : 'pill-trader'}">${esc(u.role)}</span></p>
             </div>
             <div style="background:#f9fafb;border-radius:8px;padding:10px">
               <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Trader Type</span>
@@ -1559,6 +1629,14 @@ async function selectUser(id) {
             <div style="background:#f9fafb;border-radius:8px;padding:10px">
               <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Notifications</span>
               <p style="font-weight:600;color:#111827;margin-top:2px">${d.notificationsCount}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">IP Address</span>
+              <p style="font-weight:600;color:#111827;margin-top:2px;font-family:monospace;font-size:12px">${esc(u.ip_address) || '-'}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Location</span>
+              <p style="font-weight:600;color:#111827;margin-top:2px">${[u.city, u.region, u.country].filter(Boolean).join(', ') || '-'}</p>
             </div>
           </div>
 
@@ -1587,7 +1665,7 @@ async function selectUser(id) {
           <!-- Actions -->
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:16px;padding-top:16px;border-top:1px solid #f3f4f6">
             <button class="btn ${u.is_verified ? 'btn-secondary' : 'btn-primary'}" onclick="toggleVerify(${u.id})" style="font-size:12px;padding:6px 14px">${u.is_verified ? 'Unverify' : 'Verify'}</button>
-            <button class="btn btn-secondary" onclick="changeRole(${u.id}, '${u.role === 'admin' ? 'trader' : 'admin'}')" style="font-size:12px;padding:6px 14px">Make ${u.role === 'admin' ? 'Trader' : 'Admin'}</button>
+            <button class="btn ${u.role === 'super_admin' ? 'btn-secondary' : 'btn-secondary'}" onclick="changeRole(${u.id}, '${u.role === 'super_admin' ? 'trader' : u.role === 'admin' ? 'trader' : 'admin'}')" style="font-size:12px;padding:6px 14px">${u.role === 'super_admin' ? 'Demote to Trader' : u.role === 'admin' ? 'Make Trader' : 'Make Admin'}</button>
             <button class="btn btn-secondary" onclick="showUserEdit()" style="font-size:12px;padding:6px 14px">Edit</button>
             <button class="btn btn-secondary" onclick="activateSubscription(${u.id})" style="font-size:12px;padding:6px 14px">Activate Sub</button>
             <button class="btn btn-secondary" onclick="resetUserPassword(${u.id})" style="font-size:12px;padding:6px 14px">Reset PW</button>
@@ -1886,7 +1964,9 @@ async function selectSignal(id) {
   if (selectedSignalId === id) { closeSignalDetail(); return; }
   selectedSignalId = id;
   document.getElementById('signalsLeftPanel').className = 'w-1/2 min-w-0 min-h-0';
+  document.getElementById('signalsLeftPanel').style.overflowY = 'auto';
   document.getElementById('signalDetailPanel').classList.remove('hidden');
+  scrollToPanel(document.getElementById('signalDetailPanel'));
   document.getElementById('signalDetailContent').innerHTML = '<div class="flex items-center justify-center py-12"><div class="size-5 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin"></div></div>';
   document.querySelectorAll('.signal-row').forEach(r => r.classList.remove('selected'));
   const row = document.querySelector(`.signal-row[onclick*="selectSignal(${id})"]`);
@@ -2345,6 +2425,7 @@ async function selectTicket(id) {
   document.getElementById('ticketsLeftPanel').className = 'w-1/2';
   document.getElementById('ticketsLeftPanel').style.overflowY = 'auto';
   document.getElementById('ticketDetailPanel').classList.remove('hidden');
+  scrollToPanel(document.getElementById('ticketDetailPanel'));
   document.getElementById('ticketDetailContent').innerHTML = '<div class="flex items-center justify-center py-12"><div class="size-5 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin"></div></div>';
   document.querySelectorAll('.ticket-row').forEach(r => r.classList.remove('selected'));
   const row = document.querySelector(`.ticket-row[onclick*="selectTicket(${id})"]`);
@@ -2777,6 +2858,30 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function updateGreeting() {
+  const el = document.getElementById('greetingText');
+  if (!el) return;
+  try {
+    const userData = JSON.parse(localStorage.getItem('stockintel_user') || '{}');
+    const name = userData.full_name || 'Admin';
+    const hour = new Date().getHours();
+    let period = 'morning';
+    if (hour >= 12 && hour < 17) period = 'afternoon';
+    else if (hour >= 17) period = 'evening';
+    el.textContent = '👋 Good ' + period + ', ' + name;
+  } catch { el.textContent = '👋 Welcome, Admin'; }
+}
+
+function applyRoleVisibility() {
+  try {
+    const userData = JSON.parse(localStorage.getItem('stockintel_user') || '{}');
+    const role = userData.role || '';
+    _isSuperAdmin = role === 'super_admin';
+    const settingsNav = document.getElementById('navSettings');
+    if (settingsNav) settingsNav.classList.toggle('hidden', !_isSuperAdmin);
+  } catch { _isSuperAdmin = false; }
+}
+
 async function fetchActiveChats() {
   try {
     const res = await fetch('/api/support/chats/active');
@@ -3142,7 +3247,88 @@ async function fetchFollowers() {
   } catch {}
 }
 
-// ── Audit ──
+// ── Settings ──
+let _isSuperAdmin = false;
+
+async function fetchSettings() {
+  try {
+    const res = await fetch('/api/admin/settings');
+    if (!res.ok) return;
+    const d = await res.json();
+    const container = document.getElementById('settingsContainer');
+    const isSuper = _isSuperAdmin;
+    container.innerHTML = d.settings.map(s => {
+      let inputHtml = '';
+      const key = s.key;
+      if (key === 'maintenance_mode' || key === 'new_user_registration') {
+        const checked = s.value === 'true' ? 'checked' : '';
+        inputHtml = `<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" ${checked} ${isSuper ? '' : 'disabled'} class="settings-input" data-key="${key}" style="width:18px;height:18px;accent-color:#4f46e5;cursor:${isSuper ? 'pointer' : 'not-allowed'}">
+          <span style="font-size:13px;color:#374151">${s.value === 'true' ? 'Enabled' : 'Disabled'}</span>
+        </label>`;
+      } else if (key === 'system_announcement') {
+        inputHtml = `<textarea class="input-field settings-input" data-key="${key}" ${isSuper ? '' : 'readonly'} style="min-height:64px;resize:vertical;font-size:13px">${esc(s.value)}</textarea>`;
+      } else {
+        inputHtml = `<input class="input-field settings-input" data-key="${key}" value="${esc(s.value)}" ${isSuper ? '' : 'readonly'} style="font-size:13px">`;
+      }
+      const labels = {
+        platform_name: 'Platform Name', default_currency: 'Default Currency',
+        maintenance_mode: 'Maintenance Mode', new_user_registration: 'New User Registration',
+        default_subscription_tier: 'Default Subscription Tier', affiliate_commission_pct: 'Affiliate Commission %',
+        signal_confidence_threshold: 'Signal Confidence Threshold (%)', admin_email: 'Admin Email',
+        max_portfolio_watchlist: 'Max Portfolio Watchlist Items', system_announcement: 'System Announcement'
+      };
+      const descriptions = {
+        platform_name: 'The name displayed across the platform',
+        default_currency: 'Base currency for pricing (KES/USD)',
+        maintenance_mode: 'When enabled, only admins can access the platform',
+        new_user_registration: 'Allow new users to sign up',
+        default_subscription_tier: 'Default tier for new user accounts',
+        affiliate_commission_pct: 'Percentage paid to affiliates for referrals',
+        signal_confidence_threshold: 'Minimum confidence score for signal generation',
+        admin_email: 'Email address for system notifications',
+        max_portfolio_watchlist: 'Maximum stocks a user can track in their watchlist',
+        system_announcement: 'Announcement shown to all users (leave empty to hide)'
+      };
+      return `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:13px;font-weight:600;color:#111827">${labels[key] || key}</span>
+          <span style="font-size:11px;color:#9ca3af;font-family:monospace">${key}</span>
+        </div>
+        <p style="font-size:12px;color:#6b7280;margin-bottom:10px">${descriptions[key] || ''}</p>
+        ${inputHtml}
+        <div style="font-size:11px;color:#9ca3af;margin-top:6px">Last updated: ${s.updated_at ? formatDate(s.updated_at) : 'never'}</div>
+      </div>`;
+    }).join('');
+    document.getElementById('settingsActionBar').classList.toggle('hidden', !isSuper);
+    document.getElementById('settingsSuperAdminBanner').classList.toggle('hidden', isSuper);
+    document.getElementById('settingsSubtitle').textContent = isSuper ? 'Full access — changes are saved immediately' : 'Read-only view';
+    hideTabLoading();
+  } catch { hideTabLoading(); }
+}
+
+async function saveSettings() {
+  const inputs = document.querySelectorAll('#settingsContainer .settings-input');
+  const settings = [];
+  inputs.forEach(inp => {
+    const key = inp.getAttribute('data-key');
+    let value = inp.value;
+    if (inp.type === 'checkbox') value = inp.checked ? 'true' : 'false';
+    if (key) settings.push({ key, value });
+  });
+  try {
+    const res = await fetch('/api/admin/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings })
+    });
+    if (!res.ok) { const e = await res.json(); toast(e.error || 'Failed to save', 'error'); return; }
+    const toastEl = document.getElementById('settingsSavedToast');
+    toastEl.classList.remove('hidden');
+    setTimeout(() => toastEl.classList.add('hidden'), 3000);
+    await fetchSettings();
+  } catch { toast('Error saving settings', 'error'); }
+}
 let _auditTimer = null;
 
 function toggleAuditAutoRefresh() {
@@ -3356,7 +3542,7 @@ async function handleVerifyOtp() {
       document.getElementById('loginOtpInput').focus();
       return;
     }
-    if (data.user && data.user.role !== 'admin') {
+    if (data.user && data.user.role !== 'admin' && data.user.role !== 'super_admin') {
       showLoginError('Access denied. Admin privileges required.');
       btn.disabled = false; btn.textContent = 'Verify & Sign In';
       document.getElementById('loginOtpInput').value = '';
@@ -3367,11 +3553,13 @@ async function handleVerifyOtp() {
     localStorage.setItem('stockintel_user', JSON.stringify(data.user));
     document.getElementById('loginScreen').classList.add('hidden');
     showAdminLayout(true);
+    updateGreeting();
+    applyRoleVisibility();
     toast('Welcome back, ' + (data.user.full_name || 'Admin'), 'success');
     switchTab('dashboard');
     initSocket();
     await fetchDashboard();
-    setInterval(fetchDashboard, 30000);
+    setInterval(function(){ updateGreeting(); fetchDashboard(); }, 30000);
     setInterval(fetchActiveChats, 15000);
     setInterval(fetchSignalOutcomes, 30000);
     setInterval(fetchSignalStats, 30000);
@@ -3525,9 +3713,11 @@ async function fetchUserActivity(page) {
   const authed = await checkAuth();
   if (authed) {
     showAdminLayout(true);
+    updateGreeting();
+    applyRoleVisibility();
     initSocket();
     fetchDashboard();
-    setInterval(fetchDashboard, 30000);
+    setInterval(function(){ updateGreeting(); fetchDashboard(); }, 30000);
     setInterval(fetchActiveChats, 15000);
     setInterval(fetchSignalOutcomes, 30000);
     setInterval(fetchSignalStats, 30000);
@@ -3694,9 +3884,9 @@ function statusPill(status) {
   return '<span class="pill ' + (colors[status] || 'bg-gray-100 text-gray-600') + '">' + (status || 'unknown') + '</span>';
 }
 
-function renderAffPagination(containerId, total, pageSize, currentPage, fetchFn) {
+function renderAffPagination(containerEl, total, pageSize, currentPage, fetchFn) {
   const totalPages = Math.ceil(total / pageSize);
-  const container = document.getElementById(containerId);
+  const container = typeof containerEl === 'string' ? document.getElementById(containerEl) : containerEl;
   if (!container) return;
   let html = '';
   if (currentPage > 0) html += '<button class="btn btn-secondary py-1 px-3 text-xs" onclick="' + fetchFn + '(' + (currentPage - 1) + ')">Prev</button>';
