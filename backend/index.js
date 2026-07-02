@@ -382,6 +382,16 @@ app.post('/api/admin/users/:id/role', async (req, res) => {
   } catch (err) { console.error('Admin set role error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
+// ── Admin: List admin users (super_admin only) ──
+app.get('/api/admin/admins', requireSuperAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, full_name, email, role, created_at FROM users WHERE role IN ('admin', 'super_admin') ORDER BY created_at ASC"
+    );
+    res.json({ admins: result.rows });
+  } catch (err) { console.error('Admin list error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
 // ── Admin Platform Settings API ──
 app.get('/api/admin/settings', async (req, res) => {
   try {

@@ -1268,6 +1268,28 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       <div id="settingsActionBar" class="hidden" style="display:flex;justify-content:flex-end;gap:8px;padding-top:8px;border-top:1px solid #e5e7eb">
         <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
       </div>
+
+      <!-- Admin Management (super_admin only) -->
+      <div id="adminManagementSection" class="hidden" style="margin-top:20px">
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#7c3aed"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/></svg>
+            <span style="font-size:16px;font-weight:700;color:#111827">Admin Management</span>
+          </div>
+          <p style="font-size:12px;color:#6b7280;margin-bottom:16px">Promote users to admin or super_admin, or demote existing admins.</p>
+
+          <!-- Add Admin form -->
+          <div style="display:flex;gap:8px;margin-bottom:16px">
+            <input id="adminEmailInput" type="email" class="input-field" placeholder="Enter user email to promote" style="flex:1;font-size:13px" onkeydown="if(event.key==='Enter')promoteToAdmin()">
+            <button class="btn btn-primary" onclick="promoteToAdmin()" style="white-space:nowrap;font-size:13px">Promote to Admin</button>
+          </div>
+
+          <!-- Admin list -->
+          <div id="adminListContainer" style="font-size:13px">
+            <div style="padding:12px;text-align:center;color:#9ca3af">Loading...</div>
+          </div>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -1409,7 +1431,16 @@ function switchTab(tab) {
   if (tab === 'user-activity') { fetchUserActivity(); }
   if (tab === 'affiliates') { fetchAffiliateStats(); fetchAffiliates(); }
   if (tab === 'audit') { onAuditPeriodChange(); }
-  if (tab === 'settings') { fetchSettings(); }
+  if (tab === 'settings') {
+    fetchSettings();
+    const section = document.getElementById('adminManagementSection');
+    if (_isSuperAdmin) {
+      section.classList.remove('hidden');
+      fetchAdmins();
+    } else {
+      section.classList.add('hidden');
+    }
+  }
 }
 ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','audit','settings'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
 
@@ -3329,6 +3360,77 @@ async function saveSettings() {
     await fetchSettings();
   } catch { toast('Error saving settings', 'error'); }
 }
+
+// ── Admin Management ──
+async function fetchAdmins() {
+  try {
+    const res = await fetch('/api/admin/admins');
+    if (!res.ok) return;
+    const d = await res.json();
+    const container = document.getElementById('adminListContainer');
+    container.innerHTML = d.admins.length === 0
+      ? '<div style="padding:12px;text-align:center;color:#9ca3af">No admins found</div>'
+      : d.admins.map(a => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:32px;height:32px;border-radius:50%;background:${a.role === 'super_admin' ? '#fef3c7' : '#f3e8ff'};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:${a.role === 'super_admin' ? '#92400e' : '#7c3aed'}">
+              ${(a.full_name || a.email)[0].toUpperCase()}
+            </div>
+            <div>
+              <div style="font-weight:500;color:#111827">${esc(a.full_name)}</div>
+              <div style="font-size:11px;color:#6b7280">${esc(a.email)}</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="pill ${a.role === 'super_admin' ? 'pill-super-admin' : 'pill-admin'}">${esc(a.role)}</span>
+            ${a.role !== 'super_admin' ? `
+              <button class="btn btn-secondary" style="font-size:11px;padding:4px 10px" onclick="changeUserRole(${a.id}, 'super_admin')">Make Super</button>
+              <button class="btn btn-danger" style="font-size:11px;padding:4px 10px" onclick="changeUserRole(${a.id}, 'trader')">Demote</button>
+            ` : `<span style="font-size:11px;color:#9ca3af">Cannot modify</span>`}
+          </div>
+        </div>
+      `).join('');
+  } catch {}
+}
+
+async function promoteToAdmin() {
+  const input = document.getElementById('adminEmailInput');
+  const email = input.value.trim();
+  if (!email) { toast('Enter an email address', 'error'); return; }
+  try {
+    const res = await fetch('/api/admin/users?search=' + encodeURIComponent(email));
+    if (!res.ok) { toast('Failed to search users', 'error'); return; }
+    const d = await res.json();
+    const user = d.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!user) { toast('No user found with that email', 'error'); return; }
+    if (user.role === 'admin' || user.role === 'super_admin') { toast('User is already an admin', 'error'); return; }
+    const roleRes = await fetch(`/api/admin/users/${user.id}/role`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'admin' })
+    });
+    if (!roleRes.ok) { const e = await roleRes.json(); toast(e.error || 'Failed to promote', 'error'); return; }
+    toast('Promoted to admin successfully', 'success');
+    input.value = '';
+    await fetchAdmins();
+  } catch { toast('Error promoting user', 'error'); }
+}
+
+async function changeUserRole(userId, role) {
+  const label = role === 'super_admin' ? 'Make super admin' : role === 'admin' ? 'Promote to admin' : 'Demote';
+  if (!confirm(`${label} this user?`)) return;
+  try {
+    const res = await fetch(`/api/admin/users/${userId}/role`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role })
+    });
+    if (!res.ok) { const e = await res.json(); toast(e.error || 'Failed', 'error'); return; }
+    toast('Role updated', 'success');
+    await fetchAdmins();
+  } catch { toast('Error updating role', 'error'); }
+}
+
 let _auditTimer = null;
 
 function toggleAuditAutoRefresh() {
