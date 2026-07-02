@@ -4,13 +4,15 @@ import {
   LayoutDashboard, Signal, PieChart, Star,
   LineChart, Newspaper, FileText, MessageSquare, Users,
   BarChart3, Briefcase, Layers, User, LifeBuoy, Cpu,
-  DollarSign,
+  DollarSign, TrendingUp, GraduationCap, Lightbulb,
 } from "lucide-react";
+import { useBeginnerMode } from "../contexts/BeginnerModeContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
+  const { beginnerMode, toggleBeginnerMode } = useBeginnerMode();
   const [marketStatus, setMarketStatus] = useState<{ nse: { open: boolean; label: string; eventLabel: string }; global: { open: boolean; label: string; eventLabel: string } } | null>(null);
 
   useEffect(() => {
@@ -52,6 +54,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         { path: "/app/signals/engine", icon: Cpu, label: "Engine" },
         { path: "/app/news", icon: Newspaper, label: "News" },
         { path: "/app/financials", icon: FileText, label: "Financials" },
+        { path: "/app/ipos", icon: TrendingUp, label: "IPOs" },
+        { path: "/app/derivatives", icon: GraduationCap, label: "Derivatives" },
       ],
     },
     {
@@ -145,6 +149,23 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="px-4 pb-2">
+        <button
+          onClick={toggleBeginnerMode}
+          className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs transition-all ${
+            beginnerMode
+              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+              : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+          }`}
+        >
+          <Lightbulb className={`size-3.5 ${beginnerMode ? 'text-amber-600' : ''}`} />
+          <span className="flex-1 text-left font-medium">{beginnerMode ? 'Beginner Mode ON' : 'Beginner Mode'}</span>
+          <div className={`w-7 h-4 rounded-full transition-colors ${beginnerMode ? 'bg-amber-500' : 'bg-muted-foreground/30'} relative`}>
+            <div className={`absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-transform ${beginnerMode ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+          </div>
+        </button>
       </div>
     </>
   );

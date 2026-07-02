@@ -18,6 +18,8 @@ import { PeoplePage } from "./pages/PeoplePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SectorsPage } from "./pages/SectorsPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
+import { IpoPage } from "./pages/IpoPage";
+import { DerivativesPage } from "./pages/DerivativesPage";
 
 export const router = createBrowserRouter([
   {
@@ -48,6 +50,8 @@ export const router = createBrowserRouter([
       { path: "portfolio", Component: PortfolioPage },
       { path: "notifications", Component: NotificationsPage },
       { path: "settings", Component: SettingsPage }, 
+      { path: "ipos", Component: IpoPage },
+      { path: "derivatives", Component: DerivativesPage },
     ],
   },
   { path: "/markets", loader: () => redirect("/app/markets") },

@@ -116,6 +116,8 @@ export function StockAnalysisPage() {
   const [sortBy, setSortBy] = useState<"ticker" | "price" | "change" | "volume">("ticker");
   const [filterSector, setFilterSector] = useState("All");
   const [favorites, setFavorites] = useState<string[]>(["SCOM", "EQTY", "KCB", "AAPL", "MSFT"]);
+  const [nseInsights, setNseInsights] = useState<any>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
   const [page, setPage] = useState(1);
   const itemsPerPage = 15;
 
@@ -235,6 +237,18 @@ export function StockAnalysisPage() {
         setEtfHolders(data.etfHolders || []);
       })
       .catch(() => {});
+    return () => { active = false; };
+  }, [activeSelection.ticker]);
+
+  // NSE-specific insights (liquidity, health, earnings, corporate actions)
+  useEffect(() => {
+    if (activeSelection.market !== "nse") { setNseInsights(null); return; }
+    let active = true;
+    setInsightsLoading(true);
+    fetch(`${API_URL}/nse/insights/${encodeURIComponent(activeSelection.ticker)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (active) { setNseInsights(data); setInsightsLoading(false); } })
+      .catch(() => { if (active) setInsightsLoading(false); });
     return () => { active = false; };
   }, [activeSelection.ticker]);
 
@@ -836,10 +850,20 @@ export function StockAnalysisPage() {
                       <m.icon className="size-3.5 text-[#0D7490]" />
                       <span className="text-[11px] font-medium text-muted-foreground">{m.label}</span>
                     </div>
-                    <div className="text-sm font-semibold text-foreground">{m.value}</div>
-                  </div>
-                ))}
+                  <div className="text-sm font-semibold text-foreground">{m.value}</div>
+                </div>
+              ))}
               </div>
+              {activeSelection.market === "nse" && nseInsights && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-medium">
+                    KES/USD: 1 USD = {nseInsights.fxRate || 130} KES
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-muted-foreground border border-border text-[11px]">
+                    ↗ Dollar-adjusted returns may differ due to FX volatility
+                  </span>
+                </div>
+              )}
             </div>
           </Card>
 
@@ -1072,6 +1096,107 @@ export function StockAnalysisPage() {
               )}
             </div>
           </Card>
+
+          {/* NSE Insights — only for Kenyan stocks */}
+          {activeSelection.market === "nse" && (
+            <Card className="border shadow-sm overflow-hidden">
+              <div className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <svg className="size-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                  <h3 className="text-sm font-semibold text-foreground">NSE Insights</h3>
+                  {insightsLoading && <Loader2 className="size-3.5 animate-spin text-muted-foreground ml-1" />}
+                </div>
+                {nseInsights ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Financial Health */}
+                    <div className="rounded-lg border p-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className={`size-2.5 rounded-full ${nseInsights.financialHealth.level === 'good' ? 'bg-emerald-500' : nseInsights.financialHealth.level === 'watch' ? 'bg-amber-500' : 'bg-red-500'}`} />
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Financial Health</span>
+                      </div>
+                      <div className={`text-lg font-bold ${nseInsights.financialHealth.level === 'good' ? 'text-emerald-600' : nseInsights.financialHealth.level === 'watch' ? 'text-amber-600' : 'text-red-600'}`}>
+                        {nseInsights.financialHealth.label}
+                      </div>
+                      {nseInsights.financialHealth.issues.length > 0 && (
+                        <div className="mt-1.5 space-y-0.5">
+                          {nseInsights.financialHealth.issues.slice(0, 2).map((issue: string, i: number) => (
+                            <div key={i} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                              <span className="text-red-400 mt-0.5">•</span>
+                              <span>{issue}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Liquidity Risk */}
+                    <div className="rounded-lg border p-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className={`size-2.5 rounded-full ${nseInsights.liquidity.score >= 70 ? 'bg-emerald-500' : nseInsights.liquidity.score >= 40 ? 'bg-amber-500' : 'bg-red-500'}`} />
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Liquidity Risk</span>
+                      </div>
+                      <div className={`text-lg font-bold ${nseInsights.liquidity.score >= 70 ? 'text-emerald-600' : nseInsights.liquidity.score >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
+                        {nseInsights.liquidity.label}
+                      </div>
+                      <div className="mt-1 text-[11px] text-muted-foreground space-y-0.5">
+                        <div>Avg Vol: {(nseInsights.liquidity.avgDailyVolume / 1000).toFixed(0)}K</div>
+                        <div>Spread: {nseInsights.liquidity.bidAskSpread}%</div>
+                        <div>Exit: ~{nseInsights.liquidity.daysToExit}d (KES 500K pos)</div>
+                      </div>
+                    </div>
+
+                    {/* Earnings Countdown */}
+                    <div className="rounded-lg border p-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <svg className="size-3 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Earnings</span>
+                      </div>
+                      {nseInsights.earnings.length > 0 ? (
+                        <div>
+                          <div className="text-lg font-bold text-foreground">{nseInsights.earnings[0].daysUntil}d</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            {nseInsights.earnings[0].quarter} — {nseInsights.earnings[0].date}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            EPS est: KES {nseInsights.earnings[0].epsEstimate}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">No upcoming dates</div>
+                      )}
+                    </div>
+
+                    {/* Corporate Actions */}
+                    <div className="rounded-lg border p-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <svg className="size-3 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Corporate Actions</span>
+                      </div>
+                      {nseInsights.corporateActions.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {nseInsights.corporateActions.map((ca: any, i: number) => (
+                            <div key={i} className="text-[11px]">
+                              <div className="flex items-center gap-1">
+                                <span className={`font-semibold ${ca.type === 'suspension' ? 'text-red-600' : ca.type === 'dividend' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                  {ca.type === 'suspension' ? '⚠' : ca.type === 'dividend' ? '💵' : '📋'}
+                                </span>
+                                <span className="font-medium text-foreground">{ca.title}</span>
+                              </div>
+                              <div className="text-muted-foreground ml-4">{ca.date}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">None pending</div>
+                      )}
+                    </div>
+                  </div>
+                ) : !insightsLoading ? (
+                  <div className="text-xs text-muted-foreground">No data available</div>
+                ) : null}
+              </div>
+            </Card>
+          )}
 
           {/* Analytics Grid */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

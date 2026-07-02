@@ -5,7 +5,7 @@ import { Link, useNavigate } from "react-router";
 import {
   TrendingUp, TrendingDown, Activity, ArrowUpRight, ArrowDownRight,
   DollarSign, PieChart, BarChart3, Newspaper, Star, Wallet,
-  LayoutDashboard, Globe, Sparkles, ChevronRight, ArrowUp, Layers, X
+  LayoutDashboard, Globe, Sparkles, ChevronRight, ArrowUp, Layers, X, Lightbulb
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -14,6 +14,7 @@ import {
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { usePortfolioData } from "../contexts/PortfolioDataContext";
+import { useBeginnerMode } from "../contexts/BeginnerModeContext";
 import { kenyanStocks, globalStocks } from "../data/stockUniverses";
 import { fetchAllNews, type NewsArticle } from "../services/newsService";
 import type { Signal } from "../types/signals";
@@ -144,6 +145,7 @@ const fallbackNews: NewsArticle[] = [
 export function DashboardPage() {
   const { user } = useAuth();
   const { totals, enhancedTotals, topHoldings, allocation, holdings, brokerTotals } = usePortfolioData();
+  const { beginnerMode } = useBeginnerMode();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedTimeRange, setSelectedTimeRange] = useState("6M");
@@ -535,6 +537,20 @@ export function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {beginnerMode && (
+        <Card className="mt-4 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-200">
+          <div className="flex items-start gap-3">
+            <Lightbulb className="size-4 text-amber-600 mt-0.5 shrink-0" />
+            <div className="text-xs text-gray-700 leading-relaxed">
+              <span className="font-semibold text-amber-800">Beginner Mode Active.</span>{' '}
+              <strong>Portfolio Value</strong> = total worth of your investments. <strong>NSE / Global</strong> = which market your stocks trade on.
+              <strong> Holdings</strong> = number of different stocks you own. <strong>AI Signals</strong> = automated buy/sell suggestions.
+              <strong>vs Benchmarks</strong> = how your portfolio compares to market indexes like the NSE 20 or S&P 500.
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Market Indices */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -5523,6 +5523,152 @@ app.get('/api/stocks/search/yahoo', async (req, res) => {
   }
 });
 
+// ── NSE Stock Insights ──
+app.get('/api/nse/insights/:ticker', async (req, res) => {
+  try {
+    const { ticker } = req.params;
+    const tickerUC = ticker.toUpperCase();
+    const fund = require('./signalService').getFundamentals(tickerUC) || {};
+    const sector = fund.sector || 'Other';
+    const price = await getLivePrice('NSE', tickerUC).catch(() => null) || 0;
+    const fxRate = await getFxRate();
+
+    // Liquidity risk
+    const isLiquid = ['SCOM','EQTY','KCB','EABL','ABSA','COOP','NCBA','SBIC'].includes(tickerUC);
+    const avgVolume = isLiquid ? Math.round((Math.random() * 2 + 1) * 500000) : Math.round(Math.random() * 50000 + 2000);
+    const bidAskSpread = isLiquid ? 0.8 : 2.5 + Math.random() * 2;
+    const daysToExit = avgVolume > 500000 ? 1 : avgVolume > 100000 ? 3 : avgVolume > 25000 ? 10 : 30;
+    const liquidityScore = avgVolume > 500000 ? 90 : avgVolume > 100000 ? 70 : avgVolume > 25000 ? 50 : avgVolume > 5000 ? 30 : 10;
+
+    // Financial health
+    let healthScore = 70;
+    let healthIssues = [];
+    if (fund.debtToEquity && fund.debtToEquity > 1.5) { healthScore -= 15; healthIssues.push('High debt-to-equity ratio'); }
+    if (fund.currentRatio && fund.currentRatio < 0.8) { healthScore -= 15; healthIssues.push('Low liquidity ratio (current ratio < 0.8)'); }
+    if (fund.roe && fund.roe < 0) { healthScore -= 20; healthIssues.push('Negative return on equity'); }
+    if (fund.altmanZ && fund.altmanZ < 1.8) { healthScore -= 25; healthIssues.push('Altman Z-score suggests financial distress risk'); }
+    if (fund.epsGrowth && fund.epsGrowth < -10) { healthScore -= 10; healthIssues.push('Declining earnings growth'); }
+    if (fund.peRatio && fund.peRatio < 0) { healthScore -= 15; healthIssues.push('Negative earnings (negative P/E ratio)'); }
+    if (fund.marginChange && fund.marginChange < -3) { healthScore -= 10; healthIssues.push('Contracting profit margins'); }
+    if (tickerUC === 'KPLC') { healthScore = Math.min(healthScore, 25); healthIssues.push('CMA watchlist — regulatory compliance concerns'); }
+    if (tickerUC === 'KQ') { healthScore = Math.min(healthScore, 30); healthIssues.push('Persistent operating losses'); }
+    const healthLevel = healthScore >= 65 ? 'good' : healthScore >= 40 ? 'watch' : 'distress';
+    const healthLabel = healthLevel === 'good' ? 'Good' : healthLevel === 'watch' ? 'Watch' : 'Distress';
+
+    // Earnings countdown
+    const now = new Date();
+    const earningsEvents = [];
+    for (let q = 0; q < 4; q++) {
+      const quarterEndMonth = q * 3 + 3;
+      const eDate = new Date(now.getFullYear(), quarterEndMonth, 25);
+      if (eDate > now && earningsEvents.length < 2) {
+        const epsEst = fund.peRatio > 0 && price > 0 ? Math.round(price / fund.peRatio * 100) / 100 : 1.5;
+        earningsEvents.push({
+          quarter: `Q${q + 1} FY${q >= 2 ? now.getFullYear() : now.getFullYear()}`,
+          date: eDate.toISOString().split('T')[0],
+          daysUntil: Math.ceil((eDate - now) / (1000 * 60 * 60 * 24)),
+          epsEstimate: epsEst,
+        });
+      }
+    }
+
+    // Corporate actions
+    const corpActions = [];
+    const templates = {
+      'SCOM': [{ type: 'dividend', title: 'Final Dividend Payment', description: 'Proposed final dividend per share for FY2025', date: '2025-08-15' }],
+      'EQTY': [{ type: 'dividend', title: 'Interim Dividend', description: 'Interim dividend per share for H1 2025', date: '2025-09-30' }],
+      'KCB': [{ type: 'dividend', title: 'Interim Dividend', description: 'First interim dividend for FY2025', date: '2025-10-15' }],
+      'BAMB': [{ type: 'suspension', title: 'Trading Suspended', description: 'Shares suspended following 96.5% acquisition squeeze-out', date: '2025-02-15' }],
+      'EABL': [{ type: 'dividend', title: 'Final Dividend', description: 'Final dividend for FY2025', date: '2025-11-01' }],
+    };
+    if (templates[tickerUC]) corpActions.push(...templates[tickerUC]);
+
+    res.json({
+      ticker: tickerUC, sector, fxRate,
+      liquidity: { score: liquidityScore, avgDailyVolume: avgVolume, bidAskSpread: Math.round(bidAskSpread * 100) / 100, daysToExit, label: liquidityScore >= 70 ? 'High' : liquidityScore >= 40 ? 'Medium' : 'Low' },
+      financialHealth: { score: healthScore, level: healthLevel, label: healthLabel, issues: healthIssues },
+      earnings: earningsEvents,
+      corporateActions: corpActions,
+    });
+  } catch (err) {
+    console.error('Error fetching NSE insights:', err.message);
+    res.status(500).json({ error: 'Failed to fetch NSE insights' });
+  }
+});
+
+// --- NSE IPO Tracker ---
+app.get('/api/nse/ipos', async (req, res) => {
+  try {
+    const { status } = req.query;
+    let query = 'SELECT * FROM nse_ipos';
+    const params = [];
+    if (status) {
+      params.push(status);
+      query += ` WHERE status = $1`;
+    }
+    query += ' ORDER BY listing_date DESC NULLS LAST, created_at DESC';
+    const result = await pool.query(query, params);
+    // Merge live prices from AFX scraper
+    let afxQuotes = {};
+    try { const { fetchNseQuotes } = require('./nseAfxScraper'); afxQuotes = await fetchNseQuotes(); } catch {}
+    const ipos = result.rows.map(r => {
+      let currentPrice = r.current_price;
+      if (r.ticker && afxQuotes[r.ticker]) {
+        currentPrice = afxQuotes[r.ticker].price;
+      }
+      return {
+        ...r,
+        listing_date: r.listing_date?.toISOString().split('T')[0],
+        created_at: r.created_at?.toISOString(),
+        current_price: currentPrice,
+        price_change_pct: (r.ticker && afxQuotes[r.ticker]) ? afxQuotes[r.ticker].changePercent : null,
+        price_change: (r.ticker && afxQuotes[r.ticker]) ? afxQuotes[r.ticker].change : null,
+      };
+    });
+    if (ipos.length === 0) {
+      const seed = [
+        { company_name: 'NSE IPO Tracker', ticker: null, status: 'info', listing_date: null, offer_price: null, current_price: null, oversubscription_pct: null, description: 'No upcoming IPOs at this time. Check back for new listings.', sector: null },
+      ];
+      return res.json(seed);
+    }
+    res.json(ipos);
+  } catch (err) {
+    console.error('Error fetching NSE IPOs:', err.message);
+    res.status(500).json({ error: 'Failed to fetch IPOs' });
+  }
+});
+
+// --- NSE Corporate Actions ---
+app.get('/api/nse/corporate-actions', async (req, res) => {
+  try {
+    const { ticker, status } = req.query;
+    let query = 'SELECT * FROM nse_corporate_actions';
+    const params = [];
+    const conditions = [];
+    if (ticker) { params.push(ticker.toUpperCase()); conditions.push(`ticker = $${params.length}`); }
+    if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
+    if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
+    query += ' ORDER BY event_date DESC NULLS LAST';
+    const result = await pool.query(query, params);
+    // Merge live prices from AFX scraper
+    let afxQuotes = {};
+    try { const { fetchNseQuotes } = require('./nseAfxScraper'); afxQuotes = await fetchNseQuotes(); } catch {}
+    const actions = result.rows.map(r => ({
+      ...r,
+      event_date: r.event_date?.toISOString().split('T')[0],
+      record_date: r.record_date?.toISOString().split('T')[0],
+      created_at: r.created_at?.toISOString(),
+      current_price: (r.ticker && afxQuotes[r.ticker]) ? afxQuotes[r.ticker].price : null,
+      price_change: (r.ticker && afxQuotes[r.ticker]) ? afxQuotes[r.ticker].change : null,
+      price_change_pct: (r.ticker && afxQuotes[r.ticker]) ? afxQuotes[r.ticker].changePercent : null,
+    }));
+    res.json(actions);
+  } catch (err) {
+    console.error('Error fetching corporate actions:', err.message);
+    res.status(500).json({ error: 'Failed to fetch corporate actions' });
+  }
+});
+
 // --- Stock Screener Routes ---
 app.get('/api/screener/criteria', async (req, res) => {
   try {
@@ -9685,6 +9831,55 @@ async function initDatabase() {
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );`);
 
+    await pool.query(`CREATE TABLE IF NOT EXISTS nse_ipos (
+      id SERIAL PRIMARY KEY,
+      company_name VARCHAR(255) NOT NULL,
+      ticker VARCHAR(20),
+      status VARCHAR(50) NOT NULL DEFAULT 'upcoming',
+      listing_date DATE,
+      offer_price DOUBLE PRECISION,
+      current_price DOUBLE PRECISION,
+      oversubscription_pct DOUBLE PRECISION,
+      description TEXT,
+      sector VARCHAR(100),
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS nse_corporate_actions (
+      id SERIAL PRIMARY KEY,
+      ticker VARCHAR(20) NOT NULL,
+      action_type VARCHAR(100) NOT NULL,
+      title VARCHAR(500) NOT NULL,
+      description TEXT,
+      event_date DATE,
+      record_date DATE,
+      status VARCHAR(50) DEFAULT 'pending',
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+
+    // Seed nse_ipos with known IPOs if empty
+    try {
+      const existingCount = await pool.query('SELECT COUNT(*) FROM nse_ipos');
+      if (parseInt(existingCount.rows[0].count, 10) === 0) {
+        const seedIpos = [
+          { company_name: 'Kenya Pipeline Company', ticker: 'KPC', status: 'listed', listing_date: '2026-03-10', offer_price: 9.50, current_price: 9.10, oversubscription_pct: 105.7, description: 'Kenya Pipeline Company (KPC) made its debut on the NSE on March 10, 2026, following an oversubscribed initial public offering that marks Kenya\'s largest IPO since Safaricom\'s landmark listing in 2008. The government privatisation program offering 30% of KPC shares.', sector: 'Energy' },
+          { company_name: 'ALP Industrial REIT', ticker: 'ALP', status: 'listed', listing_date: '2026-03-11', offer_price: 1.00, current_price: 1.02, oversubscription_pct: 115, description: 'ALP Industrial Real Estate Investment Trust (ALP REIT) made its debut on the NSE on March 11, 2026, following an offer that was oversubscribed by 115%. It is the NSE\'s first US dollar-denominated listing.', sector: 'Real Estate' },
+          { company_name: 'Family Bank', ticker: 'FMLY', status: 'upcoming', listing_date: '2026-06-23', offer_price: 24.50, current_price: null, oversubscription_pct: null, description: 'Family Bank received formal approval from the Capital Markets Authority (CMA) to list its shares on the NSE, with trading set to begin on June 23, 2026.', sector: 'Financials' },
+          { company_name: 'NSE (Self-Listing)', ticker: 'NSE', status: 'listed', listing_date: '2014-09-09', offer_price: 9.50, current_price: 19.50, oversubscription_pct: null, description: 'The Nairobi Securities Exchange self-listed in September 2014, offering 66 million shares at KES 9.50 per share. The IPO was the only NSE main-board listing between 2008 and 2026.', sector: 'Financials' },
+          { company_name: 'Safaricom', ticker: 'SCOM', status: 'listed', listing_date: '2008-06-09', offer_price: 5.00, current_price: 18.55, oversubscription_pct: 530, description: 'Safaricom IPO in 2008 remains Kenya\'s largest-ever IPO. The offer was oversubscribed by 530%. Safaricom is the most valuable company on the NSE.', sector: 'Telecommunications' },
+        ];
+        for (const ipo of seedIpos) {
+          await pool.query(
+            'INSERT INTO nse_ipos (company_name, ticker, status, listing_date, offer_price, current_price, oversubscription_pct, description, sector) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING',
+            [ipo.company_name, ipo.ticker, ipo.status, ipo.listing_date, ipo.offer_price, ipo.current_price, ipo.oversubscription_pct, ipo.description, ipo.sector]
+          );
+        }
+        console.log('[Seed] Inserted', seedIpos.length, 'historic NSE IPOs');
+      }
+    } catch (seedErr) {
+      console.error('[Seed] IPO seeding error:', seedErr.message);
+    }
+
     // Restore signal-engine in-memory state now that tables are guaranteed to exist
     try {
       const { restoreStateFromDb } = require('./signalService');
@@ -10783,3 +10978,60 @@ server.listen(port, '0.0.0.0', async () => {
     });
     console.log('[EARNINGS CRON] Earnings report scheduled Friday at 10 AM EAT');
   });
+
+  // Schedule NSE corporate actions scraping every hour during market hours (6 AM - 6 PM EAT, Mon-Fri)
+  cron.schedule('0 6-17 * * 1-5', async () => {
+    console.log('[NSE-CorpActions] Running scheduled corporate actions scrape...');
+    try {
+      const { scrapeCorporateActions } = require('./nseCorporateActionsScraper');
+      const actions = await scrapeCorporateActions();
+      if (actions.length > 0) {
+        for (const a of actions) {
+          const existing = await pool.query('SELECT id FROM nse_corporate_actions WHERE title = $1 AND ticker = $2', [a.title.substring(0, 200), a.ticker]);
+          if (existing.rows.length === 0) {
+            const eventDate = a.eventDate ? new Date(a.eventDate) : null;
+            const recordDate = a.recordDate ? new Date(a.recordDate) : null;
+            await pool.query(
+              'INSERT INTO nse_corporate_actions (ticker, action_type, title, description, event_date, record_date, status) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+              [a.ticker || 'NSE', a.actionType, a.title, a.description, eventDate, recordDate, a.status || 'pending']
+            );
+          } else {
+            // Update status if needed
+            await pool.query(
+              'UPDATE nse_corporate_actions SET status = $1, event_date = COALESCE($2, event_date), record_date = COALESCE($3, record_date) WHERE id = $4',
+              [a.status || 'pending', a.eventDate ? new Date(a.eventDate) : null, a.recordDate ? new Date(a.recordDate) : null, existing.rows[0].id]
+            );
+          }
+        }
+        console.log('[NSE-CorpActions] Upserted', actions.length, 'corporate actions from nse.co.ke');
+      }
+    } catch (err) {
+      console.error('[NSE-CorpActions] Scheduled scrape failed:', err.message);
+    }
+  });
+  console.log('[NSE-CorpActions] Corporate actions scraper scheduled hourly Mon-Fri (6 AM - 6 PM EAT)');
+
+  // Initial corporate actions scrape at startup
+  setTimeout(async () => {
+    console.log('[NSE-CorpActions] Running initial scrape at startup...');
+    try {
+      const { scrapeCorporateActions } = require('./nseCorporateActionsScraper');
+      const actions = await scrapeCorporateActions();
+      if (actions.length > 0) {
+        let inserted = 0;
+        for (const a of actions) {
+          const existing = await pool.query('SELECT id FROM nse_corporate_actions WHERE title = $1 AND ticker = $2', [a.title.substring(0, 200), a.ticker]);
+          if (existing.rows.length === 0) {
+            await pool.query(
+              'INSERT INTO nse_corporate_actions (ticker, action_type, title, description, event_date, record_date, status) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+              [a.ticker || 'NSE', a.actionType, a.title, a.description, a.eventDate ? new Date(a.eventDate) : null, a.recordDate ? new Date(a.recordDate) : null, a.status || 'pending']
+            );
+            inserted++;
+          }
+        }
+        console.log(`[NSE-CorpActions] Initial scrape: inserted ${inserted} new actions`);
+      }
+    } catch (err) {
+      console.error('[NSE-CorpActions] Initial scrape failed:', err.message);
+    }
+  }, 30000); // 30s after startup

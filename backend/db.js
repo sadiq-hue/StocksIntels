@@ -2,9 +2,12 @@ const { Pool } = require('pg');
 
 const connectionString = process.env.DATABASE_URL;
 
+// Only force SSL for non-localhost connections
+const isLocal = !connectionString || connectionString.includes('@localhost') || connectionString.includes('@127.0.0.1');
+
 const pool = new Pool(
   connectionString
-    ? { connectionString, max: Number(process.env.DB_POOL_MAX || 25), connectionTimeoutMillis: Number(process.env.DB_POOL_TIMEOUT || 10000), idleTimeoutMillis: Number(process.env.DB_POOL_IDLE || 30000), ssl: { rejectUnauthorized: false } }
+    ? { connectionString, max: Number(process.env.DB_POOL_MAX || 25), connectionTimeoutMillis: Number(process.env.DB_POOL_TIMEOUT || 10000), idleTimeoutMillis: Number(process.env.DB_POOL_IDLE || 30000), ...(isLocal ? {} : { ssl: { rejectUnauthorized: false } }) }
     : {
         host: process.env.DB_HOST || 'localhost',
         port: Number(process.env.DB_PORT || 5432),

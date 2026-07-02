@@ -531,6 +531,42 @@ const MarketPage: React.FC = () => {
         ))}
       </div>
 
+      {/* Multi-Index Comparison (NSE-specific) */}
+      {indicesToDisplay.filter(i => i.name?.toLowerCase().includes('nse') || i.symbol?.includes('NSE') || i.name?.includes('All Share') || i.name?.includes('NSE 20') || i.name?.includes('NSE 25')).length >= 2 && (
+        <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-100 shadow-sm">
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <svg className="size-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+              <h3 className="text-xs font-semibold text-purple-800 uppercase tracking-wider">Index Comparison — What Each Measures</h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+              {indicesToDisplay.filter(i => i.name?.toLowerCase().includes('nse') || i.symbol?.includes('NSE') || i.name?.includes('All Share') || i.name?.includes('NSE 20') || i.name?.includes('NSE 25')).map(idx => {
+                const name = idx.name || idx.symbol || '';
+                let description = '';
+                if (name.includes('NSE 20') || name.includes('NSE20')) description = 'Price-weighted index of 20 largest NSE companies. Most commonly cited but has declined in relevance — down ~50% since 2015.';
+                else if (name.includes('All Share') || name.includes('NASI')) description = 'Market-cap weighted index covering all listed NSE companies. Broader representation than NSE 20. Preferred by institutional investors.';
+                else if (name.includes('NSE 25')) description = 'Mid-cap focused index tracking 25 companies outside the top tier. Useful for measuring medium-sized company performance.';
+                else description = 'Track this index alongside NSE 20 and NASI for a complete market picture.';
+                return (
+                  <div key={idx.symbol} className="bg-white/70 rounded-lg p-3 border border-purple-100">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-semibold text-purple-900">{name}</span>
+                      <span className={`text-xs font-bold ${idx.change?.startsWith('+') ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {idx.change || idx.value}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-600 leading-relaxed">{description}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-3 italic">
+              The NSE 20 declined over 50% from 2015 to 2020. For a complete market view, track the NASI (NSE All Share Index) and NSE 25 alongside it.
+            </p>
+          </div>
+        </Card>
+      )}
+
       {/* Market Legend */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1">
         <div className="flex items-center gap-2">

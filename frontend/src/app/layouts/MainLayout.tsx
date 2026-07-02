@@ -4,6 +4,7 @@ import { Header } from "../components/Header";
 import { Sidebar } from "../components/Sidebar";
 import { Toaster } from "../components/ui/sonner";
 import { useAuth } from "../auth/AuthContext";
+import { BeginnerModeProvider } from "../contexts/BeginnerModeContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -21,6 +22,7 @@ export function MainLayout() {
   }, [location.pathname, user?.id]);
 
   return (
+    <BeginnerModeProvider>
     <div className="min-h-screen bg-background flex">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
@@ -31,5 +33,6 @@ export function MainLayout() {
       </div>
       <Toaster position="top-right" />
     </div>
+    </BeginnerModeProvider>
   );
 }
