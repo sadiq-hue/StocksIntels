@@ -122,6 +122,8 @@ export function LoginPage() {
   const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 });
   const [country, setCountry] = useState("");
   const [countries, setCountries] = useState<{ code: string; name: string; flag: string }[]>([]);
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
 
   useEffect(() => {
     fetch("/api/countries")
@@ -129,6 +131,11 @@ export function LoginPage() {
       .then((data: { code: string; name: string; flag: string }[]) => setCountries(data))
       .catch(() => {});
   }, []);
+
+  const filteredCountries = countries.filter(c =>
+    c.name.toLowerCase().includes(countrySearch.toLowerCase()) || c.code.toLowerCase().includes(countrySearch.toLowerCase())
+  );
+  const selectedCountry = countries.find(c => c.name === country);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => setMousePos({ x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight });
@@ -141,6 +148,16 @@ export function LoginPage() {
     const t = setInterval(() => setCountdown(c => c - 1), 1000);
     return () => clearInterval(t);
   }, [countdown]);
+
+  useEffect(() => {
+    if (!countryOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-country-dropdown]')) setCountryOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [countryOpen]);
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -501,18 +518,37 @@ export function LoginPage() {
                         </div>
                         <div className="space-y-1.5">
                           <label className="text-gray-700 text-sm font-semibold block ml-1">Country</label>
-                          <div className="relative">
-                            <select value={country} onChange={(e) => setCountry(e.target.value)}
-                              className={cn(inputClasses("country"), "h-10 appearance-none cursor-pointer pl-11")}>
-                              <option value="">Select your country</option>
-                              {countries.map((c) => (
-                                <option key={c.code} value={c.name}>{c.flag} {c.name}</option>
-                              ))}
-                            </select>
-                            {country && countries.find(c => c.name === country) && (
-                              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg pointer-events-none">
-                                {countries.find(c => c.name === country)?.flag}
-                              </span>
+                          <div className="relative" data-country-dropdown>
+                            <button type="button" onClick={() => { setCountryOpen(!countryOpen); setCountrySearch(""); }}
+                              className={cn(inputClasses("country"), "h-10 w-full text-left flex items-center gap-2 pr-3 cursor-pointer")}>
+                              {selectedCountry ? (
+                                <>
+                                  <img src={`https://flagcdn.com/24x18/${selectedCountry.code.toLowerCase()}.png`} alt="" className="w-5 h-3.5 object-cover rounded-sm" />
+                                  <span>{selectedCountry.name}</span>
+                                </>
+                              ) : (
+                                <span className="text-gray-400">Select your country</span>
+                              )}
+                              <svg className={`w-4 h-4 ml-auto text-gray-400 transition-transform ${countryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </button>
+                            {countryOpen && (
+                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-hidden">
+                                <div className="sticky top-0 bg-white p-2 border-b border-gray-100">
+                                  <input type="text" placeholder="Search..." value={countrySearch} onChange={(e) => setCountrySearch(e.target.value)}
+                                    className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D7490]" autoFocus />
+                                </div>
+                                <div className="overflow-y-auto max-h-48">
+                                  {filteredCountries.map((c) => (
+                                    <button key={c.code} type="button"
+                                      onClick={() => { setCountry(c.name); setCountryOpen(false); setCountrySearch(""); }}
+                                      className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 ${country === c.name ? 'bg-[#0D7490]/5 text-[#0D7490] font-medium' : ''}`}>
+                                      <img src={`https://flagcdn.com/24x18/${c.code.toLowerCase()}.png`} alt="" className="w-5 h-3.5 object-cover rounded-sm" />
+                                      <span>{c.name}</span>
+                                    </button>
+                                  ))}
+                                  {filteredCountries.length === 0 && <p className="px-3 py-2 text-sm text-gray-400">No countries found</p>}
+                                </div>
+                              </div>
                             )}
                           </div>
                         </div>
