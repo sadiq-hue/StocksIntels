@@ -1982,7 +1982,7 @@ app.post('/api/auth/send-verification-code', async (req, res) => {
 
 app.post('/api/auth/verify-email-and-register', async (req, res) => {
   try {
-    const { fullName, email, password, code, ref, lat, lng } = req.body;
+    const { fullName, email, password, code, ref, lat, lng, country } = req.body;
     if (!fullName || !email || !password || !code) return res.status(400).json({ error: 'All fields required' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
     if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
@@ -2008,16 +2008,22 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
       'INSERT INTO users (full_name, email, password_hash, is_verified, trial_start_date, referred_by, ip_address) VALUES ($1, $2, $3, TRUE, NOW(), $4, $5) RETURNING id, full_name, email, role, is_verified, trader_type, created_at, subscription_tier, subscription_status, trial_start_date, subscription_end_date, commitment_fee_paid, ip_address',
       [fullName, email, hashedPassword, referredBy, ip]
     );
-    // Geo-lookup: prefer client-side coordinates, fall back to IP
-    const geoPromise = (lat && lng) ? reverseGeoCode(parseFloat(lat), parseFloat(lng)) : geoIpLookup(ip);
-    geoPromise.then(geo => {
-      if (geo) {
-        pool.query(
-          'UPDATE users SET country = $1, city = $2, region = $3, latitude = $4, longitude = $5 WHERE id = $6',
-          [geo.country, geo.city, geo.region, geo.latitude, geo.longitude, result.rows[0].id]
-        ).catch(e => console.error('[GEO] Update failed:', e.message));
-      }
-    });
+    // Geo-lookup: prefer manual country, then client-side coordinates, then IP
+    if (country) {
+      pool.query('UPDATE users SET country = $1 WHERE id = $2', [country, result.rows[0].id])
+        .catch(e => console.error('[GEO] Country update failed:', e.message));
+    }
+    const geoPromise = (lat && lng) ? reverseGeoCode(parseFloat(lat), parseFloat(lng)) : (!country ? geoIpLookup(ip) : null);
+    if (geoPromise) {
+      geoPromise.then(geo => {
+        if (geo) {
+          pool.query(
+            'UPDATE users SET country = $1, city = $2, region = $3, latitude = $4, longitude = $5 WHERE id = $6',
+            [geo.country || country, geo.city, geo.region, geo.latitude, geo.longitude, result.rows[0].id]
+          ).catch(e => console.error('[GEO] Update failed:', e.message));
+        }
+      });
+    }
     // Create pending referral record
     if (referredBy) {
       await pool.query(
@@ -2043,7 +2049,7 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
 
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { fullName, email, password, ref, lat, lng } = req.body;
+    const { fullName, email, password, ref, lat, lng, country } = req.body;
     if (!fullName || !email || !password) return res.status(400).json({ error: 'All fields required' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
     if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
@@ -2064,16 +2070,22 @@ app.post('/api/auth/register', async (req, res) => {
       'INSERT INTO users (full_name, email, password_hash, trial_start_date, referred_by, ip_address) VALUES ($1, $2, $3, NOW(), $4, $5) RETURNING id, full_name, email, role, created_at, subscription_tier, subscription_status, trial_start_date, ip_address',
       [fullName, email, hashedPassword, referredBy, ip]
     );
-    // Geo-lookup: prefer client-side coordinates, fall back to IP
-    const geoPromise = (lat && lng) ? reverseGeoCode(parseFloat(lat), parseFloat(lng)) : geoIpLookup(ip);
-    geoPromise.then(geo => {
-      if (geo) {
-        pool.query(
-          'UPDATE users SET country = $1, city = $2, region = $3, latitude = $4, longitude = $5 WHERE id = $6',
-          [geo.country, geo.city, geo.region, geo.latitude, geo.longitude, result.rows[0].id]
-        ).catch(e => console.error('[GEO] Update failed:', e.message));
-      }
-    });
+    // Geo-lookup: prefer manual country, then client-side coordinates, then IP
+    if (country) {
+      pool.query('UPDATE users SET country = $1 WHERE id = $2', [country, result.rows[0].id])
+        .catch(e => console.error('[GEO] Country update failed:', e.message));
+    }
+    const geoPromise2 = (lat && lng) ? reverseGeoCode(parseFloat(lat), parseFloat(lng)) : (!country ? geoIpLookup(ip) : null);
+    if (geoPromise2) {
+      geoPromise2.then(geo => {
+        if (geo) {
+          pool.query(
+            'UPDATE users SET country = $1, city = $2, region = $3, latitude = $4, longitude = $5 WHERE id = $6',
+            [geo.country || country, geo.city, geo.region, geo.latitude, geo.longitude, result.rows[0].id]
+          ).catch(e => console.error('[GEO] Update failed:', e.message));
+        }
+      });
+    }
     // Create pending referral record
     if (referredBy) {
       await pool.query(

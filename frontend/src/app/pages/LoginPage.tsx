@@ -120,6 +120,7 @@ export function LoginPage() {
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
   const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 });
+  const [country, setCountry] = useState("");
 
   useEffect(() => {
     const handler = (e: MouseEvent) => setMousePos({ x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight });
@@ -200,7 +201,7 @@ export function LoginPage() {
         // Try browser geolocation for accurate location
         const coords = await getBrowserCoords();
         try {
-          await verifyEmailAndRegister(fullName.trim(), email, password, verifyCode, refParam, coords?.lat, coords?.lng);
+          await verifyEmailAndRegister(fullName.trim(), email, password, verifyCode, refParam, coords?.lat, coords?.lng, country || undefined);
           navigate(redirectTo);
         } catch (err) { setError(err instanceof Error ? err.message : "Verification or registration failed"); }
         finally { setIsLoading(false); }
@@ -530,6 +531,36 @@ export function LoginPage() {
                           {confirmPassword && password !== confirmPassword && (
                             <p className="text-xs text-red-500 mt-0.5">Passwords do not match</p>
                           )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-gray-700 text-sm font-semibold block ml-1">Country</label>
+                          <div className="relative">
+                            <select value={country} onChange={(e) => setCountry(e.target.value)}
+                              className={cn(inputClasses("country"), "h-10 appearance-none cursor-pointer")}>
+                              <option value="">Select your country</option>
+                              <option value="Kenya">Kenya</option>
+                              <option value="Nigeria">Nigeria</option>
+                              <option value="South Africa">South Africa</option>
+                              <option value="Ghana">Ghana</option>
+                              <option value="Tanzania">Tanzania</option>
+                              <option value="Uganda">Uganda</option>
+                              <option value="Rwanda">Rwanda</option>
+                              <option value="Ethiopia">Ethiopia</option>
+                              <option value="Egypt">Egypt</option>
+                              <option value="Morocco">Morocco</option>
+                              <option value="United States">United States</option>
+                              <option value="United Kingdom">United Kingdom</option>
+                              <option value="Canada">Canada</option>
+                              <option value="India">India</option>
+                              <option value="United Arab Emirates">United Arab Emirates</option>
+                              <option value="Germany">Germany</option>
+                              <option value="France">France</option>
+                              <option value="Australia">Australia</option>
+                              <option value="China">China</option>
+                              <option value="Japan">Japan</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => { setRegStage("form"); setVerifyCode(""); setError(null); }}

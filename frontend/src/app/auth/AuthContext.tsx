@@ -32,13 +32,13 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (fullName: string, email: string, password: string, ref?: string) => Promise<void>;
+  register: (fullName: string, email: string, password: string, ref?: string, lat?: number, lng?: number, country?: string) => Promise<void>;
   sendOtp: (email: string) => Promise<{ expiresIn: number }>;
   verifyOtp: (email: string, code: string) => Promise<void>;
   requestLoginOtp: (email: string, password: string) => Promise<{ expiresIn: number }>;
   verifyLoginOtp: (email: string, code: string) => Promise<void>;
   sendVerificationCode: (email: string) => Promise<{ expiresIn: number }>;
-  verifyEmailAndRegister: (fullName: string, email: string, password: string, code: string, ref?: string) => Promise<void>;
+  verifyEmailAndRegister: (fullName: string, email: string, password: string, code: string, ref?: string, lat?: number, lng?: number, country?: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<{ expiresIn: number }>;
   resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -181,10 +181,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserAndStore(data.user, data.token);
   };
 
-  const register = async (fullName: string, email: string, password: string, ref?: string, lat?: number, lng?: number) => {
+  const register = async (fullName: string, email: string, password: string, ref?: string, lat?: number, lng?: number, country?: string) => {
     const body: Record<string, string | number> = { fullName, email, password };
     if (ref) body.ref = ref;
     if (lat != null && lng != null) { body.lat = lat; body.lng = lng; }
+    if (country) body.country = country;
     const res = await fetch(`${API_URL}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -248,10 +249,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return { expiresIn: data.expiresIn };
   };
 
-  const verifyEmailAndRegister = async (fullName: string, email: string, password: string, code: string, ref?: string, lat?: number, lng?: number) => {
+  const verifyEmailAndRegister = async (fullName: string, email: string, password: string, code: string, ref?: string, lat?: number, lng?: number, country?: string) => {
     const body: Record<string, string | number> = { fullName, email, password, code };
     if (ref) body.ref = ref;
     if (lat != null && lng != null) { body.lat = lat; body.lng = lng; }
+    if (country) body.country = country;
     const res = await fetch(`${API_URL}/auth/verify-email-and-register`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       credentials: 'include',
