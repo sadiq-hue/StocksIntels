@@ -5018,9 +5018,19 @@ app.post('/api/user/send-test-sentiment', async (req, res) => {
       fullName = result.rows[0].full_name;
     }
     if (!email) return res.status(400).json({ error: 'email or userId required' });
-    const summaryRes = await axios.get(`http://localhost:${port}/api/ai/market-summary`).then(r => r.data).catch(() => null);
-    const moversRes = await axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({}));
+    const [summaryRes, moversRes, globalIndicesRes] = await Promise.all([
+      axios.get(`http://localhost:${port}/api/ai/market-summary`).then(r => r.data).catch(() => null),
+      axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({})),
+      axios.get(`http://localhost:${port}/api/indices/global`).then(r => r.data).catch(() => []),
+    ]);
     const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const globalIndices = Array.isArray(globalIndicesRes) ? globalIndicesRes.slice(0, 5).map(g => ({
+      name: g.name || g.label || '',
+      exchange: g.exchange || '',
+      value: g.price || g.value || g.close || '--',
+      change: g.changePercent ? (g.changePercent.startsWith?.('+') || g.changePercent.startsWith?.('-') ? g.changePercent : (g.change >= 0 ? '+' : '') + g.changePercent + '%') : (g.change || '--'),
+      ytd: g.ytd || '',
+    })) : [];
     await sendDailySentimentEmail(email, {
       userName: fullName || 'Trader',
       summary: summaryRes?.summary || 'Markets showing mixed activity today.',
@@ -5032,6 +5042,7 @@ app.post('/api/user/send-test-sentiment', async (req, res) => {
       globalGainers: moversRes?.global?.gainers?.slice(0, 8) || [],
       globalLosers: moversRes?.global?.losers?.slice(0, 8) || [],
       signals: summaryRes?.signals || { total: 0, strongBuys: 0, buys: 0, sells: 0 },
+      globalIndices,
     });
     res.json({ success: true, message: 'Test sentiment email sent' });
   } catch (error) {
@@ -10787,8 +10798,11 @@ async function sendDailySentimentReports() {
     console.log(`[SENTIMENT] Sending reports to ${users.length} users...`);
 
     // Fetch market summary data once, reuse for all users
-    const summaryRes = await axios.get(`http://localhost:${port}/api/ai/market-summary`).then(r => r.data).catch(() => null);
-    const moversRes = await axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({}));
+    const [summaryRes, moversRes, globalIndicesRes] = await Promise.all([
+      axios.get(`http://localhost:${port}/api/ai/market-summary`).then(r => r.data).catch(() => null),
+      axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({})),
+      axios.get(`http://localhost:${port}/api/indices/global`).then(r => r.data).catch(() => []),
+    ]);
 
     const summary = summaryRes?.summary || 'Markets showing mixed activity today.';
     const sentiment = summaryRes?.sentiment || 'Neutral';
@@ -10798,6 +10812,13 @@ async function sendDailySentimentReports() {
     const nseLosers = moversRes?.nse?.losers?.slice(0, 8) || [];
     const globalGainers = moversRes?.global?.gainers?.slice(0, 8) || [];
     const globalLosers = moversRes?.global?.losers?.slice(0, 8) || [];
+    const globalIndices = Array.isArray(globalIndicesRes) ? globalIndicesRes.slice(0, 5).map(g => ({
+      name: g.name || g.label || '',
+      exchange: g.exchange || '',
+      value: g.price || g.value || g.close || '--',
+      change: g.changePercent ? (g.changePercent.startsWith?.('+') || g.changePercent.startsWith?.('-') ? g.changePercent : (g.change >= 0 ? '+' : '') + g.changePercent + '%') : (g.change || '--'),
+      ytd: g.ytd || '',
+    })) : [];
 
     const dateStr = new Date().toLocaleDateString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -10809,6 +10830,7 @@ async function sendDailySentimentReports() {
           userName: user.full_name,
           summary, sentiment, confidence, dateStr,
           nseGainers, nseLosers, globalGainers, globalLosers, signals,
+          globalIndices,
         });
         console.log(`[SENTIMENT] Report sent to ${user.email}`);
       } catch (e) {

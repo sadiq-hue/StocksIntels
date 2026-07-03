@@ -375,43 +375,15 @@ async function sendDailySentimentEmail(email, data) {
   const {
     userName, summary, sentiment, confidence, dateStr,
     nseGainers, nseLosers, globalGainers, globalLosers,
-    signals
+    signals,
+    nseContext, globalContext, corporateActions, macroData,
+    aiNarrative, whatToWatch, globalIndices, kpiData
   } = data;
 
-  const sentimentColor = sentiment === 'Bullish' ? GREEN : sentiment === 'Bearish' ? RED : AMBER;
+  const sentimentLower = (sentiment || 'Neutral').toLowerCase();
+  const sentimentColor = sentimentLower === 'bullish' ? '#1A7A4A' : sentimentLower === 'bearish' ? '#C0392B' : '#E8A020';
+  const sentimentHeroClass = sentimentLower === 'bullish' ? 'linear-gradient(135deg, #0B2545 0%, #0f3d28 100%)' : sentimentLower === 'bearish' ? 'linear-gradient(135deg, #0B2545 0%, #3d0f0f 100%)' : 'linear-gradient(135deg, #0B2545 0%, #1a3a6b 100%)';
   const subject = `Market Sentiment Report — ${dateStr}`;
-
-  const gainerRows = (nseGainers || []).slice(0, 8).map(s =>
-    `<tr>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${s.symbol}</td>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || ''}</td>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${GREEN}">+${s.changePercent?.toFixed(2) || '0.00'}%</td>
-    </tr>`
-  ).join('');
-
-  const loserRows = (nseLosers || []).slice(0, 8).map(s =>
-    `<tr>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${s.symbol}</td>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || ''}</td>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${RED}">${s.changePercent?.toFixed(2) || '0.00'}%</td>
-    </tr>`
-  ).join('');
-
-  const globalGainerRows = (globalGainers || []).slice(0, 8).map(s =>
-    `<tr>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${s.symbol}</td>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || ''}</td>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${GREEN}">+${s.changePercent?.toFixed(2) || '0.00'}%</td>
-    </tr>`
-  ).join('');
-
-  const globalLoserRows = (globalLosers || []).slice(0, 8).map(s =>
-    `<tr>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${s.symbol}</td>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || ''}</td>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${RED}">${s.changePercent?.toFixed(2) || '0.00'}%</td>
-    </tr>`
-  ).join('');
 
   const strongBuys = signals?.strongBuys || 0;
   const totalSignals = signals?.total || 0;
@@ -420,87 +392,368 @@ async function sendDailySentimentEmail(email, data) {
   const buyPct = totalSignals > 0 ? Math.round((buys / totalSignals) * 100) : 0;
   const sellPct = totalSignals > 0 ? Math.round((sells / totalSignals) * 100) : 0;
 
-  const html = baseWrapper(`
-    <div style="text-align:center;margin-bottom:24px">
-      <div style="font-size:20px;font-weight:700;color:${TEXT_DARK}">Market Sentiment</div>
-      <div style="font-size:13px;color:${TEXT_MED}">${dateStr}</div>
-      ${userName ? `<div style="font-size:14px;color:${TEXT_MED};margin-top:8px">Hello ${userName}</div>` : ''}
-    </div>
+  const confNum = parseInt(String(confidence).replace(/[^0-9]/g, '')) || 65;
 
-    <div style="background:linear-gradient(135deg,${sentimentColor}15,${sentimentColor}08);border:1px solid ${sentimentColor}30;border-radius:10px;padding:24px;text-align:center;margin-bottom:20px">
-      <div style="font-size:28px;font-weight:800;color:${sentimentColor}">${sentiment}</div>
-      <div style="font-size:13px;color:${TEXT_MED};margin-top:4px">Confidence: ${confidence}</div>
-      <div style="font-size:13px;color:${TEXT_DARK};margin-top:12px;line-height:1.6">${summary}</div>
-    </div>
+  function chgColor(val) {
+    if (!val) return '#9ca3af';
+    const s = String(val);
+    if (s.startsWith('+') || s.startsWith('\u25B2')) return '#1A7A4A';
+    if (s.startsWith('-') || s.startsWith('\u25BC')) return '#C0392B';
+    return '#E8A020';
+  }
 
-    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;padding:18px;margin-bottom:20px">
-      <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:14px">Signal Overview</div>
-      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:13px">
-        <tr>
-          <td style="padding:6px 0;color:${TEXT_MED}">Total Signals</td>
-          <td style="padding:6px 0;text-align:right;font-weight:700;color:${TEXT_DARK}">${totalSignals}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${GREEN}">Buy Signals</td>
-          <td style="padding:6px 0;text-align:right;font-weight:700;color:${GREEN}">${buys} (${buyPct}%)</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${RED}">Sell Signals</td>
-          <td style="padding:6px 0;text-align:right;font-weight:700;color:${RED}">${sells} (${sellPct}%)</td>
-        </tr>
-        <tr>
-          <td style="padding:6px 0;color:${BRAND_COLOR}">Strong Buy Signals</td>
-          <td style="padding:6px 0;text-align:right;font-weight:700;color:${BRAND_COLOR}">${strongBuys}</td>
-        </tr>
-      </table>
-    </div>
+  function badgeClass(val) {
+    if (!val) return 'badge-grey';
+    const s = String(val).toUpperCase();
+    if (s === 'BUY' || s === 'BULLISH' || s === 'BEAT' || s === 'DIVIDEND') return 'badge-green';
+    if (s === 'SELL' || s === 'BEARISH' || s === 'MISS') return 'badge-red';
+    if (s === 'WATCH' || s === 'NEUTRAL' || s === 'HOLD') return 'badge-amber';
+    if (s === 'HIGH') return 'badge-red';
+    if (s === 'MEDIUM') return 'badge-amber';
+    return 'badge-grey';
+  }
 
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px">
-      <tr>
-        <td style="width:50%;padding:0 6px 0 0;vertical-align:top">
-          <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden">
-            <div style="background:${GREEN};color:#ffffff;padding:8px 12px;font-size:12px;font-weight:600">NSE Top Gainers</div>
-            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
-              <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Name</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Change</th></tr></thead>
-              <tbody>${gainerRows || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No data</td></tr>'}</tbody>
-            </table>
-          </div>
-        </td>
-        <td style="width:50%;padding:0 0 0 6px;vertical-align:top">
-          <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden">
-            <div style="background:${RED};color:#ffffff;padding:8px 12px;font-size:12px;font-weight:600">NSE Top Losers</div>
-            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
-              <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Name</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Change</th></tr></thead>
-              <tbody>${loserRows || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No data</td></tr>'}</tbody>
-            </table>
-          </div>
-        </td>
-      </tr>
+  function badgeStyle(val) {
+    if (!val) return 'background:#F5F5F5;color:#6b7280';
+    const s = String(val).toUpperCase();
+    if (s === 'BUY' || s === 'BULLISH' || s === 'BEAT' || s === 'DIVIDEND') return 'background:#E8F5E9;color:#1A7A4A';
+    if (s === 'SELL' || s === 'BEARISH' || s === 'MISS') return 'background:#FFEBEE;color:#C0392B';
+    if (s === 'WATCH' || s === 'NEUTRAL' || s === 'HOLD') return 'background:#FFF8E1;color:#E8A020';
+    if (s === 'HIGH') return 'background:#FFEBEE;color:#C0392B';
+    if (s === 'MEDIUM') return 'background:#FFF8E1;color:#E8A020';
+    return 'background:#F5F5F5;color:#6b7280';
+  }
+
+  const nseGainerRows = (nseGainers || []).slice(0, 8).map(s => {
+    const signal = s.signal || s.aiSignal || '';
+    return `<tr>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;font-weight:700;color:#0F9B8E">${s.symbol || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;color:#1a1a1a">${s.company_name || s.name || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;color:#9ca3af;font-size:12px">${s.sector || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;text-align:right;font-weight:600;color:#1A7A4A">+${s.changePercent?.toFixed(2) || '0.00'}%</td>
+      ${signal ? `<td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;text-align:right"><span style="${badgeStyle(signal)};display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${signal}</span></td>` : ''}
+    </tr>`;
+  }).join('');
+
+  const nseLoserRows = (nseLosers || []).slice(0, 8).map(s => {
+    const signal = s.signal || s.aiSignal || '';
+    return `<tr>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;font-weight:700;color:#0F9B8E">${s.symbol || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;color:#1a1a1a">${s.company_name || s.name || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;color:#9ca3af;font-size:12px">${s.sector || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;text-align:right;font-weight:600;color:#C0392B">${s.changePercent?.toFixed(2) || '0.00'}%</td>
+      ${signal ? `<td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;text-align:right"><span style="${badgeStyle(signal)};display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${signal}</span></td>` : ''}
+    </tr>`;
+  }).join('');
+
+  const globalGainerRows = (globalGainers || []).slice(0, 8).map(s =>
+    `<tr>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;font-weight:700;color:#0F9B8E">${s.symbol || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;color:#1a1a1a">${s.company_name || s.name || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;color:#9ca3af;font-size:12px">${s.sector || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;text-align:right;font-weight:600;color:#1A7A4A">+${s.changePercent?.toFixed(2) || '0.00'}%</td>
+    </tr>`
+  ).join('');
+
+  const globalLoserRows = (globalLosers || []).slice(0, 8).map(s =>
+    `<tr>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;font-weight:700;color:#0F9B8E">${s.symbol || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;color:#1a1a1a">${s.company_name || s.name || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;color:#9ca3af;font-size:12px">${s.sector || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;text-align:right;font-weight:600;color:#C0392B">${s.changePercent?.toFixed(2) || '0.00'}%</td>
+    </tr>`
+  ).join('');
+
+  const globalIndexRows = (globalIndices || []).map(g =>
+    `<tr>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;font-weight:600;color:#0B2545"><strong>${g.name || g.label || ''}</strong></td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;color:#9ca3af;font-size:12px">${g.exchange || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;text-align:right;font-weight:600;color:#1a1a1a">${g.value || '--'}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;text-align:right;font-weight:600;color:${chgColor(g.change)}">${g.change || '--'}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;text-align:right;font-weight:600;color:${chgColor(g.ytd)}">${g.ytd || ''}</td>
+    </tr>`
+  ).join('');
+
+  const corporateActionRows = (corporateActions || []).slice(0, 6).map(a =>
+    `<tr>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;font-weight:700;color:#0F9B8E">${a.ticker || a.symbol || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5"><span style="${badgeStyle(a.action || a.type)};display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${a.action || a.type || ''}</span></td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;color:#1a1a1a;font-size:12px">${a.detail || a.details || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;text-align:right;color:#9ca3af;font-size:12px">${a.paymentDate || a.date || ''}</td>
+    </tr>`
+  ).join('');
+
+  const watchRows = (whatToWatch || []).slice(0, 6).map(w =>
+    `<tr>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;color:#9ca3af;font-size:12px">${w.date || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;color:#1a1a1a">${w.event || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid #f0f2f5;text-align:center"><span style="${badgeStyle(w.impact)};display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${w.impact || ''}</span></td>
+    </tr>`
+  ).join('');
+
+  const kpi = kpiData || {};
+  const macro = macroData || {};
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<title>StocksIntels Market Sentiment</title>
+</head>
+<body style="margin:0;padding:0;background:#f0f2f5;font-family:Arial,sans-serif;-webkit-font-smoothing:antialiased">
+<div style="max-width:640px;margin:32px auto;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)">
+
+  <!-- HEADER -->
+  <div style="background:#0B2545;padding:24px 32px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        ${LOGO_BASE64
+          ? `<img src="${LOGO_BASE64}" alt="StocksIntels" style="max-width:180px;max-height:32px;height:auto;display:block;border:0" />`
+          : `<div style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:1px">STOCKSINTELS</div>`
+        }
+        <div style="color:#0F9B8E;font-size:11px;font-weight:400;margin-top:2px;letter-spacing:0.5px">MARKET INTELLIGENCE PLATFORM</div>
+      </div>
+      <div style="background:#0F9B8E;color:#ffffff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:4px;letter-spacing:0.5px">MARKET SENTIMENT</div>
+    </div>
+    <div style="color:#8da5c0;font-size:12px;margin-top:16px">${dateStr}</div>
+    ${userName ? `<div style="color:#ffffff;font-size:15px;margin-top:4px">Hello, ${userName}</div>` : ''}
+  </div>
+
+  <!-- SENTIMENT HERO -->
+  <div style="padding:28px 32px;border-bottom:3px solid #0F9B8E;background:${sentimentHeroClass}">
+    <div style="font-size:11px;font-weight:700;color:#8da5c0;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px">Overall Market Sentiment</div>
+    <div style="font-size:42px;font-weight:700;color:${sentimentColor};line-height:1">${sentiment || 'NEUTRAL'}</div>
+    <div style="font-size:14px;color:#8da5c0;margin-top:8px">Confidence: ${confidence || '65%'} &nbsp;&middot;&nbsp; Based on price, volume, sentiment &amp; macro signals</div>
+    <div style="font-size:14px;color:#d1dae7;margin-top:6px;line-height:1.5">${summary || 'Markets showing mixed activity today.'}</div>
+    <div style="margin-top:14px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#8da5c0;margin-bottom:4px"><span>Bearish</span><span>${confidence || '65%'} Confidence</span><span>Bullish</span></div>
+      <div style="background:rgba(255,255,255,0.1);border-radius:4px;height:6px">
+        <div style="height:6px;border-radius:4px;background:#E8A020;width:${confNum}%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI STRIP -->
+  <div style="display:flex;background:#f8fafc;border-bottom:1px solid #e8ecf0">
+    <div style="flex:1;padding:14px 16px;border-right:1px solid #e8ecf0;text-align:center">
+      <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">NSE 20</div>
+      <div style="font-size:20px;font-weight:700;color:${kpi.nseChange?.startsWith('+') ? '#1A7A4A' : '#0B2545'}">${kpi.nse || '--'}</div>
+      <div style="font-size:10px;color:#9ca3af;margin-top:2px">${kpi.nseChange || ''}</div>
+    </div>
+    <div style="flex:1;padding:14px 16px;border-right:1px solid #e8ecf0;text-align:center">
+      <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">S&P 500</div>
+      <div style="font-size:20px;font-weight:700;color:#0B2545">${kpi.sp500 || '--'}</div>
+      <div style="font-size:10px;color:#9ca3af;margin-top:2px">${kpi.sp500Change || ''}</div>
+    </div>
+    <div style="flex:1;padding:14px 16px;border-right:1px solid #e8ecf0;text-align:center">
+      <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">USD/KES</div>
+      <div style="font-size:20px;font-weight:700;color:#0B2545">${macro.usdKes || '--'}</div>
+      <div style="font-size:10px;color:#9ca3af;margin-top:2px">FX Rate</div>
+    </div>
+    <div style="flex:1;padding:14px 16px;text-align:center">
+      <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Brent Crude</div>
+      <div style="font-size:20px;font-weight:700;color:#0B2545">${macro.brent || '--'}</div>
+      <div style="font-size:10px;color:${macro.brentChange?.startsWith('-') ? '#C0392B' : '#9ca3af'};margin-top:2px">${macro.brentNote || ''}</div>
+    </div>
+  </div>
+
+  <!-- SIGNAL OVERVIEW -->
+  <div style="padding:22px 32px;border-bottom:1px solid #f0f2f5">
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:14px;display:flex;align-items:center;gap:8px">Signal Overview<span style="flex:1;height:1px;background:#e8ecf0;margin-left:8px"></span></div>
+    <div style="display:flex;gap:10px;margin-bottom:4px">
+      <div style="flex:1;border-radius:6px;padding:14px 12px;text-align:center;background:#0B2545">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;color:#8da5c0">Total Signals</div>
+        <div style="font-size:28px;font-weight:700;color:#ffffff">${totalSignals}</div>
+        <div style="font-size:11px;color:#8da5c0;margin-top:2px">${totalSignals > 0 ? 'Active' : 'Pending data'}</div>
+      </div>
+      <div style="flex:1;border-radius:6px;padding:14px 12px;text-align:center;background:#E8F5E9">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;color:#2d6a4f">Buy Signals</div>
+        <div style="font-size:28px;font-weight:700;color:#1A7A4A">${buys}</div>
+        <div style="font-size:11px;color:#2d6a4f;margin-top:2px">${buyPct}%</div>
+      </div>
+      <div style="flex:1;border-radius:6px;padding:14px 12px;text-align:center;background:#FFEBEE">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;color:#7f1d1d">Sell Signals</div>
+        <div style="font-size:28px;font-weight:700;color:#C0392B">${sells}</div>
+        <div style="font-size:11px;color:#7f1d1d;margin-top:2px">${sellPct}%</div>
+      </div>
+      <div style="flex:1;border-radius:6px;padding:14px 12px;text-align:center;background:#E3F2FD">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;color:#1565C0">Strong Buy</div>
+        <div style="font-size:28px;font-weight:700;color:#1565C0">${strongBuys}</div>
+        <div style="font-size:11px;color:#1565C0;margin-top:2px">${strongBuys > 0 ? 'Active' : 'Awaiting'}</div>
+      </div>
+    </div>
+    ${totalSignals === 0 ? `
+    <div style="border-radius:6px;padding:12px 16px;margin-top:12px;font-size:13px;line-height:1.6;background:#FFF8E1;border-left:3px solid #E8A020;color:#78500a">
+      <strong>Signal Note:</strong> No AI signals have been generated yet. This typically means the data pipeline is still populating or market activity is below the signal threshold.
+    </div>` : ''}
+  </div>
+
+  <!-- NSE MARKET INTELLIGENCE -->
+  <div style="padding:22px 32px;border-bottom:1px solid #f0f2f5">
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:14px;display:flex;align-items:center;gap:8px">NSE Market Intelligence<span style="flex:1;height:1px;background:#e8ecf0;margin-left:8px"></span></div>
+    ${nseContext ? `<div style="border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:13px;line-height:1.6;background:#E6F5F3;border-left:3px solid #0F9B8E;color:#0a4a43">${nseContext}</div>` : ''}
+
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;margin-top:4px;display:flex;align-items:center;gap:8px">NSE Top Gainers<span style="flex:1;height:1px;background:#e8ecf0;margin-left:8px"></span></div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:18px">
+      <thead>
+        <tr style="background:#0B2545">
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Symbol</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Name</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Sector</th>
+          <th style="padding:9px 10px;text-align:right;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Change</th>
+          ${nseGainers?.[0]?.signal || nseGainers?.[0]?.aiSignal ? `<th style="padding:9px 10px;text-align:right;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">AI Signal</th>` : ''}
+        </tr>
+      </thead>
+      <tbody>
+        ${nseGainerRows || `<tr><td colspan="5" style="padding:12px;text-align:center;color:#9ca3af;font-size:12px;font-style:italic">No gainers data available for this session.</td></tr>`}
+      </tbody>
     </table>
 
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px">
-      <tr>
-        <td style="width:50%;padding:0 6px 0 0;vertical-align:top">
-          <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden">
-            <div style="background:${GREEN};color:#ffffff;padding:8px 12px;font-size:12px;font-weight:600">Global Top Gainers</div>
-            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
-              <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Name</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Change</th></tr></thead>
-              <tbody>${globalGainerRows || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No data</td></tr>'}</tbody>
-            </table>
-          </div>
-        </td>
-        <td style="width:50%;padding:0 0 0 6px;vertical-align:top">
-          <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden">
-            <div style="background:${RED};color:#ffffff;padding:8px 12px;font-size:12px;font-weight:600">Global Top Losers</div>
-            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
-              <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Name</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Change</th></tr></thead>
-              <tbody>${globalLoserRows || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No data</td></tr>'}</tbody>
-            </table>
-          </div>
-        </td>
-      </tr>
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;display:flex;align-items:center;gap:8px">NSE Top Losers<span style="flex:1;height:1px;background:#e8ecf0;margin-left:8px"></span></div>
+    ${nseLoserRows ? `
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:18px">
+      <thead>
+        <tr style="background:#0B2545">
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Symbol</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Name</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Sector</th>
+          <th style="padding:9px 10px;text-align:right;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Change</th>
+          ${nseLosers?.[0]?.signal || nseLosers?.[0]?.aiSignal ? `<th style="padding:9px 10px;text-align:right;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">AI Signal</th>` : ''}
+        </tr>
+      </thead>
+      <tbody>${nseLoserRows}</tbody>
+    </table>` : `
+    <div style="border-radius:6px;padding:12px 16px;margin-bottom:18px;font-size:13px;line-height:1.6;background:#EEF2F7;border-left:3px solid #0B2545;color:#0B2545">No losers data available for this session. This may indicate flat trading or a data gap.</div>`}
+
+    ${corporateActions && corporateActions.length ? `
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;display:flex;align-items:center;gap:8px">NSE Corporate Actions &mdash; Coming Up<span style="flex:1;height:1px;background:#e8ecf0;margin-left:8px"></span></div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="background:#0B2545">
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Ticker</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Action</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Detail</th>
+          <th style="padding:9px 10px;text-align:right;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Payment Date</th>
+        </tr>
+      </thead>
+      <tbody>${corporateActionRows}</tbody>
+    </table>` : ''}
+  </div>
+
+  <!-- GLOBAL MARKETS -->
+  <div style="padding:22px 32px;border-bottom:1px solid #f0f2f5">
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:14px;display:flex;align-items:center;gap:8px">Global Markets<span style="flex:1;height:1px;background:#e8ecf0;margin-left:8px"></span></div>
+    ${globalContext ? `<div style="border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:13px;line-height:1.6;background:#FFF8E1;border-left:3px solid #E8A020;color:#78500a">${globalContext}</div>` : ''}
+
+    ${globalIndices && globalIndices.length ? `
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+      <thead>
+        <tr style="background:#0B2545">
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Index</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Exchange</th>
+          <th style="padding:9px 10px;text-align:right;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Last Close</th>
+          <th style="padding:9px 10px;text-align:right;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Change</th>
+          <th style="padding:9px 10px;text-align:right;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">YTD</th>
+        </tr>
+      </thead>
+      <tbody>${globalIndexRows}</tbody>
+    </table>` : ''}
+
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;display:flex;align-items:center;gap:8px">Global Top Gainers<span style="flex:1;height:1px;background:#e8ecf0;margin-left:8px"></span></div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+      <thead>
+        <tr style="background:#0B2545">
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Symbol</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Name</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Sector</th>
+          <th style="padding:9px 10px;text-align:right;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Change</th>
+        </tr>
+      </thead>
+      <tbody>${globalGainerRows || `<tr><td colspan="4" style="padding:12px;text-align:center;color:#9ca3af;font-size:12px;font-style:italic">No data</td></tr>`}</tbody>
     </table>
-  `);
+
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px;display:flex;align-items:center;gap:8px">Global Top Losers<span style="flex:1;height:1px;background:#e8ecf0;margin-left:8px"></span></div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="background:#0B2545">
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Symbol</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Name</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Sector</th>
+          <th style="padding:9px 10px;text-align:right;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Change</th>
+        </tr>
+      </thead>
+      <tbody>${globalLoserRows || `<tr><td colspan="4" style="padding:12px;text-align:center;color:#9ca3af;font-size:12px;font-style:italic">No data</td></tr>`}</tbody>
+    </table>
+  </div>
+
+  <!-- MACRO STRIP -->
+  <div style="display:flex;background:#f8fafc;border-top:1px solid #e8ecf0;border-bottom:1px solid #e8ecf0">
+    <div style="flex:1;padding:12px 14px;border-right:1px solid #e8ecf0;text-align:center">
+      <div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">USD/KES</div>
+      <div style="font-size:13px;font-weight:700;color:#0B2545">${macro.usdKes || '--'}</div>
+      <div style="font-size:11px;margin-top:2px;color:#9ca3af">${macro.usdKesNote || 'Live rate'}</div>
+    </div>
+    <div style="flex:1;padding:12px 14px;border-right:1px solid #e8ecf0;text-align:center">
+      <div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Brent Crude</div>
+      <div style="font-size:13px;font-weight:700;color:#0B2545">${macro.brent || '--'}</div>
+      <div style="font-size:11px;margin-top:2px;color:${macro.brentChange?.startsWith('-') ? '#C0392B' : '#9ca3af'}">${macro.brentNote || ''}</div>
+    </div>
+    <div style="flex:1;padding:12px 14px;border-right:1px solid #e8ecf0;text-align:center">
+      <div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Gold</div>
+      <div style="font-size:13px;font-weight:700;color:#0B2545">${macro.gold || '--'}</div>
+      <div style="font-size:11px;margin-top:2px;color:${macro.goldChange?.startsWith('+') ? '#1A7A4A' : '#9ca3af'}">${macro.goldChange || ''}</div>
+    </div>
+    <div style="flex:1;padding:12px 14px;text-align:center">
+      <div style="font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">VIX</div>
+      <div style="font-size:13px;font-weight:700;color:#0B2545">${macro.vix || '--'}</div>
+      <div style="font-size:11px;margin-top:2px;color:#E8A020">${macro.vixNote || ''}</div>
+    </div>
+  </div>
+
+  <!-- AI MARKET NARRATIVE -->
+  ${aiNarrative ? `
+  <div style="padding:22px 32px;border-bottom:1px solid #f0f2f5">
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:14px;display:flex;align-items:center;gap:8px">AI Market Narrative<span style="flex:1;height:1px;background:#e8ecf0;margin-left:8px"></span></div>
+    <div style="border-radius:6px;padding:12px 16px;font-size:13px;line-height:1.6;background:#E6F5F3;border-left:3px solid #0F9B8E;color:#0a4a43">${aiNarrative}</div>
+  </div>` : ''}
+
+  <!-- WHAT TO WATCH -->
+  ${whatToWatch && whatToWatch.length ? `
+  <div style="padding:22px 32px;border-bottom:1px solid #f0f2f5">
+    <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:14px;display:flex;align-items:center;gap:8px">What to Watch This Week<span style="flex:1;height:1px;background:#e8ecf0;margin-left:8px"></span></div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="background:#0B2545">
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Date</th>
+          <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Event</th>
+          <th style="padding:9px 10px;text-align:center;font-size:11px;font-weight:600;color:#ffffff;letter-spacing:0.3px">Impact</th>
+        </tr>
+      </thead>
+      <tbody>${watchRows}</tbody>
+    </table>
+  </div>` : ''}
+
+  <!-- CTA -->
+  <div style="background:#0B2545;padding:28px 32px;text-align:center">
+    <div style="color:#8da5c0;font-size:13px;margin-bottom:16px">View live AI signals, full market intelligence, and your portfolio on the StocksIntels platform.</div>
+    <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/dashboard" style="display:inline-block;background:#0F9B8E;color:#ffffff;font-size:14px;font-weight:700;padding:12px 32px;border-radius:6px;text-decoration:none;letter-spacing:0.5px">EXPLORE FULL PLATFORM &rarr;</a>
+  </div>
+
+  <!-- FOOTER -->
+  <div style="background:#f8fafc;padding:20px 32px;text-align:center;border-top:1px solid #e8ecf0">
+    <div style="font-size:13px;font-weight:700;color:#0B2545;margin-bottom:4px">StocksIntels</div>
+    <div style="font-size:11px;color:#9ca3af;line-height:1.7">
+      This is an automated market sentiment report from StocksIntels.<br>
+      Market data is for informational purposes only and does not constitute financial advice.<br><br>
+      &copy; ${new Date().getFullYear()} StocksIntels. All rights reserved.
+    </div>
+  </div>
+
+</div>
+</body>
+</html>`;
 
   return sendViaTransport({ to: email, subject, html, label: 'Sentiment report' });
 }
