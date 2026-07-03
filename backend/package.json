@@ -8,7 +8,8 @@
     "dev": "nodemon index.js",
     "load-test:setup": "node ../load-test/setup-test-users.js",
     "load-test": "artillery run ../load-test/artillery.yml",
-    "load-test:report": "artillery report artillery-report.json"
+    "load-test:report": "artillery report artillery-report.json",
+    "db:migrate": "node db/migrate.js"
   },
   "dependencies": {
     "@paypal/checkout-server-sdk": "^1.0.3",

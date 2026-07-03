@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Signal, PieChart, Star,
   LineChart, Newspaper, FileText, MessageSquare, Users,
   BarChart3, Briefcase, Layers, User, LifeBuoy, Cpu,
-  DollarSign, TrendingUp, GraduationCap, Lightbulb,
+  DollarSign, TrendingUp, GraduationCap, Lightbulb, Shield,
 } from "lucide-react";
 import { useBeginnerMode } from "../contexts/BeginnerModeContext";
 
@@ -64,6 +64,12 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         { path: "/app/profile", icon: User, label: "Profile" },
         { path: "/app/affiliates", icon: DollarSign, label: "Affiliates" },
         { path: "/app/support", icon: LifeBuoy, label: "Support Center" },
+      ],
+    },
+    {
+      title: "Admin",
+      items: [
+        { path: "/app/admin/stocks", icon: Shield, label: "Stocks" },
       ],
     },
   ];

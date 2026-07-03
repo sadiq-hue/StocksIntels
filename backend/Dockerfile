@@ -2,7 +2,9 @@ FROM mcr.microsoft.com/playwright:v1.60.0-jammy
 
 WORKDIR /app
 
-# ML is offloaded to Modal serverless — no Python/ML deps needed
+# Install Python for PDF parsing
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip && rm -rf /var/lib/apt/lists/*
+
 # Install pnpm (workspace lockfile is used for deterministic installs)
 RUN npm install -g pnpm@10
 
@@ -16,8 +18,15 @@ RUN pnpm install --filter backend --prod --no-frozen-lockfile
 # Copy backend source
 COPY backend/ ./backend/
 
+# Install Python PDF parser dependencies
+RUN pip3 install --no-cache-dir -r /app/backend/requirements.txt 2>/dev/null || true
+
+# Ensure upload directories exist
+RUN mkdir -p /app/backend/uploads/stocks /app/backend/uploads/knowledge
+
 ENV NODE_ENV=production \
-    PORT=3001
+    PORT=3001 \
+    PYTHON_PATH=python3
 
 EXPOSE 3001
 

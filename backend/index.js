@@ -1515,6 +1515,9 @@ app.get('/api/admin/audit', async (req, res) => {
   }
 });
 
+// ── NSE Financial Statements Routes ──
+app.use('/api/admin', require('./routes/financialStatements'));
+
 const port = process.env.PORT || 3001;
 app.get(['/admin', '/admin/*'], (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
