@@ -4840,6 +4840,42 @@ app.get('/api/fx/convert', async (req, res) => {
   }
 });
 
+// --- Countries with flags ---
+app.get('/api/countries', (req, res) => {
+  res.json([
+    { code: 'KE', name: 'Kenya', flag: '🇰🇪' },
+    { code: 'NG', name: 'Nigeria', flag: '🇳🇬' },
+    { code: 'ZA', name: 'South Africa', flag: '🇿🇦' },
+    { code: 'GH', name: 'Ghana', flag: '🇬🇭' },
+    { code: 'TZ', name: 'Tanzania', flag: '🇹🇿' },
+    { code: 'UG', name: 'Uganda', flag: '🇺🇬' },
+    { code: 'RW', name: 'Rwanda', flag: '🇷🇼' },
+    { code: 'ET', name: 'Ethiopia', flag: '🇪🇹' },
+    { code: 'EG', name: 'Egypt', flag: '🇪🇬' },
+    { code: 'MA', name: 'Morocco', flag: '🇲🇦' },
+    { code: 'SN', name: 'Senegal', flag: '🇸🇳' },
+    { code: 'CI', name: "Côte d'Ivoire", flag: '🇨🇮' },
+    { code: 'CM', name: 'Cameroon', flag: '🇨🇲' },
+    { code: 'CD', name: 'DR Congo', flag: '🇨🇩' },
+    { code: 'ZM', name: 'Zambia', flag: '🇿🇲' },
+    { code: 'ZW', name: 'Zimbabwe', flag: '🇿🇼' },
+    { code: 'BW', name: 'Botswana', flag: '🇧🇼' },
+    { code: 'MU', name: 'Mauritius', flag: '🇲🇺' },
+    { code: 'US', name: 'United States', flag: '🇺🇸' },
+    { code: 'GB', name: 'United Kingdom', flag: '🇬🇧' },
+    { code: 'CA', name: 'Canada', flag: '🇨🇦' },
+    { code: 'IN', name: 'India', flag: '🇮🇳' },
+    { code: 'AE', name: 'United Arab Emirates', flag: '🇦🇪' },
+    { code: 'DE', name: 'Germany', flag: '🇩🇪' },
+    { code: 'FR', name: 'France', flag: '🇫🇷' },
+    { code: 'AU', name: 'Australia', flag: '🇦🇺' },
+    { code: 'CN', name: 'China', flag: '🇨🇳' },
+    { code: 'JP', name: 'Japan', flag: '🇯🇵' },
+    { code: 'SA', name: 'Saudi Arabia', flag: '🇸🇦' },
+    { code: 'BR', name: 'Brazil', flag: '🇧🇷' },
+  ]);
+});
+
 // --- Market Status ---
 app.get('/api/market/status', async (req, res) => {
   res.json({

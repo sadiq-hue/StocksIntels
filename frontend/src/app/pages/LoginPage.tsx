@@ -121,6 +121,14 @@ export function LoginPage() {
   const [countdown, setCountdown] = useState(0);
   const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 });
   const [country, setCountry] = useState("");
+  const [countries, setCountries] = useState<{ code: string; name: string; flag: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/countries")
+      .then(r => r.json())
+      .then((data: { code: string; name: string; flag: string }[]) => setCountries(data))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => setMousePos({ x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight });
@@ -492,6 +500,23 @@ export function LoginPage() {
                           </div>
                         </div>
                         <div className="space-y-1.5">
+                          <label className="text-gray-700 text-sm font-semibold block ml-1">Country</label>
+                          <div className="relative">
+                            <select value={country} onChange={(e) => setCountry(e.target.value)}
+                              className={cn(inputClasses("country"), "h-10 appearance-none cursor-pointer pl-11")}>
+                              <option value="">Select your country</option>
+                              {countries.map((c) => (
+                                <option key={c.code} value={c.name}>{c.flag} {c.name}</option>
+                              ))}
+                            </select>
+                            {country && countries.find(c => c.name === country) && (
+                              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg pointer-events-none">
+                                {countries.find(c => c.name === country)?.flag}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
                           <label className="text-gray-700 text-sm font-semibold block ml-1">Password</label>
                           <div className="relative">
                             <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0D7490]" : "text-gray-400"}`} />
@@ -531,36 +556,6 @@ export function LoginPage() {
                           {confirmPassword && password !== confirmPassword && (
                             <p className="text-xs text-red-500 mt-0.5">Passwords do not match</p>
                           )}
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-gray-700 text-sm font-semibold block ml-1">Country</label>
-                          <div className="relative">
-                            <select value={country} onChange={(e) => setCountry(e.target.value)}
-                              className={cn(inputClasses("country"), "h-10 appearance-none cursor-pointer")}>
-                              <option value="">Select your country</option>
-                              <option value="Kenya">Kenya</option>
-                              <option value="Nigeria">Nigeria</option>
-                              <option value="South Africa">South Africa</option>
-                              <option value="Ghana">Ghana</option>
-                              <option value="Tanzania">Tanzania</option>
-                              <option value="Uganda">Uganda</option>
-                              <option value="Rwanda">Rwanda</option>
-                              <option value="Ethiopia">Ethiopia</option>
-                              <option value="Egypt">Egypt</option>
-                              <option value="Morocco">Morocco</option>
-                              <option value="United States">United States</option>
-                              <option value="United Kingdom">United Kingdom</option>
-                              <option value="Canada">Canada</option>
-                              <option value="India">India</option>
-                              <option value="United Arab Emirates">United Arab Emirates</option>
-                              <option value="Germany">Germany</option>
-                              <option value="France">France</option>
-                              <option value="Australia">Australia</option>
-                              <option value="China">China</option>
-                              <option value="Japan">Japan</option>
-                              <option value="Other">Other</option>
-                            </select>
-                          </div>
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => { setRegStage("form"); setVerifyCode(""); setError(null); }}
