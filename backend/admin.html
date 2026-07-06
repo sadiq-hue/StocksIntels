@@ -909,7 +909,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
     </div>
 
     <!-- Tab: Stocks -->
-    <div id="tab-stocks" class="flex-1 hidden overflow-hidden flex-col">
+    <div id="tab-stocks" class="flex-1 hidden flex-col" style="min-height:0">
       <div class="admin-header flex items-center justify-between shrink-0">
         <h1 class="text-lg font-bold text-gray-900">Stocks</h1>
         <div class="flex items-center gap-3">
@@ -917,7 +917,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
           <span id="stockTotalLabel" class="text-sm text-gray-500"></span>
         </div>
       </div>
-      <div class="flex-1 min-h-0 scroll p-6">
+      <div class="flex-1 p-6" style="overflow-y:auto;min-height:0">
         <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
           <table class="w-full">
             <thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th>Market</th><th>Currency</th><th>Active</th><th></th></tr></thead>
