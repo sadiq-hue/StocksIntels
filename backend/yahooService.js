@@ -1,14 +1,7 @@
-const axios = require('axios');
 const Bottleneck = require('bottleneck');
-const { HttpsProxyAgent } = require('https-proxy-agent');
-const { SocksProxyAgent } = require('socks-proxy-agent');
+const proxyService = require('./proxyService');
 
 const YAHOO_HOSTS = ['query1', 'query2', 'query3', 'query4', 'query5'];
-const CORS_PROXIES = [
-  'https://api.allorigins.win/raw?url=',
-  'https://api.codetabs.com/v1/proxy?quest=',
-  'https://api.allorigins.win/get?url=',
-];
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
 
 const CACHE_TTL = {
@@ -16,18 +9,47 @@ const CACHE_TTL = {
   historical: 60 * 60 * 1000,
 };
 
+const useRedis = process.env.REDIS_URL && process.env.REDIS_CACHE_ENABLED === 'true';
+let redisClient = null;
+let redisSet, redisGet;
+
+if (useRedis) {
+  try {
+    const { createClient } = require('redis');
+    redisClient = createClient({ url: process.env.REDIS_URL });
+    redisClient.on('error', () => {});
+    redisClient.connect().catch(() => {});
+    redisSet = async (key, data, ttl) => {
+      try { await redisClient.set(key, JSON.stringify(data), { EX: Math.ceil(ttl / 1000) }); } catch {}
+    };
+    redisGet = async (key) => {
+      try {
+        const val = await redisClient.get(key);
+        return val ? JSON.parse(val) : null;
+      } catch { return null; }
+    };
+  } catch { /* redis unavailable, fall back to in-memory */ }
+}
+
 const quoteCache = new Map();
 const histCache = new Map();
 
-function cacheGet(map, key, ttl) {
+async function cacheGet(map, key, ttl, redisKey) {
+  if (redisKey && redisGet) {
+    const val = await redisGet(redisKey);
+    if (val) return val;
+  }
   const hit = map.get(key);
   if (hit && Date.now() - hit.ts < ttl) return hit.data;
   if (hit) map.delete(key);
   return null;
 }
 
-function cacheSet(map, key, data) {
+function cacheSet(map, key, data, ttl, redisKey) {
   map.set(key, { data, ts: Date.now() });
+  if (redisKey && redisSet) {
+    redisSet(redisKey, data, ttl).catch(() => {});
+  }
   return data;
 }
 
@@ -62,8 +84,6 @@ const breakers = {
   v8: new CircuitBreaker('v8', 5, 120000),
   yf2: new CircuitBreaker('yf2', 3, 300000),
   rapidapi: new CircuitBreaker('rapidapi', 5, 120000),
-  proxy: new CircuitBreaker('proxy', 5, 120000),
-  cors: new CircuitBreaker('cors', 3, 300000),
   google: new CircuitBreaker('google', 3, 300000),
 };
 
@@ -71,8 +91,6 @@ const limiters = {
   v8: new Bottleneck({ maxConcurrent: 5, minTime: 150 }),
   yf2: new Bottleneck({ maxConcurrent: 3, minTime: 500 }),
   rapidapi: new Bottleneck({ maxConcurrent: 1, minTime: 600 }),
-  proxy: new Bottleneck({ maxConcurrent: 3, minTime: 1000 }),
-  cors: new Bottleneck({ maxConcurrent: 2, minTime: 2000 }),
 };
 
 function pickHost() {
@@ -119,18 +137,18 @@ async function fetchV8Quote(symbol) {
   const host = pickHost();
   const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
   try {
-    const resp = await limiters.v8.schedule(() =>
-      axios.get(url, { headers: { 'User-Agent': UA }, timeout: 8000 })
+    const { data } = await limiters.v8.schedule(() =>
+      proxyService.fetchWithProxyFallback(url)
     );
-    const meta = resp?.data?.chart?.result?.[0]?.meta;
+    const meta = data?.chart?.result?.[0]?.meta;
     if (!meta || (!meta.regularMarketPrice && !meta.previousClose && !meta.chartPreviousClose)) {
       breakers.v8.recordFailure();
       return null;
     }
     breakers.v8.recordSuccess();
     return formatQuote(meta, symbol, 'yahoo-v8');
-  } catch (err) {
-    if (err?.response?.status !== 404) breakers.v8.recordFailure();
+  } catch {
+    breakers.v8.recordFailure();
     return null;
   }
 }
@@ -178,7 +196,7 @@ async function fetchRapidapiQuote(symbol) {
     for (const ep of endpoints) {
       try {
         const resp = await limiters.rapidapi.schedule(() =>
-          axios.get(`https://${host}${ep.path}`, {
+          require('axios').get(`https://${host}${ep.path}`, {
             params: ep.params(sym),
             headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
             timeout: 8000,
@@ -203,7 +221,7 @@ async function fetchGoogleFinanceQuote(symbol) {
   const cheerio = require('cheerio');
   const clean = symbol.replace('.NR', '').replace('=X', '');
   try {
-    const resp = await axios.get(`https://www.google.com/finance/quote/${clean}`, {
+    const resp = await require('axios').get(`https://www.google.com/finance/quote/${clean}`, {
       headers: { 'User-Agent': UA },
       timeout: 5000,
     });
@@ -230,10 +248,10 @@ async function fetchV8Historical(symbol, range, interval) {
   const host = pickHost();
   const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}`;
   try {
-    const resp = await limiters.v8.schedule(() =>
-      axios.get(url, { headers: { 'User-Agent': UA }, timeout: 10000 })
+    const { data } = await limiters.v8.schedule(() =>
+      proxyService.fetchWithProxyFallback(url)
     );
-    return parseChartBars(resp?.data);
+    return parseChartBars(data);
   } catch {
     return null;
   }
@@ -255,7 +273,7 @@ async function fetchRapidapiHistorical(symbol, range, interval) {
   for (const ep of endpoints) {
     try {
       const resp = await limiters.rapidapi.schedule(() =>
-        axios.get(`https://${host}${ep.path}`, {
+        require('axios').get(`https://${host}${ep.path}`, {
           params: ep.params,
           headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
           timeout: 10000,
@@ -289,66 +307,22 @@ function parseChartBars(data) {
   return bars.length > 0 ? bars : null;
 }
 
-async function fetchViaCorsProxy(url) {
-  if (breakers.cors.isOpen()) return null;
-  for (const proxy of CORS_PROXIES) {
-    try {
-      const resp = await limiters.cors.schedule(() =>
-        axios.get(proxy + encodeURIComponent(url), {
-          timeout: 8000,
-          headers: { 'User-Agent': UA, 'Accept': 'application/json' },
-        })
-      );
-      breakers.cors.recordSuccess();
-      return resp.data;
-    } catch {}
-  }
-  breakers.cors.recordFailure();
-  return null;
-}
-
-async function fetchViaProxyPool(url, params) {
-  if (breakers.proxy.isOpen()) return null;
-  // Lazy-require proxyService to avoid circular dependency
-  const proxyService = require('./proxyService');
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const proxy = proxyService.getRandomProxy();
-    if (!proxy) break;
-    const agent = proxy.type === 'socks' || proxy.type === 'socks5'
-      ? new SocksProxyAgent(`socks5://${proxy.host}:${proxy.port}`)
-      : new HttpsProxyAgent(`http://${proxy.host}:${proxy.port}`);
-    try {
-      const resp = await limiters.proxy.schedule(() =>
-        axios.get(url, {
-          params,
-          httpsAgent: agent,
-          timeout: 8000,
-          headers: { 'User-Agent': UA, 'Accept': 'application/json' },
-        })
-      );
-      breakers.proxy.recordSuccess();
-      return resp.data;
-    } catch {}
-  }
-  breakers.proxy.recordFailure();
-  return null;
-}
-
 async function fetchQuote(symbol) {
   if (!symbol) return null;
   const cacheKey = symbol.toUpperCase();
-  const cached = cacheGet(quoteCache, cacheKey, CACHE_TTL.quote);
+  const redisKey = useRedis ? `yahoo:quote:${cacheKey}` : null;
+  const cached = await cacheGet(quoteCache, cacheKey, CACHE_TTL.quote, redisKey);
   if (cached) return cached;
 
   const yahooSymbol = toYahooSymbol(symbol);
   let quote = await fetchV8Quote(yahooSymbol);
-  if (quote) return cacheSet(quoteCache, cacheKey, quote);
+  if (quote) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
 
   quote = await fetchYf2Quote(yahooSymbol);
-  if (quote) return cacheSet(quoteCache, cacheKey, quote);
+  if (quote) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
 
   quote = await fetchRapidapiQuote(yahooSymbol);
-  if (quote) return cacheSet(quoteCache, cacheKey, quote);
+  if (quote) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
 
   if (symbol.startsWith('NSE:')) return null;
 
@@ -371,7 +345,7 @@ async function fetchQuote(symbol) {
       lastUpdated: new Date().toISOString(),
       exchange: 'Global',
       provider: 'google',
-    });
+    }, CACHE_TTL.quote, redisKey);
   }
 
   return null;
@@ -392,55 +366,51 @@ async function fetchQuotes(symbols) {
 
 async function fetchHistorical(symbol, range = '6mo', interval = '1d') {
   const cacheKey = `${symbol}|${range}|${interval}`;
-  const cached = cacheGet(histCache, cacheKey, CACHE_TTL.historical);
+  const redisKey = useRedis ? `yahoo:hist:${symbol}:${range}:${interval}` : null;
+  const cached = await cacheGet(histCache, cacheKey, CACHE_TTL.historical, redisKey);
   if (cached) return cached;
 
   const yahooSymbol = toYahooSymbol(symbol);
   let bars = await fetchV8Historical(yahooSymbol, range, interval);
-  if (bars) return cacheSet(histCache, cacheKey, bars);
+  if (bars) return cacheSet(histCache, cacheKey, bars, CACHE_TTL.historical, redisKey);
 
   bars = await fetchRapidapiHistorical(yahooSymbol, range, interval);
-  if (bars) return cacheSet(histCache, cacheKey, bars);
+  if (bars) return cacheSet(histCache, cacheKey, bars, CACHE_TTL.historical, redisKey);
 
   return null;
 }
 
 async function fetchQuoteSummary(symbol, modules) {
   const yahooSymbol = toYahooSymbol(symbol);
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooSymbol)}`;
+  const host = pickHost();
+  const url = `https://${host}.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(yahooSymbol)}`;
   const params = { modules: modules.join(',') };
 
-  // Try proxy pool first (v10 often blocked from cloud IPs)
-  const proxyData = await fetchViaProxyPool(url, params);
-  if (proxyData?.quoteSummary?.result?.[0]?.financialData?.marketCap) {
+  // Try proxy-first (v10 aggressively blocks cloud IPs)
+  const { data: proxyData } = await proxyService.fetchWithProxyFallback(url, params);
+  if (proxyData?.quoteSummary?.result?.[0]) {
     return normalizeYahooResponse(proxyData.quoteSummary.result[0]);
   }
 
-  // Try CORS relay
-  const corsData = await fetchViaCorsProxy(url + '?' + new URLSearchParams(params).toString());
-  if (corsData?.quoteSummary?.result?.[0]?.financialData?.marketCap) {
-    return normalizeYahooResponse(corsData.quoteSummary.result[0]);
+  // Try yahoo-finance2 as fallback
+  if (!breakers.yf2.isOpen()) {
+    try {
+      const { default: YahooFinance } = await import('yahoo-finance2');
+      const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+      const qs = await yf.quoteSummary(yahooSymbol, { modules });
+      if (qs) return normalizeYahooResponse(qs);
+    } catch {}
   }
-
-  // Try yahoo-finance2 as last resort
-  try {
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-    const qs = await yf.quoteSummary(yahooSymbol, { modules });
-    if (qs?.financialData?.marketCap) {
-      return normalizeYahooResponse(qs);
-    }
-  } catch {}
 
   // Try RapidAPI
   const key = process.env.RAPIDAPI_KEY;
-  let host = (process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com').trim();
-  host = host.replace(/^https?:\/\//, '');
-  if (key && host) {
+  let rapidHost = (process.env.RAPIDAPI_HOST || 'yahoo-finance15.p.rapidapi.com').trim();
+  rapidHost = rapidHost.replace(/^https?:\/\//, '');
+  if (key && rapidHost) {
     try {
-      const resp = await axios.get(`https://${host}/api/v1/markets/stock/modules`, {
+      const resp = await require('axios').get(`https://${rapidHost}/api/v1/markets/stock/modules`, {
         params: { symbol: yahooSymbol, module: modules.join(',') },
-        headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': host },
+        headers: { 'X-RapidAPI-Key': key, 'X-RapidAPI-Host': rapidHost },
         timeout: 10000,
       });
       if (resp.data?.financialData?.marketCap) return resp.data;
@@ -462,33 +432,15 @@ function normalizeYahooResponse(data) {
 
 async function fetchPriceViaProxy(symbol) {
   const yahooSymbol = toYahooSymbol(symbol);
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}`;
+  const host = pickHost();
+  const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}`;
   const params = { interval: '1d', range: '1d', includePreMarket: 'true' };
 
-  // Try proxy pool
-  const proxyData = await fetchViaProxyPool(url, params);
-  if (proxyData) {
-    const result = parsePriceProxyResult(proxyData, symbol);
+  const { data } = await proxyService.fetchWithProxyFallback(url, params);
+  if (data) {
+    const result = parsePriceProxyResult(data, symbol);
     if (result) return result;
   }
-
-  // Try CORS relay
-  const corsData = await fetchViaCorsProxy(url + '?' + new URLSearchParams(params).toString());
-  if (corsData) {
-    const result = parsePriceProxyResult(corsData, symbol);
-    if (result) return result;
-  }
-
-  // Try direct (may work from some regions)
-  try {
-    const resp = await axios.get(url, {
-      params,
-      timeout: 5000,
-      headers: { 'User-Agent': UA },
-    });
-    const result = parsePriceProxyResult(resp.data, symbol);
-    if (result) return result;
-  } catch {}
 
   return null;
 }

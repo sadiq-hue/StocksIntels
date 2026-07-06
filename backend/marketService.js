@@ -5,6 +5,10 @@ const yahooService = require('./yahooService');
 const mystocks = require('./mystocksScraper');
 setTimeout(() => mystocks.startAutoRefresh(), 1000);
 
+// NSE volume data from afx.kwayisi.org
+const nseAfx = require('./nseAfxScraper');
+setTimeout(() => nseAfx.fetchNseQuotes().catch(() => {}), 2000);
+
 const quoteCache = new Map();
 const MAX_QUOTE_AGE_MS = 5 * 60 * 1000;
 
@@ -346,6 +350,15 @@ function getCompanyName(symbol) {
   return names[ticker] || KENYAN_STOCKS[ticker] || ticker;
 }
 
+async function enrichVolumeFromAfx(quote, symbol) {
+  if (!quote || !symbol.startsWith('NSE:')) return;
+  try {
+    await nseAfx.fetchNseQuotes();
+    const afx = nseAfx.getQuoteForSymbol(symbol);
+    if (afx && afx.volume) quote.volume = afx.volume;
+  } catch {}
+}
+
 async function getStockQuote(symbol) {
   if (!symbol) return null;
 
@@ -373,6 +386,7 @@ async function getStockQuote(symbol) {
         lastUpdated: new Date().toISOString(),
         provider: 'mystocks',
       };
+      await enrichVolumeFromAfx(quote, symbol);
     }
   }
 
@@ -411,6 +425,7 @@ async function fetchQuoteForSymbol(s) {
         lastUpdated: new Date().toISOString(),
         provider: 'mystocks',
       };
+      await enrichVolumeFromAfx(quote, s);
     }
   }
 

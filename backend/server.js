@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const pool = require('./db'); // Assuming db.js exports a PG pool
+const { authenticateToken } = require('./auth');
 
 const app = express();
 app.use(cors());
@@ -34,7 +35,7 @@ app.get('/api/groups', async (req, res) => {
 });
 
 // Fetch user directory (People Page)
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query('SELECT id, full_name, role, trader_type, is_verified FROM users');
     res.json(result.rows);

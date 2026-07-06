@@ -34,6 +34,20 @@ CREATE INDEX IF NOT EXISTS idx_financial_statements_stock_id ON financial_statem
 CREATE INDEX IF NOT EXISTS idx_financial_statements_status ON financial_statements(status);
 CREATE INDEX IF NOT EXISTS idx_financial_statements_uploaded_at ON financial_statements(uploaded_at DESC);
 
+-- Stock fundamentals table (stores extracted metrics from PDFs)
+CREATE TABLE IF NOT EXISTS stock_fundamentals (
+  symbol VARCHAR(20) PRIMARY KEY,
+  pe_ratio NUMERIC(10,4),
+  pb_ratio NUMERIC(10,4),
+  market_cap NUMERIC(20,4),
+  dividend_yield NUMERIC(10,4),
+  roe NUMERIC(10,4),
+  revenue_growth NUMERIC(10,4),
+  eps_growth NUMERIC(10,4),
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Seed NSE stocks if not already present
 INSERT INTO stocks (ticker, name, sector, market, currency, is_active) VALUES
   ('SCOM', 'Safaricom PLC', 'Telecommunications', 'NSE', 'KES', true),

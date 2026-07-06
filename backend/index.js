@@ -211,7 +211,6 @@ app.post('/api/admin/send-otp', async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'admin_login']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'admin_login', expiresAt]);
-    console.log(`[OTP] Admin login code for ${email}: ${code}`);
     await sendOtpEmail(email, code).catch(e => console.error('[MAILER] admin send-otp failed:', e.message));
     await logAdminAction(user.rows[0].id, email, 'otp_sent', ip, ua, null, true);
     res.json({ message: 'OTP sent to email', expiresIn: 600 });
@@ -812,7 +811,6 @@ app.post('/api/admin/users/:id/reset-password', async (req, res) => {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'password_reset']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'password_reset', expiresAt]);
-    console.log(`[OTP] Admin password reset code for ${email}: ${code}`);
     await sendResetCode(email, code).catch(e => console.error('[MAILER] admin reset-password failed:', e.message));
     res.json({ message: 'Password reset email sent' });
   } catch (err) { console.error('Admin reset password error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
@@ -1359,7 +1357,7 @@ app.get('/api/admin/audit', async (req, res) => {
     const range = Math.min(12, Math.max(1, parseInt(req.query.range) || 6));
 
     // Compute date boundaries
-    let currentStart, prevStart, label;
+    let currentStart, prevStart, label, currentEnd;
     const now = new Date();
     if (period === 'month' && req.query.month && req.query.year) {
       const m = parseInt(req.query.month);
@@ -1974,7 +1972,6 @@ app.post('/api/auth/send-verification-code', async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'email_verify']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'email_verify', expiresAt]);
-    console.log(`[OTP] Email verification code for ${email}: ${code}`);
     await sendVerificationEmail(email, code).catch(e => console.error('[MAILER] send-verification-code failed:', e.message));
     res.json({ message: 'Verification code sent to email', expiresIn: 600 });
   } catch (error) {
@@ -2247,7 +2244,6 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'login']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'login', expiresAt]);
-    console.log(`[OTP] Login code for ${email}: ${code}`);
     // Send email in the background so the UI responds immediately even if the mailer is slow/fails
     sendOtpEmail(email, code).catch(e => console.error('[MAILER] send-otp failed:', e.message));
     res.json({ message: 'OTP sent to email', expiresIn: 600 });
@@ -2315,7 +2311,6 @@ app.post('/api/auth/login-request-otp', async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'login_password']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'login_password', expiresAt]);
-    console.log(`[OTP] Login code for ${email}: ${code}`);
     // Send email in the background so the UI responds immediately even if the mailer is slow/fails
     sendOtpEmail(email, code).catch(e => console.error('[MAILER] login-request-otp failed:', e.message));
     res.json({ message: 'OTP sent to email', expiresIn: 600 });
@@ -2465,7 +2460,6 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'password_reset']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'password_reset', expiresAt]);
-    console.log(`[OTP] Password reset code for ${email}: ${code}`);
     await sendResetCode(email, code).catch(e => console.error('[MAILER] forgot-password failed:', e.message));
     res.json({ message: 'Reset code sent to email', expiresIn: 900 });
   } catch (error) {
@@ -10506,6 +10500,21 @@ async function initDatabase() {
       console.warn('[initDatabase] restoreStateFromDb failed:', e.message);
     }
 
+    // ── NSE Financial Statements migration ──
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const migSql = fs.readFileSync(path.join(__dirname, 'db', 'migration_stock_statements.sql'), 'utf8');
+      await pool.query(migSql);
+      console.log('[Migration] NSE stock financial statements schema verified');
+      await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN dividend_yield TYPE numeric(12,4)`);
+      await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN roe TYPE numeric(12,4)`);
+      await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN revenue_growth TYPE numeric(12,4)`);
+      await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN eps_growth TYPE numeric(12,4)`);
+    } catch (migErr) {
+      console.error('[Migration] NSE financial statements migration error:', migErr.message);
+    }
+
     console.log('Database schema verified');
   } catch (err) {
     console.error('Database initialization failed:', err.message);
@@ -11372,6 +11381,10 @@ server.listen(port, '0.0.0.0', async () => {
 
       // Deferred warmFMPCache - don't await, fire and forget
       warmFMPCache(ALL_SYMBOLS).catch(() => {});
+
+      // Seed NSE stock fundamentals from static data into DB (background)
+      const nseFundamentals = require('./nseFundamentalsSeeder');
+      nseFundamentals.startAutoSeed();
     } catch (err) {
       console.warn('Redis unavailable - signal publisher disabled:', err.message);
       console.warn('Signal generation will happen on-demand via REST endpoints.');

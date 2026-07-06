@@ -48,6 +48,19 @@ METRIC_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(r"(?:profit|loss)\s+for\s+the\s+(?:period|year)[:\s]*([\d,.]+)", re.I),
         re.compile(r"total\s+comprehensive\s+income[:\s]*([\d,.]+)", re.I),
     ],
+    "cost_of_revenue": [
+        re.compile(r"(?:cost\s+of\s+)?(?:revenue|sales|goods\s+sold)[:\s]*([\d,.]+)", re.I),
+        re.compile(r"cost\s+of\s+sales[:\s]*([\d,.]+)", re.I),
+    ],
+    "operating_income": [
+        re.compile(r"operating\s+(?:income|profit)[:\s]*([\d,.]+)", re.I),
+        re.compile(r"(?:income|profit)\s+from\s+operations[:\s]*([\d,.]+)", re.I),
+    ],
+    "cash_from_operations": [
+        re.compile(r"(?:net\s+)?cash\s+(?:from|generated\s+by|provided\s+by)\s+operating\s+activities[:\s]*([\d,.]+)", re.I),
+        re.compile(r"(?:net\s+)?cash\s+(?:from|from\s+)?operations[:\s]*([\d,.]+)", re.I),
+        re.compile(r"operating\s+cash\s+flow[:\s]*([\d,.]+)", re.I),
+    ],
     "total_assets": [
         re.compile(r"(?:total\s+)?assets[:\s]*([\d,.]+)", re.I),
     ],
@@ -55,10 +68,24 @@ METRIC_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(r"(?:total\s+)?liabilities[:\s]*([\d,.]+)", re.I),
         re.compile(r"total\s+(?:equity\s+and\s+)?liabilities[:\s]*([\d,.]+)", re.I),
     ],
+    "total_debt": [
+        re.compile(r"(?:total\s+)?(?:debt|borrowings|loans\s+(?:and|&)\s+borrowings)[:\s]*([\d,.]+)", re.I),
+        re.compile(r"total\s+(?:non-current\s+)?(?:liabilities|debt)[:\s]*([\d,.]+)", re.I),
+    ],
+    "current_assets": [
+        re.compile(r"(?:total\s+)?current\s+assets[:\s]*([\d,.]+)", re.I),
+    ],
+    "current_liabilities": [
+        re.compile(r"(?:total\s+)?current\s+liabilities[:\s]*([\d,.]+)", re.I),
+    ],
     "shareholders_equity": [
         re.compile(r"(?:shareholders[''´`]?\s*)?equity[:\s]*([\d,.]+)", re.I),
         re.compile(r"(?:total\s+)?equity[:\s]*([\d,.]+)", re.I),
         re.compile(r"net\s+assets[:\s]*([\d,.]+)", re.I),
+    ],
+    "retained_earnings": [
+        re.compile(r"(?:retained\s+)?earnings[:\s]*([\d,.]+)", re.I),
+        re.compile(r"retained\s+(?:profit|earnings)[:\s]*([\d,.]+)", re.I),
     ],
     "eps": [
         re.compile(r"(?:earnings\s+per\s+share|eps)[:\s]*([\d,.]+)", re.I),
@@ -93,7 +120,7 @@ def extract_metrics(text: str) -> dict:
     return results
 
 
-KEY_METRICS = {"total_revenue", "net_income", "total_assets", "shareholders_equity"}
+KEY_METRICS = {"total_revenue", "net_income", "total_assets", "shareholders_equity", "operating_income", "cash_from_operations"}
 
 
 def count_key_metrics(metrics: dict) -> int:
@@ -106,9 +133,16 @@ Return ONLY a valid JSON object with these numeric fields (use null if not found
 {{
   "total_revenue": number | null,
   "net_income": number | null,
+  "cost_of_revenue": number | null,
+  "operating_income": number | null,
+  "cash_from_operations": number | null,
   "total_assets": number | null,
   "total_liabilities": number | null,
+  "total_debt": number | null,
+  "current_assets": number | null,
+  "current_liabilities": number | null,
   "shareholders_equity": number | null,
+  "retained_earnings": number | null,
   "eps": number | null,
   "dividend_per_share": number | null
 }}

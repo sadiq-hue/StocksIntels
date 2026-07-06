@@ -2,6 +2,7 @@ require('dotenv').config();
 const marketService = require('./marketService');
 const edgarService = require('./edgarService');
 const yahooFinanceScraper = require('./yahooFinanceFinancialsScraper');
+const { pool } = require('./db');
 
 const FINANCIALS_PROVIDER = process.env.FINANCIALS_PROVIDER || 'yahoo-finance';
 const CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -278,6 +279,112 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
   };
 }
 
+function toNum(v) { return v != null ? Number(v) : 0; }
+
+async function buildLocalNseReport(symbol) {
+  let ticker = symbol;
+  if (ticker.startsWith('NSE:')) ticker = ticker.slice(4);
+  try {
+    const stockResult = await pool.query(
+      'SELECT id, name, sector, currency FROM stocks WHERE UPPER(ticker) = $1 AND market = $2',
+      [ticker, 'NSE']
+    );
+    if (stockResult.rows.length === 0) return null;
+    const stock = stockResult.rows[0];
+
+    const fundResult = await pool.query('SELECT * FROM stock_fundamentals WHERE symbol = $1', [ticker]);
+    const fundamentals = fundResult.rows[0] || null;
+
+    const stmtResult = await pool.query(
+      `SELECT parsed_data, period_end_date FROM financial_statements
+       WHERE stock_id = $1 AND status = 'completed' AND parsed_data IS NOT NULL
+       ORDER BY period_end_date DESC NULLS LAST, uploaded_at DESC LIMIT 1`,
+      [stock.id]
+    );
+    const statement = stmtResult.rows[0] || null;
+    const parsed = statement?.parsed_data || null;
+
+    if (!fundamentals && !parsed) return null;
+
+    const now = new Date().toISOString();
+    const periodDate = statement?.period_end_date || now;
+
+    const incItem = parsed ? {
+      date: periodDate, revenue: parsed.total_revenue, netIncome: parsed.net_income,
+      grossProfit: parsed.total_revenue != null && parsed.cost_of_revenue != null ? parsed.total_revenue - parsed.cost_of_revenue : null,
+      ebitda: null, eps: parsed.eps,
+      costOfRevenue: parsed.cost_of_revenue, operatingExpenses: null,
+      operatingIncome: parsed.operating_income,
+    } : null;
+
+    const balItem = parsed ? {
+      date: periodDate, totalAssets: parsed.total_assets, totalLiabilities: parsed.total_liabilities,
+      totalEquity: parsed.shareholders_equity, cashAndCashEquivalents: null,
+      longTermDebt: null, totalDebt: parsed.total_debt,
+      totalCurrentAssets: parsed.current_assets, totalCurrentLiabilities: parsed.current_liabilities,
+      totalStockholdersEquity: parsed.shareholders_equity, retainedEarnings: parsed.retained_earnings,
+    } : null;
+
+    const cfItem = parsed?.cash_from_operations != null ? {
+      date: periodDate, operatingCashFlow: parsed.cash_from_operations,
+      freeCashFlow: null, capitalExpenditure: null, dividendsPaid: null, netChangeInCash: null,
+    } : null;
+
+    const f = fundamentals ? { market_cap: toNum(fundamentals.market_cap), pe_ratio: toNum(fundamentals.pe_ratio), pb_ratio: toNum(fundamentals.pb_ratio), dividend_yield: toNum(fundamentals.dividend_yield), roe: toNum(fundamentals.roe), revenue_growth: toNum(fundamentals.revenue_growth), eps_growth: toNum(fundamentals.eps_growth) } : null;
+
+    const sharesOut = parsed?.eps > 0 && parsed?.net_income > 0 ? Math.round(parsed.net_income / parsed.eps) : 0;
+
+    const divYield = f?.dividend_yield || parsed?.dividend_per_share || 0;
+    const mc = f?.market_cap || 0;
+    const totalDebt = parsed?.total_debt || 0;
+    const equity = parsed?.shareholders_equity || 0;
+    const curAssets = parsed?.current_assets || 0;
+    const curLiabs = parsed?.current_liabilities || 0;
+
+    const kmItem = {
+      date: periodDate, marketCap: mc,
+      peRatio: f?.pe_ratio || 0, pbRatio: f?.pb_ratio || 0,
+      dividendYield: divYield, dividendYieldPercentage: divYield * 100,
+      roe: f?.roe || (parsed?.net_income && equity ? parsed.net_income / equity : 0),
+      revenueGrowth: f?.revenue_growth || 0,
+      epsGrowth: f?.eps_growth || parsed?.eps || 0, sharesOutstanding: sharesOut,
+      earningsYield: f?.pe_ratio > 0 ? 1 / f.pe_ratio : 0,
+      revenuePerShare: sharesOut > 0 && parsed?.total_revenue ? parsed.total_revenue / sharesOut : 0,
+      netIncomePerShare: parsed?.eps || 0,
+      priceToSalesRatio: mc > 0 && parsed?.total_revenue ? mc / parsed.total_revenue : 0,
+      debtToEquity: totalDebt > 0 && equity > 0 ? totalDebt / equity : 0,
+      currentRatio: curAssets > 0 && curLiabs > 0 ? curAssets / curLiabs : 0,
+    };
+
+    const quote = await getQuote(symbol).catch(() => null);
+
+    return {
+      success: true, symbol: ticker, source: 'nse-upload',
+      availableProviders: ['yahoo-finance'], lastUpdated: now,
+      data: {
+        profile: { symbol: ticker, companyName: stock.name, industry: stock.sector || 'N/A',
+          sector: stock.sector || 'N/A', country: 'Kenya', website: '', description: '',
+          ceo: 'N/A', employees: 0, marketCap: quote?.marketCap || mc,
+          exchange: 'NSE', currency: stock.currency || 'KES', isEtf: false, image: '', lastUpdated: now },
+        quote: quote || { symbol: ticker, price: 0, change: 0, changesPercentage: 0,
+          dayLow: 0, dayHigh: 0, yearLow: 0, yearHigh: 0, avgVolume: 0, open: 0,
+          marketCap: mc, volume: 0, previousClose: 0, sharesOutstanding: sharesOut,
+          eps: parsed?.eps || 0, pe: f?.pe_ratio || 0, lastUpdated: now },
+        incomeStatement: incItem, incomeStatementHistory: incItem ? [incItem] : [],
+        balanceSheet: balItem, balanceSheetHistory: balItem ? [balItem] : [],
+        cashFlowStatement: cfItem, cashFlowStatementHistory: cfItem ? [cfItem] : [],
+        keyMetrics: kmItem, keyMetricsHistory: [kmItem],
+        dividendHistory: parsed?.dividend_per_share
+          ? [{ date: periodDate, dividend: parsed.dividend_per_share, adjDividend: parsed.dividend_per_share }] : [],
+        filings: [],
+      }
+    };
+  } catch (err) {
+    console.error(`[FinancialReports] NSE local fallback error for ${symbol}:`, err.message);
+    return null;
+  }
+}
+
 async function getFinancialReport(symbol, period = 'annual', limit = 4, providerOverride = null) {
   try {
     const isUs = edgarService.isUsStock(symbol);
@@ -356,6 +463,8 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
         console.log(`[FinancialReports] Yahoo Finance empty for ${symbol}; trying SEC EDGAR fallback`);
         return buildEdgarReport(symbol, period, limit, availableProviders);
       }
+      const nseLocal = await buildLocalNseReport(symbol);
+      if (nseLocal) return nseLocal;
       return { success: false, symbol, source: 'yahoo-finance', error: `Yahoo Finance returned no data for ${symbol}` };
     }
 
@@ -364,6 +473,8 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
       return buildEdgarReport(symbol, period, limit, availableProviders);
     }
 
+    const nseLocal = await buildLocalNseReport(symbol);
+    if (nseLocal) return nseLocal;
     return { success: false, symbol, error: `No provider available for ${symbol}` };
   } catch (error) {
     console.error(`Error generating financial report for ${symbol}:`, error.message);
