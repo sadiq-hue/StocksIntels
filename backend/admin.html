@@ -1429,6 +1429,9 @@ function switchTab(tab) {
   document.getElementById('tab-' + tab).classList.remove('hidden');
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.querySelector(`.nav-item[data-tab="${tab}"]`).classList.add('active');
+  // Update URL without reloading
+  const url = tab === 'dashboard' ? '/admin' : '/admin/' + tab;
+  history.replaceState({ tab }, '', url);
   showTabLoading();
   // Auto-hide loading bar after 2.5s fallback
   if (window._tabLoadingTimer) clearTimeout(window._tabLoadingTimer);
@@ -3777,10 +3780,12 @@ async function handleVerifyOtp() {
     updateGreeting();
     applyRoleVisibility();
     toast('Welcome back, ' + (data.user.full_name || 'Admin'), 'success');
-    switchTab('dashboard');
+    // Restore tab from URL path
+    const pathTab = location.pathname.replace('/admin/', '') || 'dashboard';
+    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','audit','settings'];
+    switchTab(validTabs.includes(pathTab) ? pathTab : 'dashboard');
     initSocket();
-    await fetchDashboard();
-    setInterval(function(){ updateGreeting(); fetchDashboard(); }, 30000);
+    setInterval(function(){ updateGreeting(); }, 30000);
     setInterval(fetchActiveChats, 15000);
     setInterval(fetchSignalOutcomes, 30000);
     setInterval(fetchSignalStats, 30000);
@@ -3947,8 +3952,12 @@ async function fetchUserActivity(page) {
     updateGreeting();
     applyRoleVisibility();
     initSocket();
-    fetchDashboard();
-    setInterval(function(){ updateGreeting(); fetchDashboard(); }, 30000);
+    // Restore tab from URL path
+    const pathTab = location.pathname.replace('/admin/', '') || 'dashboard';
+    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','audit','settings'];
+    const initialTab = validTabs.includes(pathTab) ? pathTab : 'dashboard';
+    switchTab(initialTab);
+    setInterval(function(){ updateGreeting(); }, 30000);
     setInterval(fetchActiveChats, 15000);
     setInterval(fetchSignalOutcomes, 30000);
     setInterval(fetchSignalStats, 30000);
