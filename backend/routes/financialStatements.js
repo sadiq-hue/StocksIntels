@@ -120,13 +120,6 @@ router.delete('/nse-stocks/:id', async (req, res) => {
 
 router.get('/financial-statements', async (req, res) => {
   try {
-    // Check if financial_statements table exists; if not, return empty
-    const tableCheck = await pool.query(
-      `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'financial_statements') as exists`
-    );
-    if (!tableCheck.rows[0].exists) {
-      return res.json({ statements: [], total: 0, page: 1, limit: 50 });
-    }
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
     const stockId = req.query.stock_id ? parseInt(req.query.stock_id) : null;
@@ -151,7 +144,11 @@ router.get('/financial-statements', async (req, res) => {
     res.json({ statements: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
   } catch (err) {
     console.error('Financial statements error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch financial statements' });
+    // If table doesn't exist yet, return empty
+    if (err.message && err.message.includes('relation') && err.message.includes('does not exist')) {
+      return res.json({ statements: [], total: 0, page: 1, limit: 50 });
+    }
+    res.status(500).json({ error: err.message || 'Failed to fetch financial statements' });
   }
 });
 
