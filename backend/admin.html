@@ -3785,7 +3785,7 @@ async function handleVerifyOtp() {
     const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','audit','settings'];
     switchTab(validTabs.includes(pathTab) ? pathTab : 'dashboard');
     initSocket();
-    setInterval(function(){ updateGreeting(); }, 30000);
+    setInterval(function(){ updateGreeting(); fetchDashboard(); }, 30000);
     setInterval(fetchActiveChats, 15000);
     setInterval(fetchSignalOutcomes, 30000);
     setInterval(fetchSignalStats, 30000);
@@ -3957,7 +3957,7 @@ async function fetchUserActivity(page) {
     const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','audit','settings'];
     const initialTab = validTabs.includes(pathTab) ? pathTab : 'dashboard';
     switchTab(initialTab);
-    setInterval(function(){ updateGreeting(); }, 30000);
+    setInterval(function(){ updateGreeting(); fetchDashboard(); }, 30000);
     setInterval(fetchActiveChats, 15000);
     setInterval(fetchSignalOutcomes, 30000);
     setInterval(fetchSignalStats, 30000);
