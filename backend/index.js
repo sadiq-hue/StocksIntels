@@ -10565,6 +10565,11 @@ async function initDatabase() {
       console.warn('[Migration] Schema check warning:', schemaErr.message);
     }
 
+    // Reset any stuck 'processing' or 'pending' statements
+    try {
+      await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = 'Server restarted while processing' WHERE status IN ('processing','pending')`);
+    } catch {}<｜｜DSML｜｜parameter name="is_active" string="false">true
+
     console.log('Database schema verified');
   } catch (err) {
     console.error('Database initialization failed:', err.message);

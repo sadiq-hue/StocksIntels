@@ -189,8 +189,10 @@ def send_webhook(url: str, data: dict) -> None:
     try:
         urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT)
         print(f"WEBHOOK:Sent to {url}", flush=True)
+        return True
     except Exception as e:
         print(f"WARNING:Webhook failed: {e}", flush=True)
+        return False
 
 
 def main():
@@ -206,12 +208,12 @@ def main():
 
     text = extract_text_from_pdf(args.path)
     if not text.strip():
-        send_webhook(args.webhook, {
+        ok = send_webhook(args.webhook, {
             "docId": args.docId,
             "status": "failed",
             "error": "No text could be extracted from PDF",
         })
-        sys.exit(0)
+        sys.exit(0 if ok else 1)
 
     metrics = extract_metrics(text)
     key_count = count_key_metrics(metrics)
@@ -236,7 +238,7 @@ def main():
     print(f"RESULT:{json.dumps(parsed_data)}", flush=True)
     print(f"PROCESSED_BY:{processed_by}", flush=True)
 
-    send_webhook(args.webhook, {
+    ok = send_webhook(args.webhook, {
         "docId": args.docId,
         "status": "completed",
         "parsedData": parsed_data,
@@ -244,6 +246,8 @@ def main():
     })
 
     print("DONE", flush=True)
+    if not ok:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

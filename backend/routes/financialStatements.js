@@ -309,17 +309,25 @@ router.post('/financial-statements/upload', (req, res) => {
         `UPDATE financial_statements SET status = 'processing', processed_by = $1 WHERE id = $2`,
         [process.env.OPENAI_API_KEY ? 'python+llm' : 'python', docId]
       );
-      const child = spawn(pythonPath, args, { stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000 });
+      const child = spawn(pythonPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
       let stdout = '';
       let stderr = '';
+      let timedOut = false;
+      const killTimer = setTimeout(() => {
+        timedOut = true;
+        child.kill();
+        pool.query(`UPDATE financial_statements SET status = 'failed', error_message = 'Parser timed out after 120s' WHERE id = $1 AND status = 'processing'`, [docId]).catch(() => {});
+      }, 120000);
       child.stdout.on('data', (d) => { stdout += d.toString(); });
       child.stderr.on('data', (d) => { stderr += d.toString(); });
       child.on('error', (e) => {
+        clearTimeout(killTimer);
         console.error(`Python spawn error for doc ${docId}:`, e.message);
         pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`, [e.message, docId]).catch(() => {});
       });
       child.on('close', (code) => {
-        if (code !== 0) {
+        clearTimeout(killTimer);
+        if (!timedOut && code !== 0) {
           console.error(`Python parser exited with code ${code} for doc ${docId}:`, stderr);
           if (code !== null) {
             pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`, [`Exit code ${code}: ${stderr.slice(0, 500)}`, docId]).catch(() => {});
