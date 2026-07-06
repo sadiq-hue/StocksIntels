@@ -48,20 +48,52 @@ function extractPdfText(buffer) {
   const latin1 = buffer.toString('latin1');
   const texts = [];
 
-  function extractFromString(s) {
-    const re = /\(([^)]*)\)/g;
+  function decodePdfString(s) {
+    // Handle escaped chars
+    return s.replace(/\\(.)/g, (m, c) => c === 'n' ? '\n' : c === 'r' ? '\r' : c === 't' ? '\t' : c);
+  }
+
+  function extractFromString(str) {
+    // Extract parenthesized strings: (text)
+    let re = /\(([^)]*)\)/g;
     let m;
-    while ((m = re.exec(s)) !== null) {
-      const t = m[1];
-      if (t.length > 2 && /[a-zA-Z]{2,}/.test(t)) {
-        texts.push(t.replace(/\\(.)/g, '$1'));
+    while ((m = re.exec(str)) !== null) {
+      const t = decodePdfString(m[1]);
+      if (t.length > 1 && /[a-zA-Z0-9]{2,}/.test(t)) {
+        texts.push(t);
+      }
+    }
+    // Extract hex strings: <hex>  (min 8 hex chars to avoid PDF artifact IDs)
+    re = /<([0-9a-fA-F]{8,})>/g;
+    while ((m = re.exec(str)) !== null) {
+      try {
+        const hex = m[1];
+        const t = Buffer.from(hex, 'hex').toString('latin1');
+        if (t.length > 3 && /[a-zA-Z0-9]{2,}/.test(t)) {
+          texts.push(t);
+        }
+      } catch (_) {}
+    }
+    // Extract text from TJ arrays: [(text) num (text)] TJ
+    re = /\[([^\]]*)\]\s*TJ/g;
+    while ((m = re.exec(str)) !== null) {
+      const inner = m[1];
+      const parts = [];
+      let pm;
+      let pr = /\(([^)]*)\)/g;
+      while ((pm = pr.exec(inner)) !== null) {
+        parts.push(decodePdfString(pm[1]));
+      }
+      if (parts.length > 0) {
+        texts.push(parts.join(''));
       }
     }
   }
 
   extractFromString(latin1);
 
-  const streamRe = /stream\r?\n(.+?)\r?\nendstream/gs;
+  // Find and decompress FlateDecode streams
+  const streamRe = /stream\r?\n(.+?)\r?\n?endstream/gs;
   let sm;
   while ((sm = streamRe.exec(latin1)) !== null) {
     try {
@@ -99,9 +131,10 @@ async function parsePdfBuffer(buffer, docId) {
         [JSON.stringify(parsedData), docId]
       );
     } else {
+      const preview = text.slice(0, 300).replace(/\0/g, '');
       await pool.query(
-        `UPDATE financial_statements SET status = 'completed', parsed_data = '{}'::jsonb, parsed_at = CURRENT_TIMESTAMP, processed_by = 'js' WHERE id = $1`,
-        [docId]
+        `UPDATE financial_statements SET status = 'completed', parsed_data = '{}'::jsonb, error_message = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = 'js' WHERE id = $2`,
+        ['No metrics matched. Extracted text preview: ' + preview, docId]
       );
     }
     if (parsedData.dividend_per_share || parsedData.eps) {
