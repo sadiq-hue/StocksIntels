@@ -201,19 +201,14 @@ router.post('/financial-statements/upload', (req, res) => {
         return res.status(404).json({ error: 'Stock not found' });
       }
       const fileBuffer = fs.readFileSync(req.file.path);
-      // Detect actual columns of financial_statements table to handle schema mismatch
+      // Detect column types for UUID casting
       let sidVal = stock_id;
       let uidVal = req.user?.id || null;
-      const insertCols = [];
-      const insertVals = [];
-      const insertIdx = { current: 0, next: function() { this.current++; return this.current; } };
       try {
-        const cols = await pool.query(
-          `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'financial_statements' AND column_name NOT IN ('id','parsed_data','raw_text','error_message','parsed_at') ORDER BY ordinal_position`
+        const colTypes = await pool.query(
+          `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'financial_statements' AND column_name IN ('stock_id','uploaded_by')`
         );
-        const colMap = {};
-        for (const row of cols.rows) {
-          colMap[row.column_name] = row.data_type;
+        for (const row of colTypes.rows) {
           if (row.column_name === 'stock_id' && row.data_type === 'uuid') {
             const r = await pool.query('SELECT $1::uuid AS v', [stock_id]);
             sidVal = r.rows[0].v;
@@ -223,35 +218,35 @@ router.post('/financial-statements/upload', (req, res) => {
             uidVal = r.rows[0].v;
           }
         }
-        // Build INSERT dynamically based on actual columns
-        const colValues = {
-          stock_id: () => sidVal,
-          period_type: () => period_type || 'annual',
-          period_end_date: () => period_end_date || null,
-          file_name: () => req.file.originalname,
-          file_data: () => fileBuffer,
-          file_size: () => req.file.size,
-          mime_type: () => req.file.mimetype || 'application/pdf',
-          uploaded_by: () => uidVal,
-          status: () => 'pending',
-        };
-        for (const [col, dataType] of Object.entries(colMap)) {
-          if (colValues[col] !== undefined) {
-            insertCols.push(col);
-            insertVals.push(colValues[col]());
-          }
-        }
-      } catch { /* fallback below */ }
-      if (insertCols.length === 0) {
-        // Fallback: hard-coded minimal insert
-        insertCols.push('stock_id', 'period_type', 'file_name', 'file_data', 'file_size', 'mime_type', 'status', 'uploaded_by');
-        insertVals.push(sidVal, period_type || 'annual', req.file.originalname, fileBuffer, req.file.size, req.file.mimetype || 'application/pdf', 'pending', uidVal);
+      } catch {}
+
+      // Build INSERT with only columns that exist in the table
+      async function tryInsert(cols, vals) {
+        const ph = cols.map((_, i) => '$' + (i + 1)).join(', ');
+        return pool.query(`INSERT INTO financial_statements (${cols.join(', ')}) VALUES (${ph}) RETURNING id`, vals);
       }
-      const placeholders = insertCols.map((_, i) => '$' + (i + 1)).join(', ');
-      const result = await pool.query(
-        `INSERT INTO financial_statements (${insertCols.join(', ')}) VALUES (${placeholders}) RETURNING id`,
-        insertVals
-      );
+      const allCols = ['stock_id', 'period_type', 'period_end_date', 'file_name', 'file_data', 'file_size', 'mime_type', 'status', 'uploaded_by'];
+      const allVals = [sidVal, period_type || 'annual', period_end_date || null, req.file.originalname, fileBuffer, req.file.size, req.file.mimetype || 'application/pdf', 'pending', uidVal];
+      let result;
+      for (let attempt = 0; attempt <= allCols.length; attempt++) {
+        try {
+          result = await tryInsert(allCols, allVals);
+          break;
+        } catch (e) {
+          if (e.message && e.message.includes('does not exist')) {
+            // Remove the offending column and retry
+            const colMatch = e.message.match(/column "(\w+)" of relation/);
+            if (colMatch) {
+              const badCol = colMatch[1];
+              const idx = allCols.indexOf(badCol);
+              if (idx !== -1) { allCols.splice(idx, 1); allVals.splice(idx, 1); }
+              continue;
+            }
+          }
+          throw e; // not a column error, re-throw
+        }
+      }
+      if (!result) throw new Error('Could not insert after removing columns');
       const docId = result.rows[0].id;
       // Trigger Python parser asynchronously
       const pythonPath = process.env.PYTHON_PATH || 'python';
