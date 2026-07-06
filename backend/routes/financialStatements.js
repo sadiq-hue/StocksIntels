@@ -281,7 +281,22 @@ router.post('/financial-statements/upload', (req, res) => {
               continue;
             }
           }
-          throw e;
+          if (msg.includes('violates not-null constraint')) {
+            const colMatch = msg.match(/column "(\w+)" of relation/);
+            if (colMatch) {
+              const badCol = colMatch[1];
+              const idx = allCols.indexOf(badCol);
+              if (idx !== -1) {
+                allVals[idx] = '';
+                continue;
+              } else {
+                // Column not in INSERT; add it with a default
+                allCols.push(badCol);
+                allVals.push('');
+                continue;
+              }
+            }
+          }
         }
       }
       if (!result) {
