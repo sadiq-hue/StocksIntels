@@ -1361,8 +1361,11 @@ function toast(msg, type) {
   el.className = 'fixed top-4 right-4 z-50 px-4 py-3 rounded-lg text-sm font-medium shadow-lg transition-all duration-300 ' +
     (type === 'error' ? 'bg-red-500 text-white' : type === 'success' ? 'bg-emerald-500 text-white' : 'bg-gray-800 text-white');
   el.textContent = msg;
+  el.style.maxWidth = '90vw';
+  el.style.wordBreak = 'break-word';
   document.body.appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+  const duration = type === 'error' ? 15000 : 3000;
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, duration);
 }
 
 function showTabLoading() {
