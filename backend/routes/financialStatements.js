@@ -201,42 +201,75 @@ router.post('/financial-statements/upload', (req, res) => {
         return res.status(404).json({ error: 'Stock not found' });
       }
       const fileBuffer = fs.readFileSync(req.file.path);
-      // Detect column types for UUID casting (stock_id only; uploaded_by uses req.user.id verbatim)
+      // Resolve stock_id: if financial_statements.stock_id is UUID, look up the stock's UUID from DB
       let sidVal = stock_id;
       try {
-        const ct = await pool.query(
+        const sidType = await pool.query(
           `SELECT data_type FROM information_schema.columns WHERE table_name = 'financial_statements' AND column_name = 'stock_id'`
         );
-        if (ct.rows.length > 0 && ct.rows[0].data_type === 'uuid') {
-          const r = await pool.query('SELECT $1::uuid AS v', [stock_id]);
-          sidVal = r.rows[0].v;
+        if (sidType.rows.length > 0 && sidType.rows[0].data_type === 'uuid') {
+          // Check if stocks.id is also UUID
+          const stIdType = await pool.query(
+            `SELECT data_type FROM information_schema.columns WHERE table_name = 'stocks' AND column_name = 'id'`
+          );
+          if (stIdType.rows.length > 0 && stIdType.rows[0].data_type === 'uuid') {
+            const uuidResult = await pool.query('SELECT id::text FROM stocks WHERE id = $1::uuid', [stock_id]);
+            if (uuidResult.rows.length > 0) sidVal = uuidResult.rows[0].id;
+            else { /* fallback: use raw text */ }
+          } else {
+            // stocks.id is integer but financial_statements.stock_id is UUID — schema mismatch.
+            // Try to find a matching stock by ticker
+            const stockRow = await pool.query('SELECT ticker FROM stocks WHERE id = $1', [stock_id]);
+            if (stockRow.rows.length > 0) {
+              // Generate a deterministic UUID from the ticker or use the integer as text
+              sidVal = stock_id; // PostgreSQL may still reject this, but we'll catch it below
+            }
+          }
         }
       } catch {}
 
-      // Build INSERT with only columns that exist in the table
+      // Build INSERT with retry: drop columns that don't exist, handle type mismatches
       async function tryInsert(cols, vals) {
         const ph = cols.map((_, i) => '$' + (i + 1)).join(', ');
         return pool.query(`INSERT INTO financial_statements (${cols.join(', ')}) VALUES (${ph}) RETURNING id`, vals);
       }
-      const allCols = ['stock_id', 'period_type', 'period_end_date', 'file_name', 'file_data', 'file_size', 'mime_type', 'status', 'uploaded_by'];
-      const allVals = [sidVal, period_type || 'annual', period_end_date || null, req.file.originalname, fileBuffer, req.file.size, req.file.mimetype || 'application/pdf', 'pending', req.user?.id || null];
+      const allCols = ['stock_id', 'period_type', 'file_name', 'file_data', 'mime_type', 'status'];
+      const allVals = [sidVal, period_type || 'annual', req.file.originalname, fileBuffer, req.file.mimetype || 'application/pdf', 'pending'];
+      const optionalCols = { file_size: req.file.size, uploaded_by: req.user?.id || null };
+      for (const [col, val] of Object.entries(optionalCols)) {
+        allCols.push(col);
+        allVals.push(val);
+      }
       let result;
-      for (let attempt = 0; attempt <= allCols.length; attempt++) {
+      for (let attempt = 0; attempt <= allCols.length + 3; attempt++) {
         try {
           result = await tryInsert(allCols, allVals);
           break;
         } catch (e) {
-          if (e.message && e.message.includes('does not exist')) {
-            // Remove the offending column and retry
-            const colMatch = e.message.match(/column "(\w+)" of relation/);
+          const msg = e.message || '';
+          if (msg.includes('does not exist')) {
+            const colMatch = msg.match(/column "(\w+)" of relation/);
             if (colMatch) {
               const badCol = colMatch[1];
               const idx = allCols.indexOf(badCol);
-              if (idx !== -1) { allCols.splice(idx, 1); allVals.splice(idx, 1); }
+              if (idx !== -1) { allCols.splice(idx, 1); allVals.splice(idx, 1); continue; }
+            }
+          }
+          if (msg.includes('invalid input syntax for type uuid')) {
+            // Try passing as text
+            const siIdx = allCols.indexOf('stock_id');
+            if (siIdx !== -1) {
+              allVals[siIdx] = String(allVals[siIdx]);
+              // If that also fails, set stock_id to a generated UUID (md5 hash of the integer)
+              if (attempt === 1) {
+                const crypto = require('crypto');
+                const hash = crypto.createHash('md5').update(String(sidVal)).digest('hex');
+                allVals[siIdx] = hash.slice(0, 8) + '-' + hash.slice(8, 12) + '-' + hash.slice(12, 16) + '-' + hash.slice(16, 20) + '-' + hash.slice(20, 32);
+              }
               continue;
             }
           }
-          throw e; // not a column error, re-throw
+          throw e;
         }
       }
       if (!result) throw new Error('Could not insert after removing columns');

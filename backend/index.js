@@ -10517,6 +10517,33 @@ async function initDatabase() {
       await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN roe TYPE numeric(12,4)`);
       await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN revenue_growth TYPE numeric(12,4)`);
       await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN eps_growth TYPE numeric(12,4)`);
+      // Fix financial_statements column types if they differ from expected (e.g., UUID vs INTEGER)
+      async function fixFinancialStatementsSchema() {
+        try {
+          const colInfo = await pool.query(
+            `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = 'financial_statements'`
+          );
+          const cols = {};
+          for (const r of colInfo.rows) cols[r.column_name] = r;
+          const wanted = { stock_id: 'integer', period_end_date: 'date', file_size: 'integer', uploaded_by: 'integer' };
+          for (const [col, targetType] of Object.entries(wanted)) {
+            if (cols[col] && cols[col].data_type !== targetType) {
+              await pool.query(`ALTER TABLE financial_statements ALTER COLUMN ${col} TYPE ${targetType} USING ${col}::text::${targetType}`);
+              console.log(`[Migration] Fixed financial_statements.${col} (${cols[col].data_type} → ${targetType})`);
+            }
+            if (!cols[col]) {
+              // Column doesn't exist; add it
+              const typeDef = targetType === 'integer' ? 'INTEGER' : targetType === 'date' ? 'DATE' : 'VARCHAR(255)';
+              const nullable = col === 'stock_id' ? 'NOT NULL' : '';
+              await pool.query(`ALTER TABLE financial_statements ADD COLUMN IF NOT EXISTS ${col} ${typeDef} ${nullable}`);
+              console.log(`[Migration] Added financial_statements.${col} (${typeDef})`);
+            }
+          }
+        } catch (fixErr) {
+          console.warn('[Migration] Schema fix warning:', fixErr.message);
+        }
+      }
+      await fixFinancialStatementsSchema();
     } catch (migErr) {
       console.error('[Migration] NSE financial statements migration error:', migErr.message);
     }
