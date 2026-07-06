@@ -228,80 +228,90 @@ router.post('/financial-statements/upload', (req, res) => {
         }
       } catch {}
 
-      // Build INSERT with retry: drop columns that don't exist, handle type mismatches
+      // Build INSERT based on actual table schema
       async function tryInsert(cols, vals) {
         const ph = cols.map((_, i) => '$' + (i + 1)).join(', ');
         return pool.query(`INSERT INTO financial_statements (${cols.join(', ')}) VALUES (${ph}) RETURNING id`, vals);
       }
-      // Check if status column uses enum; pick a valid value
-      let statusVal = 'pending';
-      try {
-        const enumRes = await pool.query(`
-          SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid WHERE t.typname = 'statement_status'
-        `);
-        if (enumRes.rows.length > 0) {
-          // Pick the first valid status value that isn't 'failed'
-          const valid = enumRes.rows.map(r => r.enumlabel);
-          statusVal = valid.find(v => v !== 'failed') || valid[0];
-        }
-      } catch {}
-      const allCols = ['stock_id', 'period_type', 'file_name', 'file_data', 'mime_type', 'status'];
-      const allVals = [sidVal, period_type || 'annual', req.file.originalname, fileBuffer, req.file.mimetype || 'application/pdf', statusVal];
-      const optionalCols = { file_size: req.file.size, uploaded_by: req.user?.id || null };
-      for (const [col, val] of Object.entries(optionalCols)) {
-        allCols.push(col);
-        allVals.push(val);
-      }
-      let lastError = null;
       let result;
-      for (let attempt = 0; attempt <= allCols.length + 3; attempt++) {
-        try {
-          result = await tryInsert(allCols, allVals);
-          break;
-        } catch (e) {
-          lastError = e;
-          const msg = e.message || '';
-          if (msg.includes('does not exist')) {
-            const colMatch = msg.match(/column "(\w+)" of relation/);
-            if (colMatch) {
-              const badCol = colMatch[1];
-              const idx = allCols.indexOf(badCol);
-              if (idx !== -1) { allCols.splice(idx, 1); allVals.splice(idx, 1); continue; }
+      try {
+        const colInfo = await pool.query(
+          `SELECT column_name, data_type, is_nullable, column_default, udt_name
+           FROM information_schema.columns WHERE table_name = 'financial_statements' ORDER BY ordinal_position`
+        );
+        const knownVals = {
+          stock_id: sidVal,
+          period_type: period_type || 'annual',
+          period_end_date: period_end_date || null,
+          file_name: req.file.originalname,
+          file_data: fileBuffer,
+          file_size: req.file.size,
+          mime_type: req.file.mimetype || 'application/pdf',
+          uploaded_by: req.user?.id || null,
+        };
+        const allCols = [];
+        const allVals = [];
+        for (const col of colInfo.rows) {
+          const cn = col.column_name;
+          if (['id', 'parsed_data', 'raw_text', 'error_message', 'parsed_at', 'processed_by', 'created_at', 'updated_at'].includes(cn)) continue;
+          if (cn in knownVals) {
+            allCols.push(cn);
+            allVals.push(knownVals[cn]);
+          } else if (col.column_default) {
+            // Has default, skip it
+          } else if (col.is_nullable === 'NO') {
+            // NOT NULL with no default — provide a type-appropriate value
+            const ct = col.udt_name || col.data_type;
+            if (ct === 'uuid') {
+              const crypto = require('crypto');
+              const hash = crypto.createHash('md5').update(String(sidVal)).digest('hex');
+              allCols.push(cn);
+              allVals.push(hash.slice(0,8)+'-'+hash.slice(8,12)+'-'+hash.slice(12,16)+'-'+hash.slice(16,20)+'-'+hash.slice(20,32));
+            } else if (ct.includes('int') || ct === 'smallint' || ct === 'integer' || ct === 'bigint') {
+              allCols.push(cn);
+              allVals.push(0);
+            } else if (ct === 'numeric' || ct === 'decimal' || ct === 'real' || ct === 'double') {
+              allCols.push(cn);
+              allVals.push(0);
+            } else if (ct === 'bool' || ct === 'boolean') {
+              allCols.push(cn);
+              allVals.push(false);
+            } else {
+              allCols.push(cn);
+              allVals.push('');
             }
           }
-          if (msg.includes('invalid input syntax for type uuid')) {
-            const siIdx = allCols.indexOf('stock_id');
-            if (siIdx !== -1) {
-              allVals[siIdx] = String(allVals[siIdx]);
-              if (attempt >= 1) {
-                const crypto = require('crypto');
-                const hash = crypto.createHash('md5').update(String(sidVal)).digest('hex');
-                allVals[siIdx] = hash.slice(0, 8) + '-' + hash.slice(8, 12) + '-' + hash.slice(12, 16) + '-' + hash.slice(16, 20) + '-' + hash.slice(20, 32);
+        }
+        let attempts = 0;
+        while (attempts < allCols.length + 5) {
+          attempts++;
+          try {
+            result = await tryInsert(allCols, allVals);
+            break;
+          } catch (e) {
+            const msg = e.message || '';
+            if (msg.includes('does not exist')) {
+              const m = msg.match(/column "(\w+)" of relation/);
+              if (m) { const i = allCols.indexOf(m[1]); if (i !== -1) { allCols.splice(i,1); allVals.splice(i,1); } }
+              continue;
+            }
+            // Type mismatch — try casting
+            if (msg.includes('invalid input syntax') || msg.includes('type uuid') || msg.includes('type smallint') || msg.includes('type integer')) {
+              // Find the offending column by trying each value
+              for (let i = 0; i < allCols.length; i++) {
+                const v = allVals[i];
+                if (v === '' || v === null) {
+                  allVals[i] = 0; // try 0 instead of empty
+                  break;
+                }
               }
               continue;
             }
-          }
-          if (msg.includes('violates not-null constraint')) {
-            const colMatch = msg.match(/column "(\w+)" of relation/);
-            if (colMatch) {
-              const badCol = colMatch[1];
-              const idx = allCols.indexOf(badCol);
-              if (idx !== -1) {
-                allVals[idx] = '';
-                continue;
-              } else {
-                // Column not in INSERT; add it with a default
-                allCols.push(badCol);
-                allVals.push('');
-                continue;
-              }
-            }
+            throw e;
           }
         }
-      }
-      if (!result) {
-        const errMsg = lastError ? lastError.message : 'Could not insert after removing columns';
-        throw new Error(errMsg);
+      } catch (e) {
+        if (!result) throw e;
       }
       const docId = result.rows[0].id;
       // Trigger Python parser asynchronously
