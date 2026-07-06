@@ -122,30 +122,60 @@ router.get('/financial-statements', async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
-    const stockId = req.query.stock_id ? parseInt(req.query.stock_id) : null;
     const status = req.query.status || null;
     const offset = (page - 1) * limit;
     let whereClause = 'WHERE 1=1';
     const params = [];
     let idx = 1;
-    if (stockId) { whereClause += ` AND fs.stock_id = $${idx++}`; params.push(stockId); }
     if (status) { whereClause += ` AND fs.status = $${idx++}`; params.push(status); }
+
+    // stock_id may be INTEGER or UUID depending on schema; check column type
+    const stockIdRaw = req.query.stock_id;
+    if (stockIdRaw) {
+      const typeRes = await pool.query(
+        `SELECT data_type FROM information_schema.columns WHERE table_name = 'financial_statements' AND column_name = 'stock_id'`
+      );
+      if (typeRes.rows.length > 0 && typeRes.rows[0].data_type === 'uuid') {
+        whereClause += ` AND fs.stock_id = $${idx++}::uuid`;
+        params.push(stockIdRaw);
+      } else {
+        const sid = parseInt(stockIdRaw);
+        if (!isNaN(sid)) { whereClause += ` AND fs.stock_id = $${idx++}`; params.push(sid); }
+      }
+    }
+
     const countResult = await pool.query(
       `SELECT COUNT(*)::int as cnt FROM financial_statements fs ${whereClause}`, params
     );
-    const dataResult = await pool.query(
-      `SELECT fs.*, s.ticker, s.name as stock_name
-       FROM financial_statements fs
-       JOIN stocks s ON s.id = fs.stock_id
-       ${whereClause}
-       ORDER BY fs.uploaded_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
-      [...params, limit, offset]
-    );
-    res.json({ statements: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
+    let statements = [];
+    try {
+      const dataResult = await pool.query(
+        `SELECT fs.*, s.ticker, s.name as stock_name
+         FROM financial_statements fs
+         JOIN stocks s ON s.id = fs.stock_id
+         ${whereClause}
+         ORDER BY fs.uploaded_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+        [...params, limit, offset]
+      );
+      statements = dataResult.rows;
+    } catch {
+      // JOIN may fail if schema mismatched; return statements without join data
+      const dataResult = await pool.query(
+        `SELECT fs.* FROM financial_statements fs ${whereClause}
+         ORDER BY fs.uploaded_at DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+        [...params, limit, offset]
+      );
+      statements = dataResult.rows;
+    }
+    res.json({ statements, total: countResult.rows[0].cnt, page, limit });
   } catch (err) {
     console.error('Financial statements error:', err.message);
-    // If table doesn't exist yet, return empty
-    if (err.message && err.message.includes('relation') && err.message.includes('does not exist')) {
+    // If table/schema issue, return empty
+    if (err.message && (
+      err.message.includes('does not exist') ||
+      err.message.includes('invalid input syntax for type uuid') ||
+      err.message.includes('uuid')
+    )) {
       return res.json({ statements: [], total: 0, page: 1, limit: 50 });
     }
     res.status(500).json({ error: err.message || 'Failed to fetch financial statements' });
