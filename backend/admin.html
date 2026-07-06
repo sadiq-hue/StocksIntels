@@ -7,6 +7,8 @@
 <link rel="icon" type="image/jpeg" href="/logo1.jpg">
 <link rel="shortcut icon" href="/logo1.jpg" type="image/jpeg">
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <script src="/socket.io/socket.io.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -3257,28 +3259,48 @@ async function loadFsStatements(stockId) {
 async function handleFsUpload(event) {
   const file = event.target.files?.[0];
   if (!file || !fsStockId) return;
-  if (file.size > 20 * 1024 * 1024) { toast('File too large (max 20MB)', 'error'); event.target.value = ''; return; }
+  if (!file.name.toLowerCase().endsWith('.pdf')) { toast('Only PDF files accepted', 'error'); event.target.value = ''; return; }
   const progress = document.getElementById('fsUploadProgress');
   const progressText = document.getElementById('fsUploadText');
   progress.classList.remove('hidden');
-  progressText.textContent = 'Uploading (this may take a while on slow connections)...';
   try {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('stock_id', String(fsStockId));
-    formData.append('period_type', 'annual');
-    const res = await fetch('/api/admin/financial-statements/upload', { method: 'POST', body: formData });
+    progressText.textContent = 'Reading PDF...';
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let extractedText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      extractedText += content.items.map(item => item.str).join(' ') + '\n';
+      progressText.textContent = 'Reading page ' + i + ' of ' + pdf.numPages + '...';
+    }
+    if (!extractedText.trim()) { toast('No text could be extracted from this PDF', 'error'); progress.classList.add('hidden'); event.target.value = ''; return; }
+    progressText.textContent = 'Uploading ' + (extractedText.length / 1024).toFixed(0) + 'KB of extracted text...';
+    const res = await fetch('/api/admin/financial-statements/upload-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stock_id: fsStockId,
+        period_type: 'annual',
+        file_name: file.name,
+        extracted_text: extractedText,
+      }),
+    });
     if (!res.ok) {
-      let text = '';
-      try { text = await res.text(); } catch(_) {}
-      throw new Error(text.slice(0, 500) || 'HTTP ' + res.status);
+      let errText = '';
+      try { errText = await res.text(); } catch(_) {}
+      throw new Error(errText.slice(0, 500) || 'HTTP ' + res.status);
     }
     progressText.textContent = 'Parsing...';
     toast('Upload complete, parsing...', 'success');
     loadFsStatements(fsStockId);
     setTimeout(() => loadFsStatements(fsStockId), 5000);
   } catch (e) {
-    toast(e.message, 'error');
+    if (e.message.includes('pdf.js') || e.message.includes('worker')) {
+      toast('PDF reading failed. Try a different file.', 'error');
+    } else {
+      toast(e.message, 'error');
+    }
   }
   finally { progress.classList.add('hidden'); event.target.value = ''; }
 }

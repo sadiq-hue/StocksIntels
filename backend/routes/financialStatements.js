@@ -490,4 +490,36 @@ router.post('/financial-statements/reparse/:id', async (req, res) => {
   }
 });
 
+// ── Upload extracted text (client-side PDF text extraction) ──
+router.post('/financial-statements/upload-text', async (req, res) => {
+  try {
+    const { stock_id, period_type, file_name, extracted_text } = req.body;
+    if (!stock_id || !file_name || !extracted_text) {
+      return res.status(400).json({ error: 'Missing required fields: stock_id, file_name, extracted_text' });
+    }
+    const sid = parseInt(stock_id);
+    if (isNaN(sid)) return res.status(400).json({ error: 'Invalid stock_id' });
+    // Verify stock exists
+    const stockCheck = await pool.query('SELECT id FROM stocks WHERE id = $1', [sid]);
+    if (stockCheck.rows.length === 0) return res.status(404).json({ error: 'Stock not found' });
+    // Insert statement with raw_text, no file_data
+    const result = await pool.query(
+      `INSERT INTO financial_statements (stock_id, period_type, file_name, raw_text, status, mime_type, file_size, uploaded_by)
+       VALUES ($1, $2, $3, $4, 'processing', 'application/pdf', $5, $6) RETURNING id`,
+      [sid, period_type || 'annual', file_name, extracted_text, extracted_text.length, req.user?.id || null]
+    );
+    const docId = result.rows[0].id;
+    // Run parser asynchronously
+    let jsParser;
+    try { jsParser = require('../jsParser'); } catch (e) { jsParser = null; }
+    if (jsParser) {
+      jsParser.parseExtractedText(extracted_text, docId, file_name);
+    }
+    res.status(201).json({ id: docId, status: 'processing' });
+  } catch (e) {
+    console.error('upload-text error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
