@@ -10508,75 +10508,61 @@ async function initDatabase() {
 
     // ── NSE Financial Statements migration ──
     try {
-      const fs = require('fs');
-      const path = require('path');
-      const migSql = fs.readFileSync(path.join(__dirname, 'db', 'migration_stock_statements.sql'), 'utf8');
-      await pool.query(migSql);
-      console.log('[Migration] NSE stock financial statements schema verified');
-      await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN dividend_yield TYPE numeric(12,4)`);
-      await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN roe TYPE numeric(12,4)`);
-      await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN revenue_growth TYPE numeric(12,4)`);
-      await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN eps_growth TYPE numeric(12,4)`);
-      // Fix financial_statements column types if they differ from expected (e.g., UUID vs INTEGER)
-      async function fixFinancialStatementsSchema() {
-        // Since the table is empty on production, drop and recreate with correct schema
-        // to avoid fighting legacy column types (UUID, enum, smallint, etc.)
-        try {
-          await pool.query('DROP TABLE IF EXISTS financial_statements CASCADE');
-          await pool.query(`
-            CREATE TABLE financial_statements (
-              id SERIAL PRIMARY KEY,
-              stock_id INTEGER NOT NULL REFERENCES stocks(id) ON DELETE CASCADE,
-              period_type VARCHAR(10) NOT NULL DEFAULT 'annual',
-              period_end_date DATE,
-              file_name VARCHAR(255) NOT NULL,
-              file_data BYTEA,
-              file_size INTEGER,
-              mime_type VARCHAR(100) DEFAULT 'application/pdf',
-              status VARCHAR(20) NOT NULL DEFAULT 'pending',
-              raw_text TEXT,
-              parsed_data JSONB,
-              error_message TEXT,
-              uploaded_by INTEGER REFERENCES users(id),
-              uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-              parsed_at TIMESTAMPTZ,
-              processed_by VARCHAR(50)
-            )
-          `);
-          await pool.query('CREATE INDEX IF NOT EXISTS idx_financial_statements_stock_id ON financial_statements(stock_id)');
-          await pool.query('CREATE INDEX IF NOT EXISTS idx_financial_statements_status ON financial_statements(status)');
-          await pool.query('CREATE INDEX IF NOT EXISTS idx_financial_statements_uploaded_at ON financial_statements(uploaded_at DESC)');
-          console.log('[Migration] Recreated financial_statements table with correct schema');
-        } catch (fixErr) {
-          console.warn('[Migration] Schema recreate failed, trying ALTER approach:', fixErr.message);
-          // Fallback: try ALTER COLUMN fixes
-          try {
-            const colInfo = await pool.query(
-              `SELECT column_name, data_type, is_nullable, udt_name FROM information_schema.columns WHERE table_name = 'financial_statements'`
-            );
-            const cols = {};
-            for (const r of colInfo.rows) cols[r.column_name] = r;
-            if (cols['status'] && cols['status'].data_type === 'USER-DEFINED') {
-              await pool.query(`ALTER TABLE financial_statements ALTER COLUMN status TYPE VARCHAR(20) USING status::text`);
-            }
-            for (const [col, targetType] of Object.entries({ stock_id: 'integer', period_end_date: 'date', file_size: 'integer', uploaded_by: 'integer' })) {
-              if (cols[col] && cols[col].data_type !== targetType) {
-                await pool.query(`ALTER TABLE financial_statements ALTER COLUMN ${col} TYPE ${targetType} USING ${col}::text::${targetType}`);
-              }
-              if (!cols[col]) {
-                const typeDef = targetType === 'integer' ? 'INTEGER' : 'DATE';
-                const nullable = col === 'stock_id' ? 'NOT NULL' : '';
-                await pool.query(`ALTER TABLE financial_statements ADD COLUMN IF NOT EXISTS ${col} ${typeDef} ${nullable}`);
-              }
-            }
-          } catch (altErr) {
-            console.warn('[Migration] ALTER approach also failed:', altErr.message);
-          }
-        }
+      const fsp = require('fs');
+      const pt = require('path');
+      const migSql = fsp.readFileSync(pt.join(__dirname, 'db', 'migration_stock_statements.sql'), 'utf8');
+      // Run SQL file statements individually for robustness
+      const statements = migSql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+      for (const stmt of statements) {
+        try { await pool.query(stmt); } catch (e) { console.warn('[Migration] Statement warning:', e.message); }
       }
-      await fixFinancialStatementsSchema();
+      console.log('[Migration] NSE stock financial statements schema verified');
+      await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN dividend_yield TYPE numeric(12,4)`).catch(e => console.warn(e.message));
+      await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN roe TYPE numeric(12,4)`).catch(e => console.warn(e.message));
+      await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN revenue_growth TYPE numeric(12,4)`).catch(e => console.warn(e.message));
+      await pool.query(`ALTER TABLE stock_fundamentals ALTER COLUMN eps_growth TYPE numeric(12,4)`).catch(e => console.warn(e.message));
     } catch (migErr) {
       console.error('[Migration] NSE financial statements migration error:', migErr.message);
+    }
+
+    // ── Ensure financial_statements has correct schema (run unconditionally) ──
+    try {
+      const colInfo = await pool.query(
+        `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'financial_statements'`
+      );
+      const colMap = {};
+      for (const r of colInfo.rows) colMap[r.column_name] = r.data_type;
+      // If stock_id is not integer, drop and recreate table
+      if (colMap['stock_id'] && colMap['stock_id'] !== 'integer') {
+        console.log('[Migration] financial_statements.stock_id is ' + colMap['stock_id'] + ', recreating table...');
+        await pool.query('DROP TABLE IF EXISTS financial_statements CASCADE');
+        await pool.query(`
+          CREATE TABLE financial_statements (
+            id SERIAL PRIMARY KEY,
+            stock_id INTEGER NOT NULL REFERENCES stocks(id) ON DELETE CASCADE,
+            period_type VARCHAR(10) NOT NULL DEFAULT 'annual',
+            period_end_date DATE,
+            file_name VARCHAR(255) NOT NULL,
+            file_data BYTEA,
+            file_size INTEGER,
+            mime_type VARCHAR(100) DEFAULT 'application/pdf',
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            raw_text TEXT,
+            parsed_data JSONB,
+            error_message TEXT,
+            uploaded_by INTEGER REFERENCES users(id),
+            uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            parsed_at TIMESTAMPTZ,
+            processed_by VARCHAR(50)
+          )
+        `);
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_financial_statements_stock_id ON financial_statements(stock_id)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_financial_statements_status ON financial_statements(status)');
+        await pool.query('CREATE INDEX IF NOT EXISTS idx_financial_statements_uploaded_at ON financial_statements(uploaded_at DESC)');
+        console.log('[Migration] financial_statements table recreated with correct schema');
+      }
+    } catch (schemaErr) {
+      console.warn('[Migration] Schema check warning:', schemaErr.message);
     }
 
     console.log('Database schema verified');
