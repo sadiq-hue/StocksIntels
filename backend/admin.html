@@ -3154,9 +3154,10 @@ function renderStocksPagination(total, page, limit) {
 async function showStockEdit(id) {
   editingStockId = id;
   document.getElementById('stockEditModal').classList.remove('hidden');
+  document.getElementById('editStockTicker').value = 'Loading...';
   try {
     const res = await fetch('/api/admin/stocks/' + id);
-    if (!res.ok) return;
+    if (!res.ok) { const err = await res.json().catch(()=>({})); toast(err.error || 'Failed to load stock (' + res.status + ')', 'error'); closeStockEditModal(); return; }
     const stock = await res.json();
     document.getElementById('editStockTicker').value = stock.ticker || '';
     document.getElementById('editStockName').value = stock.name || '';
@@ -3172,7 +3173,7 @@ async function showStockEdit(id) {
     } else {
       fsSection.classList.add('hidden');
     }
-  } catch { toast('Error loading stock', 'error'); }
+  } catch (e) { toast('Error loading stock: ' + e.message, 'error'); closeStockEditModal(); }
 }
 
 function closeStockEditModal() {
