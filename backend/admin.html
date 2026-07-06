@@ -3265,7 +3265,7 @@ async function handleFsUpload(event) {
     formData.append('stock_id', String(fsStockId));
     formData.append('period_type', 'annual');
     const res = await fetch('/api/admin/financial-statements/upload', { method: 'POST', body: formData });
-    if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Upload failed'); }
+    if (!res.ok) { const text = await res.text(); throw new Error(text.slice(0, 500) || 'Upload failed (HTTP ' + res.status + ')'); }
     toast('PDF uploaded, parsing...', 'success');
     loadFsStatements(fsStockId);
     setTimeout(() => loadFsStatements(fsStockId), 5000);

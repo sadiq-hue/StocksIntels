@@ -239,12 +239,11 @@ router.post('/financial-statements/upload', (req, res) => {
         period_type: period_type || 'annual',
         period_end_date: period_end_date || null,
         file_name: req.file.originalname,
-        file_data: fileBuffer,
         file_size: req.file.size,
         mime_type: req.file.mimetype || 'application/pdf',
         uploaded_by: req.user?.id || null,
       };
-      const skipCols = ['id', 'parsed_data', 'raw_text', 'error_message', 'parsed_at', 'processed_by', 'created_at', 'updated_at'];
+      const skipCols = ['id', 'file_data', 'parsed_data', 'raw_text', 'error_message', 'parsed_at', 'processed_by', 'created_at', 'updated_at'];
       const allCols = [];
       const allVals = [];
       for (const col of colInfo.rows) {
@@ -290,7 +289,11 @@ router.post('/financial-statements/upload', (req, res) => {
       }
       if (!result) throw new Error(lastErr ? lastErr.message : 'All ' + maxAttempts + ' insert attempts failed');
       const docId = result.rows[0].id;
-      // Trigger Python parser asynchronously
+      // Store BYTEA in background (avoids proxy timeout on upload)
+      pool.query(`UPDATE financial_statements SET file_data = $1 WHERE id = $2`, [fileBuffer, docId]).catch(e => {
+        console.error('BYTEA background insert failed for doc ' + docId + ':', e.message);
+      });
+      // Trigger JS/Python parser asynchronously
       const pythonPath = process.env.PYTHON_PATH || 'python';
       const scriptPath = path.join(__dirname, '..', 'scripts', 'parse_financial.py');
       const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3001}`;
