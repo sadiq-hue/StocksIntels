@@ -10568,7 +10568,7 @@ async function initDatabase() {
     // Reset any stuck 'processing' or 'pending' statements
     try {
       await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = 'Server restarted while processing' WHERE status IN ('processing','pending')`);
-    } catch {}<｜｜DSML｜｜parameter name="is_active" string="false">true
+    } catch {}
 
     console.log('Database schema verified');
   } catch (err) {
