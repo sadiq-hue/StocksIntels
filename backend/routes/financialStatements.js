@@ -240,12 +240,14 @@ router.post('/financial-statements/upload', (req, res) => {
         allCols.push(col);
         allVals.push(val);
       }
+      let lastError = null;
       let result;
       for (let attempt = 0; attempt <= allCols.length + 3; attempt++) {
         try {
           result = await tryInsert(allCols, allVals);
           break;
         } catch (e) {
+          lastError = e;
           const msg = e.message || '';
           if (msg.includes('does not exist')) {
             const colMatch = msg.match(/column "(\w+)" of relation/);
@@ -256,12 +258,10 @@ router.post('/financial-statements/upload', (req, res) => {
             }
           }
           if (msg.includes('invalid input syntax for type uuid')) {
-            // Try passing as text
             const siIdx = allCols.indexOf('stock_id');
             if (siIdx !== -1) {
               allVals[siIdx] = String(allVals[siIdx]);
-              // If that also fails, set stock_id to a generated UUID (md5 hash of the integer)
-              if (attempt === 1) {
+              if (attempt >= 1) {
                 const crypto = require('crypto');
                 const hash = crypto.createHash('md5').update(String(sidVal)).digest('hex');
                 allVals[siIdx] = hash.slice(0, 8) + '-' + hash.slice(8, 12) + '-' + hash.slice(12, 16) + '-' + hash.slice(16, 20) + '-' + hash.slice(20, 32);
@@ -272,7 +272,10 @@ router.post('/financial-statements/upload', (req, res) => {
           throw e;
         }
       }
-      if (!result) throw new Error('Could not insert after removing columns');
+      if (!result) {
+        const errMsg = lastError ? lastError.message : 'Could not insert after removing columns';
+        throw new Error(errMsg);
+      }
       const docId = result.rows[0].id;
       // Trigger Python parser asynchronously
       const pythonPath = process.env.PYTHON_PATH || 'python';
