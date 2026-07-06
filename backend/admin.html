@@ -3222,7 +3222,7 @@ async function loadFsStatements(stockId) {
   el.querySelector('#fsList').innerHTML = '<div class="text-gray-400 text-center py-4">Loading...</div>';
   try {
     const res = await fetch('/api/admin/financial-statements?stock_id=' + stockId + '&limit=20');
-    if (!res.ok) throw new Error('Fetch failed');
+    if (!res.ok) { const body = await res.text().catch(()=>''); throw new Error('HTTP ' + res.status + ': ' + body.slice(0,200)); }
     const d = await res.json();
     const list = el.querySelector('#fsList');
     fsStatementsCache = d.statements;
@@ -3247,7 +3247,7 @@ async function loadFsStatements(stockId) {
         </div>
       `).join('');
     }
-  } catch (e) { console.error('loadFsStatements error:', e); el.querySelector('#fsList').innerHTML = '<div class="text-red-400 text-center py-4">Error loading statements</div>'; }
+  } catch (e) { console.error('loadFsStatements error:', e); el.querySelector('#fsList').innerHTML = '<div class="text-red-400 text-center py-4">Error: ' + esc(e.message) + '</div>'; }
 }
 
 async function handleFsUpload(event) {
