@@ -1,5 +1,6 @@
 const { pool } = require('./db');
 const zlib = require('zlib');
+const https = require('https');
 
 const METRIC_PATTERNS = {
   total_revenue: [/(?:total\s+)?revenue[:\s]*([\d,.]+)/i, /(?:total\s+)?(?:operating\s+)?income[:\s]*([\d,.]+)/i, /gross\s+revenue[:\s]*([\d,.]+)/i],
@@ -106,6 +107,70 @@ function extractPdfText(buffer) {
   return texts.join(' ');
 }
 
+function countKeyMetrics(data) {
+  const keys = ['eps', 'dividend_per_share', 'total_revenue', 'net_income'];
+  return keys.filter(k => data[k] && data[k].length > 0).length;
+}
+
+async function callLlm(text, apiKey, model) {
+  const prompt = `Extract financial metrics from the following NSE (Nairobi Stock Exchange) financial statement text.
+Return ONLY a JSON object with these exact keys (use null if not found):
+- total_revenue (number, in KES)
+- net_income (number, in KES)
+- cost_of_revenue (number, in KES)
+- operating_income (number, in KES)
+- cash_from_operations (number, in KES)
+- total_assets (number, in KES)
+- total_liabilities (number, in KES)
+- total_debt (number, in KES)
+- current_assets (number, in KES)
+- current_liabilities (number, in KES)
+- shareholders_equity (number, in KES)
+- retained_earnings (number, in KES)
+- eps (number, in KES)
+- dividend_per_share (number, in KES)
+
+Report text:
+${text.slice(0, 8000)}`;
+
+  return new Promise((resolve) => {
+    const body = JSON.stringify({
+      model: model || 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0,
+      response_format: { type: 'json_object' },
+    });
+    const url = new URL(process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1/chat/completions');
+    const opts = {
+      hostname: url.hostname,
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey,
+        'Content-Length': Buffer.byteLength(body),
+      },
+      timeout: 60000,
+    };
+    const req = https.request(opts, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.message?.content;
+          if (content) resolve(JSON.parse(content));
+          else resolve(null);
+        } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.write(body);
+    req.end();
+  });
+}
+
 async function parsePdfBuffer(buffer, docId) {
   try {
     const text = extractPdfText(buffer);
@@ -124,17 +189,30 @@ async function parsePdfBuffer(buffer, docId) {
         parsedData[metric] = Math.round(best * 100) / 100;
       }
     }
+    const keyCount = countKeyMetrics(metrics);
+    let processedBy = 'js:regex';
+    // If regex found few key metrics and OpenAI key is available, try LLM fallback
+    if (keyCount < 2 && process.env.OPENAI_API_KEY) {
+      console.log('[JSParser] Only ' + keyCount + ' key metrics via regex, trying LLM for doc ' + docId);
+      const llmResult = await callLlm(text, process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || 'gpt-4o-mini');
+      if (llmResult && Object.values(llmResult).some(v => v !== null)) {
+        for (const [k, v] of Object.entries(llmResult)) {
+          if (v !== null && v !== undefined) parsedData[k] = Math.round(v * 100) / 100;
+        }
+        processedBy = 'js:llm';
+      }
+    }
     const hasAnyData = Object.keys(parsedData).length > 0;
     if (hasAnyData) {
       await pool.query(
-        `UPDATE financial_statements SET status = 'completed', parsed_data = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = 'js' WHERE id = $2`,
-        [JSON.stringify(parsedData), docId]
+        `UPDATE financial_statements SET status = 'completed', parsed_data = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
+        [JSON.stringify(parsedData), processedBy, docId]
       );
     } else {
       const preview = text.slice(0, 300).replace(/\0/g, '');
       await pool.query(
-        `UPDATE financial_statements SET status = 'completed', parsed_data = '{}'::jsonb, error_message = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = 'js' WHERE id = $2`,
-        ['No metrics matched. Extracted text preview: ' + preview, docId]
+        `UPDATE financial_statements SET status = 'completed', parsed_data = '{}'::jsonb, error_message = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
+        ['No metrics matched. Extracted text preview: ' + preview, processedBy, docId]
       );
     }
     if (parsedData.dividend_per_share || parsedData.eps) {

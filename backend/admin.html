@@ -3257,44 +3257,34 @@ async function loadFsStatements(stockId) {
 async function handleFsUpload(event) {
   const file = event.target.files?.[0];
   if (!file || !fsStockId) return;
-  if (file.size > 20 * 1024 * 1024) { toast('File too large (max 20MB)', 'error'); event.target.value = ''; return; }
+  if (file.size > 5 * 1024 * 1024) { toast('File too large (max 5MB). Please compress the PDF first.', 'error'); event.target.value = ''; return; }
   const progress = document.getElementById('fsUploadProgress');
   const progressText = document.getElementById('fsUploadText');
   progress.classList.remove('hidden');
-  progressText.textContent = 'Uploading ' + (file.size / 1024).toFixed(0) + 'KB...';
+  progressText.textContent = 'Uploading...';
   try {
-    const data = await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/admin/financial-statements/upload');
-      const token = localStorage.getItem('token');
-      if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
-      xhr.timeout = 60000;
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const pct = Math.round(e.loaded / e.total * 100);
-          progressText.textContent = 'Uploading ' + pct + '% (' + (e.loaded / 1024).toFixed(0) + '/' + (e.total / 1024).toFixed(0) + 'KB)...';
-        }
-      };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try { resolve(JSON.parse(xhr.responseText)); } catch(_) { resolve(xhr.responseText); }
-        } else {
-          reject(new Error(xhr.responseText.slice(0, 500) || 'Upload failed (HTTP ' + xhr.status + ')'));
-        }
-      };
-      xhr.onerror = () => reject(new Error('Network error'));
-      xhr.ontimeout = () => reject(new Error('Upload timed out (60s)'));
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('stock_id', String(fsStockId));
-      fd.append('period_type', 'annual');
-      xhr.send(fd);
-    });
+    // Use AbortController for timeout (120s)
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 120000);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('stock_id', String(fsStockId));
+    formData.append('period_type', 'annual');
+    const res = await fetch('/api/admin/financial-statements/upload', { method: 'POST', body: formData, signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) {
+      let text = '';
+      try { text = await res.text(); } catch(_) {}
+      throw new Error(text.slice(0, 500) || 'Upload failed (HTTP ' + res.status + ')');
+    }
     progressText.textContent = 'Parsing...';
-    toast('PDF uploaded, parsing...', 'success');
+    toast('Upload complete, parsing...', 'success');
     loadFsStatements(fsStockId);
     setTimeout(() => loadFsStatements(fsStockId), 5000);
-  } catch (e) { toast(e.message, 'error'); }
+  } catch (e) {
+    if (e.name === 'AbortError') toast('Upload timed out (120s). Try a smaller PDF.', 'error');
+    else toast(e.message, 'error');
+  }
   finally { progress.classList.add('hidden'); event.target.value = ''; }
 }
 
