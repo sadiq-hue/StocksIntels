@@ -3247,7 +3247,7 @@ async function loadFsStatements(stockId) {
         </div>
       `).join('');
     }
-  } catch { el.querySelector('#fsList').innerHTML = '<div class="text-red-400 text-center py-4">Error loading statements</div>'; }
+  } catch (e) { console.error('loadFsStatements error:', e); el.querySelector('#fsList').innerHTML = '<div class="text-red-400 text-center py-4">Error loading statements</div>'; }
 }
 
 async function handleFsUpload(event) {
