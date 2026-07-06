@@ -962,7 +962,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
             <!-- Upload progress -->
             <div id="fsUploadProgress" class="hidden mt-2 flex items-center gap-2 text-xs text-gray-500">
               <span class="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></span>
-              Uploading &amp; parsing...
+              <span id="fsUploadText">Uploading...</span>
             </div>
             <!-- Parsed data viewer -->
             <div id="fsParsedModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center" style="background:rgba(0,0,0,.4)">
@@ -3257,15 +3257,40 @@ async function loadFsStatements(stockId) {
 async function handleFsUpload(event) {
   const file = event.target.files?.[0];
   if (!file || !fsStockId) return;
+  if (file.size > 20 * 1024 * 1024) { toast('File too large (max 20MB)', 'error'); event.target.value = ''; return; }
   const progress = document.getElementById('fsUploadProgress');
+  const progressText = document.getElementById('fsUploadText');
   progress.classList.remove('hidden');
+  progressText.textContent = 'Uploading ' + (file.size / 1024).toFixed(0) + 'KB...';
   try {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('stock_id', String(fsStockId));
-    formData.append('period_type', 'annual');
-    const res = await fetch('/api/admin/financial-statements/upload', { method: 'POST', body: formData });
-    if (!res.ok) { const text = await res.text(); throw new Error(text.slice(0, 500) || 'Upload failed (HTTP ' + res.status + ')'); }
+    const data = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/admin/financial-statements/upload');
+      const token = localStorage.getItem('token');
+      if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+      xhr.timeout = 60000;
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round(e.loaded / e.total * 100);
+          progressText.textContent = 'Uploading ' + pct + '% (' + (e.loaded / 1024).toFixed(0) + '/' + (e.total / 1024).toFixed(0) + 'KB)...';
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)); } catch(_) { resolve(xhr.responseText); }
+        } else {
+          reject(new Error(xhr.responseText.slice(0, 500) || 'Upload failed (HTTP ' + xhr.status + ')'));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error'));
+      xhr.ontimeout = () => reject(new Error('Upload timed out (60s)'));
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('stock_id', String(fsStockId));
+      fd.append('period_type', 'annual');
+      xhr.send(fd);
+    });
+    progressText.textContent = 'Parsing...';
     toast('PDF uploaded, parsing...', 'success');
     loadFsStatements(fsStockId);
     setTimeout(() => loadFsStatements(fsStockId), 5000);
