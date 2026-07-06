@@ -228,91 +228,66 @@ router.post('/financial-statements/upload', (req, res) => {
         }
       } catch {}
 
-      // Build INSERT based on actual table schema
-      async function tryInsert(cols, vals) {
-        const ph = cols.map((_, i) => '$' + (i + 1)).join(', ');
-        return pool.query(`INSERT INTO financial_statements (${cols.join(', ')}) VALUES (${ph}) RETURNING id`, vals);
+      // Build INSERT dynamically from actual table schema
+      const colInfo = await pool.query(
+        `SELECT column_name, data_type, is_nullable, column_default, udt_name
+         FROM information_schema.columns WHERE table_name = 'financial_statements' ORDER BY ordinal_position`
+      );
+      console.log('[Upload] financial_statements columns:', colInfo.rows.map(r => r.column_name + ':' + r.data_type).join(', '));
+      const knownVals = {
+        stock_id: sidVal,
+        period_type: period_type || 'annual',
+        period_end_date: period_end_date || null,
+        file_name: req.file.originalname,
+        file_data: fileBuffer,
+        file_size: req.file.size,
+        mime_type: req.file.mimetype || 'application/pdf',
+        uploaded_by: req.user?.id || null,
+      };
+      const skipCols = ['id', 'parsed_data', 'raw_text', 'error_message', 'parsed_at', 'processed_by', 'created_at', 'updated_at'];
+      const allCols = [];
+      const allVals = [];
+      for (const col of colInfo.rows) {
+        const cn = col.column_name;
+        if (skipCols.includes(cn)) continue;
+        if (cn in knownVals) { allCols.push(cn); allVals.push(knownVals[cn]); continue; }
+        if (col.column_default) continue; // has default
+        // NOT NULL with no default — provide a type-appropriate value
+        if (col.is_nullable === 'NO') {
+          const ct = col.udt_name || col.data_type;
+          if (ct.includes('int')) { allCols.push(cn); allVals.push(0); }
+          else if (ct === 'numeric' || ct === 'real' || ct === 'double') { allCols.push(cn); allVals.push(0); }
+          else if (ct === 'bool') { allCols.push(cn); allVals.push(false); }
+          else { allCols.push(cn); allVals.push(''); }
+        }
       }
       let result;
-      try {
-        const colInfo = await pool.query(
-          `SELECT column_name, data_type, is_nullable, column_default, udt_name
-           FROM information_schema.columns WHERE table_name = 'financial_statements' ORDER BY ordinal_position`
-        );
-        const knownVals = {
-          stock_id: sidVal,
-          period_type: period_type || 'annual',
-          period_end_date: period_end_date || null,
-          file_name: req.file.originalname,
-          file_data: fileBuffer,
-          file_size: req.file.size,
-          mime_type: req.file.mimetype || 'application/pdf',
-          uploaded_by: req.user?.id || null,
-        };
-        const allCols = [];
-        const allVals = [];
-        for (const col of colInfo.rows) {
-          const cn = col.column_name;
-          if (['id', 'parsed_data', 'raw_text', 'error_message', 'parsed_at', 'processed_by', 'created_at', 'updated_at'].includes(cn)) continue;
-          if (cn in knownVals) {
-            allCols.push(cn);
-            allVals.push(knownVals[cn]);
-          } else if (col.column_default) {
-            // Has default, skip it
-          } else if (col.is_nullable === 'NO') {
-            // NOT NULL with no default — provide a type-appropriate value
-            const ct = col.udt_name || col.data_type;
-            if (ct === 'uuid') {
-              const crypto = require('crypto');
-              const hash = crypto.createHash('md5').update(String(sidVal)).digest('hex');
-              allCols.push(cn);
-              allVals.push(hash.slice(0,8)+'-'+hash.slice(8,12)+'-'+hash.slice(12,16)+'-'+hash.slice(16,20)+'-'+hash.slice(20,32));
-            } else if (ct.includes('int') || ct === 'smallint' || ct === 'integer' || ct === 'bigint') {
-              allCols.push(cn);
-              allVals.push(0);
-            } else if (ct === 'numeric' || ct === 'decimal' || ct === 'real' || ct === 'double') {
-              allCols.push(cn);
-              allVals.push(0);
-            } else if (ct === 'bool' || ct === 'boolean') {
-              allCols.push(cn);
-              allVals.push(false);
-            } else {
-              allCols.push(cn);
-              allVals.push('');
-            }
+      const maxAttempts = allCols.length + 5;
+      for (let a = 0; a < maxAttempts; a++) {
+        try {
+          const ph = allCols.map((_, i) => '$' + (i + 1)).join(', ');
+          result = await pool.query(`INSERT INTO financial_statements (${allCols.join(', ')}) VALUES (${ph}) RETURNING id`, allVals);
+          break;
+        } catch (e) {
+          const msg = e.message || '';
+          console.log('[Upload] Attempt ' + (a+1) + ' failed:', msg);
+          if (msg.includes('does not exist')) {
+            const m = msg.match(/column "(\w+)" of relation/);
+            if (m) { const i = allCols.indexOf(m[1]); if (i !== -1) { allCols.splice(i,1); allVals.splice(i,1); } }
+            continue;
           }
-        }
-        let attempts = 0;
-        while (attempts < allCols.length + 5) {
-          attempts++;
-          try {
-            result = await tryInsert(allCols, allVals);
-            break;
-          } catch (e) {
-            const msg = e.message || '';
-            if (msg.includes('does not exist')) {
-              const m = msg.match(/column "(\w+)" of relation/);
-              if (m) { const i = allCols.indexOf(m[1]); if (i !== -1) { allCols.splice(i,1); allVals.splice(i,1); } }
-              continue;
-            }
-            // Type mismatch — try casting
-            if (msg.includes('invalid input syntax') || msg.includes('type uuid') || msg.includes('type smallint') || msg.includes('type integer')) {
-              // Find the offending column by trying each value
-              for (let i = 0; i < allCols.length; i++) {
-                const v = allVals[i];
-                if (v === '' || v === null) {
-                  allVals[i] = 0; // try 0 instead of empty
-                  break;
-                }
+          if (msg.includes('invalid input syntax') || msg.includes('type uuid') || msg.includes('type smallint')) {
+            for (let i = 0; i < allCols.length; i++) {
+              if (allVals[i] === '' || allVals[i] === null || allVals[i] === undefined) {
+                allVals[i] = 0; break;
               }
-              continue;
             }
-            throw e;
+            continue;
           }
+          throw e;
         }
-      } catch (e) {
-        if (!result) throw e;
       }
+      if (!result) throw new Error('All ' + maxAttempts + ' insert attempts failed');
       const docId = result.rows[0].id;
       // Trigger Python parser asynchronously
       const pythonPath = process.env.PYTHON_PATH || 'python';
