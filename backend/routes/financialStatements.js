@@ -201,22 +201,15 @@ router.post('/financial-statements/upload', (req, res) => {
         return res.status(404).json({ error: 'Stock not found' });
       }
       const fileBuffer = fs.readFileSync(req.file.path);
-      // Detect column types for UUID casting
+      // Detect column types for UUID casting (stock_id only; uploaded_by uses req.user.id verbatim)
       let sidVal = stock_id;
-      let uidVal = req.user?.id || null;
       try {
-        const colTypes = await pool.query(
-          `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'financial_statements' AND column_name IN ('stock_id','uploaded_by')`
+        const ct = await pool.query(
+          `SELECT data_type FROM information_schema.columns WHERE table_name = 'financial_statements' AND column_name = 'stock_id'`
         );
-        for (const row of colTypes.rows) {
-          if (row.column_name === 'stock_id' && row.data_type === 'uuid') {
-            const r = await pool.query('SELECT $1::uuid AS v', [stock_id]);
-            sidVal = r.rows[0].v;
-          }
-          if (row.column_name === 'uploaded_by' && row.data_type === 'uuid' && uidVal) {
-            const r = await pool.query('SELECT $1::uuid AS v', [uidVal]);
-            uidVal = r.rows[0].v;
-          }
+        if (ct.rows.length > 0 && ct.rows[0].data_type === 'uuid') {
+          const r = await pool.query('SELECT $1::uuid AS v', [stock_id]);
+          sidVal = r.rows[0].v;
         }
       } catch {}
 
@@ -226,7 +219,7 @@ router.post('/financial-statements/upload', (req, res) => {
         return pool.query(`INSERT INTO financial_statements (${cols.join(', ')}) VALUES (${ph}) RETURNING id`, vals);
       }
       const allCols = ['stock_id', 'period_type', 'period_end_date', 'file_name', 'file_data', 'file_size', 'mime_type', 'status', 'uploaded_by'];
-      const allVals = [sidVal, period_type || 'annual', period_end_date || null, req.file.originalname, fileBuffer, req.file.size, req.file.mimetype || 'application/pdf', 'pending', uidVal];
+      const allVals = [sidVal, period_type || 'annual', period_end_date || null, req.file.originalname, fileBuffer, req.file.size, req.file.mimetype || 'application/pdf', 'pending', req.user?.id || null];
       let result;
       for (let attempt = 0; attempt <= allCols.length; attempt++) {
         try {
