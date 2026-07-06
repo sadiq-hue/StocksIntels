@@ -1158,7 +1158,11 @@ app.get('/api/admin/stocks', async (req, res) => {
 app.get('/api/admin/stocks/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query('SELECT * FROM stocks WHERE id = $1', [id]);
+    const result = await pool.query(
+      `SELECT s.*, sf.pe_ratio, sf.pb_ratio, sf.market_cap, sf.dividend_yield, sf.roe
+       FROM stocks s LEFT JOIN stock_fundamentals sf ON sf.symbol = s.ticker WHERE s.id = $1`,
+      [id]
+    );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Stock not found' });
     res.json(result.rows[0]);
   } catch (err) { console.error('Admin stock detail error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
