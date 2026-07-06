@@ -262,6 +262,7 @@ router.post('/financial-statements/upload', (req, res) => {
         }
       }
       let result;
+      let lastErr = null;
       const maxAttempts = allCols.length + 5;
       for (let a = 0; a < maxAttempts; a++) {
         try {
@@ -269,8 +270,8 @@ router.post('/financial-statements/upload', (req, res) => {
           result = await pool.query(`INSERT INTO financial_statements (${allCols.join(', ')}) VALUES (${ph}) RETURNING id`, allVals);
           break;
         } catch (e) {
+          lastErr = e;
           const msg = e.message || '';
-          console.log('[Upload] Attempt ' + (a+1) + ' failed:', msg);
           if (msg.includes('does not exist')) {
             const m = msg.match(/column "(\w+)" of relation/);
             if (m) { const i = allCols.indexOf(m[1]); if (i !== -1) { allCols.splice(i,1); allVals.splice(i,1); } }
@@ -287,7 +288,7 @@ router.post('/financial-statements/upload', (req, res) => {
           throw e;
         }
       }
-      if (!result) throw new Error('All ' + maxAttempts + ' insert attempts failed');
+      if (!result) throw new Error(lastErr ? lastErr.message : 'All ' + maxAttempts + ' insert attempts failed');
       const docId = result.rows[0].id;
       // Trigger Python parser asynchronously
       const pythonPath = process.env.PYTHON_PATH || 'python';
