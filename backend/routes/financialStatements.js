@@ -309,65 +309,22 @@ router.post('/financial-statements/upload', (req, res) => {
         `UPDATE financial_statements SET status = 'processing', processed_by = $1 WHERE id = $2`,
         [process.env.OPENAI_API_KEY ? 'python+llm' : 'python', docId]
       );
+      // Run JavaScript parser in-process (reliable, no dependency on Python/webhook)
+      try {
+        const { parsePdfBuffer } = require('../jsParser');
+        parsePdfBuffer(Buffer.isBuffer(fileBuffer) ? fileBuffer : Buffer.from(fileBuffer), docId);
+      } catch (e) {
+        console.error('JS parser load error for doc ' + docId + ':', e.message);
+      }
+      // Spawn Python as async fallback (best-effort)
       const child = spawn(pythonPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
       let stdout = '';
       let stderr = '';
-      let timedOut = false;
-      const killTimer = setTimeout(() => {
-        timedOut = true;
-        child.kill();
-        pool.query(`UPDATE financial_statements SET status = 'failed', error_message = 'Parser timed out after 120s' WHERE id = $1 AND status = 'processing'`, [docId]).catch(() => {});
-      }, 120000);
+      const killTimer = setTimeout(() => { child.kill(); }, 120000);
       child.stdout.on('data', (d) => { stdout += d.toString(); });
       child.stderr.on('data', (d) => { stderr += d.toString(); });
-      child.on('error', (e) => {
-        clearTimeout(killTimer);
-        console.error('Python spawn error for doc ' + docId + ':', e.message);
-        pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`, [e.message, docId]).catch(() => {});
-      });
-      child.on('close', (code) => {
-        clearTimeout(killTimer);
-        if (timedOut) return;
-        // Parse stdout for RESULT line — avoids dependency on webhook
-        try {
-          const resultMatch = stdout.match(/RESULT:(\{.*?\})/);
-          const procMatch = stdout.match(/PROCESSED_BY:(\S+)/);
-          if (resultMatch) {
-            const parsedData = JSON.parse(resultMatch[1]);
-            const processedBy = procMatch ? procMatch[1] : 'python';
-            pool.query(
-              `UPDATE financial_statements SET status = 'completed', parsed_data = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
-              [JSON.stringify(parsedData), processedBy, docId]
-            ).catch(() => {});
-            // Upsert stock_fundamentals
-            if (parsedData.dividend_per_share) {
-              pool.query('SELECT s.ticker FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE fs.id = $1', [docId]).then(r => {
-                if (r.rows.length > 0) {
-                  const ticker = r.rows[0].ticker;
-                  const fundRow = {};
-                  if (parsedData.dividend_per_share) fundRow.dividend_yield = parsedData.dividend_per_share;
-                  if (parsedData.eps) fundRow.eps_growth = parsedData.eps;
-                  const fk = Object.keys(fundRow);
-                  if (fk.length > 0) {
-                    const vals = fk.map((_, i) => '$' + (i + 2)).join(', ');
-                    pool.query(
-                      `INSERT INTO stock_fundamentals (symbol, ${fk.join(', ')}) VALUES ($1, ${vals}) ON CONFLICT (symbol) DO UPDATE SET ${fk.map(k => k + ' = EXCLUDED.' + k).join(', ')}`,
-                      [ticker, ...fk.map(k => fundRow[k])]
-                    ).catch(() => {});
-                  }
-                }
-              }).catch(() => {});
-            }
-          } else if (code !== 0) {
-            console.error('Python parser exited with code ' + code + ' for doc ' + docId + ':', stderr);
-            pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`, [`Exit code ${code}: ${stderr.slice(0, 500)}`, docId]).catch(() => {});
-          }
-        } catch (e) {
-          console.error('Parse error for doc ' + docId + ':', e.message);
-          pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`, [e.message, docId]).catch(() => {});
-        }
-        try { fs.unlinkSync(req.file.path); } catch (_) {}
-      });
+      child.on('error', () => { clearTimeout(killTimer); });
+      child.on('close', () => { clearTimeout(killTimer); try { fs.unlinkSync(req.file.path); } catch (_) {} });
       res.status(201).json({ id: docId, status: 'processing', message: 'File uploaded and queued for parsing' });
     } catch (dbErr) {
       console.error('Upload DB error:', dbErr.message);
