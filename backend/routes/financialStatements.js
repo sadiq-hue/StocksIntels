@@ -233,8 +233,20 @@ router.post('/financial-statements/upload', (req, res) => {
         const ph = cols.map((_, i) => '$' + (i + 1)).join(', ');
         return pool.query(`INSERT INTO financial_statements (${cols.join(', ')}) VALUES (${ph}) RETURNING id`, vals);
       }
+      // Check if status column uses enum; pick a valid value
+      let statusVal = 'pending';
+      try {
+        const enumRes = await pool.query(`
+          SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid WHERE t.typname = 'statement_status'
+        `);
+        if (enumRes.rows.length > 0) {
+          // Pick the first valid status value that isn't 'failed'
+          const valid = enumRes.rows.map(r => r.enumlabel);
+          statusVal = valid.find(v => v !== 'failed') || valid[0];
+        }
+      } catch {}
       const allCols = ['stock_id', 'period_type', 'file_name', 'file_data', 'mime_type', 'status'];
-      const allVals = [sidVal, period_type || 'annual', req.file.originalname, fileBuffer, req.file.mimetype || 'application/pdf', 'pending'];
+      const allVals = [sidVal, period_type || 'annual', req.file.originalname, fileBuffer, req.file.mimetype || 'application/pdf', statusVal];
       const optionalCols = { file_size: req.file.size, uploaded_by: req.user?.id || null };
       for (const [col, val] of Object.entries(optionalCols)) {
         allCols.push(col);

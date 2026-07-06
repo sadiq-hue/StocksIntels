@@ -10521,10 +10521,15 @@ async function initDatabase() {
       async function fixFinancialStatementsSchema() {
         try {
           const colInfo = await pool.query(
-            `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = 'financial_statements'`
+            `SELECT column_name, data_type, is_nullable, udt_name FROM information_schema.columns WHERE table_name = 'financial_statements'`
           );
           const cols = {};
           for (const r of colInfo.rows) cols[r.column_name] = r;
+          // Fix status column if it's an enum
+          if (cols['status'] && cols['status'].data_type === 'USER-DEFINED') {
+            await pool.query(`ALTER TABLE financial_statements ALTER COLUMN status TYPE VARCHAR(20) USING status::text`);
+            console.log('[Migration] Changed financial_statements.status from enum to VARCHAR');
+          }
           const wanted = { stock_id: 'integer', period_end_date: 'date', file_size: 'integer', uploaded_by: 'integer' };
           for (const [col, targetType] of Object.entries(wanted)) {
             if (cols[col] && cols[col].data_type !== targetType) {
@@ -10532,7 +10537,6 @@ async function initDatabase() {
               console.log(`[Migration] Fixed financial_statements.${col} (${cols[col].data_type} → ${targetType})`);
             }
             if (!cols[col]) {
-              // Column doesn't exist; add it
               const typeDef = targetType === 'integer' ? 'INTEGER' : targetType === 'date' ? 'DATE' : 'VARCHAR(255)';
               const nullable = col === 'stock_id' ? 'NOT NULL' : '';
               await pool.query(`ALTER TABLE financial_statements ADD COLUMN IF NOT EXISTS ${col} ${typeDef} ${nullable}`);
