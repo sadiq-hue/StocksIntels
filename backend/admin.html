@@ -3261,35 +3261,25 @@ async function handleFsUpload(event) {
   const progress = document.getElementById('fsUploadProgress');
   const progressText = document.getElementById('fsUploadText');
   progress.classList.remove('hidden');
-  progressText.textContent = 'Uploading 0%...';
+  progressText.textContent = 'Uploading (this may take a while on slow connections)...';
   try {
-    // Use XHR for upload progress (auth header passed manually)
-    const responseText = await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/admin/financial-statements/upload');
-      const token = localStorage.getItem('token');
-      if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          progressText.textContent = 'Uploading ' + Math.round(e.loaded / e.total * 100) + '%...';
-        }
-      };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.responseText);
-        else reject(new Error(xhr.responseText.slice(0, 500) || 'HTTP ' + xhr.status));
-      };
-      xhr.onerror = () => reject(new Error('Upload failed - connection issue'));
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('stock_id', String(fsStockId));
-      fd.append('period_type', 'annual');
-      xhr.send(fd);
-    });
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('stock_id', String(fsStockId));
+    formData.append('period_type', 'annual');
+    const res = await fetch('/api/admin/financial-statements/upload', { method: 'POST', body: formData });
+    if (!res.ok) {
+      let text = '';
+      try { text = await res.text(); } catch(_) {}
+      throw new Error(text.slice(0, 500) || 'HTTP ' + res.status);
+    }
     progressText.textContent = 'Parsing...';
     toast('Upload complete, parsing...', 'success');
     loadFsStatements(fsStockId);
     setTimeout(() => loadFsStatements(fsStockId), 5000);
-  } catch (e) { toast(e.message, 'error'); }
+  } catch (e) {
+    toast(e.message, 'error');
+  }
   finally { progress.classList.add('hidden'); event.target.value = ''; }
 }
 
