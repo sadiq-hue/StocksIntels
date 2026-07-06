@@ -3241,7 +3241,8 @@ async function loadFsStatements(stockId) {
             </div>
           </div>
           <div class="flex items-center gap-1 shrink-0 ml-2">
-            ${s.parsed_data ? `<button class="btn btn-secondary text-xs py-1 px-2" onclick="viewFsParsed(${s.id})">View</button>` : ''}
+            ${s.status === 'completed' ? `<button class="btn btn-secondary text-xs py-1 px-2" onclick="viewFsParsed(${s.id})">View</button>` : ''}
+            ${s.status === 'completed' || s.status === 'failed' ? `<button class="btn btn-secondary text-xs py-1 px-2" onclick="reparseFsStatement(${s.id})">↻</button>` : ''}
             <button class="btn btn-danger text-xs py-1 px-2" onclick="deleteFsStatement(${s.id})">Del</button>
           </div>
         </div>
@@ -3273,17 +3274,37 @@ let fsStatementsCache = [];
 
 async function viewFsParsed(id) {
   const stmt = fsStatementsCache.find(s => s.id === id);
-  if (!stmt || !stmt.parsed_data) { toast('No parsed data', 'error'); return; }
-  const data = stmt.parsed_data;
+  if (!stmt) { toast('Statement not found', 'error'); return; }
   const body = document.getElementById('fsParsedBody');
+  if (stmt.error_message) {
+    body.innerHTML = `<div class="text-amber-600 text-xs mb-3 break-words">${esc(stmt.error_message)}</div>`;
+  }
+  if (!stmt.parsed_data) {
+    body.innerHTML = (body.innerHTML || '') + '<div class="text-gray-400 text-center py-4">No parsed data</div>';
+    document.getElementById('fsParsedModal').classList.remove('hidden');
+    return;
+  }
+  const data = stmt.parsed_data;
   const entries = Object.entries(data).filter(([_, v]) => v != null);
-  if (entries.length === 0) { body.innerHTML = '<div class="text-gray-400 text-center py-4">No parsed data</div>'; }
-  else {
+  if (entries.length === 0) {
+    body.innerHTML = (body.innerHTML || '') + '<div class="text-gray-400 text-center py-4">No parsed data</div>';
+  } else {
     body.innerHTML = entries.map(([k, v]) =>
       `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500 capitalize">${k.replace(/_/g,' ')}</span><span class="font-medium text-gray-800">${typeof v === 'number' ? v.toLocaleString() : esc(String(v))}</span></div>`
     ).join('');
   }
   document.getElementById('fsParsedModal').classList.remove('hidden');
+}
+
+async function reparseFsStatement(id) {
+  if (!confirm('Re-parse this statement?')) return;
+  try {
+    const res = await fetch('/api/admin/financial-statements/reparse/' + id, { method: 'POST' });
+    if (!res.ok) throw new Error('Re-parse failed');
+    toast('Re-parsing...', 'success');
+    loadFsStatements(fsStockId);
+    setTimeout(() => loadFsStatements(fsStockId), 3000);
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteFsStatement(id) {
