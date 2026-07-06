@@ -201,18 +201,36 @@ router.post('/financial-statements/upload', (req, res) => {
         return res.status(404).json({ error: 'Stock not found' });
       }
       const fileBuffer = fs.readFileSync(req.file.path);
+      // Detect column types to handle UUID vs INTEGER schema mismatch on production
+      let sidVal = stock_id;
+      let uidVal = req.user?.id || null;
+      try {
+        const colTypes = await pool.query(
+          `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'financial_statements' AND column_name IN ('stock_id','uploaded_by')`
+        );
+        for (const row of colTypes.rows) {
+          if (row.column_name === 'stock_id' && row.data_type === 'uuid') {
+            const r = await pool.query('SELECT $1::uuid AS v', [stock_id]);
+            sidVal = r.rows[0].v;
+          }
+          if (row.column_name === 'uploaded_by' && row.data_type === 'uuid' && uidVal) {
+            const r = await pool.query('SELECT $1::uuid AS v', [uidVal]);
+            uidVal = r.rows[0].v;
+          }
+        }
+      } catch {}
       const result = await pool.query(
         `INSERT INTO financial_statements (stock_id, period_type, period_end_date, file_name, file_data, file_size, mime_type, status, uploaded_by)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8) RETURNING id`,
         [
-          stock_id,
+          sidVal,
           period_type || 'annual',
           period_end_date || null,
           req.file.originalname,
           fileBuffer,
           req.file.size,
           req.file.mimetype || 'application/pdf',
-          req.user?.id || null,
+          uidVal,
         ]
       );
       const docId = result.rows[0].id;
@@ -258,7 +276,7 @@ router.post('/financial-statements/upload', (req, res) => {
     } catch (dbErr) {
       console.error('Upload DB error:', dbErr.message);
       try { fs.unlinkSync(req.file.path); } catch (_) {}
-      res.status(500).json({ error: 'Database error during upload' });
+      res.status(500).json({ error: dbErr.message || 'Database error during upload' });
     }
   });
 });
@@ -347,14 +365,18 @@ router.get('/financial-statements/fundamentals/:stockId', async (req, res) => {
     const fundamentalsResult = await pool.query(
       'SELECT * FROM stock_fundamentals WHERE symbol = $1', [ticker]
     );
-    const statementsResult = await pool.query(
-      `SELECT id, period_type, period_end_date, file_name, status, parsed_data, uploaded_at, parsed_at
-       FROM financial_statements WHERE stock_id = $1 ORDER BY uploaded_at DESC`,
-      [stockId]
-    );
+    let statements = [];
+    try {
+      const r = await pool.query(
+        `SELECT id, period_type, period_end_date, file_name, status, parsed_data, uploaded_at, parsed_at
+         FROM financial_statements WHERE stock_id = $1 ORDER BY uploaded_at DESC`,
+        [stockId]
+      );
+      statements = r.rows;
+    } catch {}
     res.json({
       fundamentals: fundamentalsResult.rows[0] || null,
-      statements: statementsResult.rows,
+      statements,
     });
   } catch (err) {
     console.error('Fundamentals error:', err.message);
