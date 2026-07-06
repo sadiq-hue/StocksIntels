@@ -310,11 +310,13 @@ router.post('/financial-statements/upload', (req, res) => {
         [process.env.OPENAI_API_KEY ? 'python+llm' : 'python', docId]
       );
       // Run JavaScript parser in-process (reliable, no dependency on Python/webhook)
-      try {
-        const { parsePdfBuffer } = require('../jsParser');
-        parsePdfBuffer(Buffer.isBuffer(fileBuffer) ? fileBuffer : Buffer.from(fileBuffer), docId);
-      } catch (e) {
-        console.error('JS parser load error for doc ' + docId + ':', e.message);
+      let jsParser;
+      try { jsParser = require('../jsParser'); } catch (e) { jsParser = null; console.error('JS parser load error for doc ' + docId + ':', e.message); }
+      if (jsParser) {
+        jsParser.parsePdfBuffer(Buffer.isBuffer(fileBuffer) ? fileBuffer : Buffer.from(fileBuffer), docId).catch(e => {
+          console.error('JS parser runtime error for doc ' + docId + ':', e.message);
+          pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2 AND status = 'processing'`, [e.message, docId]).catch(() => {});
+        });
       }
       // Spawn Python as async fallback (best-effort)
       const child = spawn(pythonPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });

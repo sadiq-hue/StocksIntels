@@ -1,4 +1,5 @@
 const { pool } = require('./db');
+const zlib = require('zlib');
 
 const METRIC_PATTERNS = {
   total_revenue: [/(?:total\s+)?revenue[:\s]*([\d,.]+)/i, /(?:total\s+)?(?:operating\s+)?income[:\s]*([\d,.]+)/i, /gross\s+revenue[:\s]*([\d,.]+)/i],
@@ -43,13 +44,44 @@ function extractMetrics(text) {
   return results;
 }
 
+function extractPdfText(buffer) {
+  const latin1 = buffer.toString('latin1');
+  const texts = [];
+
+  function extractFromString(s) {
+    const re = /\(([^)]*)\)/g;
+    let m;
+    while ((m = re.exec(s)) !== null) {
+      const t = m[1];
+      if (t.length > 2 && /[a-zA-Z]{2,}/.test(t)) {
+        texts.push(t.replace(/\\(.)/g, '$1'));
+      }
+    }
+  }
+
+  extractFromString(latin1);
+
+  const streamRe = /stream\r?\n(.+?)\r?\nendstream/gs;
+  let sm;
+  while ((sm = streamRe.exec(latin1)) !== null) {
+    try {
+      const raw = Buffer.from(sm[1], 'binary');
+      const dec = zlib.inflateSync(raw).toString('latin1');
+      extractFromString(dec);
+    } catch (_) {}
+  }
+
+  return texts.join(' ');
+}
+
 async function parsePdfBuffer(buffer, docId) {
   try {
-    const pdfParse = require('pdf-parse');
-    const data = await pdfParse(buffer);
-    const text = data.text || '';
+    const text = extractPdfText(buffer);
     if (!text.trim()) {
-      await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = 'No text could be extracted from PDF' WHERE id = $1`, [docId]);
+      await pool.query(
+        `UPDATE financial_statements SET status = 'failed', error_message = 'No text could be extracted from PDF (raw extraction returned empty)' WHERE id = $1`,
+        [docId]
+      );
       return;
     }
     const metrics = extractMetrics(text);
@@ -60,12 +92,23 @@ async function parsePdfBuffer(buffer, docId) {
         parsedData[metric] = Math.round(best * 100) / 100;
       }
     }
-    await pool.query(
-      `UPDATE financial_statements SET status = 'completed', parsed_data = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = 'js' WHERE id = $2`,
-      [JSON.stringify(parsedData), docId]
-    );
+    const hasAnyData = Object.keys(parsedData).length > 0;
+    if (hasAnyData) {
+      await pool.query(
+        `UPDATE financial_statements SET status = 'completed', parsed_data = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = 'js' WHERE id = $2`,
+        [JSON.stringify(parsedData), docId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE financial_statements SET status = 'completed', parsed_data = '{}'::jsonb, parsed_at = CURRENT_TIMESTAMP, processed_by = 'js' WHERE id = $1`,
+        [docId]
+      );
+    }
     if (parsedData.dividend_per_share || parsedData.eps) {
-      const r = await pool.query('SELECT s.ticker FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE fs.id = $1', [docId]);
+      const r = await pool.query(
+        'SELECT s.ticker FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE fs.id = $1',
+        [docId]
+      );
       if (r.rows.length > 0) {
         const ticker = r.rows[0].ticker;
         const fundRow = {};
@@ -82,7 +125,10 @@ async function parsePdfBuffer(buffer, docId) {
       }
     }
   } catch (e) {
-    await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`, [e.message, docId]);
+    await pool.query(
+      `UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`,
+      [e.message, docId]
+    );
   }
 }
 
