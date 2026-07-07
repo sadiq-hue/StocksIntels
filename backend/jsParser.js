@@ -172,13 +172,19 @@ ${incomeNote}
 - current_liabilities (number, in KES)
 - shareholders_equity (number, in KES — Total equity / Shareholders funds)
 - retained_earnings (number, in KES)
-- eps (number, in KES — Earnings per share)
+- eps (number, in KES — Earnings per share. For banks this is typically 10-50 KES)
 - dividend_per_share (number, in KES — Dividends per share)
 
-IMPORTANT: The text may contain numbers for multiple years. Pick the LATEST year's values (the first column of numbers after each label).
+CRITICAL INSTRUCTIONS FOR COLUMN SELECTION:
+- The text may have multiple columns: Group (Consolidated) AND Company (Standalone/Bank).
+- ALWAYS pick the GROUP / CONSOLIDATED column values, NOT the standalone Company column.
+- Group values are always LARGER than Company values (they include subsidiaries).
+- Also, pick the LATEST/MOST RECENT year (the first data column after each label).
+- If a statement says "Group (KShs Mn)" and "Company (KShs Mn)", use the Group numbers.
+- Check: EPS must be logically consistent. If DPS is 7.00, EPS cannot be 0.90 — EPS must be larger than DPS.
 
 Report text:
-${text.slice(0, 8000)}`;
+${text.slice(0, 12000)}`;
 }
 
 async function callLlm(text, apiKey, model) {
