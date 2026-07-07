@@ -3779,7 +3779,7 @@ async function viewFsParsed(id) {
   }
     if (stmt.raw_text) {
     html += `<details class="mt-2" open><summary class="text-xs font-medium text-gray-500 cursor-pointer hover:text-gray-700">Raw extracted text (${stmt.raw_text.length} chars)</summary>
-      <pre class="text-xs text-gray-400 break-words mt-1 p-2 bg-gray-50 rounded max-h-48 overflow-y-auto">${esc(stmt.raw_text.slice(0, 5000))}</pre>
+      <pre class="text-xs text-gray-400 break-words mt-1 p-2 bg-gray-50 rounded max-h-96 overflow-y-auto">${esc(stmt.raw_text)}</pre>
     </details>`;
   }
   if (!html) html = '<div class="text-gray-400 text-center py-4">No data</div>';
