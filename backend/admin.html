@@ -3571,15 +3571,16 @@ function fillFormFromJson() {
     if (data.metadata.period_end) document.getElementById('fsJsonPeriodEnd').value = data.metadata.period_end;
     if (data.metadata.period_type) document.getElementById('fsJsonPeriodType').value = data.metadata.period_type;
   }
-  if (filled > 0) {
-    statusEl.textContent = 'Filled ' + filled + ' fields from JSON';
-    statusEl.style.color = '#059669';
-  } else if (data.raw_text) {
-    statusEl.textContent = 'Raw extraction detected — paste a JSON with field keys (total_assets, eps, dividend_per_share, etc.) to auto-fill';
+  if (filled === 0) {
+    if (data.raw_text) {
+      statusEl.textContent = 'Raw text extraction detected — paste JSON with field keys (total_assets, eps, dividend_per_share, total_revenue, net_income, etc.) instead';
+    } else {
+      statusEl.textContent = 'No matching fields. Use keys: total_assets, total_liabilities, eps, dividend_per_share, total_revenue, net_income, etc.';
+    }
     statusEl.style.color = '#f59e0b';
   } else {
-    statusEl.textContent = 'No matching fields found. Use keys like total_assets, eps, dividend_per_share, total_revenue, etc.';
-    statusEl.style.color = '#f59e0b';
+    statusEl.textContent = 'Filled ' + filled + ' fields from JSON';
+    statusEl.style.color = '#059669';
   }
 }
 
