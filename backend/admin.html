@@ -3516,23 +3516,38 @@ async function viewFsParsed(id) {
   const stmt = fsStatementsCache.find(s => s.id === id);
   if (!stmt) { toast('Statement not found', 'error'); return; }
   const body = document.getElementById('fsParsedBody');
+  let html = '';
   if (stmt.error_message) {
-    body.innerHTML = `<div class="text-amber-600 text-xs mb-3 break-words">${esc(stmt.error_message)}</div>`;
+    html += `<div class="text-amber-600 text-xs mb-3 break-words">${esc(stmt.error_message)}</div>`;
   }
-  if (!stmt.parsed_data) {
-    body.innerHTML = (body.innerHTML || '') + '<div class="text-gray-400 text-center py-4">No parsed data</div>';
-    document.getElementById('fsParsedModal').classList.remove('hidden');
-    return;
+  // Show json_data first if available (manual upload)
+  if (stmt.json_data) {
+    html += '<div class="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">JSON Upload Data</div>';
+    const jd = stmt.json_data;
+    const jEntries = Object.entries(jd).filter(([_, v]) => v != null && typeof v !== 'object');
+    if (jEntries.length > 0) {
+      html += jEntries.map(([k, v]) =>
+        `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500 capitalize">${k.replace(/_/g,' ')}</span><span class="font-medium text-gray-800">${typeof v === 'number' ? v.toLocaleString() : esc(String(v))}</span></div>`
+      ).join('');
+    }
   }
-  const data = stmt.parsed_data;
-  const entries = Object.entries(data).filter(([_, v]) => v != null);
-  if (entries.length === 0) {
-    body.innerHTML = (body.innerHTML || '') + '<div class="text-gray-400 text-center py-4">No parsed data</div>';
-  } else {
-    body.innerHTML = entries.map(([k, v]) =>
-      `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500 capitalize">${k.replace(/_/g,' ')}</span><span class="font-medium text-gray-800">${typeof v === 'number' ? v.toLocaleString() : esc(String(v))}</span></div>`
-    ).join('');
+  // Show parsed_data
+  if (stmt.parsed_data) {
+    const data = stmt.parsed_data;
+    const entries = Object.entries(data).filter(([_, v]) => v != null && typeof v !== 'object');
+    if (entries.length > 0) {
+      html += '<div class="text-xs font-semibold text-gray-500 mt-3 mb-2 uppercase tracking-wider">Parsed Metrics</div>';
+      html += entries.map(([k, v]) =>
+        `<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-gray-500 capitalize">${k.replace(/_/g,' ')}</span><span class="font-medium text-gray-800">${typeof v === 'number' ? v.toLocaleString() : esc(String(v))}</span></div>`
+      ).join('');
+    }
   }
+  // Show raw_text excerpt if no structured data
+  if (!html && stmt.raw_text) {
+    html += `<div class="text-xs text-gray-400 break-words">${esc(stmt.raw_text.slice(0, 2000))}</div>`;
+  }
+  if (!html) html = '<div class="text-gray-400 text-center py-4">No data</div>';
+  body.innerHTML = html;
   document.getElementById('fsParsedModal').classList.remove('hidden');
 }
 
