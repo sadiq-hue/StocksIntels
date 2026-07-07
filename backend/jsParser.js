@@ -238,13 +238,17 @@ async function processText(text, docId, source) {
     const metrics = extractMetrics(text);
     for (const [metric, values] of Object.entries(metrics)) {
       if (values.length > 0) {
+        // Filter out section numbers (small values) for large-value metrics
+        const largeMetrics = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
+        let filtered = largeMetrics.includes(metric) ? values.filter(v => v > 100) : values;
+        if (filtered.length === 0) filtered = values;
         let best;
         if (metric === 'total_debt') {
-          best = values.reduce((a, b) => a + b, 0);
+          best = filtered.reduce((a, b) => a + b, 0);
         } else if (metric === 'net_income') {
-          best = Math.max(...values);
+          best = Math.max(...filtered);
         } else {
-          best = values.reduce((a, b) => Math.abs(a) < Math.abs(b) ? a : b);
+          best = filtered.reduce((a, b) => Math.abs(a) < Math.abs(b) ? a : b);
         }
         parsedData[metric] = Math.round(best * 100) / 100;
       }
