@@ -4,8 +4,9 @@ const https = require('https');
 
 const METRIC_PATTERNS = {
   total_revenue: [
-    /\btotal\s+revenue[:\s]*\(?([\d,.]+)\)?/gi,
-    /\btotal\s+operating\s+income[:\s]*\(?([\d,.]+)\)?/gi,
+    /\btotal\s+revenue(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\btotal\s+operating\s+income(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\btotal\s+income(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   net_income: [
     /(?<!Equity\s+attributable\s+to\s+)\bequity\s+holders\s+of\s+the\s+parent[:\s]*\(?([\d,.]+)\)?/gi,
@@ -46,7 +47,7 @@ const METRIC_PATTERNS = {
     /(?<!\btotal\s+)current\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   shareholders_equity: [
-    /\bshareholders?[''´`]?s?\s+equity[:\s]*\(?([\d,.]+)\)?/gi,
+    /(?<!LIABILITIES\s+(?:AND|&)\s+)shareholders?[''´`]?s?\s+equity[:\s]*\(?([\d,.]+)\)?/gi,
     /\btotal\s+equity[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   retained_earnings: [
@@ -82,16 +83,25 @@ function extractMetrics(text) {
       const re = new RegExp(p.source, 'i');
       let rowMax = 0;
       for (const line of lines) {
-        if (!re.test(line)) continue;
-        const nums = line.match(/(?<![a-zA-Z])(\d[\d,]*\.?\d*)(?![a-zA-Z.%])/g);
-        if (nums) {
-          for (const n of nums) {
-            const val = parseNumber(n);
-            if (val !== null) {
-              // Skip year-like values (2024-2099) and small section/line numbers (1-999)
-              if (Number.isInteger(val) && (val >= 1 && val <= 999 || val >= 1900 && val <= 2099)) continue;
-              values.push(val);
-              if (val > rowMax) rowMax = val;
+        const m = line.match(re);
+        if (!m) continue;
+        // Use the captured number from the pattern tail (number after label)
+        let val = m[1] ? parseNumber(m[1]) : null;
+        if (val !== null) {
+          if (Number.isInteger(val) && (val >= 1 && val <= 999 || val >= 1900 && val <= 2099)) continue;
+          values.push(val);
+          if (val > rowMax) rowMax = val;
+        } else {
+          // Fallback: extract all numbers from line (backward compat for patterns without capture)
+          const nums = line.match(/(?<![a-zA-Z])(\d[\d,]*\.?\d*)(?![a-zA-Z.%])/g);
+          if (nums) {
+            for (const n of nums) {
+              val = parseNumber(n);
+              if (val !== null) {
+                if (Number.isInteger(val) && (val >= 1 && val <= 999 || val >= 1900 && val <= 2099)) continue;
+                values.push(val);
+                if (val > rowMax) rowMax = val;
+              }
             }
           }
         }
