@@ -296,19 +296,7 @@ async function buildLocalNseReport(symbol) {
     const stock = stockResult.rows[0];
     console.log(`[buildLocalNseReport] Found stock: id=${stock.id}, name=${stock.name}, sector=${stock.sector}`);
 
-    let fundamentals = null;
-    const fundResult = await pool.query('SELECT * FROM stock_fundamentals WHERE symbol = $1', [ticker]);
-    if (fundResult.rows.length > 0) {
-      fundamentals = fundResult.rows[0];
-    } else {
-      // Also try by nse_stocks.id (JSON uploads store stock_id, not symbol)
-      const nsResult = await pool.query('SELECT id FROM nse_stocks WHERE UPPER(ticker) = UPPER($1)', [ticker]);
-      if (nsResult.rows.length > 0) {
-        const fundResult2 = await pool.query('SELECT * FROM stock_fundamentals WHERE stock_id = $1', [nsResult.rows[0].id]);
-        fundamentals = fundResult2.rows[0] || null;
-      }
-    }
-
+    // Primary data source: financial_statements.parsed_data (populated by JSON upload / PDF parse)
     const stmtResult = await pool.query(
       `SELECT parsed_data, period_end_date FROM financial_statements
        WHERE stock_id = $1 AND status = 'completed' AND parsed_data IS NOT NULL
@@ -318,6 +306,23 @@ async function buildLocalNseReport(symbol) {
     const statement = stmtResult.rows[0] || null;
     const parsed = statement?.parsed_data || null;
     console.log(`[buildLocalNseReport] financial_statements: rows=${stmtResult.rows.length}, hasParsed=${!!parsed}, keys=${parsed ? Object.keys(parsed).join(',') : 'none'}`);
+
+    // Supplementary: stock_fundamentals (may have different schema on Railway; errors are non-fatal)
+    let fundamentals = null;
+    try {
+      const fundResult = await pool.query('SELECT * FROM stock_fundamentals WHERE symbol = $1', [ticker]);
+      if (fundResult.rows.length > 0) {
+        fundamentals = fundResult.rows[0];
+      } else {
+        const nsResult = await pool.query('SELECT id FROM nse_stocks WHERE UPPER(ticker) = UPPER($1)', [ticker]);
+        if (nsResult.rows.length > 0) {
+          const fundResult2 = await pool.query('SELECT * FROM stock_fundamentals WHERE stock_id = $1', [nsResult.rows[0].id]);
+          fundamentals = fundResult2.rows[0] || null;
+        }
+      }
+    } catch (fundErr) {
+      console.log(`[buildLocalNseReport] fundamentals lookup skipped (non-fatal): ${fundErr.message}`);
+    }
 
     if (!fundamentals && !parsed) return null;
 
