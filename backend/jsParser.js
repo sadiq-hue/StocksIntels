@@ -38,6 +38,8 @@ const METRIC_PATTERNS = {
     /\btotal\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   total_debt: [
+    /\btotal\s+debt[:\s]*\(?([\d,.]+)\)?/gi,
+    /\b(?:total\s+)?borrowings?\s+and\s+lease\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
     /(?<!paid\s+on\s+)\bborrowings[:\s]*\(?([\d,.]+)\)?/gi,
     /\blease\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
   ],
@@ -554,7 +556,7 @@ async function processText(text, docId, source) {
   if (scale > 1 && Object.keys(parsedData).length > 0) {
     const scaledMetrics = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
     for (const k of scaledMetrics) {
-      if (parsedData[k] !== undefined && parsedData[k] !== null && parsedData[k] > 0 && parsedData[k] < 1e10) {
+      if (parsedData[k] !== undefined && parsedData[k] !== null && parsedData[k] !== 0 && Math.abs(parsedData[k]) < 1e10) {
         parsedData[k] = Math.round(parsedData[k] * scale * 100) / 100;
         console.log('[JSParser] Scaled ' + k + ' by ' + scale + 'x to ' + parsedData[k]);
       }
