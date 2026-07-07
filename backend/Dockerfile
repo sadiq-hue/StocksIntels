@@ -2,8 +2,8 @@ FROM mcr.microsoft.com/playwright:v1.60.0-jammy
 
 WORKDIR /app
 
-# Install Python for PDF parsing
-RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip && rm -rf /var/lib/apt/lists/*
+# Install Python for PDF parsing, poppler-utils for pdftotext, tesseract-ocr for scanning
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip poppler-utils tesseract-ocr && rm -rf /var/lib/apt/lists/*
 
 # Install pnpm (workspace lockfile is used for deterministic installs)
 RUN npm install -g pnpm@10

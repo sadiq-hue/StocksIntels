@@ -3440,62 +3440,84 @@ async function handleFsUpload(event) {
   const progressText = document.getElementById('fsUploadText');
   progress.classList.remove('hidden');
   try {
-    progressText.textContent = 'Reading PDF...';
-    const buf = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    // Try client-side pdf.js first (fast, preserves row positions)
+    progressText.textContent = 'Reading PDF (client-side)...';
     let extractedText = '';
-    const Y_TOLERANCE = 3;
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      // Try position-aware row grouping first (preserves table layout)
-      const rows = {};
-      let posOk = true;
-      for (const item of content.items) {
-        if (!item.transform || item.transform.length < 6) { posOk = false; break; }
-        const y = Math.round(item.transform[5] / Y_TOLERANCE) * Y_TOLERANCE;
-        if (!rows[y]) rows[y] = [];
-        rows[y].push({ x: item.transform[4], text: item.str });
-      }
-      if (posOk && Object.keys(rows).length > 0) {
-        const sortedY = Object.keys(rows).map(Number).sort((a, b) => b - a);
-        for (const y of sortedY) {
-          rows[y].sort((a, b) => a.x - b.x);
-          extractedText += rows[y].map(item => item.str).join(' ') + '\n';
+    try {
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      const Y_TOLERANCE = 3;
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const rows = {};
+        let posOk = true;
+        for (const item of content.items) {
+          if (!item.transform || item.transform.length < 6) { posOk = false; break; }
+          const y = Math.round(item.transform[5] / Y_TOLERANCE) * Y_TOLERANCE;
+          if (!rows[y]) rows[y] = [];
+          rows[y].push({ x: item.transform[4], text: item.str });
         }
-      } else {
-        // Fallback: flat extraction (position info unavailable)
-        extractedText += content.items.map(item => item.str).join(' ') + '\n';
+        if (posOk && Object.keys(rows).length > 0) {
+          const sortedY = Object.keys(rows).map(Number).sort((a, b) => b - a);
+          for (const y of sortedY) {
+            rows[y].sort((a, b) => a.x - b.x);
+            extractedText += rows[y].map(item => item.str).join(' ') + '\n';
+          }
+        } else {
+          extractedText += content.items.map(item => item.str).join(' ') + '\n';
+        }
+        progressText.textContent = 'Reading page ' + i + ' of ' + pdf.numPages + '...';
       }
-      progressText.textContent = 'Reading page ' + i + ' of ' + pdf.numPages + '...';
+    } catch (e) {
+      console.warn('Client-side PDF extraction failed, falling back to server:', e.message);
+      extractedText = '';
     }
-    if (!extractedText.trim()) { toast('No text could be extracted from this PDF', 'error'); progress.classList.add('hidden'); event.target.value = ''; return; }
-    progressText.textContent = 'Uploading ' + (extractedText.length / 1024).toFixed(0) + 'KB of extracted text...';
-    const res = await fetch('/api/admin/financial-statements/upload-text', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        stock_id: fsStockId,
-        period_type: 'annual',
-        file_name: file.name,
-        extracted_text: extractedText,
-      }),
-    });
-    if (!res.ok) {
-      let errText = '';
-      try { errText = await res.text(); } catch(_) {}
-      throw new Error(errText.slice(0, 500) || 'HTTP ' + res.status);
+
+    if (extractedText.trim()) {
+      // Client-side extraction succeeded — upload the text
+      progressText.textContent = 'Uploading ' + (extractedText.length / 1024).toFixed(0) + 'KB of extracted text...';
+      const res = await fetch('/api/admin/financial-statements/upload-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stock_id: fsStockId,
+          period_type: 'annual',
+          file_name: file.name,
+          extracted_text: extractedText,
+        }),
+      });
+      if (!res.ok) {
+        let errText = '';
+        try { errText = await res.text(); } catch(_) {}
+        throw new Error(errText.slice(0, 500) || 'HTTP ' + res.status);
+      }
+      progressText.textContent = 'Parsing...';
+      toast('Upload complete, parsing...', 'success');
+    } else {
+      // No text from client — send PDF to server for OCR
+      progressText.textContent = 'No text layer found. Uploading PDF to server for OCR (may take a minute)...';
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('stock_id', fsStockId);
+      formData.append('period_type', 'annual');
+      const res = await fetch('/api/admin/financial-statements/upload-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        let errText = '';
+        try { errText = await res.text(); } catch(_) {}
+        throw new Error(errText.slice(0, 500) || 'HTTP ' + res.status);
+      }
+      const result = await res.json();
+      progressText.textContent = 'Server processed ' + (result.text_length || 0) + ' chars — parsing...';
+      toast('PDF uploaded for server-side extraction (' + (result.text_length || 0) + ' chars)', 'success');
     }
-    progressText.textContent = 'Parsing...';
-    toast('Upload complete, parsing...', 'success');
     loadFsStatements(fsStockId);
     setTimeout(() => loadFsStatements(fsStockId), 5000);
   } catch (e) {
-    if (e.message.includes('pdf.js') || e.message.includes('worker')) {
-      toast('PDF reading failed. Try a different file.', 'error');
-    } else {
-      toast(e.message, 'error');
-    }
+    toast(e.message, 'error');
   }
   finally { progress.classList.add('hidden'); event.target.value = ''; }
 }

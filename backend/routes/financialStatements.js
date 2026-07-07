@@ -534,6 +534,99 @@ router.post('/financial-statements/upload-text', async (req, res) => {
   }
 });
 
+// ── Upload PDF (server-side text extraction with OCR fallback) ──
+router.post('/financial-statements/upload-pdf', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    const stock_id = req.body.stock_id;
+    const period_type = req.body.period_type || 'annual';
+    if (!file) return res.status(400).json({ error: 'No file uploaded' });
+    if (!stock_id) return res.status(400).json({ error: 'stock_id is required' });
+    const sid = parseInt(stock_id);
+    if (isNaN(sid)) return res.status(400).json({ error: 'Invalid stock_id' });
+    const stockCheck = await pool.query('SELECT id FROM stocks WHERE id = $1', [sid]);
+    if (stockCheck.rows.length === 0) return res.status(404).json({ error: 'Stock not found' });
+
+    // Step 1: try pdftotext (fast, text-based PDFs)
+    const pdfPath = file.path;
+    let extractedText = '';
+    try {
+      const { execFileSync } = require('child_process');
+      const result = execFileSync('pdftotext', ['-layout', pdfPath, '-'], { encoding: 'utf8', timeout: 30000, maxBuffer: 10 * 1024 * 1024 });
+      extractedText = result.trim();
+    } catch (e) {
+      console.warn('pdftotext failed for ' + file.originalname + ': ' + e.message);
+    }
+
+    // Step 2: if no text, fall back to tesseract OCR
+    if (!extractedText) {
+      try {
+        const { execFileSync } = require('child_process');
+        // tesseract directly on PDF (it internally renders pages)
+        const result = execFileSync('tesseract', [pdfPath, '-', '-l', 'eng', '--psm', '6'], { encoding: 'utf8', timeout: 120000, maxBuffer: 10 * 1024 * 1024 });
+        extractedText = result.trim();
+      } catch (e) {
+        console.warn('tesseract OCR failed for ' + file.originalname + ': ' + e.message);
+      }
+    }
+
+    // Clean up the temp file
+    try { require('fs').unlinkSync(pdfPath); } catch (_) {}
+
+    if (!extractedText) {
+      // Last resort: try tesseract page by page via Python script
+      // (fallback for PDFs that tesseract CLI can't handle directly)
+      try {
+        const { execFileSync } = require('child_process');
+        const result = execFileSync('python3', ['-c', `
+import subprocess, sys, tempfile, os
+from pdf2image import convert_from_path
+try:
+    images = convert_from_path(sys.argv[1], dpi=300)
+    for img in images:
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as f:
+            img.save(f.name)
+            r = subprocess.run(['tesseract', f.name, '-', '-l', 'eng', '--psm', '6'], capture_output=True, text=True, timeout=60)
+            print(r.stdout, end='')
+            os.unlink(f.name)
+except Exception as ex:
+    print('', end='')
+`, pdfPath], { encoding: 'utf8', timeout: 180000, maxBuffer: 10 * 1024 * 1024 });
+        extractedText = result.trim();
+        try { require('fs').unlinkSync(pdfPath); } catch (_) {}
+      } catch (e2) {
+        console.warn('Python OCR fallback also failed: ' + e2.message);
+      }
+    }
+
+    if (!extractedText) {
+      return res.status(400).json({ error: 'No text could be extracted from this PDF. It may be a scanned document with no OCR-friendly content.' });
+    }
+
+    // Insert into financial_statements
+    const insertResult = await pool.query(
+      `INSERT INTO financial_statements (stock_id, period_type, file_name, raw_text, status, mime_type, file_size, uploaded_by)
+       VALUES ($1, $2, $3, $4, 'processing', 'application/pdf', $5, $6) RETURNING id`,
+      [sid, period_type, file.originalname, extractedText, extractedText.length, req.user?.id || null]
+    );
+    const docId = insertResult.rows[0].id;
+
+    // Run parser
+    let jsParser;
+    try { jsParser = require('../jsParser'); } catch (e) { jsParser = null; }
+    if (jsParser) {
+      jsParser.parseExtractedText(extractedText, docId, file.originalname).catch(e => {
+        console.error('upload-pdf parse error for doc ' + docId + ':', e.message);
+      });
+    }
+
+    res.status(201).json({ id: docId, status: 'processing', text_length: extractedText.length });
+  } catch (e) {
+    console.error('upload-pdf error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Upload JSON financial data (manual entry) ──
 
 const KNOWN_FUNDAMENTAL_KEYS = ['revenue','net_profit','eps','dps','total_assets','total_liabilities','book_value','pe_ratio'];
