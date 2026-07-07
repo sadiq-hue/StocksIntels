@@ -413,7 +413,7 @@ CRITICAL RULES:
 - Convert reported values to absolute KES: if text says "KShs'000" multiply by 1,000; if "KShs M" multiply by 1,000,000; if "KShs B" multiply by 1,000,000,000.
 
 Report text:
-${text.slice(0, 12000)}`;
+${text}`;
 }
 
 async function callLlm(text, apiKey, model) {
@@ -478,7 +478,7 @@ function tryGeminiModel(prompt, apiKey, model) {
   return new Promise((resolve) => {
     const body = JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+      generationConfig: { temperature: 0.1 },
     });
     const opts = {
       hostname: 'generativelanguage.googleapis.com',
@@ -488,7 +488,7 @@ function tryGeminiModel(prompt, apiKey, model) {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),
       },
-      timeout: 60000,
+      timeout: 90000,
     };
     const req = https.request(opts, (res) => {
       let data = '';
@@ -500,9 +500,11 @@ function tryGeminiModel(prompt, apiKey, model) {
             resolve(null); return;
           }
           const parsed = JSON.parse(data);
-          const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) resolve(JSON.parse(text));
-          else resolve(null);
+          const rawText = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!rawText) { console.error('[Gemini] empty response for ' + model); resolve(null); return; }
+          console.log('[Gemini] raw response (' + rawText.length + ' chars): ' + rawText.slice(0, 400));
+          const cleaned = rawText.replace(/```(?:json)?\n?/gi, '').trim();
+          resolve(JSON.parse(cleaned));
         } catch (e) { console.error('[Gemini] parse error:', e.message); resolve(null); }
       });
     });
