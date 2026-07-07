@@ -66,18 +66,37 @@ function parseNumber(s) {
 
 function extractMetrics(text) {
   const results = {};
+  const lines = text.split('\n');
   for (const [metric, patterns] of Object.entries(METRIC_PATTERNS)) {
     const values = [];
+    const perPatternMax = []; // track max per pattern for combinable metrics (total_debt)
     for (const p of patterns) {
-      let m;
-      while ((m = p.exec(text)) !== null) {
-        const val = parseNumber(m[1]);
-        if (val !== null) values.push(val);
+      const re = new RegExp(p.source, 'gi');
+      let rowMax = 0;
+      for (const line of lines) {
+        if (!re.test(line)) continue;
+        const nums = line.match(/(?<![a-zA-Z])(\d[\d,]*\.?\d*)(?![a-zA-Z.%])/g);
+        if (nums) {
+          for (const n of nums) {
+            const val = parseNumber(n);
+            if (val !== null) {
+              values.push(val);
+              if (val > rowMax) rowMax = val;
+            }
+          }
+        }
       }
+      if (rowMax > 0) perPatternMax.push(rowMax);
     }
     if (values.length > 0) {
-      const unique = [...new Set(values.map(v => Math.round(v * 100)))].map(v => v / 100);
-      results[metric] = unique.slice(0, 3);
+      // total_debt: sum the max from each pattern (borrowings + lease liabilities)
+      // other metrics: just use all raw values
+      if (metric === 'total_debt' && perPatternMax.length > 1) {
+        results[metric] = [perPatternMax.reduce((a, b) => a + b, 0)];
+      } else {
+        const unique = [...new Set(values.map(v => Math.round(v * 100)))].map(v => v / 100);
+        results[metric] = unique;
+      }
     }
   }
   return results;
@@ -316,15 +335,8 @@ async function processText(text, docId, source) {
         const largeMetrics = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
         let filtered = largeMetrics.includes(metric) ? values.filter(v => v > 100) : values;
         if (filtered.length === 0) filtered = values;
-        let best;
-        if (metric === 'total_debt') {
-          best = filtered.reduce((a, b) => a + b, 0);
-        } else if (metric === 'net_income') {
-          best = Math.max(...filtered);
-        } else {
-          best = filtered.reduce((a, b) => Math.abs(a) < Math.abs(b) ? a : b);
-        }
-        parsedData[metric] = Math.round(best * 100) / 100;
+        // Pick the LARGEST value — this is always the Consolidated/Group column
+        parsedData[metric] = Math.round(Math.max(...filtered) * 100) / 100;
       }
     }
     if (Object.keys(parsedData).length > 0) {

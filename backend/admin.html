@@ -3444,10 +3444,23 @@ async function handleFsUpload(event) {
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     let extractedText = '';
+    const Y_TOLERANCE = 3;
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      extractedText += content.items.map(item => item.str).join(' ') + '\n';
+      // Group items by Y position (same row within tolerance)
+      const rows = {};
+      for (const item of content.items) {
+        const y = Math.round(item.transform[5] / Y_TOLERANCE) * Y_TOLERANCE;
+        if (!rows[y]) rows[y] = [];
+        rows[y].push({ x: item.transform[4], text: item.str });
+      }
+      // Sort rows top-to-bottom (PDF y-axis: higher = up), items left-to-right
+      const sortedY = Object.keys(rows).map(Number).sort((a, b) => b - a);
+      for (const y of sortedY) {
+        rows[y].sort((a, b) => a.x - b.x);
+        extractedText += rows[y].map(item => item.str).join(' ') + '\n';
+      }
       progressText.textContent = 'Reading page ' + i + ' of ' + pdf.numPages + '...';
     }
     if (!extractedText.trim()) { toast('No text could be extracted from this PDF', 'error'); progress.classList.add('hidden'); event.target.value = ''; return; }
@@ -3736,8 +3749,11 @@ async function viewFsParsed(id) {
         ).join('');
     }
   }
-  if (!html && stmt.raw_text) {
-    html += `<div class="text-xs text-gray-400 break-words">${esc(stmt.raw_text.slice(0, 2000))}</div>`;
+    if (!html && stmt.raw_text) {
+    // Show raw text (first 2000 chars) in collapsible section
+    html += `<details class="mt-2"><summary class="text-xs font-medium text-gray-500 cursor-pointer hover:text-gray-700">Raw extracted text (${stmt.raw_text.length} chars)</summary>
+      <pre class="text-xs text-gray-400 break-words mt-1 p-2 bg-gray-50 rounded max-h-48 overflow-y-auto">${esc(stmt.raw_text.slice(0, 5000))}</pre>
+    </details>`;
   }
   if (!html) html = '<div class="text-gray-400 text-center py-4">No data</div>';
   body.innerHTML = html;
