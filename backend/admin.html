@@ -972,8 +972,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
                 <!-- Paste JSON area -->
                 <div class="mb-3 p-2 rounded" style="background:#fff;border:1px dashed #93c5fd">
                   <label class="text-xs text-gray-500 block mb-1">Paste JSON to auto-fill form, or enter manually below:</label>
-                  <textarea id="fsJsonPasteArea" class="input-field" rows="3" style="font-family:monospace;font-size:11px;resize:vertical" placeholder='{"total_revenue": 211800000000, "net_income": 68350000000, "eps": 20.80, "dividend_per_share": 7.00}'></textarea>
-                  <button class="btn btn-secondary text-xs py-0.5 mt-1" onclick="fillFormFromJson()">Fill from JSON</button>
+                  <textarea id="fsJsonPasteArea" class="input-field" rows="3" style="font-family:monospace;font-size:11px;resize:vertical" placeholder='{"total_revenue": 211800000000, "net_income": 68350000000, "eps": 20.80, "dividend_per_share": 7.00}' oninput="fillFormFromJson()"></textarea>
                   <span id="fsJsonPasteStatus" class="text-xs text-gray-500 ml-2"></span>
                 </div>
                 <!-- Form fields -->
