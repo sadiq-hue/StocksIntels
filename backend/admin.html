@@ -3539,7 +3539,7 @@ function toggleFsJsonUpload() {
 function fillFormFromJson() {
   const jsonStr = document.getElementById('fsJsonPasteArea').value.trim();
   const statusEl = document.getElementById('fsJsonPasteStatus');
-  if (!jsonStr) { statusEl.textContent = 'Paste JSON first'; statusEl.style.color = '#dc2626'; return; }
+  if (!jsonStr) { statusEl.textContent = ''; return; }
   let data;
   try { data = JSON.parse(jsonStr); } catch (e) { statusEl.textContent = 'Invalid JSON: ' + e.message; statusEl.style.color = '#dc2626'; return; }
   // Map JSON keys to form field ids
@@ -3566,8 +3566,21 @@ function fillFormFromJson() {
   // Also set period fields
   if (data.period_end_date) document.getElementById('fsJsonPeriodEnd').value = data.period_end_date;
   if (data.period_type) document.getElementById('fsJsonPeriodType').value = data.period_type;
-  statusEl.textContent = 'Filled ' + filled + ' fields from JSON';
-  statusEl.style.color = '#059669';
+  // Handle extraction format (metadata + raw_text)
+  if (data.metadata) {
+    if (data.metadata.period_end) document.getElementById('fsJsonPeriodEnd').value = data.metadata.period_end;
+    if (data.metadata.period_type) document.getElementById('fsJsonPeriodType').value = data.metadata.period_type;
+  }
+  if (filled > 0) {
+    statusEl.textContent = 'Filled ' + filled + ' fields from JSON';
+    statusEl.style.color = '#059669';
+  } else if (data.raw_text) {
+    statusEl.textContent = 'Raw extraction detected — paste a JSON with field keys (total_assets, eps, dividend_per_share, etc.) to auto-fill';
+    statusEl.style.color = '#f59e0b';
+  } else {
+    statusEl.textContent = 'No matching fields found. Use keys like total_assets, eps, dividend_per_share, total_revenue, etc.';
+    statusEl.style.color = '#f59e0b';
+  }
 }
 
 function clearFsForm() {
