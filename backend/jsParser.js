@@ -7,6 +7,8 @@ const METRIC_PATTERNS = {
     /\btotal\s+revenue(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
     /\btotal\s+operating\s+income(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
     /\btotal\s+income(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\brevenue\s+from\s+contracts\b[^]*?(?:with\s+customers)?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\belectricity\s+revenue[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   net_income: [
     /(?<!Equity\s+attributable\s+to\s+)\bequity\s+holders\s+of\s+the\s+parent[:\s]*\(?([\d,.]+)\)?/gi,
@@ -51,6 +53,7 @@ const METRIC_PATTERNS = {
   ],
   shareholders_equity: [
     /(?<!LIABILITIES\s+(?:AND|&)\s+)shareholders?[''´`]?s?\s+equity[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bshareholders?['\u2019\u2018\u00B4\u0060]s?\s+equity[:\s]*\(?([\d,.]+)\)?/gi,
     /\btotal\s+equity[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   retained_earnings: [
@@ -500,6 +503,7 @@ async function callGemini(text, apiKey, model) {
 }
 
 const EXPECTED_METRICS = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings','eps','dividend_per_share'];
+const SCALED_METRICS = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
 
 function countValidMetrics(data) {
   let count = 0;
@@ -566,8 +570,9 @@ async function processText(text, docId, source) {
     }
 
     // Scale normalization (only for regex path — LLM already returns absolute KES)
+    // EPS and DPS are always in base KShs/share, never scaled
     if (scale > 1 && Object.keys(parsedData).length > 0) {
-      for (const k of EXPECTED_METRICS) {
+      for (const k of SCALED_METRICS) {
         if (parsedData[k] !== undefined && parsedData[k] !== null && parsedData[k] !== 0 && Math.abs(parsedData[k]) < 1e10) {
           parsedData[k] = Math.round(parsedData[k] * scale * 100) / 100;
           console.log('[JSParser] Scaled ' + k + ' by ' + scale + 'x to ' + parsedData[k]);
