@@ -289,7 +289,10 @@ async function buildLocalNseReport(symbol) {
       'SELECT id, name, sector, currency FROM stocks WHERE UPPER(ticker) = $1 AND market = $2',
       [ticker, 'NSE']
     );
-    if (stockResult.rows.length === 0) return null;
+    if (stockResult.rows.length === 0) {
+      console.log(`[buildLocalNseReport] No stock found for ${ticker} in stocks table`);
+      return null;
+    }
     const stock = stockResult.rows[0];
 
     let fundamentals = null;
