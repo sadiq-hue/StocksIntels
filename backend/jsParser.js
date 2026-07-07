@@ -260,20 +260,27 @@ async function processText(text, docId, source) {
   }
 
   if (parsedData.dividend_per_share || parsedData.eps) {
-    const r = await pool.query('SELECT s.ticker FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE fs.id = $1', [docId]);
-    if (r.rows.length > 0) {
-      const ticker = r.rows[0].ticker;
-      const fundRow = {};
-      if (parsedData.dividend_per_share) fundRow.dividend_yield = parsedData.dividend_per_share;
-      if (parsedData.eps) fundRow.eps_growth = parsedData.eps;
-      const fk = Object.keys(fundRow);
-      if (fk.length > 0) {
-        const vals = fk.map((_, i) => '$' + (i + 2)).join(', ');
-        await pool.query(
-          `INSERT INTO stock_fundamentals (symbol, ${fk.join(', ')}) VALUES ($1, ${vals}) ON CONFLICT (symbol) DO UPDATE SET ${fk.map(k => k + ' = EXCLUDED.' + k).join(', ')}`,
-          [ticker, ...fk.map(k => fundRow[k])]
-        );
+    try {
+      const r = await pool.query(
+        'SELECT ns.id AS nse_stock_id FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id JOIN nse_stocks ns ON ns.ticker = s.ticker WHERE fs.id = $1',
+        [docId]
+      );
+      if (r.rows.length > 0) {
+        const { nse_stock_id } = r.rows[0];
+        const fundRow = {};
+        if (parsedData.dividend_per_share) fundRow.dps = parsedData.dividend_per_share;
+        if (parsedData.eps) fundRow.eps = parsedData.eps;
+        const fk = Object.keys(fundRow);
+        if (fk.length > 0) {
+          const vals = fk.map((_, i) => '$' + (i + 2)).join(', ');
+          await pool.query(
+            `INSERT INTO stock_fundamentals (stock_id, statement_id, ${fk.join(', ')}, extracted_at) VALUES ($1, $2, ${vals}, CURRENT_TIMESTAMP) ON CONFLICT (stock_id, statement_id) DO UPDATE SET ${fk.map(k => k + ' = EXCLUDED.' + k).join(', ')}`,
+            [nse_stock_id, docId, ...fk.map(k => fundRow[k])]
+          );
+        }
       }
+    } catch (e) {
+      console.warn('[JSParser] Failed to update stock_fundamentals for doc ' + docId + ': ' + e.message);
     }
   }
 }
