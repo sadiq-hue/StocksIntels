@@ -554,12 +554,34 @@ async function processText(text, docId, source) {
     }
   }
 
-  if (Object.keys(parsedData).length === 0) {
-    const msg = llmProviders.length === 0 ? 'No API keys configured. Set GEMINI_API_KEY or OPENAI_API_KEY.' : 'All LLM providers failed to extract >=8 metrics. Check server logs.';
-    console.log('[JSParser] ' + msg + ' for doc ' + docId);
+  // Fallback: regex extraction when LLM unavailable (e.g., API quota exceeded)
+  const regexFallbackTried = Object.keys(parsedData).length === 0;
+  if (regexFallbackTried) {
+    console.log('[JSParser] LLM failed, trying regex fallback for doc ' + docId);
+    const scale = detectScale(text);
+    const metrics = extractMetrics(text);
+    for (const [metric, values] of Object.entries(metrics)) {
+      if (values.length > 0) {
+        const largeMetrics = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
+        let filtered = largeMetrics.includes(metric) ? values.filter(v => v > 100) : values;
+        if (filtered.length === 0) filtered = values;
+        parsedData[metric] = Math.round(Math.max(...filtered) * 100) / 100;
+      }
+    }
+    if (Object.keys(parsedData).length > 0) {
+      processedBy = 'js:regex';
+      if (scale > 1) {
+        for (const k of ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings']) {
+          if (parsedData[k] !== undefined && parsedData[k] !== null && parsedData[k] !== 0 && Math.abs(parsedData[k]) < 1e10) {
+            parsedData[k] = Math.round(parsedData[k] * scale * 100) / 100;
+          }
+        }
+      }
+      console.log('[JSParser] Regex fallback extracted ' + Object.keys(parsedData).length + ' metrics for doc ' + docId);
+    }
   }
 
-  // Validation (for logging only)
+  // Validation
   const issues = validateMetrics(parsedData);
   if (issues.length > 0) {
     console.log('[JSParser] Validation issues for doc ' + docId + ': ' + issues.join('; '));
@@ -573,9 +595,14 @@ async function processText(text, docId, source) {
     );
   } else {
     const preview = text.slice(0, 300).replace(/\0/g, '');
-    const errorDetail = llmProviders.length === 0
-      ? 'No API keys configured (set GEMINI_API_KEY or OPENAI_API_KEY in Railway env vars)'
-      : 'LLM returned <8 valid metrics. Check Railway server logs for [Gemini] or [LLM] messages.';
+    let errorDetail;
+    if (llmProviders.length === 0) {
+      errorDetail = 'No API keys configured (set GEMINI_API_KEY or OPENAI_API_KEY in Railway env vars)';
+    } else if (regexFallbackTried) {
+      errorDetail = 'LLM quota exceeded (429), regex fallback also returned no data';
+    } else {
+      errorDetail = 'LLM returned <8 valid metrics (check Railway logs for [Gemini] or [LLM] messages)';
+    }
     await pool.query(
       `UPDATE financial_statements SET status = 'completed', parsed_data = '{}'::jsonb, error_message = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
       [errorDetail + '. Text preview: ' + preview, processedBy, docId]
