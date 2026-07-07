@@ -966,12 +966,70 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
               <input id="fsUploadInput" type="file" accept=".pdf,application/pdf" class="hidden" onchange="handleFsUpload(event)">
             </div>
             <!-- JSON upload inline form (hidden by default) -->
-            <div id="fsJsonUploadForm" class="hidden mb-4 p-3 rounded-lg" style="background:#f0f9ff;border:1px solid #bae6fd">
-              <label class="block text-xs font-medium text-gray-600 mb-2">Paste JSON financial data for <span id="fsJsonTickerLabel" class="font-semibold"></span></label>
-              <textarea id="fsJsonTextarea" class="input-field" rows="8" style="font-family:monospace;font-size:11px;resize:vertical" placeholder='{"total_revenue": 211800000000, "net_income": 68350000000, "eps": 20.80, "dividend_per_share": 7.00, "total_assets": 2145000000000, "total_liabilities": 1792800000000, "shareholders_equity": 352200000000}'></textarea>
-              <div class="flex items-center gap-2 mt-2">
-                <button class="btn btn-primary text-xs py-1" onclick="handleFsJsonUpload()">Upload JSON</button>
-                <span id="fsJsonStatus" class="text-xs text-gray-500"></span>
+            <div id="fsJsonUploadForm" class="hidden mb-4 rounded-lg" style="background:#f0f9ff;border:1px solid #bae6fd">
+              <!-- Tab toggle -->
+              <div class="flex border-b border-blue-200">
+                <button class="px-4 py-2 text-xs font-medium border-b-2" id="fsJsonFormTab" style="border-color:#0D7490;color:#0D7490" onclick="switchFsJsonTab('form')">Form</button>
+                <button class="px-4 py-2 text-xs font-medium text-gray-500 border-b-2 border-transparent" id="fsJsonRawTab" onclick="switchFsJsonTab('raw')">Raw JSON</button>
+              </div>
+              <!-- Form mode -->
+              <div id="fsJsonFormMode" class="p-3">
+                <div class="text-xs font-semibold text-gray-600 mb-2">Financial data for <span id="fsJsonTickerLabel" class="font-semibold"></span></div>
+                <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs mb-3">
+                  <div><label class="text-gray-500">Period End Date</label><input id="fsJsonPeriodEnd" type="date" class="input-field text-xs mt-0.5"></div>
+                  <div><label class="text-gray-500">Period Type</label>
+                    <select id="fsJsonPeriodType" class="input-field text-xs mt-0.5">
+                      <option value="annual">Annual</option>
+                      <option value="half-year">Half-Year</option>
+                      <option value="quarterly">Quarterly</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="text-xs font-semibold text-gray-500 mt-2 mb-1 uppercase tracking-wider">Balance Sheet (KES)</div>
+                <div class="grid grid-cols-3 gap-x-3 gap-y-1.5 text-xs mb-2">
+                  <div><label class="text-gray-400">Total Assets</label><input id="fj_total_assets" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Total Liabilities</label><input id="fj_total_liabilities" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Shareholders' Equity</label><input id="fj_shareholders_equity" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Total Debt</label><input id="fj_total_debt" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Current Assets</label><input id="fj_current_assets" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Current Liabilities</label><input id="fj_current_liabilities" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Retained Earnings</label><input id="fj_retained_earnings" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Cash & Equivalents</label><input id="fj_cash_and_equivalents" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Book Value</label><input id="fj_book_value" type="number" class="input-field text-xs" placeholder="0"></div>
+                </div>
+                <div class="text-xs font-semibold text-gray-500 mt-1 mb-1 uppercase tracking-wider">Income Statement (KES)</div>
+                <div class="grid grid-cols-3 gap-x-3 gap-y-1.5 text-xs mb-2">
+                  <div><label class="text-gray-400">Total Revenue</label><input id="fj_total_revenue" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Net Income (PAT)</label><input id="fj_net_income" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Operating Income (EBIT)</label><input id="fj_operating_income" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Cost of Revenue</label><input id="fj_cost_of_revenue" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Cash from Operations</label><input id="fj_cash_from_operations" type="number" class="input-field text-xs" placeholder="0"></div>
+                  <div><label class="text-gray-400">Gross Profit</label><input id="fj_gross_profit" type="number" class="input-field text-xs" placeholder="0"></div>
+                </div>
+                <div class="text-xs font-semibold text-gray-500 mt-1 mb-1 uppercase tracking-wider">Per Share (KES)</div>
+                <div class="grid grid-cols-3 gap-x-3 gap-y-1.5 text-xs mb-2">
+                  <div><label class="text-gray-400">Earnings Per Share (EPS)</label><input id="fj_eps" type="number" step="0.01" class="input-field text-xs" placeholder="0.00"></div>
+                  <div><label class="text-gray-400">Dividend Per Share (DPS)</label><input id="fj_dividend_per_share" type="number" step="0.01" class="input-field text-xs" placeholder="0.00"></div>
+                  <div><label class="text-gray-400">Book Value / Share</label><input id="fj_book_value_per_share" type="number" step="0.01" class="input-field text-xs" placeholder="0.00"></div>
+                </div>
+                <div class="text-xs font-semibold text-gray-500 mt-1 mb-1 uppercase tracking-wider">Valuation</div>
+                <div class="grid grid-cols-3 gap-x-3 gap-y-1.5 text-xs mb-2">
+                  <div><label class="text-gray-400">P/E Ratio</label><input id="fj_pe_ratio" type="number" step="0.01" class="input-field text-xs" placeholder="0.00"></div>
+                  <div><label class="text-gray-400">Fiscal Year</label><input id="fj_fiscal_year" type="number" class="input-field text-xs" placeholder="e.g. 2025"></div>
+                </div>
+                <div class="flex items-center gap-2 mt-2">
+                  <button class="btn btn-primary text-xs py-1" onclick="handleFsFormUpload()">Upload JSON</button>
+                  <span id="fsJsonStatus" class="text-xs text-gray-500"></span>
+                </div>
+              </div>
+              <!-- Raw JSON mode -->
+              <div id="fsJsonRawMode" class="hidden p-3">
+                <label class="block text-xs font-medium text-gray-600 mb-2">Paste JSON financial data</label>
+                <textarea id="fsJsonTextarea" class="input-field" rows="8" style="font-family:monospace;font-size:11px;resize:vertical" placeholder='{"total_revenue": 211800000000, "net_income": 68350000000, "eps": 20.80, "dividend_per_share": 7.00}'></textarea>
+                <div class="flex items-center gap-2 mt-2">
+                  <button class="btn btn-primary text-xs py-1" onclick="handleFsJsonUpload()">Upload JSON</button>
+                  <span id="fsJsonRawStatus" class="text-xs text-gray-500"></span>
+                </div>
               </div>
             </div>
             <div id="fsList" class="space-y-2 text-sm">
@@ -3477,27 +3535,100 @@ async function uploadFinancialJson() {
 
 function toggleFsJsonUpload() {
   const form = document.getElementById('fsJsonUploadForm');
+  const wasHidden = form.classList.contains('hidden');
   form.classList.toggle('hidden');
-  if (!form.classList.contains('hidden')) {
+  if (wasHidden) {
     const ticker = document.getElementById('editStockTicker').value.trim();
     document.getElementById('fsJsonTickerLabel').textContent = ticker || 'selected stock';
+    switchFsJsonTab('form');
   }
 }
 
-async function handleFsJsonUpload() {
+function switchFsJsonTab(mode) {
+  const formMode = document.getElementById('fsJsonFormMode');
+  const rawMode = document.getElementById('fsJsonRawMode');
+  const formTab = document.getElementById('fsJsonFormTab');
+  const rawTab = document.getElementById('fsJsonRawTab');
+  if (mode === 'form') {
+    formMode.classList.remove('hidden');
+    rawMode.classList.add('hidden');
+    formTab.style.borderColor = '#0D7490';
+    formTab.style.color = '#0D7490';
+    rawTab.style.borderColor = 'transparent';
+    rawTab.style.color = '#6b7280';
+  } else {
+    formMode.classList.add('hidden');
+    rawMode.classList.remove('hidden');
+    rawTab.style.borderColor = '#0D7490';
+    rawTab.style.color = '#0D7490';
+    formTab.style.borderColor = 'transparent';
+    formTab.style.color = '#6b7280';
+  }
+}
+
+async function handleFsFormUpload() {
   const ticker = document.getElementById('editStockTicker').value.trim();
-  const jsonStr = document.getElementById('fsJsonTextarea').value.trim();
+  const periodType = document.getElementById('fsJsonPeriodType').value;
+  const periodEndDate = document.getElementById('fsJsonPeriodEnd').value;
   const statusEl = document.getElementById('fsJsonStatus');
-  if (!jsonStr) { statusEl.textContent = 'JSON data is required'; statusEl.style.color = '#dc2626'; return; }
-  let data;
-  try { data = JSON.parse(jsonStr); } catch (e) { statusEl.textContent = 'Invalid JSON: ' + e.message; statusEl.style.color = '#dc2626'; return; }
+  // Build data object from form fields
+  const fieldIds = [
+    'total_assets','total_liabilities','shareholders_equity','total_debt','current_assets','current_liabilities',
+    'retained_earnings','cash_and_equivalents','book_value',
+    'total_revenue','net_income','operating_income','cost_of_revenue','cash_from_operations','gross_profit',
+    'eps','dividend_per_share','book_value_per_share',
+    'pe_ratio','fiscal_year',
+  ];
+  const data = {};
+  let hasValue = false;
+  for (const id of fieldIds) {
+    const el = document.getElementById('fj_' + id);
+    const val = el.value.trim();
+    if (val !== '') {
+      data[id] = parseFloat(val);
+      hasValue = true;
+    }
+  }
+  if (!hasValue) { statusEl.textContent = 'Enter at least one financial value'; statusEl.style.color = '#dc2626'; return; }
   statusEl.textContent = 'Uploading...';
   statusEl.style.color = '#6b7280';
   try {
     const res = await fetch('/api/admin/financial-statements/upload-json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticker, data }),
+      body: JSON.stringify({ ticker, period_type: periodType, period_end_date: periodEndDate || undefined, data }),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'HTTP ' + res.status);
+    statusEl.textContent = 'Success! Doc ID: ' + result.id;
+    statusEl.style.color = '#059669';
+    toast('Financial data uploaded (doc ' + result.id + ')', 'success');
+    // Reset form
+    for (const id of fieldIds) document.getElementById('fj_' + id).value = '';
+    document.getElementById('fsJsonPeriodEnd').value = '';
+    loadFsStatements(fsStockId);
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message;
+    statusEl.style.color = '#dc2626';
+  }
+}
+
+async function handleFsJsonUpload() {
+  const ticker = document.getElementById('editStockTicker').value.trim();
+  const jsonStr = document.getElementById('fsJsonTextarea').value.trim();
+  const statusEl = document.getElementById('fsJsonRawStatus');
+  if (!jsonStr) { statusEl.textContent = 'JSON data is required'; statusEl.style.color = '#dc2626'; return; }
+  let data;
+  try { data = JSON.parse(jsonStr); } catch (e) { statusEl.textContent = 'Invalid JSON: ' + e.message; statusEl.style.color = '#dc2626'; return; }
+  // Also try to extract period_type from raw JSON
+  const periodType = data.period_type || 'annual';
+  statusEl.textContent = 'Uploading...';
+  statusEl.style.color = '#6b7280';
+  try {
+    const res = await fetch('/api/admin/financial-statements/upload-json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticker, period_type: periodType, data }),
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.error || 'HTTP ' + res.status);
