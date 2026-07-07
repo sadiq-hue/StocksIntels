@@ -260,8 +260,8 @@ function extractMetrics(text) {
         if (!m) continue;
 
         let val = null;
-        // Strategy 1: column-aware extraction (picks Group column when detected)
-        if (columns) {
+        // Strategy 1: column-aware extraction (only for well-aligned text, 2-3 cols)
+        if (columns && columns.columns.length <= 3) {
           val = extractNumberFromLine(line, columns);
           if (val === null) {
             // Fallback within column-aware: try captured group
