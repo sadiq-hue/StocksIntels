@@ -261,17 +261,25 @@ function extractMetrics(text) {
         if (!m) continue;
 
         let val = null;
+        function negateIfParens(raw, numStr) {
+          const n = parseNumber(numStr);
+          if (n === null) return null;
+          const pos = raw.indexOf(numStr);
+          if (pos > 0 && raw[pos - 1] === '(') return -Math.abs(n);
+          return n;
+        }
+
         // Strategy 1: column-aware extraction (only for well-aligned text, 2-3 cols)
         if (columns && columns.columns.length <= 3) {
           val = extractNumberFromLine(line, columns);
           if (val === null) {
             // Fallback within column-aware: try captured group
-            if (m[1]) val = parseNumber(m[1]);
+            if (m[1]) val = negateIfParens(m[0], m[1]);
           }
         }
         // Strategy 2: use captured group from pattern tail (number after label)
         if (val === null && m[1]) {
-          val = parseNumber(m[1]);
+          val = negateIfParens(m[0], m[1]);
         }
         // Strategy 3: fall back to extracting all numbers
         if (val === null) {
@@ -279,7 +287,7 @@ function extractMetrics(text) {
           NUM_RE.lastIndex = 0;
           let nm;
           while ((nm = NUM_RE.exec(line)) !== null) {
-            const v = parseNumber(nm[1]);
+            const v = negateIfParens(line, nm[1]);
             if (v !== null && !(Number.isInteger(v) && (v >= 1 && v <= 999 || v >= 1900 && v <= 2099))) {
               nums.push(v);
             }
