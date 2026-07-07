@@ -3605,31 +3605,32 @@ function fillFormFromJson() {
     const data = JSON.parse(rawStr);
     isJson = true;
     if (!data || typeof data !== 'object') throw new Error();
-    // Flatten nested sections (balance_sheet, income_statement, per_share, etc.)
+    // Flatten nested sections — drop section names, keep only leaf keys
     const flat = {};
-    (function flatten(obj, prefix) {
-      if (!obj || typeof obj !== 'object') return;
+    (function flatten(obj) {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return;
       for (const [k, v] of Object.entries(obj)) {
-        const key = prefix ? prefix + '_' + k : k;
-        if (v !== null && typeof v === 'object' && !Array.isArray(v)) flatten(v, key);
-        else if (v !== null) flat[key] = v;
+        if (v !== null && typeof v === 'object' && !Array.isArray(v)) flatten(v);
+        else if (v !== null) flat[k] = v;
       }
     })(data);
     // Detect scale from JSON
     let scale = 1;
     if (/million/i.test(data.unit || '')) scale = 1000000;
     else if (/thousand/i.test(data.unit || '')) scale = 1000;
+    // Fields that must NOT be scaled (already in base units)
+    const noScale = new Set(['eps','dividend_per_share','dps','book_value_per_share','pe_ratio','fiscal_year']);
     // Map canonical keys
     for (const [key, fieldId] of Object.entries(fieldMap)) {
       if (flat[key] !== undefined) {
-        document.getElementById(fieldId).value = scale > 1 ? flat[key] * scale : flat[key];
+        document.getElementById(fieldId).value = noScale.has(key) ? flat[key] : (scale > 1 ? flat[key] * scale : flat[key]);
         filled++;
       }
     }
     // Map alternative keys
     for (const [alt, canon] of Object.entries(altMap)) {
       if (flat[alt] !== undefined && fieldMap[canon]) {
-        document.getElementById(fieldMap[canon]).value = scale > 1 ? flat[alt] * scale : flat[alt];
+        document.getElementById(fieldMap[canon]).value = noScale.has(canon) ? flat[alt] : (scale > 1 ? flat[alt] * scale : flat[alt]);
         filled++;
       }
     }
