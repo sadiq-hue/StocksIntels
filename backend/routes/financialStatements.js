@@ -48,8 +48,8 @@ router.get('/nse-stocks', async (req, res) => {
     }
     const countResult = await pool.query(`SELECT COUNT(*)::int as cnt FROM stocks ${whereClause}`, params);
     const dataResult = await pool.query(
-      `SELECT s.*, sf.pe_ratio, sf.pb_ratio, sf.market_cap, sf.dividend_yield
-       FROM stocks s LEFT JOIN stock_fundamentals sf ON sf.symbol = s.ticker
+      `SELECT s.*, sf.pe_ratio
+       FROM stocks s LEFT JOIN nse_stocks ns ON ns.ticker = s.ticker LEFT JOIN stock_fundamentals sf ON sf.stock_id = ns.id
        ${whereClause} ORDER BY s.ticker ASC LIMIT $${idx} OFFSET $${idx + 1}`,
       [...params, limit, offset]
     );
@@ -388,18 +388,26 @@ router.post('/financial-statements/webhook', express.json({ type: '*/*' }), asyn
         [JSON.stringify(parsedData), processedBy || 'python', docId]
       );
       // Upsert into stock_fundamentals where columns match
-      const fundRow = {};
-      if (parsedData.dividend_per_share) fundRow.dividend_yield = parsedData.dividend_per_share;
-      if (parsedData.eps) fundRow.eps_growth = parsedData.eps;
-      const fundKeys = Object.keys(fundRow);
-      if (fundKeys.length > 0) {
-        const vals = fundKeys.map((_, i) => `$${i + 2}`).join(', ');
-        await pool.query(
-          `INSERT INTO stock_fundamentals (symbol, ${fundKeys.join(', ')})
-           VALUES ($1, ${vals})
-           ON CONFLICT (symbol) DO UPDATE SET ${fundKeys.map(k => `${k} = EXCLUDED.${k}`).join(', ')}`,
-          [ticker, ...fundKeys.map(k => fundRow[k])]
-        );
+      try {
+        const ns = await pool.query('SELECT id FROM nse_stocks WHERE ticker = $1', [ticker]);
+        if (ns.rows.length > 0) {
+          const nseStockId = ns.rows[0].id;
+          const fundRow = {};
+          if (parsedData.dividend_per_share) fundRow.dps = parsedData.dividend_per_share;
+          if (parsedData.eps) fundRow.eps = parsedData.eps;
+          const fundKeys = Object.keys(fundRow);
+          if (fundKeys.length > 0) {
+            const vals = fundKeys.map((_, i) => `$${i + 2}`).join(', ');
+            await pool.query(
+              `INSERT INTO stock_fundamentals (stock_id, statement_id, ${fundKeys.join(', ')}, extracted_at)
+               VALUES ($1, $2, ${vals}, CURRENT_TIMESTAMP)
+               ON CONFLICT (stock_id, statement_id) DO UPDATE SET ${fundKeys.map(k => `${k} = EXCLUDED.${k}`).join(', ')}`,
+              [nseStockId, docId, ...fundKeys.map(k => fundRow[k])]
+            );
+          }
+        }
+      } catch (e) {
+        console.warn('[Webhook] Failed to update stock_fundamentals for doc ' + docId + ': ' + e.message);
       }
     } else if (status === 'failed') {
       await pool.query(
@@ -421,7 +429,7 @@ router.get('/financial-statements/fundamentals/:stockId', async (req, res) => {
     if (stockResult.rows.length === 0) return res.status(404).json({ error: 'Stock not found' });
     const ticker = stockResult.rows[0].ticker;
     const fundamentalsResult = await pool.query(
-      'SELECT * FROM stock_fundamentals WHERE symbol = $1', [ticker]
+      'SELECT sf.* FROM stock_fundamentals sf JOIN nse_stocks ns ON ns.id = sf.stock_id WHERE ns.ticker = $1', [ticker]
     );
     let statements = [];
     try {
