@@ -7,6 +7,7 @@ const METRIC_PATTERNS = {
     /\btotal\s+revenue[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   net_income: [
+    /\b(?:equity\s+holders\s+of\s+the\s+parent|attributable\s+to\s+(?:equity\s+holders|owners\s+of\s+the\s+parent))[:\s]*\(?([\d,.]+)\)?/gi,
     /\bprofit\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
     /(?<!Other\s+comprehensive\s+)loss\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
     /\bnet\s+(?:profit|income|earnings)(?:\s+for\s+the\s+(?:period|year))?[:\s]*\(?([\d,.]+)\)?/gi,
@@ -33,6 +34,7 @@ const METRIC_PATTERNS = {
   ],
   total_debt: [
     /(?<!paid\s+on\s+)\bborrowings[:\s]*\(?([\d,.]+)\)?/gi,
+    /\blease\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   current_assets: [
     /(?<!\btotal\s+)current\s+assets[:\s]*\(?([\d,.]+)\)?/gi,
@@ -236,7 +238,14 @@ async function processText(text, docId, source) {
     const metrics = extractMetrics(text);
     for (const [metric, values] of Object.entries(metrics)) {
       if (values.length > 0) {
-        const best = values.reduce((a, b) => Math.abs(a) < Math.abs(b) ? a : b);
+        let best;
+        if (metric === 'total_debt') {
+          best = values.reduce((a, b) => a + b, 0);
+        } else if (metric === 'net_income') {
+          best = Math.max(...values);
+        } else {
+          best = values.reduce((a, b) => Math.abs(a) < Math.abs(b) ? a : b);
+        }
         parsedData[metric] = Math.round(best * 100) / 100;
       }
     }
