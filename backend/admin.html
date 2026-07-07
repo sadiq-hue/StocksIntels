@@ -959,8 +959,20 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
           <div id="fsSection" class="hidden mt-6 border-t border-gray-200 pt-4">
             <div class="flex items-center justify-between mb-3">
               <h4 class="text-sm font-semibold text-gray-900">Financial Statements</h4>
-              <button class="btn btn-primary text-xs py-1" onclick="document.getElementById('fsUploadInput').click()">+ Upload PDF</button>
+              <div class="flex gap-2">
+                <button class="btn btn-secondary text-xs py-1" onclick="toggleFsJsonUpload()">+ Upload JSON</button>
+                <button class="btn btn-primary text-xs py-1" onclick="document.getElementById('fsUploadInput').click()">+ Upload PDF</button>
+              </div>
               <input id="fsUploadInput" type="file" accept=".pdf,application/pdf" class="hidden" onchange="handleFsUpload(event)">
+            </div>
+            <!-- JSON upload inline form (hidden by default) -->
+            <div id="fsJsonUploadForm" class="hidden mb-4 p-3 rounded-lg" style="background:#f0f9ff;border:1px solid #bae6fd">
+              <label class="block text-xs font-medium text-gray-600 mb-2">Paste JSON financial data for <span id="fsJsonTickerLabel" class="font-semibold"></span></label>
+              <textarea id="fsJsonTextarea" class="input-field" rows="8" style="font-family:monospace;font-size:11px;resize:vertical" placeholder='{"total_revenue": 211800000000, "net_income": 68350000000, "eps": 20.80, "dividend_per_share": 7.00, "total_assets": 2145000000000, "total_liabilities": 1792800000000, "shareholders_equity": 352200000000}'></textarea>
+              <div class="flex items-center gap-2 mt-2">
+                <button class="btn btn-primary text-xs py-1" onclick="handleFsJsonUpload()">Upload JSON</button>
+                <span id="fsJsonStatus" class="text-xs text-gray-500"></span>
+              </div>
             </div>
             <div id="fsList" class="space-y-2 text-sm">
               <div class="text-gray-400 text-center py-4">No statements uploaded</div>
@@ -3457,6 +3469,43 @@ async function uploadFinancialJson() {
     statusEl.textContent = 'Success! Doc ID: ' + result.id;
     statusEl.style.color = '#059669';
     toast('Financial data uploaded (doc ' + result.id + ')', 'success');
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message;
+    statusEl.style.color = '#dc2626';
+  }
+}
+
+function toggleFsJsonUpload() {
+  const form = document.getElementById('fsJsonUploadForm');
+  form.classList.toggle('hidden');
+  if (!form.classList.contains('hidden')) {
+    const ticker = document.getElementById('editStockTicker').value.trim();
+    document.getElementById('fsJsonTickerLabel').textContent = ticker || 'selected stock';
+  }
+}
+
+async function handleFsJsonUpload() {
+  const ticker = document.getElementById('editStockTicker').value.trim();
+  const jsonStr = document.getElementById('fsJsonTextarea').value.trim();
+  const statusEl = document.getElementById('fsJsonStatus');
+  if (!jsonStr) { statusEl.textContent = 'JSON data is required'; statusEl.style.color = '#dc2626'; return; }
+  let data;
+  try { data = JSON.parse(jsonStr); } catch (e) { statusEl.textContent = 'Invalid JSON: ' + e.message; statusEl.style.color = '#dc2626'; return; }
+  statusEl.textContent = 'Uploading...';
+  statusEl.style.color = '#6b7280';
+  try {
+    const res = await fetch('/api/admin/financial-statements/upload-json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticker, data }),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'HTTP ' + res.status);
+    statusEl.textContent = 'Success! Doc ID: ' + result.id;
+    statusEl.style.color = '#059669';
+    toast('Financial data uploaded (doc ' + result.id + ')', 'success');
+    document.getElementById('fsJsonTextarea').value = '';
+    loadFsStatements(fsStockId);
   } catch (e) {
     statusEl.textContent = 'Error: ' + e.message;
     statusEl.style.color = '#dc2626';
