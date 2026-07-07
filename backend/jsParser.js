@@ -503,15 +503,6 @@ async function callGemini(text, apiKey, model) {
 }
 
 const EXPECTED_METRICS = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings','eps','dividend_per_share'];
-const SCALED_METRICS = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
-
-function countValidMetrics(data) {
-  let count = 0;
-  for (const k of EXPECTED_METRICS) {
-    if (data[k] !== undefined && data[k] !== null && !isNaN(data[k])) count++;
-  }
-  return count;
-}
 
 function tryLlm(text, apiKey, provider) {
   if (provider === 'gemini') return callGemini(text, apiKey, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
@@ -522,8 +513,7 @@ async function processText(text, docId, source) {
   let parsedData = {};
   let processedBy = source || 'js';
 
-  // Step 1: Try LLM first — it handles scale, label variations, and text gaps
-  let llmSucceeded = false;
+  // LLM-only extraction (no regex fallback)
   const llmProviders = [];
   if (process.env.GEMINI_API_KEY) llmProviders.push({ key: process.env.GEMINI_API_KEY, name: 'gemini' });
   if (process.env.OPENAI_API_KEY) llmProviders.push({ key: process.env.OPENAI_API_KEY, name: 'openai' });
@@ -532,82 +522,33 @@ async function processText(text, docId, source) {
     console.log('[JSParser] Calling ' + name + ' for doc ' + docId + ', text length=' + text.length);
     const llmResult = await tryLlm(text, key, name);
     if (llmResult) {
-      const temp = {};
       let validCount = 0;
       for (const k of EXPECTED_METRICS) {
         if (llmResult[k] !== null && llmResult[k] !== undefined && !isNaN(llmResult[k])) {
-          temp[k] = Math.round(llmResult[k] * 100) / 100;
+          parsedData[k] = Math.round(llmResult[k] * 100) / 100;
           validCount++;
         }
       }
       if (validCount >= 8) {
-        parsedData = temp;
         processedBy = 'js:' + name;
-        llmSucceeded = true;
         console.log('[JSParser] ' + name + ' extracted ' + validCount + ' metrics for doc ' + docId);
         break;
       }
-      console.log('[JSParser] ' + name + ' only returned ' + validCount + ' metrics (<8), trying next LLM or fallback');
+      parsedData = {};
+      console.log('[JSParser] ' + name + ' only returned ' + validCount + ' metrics (<8), trying next LLM');
     } else {
       console.log('[JSParser] ' + name + ' returned null for doc ' + docId);
     }
   }
 
-  // Step 2: Fall back to regex if LLM failed or was unavailable
-  if (!llmSucceeded) {
-    const scale = detectScale(text);
-    const metrics = extractMetrics(text);
-    for (const [metric, values] of Object.entries(metrics)) {
-      if (values.length > 0) {
-        const largeMetrics = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
-        let filtered = largeMetrics.includes(metric) ? values.filter(v => v > 100) : values;
-        if (filtered.length === 0) filtered = values;
-        parsedData[metric] = Math.round(Math.max(...filtered) * 100) / 100;
-      }
-    }
-    if (Object.keys(parsedData).length > 0) {
-      processedBy = source ? source + ':regex' : 'js:regex';
-    }
-
-    // Scale normalization (only for regex path — LLM already returns absolute KES)
-    // EPS and DPS are always in base KShs/share, never scaled
-    if (scale > 1 && Object.keys(parsedData).length > 0) {
-      for (const k of SCALED_METRICS) {
-        if (parsedData[k] !== undefined && parsedData[k] !== null && parsedData[k] !== 0 && Math.abs(parsedData[k]) < 1e10) {
-          parsedData[k] = Math.round(parsedData[k] * scale * 100) / 100;
-          console.log('[JSParser] Scaled ' + k + ' by ' + scale + 'x to ' + parsedData[k]);
-        }
-      }
-    }
+  if (Object.keys(parsedData).length === 0) {
+    console.log('[JSParser] No LLM available or all LLMs failed for doc ' + docId);
   }
 
-  // Run validation
+  // Validation (for logging only)
   const issues = validateMetrics(parsedData);
   if (issues.length > 0) {
     console.log('[JSParser] Validation issues for doc ' + docId + ': ' + issues.join('; '));
-    // Try re-extraction with alternative strategies for failing metrics
-    if (!llmSucceeded && issues.some(i => i.includes('Equity') || i.includes('EPS') || i.includes('Revenue'))) {
-      const metrics = extractMetrics(text);
-      for (const [metric, values] of Object.entries(metrics)) {
-        if (values.length > 0 && parsedData[metric] !== undefined) {
-          const filtered = values.filter(v => v > 100);
-          const candidates = filtered.length > 0 ? filtered : values;
-          // If current value fails validation, try the first quartile value instead of max
-          candidates.sort((a, b) => a - b);
-          const midIdx = Math.floor(candidates.length / 2);
-          if (candidates.length >= 2 && candidates[candidates.length - 1] !== candidates[midIdx]) {
-            const oldVal = parsedData[metric];
-            parsedData[metric] = Math.round(candidates[midIdx] * 100) / 100;
-            console.log('[JSParser] Validation retry for ' + metric + ': ' + oldVal + ' -> ' + parsedData[metric]);
-          }
-        }
-      }
-      // Re-validate
-      const retryIssues = validateMetrics(parsedData);
-      if (retryIssues.length < issues.length) {
-        console.log('[JSParser] Retry improved validation: ' + retryIssues.length + ' issues remain');
-      }
-    }
   }
 
   const hasAnyData = Object.keys(parsedData).length > 0;
