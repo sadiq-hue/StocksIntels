@@ -4,61 +4,62 @@ const https = require('https');
 
 const METRIC_PATTERNS = {
   total_revenue: [
-    /\btotal\s+revenue\b/i,
-    /\btotal\s+operating\s+income\b/i,
+    /\btotal\s+revenue[:\s]*\(?([\d,.]+)\)?/gi,
+    /\btotal\s+operating\s+income[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   net_income: [
-    /(?<!Equity\s+attributable\s+to\s+)\bequity\s+holders\s+of\s+the\s+parent\b/i,
-    /\bprofit\s+for\s+the\s+(?:period|year)\b/i,
-    /\bprofit\b[^a]*?after\s+tax\b/i,
-    /\bprofit\b[^a]*?after\s+exceptional\s+items\b/i,
-    /(?<!Other\s+comprehensive\s+)loss\s+for\s+the\s+(?:period|year)\b/i,
-    /\bnet\s+(?:profit|income|earnings)(?:\s+for\s+the\s+(?:period|year))?\b/i,
-    /\btotal\s+comprehensive\s+income\b/i,
+    /(?<!Equity\s+attributable\s+to\s+)\bequity\s+holders\s+of\s+the\s+parent[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bprofit\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bprofit\b[^a]*?after\s+tax[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bprofit\b[^a]*?after\s+exceptional\s+items[:\s]*\(?([\d,.]+)\)?/gi,
+    /(?<!Other\s+comprehensive\s+)loss\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bnet\s+(?:profit|income|earnings)(?:\s+for\s+the\s+(?:period|year))?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\btotal\s+comprehensive\s+income[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   cost_of_revenue: [
-    /\bdirect\s+costs?\b/i,
-    /\bcost\s+of\s+(?:revenue|sales|goods\s+sold)\b/i,
+    /\bdirect\s+costs?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bcost\s+of\s+(?:revenue|sales|goods\s+sold)[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   operating_income: [
-    /(?<!other\s+)\boperating\s+(?:income|profit)\b/i,
-    /\b(?:income|profit)\s+from\s+operations\b/i,
+    /\boperating\s+(?:income|profit)(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\b(?:income|profit)\s+from\s+operations[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   cash_from_operations: [
-    /(?:net\s+)?cash\s+(?:from|generated\s+(?:from|by)|provided\s+by)\s+operating\s+activities\b/i,
-    /(?:net\s+)?cash\s+(?:from|from\s+)?operations\b/i,
-    /\boperating\s+cash\s+flow\b/i,
+    /(?:net\s+)?cash\s+(?:from|generated\s+(?:from|by)|provided\s+by)\s+operating\s+activities[:\s]*\(?([\d,.]+)\)?/gi,
+    /(?:net\s+)?cash\s+(?:from|from\s+)?operations[:\s]*\(?([\d,.]+)\)?/gi,
+    /\boperating\s+cash\s+flow[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   total_assets: [
-    /\btotal\s+assets\b/i,
+    /\btotal\s+assets[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   total_liabilities: [
-    /\btotal\s+liabilities\b/i,
+    /\btotal\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   total_debt: [
-    /(?<!paid\s+on\s+)\bborrowings\b/i,
-    /\blease\s+liabilities\b/i,
+    /(?<!paid\s+on\s+)\bborrowings[:\s]*\(?([\d,.]+)\)?/gi,
+    /\blease\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   current_assets: [
-    /(?<!\btotal\s+)current\s+assets\b/i,
+    /(?<!\btotal\s+)current\s+assets[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   current_liabilities: [
-    /(?<!\btotal\s+)current\s+liabilities\b/i,
+    /(?<!\btotal\s+)current\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   shareholders_equity: [
-    /\bshareholders?[''´`]?s?\s+equity\b/i,
-    /\btotal\s+equity\b/i,
+    /\bshareholders?[''´`]?s?\s+equity[:\s]*\(?([\d,.]+)\)?/gi,
+    /\btotal\s+equity[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   retained_earnings: [
-    /\bretained\s+earnings\b/i,
+    /\bretained\s+earnings[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   eps: [
-    /\bearnings\s+per\s+share\b/i,
-    /\beps\b/i,
+    /\b(?:earnings\s+per\s+share|eps)(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bearnings\s+per\s+share[\s-]+[A-Za-z\s&]+[\s-]*\(?([\d,.]+)\)?/gi,
   ],
   dividend_per_share: [
-    /\bdividend\s+per\s+share\b/i,
-    /\bdps\b/i,
+    /\bdividend\s+per\s+share(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bdividend\s+per\s+share[\s-]+[A-Za-z\s&]+[\s-]*\(?([\d,.]+)\)?/gi,
+    /\bdps\b[:\s]*\(?([\d,.]+)\)?/gi,
   ],
 };
 
@@ -87,10 +88,8 @@ function extractMetrics(text) {
           for (const n of nums) {
             const val = parseNumber(n);
             if (val !== null) {
-              // Skip year-like values (2024-2099)
-              if (Number.isInteger(val) && val >= 1900 && val <= 2099) continue;
-              // Skip section numbers: integers 1-999 that DON'T have decimal digits (e.g. "19." but not "7.00")
-              if (Number.isInteger(val) && val >= 1 && val <= 999 && !/\.\d/.test(n)) continue;
+              // Skip year-like values (2024-2099) and small section/line numbers (1-999)
+              if (Number.isInteger(val) && (val >= 1 && val <= 999 || val >= 1900 && val <= 2099)) continue;
               values.push(val);
               if (val > rowMax) rowMax = val;
             }
