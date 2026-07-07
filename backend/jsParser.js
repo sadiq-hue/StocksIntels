@@ -16,6 +16,7 @@ const METRIC_PATTERNS = {
     /(?<!Other\s+comprehensive\s+)loss\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
     /\bnet\s+(?:profit|income|earnings)(?:\s+for\s+the\s+(?:period|year))?[:\s]*\(?([\d,.]+)\)?/gi,
     /\btotal\s+comprehensive\s+income[:\s]*\(?([\d,.]+)\)?/gi,
+    /\(?(?:[Ll]oss|[Pp]rofit)\)?\/\(?(?:[Ll]oss|[Pp]rofit)\)?\s+f(?:or)?the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   cost_of_revenue: [
     /\bdirect\s+costs?[:\s]*\(?([\d,.]+)\)?/gi,
@@ -493,47 +494,51 @@ async function processText(text, docId, source) {
   let parsedData = {};
   let processedBy = source || 'js';
 
+  const scale = detectScale(text);
+
+  // Step 1: Regex extraction (reliable, no API dependency)
+  const metrics = extractMetrics(text);
+  for (const [metric, values] of Object.entries(metrics)) {
+    if (values.length > 0) {
+      const largeMetrics = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
+      let filtered = largeMetrics.includes(metric) ? values.filter(v => v > 100) : values;
+      if (filtered.length === 0) filtered = values;
+      parsedData[metric] = Math.round(Math.max(...filtered) * 100) / 100;
+    }
+  }
+  if (Object.keys(parsedData).length > 0) {
+    processedBy = source ? source + ':regex' : 'js:regex';
+  }
+
+  // Step 2: LLM fills in gaps (only for metrics regex couldn't extract)
   if (process.env.GEMINI_API_KEY) {
     console.log('[JSParser] Calling Gemini for doc ' + docId + ', text length=' + text.length);
     const llmResult = await callGemini(text, process.env.GEMINI_API_KEY, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
     if (llmResult && Object.values(llmResult).some(v => v !== null)) {
       for (const [k, v] of Object.entries(llmResult)) {
-        if (v !== null && v !== undefined) parsedData[k] = Math.round(v * 100) / 100;
+        if (v !== null && v !== undefined && parsedData[k] === undefined) {
+          parsedData[k] = Math.round(v * 100) / 100;
+        }
       }
       processedBy = 'js:gemini';
-      console.log('[JSParser] Gemini OK for doc ' + docId + ': ' + Object.keys(parsedData).length + ' metrics');
+      console.log('[JSParser] Gemini filled in ' + Object.keys(parsedData).length + ' metrics for doc ' + docId);
     } else {
       console.log('[JSParser] Gemini returned null for doc ' + docId);
     }
   }
-  if (Object.keys(parsedData).length === 0 && process.env.OPENAI_API_KEY) {
+  if (process.env.OPENAI_API_KEY) {
     console.log('[JSParser] Calling OpenAI for doc ' + docId + ', text length=' + text.length);
     const llmResult = await callLlm(text, process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || 'gpt-4o-mini');
     if (llmResult && Object.values(llmResult).some(v => v !== null)) {
       for (const [k, v] of Object.entries(llmResult)) {
-        if (v !== null && v !== undefined) parsedData[k] = Math.round(v * 100) / 100;
+        if (v !== null && v !== undefined && parsedData[k] === undefined) {
+          parsedData[k] = Math.round(v * 100) / 100;
+        }
       }
       processedBy = 'js:llm';
-      console.log('[JSParser] OpenAI OK for doc ' + docId + ': ' + Object.keys(parsedData).length + ' metrics');
+      console.log('[JSParser] OpenAI filled in gaps for doc ' + docId);
     } else {
       console.log('[JSParser] OpenAI returned null for doc ' + docId);
-    }
-  }
-
-  const scale = detectScale(text);
-
-  if (Object.keys(parsedData).length === 0) {
-    const metrics = extractMetrics(text);
-    for (const [metric, values] of Object.entries(metrics)) {
-      if (values.length > 0) {
-        const largeMetrics = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
-        let filtered = largeMetrics.includes(metric) ? values.filter(v => v > 100) : values;
-        if (filtered.length === 0) filtered = values;
-        parsedData[metric] = Math.round(Math.max(...filtered) * 100) / 100;
-      }
-    }
-    if (Object.keys(parsedData).length > 0) {
-      processedBy = source ? source + ':regex' : 'js:regex';
     }
   }
 
