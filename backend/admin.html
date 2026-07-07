@@ -3574,7 +3574,24 @@ async function viewFsParsed(id) {
       </div>`
     ).join('');
   }
-  if (!anyData && stmt.raw_text) {
+  if (!anyData && stmt.json_data) {
+    // json_data exists but keys didn't match categories — show raw
+    html += `<div class="text-xs text-gray-400 break-words">${esc(JSON.stringify(stmt.json_data, null, 2).slice(0, 2000))}</div>`;
+  }
+  if (!anyData && stmt.parsed_data && !stmt.json_data) {
+    const flatPairs = Object.entries(stmt.parsed_data).filter(([_, v]) => v != null && typeof v !== 'object');
+    if (flatPairs.length > 0) {
+      anyData = true;
+      html = `<div class="text-xs font-semibold text-gray-500 mt-2 mb-1.5 uppercase tracking-wider">Parsed Metrics</div>` +
+        flatPairs.map(([k, v]) =>
+          `<div class="flex justify-between py-1.5 px-2 border-b border-gray-100">
+            <span class="text-gray-600 text-xs">${k.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+            <span class="font-medium text-gray-900 text-xs">${typeof v === 'number' ? Number(v).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:2}) : esc(String(v))}</span>
+          </div>`
+        ).join('');
+    }
+  }
+  if (!html && stmt.raw_text) {
     html += `<div class="text-xs text-gray-400 break-words">${esc(stmt.raw_text.slice(0, 2000))}</div>`;
   }
   if (!html) html = '<div class="text-gray-400 text-center py-4">No data</div>';

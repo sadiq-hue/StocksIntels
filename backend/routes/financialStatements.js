@@ -564,7 +564,7 @@ router.post('/financial-statements/upload-json', async (req, res) => {
       `INSERT INTO financial_statements (stock_id, period_type, period_end_date, file_name, status, json_data, parsed_data, parsed_at, processed_by)
        VALUES ($1, $2, $3, $4, 'completed', $5, $6, CURRENT_TIMESTAMP, 'json:manual')
        RETURNING id`,
-      [sid, period_type || 'annual', period_end_date || null, file_name || (tickerVal + '_' + (period_end_date || 'manual') + '.json'), JSON.stringify(data), JSON.stringify(data)]
+      [sid, period_type || 'annual', period_end_date || null, file_name || (tickerVal + '_' + (period_end_date || 'manual') + '.json'), data, data]
     );
     const docId = ins.rows[0].id;
 
