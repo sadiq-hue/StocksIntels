@@ -352,9 +352,11 @@ async function buildLocalNseReport(symbol) {
 
     const f = fundamentals ? { market_cap: toNum(fundamentals.market_cap), pe_ratio: toNum(fundamentals.pe_ratio), pb_ratio: toNum(fundamentals.pb_ratio), dividend_yield: toNum(fundamentals.dividend_yield), roe: toNum(fundamentals.roe), revenue_growth: toNum(fundamentals.revenue_growth), eps_growth: toNum(fundamentals.eps_growth) } : null;
 
+    const quote = await getQuote(symbol).catch(() => null);
+    const price = quote?.price || 0;
     const sharesOut = parsed?.eps > 0 && parsed?.net_income > 0 ? Math.round(parsed.net_income / parsed.eps) : 0;
 
-    const divYield = f?.dividend_yield || parsed?.dividend_per_share || 0;
+    const divYield = f?.dividend_yield || (parsed?.dividend_per_share && price > 0 ? parsed.dividend_per_share / price : 0);
     const mc = f?.market_cap || 0;
     const totalDebt = parsed?.total_debt || 0;
     const equity = parsed?.shareholders_equity || 0;
@@ -375,8 +377,6 @@ async function buildLocalNseReport(symbol) {
       debtToEquity: totalDebt > 0 && equity > 0 ? totalDebt / equity : 0,
       currentRatio: curAssets > 0 && curLiabs > 0 ? curAssets / curLiabs : 0,
     };
-
-    const quote = await getQuote(symbol).catch(() => null);
 
     return {
       success: true, symbol: ticker, source: 'nse-upload',
