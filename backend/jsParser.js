@@ -140,10 +140,11 @@ ${text.slice(0, 8000)}`;
       temperature: 0,
       response_format: { type: 'json_object' },
     });
-    const url = new URL(process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1/chat/completions');
+    const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
+    const url = new URL(baseUrl.replace(/\/+$/, '') + '/chat/completions');
     const opts = {
       hostname: url.hostname,
-      path: url.pathname,
+      path: url.pathname + url.search,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -157,15 +158,19 @@ ${text.slice(0, 8000)}`;
       res.on('data', (chunk) => data += chunk);
       res.on('end', () => {
         try {
+          if (res.statusCode !== 200) {
+            console.error('[LLM] HTTP ' + res.statusCode + ':' + data.slice(0, 200));
+            resolve(null); return;
+          }
           const parsed = JSON.parse(data);
           const content = parsed.choices?.[0]?.message?.content;
           if (content) resolve(JSON.parse(content));
           else resolve(null);
-        } catch { resolve(null); }
+        } catch (e) { console.error('[LLM] parse error:', e.message); resolve(null); }
       });
     });
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.on('error', (e) => { console.error('[LLM] request error:', e.message); resolve(null); });
+    req.on('timeout', () => { console.error('[LLM] timeout'); req.destroy(); resolve(null); });
     req.write(body);
     req.end();
   });
@@ -177,12 +182,16 @@ async function processText(text, docId, source) {
 
   // Primary: try AI if key is set
   if (process.env.OPENAI_API_KEY) {
+    console.log('[JSParser] Calling LLM for doc ' + docId + ', text length=' + text.length);
     const llmResult = await callLlm(text, process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || 'gpt-4o-mini');
     if (llmResult && Object.values(llmResult).some(v => v !== null)) {
       for (const [k, v] of Object.entries(llmResult)) {
         if (v !== null && v !== undefined) parsedData[k] = Math.round(v * 100) / 100;
       }
       processedBy = 'js:llm';
+      console.log('[JSParser] LLM OK for doc ' + docId + ': ' + Object.keys(parsedData).length + ' metrics');
+    } else {
+      console.log('[JSParser] LLM returned null for doc ' + docId);
     }
   }
 
