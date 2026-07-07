@@ -150,26 +150,39 @@ function countKeyMetrics(data) {
   return keys.filter(k => data[k] && data[k].length > 0).length;
 }
 
-async function callLlm(text, apiKey, model) {
-  const prompt = `Extract financial metrics from the following NSE (Nairobi Stock Exchange) financial statement text.
-Return ONLY a JSON object with these exact keys (use null if not found):
-- total_revenue (number, in KES)
-- net_income (number, in KES)
-- cost_of_revenue (number, in KES)
-- operating_income (number, in KES)
-- cash_from_operations (number, in KES)
+function buildPrompt(text) {
+  const sector =
+    text.match(/\b(bank|banking|financial\s+services?|fintech|insurance|sacco|microfinance)\b/i)
+    ? 'banking/financial' : 'general corporate';
+  const incomeNote = sector === 'banking/financial'
+    ? `- total_revenue: This is "Total operating income" (net interest income + non-interest income) for banks
+- cost_of_revenue: This is "Total interest expenses" or "Interest expense" for banks`
+    : `- total_revenue: Total revenue or sales
+- cost_of_revenue: Cost of revenue, cost of sales, or direct costs`;
+  return `Extract ALL 13 financial metrics from this NSE (Nairobi Stock Exchange) financial statement. Sector: ${sector}.
+Return ONLY a JSON object with these exact keys (use null ONLY if the value truly cannot be found anywhere in the text):
+${incomeNote}
+- net_income (number, in KES — Profit after tax / Profit for the year / Net profit attributable to parent)
+- operating_income (number, in KES — EBIT / Operating profit / Profit from operations)
+- cash_from_operations (number, in KES — Net cash from operating activities / Cash generated from operations)
 - total_assets (number, in KES)
 - total_liabilities (number, in KES)
-- total_debt (number, in KES)
+- total_debt (number, in KES — Borrowings + lease liabilities, interest-bearing debt)
 - current_assets (number, in KES)
 - current_liabilities (number, in KES)
-- shareholders_equity (number, in KES)
+- shareholders_equity (number, in KES — Total equity / Shareholders funds)
 - retained_earnings (number, in KES)
-- eps (number, in KES)
-- dividend_per_share (number, in KES)
+- eps (number, in KES — Earnings per share)
+- dividend_per_share (number, in KES — Dividends per share)
+
+IMPORTANT: The text may contain numbers for multiple years. Pick the LATEST year's values (the first column of numbers after each label).
 
 Report text:
 ${text.slice(0, 8000)}`;
+}
+
+async function callLlm(text, apiKey, model) {
+  const prompt = buildPrompt(text);
 
   return new Promise((resolve) => {
     const body = JSON.stringify({
@@ -215,25 +228,7 @@ ${text.slice(0, 8000)}`;
 }
 
 async function callGemini(text, apiKey, model) {
-  const prompt = `Extract financial metrics from the following NSE (Nairobi Stock Exchange) financial statement text.
-Return ONLY a JSON object with these exact keys (use null if not found):
-- total_revenue (number, in KES)
-- net_income (number, in KES)
-- cost_of_revenue (number, in KES)
-- operating_income (number, in KES)
-- cash_from_operations (number, in KES)
-- total_assets (number, in KES)
-- total_liabilities (number, in KES)
-- total_debt (number, in KES)
-- current_assets (number, in KES)
-- current_liabilities (number, in KES)
-- shareholders_equity (number, in KES)
-- retained_earnings (number, in KES)
-- eps (number, in KES)
-- dividend_per_share (number, in KES)
-
-Report text:
-${text.slice(0, 8000)}`;
+  const prompt = buildPrompt(text);
 
   return new Promise((resolve) => {
     const m = model || 'gemini-2.5-flash';
