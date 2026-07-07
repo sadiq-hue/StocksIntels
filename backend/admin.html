@@ -3597,7 +3597,7 @@ function fillFormFromJson() {
   const altMap = {
     net_income_pat:'net_income', net_profit:'net_income', profit_after_tax:'net_income',
     operating_income_ebit:'operating_income', ebit:'operating_income',
-    earnings_per_share_eps:'eps', dividend_per_share_dps:'dividend_per_share', dps:'dividend_per_share',
+    earnings_per_share_eps:'eps', earnings_per_share:'eps', dividend_per_share_dps:'dividend_per_share', dps:'dividend_per_share',
     revenue:'total_revenue', total_equity:'shareholders_equity',
   };
   let filled = 0, isJson = false;
@@ -3634,13 +3634,17 @@ function fillFormFromJson() {
         filled++;
       }
     }
-    // Period end / type from metadata
+    // Period end / type from metadata (handle multiple key names)
     const md = data.metadata || data;
-    if (md.period_end) {
-      const d = new Date(md.period_end);
+    const periodEnd = md.period_end || md.period_end_date || md.periodEnd;
+    if (periodEnd) {
+      const d = new Date(periodEnd);
       if (!isNaN(d)) document.getElementById('fsJsonPeriodEnd').value = d.toISOString().split('T')[0];
     }
-    if (md.period_type) document.getElementById('fsJsonPeriodType').value = md.period_type;
+    if (md.period_type || md.periodType) {
+      const pt = (md.period_type || md.periodType || '').toLowerCase();
+      if (['annual','half-year','quarterly'].includes(pt)) document.getElementById('fsJsonPeriodType').value = pt;
+    }
     // Auto-fill ticker if present
     if (data.ticker) {
       const tickerEl = document.getElementById('editStockTicker');
