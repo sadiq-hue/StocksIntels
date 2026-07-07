@@ -972,7 +972,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
                 <!-- Paste JSON area -->
                 <div class="mb-3 p-2 rounded" style="background:#fff;border:1px dashed #93c5fd">
                   <label class="text-xs text-gray-500 block mb-1">Paste JSON to auto-fill form, or enter manually below:</label>
-                  <textarea id="fsJsonPasteArea" class="input-field" rows="3" style="font-family:monospace;font-size:11px;resize:vertical" placeholder='{"total_revenue": 211800000000, "net_income": 68350000000, "eps": 20.80, "dividend_per_share": 7.00}' oninput="fillFormFromJson()"></textarea>
+                  <textarea id="fsJsonPasteArea" class="input-field" rows="3" style="font-family:monospace;font-size:11px;resize:vertical" placeholder='Paste JSON or CSV (2 cols: field_name,value)&#10;{"total_assets":2147206575000,"eps":20.80}&#10;or&#10;total_assets, 2147206575000&#10;eps, 20.80' oninput="fillFormFromJson()"></textarea>
                   <span id="fsJsonPasteStatus" class="text-xs text-gray-500 ml-2"></span>
                 </div>
                 <!-- Form fields -->
@@ -3537,12 +3537,9 @@ function toggleFsJsonUpload() {
 }
 
 function fillFormFromJson() {
-  const jsonStr = document.getElementById('fsJsonPasteArea').value.trim();
+  const rawStr = document.getElementById('fsJsonPasteArea').value.trim();
   const statusEl = document.getElementById('fsJsonPasteStatus');
-  if (!jsonStr) { statusEl.textContent = ''; return; }
-  let data;
-  try { data = JSON.parse(jsonStr); } catch (e) { statusEl.textContent = 'Invalid JSON: ' + e.message; statusEl.style.color = '#dc2626'; return; }
-  // Map JSON keys to form field ids
+  if (!rawStr) { statusEl.textContent = ''; return; }
   const fieldMap = {
     total_assets:'fj_total_assets', total_liabilities:'fj_total_liabilities',
     shareholders_equity:'fj_shareholders_equity', total_debt:'fj_total_debt',
@@ -3556,31 +3553,45 @@ function fillFormFromJson() {
     book_value_per_share:'fj_book_value_per_share',
     pe_ratio:'fj_pe_ratio', fiscal_year:'fj_fiscal_year',
   };
+  const setField = (key, val) => { const el = document.getElementById(fieldMap[key]); if (el && el.value === '') { el.value = val; return true; } return false; };
   let filled = 0;
-  for (const [key, fieldId] of Object.entries(fieldMap)) {
-    if (data[key] !== undefined && data[key] !== null) {
-      document.getElementById(fieldId).value = data[key];
-      filled++;
+  // Try JSON first
+  let isJson = false;
+  try {
+    const data = JSON.parse(rawStr);
+    isJson = true;
+    if (data && typeof data === 'object') {
+      for (const [key, fieldId] of Object.entries(fieldMap)) {
+        if (data[key] !== undefined && data[key] !== null) { document.getElementById(fieldId).value = data[key]; filled++; }
+      }
+      if (data.period_end_date) document.getElementById('fsJsonPeriodEnd').value = data.period_end_date;
+      if (data.period_type) document.getElementById('fsJsonPeriodType').value = data.period_type;
+      if (data.metadata) {
+        if (data.metadata.period_end) document.getElementById('fsJsonPeriodEnd').value = data.metadata.period_end;
+        if (data.metadata.period_type) document.getElementById('fsJsonPeriodType').value = data.metadata.period_type;
+      }
+    }
+  } catch (e) {
+    // Not JSON — try CSV: field_name,value or field_name\tvalue (one per line)
+    const lines = rawStr.split('\n').filter(l => l.trim());
+    for (const line of lines) {
+      const parts = line.split(/[,\t]+/);
+      if (parts.length >= 2) {
+        const key = parts[0].trim().toLowerCase();
+        const val = parseFloat(parts[1].replace(/,/g, '').trim());
+        if (setField(key, val)) filled++;
+      }
     }
   }
-  // Also set period fields
-  if (data.period_end_date) document.getElementById('fsJsonPeriodEnd').value = data.period_end_date;
-  if (data.period_type) document.getElementById('fsJsonPeriodType').value = data.period_type;
-  // Handle extraction format (metadata + raw_text)
-  if (data.metadata) {
-    if (data.metadata.period_end) document.getElementById('fsJsonPeriodEnd').value = data.metadata.period_end;
-    if (data.metadata.period_type) document.getElementById('fsJsonPeriodType').value = data.metadata.period_type;
-  }
-  if (filled === 0) {
-    if (data.raw_text) {
-      statusEl.textContent = 'Raw text extraction detected — paste JSON with field keys (total_assets, eps, dividend_per_share, total_revenue, net_income, etc.) instead';
-    } else {
-      statusEl.textContent = 'No matching fields. Use keys: total_assets, total_liabilities, eps, dividend_per_share, total_revenue, net_income, etc.';
-    }
+  if (filled > 0) {
+    statusEl.textContent = 'Filled ' + filled + ' fields from ' + (isJson ? 'JSON' : 'CSV');
+    statusEl.style.color = '#059669';
+  } else if (isJson) {
+    statusEl.textContent = 'No matching fields. Paste JSON with keys: total_assets, eps, dividend_per_share, total_revenue, net_income';
     statusEl.style.color = '#f59e0b';
   } else {
-    statusEl.textContent = 'Filled ' + filled + ' fields from JSON';
-    statusEl.style.color = '#059669';
+    statusEl.textContent = 'Could not parse. Use JSON (total_assets: 2147206575000) or CSV (total_assets, 2147206575000)';
+    statusEl.style.color = '#f59e0b';
   }
 }
 
