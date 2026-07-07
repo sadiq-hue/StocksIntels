@@ -570,9 +570,6 @@ router.post('/financial-statements/upload-pdf', upload.single('file'), async (re
       }
     }
 
-    // Clean up the temp file
-    try { require('fs').unlinkSync(pdfPath); } catch (_) {}
-
     if (!extractedText) {
       // Last resort: try tesseract page by page via Python script
       // (fallback for PDFs that tesseract CLI can't handle directly)
@@ -593,11 +590,13 @@ except Exception as ex:
     print('', end='')
 `, pdfPath], { encoding: 'utf8', timeout: 180000, maxBuffer: 10 * 1024 * 1024 });
         extractedText = result.trim();
-        try { require('fs').unlinkSync(pdfPath); } catch (_) {}
       } catch (e2) {
         console.warn('Python OCR fallback also failed: ' + e2.message);
       }
     }
+
+    // Clean up the temp file (after ALL extraction attempts)
+    try { require('fs').unlinkSync(pdfPath); } catch (_) {}
 
     if (!extractedText) {
       return res.status(400).json({ error: 'No text could be extracted from this PDF. It may be a scanned document with no OCR-friendly content.' });
