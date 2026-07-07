@@ -300,14 +300,14 @@ function extractMetrics(text) {
         if (val !== null) {
           if (Number.isInteger(val) && (val >= 1 && val <= 999 || val >= 1900 && val <= 2099)) continue;
           values.push(val);
-          if (val > rowMax) rowMax = val;
+          if (Math.abs(val) > Math.abs(rowMax)) rowMax = val;
         }
       }
-      if (rowMax > 0) perPatternMax.push(rowMax);
+      if (rowMax !== 0) perPatternMax.push(rowMax);
     }
     if (values.length > 0) {
       if (metric === 'total_debt' && perPatternMax.length > 1) {
-        results[metric] = [perPatternMax.reduce((a, b) => a + b, 0)];
+        results[metric] = [Math.abs(perPatternMax.reduce((a, b) => a + b, 0))];
       } else {
         const unique = [...new Set(values.map(v => Math.round(v * 100)))].map(v => v / 100);
         results[metric] = unique;
