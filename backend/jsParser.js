@@ -7,7 +7,7 @@ const METRIC_PATTERNS = {
     /\btotal\s+revenue[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   net_income: [
-    /\b(?:equity\s+holders\s+of\s+the\s+parent|attributable\s+to\s+(?:equity\s+holders|owners\s+of\s+the\s+parent))[:\s]*\(?([\d,.]+)\)?/gi,
+    /(?<!Equity\s+attributable\s+to\s+)\bequity\s+holders\s+of\s+the\s+parent[:\s]*\(?([\d,.]+)\)?/gi,
     /\bprofit\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
     /(?<!Other\s+comprehensive\s+)loss\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
     /\bnet\s+(?:profit|income|earnings)(?:\s+for\s+the\s+(?:period|year))?[:\s]*\(?([\d,.]+)\)?/gi,
