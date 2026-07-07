@@ -294,6 +294,7 @@ async function buildLocalNseReport(symbol) {
       return null;
     }
     const stock = stockResult.rows[0];
+    console.log(`[buildLocalNseReport] Found stock: id=${stock.id}, name=${stock.name}, sector=${stock.sector}`);
 
     let fundamentals = null;
     const fundResult = await pool.query('SELECT * FROM stock_fundamentals WHERE symbol = $1', [ticker]);
@@ -316,6 +317,7 @@ async function buildLocalNseReport(symbol) {
     );
     const statement = stmtResult.rows[0] || null;
     const parsed = statement?.parsed_data || null;
+    console.log(`[buildLocalNseReport] financial_statements: rows=${stmtResult.rows.length}, hasParsed=${!!parsed}, keys=${parsed ? Object.keys(parsed).join(',') : 'none'}`);
 
     if (!fundamentals && !parsed) return null;
 
