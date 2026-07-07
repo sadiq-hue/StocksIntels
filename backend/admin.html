@@ -3448,18 +3448,24 @@ async function handleFsUpload(event) {
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      // Group items by Y position (same row within tolerance)
+      // Try position-aware row grouping first (preserves table layout)
       const rows = {};
+      let posOk = true;
       for (const item of content.items) {
+        if (!item.transform || item.transform.length < 6) { posOk = false; break; }
         const y = Math.round(item.transform[5] / Y_TOLERANCE) * Y_TOLERANCE;
         if (!rows[y]) rows[y] = [];
         rows[y].push({ x: item.transform[4], text: item.str });
       }
-      // Sort rows top-to-bottom (PDF y-axis: higher = up), items left-to-right
-      const sortedY = Object.keys(rows).map(Number).sort((a, b) => b - a);
-      for (const y of sortedY) {
-        rows[y].sort((a, b) => a.x - b.x);
-        extractedText += rows[y].map(item => item.str).join(' ') + '\n';
+      if (posOk && Object.keys(rows).length > 0) {
+        const sortedY = Object.keys(rows).map(Number).sort((a, b) => b - a);
+        for (const y of sortedY) {
+          rows[y].sort((a, b) => a.x - b.x);
+          extractedText += rows[y].map(item => item.str).join(' ') + '\n';
+        }
+      } else {
+        // Fallback: flat extraction (position info unavailable)
+        extractedText += content.items.map(item => item.str).join(' ') + '\n';
       }
       progressText.textContent = 'Reading page ' + i + ' of ' + pdf.numPages + '...';
     }
