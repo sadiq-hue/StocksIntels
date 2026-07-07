@@ -155,23 +155,11 @@ function detectColumns(lines) {
         }
       }
       if (nums.length >= 2) {
-        // Assign to columns
-        const colVals = [];
-        for (const num of nums) {
-          let bestDist = Infinity, bestCol = -1;
-          for (let i = 0; i < colPositions.length; i++) {
-            const dist = Math.abs(num.index - colPositions[i]);
-            if (dist <= bestDist) { bestDist = dist; bestCol = i; }
-          }
-          if (bestCol >= 0 && (colVals[bestCol] === undefined || num.value > colVals[bestCol])) {
-            colVals[bestCol] = num.value;
-          }
-        }
-        // Vote: which column has larger value?
-        const nonNullCols = colVals.map((v, i) => ({ v, i })).filter(x => x.v !== undefined);
+        // Vote: which column (by order: first num = col0, second = col1) has larger value?
+        const colVals = nums.map(n => n.value);
         let maxVal = -Infinity, maxCol = -1;
-        for (const { v, i } of nonNullCols) {
-          if (v > maxVal) { maxVal = v; maxCol = i; }
+        for (let i = 0; i < colVals.length; i++) {
+          if (colVals[i] > maxVal) { maxVal = colVals[i]; maxCol = i; }
         }
         if (maxCol >= 0) votes[maxCol]++;
       }
@@ -197,25 +185,10 @@ function extractNumberFromLine(line, columns) {
   if (nums.length === 0) return null;
   if (nums.length === 1 || !columns) return nums[0].value;
 
-  // Assign each number to the nearest column
-  const colValues = [];
-  for (const num of nums) {
-    let bestDist = Infinity, bestCol = -1;
-    for (let i = 0; i < columns.columns.length; i++) {
-      const dist = Math.abs(num.index - columns.columns[i]);
-      if (dist <= bestDist) { bestDist = dist; bestCol = i; }
-    }
-    if (bestCol >= 0 && (colValues[bestCol] === undefined || num.value > colValues[bestCol])) {
-      colValues[bestCol] = num.value;
-    }
-  }
-  // Return the value at the Group column
-  if (colValues[columns.groupCol] !== undefined) return colValues[columns.groupCol];
-  // Fallback: return the rightmost assigned value
-  for (let i = colValues.length - 1; i >= 0; i--) {
-    if (colValues[i] !== undefined) return colValues[i];
-  }
-  return null;
+  // Assign by order (nums are left-to-right; first num = col0, second = col1)
+  if (columns.groupCol < nums.length) return nums[columns.groupCol].value;
+  // Fallback: return the rightmost (last) number
+  return nums[nums.length - 1].value;
 }
 
 // ── Accounting validation ──
