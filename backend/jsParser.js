@@ -4,55 +4,54 @@ const https = require('https');
 
 const METRIC_PATTERNS = {
   total_revenue: [
-    /(?<!\bcost\s+of\s+)(?:total\s+)?revenue[:\s]*([\d,.]+)/gi,
-    /gross\s+revenue[:\s]*([\d,.]+)/gi,
+    /\btotal\s+revenue[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   net_income: [
-    /\bnet\s+(?:profit|income|earnings)(?:\s+for\s+the\s+(?:period|year))?[:\s]*([\d,.]+)/gi,
-    /(?:profit|loss)\s+for\s+the\s+(?:period|year)[:\s]*([\d,.]+)/gi,
-    /\btotal\s+comprehensive\s+income[:\s]*([\d,.]+)/gi,
+    /\bprofit\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
+    /(?<!Other\s+comprehensive\s+)loss\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bnet\s+(?:profit|income|earnings)(?:\s+for\s+the\s+(?:period|year))?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\btotal\s+comprehensive\s+income[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   cost_of_revenue: [
-    /\bcost\s+of\s+(?:revenue|sales|goods\s+sold)[:\s]*([\d,.]+)/gi,
+    /\bdirect\s+costs?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bcost\s+of\s+(?:revenue|sales|goods\s+sold)[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   operating_income: [
-    /\boperating\s+(?:income|profit)[:\s]*([\d,.]+)/gi,
-    /\b(?:income|profit)\s+from\s+operations[:\s]*([\d,.]+)/gi,
+    /\boperating\s+(?:income|profit)(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\b(?:income|profit)\s+from\s+operations[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   cash_from_operations: [
-    /(?:net\s+)?cash\s+(?:from|generated\s+by|provided\s+by)\s+operating\s+activities[:\s]*([\d,.]+)/gi,
-    /(?:net\s+)?cash\s+(?:from|from\s+)?operations[:\s]*([\d,.]+)/gi,
-    /\boperating\s+cash\s+flow[:\s]*([\d,.]+)/gi,
+    /(?:net\s+)?cash\s+(?:from|generated\s+(?:from|by)|provided\s+by)\s+operating\s+activities[:\s]*\(?([\d,.]+)\)?/gi,
+    /(?:net\s+)?cash\s+(?:from|from\s+)?operations[:\s]*\(?([\d,.]+)\)?/gi,
+    /\boperating\s+cash\s+flow[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   total_assets: [
-    /\btotal\s+assets[:\s]*([\d,.]+)/gi,
+    /\btotal\s+assets[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   total_liabilities: [
-    /\btotal\s+liabilities[:\s]*([\d,.]+)/gi,
-    /\btotal\s+(?:equity\s+and\s+)?liabilities[:\s]*([\d,.]+)/gi,
+    /\btotal\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   total_debt: [
-    /\b(?:total\s+)?(?:debt|borrowings|loans\s+(?:and|&)\s+borrowings)[:\s]*([\d,.]+)/gi,
+    /(?<!paid\s+on\s+)\bborrowings[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   current_assets: [
-    /(?<!\btotal\s+)current\s+assets[:\s]*([\d,.]+)/gi,
+    /(?<!\btotal\s+)current\s+assets[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   current_liabilities: [
-    /(?<!\btotal\s+)current\s+liabilities[:\s]*([\d,.]+)/gi,
+    /(?<!\btotal\s+)current\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   shareholders_equity: [
-    /\bshareholders?[''´`]?s?\s+equity[:\s]*([\d,.]+)/gi,
-    /\btotal\s+equity[:\s]*([\d,.]+)/gi,
+    /\bshareholders?[''´`]?s?\s+equity[:\s]*\(?([\d,.]+)\)?/gi,
+    /\btotal\s+equity[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   retained_earnings: [
-    /\bretained\s+earnings[:\s]*([\d,.]+)/gi,
-    /\bretained\s+profit[:\s]*([\d,.]+)/gi,
+    /\bretained\s+earnings[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   eps: [
-    /\b(?:earnings\s+per\s+share|eps)[:\s]*([\d,.]+)/gi,
+    /\b(?:earnings\s+per\s+share|eps)(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   dividend_per_share: [
-    /\b(?:dividend\s+per\s+share|dps)[:\s]*([\d,.]+)/gi,
+    /\bdividend\s+per\s+share[:\s]*\(?([\d,.]+)\)?/gi,
   ],
 };
 
