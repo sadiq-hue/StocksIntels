@@ -3247,6 +3247,7 @@ async function loadFsStatements(stockId) {
           </div>
           <div class="flex items-center gap-1 shrink-0 ml-2">
             ${s.status === 'completed' ? `<button class="btn btn-secondary text-xs py-1 px-2" onclick="viewFsParsed(${s.id})">View</button>` : ''}
+            ${s.status === 'failed' ? `<button class="btn btn-secondary text-xs py-1 px-2" onclick="showFsError(${s.id})">Error</button>` : ''}
             ${s.status === 'completed' || s.status === 'failed' ? `<button class="btn btn-secondary text-xs py-1 px-2" onclick="reparseFsStatement(${s.id})">↻</button>` : ''}
             <button class="btn btn-danger text-xs py-1 px-2" onclick="deleteFsStatement(${s.id})">Del</button>
           </div>
@@ -3331,14 +3332,23 @@ async function viewFsParsed(id) {
   document.getElementById('fsParsedModal').classList.remove('hidden');
 }
 
+async function showFsError(id) {
+  try {
+    const res = await fetch('/api/admin/financial-statements/debug/' + id);
+    if (!res.ok) { toast('Failed to fetch error', 'error'); return; }
+    const d = await res.json();
+    toast('Status: ' + d.status + '\nProcessed by: ' + (d.processed_by || 'N/A') + '\nError: ' + (d.error_message || 'None'), 'error');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
 async function reparseFsStatement(id) {
   if (!confirm('Re-parse this statement?')) return;
   try {
     const res = await fetch('/api/admin/financial-statements/reparse/' + id, { method: 'POST' });
-    if (!res.ok) throw new Error('Re-parse failed');
+    if (!res.ok) { const text = await res.text(); throw new Error(text.slice(0, 500)); }
     toast('Re-parsing...', 'success');
     loadFsStatements(fsStockId);
-    setTimeout(() => loadFsStatements(fsStockId), 3000);
+    setTimeout(() => loadFsStatements(fsStockId), 5000);
   } catch (e) { toast(e.message, 'error'); }
 }
 
