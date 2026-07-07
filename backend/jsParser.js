@@ -461,17 +461,28 @@ async function callLlm(text, apiKey, model) {
   });
 }
 
+const GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash'];
+
 async function callGemini(text, apiKey, model) {
   const prompt = buildPrompt(text);
+  const modelsToTry = model ? [model] : GEMINI_MODELS;
+  for (const m of modelsToTry) {
+    const result = await tryGeminiModel(prompt, apiKey, m);
+    if (result !== null) return result;
+    console.warn('[Gemini] Model ' + m + ' failed, trying next');
+  }
+  return null;
+}
+
+function tryGeminiModel(prompt, apiKey, model) {
   return new Promise((resolve) => {
-    const m = model || 'gemini-2.5-flash';
     const body = JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
     });
     const opts = {
       hostname: 'generativelanguage.googleapis.com',
-      path: '/v1beta/models/' + m + ':generateContent?key=' + apiKey,
+      path: '/v1beta/models/' + model + ':generateContent?key=' + apiKey,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -485,7 +496,7 @@ async function callGemini(text, apiKey, model) {
       res.on('end', () => {
         try {
           if (res.statusCode !== 200) {
-            console.error('[Gemini] HTTP ' + res.statusCode + ':' + data.slice(0, 200));
+            console.error('[Gemini] HTTP ' + res.statusCode + ' for ' + model + ':' + data.slice(0, 200));
             resolve(null); return;
           }
           const parsed = JSON.parse(data);
@@ -542,7 +553,8 @@ async function processText(text, docId, source) {
   }
 
   if (Object.keys(parsedData).length === 0) {
-    console.log('[JSParser] No LLM available or all LLMs failed for doc ' + docId);
+    const msg = llmProviders.length === 0 ? 'No API keys configured. Set GEMINI_API_KEY or OPENAI_API_KEY.' : 'All LLM providers failed to extract >=8 metrics. Check server logs.';
+    console.log('[JSParser] ' + msg + ' for doc ' + docId);
   }
 
   // Validation (for logging only)
@@ -559,9 +571,12 @@ async function processText(text, docId, source) {
     );
   } else {
     const preview = text.slice(0, 300).replace(/\0/g, '');
+    const errorDetail = llmProviders.length === 0
+      ? 'No API keys configured (set GEMINI_API_KEY or OPENAI_API_KEY in Railway env vars)'
+      : 'LLM returned <8 valid metrics. Check Railway server logs for [Gemini] or [LLM] messages.';
     await pool.query(
       `UPDATE financial_statements SET status = 'completed', parsed_data = '{}'::jsonb, error_message = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
-      ['No metrics matched. Text preview: ' + preview, processedBy, docId]
+      [errorDetail + '. Text preview: ' + preview, processedBy, docId]
     );
   }
 
