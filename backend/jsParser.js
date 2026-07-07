@@ -71,46 +71,257 @@ function parseNumber(s) {
   return isNaN(n) ? null : n;
 }
 
+// ── Column detection for pdftotext -layout multi-column tables ──
+// In layout output, numbers in the same column appear at consistent char positions.
+// Strategy:
+//   1. Cluster number positions across all lines to find column boundaries
+//   2. Scan header lines for "Group"/"Consolidated" vs "Company"/"Bank" labels
+//   3. Match header word positions to nearest column boundary
+//   4. If headers found, use them to identify Group column
+//   5. If no headers, use max-value voting across lines
+
+const NUM_RE = /(?<![a-zA-Z])(\d[\d,]*\.?\d*)(?![a-zA-Z.%])/g;
+
+function detectColumns(lines) {
+  const positions = [];
+  for (const line of lines) {
+    NUM_RE.lastIndex = 0;
+    let m;
+    while ((m = NUM_RE.exec(line)) !== null) {
+      const val = parseNumber(m[1]);
+      if (val !== null) {
+        if (Number.isInteger(val) && (val >= 1 && val <= 999 || val >= 1900 && val <= 2099)) continue;
+        positions.push({ index: m.index, value: val });
+      }
+    }
+  }
+  if (positions.length < 6) return null;
+
+  // Cluster positions by proximity (gap > 4 chars = new column)
+  positions.sort((a, b) => a.index - b.index);
+  const clusters = [];
+  for (const p of positions) {
+    const last = clusters[clusters.length - 1];
+    if (last && p.index - last.x <= 4) {
+      last.items.push(p);
+      last.x = (last.x * (last.items.length - 1) + p.index) / last.items.length;
+    } else {
+      clusters.push({ items: [p], x: p.index });
+    }
+  }
+  if (clusters.length < 2) return null;
+
+  // Keep clusters with enough values
+  const valid = clusters.filter(c => c.items.length >= 2);
+  if (valid.length < 2) return null;
+
+  const colPositions = valid.map(c => Math.round(c.x));
+
+  // Method 1: Identify Group column from header labels
+  const headerLines = lines.slice(0, Math.min(20, lines.length));
+  let groupCol = -1;
+  let method = 'none';
+
+  for (const line of headerLines) {
+    const groupIdx = line.search(/\b(?:Group|Consolidated)\b/i);
+    const companyIdx = line.search(/\b(?:Company|Standalone|Bank|Separate|Unconsolidated)\b/i);
+    if (groupIdx >= 0 && companyIdx >= 0) {
+      // Both labels found: Group is left if its character position is smaller
+      groupCol = groupIdx < companyIdx ? 0 : colPositions.length - 1;
+      method = 'header';
+      break;
+    }
+    if (groupIdx >= 0) {
+      // Only Group label: match to nearest column boundary
+      let bestDist = Infinity;
+      for (let i = 0; i < colPositions.length; i++) {
+        const dist = Math.abs(groupIdx - colPositions[i]);
+        if (dist <= bestDist) { bestDist = dist; groupCol = i; }
+      }
+      method = 'header';
+    }
+  }
+
+  // Method 2: If no header labels found, use max-value voting
+  if (groupCol < 0) {
+    const votes = new Array(colPositions.length).fill(0);
+    for (const line of lines) {
+      NUM_RE.lastIndex = 0;
+      const nums = [];
+      while ((m = NUM_RE.exec(line)) !== null) {
+        const val = parseNumber(m[1]);
+        if (val !== null && !(Number.isInteger(val) && (val >= 1 && val <= 999 || val >= 1900 && val <= 2099))) {
+          nums.push({ index: m.index, value: val });
+        }
+      }
+      if (nums.length >= 2) {
+        // Assign to columns
+        const colVals = [];
+        for (const num of nums) {
+          let bestDist = Infinity, bestCol = -1;
+          for (let i = 0; i < colPositions.length; i++) {
+            const dist = Math.abs(num.index - colPositions[i]);
+            if (dist <= bestDist) { bestDist = dist; bestCol = i; }
+          }
+          if (bestCol >= 0 && (colVals[bestCol] === undefined || num.value > colVals[bestCol])) {
+            colVals[bestCol] = num.value;
+          }
+        }
+        // Vote: which column has larger value?
+        const nonNullCols = colVals.map((v, i) => ({ v, i })).filter(x => x.v !== undefined);
+        let maxVal = -Infinity, maxCol = -1;
+        for (const { v, i } of nonNullCols) {
+          if (v > maxVal) { maxVal = v; maxCol = i; }
+        }
+        if (maxCol >= 0) votes[maxCol]++;
+      }
+    }
+    groupCol = votes.indexOf(Math.max(...votes));
+    method = 'vote';
+  }
+
+  console.log('[detectColumns] ' + colPositions.length + ' cols at [' + colPositions + '], Group=col' + groupCol + ' (method=' + method + ')');
+  return { columns: colPositions, groupCol };
+}
+
+function extractNumberFromLine(line, columns) {
+  NUM_RE.lastIndex = 0;
+  const nums = [];
+  let m;
+  while ((m = NUM_RE.exec(line)) !== null) {
+    const val = parseNumber(m[1]);
+    if (val !== null && !(Number.isInteger(val) && (val >= 1 && val <= 999 || val >= 1900 && val <= 2099))) {
+      nums.push({ index: m.index, value: val });
+    }
+  }
+  if (nums.length === 0) return null;
+  if (nums.length === 1 || !columns) return nums[0].value;
+
+  // Assign each number to the nearest column
+  const colValues = [];
+  for (const num of nums) {
+    let bestDist = Infinity, bestCol = -1;
+    for (let i = 0; i < columns.columns.length; i++) {
+      const dist = Math.abs(num.index - columns.columns[i]);
+      if (dist <= bestDist) { bestDist = dist; bestCol = i; }
+    }
+    if (bestCol >= 0 && (colValues[bestCol] === undefined || num.value > colValues[bestCol])) {
+      colValues[bestCol] = num.value;
+    }
+  }
+  // Return the value at the Group column
+  if (colValues[columns.groupCol] !== undefined) return colValues[columns.groupCol];
+  // Fallback: return the rightmost assigned value
+  for (let i = colValues.length - 1; i >= 0; i--) {
+    if (colValues[i] !== undefined) return colValues[i];
+  }
+  return null;
+}
+
+// ── Accounting validation ──
+
+function validateMetrics(data) {
+  const issues = [];
+  if (data.total_assets && data.total_liabilities && data.shareholders_equity) {
+    const expectedEquity = data.total_assets - data.total_liabilities;
+    const diff = Math.abs(data.shareholders_equity - expectedEquity);
+    const ratio = diff / Math.max(data.shareholders_equity, 1);
+    if (ratio > 0.3) {
+      issues.push(`Equity ${data.shareholders_equity} != Assets ${data.total_assets} - Liabilities ${data.total_liabilities} = ${expectedEquity} (gap ${(ratio*100).toFixed(0)}%)`);
+    }
+  }
+  if (data.eps && data.dividend_per_share && data.eps < data.dividend_per_share) {
+    issues.push(`EPS ${data.eps} < DPS ${data.dividend_per_share}`);
+  }
+  if (data.total_revenue && data.net_income && data.total_revenue < data.net_income) {
+    issues.push(`Revenue ${data.total_revenue} < Net Income ${data.net_income}`);
+  }
+  if (data.total_assets && data.total_revenue && data.total_assets < data.total_revenue) {
+    issues.push(`Assets ${data.total_assets} < Revenue ${data.total_revenue}`);
+  }
+  return issues;
+}
+
+// ── Scale detection ──
+// Detect whether values are in actual KES, thousands, or millions
+// by looking for scale keywords in the text.
+
+function detectScale(text) {
+  if (/\bKShs\s*(?:[M]illions?|[M]\.?|M\b|000'?000|'000'000)\b/i.test(text) ||
+      /\b(?:amounts?\s+)?in\s+millions\b/i.test(text) ||
+      /\b(?:Mn|Million)\s*KShs?\b/i.test(text)) {
+    return 1e6;
+  }
+  if (/\bKShs\s*(?:[T]housands?|000)\b/i.test(text) ||
+      /\b(?:figures?\s+)?in\s+thousands\b/i.test(text) ||
+      /\b'000\b/.test(text)) {
+    return 1e3;
+  }
+  return 1;
+}
+
 function extractMetrics(text) {
   const results = {};
-  // Normalize OCR ligatures: ﬁ→fi, ﬂ→fl
   text = text.replace(/\ufb01/g, 'fi').replace(/\ufb02/g, 'fl');
   const lines = text.split('\n');
+
+  // Detect columns for position-aware extraction
+  const columns = detectColumns(lines);
+  if (columns) {
+    console.log('[extractMetrics] Detected ' + columns.columns.length + ' columns, Group=col' + columns.groupCol + ' (rightmost)');
+  }
+
+  const scale = detectScale(text);
+  if (scale > 1) {
+    console.log('[extractMetrics] Scale detected: ' + scale + 'x');
+  }
+
   for (const [metric, patterns] of Object.entries(METRIC_PATTERNS)) {
     const values = [];
-    const perPatternMax = []; // track max per pattern for combinable metrics (total_debt)
+    const perPatternMax = [];
     for (const p of patterns) {
       const re = new RegExp(p.source, 'i');
       let rowMax = 0;
       for (const line of lines) {
         const m = line.match(re);
         if (!m) continue;
-        // Use the captured number from the pattern tail (number after label)
-        let val = m[1] ? parseNumber(m[1]) : null;
+
+        let val = null;
+        // Strategy 1: column-aware extraction (picks Group column when detected)
+        if (columns) {
+          val = extractNumberFromLine(line, columns);
+          if (val === null) {
+            // Fallback within column-aware: try captured group
+            if (m[1]) val = parseNumber(m[1]);
+          }
+        }
+        // Strategy 2: use captured group from pattern tail (number after label)
+        if (val === null && m[1]) {
+          val = parseNumber(m[1]);
+        }
+        // Strategy 3: fall back to extracting all numbers
+        if (val === null) {
+          const nums = [];
+          NUM_RE.lastIndex = 0;
+          let nm;
+          while ((nm = NUM_RE.exec(line)) !== null) {
+            const v = parseNumber(nm[1]);
+            if (v !== null && !(Number.isInteger(v) && (v >= 1 && v <= 999 || v >= 1900 && v <= 2099))) {
+              nums.push(v);
+            }
+          }
+          if (nums.length > 0) val = Math.max(...nums);
+        }
+
         if (val !== null) {
           if (Number.isInteger(val) && (val >= 1 && val <= 999 || val >= 1900 && val <= 2099)) continue;
           values.push(val);
           if (val > rowMax) rowMax = val;
-        } else {
-          // Fallback: extract all numbers from line (backward compat for patterns without capture)
-          const nums = line.match(/(?<![a-zA-Z])(\d[\d,]*\.?\d*)(?![a-zA-Z.%])/g);
-          if (nums) {
-            for (const n of nums) {
-              val = parseNumber(n);
-              if (val !== null) {
-                if (Number.isInteger(val) && (val >= 1 && val <= 999 || val >= 1900 && val <= 2099)) continue;
-                values.push(val);
-                if (val > rowMax) rowMax = val;
-              }
-            }
-          }
         }
       }
       if (rowMax > 0) perPatternMax.push(rowMax);
     }
     if (values.length > 0) {
-      // total_debt: sum the max from each pattern (borrowings + lease liabilities)
-      // other metrics: just use all raw values
       if (metric === 'total_debt' && perPatternMax.length > 1) {
         results[metric] = [perPatternMax.reduce((a, b) => a + b, 0)];
       } else {
@@ -127,12 +338,10 @@ function extractPdfText(buffer) {
   const texts = [];
 
   function decodePdfString(s) {
-    // Handle escaped chars
     return s.replace(/\\(.)/g, (m, c) => c === 'n' ? '\n' : c === 'r' ? '\r' : c === 't' ? '\t' : c);
   }
 
   function extractFromString(str) {
-    // Extract parenthesized strings: (text)
     let re = /\(([^)]*)\)/g;
     let m;
     while ((m = re.exec(str)) !== null) {
@@ -141,7 +350,6 @@ function extractPdfText(buffer) {
         texts.push(t);
       }
     }
-    // Extract hex strings: <hex>  (min 8 hex chars to avoid PDF artifact IDs)
     re = /<([0-9a-fA-F]{8,})>/g;
     while ((m = re.exec(str)) !== null) {
       try {
@@ -152,7 +360,6 @@ function extractPdfText(buffer) {
         }
       } catch (_) {}
     }
-    // Extract text from TJ arrays: [(text) num (text)] TJ
     re = /\[([^\]]*)\]\s*TJ/g;
     while ((m = re.exec(str)) !== null) {
       const inner = m[1];
@@ -169,8 +376,6 @@ function extractPdfText(buffer) {
   }
 
   extractFromString(latin1);
-
-  // Find and decompress FlateDecode streams
   const streamRe = /stream\r?\n(.+?)\r?\n?endstream/gs;
   let sm;
   while ((sm = streamRe.exec(latin1)) !== null) {
@@ -180,7 +385,6 @@ function extractPdfText(buffer) {
       extractFromString(dec);
     } catch (_) {}
   }
-
   return texts.join(' ');
 }
 
@@ -228,7 +432,6 @@ ${text.slice(0, 12000)}`;
 
 async function callLlm(text, apiKey, model) {
   const prompt = buildPrompt(text);
-
   return new Promise((resolve) => {
     const body = JSON.stringify({
       model: model || 'gpt-4o-mini',
@@ -274,7 +477,6 @@ async function callLlm(text, apiKey, model) {
 
 async function callGemini(text, apiKey, model) {
   const prompt = buildPrompt(text);
-
   return new Promise((resolve) => {
     const m = model || 'gemini-2.5-flash';
     const body = JSON.stringify({
@@ -318,7 +520,6 @@ async function processText(text, docId, source) {
   let parsedData = {};
   let processedBy = source || 'js';
 
-  // Primary: try AI if a key is set
   if (process.env.GEMINI_API_KEY) {
     console.log('[JSParser] Calling Gemini for doc ' + docId + ', text length=' + text.length);
     const llmResult = await callGemini(text, process.env.GEMINI_API_KEY, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
@@ -346,21 +547,60 @@ async function processText(text, docId, source) {
     }
   }
 
-  // Fallback: regex if AI returned nothing
+  const scale = detectScale(text);
+
   if (Object.keys(parsedData).length === 0) {
     const metrics = extractMetrics(text);
     for (const [metric, values] of Object.entries(metrics)) {
       if (values.length > 0) {
-        // Filter out section numbers (small values) for large-value metrics
         const largeMetrics = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
         let filtered = largeMetrics.includes(metric) ? values.filter(v => v > 100) : values;
         if (filtered.length === 0) filtered = values;
-        // Pick the LARGEST value — this is always the Consolidated/Group column
         parsedData[metric] = Math.round(Math.max(...filtered) * 100) / 100;
       }
     }
     if (Object.keys(parsedData).length > 0) {
       processedBy = source ? source + ':regex' : 'js:regex';
+    }
+  }
+
+  // Apply scale normalization
+  if (scale > 1 && Object.keys(parsedData).length > 0) {
+    const scaledMetrics = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
+    for (const k of scaledMetrics) {
+      if (parsedData[k] !== undefined && parsedData[k] !== null && parsedData[k] > 0 && parsedData[k] < 1e10) {
+        parsedData[k] = Math.round(parsedData[k] * scale * 100) / 100;
+        console.log('[JSParser] Scaled ' + k + ' by ' + scale + 'x to ' + parsedData[k]);
+      }
+    }
+  }
+
+  // Run validation
+  const issues = validateMetrics(parsedData);
+  if (issues.length > 0) {
+    console.log('[JSParser] Validation issues for doc ' + docId + ': ' + issues.join('; '));
+    // Try re-extraction with alternative strategies for failing metrics
+    if (issues.some(i => i.includes('Equity') || i.includes('EPS') || i.includes('Revenue'))) {
+      const metrics = extractMetrics(text);
+      for (const [metric, values] of Object.entries(metrics)) {
+        if (values.length > 0 && parsedData[metric] !== undefined) {
+          const filtered = values.filter(v => v > 100);
+          const candidates = filtered.length > 0 ? filtered : values;
+          // If current value fails validation, try the first quartile value instead of max
+          candidates.sort((a, b) => a - b);
+          const midIdx = Math.floor(candidates.length / 2);
+          if (candidates.length >= 2 && candidates[candidates.length - 1] !== candidates[midIdx]) {
+            const oldVal = parsedData[metric];
+            parsedData[metric] = Math.round(candidates[midIdx] * 100) / 100;
+            console.log('[JSParser] Validation retry for ' + metric + ': ' + oldVal + ' -> ' + parsedData[metric]);
+          }
+        }
+      }
+      // Re-validate
+      const retryIssues = validateMetrics(parsedData);
+      if (retryIssues.length < issues.length) {
+        console.log('[JSParser] Retry improved validation: ' + retryIssues.length + ' issues remain');
+      }
     }
   }
 
