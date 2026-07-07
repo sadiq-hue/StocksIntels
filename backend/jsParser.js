@@ -10,8 +10,8 @@ const METRIC_PATTERNS = {
   net_income: [
     /(?<!Equity\s+attributable\s+to\s+)\bequity\s+holders\s+of\s+the\s+parent[:\s]*\(?([\d,.]+)\)?/gi,
     /\bprofit\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
-    /\bprofit\s+after\s+tax[:\s]*\(?([\d,.]+)\)?/gi,
-    /\bprofit\s+after\s+exceptional\s+items[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bprofit\b[^a]*?after\s+tax[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bprofit\b[^a]*?after\s+exceptional\s+items[:\s]*\(?([\d,.]+)\)?/gi,
     /(?<!Other\s+comprehensive\s+)loss\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
     /\bnet\s+(?:profit|income|earnings)(?:\s+for\s+the\s+(?:period|year))?[:\s]*\(?([\d,.]+)\)?/gi,
     /\btotal\s+comprehensive\s+income[:\s]*\(?([\d,.]+)\)?/gi,
@@ -88,8 +88,8 @@ function extractMetrics(text) {
           for (const n of nums) {
             const val = parseNumber(n);
             if (val !== null) {
-              // Skip year-like values (2024, 2025 etc) and small section numbers
-              if (Number.isInteger(val) && val >= 1900 && val <= 2099) continue;
+              // Skip year-like values (2024-2099) and small section/line numbers (1-999)
+              if (Number.isInteger(val) && (val >= 1 && val <= 999 || val >= 1900 && val <= 2099)) continue;
               values.push(val);
               if (val > rowMax) rowMax = val;
             }
