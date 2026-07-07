@@ -3594,44 +3594,80 @@ function fillFormFromJson() {
     book_value_per_share:'fj_book_value_per_share',
     pe_ratio:'fj_pe_ratio', fiscal_year:'fj_fiscal_year',
   };
-  const setField = (key, val) => { const el = document.getElementById(fieldMap[key]); if (el && el.value === '') { el.value = val; return true; } return false; };
-  let filled = 0;
-  // Try JSON first
-  let isJson = false;
+  const altMap = {
+    net_income_pat:'net_income', net_profit:'net_income', profit_after_tax:'net_income',
+    operating_income_ebit:'operating_income', ebit:'operating_income',
+    earnings_per_share_eps:'eps', dividend_per_share_dps:'dividend_per_share', dps:'dividend_per_share',
+    revenue:'total_revenue', total_equity:'shareholders_equity',
+  };
+  let filled = 0, isJson = false;
   try {
     const data = JSON.parse(rawStr);
     isJson = true;
-    if (data && typeof data === 'object') {
-      for (const [key, fieldId] of Object.entries(fieldMap)) {
-        if (data[key] !== undefined && data[key] !== null) { document.getElementById(fieldId).value = data[key]; filled++; }
+    if (!data || typeof data !== 'object') throw new Error();
+    // Flatten nested sections (balance_sheet, income_statement, per_share, etc.)
+    const flat = {};
+    (function flatten(obj, prefix) {
+      if (!obj || typeof obj !== 'object') return;
+      for (const [k, v] of Object.entries(obj)) {
+        const key = prefix ? prefix + '_' + k : k;
+        if (v !== null && typeof v === 'object' && !Array.isArray(v)) flatten(v, key);
+        else if (v !== null) flat[key] = v;
       }
-      if (data.period_end_date) document.getElementById('fsJsonPeriodEnd').value = data.period_end_date;
-      if (data.period_type) document.getElementById('fsJsonPeriodType').value = data.period_type;
-      if (data.metadata) {
-        if (data.metadata.period_end) document.getElementById('fsJsonPeriodEnd').value = data.metadata.period_end;
-        if (data.metadata.period_type) document.getElementById('fsJsonPeriodType').value = data.metadata.period_type;
+    })(data);
+    // Detect scale from JSON
+    let scale = 1;
+    if (/million/i.test(data.unit || '')) scale = 1000000;
+    else if (/thousand/i.test(data.unit || '')) scale = 1000;
+    // Map canonical keys
+    for (const [key, fieldId] of Object.entries(fieldMap)) {
+      if (flat[key] !== undefined) {
+        document.getElementById(fieldId).value = scale > 1 ? flat[key] * scale : flat[key];
+        filled++;
       }
     }
+    // Map alternative keys
+    for (const [alt, canon] of Object.entries(altMap)) {
+      if (flat[alt] !== undefined && fieldMap[canon]) {
+        document.getElementById(fieldMap[canon]).value = scale > 1 ? flat[alt] * scale : flat[alt];
+        filled++;
+      }
+    }
+    // Period end / type from metadata
+    const md = data.metadata || data;
+    if (md.period_end) {
+      const d = new Date(md.period_end);
+      if (!isNaN(d)) document.getElementById('fsJsonPeriodEnd').value = d.toISOString().split('T')[0];
+    }
+    if (md.period_type) document.getElementById('fsJsonPeriodType').value = md.period_type;
+    // Auto-fill ticker if present
+    if (data.ticker) {
+      const tickerEl = document.getElementById('editStockTicker');
+      if (tickerEl) tickerEl.value = data.ticker.toUpperCase();
+    }
   } catch (e) {
-    // Not JSON — try CSV: field_name,value or field_name\tvalue (one per line)
+    // CSV fallback: field_name,value (one per line)
     const lines = rawStr.split('\n').filter(l => l.trim());
     for (const line of lines) {
       const parts = line.split(/[,\t]+/);
       if (parts.length >= 2) {
-        const key = parts[0].trim().toLowerCase();
+        let key = parts[0].trim().toLowerCase();
         const val = parseFloat(parts[1].replace(/,/g, '').trim());
-        if (setField(key, val)) filled++;
+        if (isNaN(val)) continue;
+        key = altMap[key] || key;
+        const fieldId = fieldMap[key];
+        if (fieldId) { document.getElementById(fieldId).value = val; filled++; }
       }
     }
   }
   if (filled > 0) {
-    statusEl.textContent = 'Filled ' + filled + ' fields from ' + (isJson ? 'JSON' : 'CSV');
+    statusEl.textContent = 'Filled ' + filled + ' fields' + (isJson ? ' from JSON (detected unit: ' + (scale > 1 ? (scale === 1000000 ? 'millions' : 'thousands') : 'base') + ')' : '');
     statusEl.style.color = '#059669';
   } else if (isJson) {
-    statusEl.textContent = 'No matching fields. Paste JSON with keys: total_assets, eps, dividend_per_share, total_revenue, net_income';
+    statusEl.textContent = 'No matching fields. Use keys like: total_assets, total_revenue, eps, net_income, dividend_per_share';
     statusEl.style.color = '#f59e0b';
   } else {
-    statusEl.textContent = 'Could not parse. Use JSON (total_assets: 2147206575000) or CSV (total_assets, 2147206575000)';
+    statusEl.textContent = 'Could not parse. Paste JSON or CSV (field_name,value per line)';
     statusEl.style.color = '#f59e0b';
   }
 }
