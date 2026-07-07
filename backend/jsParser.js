@@ -223,14 +223,17 @@ function validateMetrics(data) {
 // by looking for scale keywords in the text.
 
 function detectScale(text) {
-  if (/\bKShs\s*(?:[M]illions?|[M]\.?|M\b|000'?000|'000'000)\b/i.test(text) ||
-      /\b(?:amounts?\s+)?in\s+millions\b/i.test(text) ||
-      /\b(?:Mn|Million)\s*KShs?\b/i.test(text)) {
+  const norm = text.replace(/[\u2018\u2019\u201C\u201D\u00B4\u2032\u2033]/g, "'").replace(/\ufb01/g, 'fi').replace(/\ufb02/g, 'fl');
+  if (/\b(?:K)?Shs?\s*(?:[M]illions?|[M]\.?|M\b|000'?000|'000'000)\b/i.test(norm) ||
+      /\b(?:amounts?\s+)?in\s+millions\b/i.test(norm) ||
+      /\b(?:Mn|Million)\s*(?:K)?Shs?\b/i.test(norm)) {
     return 1e6;
   }
-  if (/\bKShs\s*(?:[T]housands?|000)\b/i.test(text) ||
-      /\b(?:figures?\s+)?in\s+thousands\b/i.test(text) ||
-      /\b'000\b/.test(text)) {
+  if (/\b(?:K)?Shs?\s*(?:[T]housands?|000)\b/i.test(norm) ||
+      /\b(?:figures?\s+)?in\s+thousands\b/i.test(norm) ||
+      /\b['\u2018\u2019]\s*000\b/.test(norm) ||
+      /\bthousands\s+of\s+(?:Kenya\s+)?[Kk]?[Ss]hillings?\b/i.test(norm) ||
+      /\b000['\u2018\u2019]\s*$|^(?:in\s+)?thousands\b/im.test(norm)) {
     return 1e3;
   }
   return 1;
@@ -372,43 +375,39 @@ function extractPdfText(buffer) {
   return texts.join(' ');
 }
 
-function countKeyMetrics(data) {
-  const keys = ['eps', 'dividend_per_share', 'total_revenue', 'net_income'];
-  return keys.filter(k => data[k] && data[k].length > 0).length;
-}
-
 function buildPrompt(text) {
   const sector =
     text.match(/\b(bank|banking|financial\s+services?|fintech|insurance|sacco|microfinance)\b/i)
     ? 'banking/financial' : 'general corporate';
   const incomeNote = sector === 'banking/financial'
-    ? `- total_revenue: This is "Total operating income" (net interest income + non-interest income) for banks
-- cost_of_revenue: This is "Total interest expenses" or "Interest expense" for banks`
+    ? `- total_revenue: "Total operating income" (net interest income + non-interest income) for banks
+- cost_of_revenue: "Total interest expenses" or "Interest expense" for banks`
     : `- total_revenue: Total revenue or sales
 - cost_of_revenue: Cost of revenue, cost of sales, or direct costs`;
-  return `Extract ALL 13 financial metrics from this NSE (Nairobi Stock Exchange) financial statement. Sector: ${sector}.
-Return ONLY a JSON object with these exact keys (use null ONLY if the value truly cannot be found anywhere in the text):
-${incomeNote}
-- net_income (number, in KES — Profit after tax / Profit for the year / Net profit attributable to parent)
-- operating_income (number, in KES — EBIT / Operating profit / Profit from operations)
-- cash_from_operations (number, in KES — Net cash from operating activities / Cash generated from operations)
-- total_assets (number, in KES)
-- total_liabilities (number, in KES)
-- total_debt (number, in KES — Borrowings + lease liabilities, interest-bearing debt)
-- current_assets (number, in KES)
-- current_liabilities (number, in KES)
-- shareholders_equity (number, in KES — Total equity / Shareholders funds)
-- retained_earnings (number, in KES)
-- eps (number, in KES — Earnings per share. For banks this is typically 10-50 KES)
-- dividend_per_share (number, in KES — Dividends per share)
+  return `Extract ALL 14 financial metrics from this Nairobi Stock Exchange financial statement. Sector: ${sector}.
+The text may be reported in thousands (KShs'000) or millions (KShs M) — you MUST convert every value to ABSOLUTE KENYA SHILLINGS (multiply by the reported scale factor).
 
-CRITICAL INSTRUCTIONS FOR COLUMN SELECTION:
-- The text may have multiple columns: Group (Consolidated) AND Company (Standalone/Bank).
-- ALWAYS pick the GROUP / CONSOLIDATED column values, NOT the standalone Company column.
-- Group values are always LARGER than Company values (they include subsidiaries).
-- Also, pick the LATEST/MOST RECENT year (the first data column after each label).
-- If a statement says "Group (KShs Mn)" and "Company (KShs Mn)", use the Group numbers.
-- Check: EPS must be logically consistent. If DPS is 7.00, EPS cannot be 0.90 — EPS must be larger than DPS.
+Return ONLY a JSON object with these exact keys. Use null ONLY if the value truly cannot be found:
+${incomeNote}
+- net_income (number, in absolute KES — Profit after tax / Profit for the year)
+- operating_income (number, in absolute KES — EBIT / Operating profit / Profit from operations)
+- cash_from_operations (number, in absolute KES — Net cash from operating activities)
+- total_assets (number, in absolute KES)
+- total_liabilities (number, in absolute KES)
+- total_debt (number, in absolute KES — Total borrowings + lease liabilities)
+- current_assets (number, in absolute KES)
+- current_liabilities (number, in absolute KES)
+- shareholders_equity (number, in absolute KES — Total equity attributable to owners of parent plus non-controlling interests)
+- retained_earnings (number, in absolute KES)
+- eps (number, in base KES per share — do NOT scale this)
+- dividend_per_share (number, in base KES per share — do NOT scale this)
+
+CRITICAL RULES:
+- The text has multiple columns: Group (Consolidated) AND Company. ALWAYS pick GROUP/CONSOLIDATED values.
+- Group column is the one with LARGER values (includes subsidiaries).
+- Pick the LATEST/MOST RECENT year column.
+- EPS must be larger than DPS.
+- Convert reported values to absolute KES: if text says "KShs'000" multiply by 1,000; if "KShs M" multiply by 1,000,000; if "KShs B" multiply by 1,000,000,000.
 
 Report text:
 ${text.slice(0, 12000)}`;
@@ -500,65 +499,79 @@ async function callGemini(text, apiKey, model) {
   });
 }
 
+const EXPECTED_METRICS = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings','eps','dividend_per_share'];
+
+function countValidMetrics(data) {
+  let count = 0;
+  for (const k of EXPECTED_METRICS) {
+    if (data[k] !== undefined && data[k] !== null && !isNaN(data[k])) count++;
+  }
+  return count;
+}
+
+function tryLlm(text, apiKey, provider) {
+  if (provider === 'gemini') return callGemini(text, apiKey, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
+  return callLlm(text, apiKey, process.env.OPENAI_MODEL || 'gpt-4o-mini');
+}
+
 async function processText(text, docId, source) {
   let parsedData = {};
   let processedBy = source || 'js';
 
-  const scale = detectScale(text);
+  // Step 1: Try LLM first — it handles scale, label variations, and text gaps
+  let llmSucceeded = false;
+  const llmProviders = [];
+  if (process.env.GEMINI_API_KEY) llmProviders.push({ key: process.env.GEMINI_API_KEY, name: 'gemini' });
+  if (process.env.OPENAI_API_KEY) llmProviders.push({ key: process.env.OPENAI_API_KEY, name: 'openai' });
 
-  // Step 1: Regex extraction (reliable, no API dependency)
-  const metrics = extractMetrics(text);
-  for (const [metric, values] of Object.entries(metrics)) {
-    if (values.length > 0) {
-      const largeMetrics = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
-      let filtered = largeMetrics.includes(metric) ? values.filter(v => v > 100) : values;
-      if (filtered.length === 0) filtered = values;
-      parsedData[metric] = Math.round(Math.max(...filtered) * 100) / 100;
-    }
-  }
-  if (Object.keys(parsedData).length > 0) {
-    processedBy = source ? source + ':regex' : 'js:regex';
-  }
-
-  // Step 2: LLM fills in gaps (only for metrics regex couldn't extract)
-  if (process.env.GEMINI_API_KEY) {
-    console.log('[JSParser] Calling Gemini for doc ' + docId + ', text length=' + text.length);
-    const llmResult = await callGemini(text, process.env.GEMINI_API_KEY, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
-    if (llmResult && Object.values(llmResult).some(v => v !== null)) {
-      for (const [k, v] of Object.entries(llmResult)) {
-        if (v !== null && v !== undefined && parsedData[k] === undefined) {
-          parsedData[k] = Math.round(v * 100) / 100;
+  for (const { key, name } of llmProviders) {
+    console.log('[JSParser] Calling ' + name + ' for doc ' + docId + ', text length=' + text.length);
+    const llmResult = await tryLlm(text, key, name);
+    if (llmResult) {
+      const temp = {};
+      let validCount = 0;
+      for (const k of EXPECTED_METRICS) {
+        if (llmResult[k] !== null && llmResult[k] !== undefined && !isNaN(llmResult[k])) {
+          temp[k] = Math.round(llmResult[k] * 100) / 100;
+          validCount++;
         }
       }
-      processedBy = 'js:gemini';
-      console.log('[JSParser] Gemini filled in ' + Object.keys(parsedData).length + ' metrics for doc ' + docId);
-    } else {
-      console.log('[JSParser] Gemini returned null for doc ' + docId);
-    }
-  }
-  if (process.env.OPENAI_API_KEY) {
-    console.log('[JSParser] Calling OpenAI for doc ' + docId + ', text length=' + text.length);
-    const llmResult = await callLlm(text, process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || 'gpt-4o-mini');
-    if (llmResult && Object.values(llmResult).some(v => v !== null)) {
-      for (const [k, v] of Object.entries(llmResult)) {
-        if (v !== null && v !== undefined && parsedData[k] === undefined) {
-          parsedData[k] = Math.round(v * 100) / 100;
-        }
+      if (validCount >= 8) {
+        parsedData = temp;
+        processedBy = 'js:' + name;
+        llmSucceeded = true;
+        console.log('[JSParser] ' + name + ' extracted ' + validCount + ' metrics for doc ' + docId);
+        break;
       }
-      processedBy = 'js:llm';
-      console.log('[JSParser] OpenAI filled in gaps for doc ' + docId);
+      console.log('[JSParser] ' + name + ' only returned ' + validCount + ' metrics (<8), trying next LLM or fallback');
     } else {
-      console.log('[JSParser] OpenAI returned null for doc ' + docId);
+      console.log('[JSParser] ' + name + ' returned null for doc ' + docId);
     }
   }
 
-  // Apply scale normalization
-  if (scale > 1 && Object.keys(parsedData).length > 0) {
-    const scaledMetrics = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
-    for (const k of scaledMetrics) {
-      if (parsedData[k] !== undefined && parsedData[k] !== null && parsedData[k] !== 0 && Math.abs(parsedData[k]) < 1e10) {
-        parsedData[k] = Math.round(parsedData[k] * scale * 100) / 100;
-        console.log('[JSParser] Scaled ' + k + ' by ' + scale + 'x to ' + parsedData[k]);
+  // Step 2: Fall back to regex if LLM failed or was unavailable
+  if (!llmSucceeded) {
+    const scale = detectScale(text);
+    const metrics = extractMetrics(text);
+    for (const [metric, values] of Object.entries(metrics)) {
+      if (values.length > 0) {
+        const largeMetrics = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
+        let filtered = largeMetrics.includes(metric) ? values.filter(v => v > 100) : values;
+        if (filtered.length === 0) filtered = values;
+        parsedData[metric] = Math.round(Math.max(...filtered) * 100) / 100;
+      }
+    }
+    if (Object.keys(parsedData).length > 0) {
+      processedBy = source ? source + ':regex' : 'js:regex';
+    }
+
+    // Scale normalization (only for regex path — LLM already returns absolute KES)
+    if (scale > 1 && Object.keys(parsedData).length > 0) {
+      for (const k of EXPECTED_METRICS) {
+        if (parsedData[k] !== undefined && parsedData[k] !== null && parsedData[k] !== 0 && Math.abs(parsedData[k]) < 1e10) {
+          parsedData[k] = Math.round(parsedData[k] * scale * 100) / 100;
+          console.log('[JSParser] Scaled ' + k + ' by ' + scale + 'x to ' + parsedData[k]);
+        }
       }
     }
   }
@@ -568,7 +581,7 @@ async function processText(text, docId, source) {
   if (issues.length > 0) {
     console.log('[JSParser] Validation issues for doc ' + docId + ': ' + issues.join('; '));
     // Try re-extraction with alternative strategies for failing metrics
-    if (issues.some(i => i.includes('Equity') || i.includes('EPS') || i.includes('Revenue'))) {
+    if (!llmSucceeded && issues.some(i => i.includes('Equity') || i.includes('EPS') || i.includes('Revenue'))) {
       const metrics = extractMetrics(text);
       for (const [metric, values] of Object.entries(metrics)) {
         if (values.length > 0 && parsedData[metric] !== undefined) {
