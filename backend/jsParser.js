@@ -5,10 +5,13 @@ const https = require('https');
 const METRIC_PATTERNS = {
   total_revenue: [
     /\btotal\s+revenue[:\s]*\(?([\d,.]+)\)?/gi,
+    /\btotal\s+operating\s+income[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   net_income: [
     /(?<!Equity\s+attributable\s+to\s+)\bequity\s+holders\s+of\s+the\s+parent[:\s]*\(?([\d,.]+)\)?/gi,
     /\bprofit\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bprofit\s+after\s+tax[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bprofit\s+after\s+exceptional\s+items[:\s]*\(?([\d,.]+)\)?/gi,
     /(?<!Other\s+comprehensive\s+)loss\s+for\s+the\s+(?:period|year)[:\s]*\(?([\d,.]+)\)?/gi,
     /\bnet\s+(?:profit|income|earnings)(?:\s+for\s+the\s+(?:period|year))?[:\s]*\(?([\d,.]+)\)?/gi,
     /\btotal\s+comprehensive\s+income[:\s]*\(?([\d,.]+)\)?/gi,
@@ -51,9 +54,11 @@ const METRIC_PATTERNS = {
   ],
   eps: [
     /\b(?:earnings\s+per\s+share|eps)(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bearnings\s+per\s+share[\s-]+[A-Za-z\s&]+[\s-]*\(?([\d,.]+)\)?/gi,
   ],
   dividend_per_share: [
     /\bdividend\s+per\s+share(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bdividend\s+per\s+share[\s-]+[A-Za-z\s&]+[\s-]*\(?([\d,.]+)\)?/gi,
     /\bdps\b[:\s]*\(?([\d,.]+)\)?/gi,
   ],
 };
@@ -67,12 +72,14 @@ function parseNumber(s) {
 
 function extractMetrics(text) {
   const results = {};
+  // Normalize OCR ligatures: ﬁ→fi, ﬂ→fl
+  text = text.replace(/\ufb01/g, 'fi').replace(/\ufb02/g, 'fl');
   const lines = text.split('\n');
   for (const [metric, patterns] of Object.entries(METRIC_PATTERNS)) {
     const values = [];
     const perPatternMax = []; // track max per pattern for combinable metrics (total_debt)
     for (const p of patterns) {
-      const re = new RegExp(p.source, 'gi');
+      const re = new RegExp(p.source, 'i');
       let rowMax = 0;
       for (const line of lines) {
         if (!re.test(line)) continue;
