@@ -967,14 +967,16 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
             </div>
             <!-- JSON upload inline form (hidden by default) -->
             <div id="fsJsonUploadForm" class="hidden mb-4 rounded-lg" style="background:#f0f9ff;border:1px solid #bae6fd">
-              <!-- Tab toggle -->
-              <div class="flex border-b border-blue-200">
-                <button class="px-4 py-2 text-xs font-medium border-b-2" id="fsJsonFormTab" style="border-color:#0D7490;color:#0D7490" onclick="switchFsJsonTab('form')">Form</button>
-                <button class="px-4 py-2 text-xs font-medium text-gray-500 border-b-2 border-transparent" id="fsJsonRawTab" onclick="switchFsJsonTab('raw')">Raw JSON</button>
-              </div>
-              <!-- Form mode -->
-              <div id="fsJsonFormMode" class="p-3">
+              <div class="p-3">
                 <div class="text-xs font-semibold text-gray-600 mb-2">Financial data for <span id="fsJsonTickerLabel" class="font-semibold"></span></div>
+                <!-- Paste JSON area -->
+                <div class="mb-3 p-2 rounded" style="background:#fff;border:1px dashed #93c5fd">
+                  <label class="text-xs text-gray-500 block mb-1">Paste JSON to auto-fill form, or enter manually below:</label>
+                  <textarea id="fsJsonPasteArea" class="input-field" rows="3" style="font-family:monospace;font-size:11px;resize:vertical" placeholder='{"total_revenue": 211800000000, "net_income": 68350000000, "eps": 20.80, "dividend_per_share": 7.00}'></textarea>
+                  <button class="btn btn-secondary text-xs py-0.5 mt-1" onclick="fillFormFromJson()">Fill from JSON</button>
+                  <span id="fsJsonPasteStatus" class="text-xs text-gray-500 ml-2"></span>
+                </div>
+                <!-- Form fields -->
                 <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs mb-3">
                   <div><label class="text-gray-500">Period End Date</label><input id="fsJsonPeriodEnd" type="date" class="input-field text-xs mt-0.5"></div>
                   <div><label class="text-gray-500">Period Type</label>
@@ -1019,16 +1021,8 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
                 </div>
                 <div class="flex items-center gap-2 mt-2">
                   <button class="btn btn-primary text-xs py-1" onclick="handleFsFormUpload()">Upload JSON</button>
+                  <button class="btn btn-secondary text-xs py-1" onclick="clearFsForm()">Clear</button>
                   <span id="fsJsonStatus" class="text-xs text-gray-500"></span>
-                </div>
-              </div>
-              <!-- Raw JSON mode -->
-              <div id="fsJsonRawMode" class="hidden p-3">
-                <label class="block text-xs font-medium text-gray-600 mb-2">Paste JSON financial data</label>
-                <textarea id="fsJsonTextarea" class="input-field" rows="8" style="font-family:monospace;font-size:11px;resize:vertical" placeholder='{"total_revenue": 211800000000, "net_income": 68350000000, "eps": 20.80, "dividend_per_share": 7.00}'></textarea>
-                <div class="flex items-center gap-2 mt-2">
-                  <button class="btn btn-primary text-xs py-1" onclick="handleFsJsonUpload()">Upload JSON</button>
-                  <span id="fsJsonRawStatus" class="text-xs text-gray-500"></span>
                 </div>
               </div>
             </div>
@@ -3535,35 +3529,61 @@ async function uploadFinancialJson() {
 
 function toggleFsJsonUpload() {
   const form = document.getElementById('fsJsonUploadForm');
-  const wasHidden = form.classList.contains('hidden');
   form.classList.toggle('hidden');
-  if (wasHidden) {
+  if (!form.classList.contains('hidden')) {
     const ticker = document.getElementById('editStockTicker').value.trim();
     document.getElementById('fsJsonTickerLabel').textContent = ticker || 'selected stock';
-    switchFsJsonTab('form');
+    document.getElementById('fsJsonPasteStatus').textContent = '';
   }
 }
 
-function switchFsJsonTab(mode) {
-  const formMode = document.getElementById('fsJsonFormMode');
-  const rawMode = document.getElementById('fsJsonRawMode');
-  const formTab = document.getElementById('fsJsonFormTab');
-  const rawTab = document.getElementById('fsJsonRawTab');
-  if (mode === 'form') {
-    formMode.classList.remove('hidden');
-    rawMode.classList.add('hidden');
-    formTab.style.borderColor = '#0D7490';
-    formTab.style.color = '#0D7490';
-    rawTab.style.borderColor = 'transparent';
-    rawTab.style.color = '#6b7280';
-  } else {
-    formMode.classList.add('hidden');
-    rawMode.classList.remove('hidden');
-    rawTab.style.borderColor = '#0D7490';
-    rawTab.style.color = '#0D7490';
-    formTab.style.borderColor = 'transparent';
-    formTab.style.color = '#6b7280';
+function fillFormFromJson() {
+  const jsonStr = document.getElementById('fsJsonPasteArea').value.trim();
+  const statusEl = document.getElementById('fsJsonPasteStatus');
+  if (!jsonStr) { statusEl.textContent = 'Paste JSON first'; statusEl.style.color = '#dc2626'; return; }
+  let data;
+  try { data = JSON.parse(jsonStr); } catch (e) { statusEl.textContent = 'Invalid JSON: ' + e.message; statusEl.style.color = '#dc2626'; return; }
+  // Map JSON keys to form field ids
+  const fieldMap = {
+    total_assets:'fj_total_assets', total_liabilities:'fj_total_liabilities',
+    shareholders_equity:'fj_shareholders_equity', total_debt:'fj_total_debt',
+    current_assets:'fj_current_assets', current_liabilities:'fj_current_liabilities',
+    retained_earnings:'fj_retained_earnings', cash_and_equivalents:'fj_cash_and_equivalents',
+    book_value:'fj_book_value',
+    total_revenue:'fj_total_revenue', net_income:'fj_net_income',
+    operating_income:'fj_operating_income', cost_of_revenue:'fj_cost_of_revenue',
+    cash_from_operations:'fj_cash_from_operations', gross_profit:'fj_gross_profit',
+    eps:'fj_eps', dividend_per_share:'fj_dividend_per_share',
+    book_value_per_share:'fj_book_value_per_share',
+    pe_ratio:'fj_pe_ratio', fiscal_year:'fj_fiscal_year',
+  };
+  let filled = 0;
+  for (const [key, fieldId] of Object.entries(fieldMap)) {
+    if (data[key] !== undefined && data[key] !== null) {
+      document.getElementById(fieldId).value = data[key];
+      filled++;
+    }
   }
+  // Also set period fields
+  if (data.period_end_date) document.getElementById('fsJsonPeriodEnd').value = data.period_end_date;
+  if (data.period_type) document.getElementById('fsJsonPeriodType').value = data.period_type;
+  statusEl.textContent = 'Filled ' + filled + ' fields from JSON';
+  statusEl.style.color = '#059669';
+}
+
+function clearFsForm() {
+  const fieldIds = [
+    'total_assets','total_liabilities','shareholders_equity','total_debt','current_assets','current_liabilities',
+    'retained_earnings','cash_and_equivalents','book_value',
+    'total_revenue','net_income','operating_income','cost_of_revenue','cash_from_operations','gross_profit',
+    'eps','dividend_per_share','book_value_per_share',
+    'pe_ratio','fiscal_year',
+  ];
+  for (const id of fieldIds) document.getElementById('fj_' + id).value = '';
+  document.getElementById('fsJsonPeriodEnd').value = '';
+  document.getElementById('fsJsonPasteArea').value = '';
+  document.getElementById('fsJsonPasteStatus').textContent = '';
+  document.getElementById('fsJsonStatus').textContent = '';
 }
 
 async function handleFsFormUpload() {
@@ -3606,36 +3626,6 @@ async function handleFsFormUpload() {
     // Reset form
     for (const id of fieldIds) document.getElementById('fj_' + id).value = '';
     document.getElementById('fsJsonPeriodEnd').value = '';
-    loadFsStatements(fsStockId);
-  } catch (e) {
-    statusEl.textContent = 'Error: ' + e.message;
-    statusEl.style.color = '#dc2626';
-  }
-}
-
-async function handleFsJsonUpload() {
-  const ticker = document.getElementById('editStockTicker').value.trim();
-  const jsonStr = document.getElementById('fsJsonTextarea').value.trim();
-  const statusEl = document.getElementById('fsJsonRawStatus');
-  if (!jsonStr) { statusEl.textContent = 'JSON data is required'; statusEl.style.color = '#dc2626'; return; }
-  let data;
-  try { data = JSON.parse(jsonStr); } catch (e) { statusEl.textContent = 'Invalid JSON: ' + e.message; statusEl.style.color = '#dc2626'; return; }
-  // Also try to extract period_type from raw JSON
-  const periodType = data.period_type || 'annual';
-  statusEl.textContent = 'Uploading...';
-  statusEl.style.color = '#6b7280';
-  try {
-    const res = await fetch('/api/admin/financial-statements/upload-json', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticker, period_type: periodType, data }),
-    });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'HTTP ' + res.status);
-    statusEl.textContent = 'Success! Doc ID: ' + result.id;
-    statusEl.style.color = '#059669';
-    toast('Financial data uploaded (doc ' + result.id + ')', 'success');
-    document.getElementById('fsJsonTextarea').value = '';
     loadFsStatements(fsStockId);
   } catch (e) {
     statusEl.textContent = 'Error: ' + e.message;
