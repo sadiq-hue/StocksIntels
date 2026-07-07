@@ -171,75 +171,78 @@ ${text.slice(0, 8000)}`;
   });
 }
 
-async function parsePdfBuffer(buffer, docId) {
-  try {
-    const text = extractPdfText(buffer);
-    if (!text.trim()) {
-      await pool.query(
-        `UPDATE financial_statements SET status = 'failed', error_message = 'No text could be extracted from PDF (raw extraction returned empty)' WHERE id = $1`,
-        [docId]
-      );
-      return;
+async function processText(text, docId, source) {
+  let parsedData = {};
+  let processedBy = source || 'js';
+
+  // Primary: try AI if key is set
+  if (process.env.OPENAI_API_KEY) {
+    const llmResult = await callLlm(text, process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || 'gpt-4o-mini');
+    if (llmResult && Object.values(llmResult).some(v => v !== null)) {
+      for (const [k, v] of Object.entries(llmResult)) {
+        if (v !== null && v !== undefined) parsedData[k] = Math.round(v * 100) / 100;
+      }
+      processedBy = 'js:llm';
     }
+  }
+
+  // Fallback: regex if AI returned nothing
+  if (Object.keys(parsedData).length === 0) {
     const metrics = extractMetrics(text);
-    const parsedData = {};
     for (const [metric, values] of Object.entries(metrics)) {
       if (values.length > 0) {
         const best = values.reduce((a, b) => Math.abs(a) < Math.abs(b) ? a : b);
         parsedData[metric] = Math.round(best * 100) / 100;
       }
     }
-    const keyCount = countKeyMetrics(metrics);
-    let processedBy = 'js:regex';
-    // If regex found few key metrics and OpenAI key is available, try LLM fallback
-    if (keyCount < 2 && process.env.OPENAI_API_KEY) {
-      console.log('[JSParser] Only ' + keyCount + ' key metrics via regex, trying LLM for doc ' + docId);
-      const llmResult = await callLlm(text, process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || 'gpt-4o-mini');
-      if (llmResult && Object.values(llmResult).some(v => v !== null)) {
-        for (const [k, v] of Object.entries(llmResult)) {
-          if (v !== null && v !== undefined) parsedData[k] = Math.round(v * 100) / 100;
-        }
-        processedBy = 'js:llm';
-      }
+    if (Object.keys(parsedData).length > 0) {
+      processedBy = source ? source + ':regex' : 'js:regex';
     }
-    const hasAnyData = Object.keys(parsedData).length > 0;
-    if (hasAnyData) {
-      await pool.query(
-        `UPDATE financial_statements SET status = 'completed', parsed_data = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
-        [JSON.stringify(parsedData), processedBy, docId]
-      );
-    } else {
-      const preview = text.slice(0, 300).replace(/\0/g, '');
-      await pool.query(
-        `UPDATE financial_statements SET status = 'completed', parsed_data = '{}'::jsonb, error_message = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
-        ['No metrics matched. Extracted text preview: ' + preview, processedBy, docId]
-      );
-    }
-    if (parsedData.dividend_per_share || parsedData.eps) {
-      const r = await pool.query(
-        'SELECT s.ticker FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE fs.id = $1',
-        [docId]
-      );
-      if (r.rows.length > 0) {
-        const ticker = r.rows[0].ticker;
-        const fundRow = {};
-        if (parsedData.dividend_per_share) fundRow.dividend_yield = parsedData.dividend_per_share;
-        if (parsedData.eps) fundRow.eps_growth = parsedData.eps;
-        const fk = Object.keys(fundRow);
-        if (fk.length > 0) {
-          const vals = fk.map((_, i) => '$' + (i + 2)).join(', ');
-          await pool.query(
-            `INSERT INTO stock_fundamentals (symbol, ${fk.join(', ')}) VALUES ($1, ${vals}) ON CONFLICT (symbol) DO UPDATE SET ${fk.map(k => k + ' = EXCLUDED.' + k).join(', ')}`,
-            [ticker, ...fk.map(k => fundRow[k])]
-          );
-        }
-      }
-    }
-  } catch (e) {
+  }
+
+  const hasAnyData = Object.keys(parsedData).length > 0;
+  if (hasAnyData) {
     await pool.query(
-      `UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`,
-      [e.message, docId]
+      `UPDATE financial_statements SET status = 'completed', parsed_data = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
+      [JSON.stringify(parsedData), processedBy, docId]
     );
+  } else {
+    const preview = text.slice(0, 300).replace(/\0/g, '');
+    await pool.query(
+      `UPDATE financial_statements SET status = 'completed', parsed_data = '{}'::jsonb, error_message = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
+      ['No metrics matched. Text preview: ' + preview, processedBy, docId]
+    );
+  }
+
+  if (parsedData.dividend_per_share || parsedData.eps) {
+    const r = await pool.query('SELECT s.ticker FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE fs.id = $1', [docId]);
+    if (r.rows.length > 0) {
+      const ticker = r.rows[0].ticker;
+      const fundRow = {};
+      if (parsedData.dividend_per_share) fundRow.dividend_yield = parsedData.dividend_per_share;
+      if (parsedData.eps) fundRow.eps_growth = parsedData.eps;
+      const fk = Object.keys(fundRow);
+      if (fk.length > 0) {
+        const vals = fk.map((_, i) => '$' + (i + 2)).join(', ');
+        await pool.query(
+          `INSERT INTO stock_fundamentals (symbol, ${fk.join(', ')}) VALUES ($1, ${vals}) ON CONFLICT (symbol) DO UPDATE SET ${fk.map(k => k + ' = EXCLUDED.' + k).join(', ')}`,
+          [ticker, ...fk.map(k => fundRow[k])]
+        );
+      }
+    }
+  }
+}
+
+async function parsePdfBuffer(buffer, docId) {
+  try {
+    const text = extractPdfText(buffer);
+    if (!text.trim()) {
+      await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = 'No text could be extracted from PDF' WHERE id = $1`, [docId]);
+      return;
+    }
+    await processText(text, docId, 'js');
+  } catch (e) {
+    await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`, [e.message, docId]);
   }
 }
 
@@ -249,55 +252,7 @@ async function parseExtractedText(text, docId, fileName) {
       await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = 'Empty text' WHERE id = $1`, [docId]);
       return;
     }
-    const metrics = extractMetrics(text);
-    const parsedData = {};
-    for (const [metric, values] of Object.entries(metrics)) {
-      if (values.length > 0) {
-        const best = values.reduce((a, b) => Math.abs(a) < Math.abs(b) ? a : b);
-        parsedData[metric] = Math.round(best * 100) / 100;
-      }
-    }
-    const keyCount = countKeyMetrics(metrics);
-    let processedBy = 'js:regex';
-    if (keyCount < 2 && process.env.OPENAI_API_KEY) {
-      const llmResult = await callLlm(text, process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || 'gpt-4o-mini');
-      if (llmResult && Object.values(llmResult).some(v => v !== null)) {
-        for (const [k, v] of Object.entries(llmResult)) {
-          if (v !== null && v !== undefined) parsedData[k] = Math.round(v * 100) / 100;
-        }
-        processedBy = 'js:llm';
-      }
-    }
-    const hasAnyData = Object.keys(parsedData).length > 0;
-    if (hasAnyData) {
-      await pool.query(
-        `UPDATE financial_statements SET status = 'completed', parsed_data = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
-        [JSON.stringify(parsedData), processedBy, docId]
-      );
-    } else {
-      const preview = text.slice(0, 300).replace(/\0/g, '');
-      await pool.query(
-        `UPDATE financial_statements SET status = 'completed', parsed_data = '{}'::jsonb, error_message = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
-        ['No metrics matched. Text preview: ' + preview, processedBy, docId]
-      );
-    }
-    if (parsedData.dividend_per_share || parsedData.eps) {
-      const r = await pool.query('SELECT s.ticker FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE fs.id = $1', [docId]);
-      if (r.rows.length > 0) {
-        const ticker = r.rows[0].ticker;
-        const fundRow = {};
-        if (parsedData.dividend_per_share) fundRow.dividend_yield = parsedData.dividend_per_share;
-        if (parsedData.eps) fundRow.eps_growth = parsedData.eps;
-        const fk = Object.keys(fundRow);
-        if (fk.length > 0) {
-          const vals = fk.map((_, i) => '$' + (i + 2)).join(', ');
-          await pool.query(
-            `INSERT INTO stock_fundamentals (symbol, ${fk.join(', ')}) VALUES ($1, ${vals}) ON CONFLICT (symbol) DO UPDATE SET ${fk.map(k => k + ' = EXCLUDED.' + k).join(', ')}`,
-            [ticker, ...fk.map(k => fundRow[k])]
-          );
-        }
-      }
-    }
+    await processText(text, docId, 'js');
   } catch (e) {
     await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`, [e.message, docId]);
   }
