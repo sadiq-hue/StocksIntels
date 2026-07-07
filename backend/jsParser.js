@@ -80,6 +80,8 @@ function extractMetrics(text) {
           for (const n of nums) {
             const val = parseNumber(n);
             if (val !== null) {
+              // Skip year-like values (2024, 2025 etc) and small section numbers
+              if (Number.isInteger(val) && val >= 1900 && val <= 2099) continue;
               values.push(val);
               if (val > rowMax) rowMax = val;
             }
