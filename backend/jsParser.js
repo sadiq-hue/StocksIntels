@@ -53,7 +53,8 @@ const METRIC_PATTERNS = {
     /\b(?:earnings\s+per\s+share|eps)(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   dividend_per_share: [
-    /\bdividend\s+per\s+share[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bdividend\s+per\s+share(?:\s*\([^)]*\))?[:\s]*\(?([\d,.]+)\)?/gi,
+    /\bdps\b[:\s]*\(?([\d,.]+)\)?/gi,
   ],
 };
 

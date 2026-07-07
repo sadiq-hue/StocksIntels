@@ -434,7 +434,7 @@ router.get('/financial-statements/fundamentals/:stockId', async (req, res) => {
     let statements = [];
     try {
       const r = await pool.query(
-        `SELECT id, period_type, period_end_date, file_name, status, parsed_data, uploaded_at, parsed_at
+        `SELECT id, period_type, period_end_date, file_name, status, parsed_data, raw_text, uploaded_at, parsed_at
          FROM financial_statements WHERE stock_id = $1 ORDER BY uploaded_at DESC`,
         [stockId]
       );
