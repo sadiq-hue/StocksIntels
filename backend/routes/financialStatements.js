@@ -470,19 +470,19 @@ router.get('/financial-statements/debug/:id', async (req, res) => {
 // ── Re-parse a statement ──
 router.post('/financial-statements/reparse/:id', async (req, res) => {
   try {
-    const r = await pool.query('SELECT id, file_data FROM financial_statements WHERE id = $1', [req.params.id]);
+    const r = await pool.query('SELECT id, file_data, raw_text FROM financial_statements WHERE id = $1', [req.params.id]);
     if (r.rows.length === 0) return res.status(404).json({ error: 'Not found' });
-    const { id, file_data } = r.rows[0];
-    if (!file_data) return res.status(400).json({ error: 'No file data stored' });
+    const { id, file_data, raw_text } = r.rows[0];
+    if (!file_data && !raw_text) return res.status(400).json({ error: 'No file data or text stored for re-parsing' });
     await pool.query(`UPDATE financial_statements SET status = 'processing', error_message = NULL, parsed_data = NULL WHERE id = $1`, [id]);
-    // Trigger the JS parser asynchronously
     let jsParser;
     try { jsParser = require('../jsParser'); } catch (e) { jsParser = null; }
     if (jsParser) {
-      jsParser.parsePdfBuffer(Buffer.isBuffer(file_data) ? file_data : Buffer.from(file_data), id).catch(e => {
-        console.error('Re-parse error for doc ' + id + ':', e.message);
-        pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2 AND status = 'processing'`, [e.message, id]).catch(() => {});
-      });
+      if (raw_text) {
+        jsParser.parseExtractedText(raw_text, id, 'reparse');
+      } else {
+        jsParser.parsePdfBuffer(Buffer.isBuffer(file_data) ? file_data : Buffer.from(file_data), id);
+      }
     }
     res.json({ message: 'Re-parsing started', id });
   } catch (e) {
