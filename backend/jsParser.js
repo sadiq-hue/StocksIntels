@@ -41,10 +41,10 @@ const METRIC_PATTERNS = {
     /\blease\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   current_assets: [
-    /(?<!\btotal\s+)current\s+assets[:\s]*\(?([\d,.]+)\)?/gi,
+    /(?<!\btotal\s+)(?<!\b[Nn]on[\s-]+)current\s+assets[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   current_liabilities: [
-    /(?<!\btotal\s+)current\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
+    /(?<!\btotal\s+)(?<!\b[Nn]on[\s-]+)current\s+liabilities[:\s]*\(?([\d,.]+)\)?/gi,
   ],
   shareholders_equity: [
     /(?<!LIABILITIES\s+(?:AND|&)\s+)shareholders?[''´`]?s?\s+equity[:\s]*\(?([\d,.]+)\)?/gi,
