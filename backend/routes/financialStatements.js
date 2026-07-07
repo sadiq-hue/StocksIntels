@@ -630,11 +630,37 @@ except Exception as ex:
 
 const KNOWN_FUNDAMENTAL_KEYS = ['revenue','net_profit','eps','dps','total_assets','total_liabilities','book_value','pe_ratio'];
 
+function normalizeFinancialData(raw) {
+  const out = {};
+  // Flatten known nested sections
+  const sections = ['balance_sheet', 'income_statement', 'cash_flow', 'per_share', 'ratios', 'metrics'];
+  for (const [key, value] of Object.entries(raw)) {
+    if (sections.includes(key) && value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [sk, sv] of Object.entries(value)) {
+        out[sk] = sv;
+      }
+    } else {
+      out[key] = value;
+    }
+  }
+  // Map alternative key names to standard ones
+  const keyMap = { net_income_pat: 'net_income', earnings_per_share: 'eps', book_value_per_share: 'book_value', profit_after_tax: 'net_income', pat: 'net_income', dividend_per_share: 'dps' };
+  for (const [src, dest] of Object.entries(keyMap)) {
+    if (out[src] !== undefined && out[dest] === undefined) {
+      out[dest] = out[src];
+    }
+  }
+  return out;
+}
+
 router.post('/financial-statements/upload-json', async (req, res) => {
   try {
-    const { ticker, stock_id, period_type, period_end_date, file_name, data } = req.body;
+    let { ticker, stock_id, period_type, period_end_date, file_name, data } = req.body;
     if (!data || typeof data !== 'object') return res.status(400).json({ error: 'data object is required' });
     if (!ticker && !stock_id) return res.status(400).json({ error: 'ticker or stock_id is required' });
+
+    // Normalize: flatten nested sections and map alternative key names
+    data = normalizeFinancialData(data);
 
     // Resolve stock
     let sid;

@@ -292,8 +292,18 @@ async function buildLocalNseReport(symbol) {
     if (stockResult.rows.length === 0) return null;
     const stock = stockResult.rows[0];
 
+    let fundamentals = null;
     const fundResult = await pool.query('SELECT * FROM stock_fundamentals WHERE symbol = $1', [ticker]);
-    const fundamentals = fundResult.rows[0] || null;
+    if (fundResult.rows.length > 0) {
+      fundamentals = fundResult.rows[0];
+    } else {
+      // Also try by nse_stocks.id (JSON uploads store stock_id, not symbol)
+      const nsResult = await pool.query('SELECT id FROM nse_stocks WHERE UPPER(ticker) = UPPER($1)', [ticker]);
+      if (nsResult.rows.length > 0) {
+        const fundResult2 = await pool.query('SELECT * FROM stock_fundamentals WHERE stock_id = $1', [nsResult.rows[0].id]);
+        fundamentals = fundResult2.rows[0] || null;
+      }
+    }
 
     const stmtResult = await pool.query(
       `SELECT parsed_data, period_end_date FROM financial_statements
@@ -390,6 +400,11 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
     const isUs = edgarService.isUsStock(symbol);
     const activeProvider = providerOverride || FINANCIALS_PROVIDER;
 
+    // For stocks with locally uploaded financial data (e.g. JSON upload for NSE),
+    // serve local data first — it's authoritative and user-curated
+    const nseLocal = await buildLocalNseReport(symbol);
+    if (nseLocal) return nseLocal;
+
     const availableProviders = ['yahoo-finance'];
     if (isUs) availableProviders.push('sec-edgar');
 
@@ -463,8 +478,6 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
         console.log(`[FinancialReports] Yahoo Finance empty for ${symbol}; trying SEC EDGAR fallback`);
         return buildEdgarReport(symbol, period, limit, availableProviders);
       }
-      const nseLocal = await buildLocalNseReport(symbol);
-      if (nseLocal) return nseLocal;
       return { success: false, symbol, source: 'yahoo-finance', error: `Yahoo Finance returned no data for ${symbol}` };
     }
 
@@ -473,8 +486,6 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
       return buildEdgarReport(symbol, period, limit, availableProviders);
     }
 
-    const nseLocal = await buildLocalNseReport(symbol);
-    if (nseLocal) return nseLocal;
     return { success: false, symbol, error: `No provider available for ${symbol}` };
   } catch (error) {
     console.error(`Error generating financial report for ${symbol}:`, error.message);
