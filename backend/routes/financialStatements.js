@@ -478,11 +478,13 @@ router.post('/financial-statements/reparse/:id', async (req, res) => {
     let jsParser;
     try { jsParser = require('../jsParser'); } catch (e) { jsParser = null; }
     if (jsParser) {
-      if (raw_text) {
-        jsParser.parseExtractedText(raw_text, id, 'reparse');
-      } else {
-        jsParser.parsePdfBuffer(Buffer.isBuffer(file_data) ? file_data : Buffer.from(file_data), id);
-      }
+      const promise = raw_text
+        ? jsParser.parseExtractedText(raw_text, id, 'reparse')
+        : jsParser.parsePdfBuffer(Buffer.isBuffer(file_data) ? file_data : Buffer.from(file_data), id);
+      promise.catch(e => {
+        console.error('Reparse background error for doc ' + id + ':', e.message);
+        pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2 AND status = 'processing'`, [e.message, id]).catch(() => {});
+      });
     }
     res.json({ message: 'Re-parsing started', id });
   } catch (e) {
@@ -513,7 +515,9 @@ router.post('/financial-statements/upload-text', async (req, res) => {
     let jsParser;
     try { jsParser = require('../jsParser'); } catch (e) { jsParser = null; }
     if (jsParser) {
-      jsParser.parseExtractedText(extracted_text, docId, file_name);
+      jsParser.parseExtractedText(extracted_text, docId, file_name).catch(e => {
+        console.error('Upload-text parse error for doc ' + docId + ':', e.message);
+      });
     }
     res.status(201).json({ id: docId, status: 'processing' });
   } catch (e) {
