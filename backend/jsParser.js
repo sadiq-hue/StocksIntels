@@ -3,20 +3,20 @@ const zlib = require('zlib');
 const https = require('https');
 
 const METRIC_PATTERNS = {
-  total_revenue: [/(?:total\s+)?revenue[:\s]*([\d,.]+)/i, /(?:total\s+)?(?:operating\s+)?income[:\s]*([\d,.]+)/i, /gross\s+revenue[:\s]*([\d,.]+)/i],
-  net_income: [/(?:net\s+)?(?:profit|income|earnings)(?:\s+for\s+the\s+(?:period|year))?[:\s]*([\d,.]+)/i, /(?:profit|loss)\s+for\s+the\s+(?:period|year)[:\s]*([\d,.]+)/i, /total\s+comprehensive\s+income[:\s]*([\d,.]+)/i],
-  cost_of_revenue: [/(?:cost\s+of\s+)?(?:revenue|sales|goods\s+sold)[:\s]*([\d,.]+)/i, /cost\s+of\s+sales[:\s]*([\d,.]+)/i],
-  operating_income: [/operating\s+(?:income|profit)[:\s]*([\d,.]+)/i, /(?:income|profit)\s+from\s+operations[:\s]*([\d,.]+)/i],
-  cash_from_operations: [/(?:net\s+)?cash\s+(?:from|generated\s+by|provided\s+by)\s+operating\s+activities[:\s]*([\d,.]+)/i, /(?:net\s+)?cash\s+(?:from|from\s+)?operations[:\s]*([\d,.]+)/i, /operating\s+cash\s+flow[:\s]*([\d,.]+)/i],
-  total_assets: [/(?:total\s+)?assets[:\s]*([\d,.]+)/i],
-  total_liabilities: [/(?:total\s+)?liabilities[:\s]*([\d,.]+)/i, /total\s+(?:equity\s+and\s+)?liabilities[:\s]*([\d,.]+)/i],
-  total_debt: [/(?:total\s+)?(?:debt|borrowings|loans\s+(?:and|&)\s+borrowings)[:\s]*([\d,.]+)/i],
-  current_assets: [/(?:total\s+)?current\s+assets[:\s]*([\d,.]+)/i],
-  current_liabilities: [/(?:total\s+)?current\s+liabilities[:\s]*([\d,.]+)/i],
-  shareholders_equity: [/(?:shareholders[''´`]?\s*)?equity[:\s]*([\d,.]+)/i, /(?:total\s+)?equity[:\s]*([\d,.]+)/i],
-  retained_earnings: [/(?:retained\s+)?earnings[:\s]*([\d,.]+)/i, /retained\s+(?:profit|earnings)[:\s]*([\d,.]+)/i],
-  eps: [/(?:earnings\s+per\s+share|eps)[:\s]*([\d,.]+)/i],
-  dividend_per_share: [/(?:dividend\s+per\s+share|dps)[:\s]*([\d,.]+)/i],
+  total_revenue: [/(?:total\s+)?revenue[:\s]*([\d,.]+)/gi, /(?:total\s+)?(?:operating\s+)?income[:\s]*([\d,.]+)/gi, /gross\s+revenue[:\s]*([\d,.]+)/gi],
+  net_income: [/(?:net\s+)?(?:profit|income|earnings)(?:\s+for\s+the\s+(?:period|year))?[:\s]*([\d,.]+)/gi, /(?:profit|loss)\s+for\s+the\s+(?:period|year)[:\s]*([\d,.]+)/gi, /total\s+comprehensive\s+income[:\s]*([\d,.]+)/gi],
+  cost_of_revenue: [/(?:cost\s+of\s+)?(?:revenue|sales|goods\s+sold)[:\s]*([\d,.]+)/gi, /cost\s+of\s+sales[:\s]*([\d,.]+)/gi],
+  operating_income: [/operating\s+(?:income|profit)[:\s]*([\d,.]+)/gi, /(?:income|profit)\s+from\s+operations[:\s]*([\d,.]+)/gi],
+  cash_from_operations: [/(?:net\s+)?cash\s+(?:from|generated\s+by|provided\s+by)\s+operating\s+activities[:\s]*([\d,.]+)/gi, /(?:net\s+)?cash\s+(?:from|from\s+)?operations[:\s]*([\d,.]+)/gi, /operating\s+cash\s+flow[:\s]*([\d,.]+)/gi],
+  total_assets: [/(?:total\s+)?assets[:\s]*([\d,.]+)/gi],
+  total_liabilities: [/(?:total\s+)?liabilities[:\s]*([\d,.]+)/gi, /total\s+(?:equity\s+and\s+)?liabilities[:\s]*([\d,.]+)/gi],
+  total_debt: [/(?:total\s+)?(?:debt|borrowings|loans\s+(?:and|&)\s+borrowings)[:\s]*([\d,.]+)/gi],
+  current_assets: [/(?:total\s+)?current\s+assets[:\s]*([\d,.]+)/gi],
+  current_liabilities: [/(?:total\s+)?current\s+liabilities[:\s]*([\d,.]+)/gi],
+  shareholders_equity: [/(?:shareholders[''´`]?\s*)?equity[:\s]*([\d,.]+)/gi, /(?:total\s+)?equity[:\s]*([\d,.]+)/gi],
+  retained_earnings: [/(?:retained\s+)?earnings[:\s]*([\d,.]+)/gi, /retained\s+(?:profit|earnings)[:\s]*([\d,.]+)/gi],
+  eps: [/(?:earnings\s+per\s+share|eps)[:\s]*([\d,.]+)/gi],
+  dividend_per_share: [/(?:dividend\s+per\s+share|dps)[:\s]*([\d,.]+)/gi],
 };
 
 function parseNumber(s) {
