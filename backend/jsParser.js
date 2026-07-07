@@ -214,22 +214,95 @@ ${text.slice(0, 8000)}`;
   });
 }
 
+async function callGemini(text, apiKey, model) {
+  const prompt = `Extract financial metrics from the following NSE (Nairobi Stock Exchange) financial statement text.
+Return ONLY a JSON object with these exact keys (use null if not found):
+- total_revenue (number, in KES)
+- net_income (number, in KES)
+- cost_of_revenue (number, in KES)
+- operating_income (number, in KES)
+- cash_from_operations (number, in KES)
+- total_assets (number, in KES)
+- total_liabilities (number, in KES)
+- total_debt (number, in KES)
+- current_assets (number, in KES)
+- current_liabilities (number, in KES)
+- shareholders_equity (number, in KES)
+- retained_earnings (number, in KES)
+- eps (number, in KES)
+- dividend_per_share (number, in KES)
+
+Report text:
+${text.slice(0, 8000)}`;
+
+  return new Promise((resolve) => {
+    const m = model || 'gemini-2.5-flash';
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+    });
+    const opts = {
+      hostname: 'generativelanguage.googleapis.com',
+      path: '/v1beta/models/' + m + ':generateContent?key=' + apiKey,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+      },
+      timeout: 60000,
+    };
+    const req = https.request(opts, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          if (res.statusCode !== 200) {
+            console.error('[Gemini] HTTP ' + res.statusCode + ':' + data.slice(0, 200));
+            resolve(null); return;
+          }
+          const parsed = JSON.parse(data);
+          const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) resolve(JSON.parse(text));
+          else resolve(null);
+        } catch (e) { console.error('[Gemini] parse error:', e.message); resolve(null); }
+      });
+    });
+    req.on('error', (e) => { console.error('[Gemini] request error:', e.message); resolve(null); });
+    req.on('timeout', () => { console.error('[Gemini] timeout'); req.destroy(); resolve(null); });
+    req.write(body);
+    req.end();
+  });
+}
+
 async function processText(text, docId, source) {
   let parsedData = {};
   let processedBy = source || 'js';
 
-  // Primary: try AI if key is set
-  if (process.env.OPENAI_API_KEY) {
-    console.log('[JSParser] Calling LLM for doc ' + docId + ', text length=' + text.length);
+  // Primary: try AI if a key is set
+  if (process.env.GEMINI_API_KEY) {
+    console.log('[JSParser] Calling Gemini for doc ' + docId + ', text length=' + text.length);
+    const llmResult = await callGemini(text, process.env.GEMINI_API_KEY, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
+    if (llmResult && Object.values(llmResult).some(v => v !== null)) {
+      for (const [k, v] of Object.entries(llmResult)) {
+        if (v !== null && v !== undefined) parsedData[k] = Math.round(v * 100) / 100;
+      }
+      processedBy = 'js:gemini';
+      console.log('[JSParser] Gemini OK for doc ' + docId + ': ' + Object.keys(parsedData).length + ' metrics');
+    } else {
+      console.log('[JSParser] Gemini returned null for doc ' + docId);
+    }
+  }
+  if (Object.keys(parsedData).length === 0 && process.env.OPENAI_API_KEY) {
+    console.log('[JSParser] Calling OpenAI for doc ' + docId + ', text length=' + text.length);
     const llmResult = await callLlm(text, process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || 'gpt-4o-mini');
     if (llmResult && Object.values(llmResult).some(v => v !== null)) {
       for (const [k, v] of Object.entries(llmResult)) {
         if (v !== null && v !== undefined) parsedData[k] = Math.round(v * 100) / 100;
       }
       processedBy = 'js:llm';
-      console.log('[JSParser] LLM OK for doc ' + docId + ': ' + Object.keys(parsedData).length + ' metrics');
+      console.log('[JSParser] OpenAI OK for doc ' + docId + ': ' + Object.keys(parsedData).length + ' metrics');
     } else {
-      console.log('[JSParser] LLM returned null for doc ' + docId);
+      console.log('[JSParser] OpenAI returned null for doc ' + docId);
     }
   }
 
