@@ -305,7 +305,7 @@ async function buildLocalNseReport(symbol) {
 
     // Primary data source: financial_statements.parsed_data (populated by JSON upload / PDF parse)
     const stmtResult = await pool.query(
-      `SELECT parsed_data, period_end_date FROM financial_statements
+      `SELECT DISTINCT ON (period_end_date) parsed_data, period_end_date FROM financial_statements
        WHERE stock_id = $1 AND status = 'completed' AND parsed_data IS NOT NULL
        ORDER BY period_end_date DESC NULLS LAST, uploaded_at DESC`,
       [stock.id]
