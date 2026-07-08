@@ -370,11 +370,16 @@ async function buildLocalNseReport(symbol) {
     const quoteSymbol = `NSE:${ticker}`;
     const quote = await getQuote(quoteSymbol).catch(() => null);
     const price = quote?.price || 0;
-    const sharesOut = parsed?.shares_outstanding || (parsed?.net_income && parsed?.eps ? Math.round(Math.abs(parsed.net_income / parsed.eps)) : 0);
+    const hasExactShares = parsed?.shares_outstanding != null && parsed.shares_outstanding > 0;
+    const computedShares = parsed?.net_income && parsed?.eps ? Math.round(Math.abs(parsed.net_income / parsed.eps)) : 0;
+    const sharesOut = hasExactShares ? parsed.shares_outstanding : computedShares;
 
     const divYield = f?.dividend_yield || (parsed?.dividend_per_share && price > 0 ? parsed.dividend_per_share / price : 0);
-    const mc = quote?.marketCap || (sharesOut > 0 && price > 0 ? Math.round(price * sharesOut) : 0)
-      || computeMarketCap(price, parsed?.net_income, parsed?.eps, sharesOut) || f?.market_cap || 0;
+    const mc = quote?.marketCap
+      || (hasExactShares && price > 0 ? Math.round(price * sharesOut) : 0)
+      || f?.market_cap
+      || (computedShares > 0 && price > 0 ? Math.round(price * computedShares) : 0)
+      || 0;
     // Ensure changesPercentage is computed if quote has change but no percentage
     if (quote && !quote.changesPercentage && quote.change && price > 0) {
       quote.changesPercentage = (quote.change / (price - quote.change)) * 100;
@@ -487,7 +492,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           const netIncome = inc.netIncome || 0;
           const eps = inc.eps || 0;
           const sharesOut = (netIncome && eps && (netIncome > 0 === eps > 0)) ? Math.abs(netIncome / eps) : 0;
-          const mc = quote?.marketCap || computeMarketCap(price, netIncome, eps, sharesOut) || km.marketCap || 0;
+          const mc = quote?.marketCap || km.marketCap || computeMarketCap(price, netIncome, eps, sharesOut) || 0;
           const revenue = inc.revenue || 0;
           const equity = bal.totalStockholdersEquity || bal.totalEquity || 0;
           const divYield = divYieldFromHistory !== null ? divYieldFromHistory : km.dividendYield || 0;
