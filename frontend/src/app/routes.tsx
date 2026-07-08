@@ -41,7 +41,7 @@ export const router = createBrowserRouter([
       { path: "sectors", Component: SectorsPage },
       { path: "stock/:ticker", Component: StockAnalysisPage },
       { path: "signals", Component: SignalsPage },
-      { path: "signals/engine", Component: SignalEnginePage },
+      { path: "admin/engine", Component: SignalEnginePage },
       { path: "news", Component: NewsPage },
       { path: "financials", Component: FinancialsPage },
       { path: "chat", Component: ChatPage },

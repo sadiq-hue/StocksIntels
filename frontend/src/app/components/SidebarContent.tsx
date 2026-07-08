@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Signal, PieChart, Star,
   LineChart, Newspaper, FileText, MessageSquare, Users,
   BarChart3, Briefcase, Layers, User, LifeBuoy, Cpu,
-  DollarSign, TrendingUp, GraduationCap, Lightbulb, Shield,
+  DollarSign, TrendingUp, GraduationCap, Lightbulb,
 } from "lucide-react";
 import { useBeginnerMode } from "../contexts/BeginnerModeContext";
 
@@ -51,7 +51,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         { path: "/app/bonds", icon: Briefcase, label: "Bonds" },
         { path: "/app/etfs", icon: Layers, label: "ETFs" },
         { path: "/app/signals", icon: Signal, label: "Signals" },
-        { path: "/app/signals/engine", icon: Cpu, label: "Engine" },
         { path: "/app/news", icon: Newspaper, label: "News" },
         { path: "/app/financials", icon: FileText, label: "Financials" },
         { path: "/app/ipos", icon: TrendingUp, label: "IPOs" },
@@ -69,7 +68,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     {
       title: "Admin",
       items: [
-        { path: "/app/admin/stocks", icon: Shield, label: "Stocks" },
+        { path: "/app/admin/engine", icon: Cpu, label: "Engine" },
       ],
     },
   ];

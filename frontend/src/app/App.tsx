@@ -120,7 +120,7 @@ const router = createBrowserRouter([
       { path: "stocks", element: <StocksPage /> },
       { path: "watchlist", element: <WatchlistPage /> },
       { path: "signals", element: <SignalsPage /> },
-      { path: "signals/engine", element: <SignalEnginePage /> },
+      { path: "admin/engine", element: <SignalEnginePage /> },
       { path: "ai-insights", element: <AIInsightsPage /> },
       { path: "people", element: <PeoplePage /> },
       { path: "groups", element: <GroupPage /> },
