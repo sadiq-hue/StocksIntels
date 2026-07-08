@@ -406,12 +406,12 @@ async function buildLocalNseReport(symbol) {
       data: {
         profile: { symbol: ticker, companyName: stock.name, industry: stock.sector || 'N/A',
           sector: stock.sector || 'N/A', country: 'Kenya', website: '', description: '',
-          ceo: 'N/A', employees: 0, marketCap: quote?.marketCap || mc,
+          ceo: 'N/A', employees: 0, marketCap: mc || quote?.marketCap,
           exchange: 'NSE', currency: stock.currency || 'KES', isEtf: false, image: '', lastUpdated: now },
-        quote: quote || { symbol: ticker, price: 0, change: 0, changesPercentage: 0,
+        quote: { ...(quote || { symbol: ticker, price: 0, change: 0, changesPercentage: 0,
           dayLow: 0, dayHigh: 0, yearLow: 0, yearHigh: 0, avgVolume: 0, open: 0,
-          marketCap: mc, volume: 0, previousClose: 0, sharesOutstanding: sharesOut,
-          eps: parsed?.eps || 0, pe: f?.pe_ratio || 0, lastUpdated: now },
+          volume: 0, previousClose: 0, sharesOutstanding: sharesOut,
+          eps: parsed?.eps || 0, pe: f?.pe_ratio || 0, lastUpdated: now }), marketCap: mc },
         incomeStatement: incItem, incomeStatementHistory: incItem ? [incItem] : [],
         balanceSheet: balItem, balanceSheetHistory: balItem ? [balItem] : [],
         cashFlowStatement: cfItem, cashFlowStatementHistory: cfItem ? [cfItem] : [],
@@ -497,7 +497,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
             ...yahooReport.data,
             keyMetrics: enrichedKm[0] || null,
             keyMetricsHistory: enrichedKm,
-            quote: quote || { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 },
+            quote: { ...(quote || { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 }), marketCap: enrichedKm[0]?.marketCap || quote?.marketCap || 0 },
             dividendHistory: yahooReport.data.dividendHistory?.length
               ? yahooReport.data.dividendHistory
               : [],
