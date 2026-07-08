@@ -308,7 +308,7 @@ async function buildLocalNseReport(symbol) {
     // Normalize alternative key names so existing uploaded data works without re-upload
     let parsed = parsedRaw;
     if (parsed) {
-      const keyMap = { net_income_pat: 'net_income', earnings_per_share: 'eps', book_value_per_share: 'book_value', profit_after_tax: 'net_income', pat: 'net_income', dividend_per_share: 'dps' };
+      const keyMap = { net_income_pat: 'net_income', earnings_per_share: 'eps', profit_after_tax: 'net_income', pat: 'net_income', dividend_per_share: 'dps' };
       for (const [src, dest] of Object.entries(keyMap)) {
         if (parsed[src] !== undefined && parsed[dest] === undefined) {
           parsed[dest] = parsed[src];
@@ -376,10 +376,12 @@ async function buildLocalNseReport(symbol) {
     const curAssets = parsed?.current_assets || 0;
     const curLiabs = parsed?.current_liabilities || 0;
 
+    const bvps = parsed?.book_value_per_share || (equity > 0 && sharesOut > 0 ? equity / sharesOut : 0);
+
     const kmItem = {
       date: periodDate, marketCap: mc,
       peRatio: f?.pe_ratio || (price > 0 && parsed?.eps > 0 ? price / parsed.eps : 0),
-      pbRatio: f?.pb_ratio || (price > 0 && (parsed?.book_value_per_share || parsed?.book_value) > 0 ? price / (parsed?.book_value_per_share || parsed?.book_value) : 0),
+      pbRatio: f?.pb_ratio || (price > 0 && bvps > 0 ? price / bvps : 0),
       dividendYield: divYield, dividendYieldPercentage: divYield * 100,
       roe: f?.roe || (parsed?.net_income && equity ? parsed.net_income / equity : 0),
       revenueGrowth: f?.revenue_growth || 0,

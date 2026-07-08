@@ -644,7 +644,7 @@ function normalizeFinancialData(raw) {
     }
   }
   // Map alternative key names to standard ones
-  const keyMap = { net_income_pat: 'net_income', earnings_per_share: 'eps', book_value_per_share: 'book_value', profit_after_tax: 'net_income', pat: 'net_income', dividend_per_share: 'dps' };
+  const keyMap = { net_income_pat: 'net_income', earnings_per_share: 'eps', profit_after_tax: 'net_income', pat: 'net_income', dividend_per_share: 'dps' };
   for (const [src, dest] of Object.entries(keyMap)) {
     if (out[src] !== undefined && out[dest] === undefined) {
       out[dest] = out[src];
