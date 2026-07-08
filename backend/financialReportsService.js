@@ -281,8 +281,9 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
 
 function toNum(v) { return v != null ? Number(v) : 0; }
 
-function computeMarketCap(price, netIncome, eps) {
+function computeMarketCap(price, netIncome, eps, sharesOutstanding) {
   if (!price || price <= 0) return 0;
+  if (sharesOutstanding > 0) return Math.round(price * sharesOutstanding);
   if (netIncome > 0 && eps > 0) return Math.round(price * (netIncome / eps));
   return 0;
 }
@@ -314,10 +315,12 @@ async function buildLocalNseReport(symbol) {
     // Normalize alternative key names so existing uploaded data works without re-upload
     let parsed = parsedRaw;
     if (parsed) {
-      const keyMap = { net_income_pat: 'net_income', earnings_per_share: 'eps', profit_after_tax: 'net_income', pat: 'net_income', dividend_per_share: 'dps' };
+      const keyMap = { net_income_pat: 'net_income', earnings_per_share: 'eps', profit_after_tax: 'net_income', pat: 'net_income', dividend_per_share: 'dps', shares_outstanding_millions: 'shares_outstanding' };
       for (const [src, dest] of Object.entries(keyMap)) {
         if (parsed[src] !== undefined && parsed[dest] === undefined) {
-          parsed[dest] = parsed[src];
+          parsed[dest] = src === 'shares_outstanding_millions' ? parsed[src] * 1000000 : parsed[src];
+        }
+      }
         }
       }
     }
@@ -373,10 +376,15 @@ async function buildLocalNseReport(symbol) {
     const quoteSymbol = `NSE:${ticker}`;
     const quote = await getQuote(quoteSymbol).catch(() => null);
     const price = quote?.price || 0;
-    const sharesOut = parsed?.net_income > 0 && parsed?.eps > 0 ? Math.round(parsed.net_income / parsed.eps) : 0;
+    const sharesOut = parsed?.shares_outstanding || (parsed?.net_income > 0 && parsed?.eps > 0 ? Math.round(parsed.net_income / parsed.eps) : 0);
 
     const divYield = f?.dividend_yield || (parsed?.dividend_per_share && price > 0 ? parsed.dividend_per_share / price : 0);
-    const mc = computeMarketCap(price, parsed?.net_income, parsed?.eps) || f?.market_cap || quote?.marketCap || 0;
+    const mc = computeMarketCap(price, parsed?.net_income, parsed?.eps, parsed?.shares_outstanding) || f?.market_cap || quote?.marketCap || 0;
+    // Ensure changesPercentage is computed if quote has change but no percentage
+    if (quote && !quote.changesPercentage && quote.change && price > 0) {
+      quote.changesPercentage = (quote.change / (price - quote.change)) * 100;
+      quote.changePercent = quote.changesPercentage;
+    }
     const totalDebt = parsed?.total_debt || 0;
     const equity = parsed?.shareholders_equity || 0;
     const curAssets = parsed?.current_assets || 0;
@@ -488,7 +496,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           };
         });
 
-        return {
+          return {
           ...yahooReport,
           symbol,
           source: 'yahoo-finance',
@@ -497,7 +505,13 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
             ...yahooReport.data,
             keyMetrics: enrichedKm[0] || null,
             keyMetricsHistory: enrichedKm,
-            quote: { ...(quote || { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 }), marketCap: enrichedKm[0]?.marketCap || quote?.marketCap || 0 },
+            quote: (() => {
+              const q = quote || { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 };
+              if (q.price > 0 && q.change && !q.changesPercentage) {
+                q.changesPercentage = (q.change / (q.price - q.change)) * 100;
+              }
+              return { ...q, marketCap: enrichedKm[0]?.marketCap || q.marketCap || 0 };
+            })(),
             dividendHistory: yahooReport.data.dividendHistory?.length
               ? yahooReport.data.dividendHistory
               : [],
