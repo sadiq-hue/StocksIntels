@@ -92,56 +92,57 @@ async function getQuote(symbol) {
     console.warn(`[FinancialReports] Quote fetch failed for ${symbol}`);
   }
 
-  // Fallback: Twelve Data statistics for rich quote data
-  try {
-    const { fetchQuoteWithStats } = require('./twelveDataService');
-    const tq = await fetchQuoteWithStats(symbol);
-    if (tq) {
-      const enriched = {
-        symbol: symbol.toUpperCase(),
-        price: tq.price,
-        change: tq.change || 0,
-        changesPercentage: tq.changePercent || 0,
-        dayLow: tq.dayLow || tq.price,
-        dayHigh: tq.dayHigh || tq.price,
-        marketCap: tq.marketCap || 0,
-        volume: tq.volume || 0,
-        previousClose: tq.previousClose || tq.price,
-        eps: tq.eps || 0,
-        pe: tq.peRatio || 0,
-        company_name: tq.company_name || symbol,
-        currency: tq.currency || 'USD',
-        exchange: tq.exchange || 'Global',
-        lastUpdated: tq.lastUpdated || new Date().toISOString(),
-      };
-      return cacheSet(cacheKey, enriched);
-    }
-  } catch {}
+  // Fallback: Twelve Data + Yahoo proxy (NSE stocks only use mystocks — no data from these)
+  if (!symbol.startsWith('NSE:')) {
+    try {
+      const { fetchQuoteWithStats } = require('./twelveDataService');
+      const tq = await fetchQuoteWithStats(symbol);
+      if (tq) {
+        const enriched = {
+          symbol: symbol.toUpperCase(),
+          price: tq.price,
+          change: tq.change || 0,
+          changesPercentage: tq.changePercent || 0,
+          dayLow: tq.dayLow || tq.price,
+          dayHigh: tq.dayHigh || tq.price,
+          marketCap: tq.marketCap || 0,
+          volume: tq.volume || 0,
+          previousClose: tq.previousClose || tq.price,
+          eps: tq.eps || 0,
+          pe: tq.peRatio || 0,
+          company_name: tq.company_name || symbol,
+          currency: tq.currency || 'USD',
+          exchange: tq.exchange || 'Global',
+          lastUpdated: tq.lastUpdated || new Date().toISOString(),
+        };
+        return cacheSet(cacheKey, enriched);
+      }
+    } catch {}
 
-  // Fallback: Yahoo Finance chart API via proxy (for price)
-  try {
-    const yf = require('./yahooFinanceFinancialsScraper');
-    const yp = await yf.fetchPriceViaProxy(symbol);
-    if (yp?.price) {
-      return cacheSet(cacheKey, {
-        symbol: yp.symbol || symbol.toUpperCase(),
-        price: yp.price,
-        change: 0,
-        changesPercentage: 0,
-        dayLow: yp.price,
-        dayHigh: yp.price,
-        marketCap: 0,
-        volume: 0,
-        previousClose: yp.previousClose || yp.price,
-        eps: 0,
-        pe: 0,
-        company_name: symbol,
-        currency: yp.currency || 'USD',
-        exchange: yp.exchange || '',
-        lastUpdated: new Date().toISOString(),
-      });
-    }
-  } catch {}
+    try {
+      const yf = require('./yahooFinanceFinancialsScraper');
+      const yp = await yf.fetchPriceViaProxy(symbol);
+      if (yp?.price) {
+        return cacheSet(cacheKey, {
+          symbol: yp.symbol || symbol.toUpperCase(),
+          price: yp.price,
+          change: 0,
+          changesPercentage: 0,
+          dayLow: yp.price,
+          dayHigh: yp.price,
+          marketCap: 0,
+          volume: 0,
+          previousClose: yp.previousClose || yp.price,
+          eps: 0,
+          pe: 0,
+          company_name: symbol,
+          currency: yp.currency || 'USD',
+          exchange: yp.exchange || '',
+          lastUpdated: new Date().toISOString(),
+        });
+      }
+    } catch {}
+  }
 
   return null;
 }

@@ -396,8 +396,8 @@ async function getStockQuote(symbol) {
     }
   }
 
-  // Fallback: Yahoo Finance (may have limited NSE data)
-  if (!quote) {
+  // Fallback: Yahoo Finance (skipped for NSE — Yahoo has no NSE data)
+  if (!quote && !symbol.startsWith('NSE:')) {
     quote = await yahooService.fetchQuote(symbol);
   }
 
@@ -417,9 +417,9 @@ const CONCURRENCY = 25;
 const BATCH_TIMEOUT_MS = 25000;
 
 async function fetchQuoteForSymbol(s) {
-  let quote = await yahooService.fetchQuote(s);
+  let quote = null;
 
-  if (!quote && s.startsWith('NSE:')) {
+  if (s.startsWith('NSE:')) {
     const mystocks = require('./mystocksScraper');
     const msq = await mystocks.getQuoteForSymbol(s);
     if (msq) {
@@ -438,6 +438,8 @@ async function fetchQuoteForSymbol(s) {
       };
       await enrichVolumeFromAfx(quote, s);
     }
+  } else {
+    quote = await yahooService.fetchQuote(s);
   }
 
   return quote;
