@@ -150,6 +150,12 @@ async function getQuoteForSymbol(symbol) {
   return cache?.[cleanSymbol] || null;
 }
 
+function clearCache() {
+  cache = null;
+  cacheTime = 0;
+  console.log('[myStocks] Cache cleared');
+}
+
 function getCacheSize() {
   return cache ? Object.keys(cache).length : 0;
 }
@@ -162,4 +168,4 @@ function startAutoRefresh() {
   console.log('[myStocks] Auto-refresh started every 5 min');
 }
 
-module.exports = { fetchAllQuotes, getQuoteForSymbol, startAutoRefresh, getCacheSize };
+module.exports = { fetchAllQuotes, getQuoteForSymbol, startAutoRefresh, clearCache, getCacheSize };

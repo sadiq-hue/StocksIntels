@@ -3,7 +3,10 @@ const yahooService = require('./yahooService');
 
 // Background NSE price cache from mystocks.co.ke
 const mystocks = require('./mystocksScraper');
-setTimeout(() => mystocks.startAutoRefresh(), 1000);
+setTimeout(() => {
+  mystocks.clearCache();
+  mystocks.startAutoRefresh();
+}, 1000);
 
 // NSE volume data from afx.kwayisi.org
 const nseAfx = require('./nseAfxScraper');
