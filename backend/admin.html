@@ -3617,7 +3617,10 @@ function fillFormFromJson() {
     // Also index flattened keys without year suffix (e.g. total_revenue_2025 -> total_revenue)
     for (const k of Object.keys(flat)) {
       const noYear = k.replace(/_\d{4}$/, '');
-      if (noYear !== k && flat[noYear] === undefined) flat[noYear] = flat[k];
+      if (noYear !== k) {
+        if (flat[noYear] === undefined) flat[noYear] = flat[k];
+        delete flat[k];
+      }
     }
     // Detect scale from JSON
     let scale = 1;
