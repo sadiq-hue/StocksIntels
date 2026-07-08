@@ -156,7 +156,16 @@ async function getQuoteForSymbol(symbol) {
   const cleanSymbol = symbol.replace('NSE:', '').toUpperCase();
   if (cache && cache[cleanSymbol]) return cache[cleanSymbol];
   if (!cache) await fetchAllQuotes();
-  return cache?.[cleanSymbol] || null;
+  // On-demand fetch: if cache exists but this symbol is missing, scrape just this stock
+  if (cache && !cache[cleanSymbol]) {
+    console.log(`[myStocks] On-demand fetch for ${cleanSymbol}`);
+    const result = await scrapeStockPage(cleanSymbol);
+    if (result) {
+      cache[cleanSymbol] = result;
+      return result;
+    }
+  }
+  return null;
 }
 
 function clearCache() {

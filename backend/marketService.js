@@ -402,7 +402,7 @@ async function getStockQuote(symbol) {
   }
 
   if (quote) {
-    quoteCache.set(symbol, { ...quote, symbol });
+    quoteCache.set(symbol, { ...quote, symbol, marketCap: quote.marketCap || 0 });
     return quoteCache.get(symbol);
   }
 
