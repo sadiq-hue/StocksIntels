@@ -304,7 +304,17 @@ async function buildLocalNseReport(symbol) {
       [stock.id]
     );
     const statement = stmtResult.rows[0] || null;
-    const parsed = statement?.parsed_data || null;
+    const parsedRaw = statement?.parsed_data || null;
+    // Normalize alternative key names so existing uploaded data works without re-upload
+    let parsed = parsedRaw;
+    if (parsed) {
+      const keyMap = { net_income_pat: 'net_income', earnings_per_share: 'eps', book_value_per_share: 'book_value', profit_after_tax: 'net_income', pat: 'net_income', dividend_per_share: 'dps' };
+      for (const [src, dest] of Object.entries(keyMap)) {
+        if (parsed[src] !== undefined && parsed[dest] === undefined) {
+          parsed[dest] = parsed[src];
+        }
+      }
+    }
     console.log(`[buildLocalNseReport] financial_statements: rows=${stmtResult.rows.length}, hasParsed=${!!parsed}, keys=${parsed ? Object.keys(parsed).join(',') : 'none'}`);
 
     // Supplementary: stock_fundamentals (may have different schema on Railway; errors are non-fatal)
@@ -354,10 +364,11 @@ async function buildLocalNseReport(symbol) {
 
     const quote = await getQuote(symbol).catch(() => null);
     const price = quote?.price || 0;
-    const sharesOut = parsed?.eps > 0 && parsed?.net_income > 0 ? Math.round(parsed.net_income / parsed.eps) : 0;
+    const sharesOut = parsed?.net_income > 0 && parsed?.eps > 0 ? Math.round(parsed.net_income / parsed.eps) : 0;
 
     const divYield = f?.dividend_yield || (parsed?.dividend_per_share && price > 0 ? parsed.dividend_per_share / price : 0);
-    const mc = f?.market_cap || 0;
+    const computedMc = price > 0 && sharesOut > 0 ? price * sharesOut : 0;
+    const mc = f?.market_cap || quote?.marketCap || computedMc || 0;
     const totalDebt = parsed?.total_debt || 0;
     const equity = parsed?.shareholders_equity || 0;
     const curAssets = parsed?.current_assets || 0;
