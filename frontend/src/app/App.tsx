@@ -25,7 +25,6 @@ import { BondsPage } from "./pages/BondsPage";
 import { ETFsPage } from "./pages/ETFsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SupportCenterPage } from "./pages/SupportCenterPage";
-import { SignalEnginePage } from "./pages/SignalEnginePage";
 import { AboutPage } from "./pages/AboutPage";
 import { BlogPage } from "./pages/BlogPage";
 import { CareersPage } from "./pages/CareersPage";
@@ -120,7 +119,6 @@ const router = createBrowserRouter([
       { path: "stocks", element: <StocksPage /> },
       { path: "watchlist", element: <WatchlistPage /> },
       { path: "signals", element: <SignalsPage /> },
-      { path: "admin/engine", element: <SignalEnginePage /> },
       { path: "ai-insights", element: <AIInsightsPage /> },
       { path: "people", element: <PeoplePage /> },
       { path: "groups", element: <GroupPage /> },

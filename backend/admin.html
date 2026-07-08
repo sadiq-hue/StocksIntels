@@ -248,6 +248,10 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
         Followers
       </div>
+      <div class="nav-item" data-tab="engine" onclick="switchTab('engine')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        Engine
+      </div>
       <div class="nav-item" data-tab="audit" onclick="switchTab('audit')">
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Audit
@@ -1494,6 +1498,117 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       </div>
     </div>
 
+    <!-- Tab: Engine -->
+    <div id="tab-engine" class="flex-1 hidden min-h-0 scroll p-6 space-y-6" style="background:linear-gradient(180deg,#ecfdf5 0%,#f9fafb 100%)">
+      <div style="background:linear-gradient(135deg,#0D7490,#0EA5E9);border-radius:14px;padding:20px 24px;color:#fff;position:relative;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center">
+            <svg style="width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          </div>
+          <div>
+            <h1 style="font-size:18px;font-weight:700">Signal Engine</h1>
+            <p style="font-size:13px;opacity:.85">Backtesting, forward testing, audit, and configuration management</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Engine sub-tab buttons -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid #e5e7eb;padding-bottom:8px">
+        <button class="tab-btn active" data-engtab="health" onclick="switchEngTab('health')">Health</button>
+        <button class="tab-btn" data-engtab="backtest" onclick="switchEngTab('backtest')">Backtest</button>
+        <button class="tab-btn" data-engtab="forward" onclick="switchEngTab('forward')">Forward Test</button>
+        <button class="tab-btn" data-engtab="config" onclick="switchEngTab('config')">Config</button>
+        <button class="tab-btn" data-engtab="audit" onclick="switchEngTab('audit')">Audit</button>
+        <button class="tab-btn" data-engtab="diagnostics" onclick="switchEngTab('diagnostics')">Diagnostics</button>
+      </div>
+
+      <!-- Engine: Health -->
+      <div id="eng-health" class="space-y-4">
+        <div id="engineHealthContent"><div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading health data...</div></div>
+      </div>
+
+      <!-- Engine: Backtest -->
+      <div id="eng-backtest" class="hidden space-y-4">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;color:#6b7280">Period:</span>
+            <select id="btDays" class="input-field" style="width:100px;font-size:12px;padding:4px 8px" onchange="fetchBacktest()">
+              <option value="7">7 days</option><option value="14">14 days</option><option value="30" selected>30 days</option><option value="90">90 days</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;color:#6b7280">Signal:</span>
+            <select id="btSignal" class="input-field" style="width:120px;font-size:12px;padding:4px 8px" onchange="fetchBacktest()">
+              <option value="all">All</option>
+              <option value="Strong Buy">Strong Buy</option>
+              <option value="Buy">Buy</option>
+              <option value="Accumulate">Accumulate</option>
+              <option value="Sell">Sell</option>
+              <option value="Strong Sell">Strong Sell</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" style="font-size:12px;padding:4px 12px" onclick="fetchBacktest()">Run</button>
+        </div>
+        <div id="engineBacktestContent"><div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Run backtest to see results</div></div>
+      </div>
+
+      <!-- Engine: Forward Test -->
+      <div id="eng-forward" class="hidden space-y-4">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <p style="font-size:12px;color:#6b7280">Tracks signal predictions and compares actual outcomes after 8 hours</p>
+          <div style="display:flex;gap:6px">
+            <span id="fwResolveResult" style="font-size:12px;color:#059669;display:none"></span>
+            <button class="btn btn-primary" style="font-size:12px;padding:4px 12px" onclick="resolveForwardTest()">Resolve Now</button>
+          </div>
+        </div>
+        <div id="engineForwardContent"><div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading forward test data...</div></div>
+      </div>
+
+      <!-- Engine: Config -->
+      <div id="eng-config" class="hidden space-y-4" style="max-width:600px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <p style="font-size:12px;color:#6b7280">Runtime engine configuration. Changes are persisted to the audit log.</p>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="configMsg" style="font-size:12px;color:#059669;display:none"></span>
+            <button class="btn btn-primary" style="font-size:12px;padding:4px 12px" onclick="saveEngineConfig()">Save Config</button>
+          </div>
+        </div>
+        <div id="engineConfigContent"><div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading configuration...</div></div>
+      </div>
+
+      <!-- Engine: Audit -->
+      <div id="eng-audit" class="hidden space-y-4">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;color:#6b7280">Type:</span>
+            <select id="auditType" class="input-field" style="width:140px;font-size:12px;padding:4px 8px" onchange="engAuditPage=0;fetchEngineAudit()">
+              <option value="all">All</option>
+              <option value="signal_cycle">Signal Cycle</option>
+              <option value="config_change">Config Change</option>
+              <option value="error">Error</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="fetchEngineAudit()">Refresh</button>
+          <span id="auditTotal" style="font-size:12px;color:#6b7280;margin-left:auto"></span>
+        </div>
+        <div id="engineAuditContent"><div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading audit log...</div></div>
+        <div id="auditPagination" style="display:flex;align-items:center;justify-content:center;gap:8px"></div>
+      </div>
+
+      <!-- Engine: Diagnostics -->
+      <div id="eng-diagnostics" class="hidden space-y-4">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <p style="font-size:12px;color:#6b7280">Real-time pipeline diagnostics</p>
+          <div style="display:flex;gap:6px">
+            <span id="btHistResult" style="font-size:12px;color:#059669;display:none"></span>
+            <button class="btn btn-primary" style="font-size:12px;padding:4px 12px" onclick="runHistoricalBacktest()">Run Historical Backtest</button>
+            <button class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="fetchDiagnostics()">Refresh</button>
+          </div>
+        </div>
+        <div id="engineDiagnosticsContent"><div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading diagnostics...</div></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1638,6 +1753,7 @@ function switchTab(tab) {
   if (tab === 'followers') fetchFollowers();
   if (tab === 'user-activity') { fetchUserActivity(); }
   if (tab === 'affiliates') { fetchAffiliateStats(); fetchAffiliates(); }
+  if (tab === 'engine') { fetchEngineHealth(); fetchForwardTest(); }
   if (tab === 'audit') { onAuditPeriodChange(); }
   if (tab === 'settings') {
     fetchSettings();
@@ -1650,7 +1766,7 @@ function switchTab(tab) {
     }
   }
 }
-['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','audit','settings'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
+['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','engine','audit','settings'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
 
 // ── Dashboard ──
 async function fetchDashboard() {
@@ -4761,6 +4877,464 @@ function renderAffPagination(containerEl, total, pageSize, currentPage, fetchFn)
   html += '<span class="text-xs text-gray-500 mx-2">Page ' + (currentPage + 1) + ' of ' + Math.max(totalPages, 1) + '</span>';
   if (currentPage + 1 < totalPages) html += '<button class="btn btn-secondary py-1 px-3 text-xs" onclick="' + fetchFn + '(' + (currentPage + 1) + ')">Next</button>';
   container.innerHTML = html;
+}
+
+// ── Engine Tab ──
+let engAuditPage = 0;
+const engAuditPerPage = 50;
+let _engConfig = null;
+
+function switchEngTab(tab) {
+  document.querySelectorAll('[data-engtab]').forEach(el => el.classList.remove('active'));
+  document.querySelector(`[data-engtab="${tab}"]`).classList.add('active');
+  document.querySelectorAll('[id^="eng-"]').forEach(el => { if (el.id.startsWith('eng-')) el.classList.add('hidden'); });
+  document.getElementById('eng-' + tab).classList.remove('hidden');
+  if (tab === 'health') fetchEngineHealth();
+  if (tab === 'backtest') fetchBacktest();
+  if (tab === 'forward') fetchForwardTest();
+  if (tab === 'config') fetchEngineConfig();
+  if (tab === 'audit') { engAuditPage = 0; fetchEngineAudit(); }
+  if (tab === 'diagnostics') fetchDiagnostics();
+}
+
+async function fetchEngineHealth() {
+  const el = document.getElementById('engineHealthContent');
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading...</div>';
+  try {
+    const res = await fetch('/api/signals/engine/health');
+    const d = await res.json();
+    if (!d.success) { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Failed to load health</div>'; return; }
+    const h = d.health;
+    const statusColor = h.status === 'healthy' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-yellow-100 text-yellow-700 border-yellow-200';
+    const regimeColor = h.regime === 'bull' ? 'text-emerald-600' : (h.regime === 'bear' || h.regime === 'crash') ? 'text-red-600' : 'text-yellow-600';
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="pill ${statusColor}">${h.status}</span>
+          <span style="font-size:12px;color:#6b7280">Uptime: ${fmtDuration(h.uptime)}</span>
+        </div>
+        <button class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="fetchEngineHealth()">Refresh</button>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-value ${regimeColor}" style="text-transform:capitalize">${h.regime}</div><div class="stat-label">Market Regime</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${h.signalCount}</div><div class="stat-label">Signal Count</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:${h.performance.winRate >= 60 ? '#059669' : '#d97706'}">${h.performance.winRate.toFixed(1)}%</div><div class="stat-label">Win Rate</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${h.confidenceMultiplier.toFixed(2)}</div><div class="stat-label">Confidence Mult.</div></div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${fmtNum(h.performance.total)}</div><div class="stat-label">Total Trades</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#059669">${fmtNum(h.performance.wins)}</div><div class="stat-label">Wins</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#dc2626">${fmtNum(h.performance.losses)}</div><div class="stat-label">Losses</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:${h.portfolio.consecutiveLosses >= 3 ? '#dc2626' : '#111827'}">${h.portfolio.consecutiveLosses}</div><div class="stat-label">Consec. Losses</div></div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+        <p style="font-size:13px;font-weight:600;margin-bottom:12px">Source Health</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          ${Object.entries(h.sources).map(([name, src]) => `
+            <div style="background:#fff;border:1px solid ${src.ok ? '#e5e7eb' : '#fecaca'};border-radius:10px;padding:12px;${src.ok ? '' : 'background:#fef2f2'}">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                <span style="font-size:13px;font-weight:500">${name.replace(/([A-Z])/g,' $1').trim()}</span>
+                <span class="pill ${src.ok ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-red-100 text-red-700 border-red-200'}">${src.ok ? 'Healthy' : 'Degraded'}</span>
+              </div>
+              ${src.failCount > 0 ? `<p style="font-size:11px;color:#6b7280;margin-top:4px">${src.failCount} failure(s)</p>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  } catch { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Error loading health data</div>'; }
+}
+
+async function fetchBacktest() {
+  const el = document.getElementById('engineBacktestContent');
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading...</div>';
+  try {
+    const days = document.getElementById('btDays').value;
+    const signal = document.getElementById('btSignal').value;
+    const params = new URLSearchParams({ days, limit: '500' });
+    if (signal !== 'all') params.set('signal', signal);
+    const res = await fetch('/api/signals/backtest?' + params.toString());
+    const d = await res.json();
+    if (!d.success || !d.stats) { el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">No backtest data available yet</div>'; return; }
+    const s = d.stats;
+    const wrColor = s.winRate >= 60 ? '#059669' : s.winRate >= 45 ? '#d97706' : '#dc2626';
+    el.innerHTML = `
+      ${s.dataSource && s.dataSource !== 'signal_outcomes' ? `<p style="font-size:11px;color:#6b7280;margin-bottom:8px">Source: ${s.dataSource} — Stats are approximate until enough resolved outcomes accumulate.</p>` : ''}
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${s.total}</div><div class="stat-label">Total Signals</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:${wrColor}">${fmtPct(s.winRate)}</div><div class="stat-label">Win Rate</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:${s.avgReturn > 0 ? '#059669' : '#dc2626'}">${fmtPct(s.avgReturn)}</div><div class="stat-label">Avg Return</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${s.wins}<span style="font-size:13px;color:#6b7280"> / </span>${s.losses}</div><div class="stat-label">Wins / Losses</div></div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-value" style="color:${s.sharpe >= 1 ? '#059669' : s.sharpe >= 0 ? '#d97706' : '#dc2626'}">${s.sharpe.toFixed(2)}</div><div class="stat-label">Sharpe Ratio</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:${s.profitFactor >= 1.5 ? '#059669' : s.profitFactor >= 1 ? '#d97706' : '#dc2626'}">${s.profitFactor.toFixed(2)}</div><div class="stat-label">Profit Factor</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#dc2626">${fmtPct(s.maxDrawdown)}</div><div class="stat-label">Max Drawdown</div></div>
+      </div>
+      ${Object.keys(s.bySignal).length > 0 ? `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <p style="font-size:13px;font-weight:600;margin-bottom:8px">By Signal Type</p>
+          <div style="overflow-x:auto">
+            <table style="width:100%;font-size:12px">
+              <thead><tr style="border-bottom:1px solid #e5e7eb">
+                <th style="text-align:left;padding:6px 8px;color:#6b7280">Signal</th>
+                <th style="text-align:right;padding:6px 8px;color:#6b7280">Total</th>
+                <th style="text-align:right;padding:6px 8px;color:#6b7280">Wins</th>
+                <th style="text-align:right;padding:6px 8px;color:#6b7280">Losses</th>
+                <th style="text-align:right;padding:6px 8px;color:#6b7280">Win Rate</th>
+                <th style="text-align:right;padding:6px 8px;color:#6b7280">Avg Return</th>
+              </tr></thead>
+              <tbody>${Object.entries(s.bySignal).map(([sig, st]) => `
+                <tr style="border-bottom:1px solid #f3f4f6">
+                  <td style="padding:6px 8px;font-weight:500">${esc(sig)}</td>
+                  <td style="padding:6px 8px;text-align:right;color:#6b7280">${st.total}</td>
+                  <td style="padding:6px 8px;text-align:right;color:#059669">${st.wins}</td>
+                  <td style="padding:6px 8px;text-align:right;color:#dc2626">${st.losses}</td>
+                  <td style="padding:6px 8px;text-align:right;font-weight:500;color:${st.winRate >= 60 ? '#059669' : '#d97706'}">${fmtPct(st.winRate)}</td>
+                  <td style="padding:6px 8px;text-align:right;color:${st.avgReturn > 0 ? '#059669' : '#dc2626'}">${fmtPct(st.avgReturn)}</td>
+                </tr>
+              `).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+      ` : ''}`;
+  } catch { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Error loading backtest data</div>'; }
+}
+
+let _fwStats = null;
+async function fetchForwardTest() {
+  const el = document.getElementById('engineForwardContent');
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading...</div>';
+  try {
+    const res = await fetch('/api/signals/forward-test');
+    const d = await res.json();
+    if (!d.success) { el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">No data</div>'; return; }
+    _fwStats = d.stats;
+    const s = d.stats;
+    const accColor = s.accuracy >= 60 ? '#059669' : s.accuracy >= 45 ? '#d97706' : '#dc2626';
+    const statusText = !s || s.totalPredictions === 0 ? 'No Data' : s.accuracy >= 60 ? 'Good' : 'Needs Work';
+    el.innerHTML = `
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${s.totalPredictions || 0}</div><div class="stat-label">Resolved</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#d97706">${s.pendingPredictions || 0}</div><div class="stat-label">Pending</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:${accColor}">${s ? fmtPct(s.accuracy) : '—'}</div><div class="stat-label">Accuracy</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:${s && s.totalPredictions > 0 ? (s.accuracy >= 60 ? '#059669' : '#d97706') : '#6b7280'}">${statusText}</div><div class="stat-label">Status</div></div>
+      </div>
+      ${s.bySymbol && Object.keys(s.bySymbol).length > 0 ? `
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" style="margin-bottom:16px">
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+            <p style="font-size:13px;font-weight:600;margin-bottom:8px">By Symbol</p>
+            <div style="overflow-x:auto;max-height:300px;overflow-y:auto">
+              <table style="width:100%;font-size:12px">
+                <thead><tr style="border-bottom:1px solid #e5e7eb">
+                  <th style="text-align:left;padding:6px 8px;color:#6b7280">Symbol</th>
+                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Total</th>
+                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Correct</th>
+                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Accuracy</th>
+                </tr></thead>
+                <tbody>${Object.entries(s.bySymbol).map(([sym, st]) => `
+                  <tr style="border-bottom:1px solid #f3f4f6">
+                    <td style="padding:6px 8px;font-weight:500">${esc(sym)}</td>
+                    <td style="padding:6px 8px;text-align:right;color:#6b7280">${st.total}</td>
+                    <td style="padding:6px 8px;text-align:right;color:#059669">${st.correct}</td>
+                    <td style="padding:6px 8px;text-align:right;font-weight:500;color:${st.accuracy >= 60 ? '#059669' : '#d97706'}">${fmtPct(st.accuracy)}</td>
+                  </tr>
+                `).join('')}</tbody>
+              </table>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+            <p style="font-size:13px;font-weight:600;margin-bottom:8px">By Confidence</p>
+            <div style="overflow-x:auto">
+              <table style="width:100%;font-size:12px">
+                <thead><tr style="border-bottom:1px solid #e5e7eb">
+                  <th style="text-align:left;padding:6px 8px;color:#6b7280">Confidence</th>
+                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Total</th>
+                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Accurate</th>
+                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Accuracy</th>
+                </tr></thead>
+                <tbody>${Object.entries(s.byConfidence || {}).length === 0 ? '<tr><td colspan="4" style="text-align:center;padding:24px;color:#6b7280">No data</td></tr>' : Object.entries(s.byConfidence).map(([bucket, st]) => `
+                  <tr style="border-bottom:1px solid #f3f4f6">
+                    <td style="padding:6px 8px;font-weight:500;text-transform:capitalize">${esc(bucket)}</td>
+                    <td style="padding:6px 8px;text-align:right;color:#6b7280">${st.total}</td>
+                    <td style="padding:6px 8px;text-align:right;color:#059669">${st.accurate}</td>
+                    <td style="padding:6px 8px;text-align:right;font-weight:500;color:${st.accuracy >= 60 ? '#059669' : '#d97706'}">${fmtPct(st.accuracy)}</td>
+                  </tr>
+                `).join('')}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ` : '<div style="text-align:center;padding:24px;color:#6b7280;font-size:13px">No resolved predictions yet</div>'}
+      ${d.predictions && d.predictions.length > 0 ? `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+          <p style="font-size:13px;font-weight:600;margin-bottom:8px">Prediction Log</p>
+          <div style="overflow-x:auto">
+            <table style="width:100%;font-size:11px">
+              <thead><tr style="border-bottom:1px solid #e5e7eb">
+                <th style="text-align:left;padding:4px 8px;color:#6b7280">Symbol</th>
+                <th style="text-align:left;padding:4px 8px;color:#6b7280">Signal</th>
+                <th style="text-align:right;padding:4px 8px;color:#6b7280">Conf</th>
+                <th style="text-align:right;padding:4px 8px;color:#6b7280">Price</th>
+                <th style="text-align:right;padding:4px 8px;color:#6b7280">Return</th>
+                <th style="text-align:center;padding:4px 8px;color:#6b7280">Result</th>
+                <th style="text-align:right;padding:4px 8px;color:#6b7280">Generated</th>
+              </tr></thead>
+              <tbody>${d.predictions.map(p => {
+                const sigColor = { 'Strong Buy': 'bg-emerald-100 text-emerald-700', 'Buy': 'bg-green-100 text-green-700', 'Hold': 'bg-gray-100 text-gray-600', 'Sell': 'bg-red-100 text-red-700', 'Strong Sell': 'bg-rose-100 text-rose-700' }[p.signal] || 'bg-gray-100 text-gray-600';
+                return `<tr style="border-bottom:1px solid #f3f4f6">
+                  <td style="padding:4px 8px;font-weight:500">${esc(p.symbol)}</td>
+                  <td style="padding:4px 8px"><span class="pill ${sigColor}">${esc(p.signal)}</span></td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.confidence}%</td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.price ? '$' + Number(p.price).toFixed(2) : '—'}</td>
+                  <td style="padding:4px 8px;text-align:right;font-weight:500;color:${p.actualReturn !== null ? (p.actualReturn > 0 ? '#059669' : '#dc2626') : '#6b7280'}">${p.actualReturn !== null ? (p.actualReturn > 0 ? '+' : '') + Number(p.actualReturn).toFixed(1) + '%' : '—'}</td>
+                  <td style="padding:4px 8px;text-align:center">${p.resolved ? (p.correct ? '✓' : '✗') : '⏳'}</td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${formatDate(p.generatedAt)}</td>
+                </tr>`;
+              }).join('')}</tbody>
+            </table>
+          </div>
+        </div>
+      ` : ''}`;
+  } catch { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Error loading forward test data</div>'; }
+}
+
+async function resolveForwardTest() {
+  const btn = document.querySelector('#eng-forward .btn-primary');
+  const prev = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Resolving...';
+  const resultEl = document.getElementById('fwResolveResult');
+  resultEl.style.display = 'none';
+  try {
+    const res = await fetch('/api/signals/forward-test/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    const d = await res.json();
+    if (d.success) {
+      resultEl.textContent = 'Resolved ' + d.resolved + ', failed ' + d.failed;
+      resultEl.style.display = 'inline';
+      setTimeout(() => { resultEl.style.display = 'none'; }, 5000);
+    }
+    fetchForwardTest();
+  } catch { toast('Error resolving predictions', 'error'); }
+  btn.disabled = false;
+  btn.textContent = prev;
+}
+
+async function fetchEngineConfig() {
+  const el = document.getElementById('engineConfigContent');
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading...</div>';
+  try {
+    const res = await fetch('/api/signals/engine/config');
+    const d = await res.json();
+    if (!d.success || !d.config) { el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280">Unable to load config</div>'; return; }
+    _engConfig = d.config;
+    const c = d.config;
+    el.innerHTML = `
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px">
+        <p style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Engine</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6">
+          <div><p style="font-size:13px;font-weight:500">Enabled</p><p style="font-size:11px;color:#6b7280">Allow signal generation to run</p></div>
+          <label style="position:relative;display:inline-flex;align-items:center;cursor:pointer">
+            <input type="checkbox" ${c.enabled ? 'checked' : ''} onchange="updateEngConfig('enabled', this.checked)" style="width:16px;height:16px;accent-color:#0D7490">
+          </label>
+        </div>
+        ${renderConfigField('Signal Interval', 'signalInterval', c.signalInterval, 'ms')}
+        ${renderConfigField('Max Symbols', 'maxSymbols', c.maxSymbols, '')}
+        ${renderConfigField('Min Confidence', 'minConfidence', c.minConfidence, '%')}
+        ${renderConfigField('Backtest Days', 'backtestDays', c.backtestDays, 'days')}
+        ${renderConfigField('Forward Test Min Age', 'forwardTestMinAge', c.forwardTestMinAge, 'ms')}
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px">
+        <p style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Weights</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          ${renderConfigField('Fundamental', 'weights.fundamental', Math.round(c.weights.fundamental * 100), '%')}
+          ${renderConfigField('Technical', 'weights.technical', Math.round(c.weights.technical * 100), '%')}
+          ${renderConfigField('Financial', 'weights.financial', Math.round(c.weights.financial * 100), '%')}
+          ${renderConfigField('Macro', 'weights.macro', Math.round(c.weights.macro * 100), '%')}
+        </div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+        <p style="font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Portfolio</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          ${renderConfigField('Max Concentration', 'portfolio.maxConcentration', Math.round(c.portfolio.maxConcentration * 100), '%')}
+          ${renderConfigField('Max Drawdown', 'portfolio.maxDrawdown', Math.round(c.portfolio.maxDrawdown * 100), '%')}
+          ${renderConfigField('Stop Loss', 'portfolio.stopLoss', Math.round(c.portfolio.stopLoss * 100), '%')}
+        </div>
+      </div>`;
+  } catch { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Error loading config</div>'; }
+}
+
+function renderConfigField(label, path, value, unit) {
+  const id = 'cfg-' + path.replace(/\./g, '-');
+  return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6">
+    <span style="font-size:13px">${label}</span>
+    <div style="display:flex;align-items:center;gap:4px">
+      <input id="${id}" type="number" value="${value}" onchange="updateEngConfig('${path}', Number(this.value))" style="width:72px;height:28px;text-align:right;font-size:12px;background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:2px 8px;outline:none">
+      ${unit ? '<span style="font-size:11px;color:#6b7280;width:28px">' + unit + '</span>' : ''}
+    </div>
+  </div>`;
+}
+
+function updateEngConfig(path, value) {
+  if (!_engConfig) return;
+  const parts = path.split('.');
+  let obj = _engConfig;
+  for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
+  if (path === 'enabled') {
+    obj[parts[parts.length - 1]] = value;
+  } else if (path.startsWith('weights.') || path.startsWith('portfolio.')) {
+    obj[parts[parts.length - 1]] = value / 100;
+  } else {
+    obj[parts[parts.length - 1]] = value;
+  }
+}
+
+async function saveEngineConfig() {
+  if (!_engConfig) return;
+  const msgEl = document.getElementById('configMsg');
+  msgEl.style.display = 'none';
+  try {
+    const res = await fetch('/api/signals/engine/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_engConfig)
+    });
+    const d = await res.json();
+    if (d.success) {
+      msgEl.textContent = 'Configuration saved successfully';
+      msgEl.style.color = '#059669';
+      if (d.config) _engConfig = d.config;
+    } else {
+      msgEl.textContent = 'Failed to save configuration';
+      msgEl.style.color = '#dc2626';
+    }
+  } catch {
+    msgEl.textContent = 'Error saving configuration';
+    msgEl.style.color = '#dc2626';
+  }
+  msgEl.style.display = 'inline';
+  setTimeout(() => { msgEl.style.display = 'none'; }, 3000);
+}
+
+async function fetchEngineAudit() {
+  const el = document.getElementById('engineAuditContent');
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading...</div>';
+  try {
+    const type = document.getElementById('auditType').value;
+    const params = new URLSearchParams({ limit: String(engAuditPerPage), offset: String(engAuditPage * engAuditPerPage) });
+    if (type !== 'all') params.set('type', type);
+    const res = await fetch('/api/signals/audit?' + params.toString());
+    const d = await res.json();
+    document.getElementById('auditTotal').textContent = (d.total || 0) + ' entries';
+    if (!d.entries || d.entries.length === 0) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">No audit log entries yet</div>';
+      document.getElementById('auditPagination').innerHTML = '';
+      return;
+    }
+    const eventColor = (type) => {
+      if (type === 'signal_cycle') return 'bg-blue-100 text-blue-700 border-blue-200';
+      if (type === 'config_change') return 'bg-purple-100 text-purple-700 border-purple-200';
+      if (type === 'error') return 'bg-red-100 text-red-700 border-red-200';
+      return 'bg-gray-100 text-gray-600 border-gray-200';
+    };
+    el.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px">${d.entries.map(e => `
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span class="pill ${eventColor(e.type)}">${esc(e.type)}</span>
+          <span style="font-size:11px;color:#6b7280">${formatDate(e.ts)}</span>
+        </div>
+        <p style="font-size:13px;color:#111827">${esc(e.message)}</p>
+        ${e.details ? `<pre style="margin-top:6px;font-size:10px;color:#6b7280;background:#f9fafb;padding:8px;border-radius:6px;overflow-x:auto;max-height:80px">${esc(JSON.stringify(e.details, null, 1))}</pre>` : ''}
+      </div>
+    `).join('')}</div>`;
+    const totalPages = Math.ceil((d.total || 0) / engAuditPerPage);
+    const pagEl = document.getElementById('auditPagination');
+    if (totalPages <= 1) { pagEl.innerHTML = ''; return; }
+    let ph = '';
+    if (engAuditPage > 0) ph += '<button class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="engAuditPage--;fetchEngineAudit()">Prev</button>';
+    ph += '<span style="font-size:12px;color:#6b7280">Page ' + (engAuditPage + 1) + ' of ' + totalPages + '</span>';
+    if (engAuditPage + 1 < totalPages) ph += '<button class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="engAuditPage++;fetchEngineAudit()">Next</button>';
+    pagEl.innerHTML = ph;
+  } catch { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Error loading audit log</div>'; }
+}
+
+async function fetchDiagnostics() {
+  const el = document.getElementById('engineDiagnosticsContent');
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading...</div>';
+  try {
+    const res = await fetch('/api/signals/engine/diagnostics');
+    const d = await res.json();
+    if (!d.success || !d.diagnostics) { el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280">Unable to load diagnostics</div>'; return; }
+    const dx = d.diagnostics;
+    const etHours = Math.floor(dx.etMinutes / 60);
+    const etMins = dx.etMinutes % 60;
+    const etTime = (etHours % 12 || 12) + ':' + String(etMins).padStart(2, '0') + ' ' + (etHours >= 12 ? 'PM' : 'AM') + ' ET';
+    el.innerHTML = `
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${dx.counts.signalHistory}</div><div class="stat-label">signal_history</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${dx.counts.signalOutcomes}</div><div class="stat-label">signal_outcomes</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${dx.counts.forwardPredictions}</div><div class="stat-label">Forward Predictions</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${dx.counts.signalsCache}</div><div class="stat-label">Signals Cache</div></div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px">
+        <p style="font-size:13px;font-weight:600;margin-bottom:8px">Market Hours</p>
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:4px">
+          <span style="color:#6b7280">US Market:</span>
+          <span class="pill ${dx.usMarketOpen ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-red-100 text-red-700 border-red-200'}">${dx.usMarketOpen ? 'Open' : 'Closed'}</span>
+        </div>
+        <div style="font-size:12px;color:#6b7280">Server: ${formatDate(dx.serverTime)}</div>
+        <div style="font-size:12px;color:#6b7280">ET: ${etTime}</div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px">
+        <p style="font-size:13px;font-weight:600;margin-bottom:8px">Timestamps</p>
+        <div style="font-size:12px;color:#6b7280">Last signal: ${dx.lastSignalGeneratedAt ? formatDate(dx.lastSignalGeneratedAt) : 'Never'}</div>
+        <div style="font-size:12px;color:#6b7280">Last outcome: ${dx.lastOutcomeRecordedAt ? formatDate(dx.lastOutcomeRecordedAt) : 'Never'}</div>
+        <div style="font-size:12px;color:#6b7280">Cache updated: ${dx.cacheLastUpdated ? formatDate(dx.cacheLastUpdated) : 'Never'}</div>
+      </div>
+      ${dx.signalsLast24h && dx.signalsLast24h.length > 0 ? `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px">
+          <p style="font-size:13px;font-weight:600;margin-bottom:8px">Signals in Last 24h</p>
+          ${dx.signalsLast24h.map(s => `<div style="display:flex;justify-content:space-between;font-size:13px;padding:2px 0"><span style="font-weight:500">${esc(s.signal)}</span><span style="color:#6b7280">${s.cnt}</span></div>`).join('')}
+        </div>
+      ` : ''}
+      ${dx.dbErrors && dx.dbErrors.length > 0 ? `
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px">
+          <p style="font-size:13px;font-weight:600;color:#dc2626;margin-bottom:8px">Database Errors</p>
+          <ul style="font-size:12px;color:#dc2626;padding-left:16px">${dx.dbErrors.map(e => `<li>${esc(e)}</li>`).join('')}</ul>
+        </div>
+      ` : ''}`;
+  } catch { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Error loading diagnostics</div>'; }
+}
+
+async function runHistoricalBacktest() {
+  const btn = document.querySelector('#eng-diagnostics .btn-primary');
+  const prev = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  const resultEl = document.getElementById('btHistResult');
+  resultEl.style.display = 'none';
+  try {
+    const res = await fetch('/api/signals/engine/backtest/historical?days=90&maxHoldDays=5&maxSignals=1000', { method: 'POST' });
+    const d = await res.json();
+    if (d.success) {
+      const r = d.result;
+      const winRate = r.evaluated > 0 ? Math.round((r.wins / r.evaluated) * 1000) / 10 : 0;
+      resultEl.innerHTML = 'Evaluated: ' + r.evaluated + ', Wins: ' + r.wins + ', Losses: ' + r.losses + ', Win Rate: ' + winRate + '%, Outcomes: ' + (d.signalOutcomes || 0);
+      resultEl.style.display = 'inline';
+      setTimeout(() => { resultEl.style.display = 'none'; }, 8000);
+      fetchDiagnostics();
+    }
+  } catch { toast('Error running backtest', 'error'); }
+  btn.disabled = false;
+  btn.textContent = prev;
+}
+
+function fmtPct(v) { return (v >= 0 ? '' : '') + Number(v).toFixed(1) + '%'; }
+function fmtNum(v) { return Number(v).toLocaleString(); }
+function fmtDuration(seconds) {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return d + 'd ' + h + 'h ' + m + 'm';
 }
 </script>
 </body>
