@@ -281,6 +281,12 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
 
 function toNum(v) { return v != null ? Number(v) : 0; }
 
+function computeMarketCap(price, netIncome, eps) {
+  if (!price || price <= 0) return 0;
+  if (netIncome > 0 && eps > 0) return Math.round(price * (netIncome / eps));
+  return 0;
+}
+
 async function buildLocalNseReport(symbol) {
   let ticker = symbol;
   if (ticker.startsWith('NSE:')) ticker = ticker.slice(4);
@@ -370,8 +376,7 @@ async function buildLocalNseReport(symbol) {
     const sharesOut = parsed?.net_income > 0 && parsed?.eps > 0 ? Math.round(parsed.net_income / parsed.eps) : 0;
 
     const divYield = f?.dividend_yield || (parsed?.dividend_per_share && price > 0 ? parsed.dividend_per_share / price : 0);
-    const computedMc = price > 0 && sharesOut > 0 ? price * sharesOut : 0;
-    const mc = f?.market_cap || quote?.marketCap || computedMc || 0;
+    const mc = computeMarketCap(price, parsed?.net_income, parsed?.eps) || f?.market_cap || quote?.marketCap || 0;
     const totalDebt = parsed?.total_debt || 0;
     const equity = parsed?.shareholders_equity || 0;
     const curAssets = parsed?.current_assets || 0;
@@ -456,7 +461,6 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
         const divYieldFromHistory = (price > 0 && totalAnnualDiv > 0) ? totalAnnualDiv / price : null;
 
         // Enrich keyMetrics with real ratios from quote price + financial data
-        const quoteMc = quote?.marketCap || 0;
         const incHist = yahooReport.data.incomeStatementHistory || [];
         const balHist = yahooReport.data.balanceSheetHistory || [];
         const enrichedKm = (yahooReport.data.keyMetricsHistory || []).map((km, idx) => {
@@ -465,7 +469,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           const netIncome = inc.netIncome || 0;
           const eps = inc.eps || 0;
           const sharesOut = (eps > 0 && netIncome > 0) ? netIncome / eps : 0;
-          const mc = quoteMc || (price > 0 && sharesOut > 0 ? price * sharesOut : km.marketCap || 0);
+          const mc = computeMarketCap(price, netIncome, eps) || quote?.marketCap || km.marketCap || 0;
           const revenue = inc.revenue || 0;
           const equity = bal.totalStockholdersEquity || bal.totalEquity || 0;
           const divYield = divYieldFromHistory !== null ? divYieldFromHistory : km.dividendYield || 0;
