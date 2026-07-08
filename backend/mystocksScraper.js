@@ -53,6 +53,24 @@ async function scrapeStockPage(ticker) {
     const loMatch = html.match(/<b[^>]*id\s*=\s*rtLo[^>]*>\s*([0-9.,]+)\s*<\/b>/i);
     if (loMatch) low = parseFloat(loMatch[1].replace(/,/g, '')) || price;
 
+    let marketCap = 0;
+    const jsonMatch = html.match(/\{"reload":\d+.*?"data":\s*\[([^\]]+)\]/);
+    if (jsonMatch) {
+      const items = jsonMatch[1].split(',').map(s => s.trim().replace(/"/g, ''));
+      if (items.length > 10) {
+        const mcStr = items[10];
+        const mcMatch = mcStr.match(/([\d,.]+)\s*([MBT])?/i);
+        if (mcMatch) {
+          let mcNum = parseFloat(mcMatch[1].replace(/,/g, ''));
+          const sfx = (mcMatch[2] || '').toUpperCase();
+          if (sfx === 'T') mcNum *= 1e12;
+          else if (sfx === 'B') mcNum *= 1e9;
+          else if (sfx === 'M') mcNum *= 1e6;
+          marketCap = Math.round(mcNum) || 0;
+        }
+      }
+    }
+
     let volume = 0;
     const volMatch = html.match(/([\d,.]+)\s*([MKB])?\s*Volume/i);
     if (volMatch) {
@@ -72,7 +90,7 @@ async function scrapeStockPage(ticker) {
       ticker, name, price, change,
       changePercent: change && price ? (change / (price - change)) * 100 : 0,
       volume, previousClose: price - change, dayHigh: high, dayLow: low,
-      currency: 'KES', market: 'NSE', provider: 'mystocks',
+      marketCap, currency: 'KES', market: 'NSE', provider: 'mystocks',
       timestamp: Math.floor(Date.now() / 1000),
     };
   } catch (err) {

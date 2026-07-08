@@ -376,8 +376,10 @@ async function getStockQuote(symbol) {
       quote = {
         price: msq.price,
         change: msq.change || 0,
+        changesPercentage: msq.changePercent || 0,
         changePercent: msq.changePercent || 0,
         volume: msq.volume || 0,
+        marketCap: msq.marketCap || 0,
         dayHigh: msq.dayHigh || msq.price,
         dayLow: msq.dayLow || msq.price,
         previousClose: msq.previousClose || msq.price,
