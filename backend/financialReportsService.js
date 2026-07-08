@@ -379,8 +379,8 @@ async function buildLocalNseReport(symbol) {
     const sharesOut = parsed?.shares_outstanding || (parsed?.net_income > 0 && parsed?.eps > 0 ? Math.round(parsed.net_income / parsed.eps) : 0);
 
     const divYield = f?.dividend_yield || (parsed?.dividend_per_share && price > 0 ? parsed.dividend_per_share / price : 0);
-    const mc = (parsed?.shares_outstanding && price > 0 ? Math.round(price * parsed.shares_outstanding) : 0)
-      || quote?.marketCap || computeMarketCap(price, parsed?.net_income, parsed?.eps) || f?.market_cap || 0;
+    const mc = quote?.marketCap || (parsed?.shares_outstanding && price > 0 ? Math.round(price * parsed.shares_outstanding) : 0)
+      || computeMarketCap(price, parsed?.net_income, parsed?.eps) || f?.market_cap || 0;
     // Ensure changesPercentage is computed if quote has change but no percentage
     if (quote && !quote.changesPercentage && quote.change && price > 0) {
       quote.changesPercentage = (quote.change / (price - quote.change)) * 100;
