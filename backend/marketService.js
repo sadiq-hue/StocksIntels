@@ -367,9 +367,10 @@ async function getStockQuote(symbol) {
     return cached;
   }
 
-  let quote = await yahooService.fetchQuote(symbol);
+  let quote = null;
 
-  if (!quote && symbol.startsWith('NSE:')) {
+  // For NSE stocks, try mystocks first (it has change, marketCap, volume)
+  if (symbol.startsWith('NSE:')) {
     const mystocks = require('./mystocksScraper');
     const msq = await mystocks.getQuoteForSymbol(symbol);
     if (msq) {
@@ -390,6 +391,11 @@ async function getStockQuote(symbol) {
       };
       await enrichVolumeFromAfx(quote, symbol);
     }
+  }
+
+  // Fallback: Yahoo Finance (may have limited NSE data)
+  if (!quote) {
+    quote = await yahooService.fetchQuote(symbol);
   }
 
   if (quote) {

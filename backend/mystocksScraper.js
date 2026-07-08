@@ -44,7 +44,7 @@ async function scrapeStockPage(ticker) {
     if (price === null || isNaN(price) || !price) return null;
 
     let change = 0;
-    const chMatch = html.match(/<b[^>]*id\s*=\s*rtChange2[^>]*>\s*([0-9.,-]+)\s*<\/b>/i);
+    const chMatch = html.match(/<b[^>]*id\s*=\s*rtChange2[^>]*>\s*([+-]?[0-9.,]+)\s*\(/i);
     if (chMatch) change = parseFloat(chMatch[1].replace(/,/g, '')) || 0;
 
     let high = price, low = price;
@@ -54,20 +54,25 @@ async function scrapeStockPage(ticker) {
     if (loMatch) low = parseFloat(loMatch[1].replace(/,/g, '')) || price;
 
     let marketCap = 0;
-    const jsonMatch = html.match(/\{"reload":\d+.*?"data":\s*\[([^\]]+)\]/);
-    if (jsonMatch) {
-      const items = jsonMatch[1].split(',').map(s => s.trim().replace(/"/g, ''));
-      if (items.length > 10) {
-        const mcStr = items[10];
-        const mcMatch = mcStr.match(/([\d,.]+)\s*([MBT])?/i);
-        if (mcMatch) {
-          let mcNum = parseFloat(mcMatch[1].replace(/,/g, ''));
-          const sfx = (mcMatch[2] || '').toUpperCase();
-          if (sfx === 'T') mcNum *= 1e12;
-          else if (sfx === 'B') mcNum *= 1e9;
-          else if (sfx === 'M') mcNum *= 1e6;
-          marketCap = Math.round(mcNum) || 0;
+    const dataDivMatch = html.match(/<div[^>]*id\s*=\s*rtDataJson[^>]*>\s*(\{.*?\})\s*<\/div>/i);
+    if (dataDivMatch) {
+      const jsonStr = dataDivMatch[1].replace(/&quot;/g, '"');
+      try {
+        const data = JSON.parse(jsonStr);
+        if (data && Array.isArray(data.data) && data.data.length > 10) {
+          const mcStr = data.data[10];
+          const mcMatch = mcStr.match(/([\d,.]+)\s*([MBT])?/i);
+          if (mcMatch) {
+            let mcNum = parseFloat(mcMatch[1].replace(/,/g, ''));
+            const sfx = (mcMatch[2] || '').toUpperCase();
+            if (sfx === 'T') mcNum *= 1e12;
+            else if (sfx === 'B') mcNum *= 1e9;
+            else if (sfx === 'M') mcNum *= 1e6;
+            marketCap = Math.round(mcNum) || 0;
+          }
         }
+      } catch (e) {
+        console.warn(`[myStocks] Failed to parse data JSON for ${ticker}: ${e.message}`);
       }
     }
 
