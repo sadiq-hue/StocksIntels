@@ -378,12 +378,13 @@ async function buildLocalNseReport(symbol) {
 
     const kmItem = {
       date: periodDate, marketCap: mc,
-      peRatio: f?.pe_ratio || 0, pbRatio: f?.pb_ratio || 0,
+      peRatio: f?.pe_ratio || (price > 0 && parsed?.eps > 0 ? price / parsed.eps : 0),
+      pbRatio: f?.pb_ratio || (price > 0 && (parsed?.book_value_per_share || parsed?.book_value) > 0 ? price / (parsed?.book_value_per_share || parsed?.book_value) : 0),
       dividendYield: divYield, dividendYieldPercentage: divYield * 100,
       roe: f?.roe || (parsed?.net_income && equity ? parsed.net_income / equity : 0),
       revenueGrowth: f?.revenue_growth || 0,
       epsGrowth: f?.eps_growth || parsed?.eps || 0, sharesOutstanding: sharesOut,
-      earningsYield: f?.pe_ratio > 0 ? 1 / f.pe_ratio : 0,
+      earningsYield: f?.pe_ratio > 0 ? 1 / f.pe_ratio : (price > 0 && parsed?.eps > 0 ? parsed.eps / price : 0),
       revenuePerShare: sharesOut > 0 && parsed?.total_revenue ? parsed.total_revenue / sharesOut : 0,
       netIncomePerShare: parsed?.eps || 0,
       priceToSalesRatio: mc > 0 && parsed?.total_revenue ? mc / parsed.total_revenue : 0,
