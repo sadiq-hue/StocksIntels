@@ -284,7 +284,7 @@ function toNum(v) { return v != null ? Number(v) : 0; }
 function computeMarketCap(price, netIncome, eps, sharesOutstanding) {
   if (!price || price <= 0) return 0;
   if (sharesOutstanding > 0) return Math.round(price * sharesOutstanding);
-  if (netIncome > 0 && eps > 0) return Math.round(price * (netIncome / eps));
+  if (netIncome && eps && (netIncome > 0 === eps > 0)) return Math.round(price * Math.abs(netIncome / eps));
   return 0;
 }
 
@@ -370,11 +370,11 @@ async function buildLocalNseReport(symbol) {
     const quoteSymbol = `NSE:${ticker}`;
     const quote = await getQuote(quoteSymbol).catch(() => null);
     const price = quote?.price || 0;
-    const sharesOut = parsed?.shares_outstanding || (parsed?.net_income > 0 && parsed?.eps > 0 ? Math.round(parsed.net_income / parsed.eps) : 0);
+    const sharesOut = parsed?.shares_outstanding || (parsed?.net_income && parsed?.eps ? Math.round(Math.abs(parsed.net_income / parsed.eps)) : 0);
 
     const divYield = f?.dividend_yield || (parsed?.dividend_per_share && price > 0 ? parsed.dividend_per_share / price : 0);
-    const mc = quote?.marketCap || (parsed?.shares_outstanding && price > 0 ? Math.round(price * parsed.shares_outstanding) : 0)
-      || computeMarketCap(price, parsed?.net_income, parsed?.eps) || f?.market_cap || 0;
+    const mc = quote?.marketCap || (sharesOut > 0 && price > 0 ? Math.round(price * sharesOut) : 0)
+      || computeMarketCap(price, parsed?.net_income, parsed?.eps, sharesOut) || f?.market_cap || 0;
     // Ensure changesPercentage is computed if quote has change but no percentage
     if (quote && !quote.changesPercentage && quote.change && price > 0) {
       quote.changesPercentage = (quote.change / (price - quote.change)) * 100;
@@ -389,7 +389,7 @@ async function buildLocalNseReport(symbol) {
 
     function buildKmItem(p, d) {
       if (!p) return null;
-      const pShares = p.shares_outstanding || (p.net_income > 0 && p.eps > 0 ? Math.round(p.net_income / p.eps) : 0);
+      const pShares = p.shares_outstanding || (p.net_income && p.eps ? Math.round(Math.abs(p.net_income / p.eps)) : 0);
       const pEquity = p.shareholders_equity || 0;
       const pBvps = p.book_value_per_share || (pEquity > 0 && pShares > 0 ? pEquity / pShares : 0);
       return {
@@ -486,8 +486,8 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           const bal = balHist[idx] || {};
           const netIncome = inc.netIncome || 0;
           const eps = inc.eps || 0;
-          const sharesOut = (eps > 0 && netIncome > 0) ? netIncome / eps : 0;
-          const mc = quote?.marketCap || computeMarketCap(price, netIncome, eps) || km.marketCap || 0;
+          const sharesOut = (netIncome && eps && (netIncome > 0 === eps > 0)) ? Math.abs(netIncome / eps) : 0;
+          const mc = quote?.marketCap || computeMarketCap(price, netIncome, eps, sharesOut) || km.marketCap || 0;
           const revenue = inc.revenue || 0;
           const equity = bal.totalStockholdersEquity || bal.totalEquity || 0;
           const divYield = divYieldFromHistory !== null ? divYieldFromHistory : km.dividendYield || 0;
