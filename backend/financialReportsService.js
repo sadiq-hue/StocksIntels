@@ -379,7 +379,8 @@ async function buildLocalNseReport(symbol) {
     const sharesOut = parsed?.shares_outstanding || (parsed?.net_income > 0 && parsed?.eps > 0 ? Math.round(parsed.net_income / parsed.eps) : 0);
 
     const divYield = f?.dividend_yield || (parsed?.dividend_per_share && price > 0 ? parsed.dividend_per_share / price : 0);
-    const mc = computeMarketCap(price, parsed?.net_income, parsed?.eps, parsed?.shares_outstanding) || f?.market_cap || quote?.marketCap || 0;
+    const mc = (parsed?.shares_outstanding && price > 0 ? Math.round(price * parsed.shares_outstanding) : 0)
+      || quote?.marketCap || computeMarketCap(price, parsed?.net_income, parsed?.eps) || f?.market_cap || 0;
     // Ensure changesPercentage is computed if quote has change but no percentage
     if (quote && !quote.changesPercentage && quote.change && price > 0) {
       quote.changesPercentage = (quote.change / (price - quote.change)) * 100;
@@ -452,7 +453,12 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
     if (activeProvider === 'yahoo-finance') {
       const yahooReport = await yahooFinanceScraper.getFinancialReport(symbol, period, limit);
       if (yahooReport.success && yahooReport.data.incomeStatementHistory?.length > 0) {
-        const quote = await getQuote(symbol).catch(() => null);
+        // Try NSE: prefix for mystocks quote (has marketCap, changePercent) on NSE stocks
+        let quote = await getQuote(symbol).catch(() => null);
+        if (!quote || !quote.marketCap) {
+          const nseQuote = await getQuote('NSE:' + symbol).catch(() => null);
+          if (nseQuote) quote = nseQuote;
+        }
         const price = quote?.price || 0;
 
         // Force USD for known US stocks (guard against wrong profile currency from API)
@@ -477,7 +483,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           const netIncome = inc.netIncome || 0;
           const eps = inc.eps || 0;
           const sharesOut = (eps > 0 && netIncome > 0) ? netIncome / eps : 0;
-          const mc = computeMarketCap(price, netIncome, eps) || quote?.marketCap || km.marketCap || 0;
+          const mc = quote?.marketCap || computeMarketCap(price, netIncome, eps) || km.marketCap || 0;
           const revenue = inc.revenue || 0;
           const equity = bal.totalStockholdersEquity || bal.totalEquity || 0;
           const divYield = divYieldFromHistory !== null ? divYieldFromHistory : km.dividendYield || 0;
