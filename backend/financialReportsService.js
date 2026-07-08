@@ -378,7 +378,6 @@ async function buildLocalNseReport(symbol) {
     const mc = quote?.marketCap
       || (hasExactShares && price > 0 ? Math.round(price * sharesOut) : 0)
       || f?.market_cap
-      || (computedShares > 0 && price > 0 ? Math.round(price * computedShares) : 0)
       || 0;
     console.log(`[buildLocalNseReport] ${ticker}: quote.mc=${quote?.marketCap}, hasExactShares=${hasExactShares}, sharesOut=${sharesOut}, computedShares=${computedShares}, f.mc=${f?.market_cap}, price=${price}, mc=${mc}`);
     // Ensure changesPercentage is computed if quote has change but no percentage
@@ -493,7 +492,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           const netIncome = inc.netIncome || 0;
           const eps = inc.eps || 0;
           const sharesOut = (netIncome && eps && (netIncome > 0 === eps > 0)) ? Math.abs(netIncome / eps) : 0;
-          const mc = quote?.marketCap || km.marketCap || computeMarketCap(price, netIncome, eps, sharesOut) || 0;
+          const mc = quote?.marketCap || km.marketCap || 0;
           const revenue = inc.revenue || 0;
           const equity = bal.totalStockholdersEquity || bal.totalEquity || 0;
           const divYield = divYieldFromHistory !== null ? divYieldFromHistory : km.dividendYield || 0;
