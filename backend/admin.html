@@ -3705,7 +3705,6 @@ async function handleFsFormUpload() {
   const periodType = document.getElementById('fsJsonPeriodType').value;
   const periodEndDate = document.getElementById('fsJsonPeriodEnd').value;
   const statusEl = document.getElementById('fsJsonStatus');
-  // Build data object from form fields
   const fieldIds = [
     'total_assets','total_liabilities','shareholders_equity','total_debt','current_assets','current_liabilities',
     'retained_earnings','cash_and_equivalents','book_value',
@@ -3713,14 +3712,72 @@ async function handleFsFormUpload() {
     'eps','dividend_per_share','book_value_per_share',
     'pe_ratio','fiscal_year',
   ];
-  const data = {};
+  // Try to parse JSON textarea directly first (bypasses fillFormFromJson issues)
+  let data = {};
   let hasValue = false;
-  for (const id of fieldIds) {
-    const el = document.getElementById('fj_' + id);
-    const val = el.value.trim();
-    if (val !== '') {
-      data[id] = parseFloat(val);
-      hasValue = true;
+  try {
+    const rawStr = document.getElementById('fsJsonPasteArea').value.trim();
+    if (rawStr) {
+      const parsed = JSON.parse(rawStr);
+      if (parsed && typeof parsed === 'object') {
+        // Flatten nested sections and normalize (same logic as fillFormFromJson)
+        const flat = {};
+        (function flatten(obj) {
+          if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return;
+          for (const [k, v] of Object.entries(obj)) {
+            if (v !== null && typeof v === 'object' && !Array.isArray(v)) flatten(v);
+            else if (v !== null) flat[k] = v;
+          }
+        })(parsed);
+        // Strip year suffixes
+        for (const k of Object.keys(flat)) {
+          const noYear = k.replace(/_\d{4}$/, '');
+          if (noYear !== k) {
+            if (flat[noYear] === undefined) flat[noYear] = flat[k];
+            delete flat[k];
+          }
+        }
+        // Detect scale
+        let scale = 1;
+        if (/million/i.test(parsed.unit || '')) scale = 1000000;
+        else if (/thousand/i.test(parsed.unit || '')) scale = 1000;
+        const noScale = new Set(['eps','dividend_per_share','dps','book_value_per_share','pe_ratio','fiscal_year']);
+        // Map canonical + alt keys
+        const altMapRev = { net_income_pat:'net_income', net_profit:'net_income', profit_after_tax:'net_income', operating_income_ebit:'operating_income', ebit:'operating_income', earnings_per_share_eps:'eps', earnings_per_share:'eps', dividend_per_share_dps:'dividend_per_share', dps:'dividend_per_share', revenue:'total_revenue', total_equity:'shareholders_equity' };
+        for (const canon of fieldIds) {
+          let v = flat[canon];
+          if (v === undefined) {
+            // Check alternative keys
+            for (const [alt, c] of Object.entries(altMapRev)) {
+              if (c === canon && flat[alt] !== undefined) { v = flat[alt]; break; }
+            }
+          }
+          if (v !== undefined && v !== null) {
+            data[canon] = noScale.has(canon) ? v : (scale > 1 ? v * scale : v);
+            hasValue = true;
+          }
+        }
+        if (hasValue) {
+          // Use period_end and ticker from JSON metadata if form fields are empty
+          if (!periodEndDate && (parsed.metadata?.period_end || parsed.period_end)) {
+            const d = new Date(parsed.metadata?.period_end || parsed.period_end);
+            if (!isNaN(d)) document.getElementById('fsJsonPeriodEnd').value = d.toISOString().split('T')[0];
+          }
+          if (!ticker && parsed.ticker) document.getElementById('editStockTicker').value = parsed.ticker.toUpperCase();
+        }
+      }
+    }
+  } catch (e) { /* JSON parse failed, fall through to form fields */ }
+  if (!hasValue) {
+    // Fallback: read from form fields
+    data = {};
+    for (const id of fieldIds) {
+      const el = document.getElementById('fj_' + id);
+      const val = el.value.trim();
+      if (val !== '') {
+        data[id] = parseFloat(val);
+        hasValue = true;
+      }
     }
   }
   if (!hasValue) { statusEl.textContent = 'Enter at least one financial value'; statusEl.style.color = '#dc2626'; return; }
