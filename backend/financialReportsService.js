@@ -362,7 +362,9 @@ async function buildLocalNseReport(symbol) {
 
     const f = fundamentals ? { market_cap: toNum(fundamentals.market_cap), pe_ratio: toNum(fundamentals.pe_ratio), pb_ratio: toNum(fundamentals.pb_ratio), dividend_yield: toNum(fundamentals.dividend_yield), roe: toNum(fundamentals.roe), revenue_growth: toNum(fundamentals.revenue_growth), eps_growth: toNum(fundamentals.eps_growth) } : null;
 
-    const quote = await getQuote(symbol).catch(() => null);
+    // NSE stocks need 'NSE:' prefix for marketService to trigger mystocks + AFX volume fallback
+    const quoteSymbol = `NSE:${ticker}`;
+    const quote = await getQuote(quoteSymbol).catch(() => null);
     const price = quote?.price || 0;
     const sharesOut = parsed?.net_income > 0 && parsed?.eps > 0 ? Math.round(parsed.net_income / parsed.eps) : 0;
 
