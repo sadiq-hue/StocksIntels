@@ -194,6 +194,15 @@ function appendUserId(url: string): string {
   return `${url}${separator}userId=${userId}`;
 }
 
+function parseErrorText(text: string): string {
+  try {
+    const parsed = JSON.parse(text);
+    return parsed.error || parsed.message || text;
+  } catch {
+    return text;
+  }
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const headers: Record<string, string> = {};
   const token = getToken();
@@ -201,7 +210,8 @@ async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(appendUserId(url), { headers });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `Request failed with status ${response.status}`);
+    const message = parseErrorText(text) || `Request failed with status ${response.status}`;
+    throw new Error(message);
   }
   return response.json() as Promise<T>;
 }

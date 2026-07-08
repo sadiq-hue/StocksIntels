@@ -581,7 +581,11 @@ export function FinancialsPage() {
           <div className="text-rose-500 font-black text-4xl mb-3">!</div>
           <p className="text-sm font-bold text-foreground mb-1">Failed to load data</p>
           <p className="text-xs text-muted-foreground mb-4">{error}</p>
-          <Button onClick={handleRefresh} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-xs">Try Again</Button>
+          {error.toLowerCase().includes("token expired") || error.toLowerCase().includes("session expired") ? (
+            <Button onClick={() => window.location.href = "/login"} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-xs">Log In</Button>
+          ) : (
+            <Button onClick={handleRefresh} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-xs">Try Again</Button>
+          )}
         </div>
       ) : (
         <Tabs defaultValue="summary" className="space-y-4">
