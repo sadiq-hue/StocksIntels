@@ -307,22 +307,29 @@ async function buildLocalNseReport(symbol) {
     const stmtResult = await pool.query(
       `SELECT parsed_data, period_end_date FROM financial_statements
        WHERE stock_id = $1 AND status = 'completed' AND parsed_data IS NOT NULL
-       ORDER BY period_end_date DESC NULLS LAST, uploaded_at DESC LIMIT 1`,
+       ORDER BY period_end_date DESC NULLS LAST, uploaded_at DESC`,
       [stock.id]
     );
-    const statement = stmtResult.rows[0] || null;
-    const parsedRaw = statement?.parsed_data || null;
-    // Normalize alternative key names so existing uploaded data works without re-upload
-    let parsed = parsedRaw;
-    if (parsed) {
+    const statements = stmtResult.rows;
+    const now = new Date().toISOString();
+    // Normalize each statement's parsed_data (alternative key names)
+    function normalizeParsed(raw) {
+      if (!raw) return null;
+      const p = typeof raw === 'string' ? JSON.parse(raw) : { ...raw };
       const keyMap = { net_income_pat: 'net_income', earnings_per_share: 'eps', profit_after_tax: 'net_income', pat: 'net_income', dividend_per_share: 'dps', shares_outstanding_millions: 'shares_outstanding' };
       for (const [src, dest] of Object.entries(keyMap)) {
-        if (parsed[src] !== undefined && parsed[dest] === undefined) {
-          parsed[dest] = src === 'shares_outstanding_millions' ? parsed[src] * 1000000 : parsed[src];
+        if (p[src] !== undefined && p[dest] === undefined) {
+          p[dest] = src === 'shares_outstanding_millions' ? p[src] * 1000000 : p[src];
         }
       }
+      return p;
     }
-    console.log(`[buildLocalNseReport] financial_statements: rows=${stmtResult.rows.length}, hasParsed=${!!parsed}, keys=${parsed ? Object.keys(parsed).join(',') : 'none'}`);
+    const allParsed = statements.map(s => ({ parsed: normalizeParsed(s.parsed_data), periodDate: s.period_end_date }));
+    const validParsed = allParsed.filter(p => p.parsed);
+    const latest = validParsed[0] || {};
+    const parsed = latest.parsed || null;
+    const periodDate = latest.periodDate || now;
+    console.log(`[buildLocalNseReport] financial_statements: rows=${stmtResult.rows.length}, valid=${validParsed.length}, latestKeys=${parsed ? Object.keys(parsed).join(',') : 'none'}`);
 
     // Supplementary: stock_fundamentals (may have different schema on Railway; errors are non-fatal)
     let fundamentals = null;
@@ -343,30 +350,19 @@ async function buildLocalNseReport(symbol) {
 
     if (!fundamentals && !parsed) return null;
 
-    const now = new Date().toISOString();
-    const periodDate = statement?.period_end_date || now;
+    // Build history arrays from all uploaded periods
+    function buildIncItem(p, d) { return p ? { date: d, revenue: p.total_revenue, netIncome: p.net_income, netIncomeRatio: p.net_income > 0 && p.total_revenue > 0 ? p.net_income / p.total_revenue : 0, grossProfit: p.total_revenue != null && p.cost_of_revenue != null ? p.total_revenue - p.cost_of_revenue : null, ebitda: null, eps: p.eps, costOfRevenue: p.cost_of_revenue, operatingExpenses: null, operatingIncome: p.operating_income } : null; }
+    function buildBalItem(p, d) { return p ? { date: d, totalAssets: p.total_assets, totalLiabilities: p.total_liabilities, totalEquity: p.shareholders_equity, cashAndCashEquivalents: p.cash_and_equivalents, longTermDebt: null, totalDebt: p.total_debt, totalCurrentAssets: p.current_assets, totalCurrentLiabilities: p.current_liabilities, totalStockholdersEquity: p.shareholders_equity, retainedEarnings: p.retained_earnings } : null; }
+    function buildCfItem(p, d) { return p?.cash_from_operations != null ? { date: d, operatingCashFlow: p.cash_from_operations, freeCashFlow: null, capitalExpenditure: null, dividendsPaid: null, netChangeInCash: null } : null; }
 
-    const incItem = parsed ? {
-      date: periodDate, revenue: parsed.total_revenue, netIncome: parsed.net_income,
-      netIncomeRatio: parsed.net_income > 0 && parsed.total_revenue > 0 ? parsed.net_income / parsed.total_revenue : 0,
-      grossProfit: parsed.total_revenue != null && parsed.cost_of_revenue != null ? parsed.total_revenue - parsed.cost_of_revenue : null,
-      ebitda: null, eps: parsed.eps,
-      costOfRevenue: parsed.cost_of_revenue, operatingExpenses: null,
-      operatingIncome: parsed.operating_income,
-    } : null;
+    const incHistory = validParsed.map(v => buildIncItem(v.parsed, v.periodDate)).filter(Boolean);
+    const balHistory = validParsed.map(v => buildBalItem(v.parsed, v.periodDate)).filter(Boolean);
+    const cfHistory = validParsed.map(v => buildCfItem(v.parsed, v.periodDate)).filter(Boolean);
 
-    const balItem = parsed ? {
-      date: periodDate, totalAssets: parsed.total_assets, totalLiabilities: parsed.total_liabilities,
-      totalEquity: parsed.shareholders_equity, cashAndCashEquivalents: parsed.cash_and_equivalents,
-      longTermDebt: null, totalDebt: parsed.total_debt,
-      totalCurrentAssets: parsed.current_assets, totalCurrentLiabilities: parsed.current_liabilities,
-      totalStockholdersEquity: parsed.shareholders_equity, retainedEarnings: parsed.retained_earnings,
-    } : null;
-
-    const cfItem = parsed?.cash_from_operations != null ? {
-      date: periodDate, operatingCashFlow: parsed.cash_from_operations,
-      freeCashFlow: null, capitalExpenditure: null, dividendsPaid: null, netChangeInCash: null,
-    } : null;
+    // Latest single items for backward compatibility (KPI cards, summary)
+    const incItem = incHistory[0] || null;
+    const balItem = balHistory[0] || null;
+    const cfItem = cfHistory[0] || null;
 
     const f = fundamentals ? { market_cap: toNum(fundamentals.market_cap), pe_ratio: toNum(fundamentals.pe_ratio), pb_ratio: toNum(fundamentals.pb_ratio), dividend_yield: toNum(fundamentals.dividend_yield), roe: toNum(fundamentals.roe), revenue_growth: toNum(fundamentals.revenue_growth), eps_growth: toNum(fundamentals.eps_growth) } : null;
 
@@ -391,21 +387,31 @@ async function buildLocalNseReport(symbol) {
 
     const bvps = parsed?.book_value_per_share || (equity > 0 && sharesOut > 0 ? equity / sharesOut : 0);
 
-    const kmItem = {
-      date: periodDate, marketCap: mc,
-      peRatio: f?.pe_ratio || (price > 0 && parsed?.eps > 0 ? price / parsed.eps : 0),
-      pbRatio: f?.pb_ratio || (price > 0 && bvps > 0 ? price / bvps : 0),
-      dividendYield: divYield, dividendYieldPercentage: divYield * 100,
-      roe: f?.roe || (parsed?.net_income && equity ? parsed.net_income / equity : 0),
-      revenueGrowth: f?.revenue_growth || 0,
-      epsGrowth: f?.eps_growth || parsed?.eps || 0, sharesOutstanding: sharesOut,
-      earningsYield: f?.pe_ratio > 0 ? 1 / f.pe_ratio : (price > 0 && parsed?.eps > 0 ? parsed.eps / price : 0),
-      revenuePerShare: sharesOut > 0 && parsed?.total_revenue ? parsed.total_revenue / sharesOut : 0,
-      netIncomePerShare: parsed?.eps || 0,
-      priceToSalesRatio: mc > 0 && parsed?.total_revenue ? mc / parsed.total_revenue : 0,
-      debtToEquity: totalDebt > 0 && equity > 0 ? totalDebt / equity : 0,
-      currentRatio: curAssets > 0 && curLiabs > 0 ? curAssets / curLiabs : 0,
-    };
+    function buildKmItem(p, d) {
+      if (!p) return null;
+      const pShares = p.shares_outstanding || (p.net_income > 0 && p.eps > 0 ? Math.round(p.net_income / p.eps) : 0);
+      const pEquity = p.shareholders_equity || 0;
+      const pBvps = p.book_value_per_share || (pEquity > 0 && pShares > 0 ? pEquity / pShares : 0);
+      return {
+        date: d, marketCap: mc,
+        peRatio: price > 0 && p.eps > 0 ? price / p.eps : (f?.pe_ratio || 0),
+        pbRatio: price > 0 && pBvps > 0 ? price / pBvps : (f?.pb_ratio || 0),
+        dividendYield: divYield, dividendYieldPercentage: divYield * 100,
+        roe: p.net_income && pEquity ? p.net_income / pEquity : (f?.roe || 0),
+        revenueGrowth: f?.revenue_growth || 0,
+        epsGrowth: f?.eps_growth || p.eps || 0,
+        sharesOutstanding: Math.round(pShares),
+        earningsYield: price > 0 && p.eps > 0 ? p.eps / price : 0,
+        revenuePerShare: pShares > 0 && p.total_revenue ? p.total_revenue / pShares : 0,
+        netIncomePerShare: p.eps || 0,
+        priceToSalesRatio: mc > 0 && p.total_revenue ? mc / p.total_revenue : 0,
+        debtToEquity: (p.total_debt || 0) > 0 && pEquity > 0 ? p.total_debt / pEquity : 0,
+        currentRatio: (p.current_assets || 0) > 0 && (p.current_liabilities || 0) > 0 ? p.current_assets / p.current_liabilities : 0,
+      };
+    }
+
+    const metHistory = validParsed.map(v => buildKmItem(v.parsed, v.periodDate)).filter(Boolean);
+    const kmItem = metHistory[0] || null;
 
     return {
       success: true, symbol: ticker, source: 'nse-upload',
@@ -419,10 +425,10 @@ async function buildLocalNseReport(symbol) {
           dayLow: 0, dayHigh: 0, yearLow: 0, yearHigh: 0, avgVolume: 0, open: 0,
           volume: 0, previousClose: 0, sharesOutstanding: sharesOut,
           eps: parsed?.eps || 0, pe: f?.pe_ratio || 0, lastUpdated: now }), marketCap: mc },
-        incomeStatement: incItem, incomeStatementHistory: incItem ? [incItem] : [],
-        balanceSheet: balItem, balanceSheetHistory: balItem ? [balItem] : [],
-        cashFlowStatement: cfItem, cashFlowStatementHistory: cfItem ? [cfItem] : [],
-        keyMetrics: kmItem, keyMetricsHistory: [kmItem],
+        incomeStatement: incItem, incomeStatementHistory: incHistory,
+        balanceSheet: balItem, balanceSheetHistory: balHistory,
+        cashFlowStatement: cfItem, cashFlowStatementHistory: cfHistory,
+        keyMetrics: kmItem, keyMetricsHistory: metHistory,
         dividendHistory: parsed?.dividend_per_share
           ? [{ date: periodDate, dividend: parsed.dividend_per_share, adjDividend: parsed.dividend_per_share }] : [],
         filings: [],
