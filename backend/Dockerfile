@@ -8,12 +8,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 python3
 # Install pnpm (workspace lockfile is used for deterministic installs)
 RUN npm install -g pnpm@10
 
-# Copy workspace files and backend manifest
+# Copy workspace files and manifests
 COPY pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY backend/package.json ./backend/
+COPY frontend/package.json ./frontend/
+RUN mkdir -p frontend/src frontend/public
 
 # Install backend production dependencies using the workspace lockfile
 RUN pnpm install --filter backend --prod --no-frozen-lockfile
+
+# Copy frontend source and build
+COPY frontend/ ./frontend/
+RUN cd frontend && npm install && npm run build
 
 # Copy backend source
 COPY backend/ ./backend/
