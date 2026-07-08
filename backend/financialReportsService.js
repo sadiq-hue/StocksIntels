@@ -349,7 +349,7 @@ async function buildLocalNseReport(symbol) {
 
     const balItem = parsed ? {
       date: periodDate, totalAssets: parsed.total_assets, totalLiabilities: parsed.total_liabilities,
-      totalEquity: parsed.shareholders_equity, cashAndCashEquivalents: null,
+      totalEquity: parsed.shareholders_equity, cashAndCashEquivalents: parsed.cash_and_equivalents,
       longTermDebt: null, totalDebt: parsed.total_debt,
       totalCurrentAssets: parsed.current_assets, totalCurrentLiabilities: parsed.current_liabilities,
       totalStockholdersEquity: parsed.shareholders_equity, retainedEarnings: parsed.retained_earnings,
