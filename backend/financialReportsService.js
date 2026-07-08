@@ -372,15 +372,20 @@ async function buildLocalNseReport(symbol) {
     const quote = await getQuote(quoteSymbol).catch(() => null);
     const price = quote?.price || 0;
     const hasExactShares = parsed?.shares_outstanding != null && parsed.shares_outstanding > 0;
-    const computedShares = parsed?.net_income && parsed?.eps ? Math.round(Math.abs(parsed.net_income / parsed.eps)) : 0;
-    const sharesOut = hasExactShares ? parsed.shares_outstanding : computedShares;
+    const equityShares = (parsed?.shareholders_equity > 0 && parsed?.book_value_per_share > 0)
+      ? Math.round(parsed.shareholders_equity / parsed.book_value_per_share) : 0;
+    const incomeShares = (parsed?.net_income && parsed?.eps && (parsed.net_income > 0 === parsed.eps > 0))
+      ? Math.round(Math.abs(parsed.net_income / parsed.eps)) : 0;
+    const sharesOut = hasExactShares ? parsed.shares_outstanding : (equityShares || incomeShares);
 
     const divYield = f?.dividend_yield || (parsed?.dividend_per_share && price > 0 ? parsed.dividend_per_share / price : 0);
     const mc = quote?.marketCap
       || (hasExactShares && price > 0 ? Math.round(price * sharesOut) : 0)
+      || (equityShares > 0 && price > 0 ? Math.round(price * equityShares) : 0)
       || f?.market_cap
+      || (incomeShares > 0 && price > 0 ? Math.round(price * incomeShares) : 0)
       || 0;
-    console.log(`[buildLocalNseReport] ${ticker}: quote.mc=${quote?.marketCap}, hasExactShares=${hasExactShares}, sharesOut=${sharesOut}, computedShares=${computedShares}, f.mc=${f?.market_cap}, price=${price}, mc=${mc}`);
+    console.log(`[buildLocalNseReport] ${ticker}: quote.mc=${quote?.marketCap}, hasExactShares=${hasExactShares}, equityShares=${equityShares}, incomeShares=${incomeShares}, sharesOut=${sharesOut}, f.mc=${f?.market_cap}, price=${price}, mc=${mc}`);
     // Ensure changesPercentage is computed if quote has change but no percentage
     if (quote && !quote.changesPercentage && quote.change && price > 0) {
       quote.changesPercentage = (quote.change / (price - quote.change)) * 100;
@@ -395,7 +400,11 @@ async function buildLocalNseReport(symbol) {
 
     function buildKmItem(p, d) {
       if (!p) return null;
-      const pShares = p.shares_outstanding || (p.net_income && p.eps ? Math.round(Math.abs(p.net_income / p.eps)) : 0);
+      const pEquityShares = (p.shareholders_equity > 0 && p.book_value_per_share > 0)
+        ? Math.round(p.shareholders_equity / p.book_value_per_share) : 0;
+      const pIncomeShares = (p.net_income && p.eps && (p.net_income > 0 === p.eps > 0))
+        ? Math.round(Math.abs(p.net_income / p.eps)) : 0;
+      const pShares = p.shares_outstanding || pEquityShares || pIncomeShares;
       const pEquity = p.shareholders_equity || 0;
       const pBvps = p.book_value_per_share || (pEquity > 0 && pShares > 0 ? pEquity / pShares : 0);
       return {
