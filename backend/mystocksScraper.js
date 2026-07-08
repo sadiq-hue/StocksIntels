@@ -53,6 +53,17 @@ async function scrapeStockPage(ticker) {
     const loMatch = html.match(/<b[^>]*id\s*=\s*rtLo[^>]*>\s*([0-9.,]+)\s*<\/b>/i);
     if (loMatch) low = parseFloat(loMatch[1].replace(/,/g, '')) || price;
 
+    let volume = 0;
+    const volMatch = html.match(/([\d,.]+)\s*([MKB])?\s*Volume/i);
+    if (volMatch) {
+      let volNum = parseFloat(volMatch[1].replace(/,/g, ''));
+      const suffix = (volMatch[2] || '').toUpperCase();
+      if (suffix === 'M') volNum *= 1000000;
+      else if (suffix === 'B') volNum *= 1000000000;
+      else if (suffix === 'K') volNum *= 1000;
+      volume = Math.round(volNum) || 0;
+    }
+
     let name = ticker;
     const titleMatch = html.match(/<title>([^<]+)\s+Realtime/i);
     if (titleMatch) name = titleMatch[1].trim();
@@ -60,7 +71,7 @@ async function scrapeStockPage(ticker) {
     return {
       ticker, name, price, change,
       changePercent: change && price ? (change / (price - change)) * 100 : 0,
-      volume: 0, previousClose: price - change, dayHigh: high, dayLow: low,
+      volume, previousClose: price - change, dayHigh: high, dayLow: low,
       currency: 'KES', market: 'NSE', provider: 'mystocks',
       timestamp: Math.floor(Date.now() / 1000),
     };
