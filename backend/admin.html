@@ -972,7 +972,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
                 <!-- Paste JSON area -->
                 <div class="mb-3 p-2 rounded" style="background:#fff;border:1px dashed #93c5fd">
                   <label class="text-xs text-gray-500 block mb-1">Paste JSON to auto-fill form, or enter manually below:</label>
-                  <textarea id="fsJsonPasteArea" class="input-field" rows="3" style="font-family:monospace;font-size:11px;resize:vertical" placeholder='Paste JSON or CSV (2 cols: field_name,value)&#10;{"total_assets":2147206575000,"eps":20.80}&#10;or&#10;total_assets, 2147206575000&#10;eps, 20.80' oninput="fillFormFromJson()"></textarea>
+                   <textarea id="fsJsonPasteArea" class="input-field" rows="6" style="font-family:monospace;font-size:11px;resize:vertical" placeholder='Paste JSON (all fields optional). Values in unit scale (e.g. millions):&#10;{"unit":"million","fiscal_year":2025,"ticker":"KCB",&#10; "income_statement":{"total_revenue":213800,"cost_of_revenue":61700,"gross_profit":152100,"operating_income":90900,"net_income_pat":66819,"cash_from_operations":50000},&#10; "balance_sheet":{"total_assets":2100000,"total_liabilities":1800000,"shareholders_equity":340600,"total_debt":90200,"current_assets":0,"current_liabilities":0,"retained_earnings":290200,"cash_and_equivalents":0,"book_value":0},&#10; "per_share":{"earnings_per_share":21.18,"dividend_per_share":7.00,"book_value_per_share":0},&#10; "pe_ratio":3.91}' oninput="fillFormFromJson()"></textarea>
                   <span id="fsJsonPasteStatus" class="text-xs text-gray-500 ml-2"></span>
                 </div>
                 <!-- Form fields -->
