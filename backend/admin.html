@@ -3614,24 +3614,32 @@ function fillFormFromJson() {
         else if (v !== null) flat[k] = v;
       }
     })(data);
+    // Helper: strip year suffix (e.g. total_revenue_2025 -> total_revenue)
+    const stripYear = s => s.replace(/_\d{4}$/, '');
     // Detect scale from JSON
     let scale = 1;
     if (/million/i.test(data.unit || '')) scale = 1000000;
     else if (/thousand/i.test(data.unit || '')) scale = 1000;
     // Fields that must NOT be scaled (already in base units)
     const noScale = new Set(['eps','dividend_per_share','dps','book_value_per_share','pe_ratio','fiscal_year']);
-    // Map canonical keys
+    // Map canonical keys (try exact match, then with year suffix stripped)
     for (const [key, fieldId] of Object.entries(fieldMap)) {
-      if (flat[key] !== undefined) {
-        document.getElementById(fieldId).value = noScale.has(key) ? flat[key] : (scale > 1 ? flat[key] * scale : flat[key]);
+      let val = flat[key];
+      if (val === undefined) val = flat[stripYear(key)];
+      if (val !== undefined) {
+        document.getElementById(fieldId).value = noScale.has(key) ? val : (scale > 1 ? val * scale : val);
         filled++;
       }
     }
-    // Map alternative keys
+    // Map alternative keys (try exact match, then with year suffix stripped)
     for (const [alt, canon] of Object.entries(altMap)) {
-      if (flat[alt] !== undefined && fieldMap[canon]) {
-        document.getElementById(fieldMap[canon]).value = noScale.has(canon) ? flat[alt] : (scale > 1 ? flat[alt] * scale : flat[alt]);
-        filled++;
+      if (fieldMap[canon]) {
+        let val = flat[alt];
+        if (val === undefined) val = flat[stripYear(alt)];
+        if (val !== undefined) {
+          document.getElementById(fieldMap[canon]).value = noScale.has(canon) ? val : (scale > 1 ? val * scale : val);
+          filled++;
+        }
       }
     }
     // Period end / type from metadata (handle multiple key names)

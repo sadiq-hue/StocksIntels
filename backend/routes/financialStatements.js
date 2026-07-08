@@ -643,8 +643,15 @@ function normalizeFinancialData(raw) {
       out[key] = value;
     }
   }
+  // Strip year suffixes (e.g. total_revenue_2025 -> total_revenue) to canonical keys
+  for (const k of Object.keys(out)) {
+    const noYear = k.replace(/_\d{4}$/, '');
+    if (noYear !== k && out[noYear] === undefined) {
+      out[noYear] = out[k];
+    }
+  }
   // Map alternative key names to standard ones
-  const keyMap = { net_income_pat: 'net_income', earnings_per_share: 'eps', profit_after_tax: 'net_income', pat: 'net_income', dividend_per_share: 'dps' };
+  const keyMap = { net_income_pat: 'net_income', earnings_per_share: 'eps', profit_after_tax: 'net_income', pat: 'net_income', dividend_per_share: 'dps', earnings_per_share_eps: 'eps', dividend_per_share_dps: 'dps' };
   for (const [src, dest] of Object.entries(keyMap)) {
     if (out[src] !== undefined && out[dest] === undefined) {
       out[dest] = out[src];
