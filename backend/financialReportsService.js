@@ -380,6 +380,7 @@ async function buildLocalNseReport(symbol) {
       || f?.market_cap
       || (computedShares > 0 && price > 0 ? Math.round(price * computedShares) : 0)
       || 0;
+    console.log(`[buildLocalNseReport] ${ticker}: quote.mc=${quote?.marketCap}, hasExactShares=${hasExactShares}, sharesOut=${sharesOut}, computedShares=${computedShares}, f.mc=${f?.market_cap}, price=${price}, mc=${mc}`);
     // Ensure changesPercentage is computed if quote has change but no percentage
     if (quote && !quote.changesPercentage && quote.change && price > 0) {
       quote.changesPercentage = (quote.change / (price - quote.change)) * 100;

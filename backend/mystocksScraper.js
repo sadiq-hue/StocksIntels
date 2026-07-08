@@ -59,30 +59,30 @@ async function scrapeStockPage(ticker) {
       const jsonStr = dataDivMatch[1].replace(/&quot;/g, '"');
       try {
         const data = JSON.parse(jsonStr);
-        if (data && Array.isArray(data.data)) {
-          // Market cap is at index 10, but field order can vary; search by label
-          for (const item of data.data) {
-            if (typeof item === 'string' && /(market\s*cap|mkt\s*cap|mc)/i.test(item)) {
-              const idx = data.data.indexOf(item) + 1;
-              if (idx < data.data.length) {
-                const mcStr = String(data.data[idx]);
-                const mcMatch = mcStr.match(/([\d,.]+)\s*([MBT])?/i);
-                if (mcMatch) {
-                  let mcNum = parseFloat(mcMatch[1].replace(/,/g, ''));
-                  const sfx = (mcMatch[2] || '').toUpperCase();
-                  if (sfx === 'T') mcNum *= 1e12;
-                  else if (sfx === 'B') mcNum *= 1e9;
-                  else if (sfx === 'M') mcNum *= 1e6;
-                  marketCap = Math.round(mcNum) || 0;
-                }
-              }
-              break;
-            }
+        console.log(`[myStocks] ${ticker}: rtDataJson parsed, keys=${Object.keys(data).join(',')}, data.length=${data.data?.length}`);
+        if (data && Array.isArray(data.data) && data.data.length >= 11) {
+          const raw10 = data.data[10];
+          console.log(`[myStocks] ${ticker}: data.data[10]=${JSON.stringify(raw10)}`);
+          const mcStr = String(raw10 ?? '');
+          const mcMatch = mcStr.match(/([\d,.]+)\s*([MBT])?/i);
+          if (mcMatch) {
+            let mcNum = parseFloat(mcMatch[1].replace(/,/g, ''));
+            const sfx = (mcMatch[2] || '').toUpperCase();
+            if (sfx === 'T') mcNum *= 1e12;
+            else if (sfx === 'B') mcNum *= 1e9;
+            else if (sfx === 'M') mcNum *= 1e6;
+            marketCap = Math.round(mcNum) || 0;
+          } else {
+            console.log(`[myStocks] ${ticker}: no number match in data.data[10]=${mcStr}`);
           }
+        } else {
+          console.log(`[myStocks] ${ticker}: data array too short or missing (length=${data.data?.length})`);
         }
       } catch (e) {
         console.warn(`[myStocks] Failed to parse data JSON for ${ticker}: ${e.message}`);
       }
+    } else {
+      console.log(`[myStocks] ${ticker}: rtDataJson div NOT FOUND in HTML`);
     }
 
     let volume = 0;
