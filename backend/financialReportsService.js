@@ -341,6 +341,7 @@ async function buildLocalNseReport(symbol) {
 
     const incItem = parsed ? {
       date: periodDate, revenue: parsed.total_revenue, netIncome: parsed.net_income,
+      netIncomeRatio: parsed.net_income > 0 && parsed.total_revenue > 0 ? parsed.net_income / parsed.total_revenue : 0,
       grossProfit: parsed.total_revenue != null && parsed.cost_of_revenue != null ? parsed.total_revenue - parsed.cost_of_revenue : null,
       ebitda: null, eps: parsed.eps,
       costOfRevenue: parsed.cost_of_revenue, operatingExpenses: null,
