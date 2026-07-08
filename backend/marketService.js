@@ -22,7 +22,7 @@ function getCompanyName(symbol) {
   const ticker = symbol.replace('NSE:', '').toUpperCase();
   const names = {
     'SCOM': 'Safaricom', 'EQTY': 'Equity Group', 'KCB': 'KCB Group', 'EABL': 'EABL',
-    'ABSA': 'Absa Bank', 'SBIC': 'Stanbic Holdings', 'KLG': 'Kenya Airways',
+    'ABSA': 'Absa Bank', 'SBIC': 'Stanbic Holdings', 'KQ': 'Kenya Airways', 'KLG': 'Kenya Airways',
     'AAPL': 'Apple Inc.', 'MSFT': 'Microsoft Corp.', 'NVDA': 'NVIDIA Corp.',
     'TSLA': 'Tesla Inc.', 'AMZN': 'Amazon.com Inc.', 'GOOGL': 'Alphabet Inc.',
     'META': 'Meta Platforms', 'NFLX': 'Netflix Inc.', 'JPM': 'JPMorgan Chase', 'V': 'Visa Inc.',
