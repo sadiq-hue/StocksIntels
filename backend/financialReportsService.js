@@ -321,8 +321,6 @@ async function buildLocalNseReport(symbol) {
           parsed[dest] = src === 'shares_outstanding_millions' ? parsed[src] * 1000000 : parsed[src];
         }
       }
-        }
-      }
     }
     console.log(`[buildLocalNseReport] financial_statements: rows=${stmtResult.rows.length}, hasParsed=${!!parsed}, keys=${parsed ? Object.keys(parsed).join(',') : 'none'}`);
 
