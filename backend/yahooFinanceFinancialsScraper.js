@@ -337,6 +337,9 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
   }
 
   // Annual: combine fiscal years from quoteSummary + trailing TTM
+  // incomeStatementHistoryQuarterly has almost no data since Nov 2024 (only totalRevenue/netIncome
+  // are populated). Use fundamentalsTimeSeries instead — it returns full financial fields (EPS,
+  // EBITDA, grossProfit, etc.) when the required module parameter is provided.
   const [annualData, fts, yf2Quarterly] = await Promise.allSettled([
     fetchAnnualIncomeHistory(symbol),
     fetchAllFundamentals(symbol),
@@ -344,8 +347,14 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
       try {
         const { default: YahooFinance } = await import('yahoo-finance2');
         const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-        const qs = await yf.quoteSummary(symbol, { modules: ['incomeStatementHistoryQuarterly'] });
-        return qs?.incomeStatementHistoryQuarterly?.incomeStatementHistory || null;
+        const periodEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const periodStart = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const fts = await yf.fundamentalsTimeSeries(symbol, {
+          period1: periodStart,
+          period2: periodEnd,
+          module: 'financials',
+        });
+        return fts || null;
       } catch { return null; }
     })(),
   ]);
@@ -392,24 +401,26 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
     'totalOperatingIncomeAsReported', 'normalizedEBITDA',
   ];
   let ttmAdded = false;
-  // a) Try yahoo-finance2 incomeStatementHistoryQuarterly (same API that works for annual)
+  // a) Try yahoo-finance2 fundamentalsTimeSeries (replaced incomeStatementHistoryQuarterly which
+  //    has returned almost no financial fields since Nov 2024)
   if (yf2Quarterly.status === 'fulfilled' && yf2Quarterly.value) {
+    // fundamentalsTimeSeries returns items in ascending date order; sort descending first
+    // so slice(0,4) takes the 4 most recent quarters
     const quarterly = yf2Quarterly.value
       .filter(item => item.totalRevenue != null)
+      .sort((a, b) => (getDateStr(b.date) || '').localeCompare(getDateStr(a.date) || ''))
       .slice(0, 4)
       .map(item => ({
         ...item,
         periodType: '3M',
-        date: getDateStr(item.endDate) || item.date,
-        netIncome: item.netIncomeApplicableToCommonShares ?? item.netIncome ?? 0,
-        netIncomeCommonStockholders: item.netIncomeFromContinuingOps ?? item.netIncomeCommonStockholders ?? 0,
+        date: getDateStr(item.date),
+        netIncome: item.netIncome ?? 0,
+        netIncomeCommonStockholders: item.netIncomeCommonStockholders ?? item.netIncome ?? 0,
         basicEPS: item.basicEPS ?? 0,
         dilutedEPS: item.dilutedEPS ?? 0,
         operatingRevenue: item.operatingRevenue ?? item.totalRevenue,
-        totalExpenses: item.totalOperatingExpenses ?? item.totalExpenses ?? 0,
-        ebitda: item.ebitda ?? item.normalizedEBITDA ?? 0,
-      }))
-      .sort((a, b) => ((b.date || b.endDate || '')).localeCompare(a.date || a.endDate || ''));
+        totalExpenses: item.totalExpenses ?? item.totalOperatingExpenses ?? 0,
+      }));
     if (quarterly.length >= 4) {
       const windows = computeTTM(quarterly, ttmKeys);
       if (windows.length > 0) {
