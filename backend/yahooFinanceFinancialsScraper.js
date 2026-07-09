@@ -1,7 +1,20 @@
 const axios = require('axios');
 const yahooService = require('./yahooService');
+const proxyService = require('./proxyService');
 const PersistentCache = require('./cacheService');
 const yahooFinanceCache = new PersistentCache('yahoo', 24 * 60 * 60 * 1000);
+
+async function createYf() {
+  const { default: YahooFinance } = await import('yahoo-finance2');
+  try {
+    const proxy = proxyService.getNextProxy();
+    if (proxy) {
+      const agent = proxyService.createProxyAgent(proxy);
+      return new YahooFinance({ suppressNotices: ['yahooSurvey'], fetchOptions: { agent } });
+    }
+  } catch {}
+  return new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+}
 
 function cacheGet(key) {
   return yahooFinanceCache.get(key);
@@ -110,8 +123,7 @@ async function fetchQuoteSummary(symbol, modules) {
 
   // 3. Try yahoo-finance2 directly (bypasses yahooService circuit breaker)
   try {
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const yf = await createYf();
     const yf2qs = await yf.quoteSummary(symbol.replace(/\./g, '-'), { modules });
     if (yf2qs) {
       const normalized = flattenYahooObject(yf2qs);
@@ -316,8 +328,7 @@ async function fetchAnnualIncomeHistory(symbol) {
   if (cached) return cached;
 
   try {
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const yf = await createYf();
     const qs = await yf.quoteSummary(symbol, { modules: ['incomeStatementHistory'] });
     const hist = qs?.incomeStatementHistory?.incomeStatementHistory || [];
     return cacheSet(cacheKey, hist);
@@ -345,8 +356,7 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
     fetchAllFundamentals(symbol),
     (async () => {
       try {
-        const { default: YahooFinance } = await import('yahoo-finance2');
-        const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+        const yf = await createYf();
         const periodEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         const periodStart = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         const fts = await yf.fundamentalsTimeSeries(symbol, {

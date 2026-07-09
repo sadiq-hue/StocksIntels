@@ -1,9 +1,22 @@
 require('dotenv').config();
 const marketService = require('./marketService');
 const edgarService = require('./edgarService');
+const proxyService = require('./proxyService');
 const yahooFinanceScraper = require('./yahooFinanceFinancialsScraper');
 const { pool } = require('./db');
 const PersistentCache = require('./cacheService');
+
+async function createYf() {
+  const { default: YahooFinance } = await import('yahoo-finance2');
+  try {
+    const proxy = proxyService.getNextProxy();
+    if (proxy) {
+      const agent = proxyService.createProxyAgent(proxy);
+      return new YahooFinance({ suppressNotices: ['yahooSurvey'], fetchOptions: { agent } });
+    }
+  } catch {}
+  return new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+}
 
 const FINANCIALS_PROVIDER = process.env.FINANCIALS_PROVIDER || 'yahoo-finance';
 const financialCache = new PersistentCache('finrep', 24 * 60 * 60 * 1000);
@@ -39,8 +52,7 @@ async function ensureTTMValues(symbol, incHist) {
 
   // Get shares outstanding & forwardPE from defaultKeyStatistics
   try {
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const yf = await createYf();
     const qs = await yf.quoteSummary(symbol, { modules: ['defaultKeyStatistics'] });
     const raw = qs?.defaultKeyStatistics?.sharesOutstanding;
     sharesOut = raw?.raw ?? raw ?? 0;
@@ -51,8 +63,7 @@ async function ensureTTMValues(symbol, incHist) {
   // Strategy 1: fundamentalsTimeSeries (full data — revenue, netIncome, basicEPS)
   if (!ttmRevenue || !ttmNetIncome || !ttmEps) {
     try {
-      const { default: YahooFinance } = await import('yahoo-finance2');
-      const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+      const yf = await createYf();
       const periodEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const periodStart = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const fts = await yf.fundamentalsTimeSeries(symbol, { period1: periodStart, period2: periodEnd, module: 'financials' });
@@ -72,8 +83,7 @@ async function ensureTTMValues(symbol, incHist) {
   // Strategy 2: incomeStatementHistoryQuarterly (limited — only totalRevenue, netIncome)
   if (!ttmNetIncome) {
     try {
-      const { default: YahooFinance } = await import('yahoo-finance2');
-      const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+      const yf = await createYf();
       const qs = await yf.quoteSummary(symbol, { modules: ['incomeStatementHistoryQuarterly'] });
       const hist = qs?.incomeStatementHistoryQuarterly?.incomeStatementHistory || [];
       if (hist.length >= 4) {
