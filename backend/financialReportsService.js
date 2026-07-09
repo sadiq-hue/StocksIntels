@@ -31,13 +31,13 @@ async function ensureTTMValues(symbol, incHist) {
     return { revenue: incHist[0].revenue, netIncome: incHist[0].netIncome, eps: incHist[0].eps, forwardPE: 0 };
   }
 
-  let ttmRevenue = incHist?.[0]?.revenue || 0;
-  let ttmNetIncome = incHist?.[0]?.netIncome || 0;
-  let ttmEps = incHist?.[0]?.eps || 0;
+  let ttmRevenue = 0;
+  let ttmNetIncome = 0;
+  let ttmEps = 0;
   let sharesOut = 0;
   let forwardPE = 0;
 
-  // Get shares outstanding & forwardPE from defaultKeyStatistics (confirmed to work on Railway)
+  // Get shares outstanding & forwardPE from defaultKeyStatistics
   try {
     const { default: YahooFinance } = await import('yahoo-finance2');
     const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
@@ -49,7 +49,7 @@ async function ensureTTMValues(symbol, incHist) {
   } catch {}
 
   // Strategy 1: fundamentalsTimeSeries (full data — revenue, netIncome, basicEPS)
-  if (!ttmEps || !ttmNetIncome) {
+  if (!ttmRevenue || !ttmNetIncome || !ttmEps) {
     try {
       const { default: YahooFinance } = await import('yahoo-finance2');
       const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });

@@ -3539,6 +3539,8 @@ app.get('/api/financials/debug/:symbol', async (req, res) => {
     const full = await getFinancialReport(symbol, 'annual', 4).catch(e => ({ error: e.message }));
     const yahooScraper = require('./yahooFinanceFinancialsScraper');
     const scraperResult = await yahooScraper.getFinancialReport(symbol, 'annual', 4).catch(e => ({ error: e.message }));
+    const edgarService = require('./edgarService');
+    const edgarResult = await edgarService.getFinancialReportFromEdgar(symbol, 'annual', 4).catch(e => ({ error: e.message }));
     res.json({
       symbol,
       fullReportSuccess: full?.success,
@@ -3553,6 +3555,10 @@ app.get('/api/financials/debug/:symbol', async (req, res) => {
       scraperResultCount: scraperResult?.data?.incomeStatementHistory?.length || 0,
       scraperError: scraperResult?.error,
       scraperIncomeHistory: (scraperResult?.data?.incomeStatementHistory || []).slice(0, 2),
+      edgarResultSuccess: edgarResult?.success,
+      edgarResultCount: edgarResult?.data?.incomeStatementHistory?.length || 0,
+      edgarError: edgarResult?.error,
+      edgarIncomeHistory: (edgarResult?.data?.incomeStatementHistory || []).slice(0, 2),
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
