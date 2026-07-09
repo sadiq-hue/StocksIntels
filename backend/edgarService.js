@@ -667,7 +667,7 @@ async function getTTMFromEdgar(symbol) {
 
   // For each metric, group by fy+fp, prefer entries with frame ending in 'I',
   // then prefer entries without frame (current period) over entries with frame (comparisons),
-  // then de-cumulate to get standalone quarters, then take last 4
+  // then prefer larger values (YTD cumulative > restated prior), then de-cumulate
   function bestPerQuarter(entries) {
     const best = {};
     for (const e of entries) {
@@ -677,12 +677,11 @@ async function getTTMFromEdgar(symbol) {
       if (!existing) {
         best[key] = e;
       } else if (e.frame && e.frame.endsWith('I')) {
-        // Prefer YTD cumulative entries
         best[key] = e;
       } else if (!e.frame && existing.frame) {
-        // Prefer current-period entries (no frame) over restated comparisons
         best[key] = e;
-      } else if (e.fp === 'FY' && (!existing.frame || !existing.frame.endsWith('I'))) {
+      } else if (e.val > existing.val) {
+        // Prefer larger value — current-period YTD cumulative is always >= any restated entry
         best[key] = e;
       }
     }
