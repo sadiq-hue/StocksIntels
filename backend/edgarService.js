@@ -617,28 +617,32 @@ async function getTTMFromEdgar(symbol) {
 
   const facts = data.facts?.['us-gaap'] || {};
 
-  function getAllEntries(facts, tagKeys) {
+  function getQuarterlyEntries(facts, tagKeys) {
     for (const tag of tagKeys) {
       const entries = factLookup(facts, tag);
       if (!entries) continue;
       const units = entries.units;
       const usd = units?.USD || units?.USD_per_share || units?.['USD/shares'] || units?.shares || units?.pure;
       if (!usd || usd.length === 0) continue;
-      // Only include YTD cumulative entries (frame ending in 'I') for quarters, and FY for annual
-      return usd.filter(e => e.fy && e.fp && (e.fp === 'FY' || (e.fp.startsWith('Q') && e.frame && e.frame.endsWith('I'))));
+      // Separate YTD cumulative quarters (frame ends with 'I') and full-year entries
+      const quarters = usd.filter(e => e.fy && e.fp && e.fp.startsWith('Q') && e.frame && e.frame.endsWith('I'));
+      const fy = usd.filter(e => e.fy && e.fp === 'FY' && e.frame && !e.frame.endsWith('I'));
+      return { quarters, fy };
     }
-    return [];
+    return null;
   }
 
-  function deCumulateToStandalone(entries) {
-    const groups = {};
-    for (const e of entries) {
-      if (!groups[e.fy]) groups[e.fy] = [];
-      groups[e.fy].push(e);
+  function computeTtmFromCumulative(quarters, fyEntries) {
+    // Group quarterly entries by fy, sort within each fy
+    const byFy = {};
+    for (const e of quarters) {
+      if (!byFy[e.fy]) byFy[e.fy] = [];
+      byFy[e.fy].push(e);
     }
+    // For each FY with quarterly data, compute standalone quarter values
     const standalone = [];
-    const order = { Q1: 1, Q2: 2, Q3: 3, Q4: 4, FY: 5 };
-    for (const [fy, list] of Object.entries(groups)) {
+    const order = { Q1: 1, Q2: 2, Q3: 3 };
+    for (const [fy, list] of Object.entries(byFy)) {
       const sorted = list.sort((a, b) => (order[a.fp] || 0) - (order[b.fp] || 0));
       let prev = 0;
       for (const e of sorted) {
@@ -648,28 +652,38 @@ async function getTTMFromEdgar(symbol) {
         }
         prev = e.val;
       }
+      // Compute Q4 as FY total minus Q3 cumulative
+      const fyEntry = fyEntries.find(e => e.fy === parseInt(fy));
+      if (fyEntry && fyEntry.val > prev) {
+        standalone.push({ fy: parseInt(fy), fp: 'Q4', val: fyEntry.val - prev, filed: fyEntry.filed || `${fy}-12-31` });
+      }
     }
-    return standalone.sort((a, b) => (b.filed || '').localeCompare(a.filed || ''));
+
+    // Sort by filing date descending, take last 4
+    const sorted = standalone.sort((a, b) => (b.filed || '').localeCompare(a.filed || ''));
+    return sorted.slice(0, 4);
   }
 
-  const revAll = getAllEntries(facts, US_GAAP_TAGS.revenue);
-  const niAll = getAllEntries(facts, US_GAAP_TAGS.netIncome);
-  const epsAll = getAllEntries(facts, US_GAAP_TAGS.epsBasic);
-  const epsDilAll = getAllEntries(facts, US_GAAP_TAGS.epsDiluted);
+  const revData = getQuarterlyEntries(facts, US_GAAP_TAGS.revenue);
+  const niData = getQuarterlyEntries(facts, US_GAAP_TAGS.netIncome);
+  const epsData = getQuarterlyEntries(facts, US_GAAP_TAGS.epsBasic);
+  const epsDilData = getQuarterlyEntries(facts, US_GAAP_TAGS.epsDiluted);
 
-  if (revAll.length === 0) return null;
+  if (!revData || revData.quarters.length === 0) return null;
 
-  const revQ = deCumulateToStandalone(revAll).slice(0, 4);
-  const niQ = deCumulateToStandalone(niAll).slice(0, 4);
-  const epsQ = deCumulateToStandalone(epsAll).slice(0, 4);
-  const epsDilQ = deCumulateToStandalone(epsDilAll).slice(0, 4);
+  const revQ = computeTtmFromCumulative(revData.quarters, revData.fy);
+  const niQ = computeTtmFromCumulative(niData?.quarters || [], niData?.fy || []);
+  const epsQ = computeTtmFromCumulative(epsData?.quarters || [], epsData?.fy || []);
+  const epsDilQ = computeTtmFromCumulative(epsDilData?.quarters || [], epsDilData?.fy || []);
+
+  if (!revQ || revQ.length < 4) return null;
 
   return {
     revenue: revQ.reduce((s, i) => s + i.val, 0),
-    netIncome: niQ.reduce((s, i) => s + i.val, 0),
-    eps: epsQ.reduce((s, i) => s + i.val, 0),
-    epsdiluted: epsDilQ.reduce((s, i) => s + i.val, 0),
-    periods: revQ.map(i => `FY${i.fy} Q${i.fp.replace('Q','')}`).join(', '),
+    netIncome: niQ ? niQ.reduce((s, i) => s + i.val, 0) : 0,
+    eps: epsQ ? epsQ.reduce((s, i) => s + i.val, 0) : 0,
+    epsdiluted: epsDilQ ? epsDilQ.reduce((s, i) => s + i.val, 0) : 0,
+    periods: revQ.map(i => `FY${i.fy} ${i.fp}`).join(', '),
   };
 }
 
