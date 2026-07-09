@@ -608,6 +608,70 @@ async function getFinancialReportFromEdgar(symbol, period = 'annual', limit = 4)
   }
 }
 
+async function getTTMFromEdgar(symbol) {
+  const cik = cikLookup(symbol);
+  if (!cik) return null;
+
+  const data = await fetchCompanyFacts(cik);
+  if (!data) return null;
+
+  const facts = data.facts?.['us-gaap'] || {};
+
+  function getAllEntries(facts, tagKeys) {
+    for (const tag of tagKeys) {
+      const entries = factLookup(facts, tag);
+      if (!entries) continue;
+      const units = entries.units;
+      const usd = units?.USD || units?.USD_per_share || units?.['USD/shares'] || units?.shares || units?.pure;
+      if (!usd || usd.length === 0) continue;
+      return usd.filter(e => e.fy && e.fp && (e.fp === 'FY' || e.fp.startsWith('Q')));
+    }
+    return [];
+  }
+
+  function deCumulateToStandalone(entries) {
+    const groups = {};
+    for (const e of entries) {
+      if (!groups[e.fy]) groups[e.fy] = [];
+      groups[e.fy].push(e);
+    }
+    const standalone = [];
+    const order = { Q1: 1, Q2: 2, Q3: 3, Q4: 4, FY: 5 };
+    for (const [fy, list] of Object.entries(groups)) {
+      const sorted = list.sort((a, b) => (order[a.fp] || 0) - (order[b.fp] || 0));
+      let prev = 0;
+      for (const e of sorted) {
+        const val = e.val - prev;
+        if (!isNaN(val) && val >= 0) {
+          standalone.push({ fy: parseInt(fy), fp: e.fp, val, filed: e.filed || `${fy}-12-31` });
+        }
+        prev = e.val;
+      }
+    }
+    return standalone.sort((a, b) => (b.filed || '').localeCompare(a.filed || ''));
+  }
+
+  const revAll = getAllEntries(facts, US_GAAP_TAGS.revenue);
+  const niAll = getAllEntries(facts, US_GAAP_TAGS.netIncome);
+  const epsAll = getAllEntries(facts, US_GAAP_TAGS.epsBasic);
+  const epsDilAll = getAllEntries(facts, US_GAAP_TAGS.epsDiluted);
+
+  if (revAll.length === 0) return null;
+
+  const revQ = deCumulateToStandalone(revAll).slice(0, 4);
+  const niQ = deCumulateToStandalone(niAll).slice(0, 4);
+  const epsQ = deCumulateToStandalone(epsAll).slice(0, 4);
+  const epsDilQ = deCumulateToStandalone(epsDilAll).slice(0, 4);
+
+  return {
+    revenue: revQ.reduce((s, i) => s + i.val, 0),
+    netIncome: niQ.reduce((s, i) => s + i.val, 0),
+    eps: epsQ.reduce((s, i) => s + i.val, 0),
+    epsdiluted: epsDilQ.reduce((s, i) => s + i.val, 0),
+    periods: revQ.map(i => `FY${i.fy} Q${i.fp.replace('Q','')}`).join(', '),
+  };
+}
+
 function clearCache() {
   cache.clear();
 }
@@ -628,5 +692,6 @@ module.exports = {
   getFilings,
   getFinancialReportFromEdgar,
   getProviderStatus,
+  getTTMFromEdgar,
   clearCache,
 };

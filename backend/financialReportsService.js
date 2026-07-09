@@ -98,6 +98,18 @@ async function ensureTTMValues(symbol, incHist) {
     } catch {}
   }
 
+  // Strategy 3: SEC EDGAR quarterly data (free, no API key needed for US stocks)
+  if (!ttmNetIncome || !ttmEps) {
+    try {
+      const edgarTtm = await edgarService.getTTMFromEdgar(symbol);
+      if (edgarTtm && edgarTtm.revenue > 0 && edgarTtm.netIncome > 0) {
+        ttmRevenue = edgarTtm.revenue;
+        ttmNetIncome = edgarTtm.netIncome;
+        if (!ttmEps && edgarTtm.eps > 0) ttmEps = edgarTtm.eps;
+      }
+    } catch {}
+  }
+
   // If we still have no EPS but have sharesOutstanding and TTM netIncome, compute EPS
   if (!ttmEps && ttmNetIncome > 0 && sharesOut > 0) {
     ttmEps = ttmNetIncome / sharesOut;
