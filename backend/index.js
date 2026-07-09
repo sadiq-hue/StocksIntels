@@ -3531,6 +3531,28 @@ app.use('/api/groups', ...authSubs);
 app.use('/api/chat', ...authSubs);
 app.use('/api/conversations', ...authSubs);
 app.use('/api/notifications', ...authSubs);
+
+// Public financials debug endpoint (no auth required)
+app.get('/api/financials/debug/:symbol', async (req, res) => {
+  try {
+    const symbol = req.params.symbol.toUpperCase();
+    const income = await getIncomeStatement(symbol).catch(e => ({ error: e.message }));
+    const ttm = await ensureTTMValues(symbol, income?.incomeStatementHistory || []).catch(e => ({ error: e.message }));
+    res.json({
+      symbol,
+      incomeStatementItemCount: income?.incomeStatementHistory?.length || 0,
+      latestPeriod: income?.incomeStatementHistory?.[0]?.period || null,
+      latestRevenue: income?.incomeStatementHistory?.[0]?.revenue || 0,
+      latestNetIncome: income?.incomeStatementHistory?.[0]?.netIncome || 0,
+      latestEps: income?.incomeStatementHistory?.[0]?.eps || 0,
+      ttmFallback: ttm,
+      rawIncomeStatement: income?.incomeStatementHistory?.slice(0, 4) || [],
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.use('/api/financials', ...authSubs);
 app.use('/api/user', ...authSubs);
 app.use('/api/users', ...authSubs);
@@ -4687,26 +4709,6 @@ app.get('/api/financials/status', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
-  }
-});
-
-app.get('/api/financials/debug/:symbol', async (req, res) => {
-  try {
-    const symbol = req.params.symbol.toUpperCase();
-    const income = await getIncomeStatement(symbol).catch(e => ({ error: e.message }));
-    const ttm = await ensureTTMValues(symbol, income?.incomeStatementHistory || []).catch(e => ({ error: e.message }));
-    res.json({
-      symbol,
-      incomeStatementItemCount: income?.incomeStatementHistory?.length || 0,
-      latestPeriod: income?.incomeStatementHistory?.[0]?.period || null,
-      latestRevenue: income?.incomeStatementHistory?.[0]?.revenue || 0,
-      latestNetIncome: income?.incomeStatementHistory?.[0]?.netIncome || 0,
-      latestEps: income?.incomeStatementHistory?.[0]?.eps || 0,
-      ttmFallback: ttm,
-      rawIncomeStatement: income?.incomeStatementHistory?.slice(0, 4) || [],
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
   }
 });
 
