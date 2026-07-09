@@ -16,6 +16,87 @@ function cacheSet(key, data) {
   return financialCache.set(key, data);
 }
 
+function getDateStr(d) {
+  if (!d) return null;
+  if (d instanceof Date) return d.toISOString().split('T')[0];
+  if (typeof d === 'string') return d.split('T')[0];
+  return String(d);
+}
+
+// Fallback TTM computation when the scraper's fundamentalTimeSeries call fails (e.g. on Railway).
+// Tries multiple strategies so the enrichment layer always has meaningful trailing 12-month values.
+async function ensureTTMValues(symbol, incHist) {
+  // If the scraper already produced a TTM item with EPS, use it as-is
+  if (incHist?.[0]?.period === 'ttm' && incHist[0].eps > 0) {
+    return { revenue: incHist[0].revenue, netIncome: incHist[0].netIncome, eps: incHist[0].eps };
+  }
+
+  let ttmRevenue = incHist?.[0]?.revenue || 0;
+  let ttmNetIncome = incHist?.[0]?.netIncome || 0;
+  let ttmEps = incHist?.[0]?.eps || 0;
+  let sharesOut = 0;
+
+  // Get shares outstanding from defaultKeyStatistics (confirmed to work on Railway)
+  try {
+    const { default: YahooFinance } = await import('yahoo-finance2');
+    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const qs = await yf.quoteSummary(symbol, { modules: ['defaultKeyStatistics'] });
+    const raw = qs?.defaultKeyStatistics?.sharesOutstanding;
+    sharesOut = raw?.raw ?? raw ?? 0;
+  } catch {}
+
+  // Strategy 1: fundamentalsTimeSeries (full data — revenue, netIncome, basicEPS)
+  if (!ttmEps || !ttmNetIncome) {
+    try {
+      const { default: YahooFinance } = await import('yahoo-finance2');
+      const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+      const periodEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const periodStart = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const fts = await yf.fundamentalsTimeSeries(symbol, { period1: periodStart, period2: periodEnd, module: 'financials' });
+      if (fts && fts.length >= 4) {
+        const sorted = fts.filter(i => i.totalRevenue != null)
+          .sort((a, b) => (getDateStr(b.date) || '').localeCompare(getDateStr(a.date) || ''))
+          .slice(0, 4);
+        if (sorted.length >= 4) {
+          ttmRevenue = sorted.reduce((s, i) => s + (i.totalRevenue || 0), 0);
+          ttmNetIncome = sorted.reduce((s, i) => s + (i.netIncome || 0), 0);
+          ttmEps = sorted.reduce((s, i) => s + (i.basicEPS || 0), 0);
+        }
+      }
+    } catch {}
+  }
+
+  // Strategy 2: incomeStatementHistoryQuarterly (limited — only totalRevenue, netIncome)
+  if (!ttmNetIncome) {
+    try {
+      const { default: YahooFinance } = await import('yahoo-finance2');
+      const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+      const qs = await yf.quoteSummary(symbol, { modules: ['incomeStatementHistoryQuarterly'] });
+      const hist = qs?.incomeStatementHistoryQuarterly?.incomeStatementHistory || [];
+      if (hist.length >= 4) {
+        const sorted = hist.filter(i => i.totalRevenue != null)
+          .sort((a, b) => (getDateStr(b.endDate) || '').localeCompare(getDateStr(a.endDate) || ''))
+          .slice(0, 4);
+        if (sorted.length >= 4) {
+          ttmRevenue = sorted.reduce((s, i) => s + ((i.totalRevenue?.raw ?? i.totalRevenue) || 0), 0);
+          ttmNetIncome = sorted.reduce((s, i) => s + ((i.netIncome?.raw ?? i.netIncome) || 0), 0);
+        }
+      }
+    } catch {}
+  }
+
+  // If we still have no EPS but have sharesOutstanding and TTM netIncome, compute EPS
+  if (!ttmEps && ttmNetIncome > 0 && sharesOut > 0) {
+    ttmEps = ttmNetIncome / sharesOut;
+  }
+
+  // If TTM revenue/netIncome are still 0, fall back to what the scraper returned
+  if (!ttmRevenue) ttmRevenue = incHist?.[0]?.revenue || 0;
+  if (!ttmNetIncome) ttmNetIncome = incHist?.[0]?.netIncome || 0;
+
+  return { revenue: ttmRevenue, netIncome: ttmNetIncome, eps: ttmEps };
+}
+
 function validateDateString(dateStr) {
   if (!dateStr) return null;
   if (typeof dateStr !== 'string' || dateStr.trim() === '') {
@@ -496,14 +577,19 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
         const divYieldFromHistory = (price > 0 && totalAnnualDiv > 0) ? totalAnnualDiv / price : null;
         const incHist = yahooReport.data.incomeStatementHistory || [];
         const balHist = yahooReport.data.balanceSheetHistory || [];
+        // Multi-layer TTM safety net: if the scraper didn't produce TTM data with EPS
+        // (e.g. fundamentalsTimeSeries blocked on Railway), try alternative sources
+        const ttm = await ensureTTMValues(symbol, incHist);
         const enrichedKm = (yahooReport.data.keyMetricsHistory || []).map((km, idx) => {
           const inc = incHist[idx] || {};
           const bal = balHist[idx] || {};
-          const netIncome = quote?.netIncomeTTM || inc.netIncome || 0;
-          const eps = quote?.eps || inc.eps || 0;
+          const isCurrent = idx === 0;
+          // Use TTM fallback values for the current (latest) period; historical periods use inc directly
+          const netIncome = quote?.netIncomeTTM || (isCurrent ? ttm.netIncome : inc.netIncome) || inc.netIncome || 0;
+          const eps = quote?.eps || (isCurrent ? ttm.eps : inc.eps) || inc.eps || 0;
           const sharesOut = quote?.sharesOutstanding || ((netIncome && eps && (netIncome > 0 === eps > 0)) ? Math.abs(netIncome / eps) : 0);
           const mc = quote?.marketCap || km.marketCap || computeMarketCap(price, netIncome, eps, sharesOut) || 0;
-          const revenue = quote?.revenueTTM || inc.revenue || 0;
+          const revenue = quote?.revenueTTM || (isCurrent ? ttm.revenue : inc.revenue) || inc.revenue || 0;
           const equity = bal.totalStockholdersEquity || bal.totalEquity || 0;
           const divYield = quote?.dividendYield || km.dividendYield || divYieldFromHistory || 0;
           return {
