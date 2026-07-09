@@ -337,9 +337,16 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
   }
 
   // Annual: combine fiscal years from quoteSummary + trailing TTM
-  const [annualData, fts] = await Promise.allSettled([
+  const [annualData, fts, yf2Fts] = await Promise.allSettled([
     fetchAnnualIncomeHistory(symbol),
     fetchAllFundamentals(symbol),
+    (async () => {
+      try {
+        const { default: YahooFinance } = await import('yahoo-finance2');
+        const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+        return await yf.fundamentalsTimeSeries(symbol, { period1: '1970-01-01', period2: new Date().toISOString().split('T')[0] });
+      } catch { return null; }
+    })(),
   ]);
 
   const items = [];
@@ -368,34 +375,42 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
     }
   }
 
-  // 2. Trailing TTM (most recent 4 quarters) — only if it's a different year than the latest FY
-  if (fts.status === 'fulfilled' && fts.value) {
-    const keys = [
-      'totalRevenue', 'reconciledCostOfRevenue', 'costOfRevenue',
-      'grossProfit', 'operatingExpense', 'operatingIncome',
-      'netIncome', 'netIncomeCommonStockholders',
-      'netIncomeFromContinuingAndDiscontinuedOperation',
-      'EBITDA', 'EBIT', 'pretaxIncome', 'taxProvision',
-      'researchAndDevelopment', 'sellingGeneralAndAdministration',
-      'basicEPS', 'dilutedEPS', 'basicAverageShares', 'dilutedAverageShares',
-      'totalExpenses', 'operatingRevenue', 'otherIncomeExpense',
-      'interestExpense', 'reconciledDepreciation',
-      'netIncomeContinuousOperations',
-      'normalizedIncome', 'netIncomeIncludingNoncontrollingInterests',
-      'totalOperatingIncomeAsReported', 'normalizedEBITDA',
-    ];
+  // 2. Trailing TTM (most recent 4 quarters) from yahoo-finance2 fundamentalsTimeSeries
+  const ttmKeys = [
+    'totalRevenue', 'reconciledCostOfRevenue', 'costOfRevenue',
+    'grossProfit', 'operatingExpense', 'operatingIncome',
+    'netIncome', 'netIncomeCommonStockholders',
+    'netIncomeFromContinuingAndDiscontinuedOperation',
+    'EBITDA', 'EBIT', 'pretaxIncome', 'taxProvision',
+    'researchAndDevelopment', 'sellingGeneralAndAdministration',
+    'basicEPS', 'dilutedEPS', 'basicAverageShares', 'dilutedAverageShares',
+    'totalExpenses', 'operatingRevenue', 'otherIncomeExpense',
+    'interestExpense', 'reconciledDepreciation',
+    'netIncomeContinuousOperations',
+    'normalizedIncome', 'netIncomeIncludingNoncontrollingInterests',
+    'totalOperatingIncomeAsReported', 'normalizedEBITDA',
+  ];
+  let ttmAdded = false;
+  if (yf2Fts.status === 'fulfilled' && yf2Fts.value) {
+    const quarterly = yf2Fts.value.filter(item =>
+      item.periodType === '3M' && item.totalRevenue != null
+    ).sort((a, b) => ((b.date || '')).localeCompare(a.date || ''));
+    if (quarterly.length >= 4) {
+      const windows = computeTTM(quarterly, ttmKeys);
+      if (windows.length > 0) {
+        items.unshift(formatIncomeItem(windows[0], 'ttm'));
+        ttmAdded = true;
+      }
+    }
+  }
+  if (!ttmAdded && fts.status === 'fulfilled' && fts.value) {
     const quarterly = fts.value.filter(item =>
       item.periodType === '3M' && item.totalRevenue != null
     );
     if (quarterly.length >= 4) {
-      const windows = computeTTM(quarterly, keys);
+      const windows = computeTTM(quarterly, ttmKeys);
       if (windows.length > 0) {
-        const ttmYear = (getDateStr(windows[0].date) || '').slice(0, 4);
-        // Only add TTM if it differs from the latest fiscal year
-        const latestFY = items.length > 0 ? (items[0].date || '').slice(0, 4) : '';
-        if (ttmYear !== latestFY) {
-          items.unshift(formatIncomeItem(windows[0], 'ttm'));
-        }
+        items.unshift(formatIncomeItem(windows[0], 'ttm'));
       }
     }
   }

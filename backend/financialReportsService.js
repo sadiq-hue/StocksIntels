@@ -219,7 +219,7 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
   const epsFromStats = tds?.eps || 0;
 
   // Compute dividend yield from dividend history
-  const totalAnnualDiv = divsValue.slice(0, 4).reduce((sum, d) => sum + Math.abs(d.dividend || d.adjDividend || 0), 0);
+  const totalAnnualDiv = divsValue.length > 0 ? Math.abs(divsValue[0].dividend || divsValue[0].adjDividend || 0) : 0;
   const divYieldFromHistory = (price > 0 && totalAnnualDiv > 0) ? totalAnnualDiv / price : null;
 
   const enrichedKm = edgarKmHistory.map((km, idx) => {
@@ -492,7 +492,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
 
         // Enrich keyMetrics with real ratios from quote price + financial data
         const divHist = yahooReport.data.dividendHistory || [];
-        const totalAnnualDiv = divHist.slice(0, 4).reduce((sum, d) => sum + Math.abs(d.dividend || d.adjDividend || 0), 0);
+        const totalAnnualDiv = divHist.length > 0 ? Math.abs(divHist[0].dividend || divHist[0].adjDividend || 0) : 0;
         const divYieldFromHistory = (price > 0 && totalAnnualDiv > 0) ? totalAnnualDiv / price : null;
         const incHist = yahooReport.data.incomeStatementHistory || [];
         const balHist = yahooReport.data.balanceSheetHistory || [];
