@@ -509,7 +509,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           return {
             ...km,
             marketCap: mc,
-            peRatio: quote?.pe > 0 ? quote.pe : ((price > 0 && eps > 0) ? price / eps : (netIncome > 0 && mc > 0 ? mc / netIncome : 0)),
+            peRatio: quote?.pe > 0 ? quote.pe : (km.peRatio > 0 ? km.peRatio : ((price > 0 && eps > 0) ? price / eps : (netIncome > 0 && mc > 0 ? mc / netIncome : 0))),
             priceToSalesRatio: (mc > 0 && revenue > 0) ? mc / revenue : 0,
             pbRatio: (mc > 0 && equity > 0) ? mc / equity : 0,
             earningsYield: (price > 0 && eps > 0) ? eps / price : 0,

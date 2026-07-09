@@ -105,6 +105,7 @@ function twelveDataToQuoteSummary(tds, symbol) {
   return {
     financialData: {
       marketCap: tds.marketCap,
+      trailingPE: tds.peRatio,
       forwardPE: tds.forwardPE,
       dividendYield: tds.dividendYield,
       payoutRatio: tds.payoutRatio,
@@ -555,6 +556,7 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
   let dk = qs?.defaultKeyStatistics || {};
   let currentMarketCap = fd.marketCap || dk.marketCap || 0;
   let forwardPE = fd.forwardPE || dk.forwardPE || 0;
+  let trailingPE = fd.trailingPE || dk.trailingPE || 0;
 
   // Fallback: scan fundamentals data for marketCap/price fields
   if (!currentMarketCap && allData) {
@@ -592,11 +594,12 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
     const divYieldDecimal = fd.dividendYield ?? 0;
     const divYieldPct = divYieldDecimal * 100;
 
+    const isCurrent = metricsArray.length === 0;
     metricsArray.push({
       date: yr,
       period,
       marketCap: cap,
-      peRatio: netIncome > 0 ? cap / netIncome : (forwardPE > 0 ? forwardPE : 0),
+      peRatio: isCurrent && trailingPE > 0 ? trailingPE : (netIncome > 0 ? cap / netIncome : (forwardPE > 0 ? forwardPE : 0)),
       priceToSalesRatio: revenue > 0 ? cap / revenue : 0,
       pbRatio: equity > 0 ? cap / equity : 0,
       debtToEquity: equity > 0 ? totalLiabilities / equity : 0,
