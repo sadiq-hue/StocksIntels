@@ -7,6 +7,16 @@ function cacheGet(key) {
   return yahooFinanceCache.get(key);
 }
 
+function flattenYahooObject(data) {
+  if (!data || typeof data !== 'object') return data;
+  if (data.raw !== undefined) return data.raw;
+  const result = Array.isArray(data) ? [] : {};
+  for (const [key, val] of Object.entries(data)) {
+    result[key] = flattenYahooObject(val);
+  }
+  return result;
+}
+
 function cacheSet(key, data) {
   return yahooFinanceCache.set(key, data);
 }
@@ -75,8 +85,10 @@ async function fetchPreMarketBatch(symbols) {
   return yahooService.fetchPreMarketBatch(symbols);
 }
 
+// Bump CACHE_VERSION when response shape changes to invalidate stale DB cache entries
+const QUOTE_SUMMARY_CACHE_VERSION = 2;
 async function fetchQuoteSummary(symbol, modules) {
-  const cacheKey = `yh_quoteSummary_${symbol}_${modules.join(',')}`;
+  const cacheKey = `yh_qs_v${QUOTE_SUMMARY_CACHE_VERSION}_${symbol}_${modules.join(',')}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
@@ -94,6 +106,19 @@ async function fetchQuoteSummary(symbol, modules) {
   try {
     const yahooData = await yahooService.fetchQuoteSummary(symbol, modules);
     if (yahooData) return cacheSet(cacheKey, yahooData);
+  } catch {}
+
+  // 3. Try yahoo-finance2 directly (bypasses yahooService circuit breaker)
+  try {
+    const { default: YahooFinance } = await import('yahoo-finance2');
+    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const yf2qs = await yf.quoteSummary(symbol.replace(/\./g, '-'), { modules });
+    if (yf2qs) {
+      const normalized = flattenYahooObject(yf2qs);
+      if (normalized?.financialData || normalized?.defaultKeyStatistics) {
+        return cacheSet(cacheKey, normalized);
+      }
+    }
   } catch {}
 
   return null;
