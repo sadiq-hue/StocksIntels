@@ -16,19 +16,15 @@ edgarClient.interceptors.response.use(
   }
 );
 
-const CACHE_TTL = 24 * 60 * 60 * 1000;
-const cache = new Map();
+const PersistentCache = require('./cacheService');
+const cache = new PersistentCache('edgar', 24 * 60 * 60 * 1000);
 
 function cacheGet(key) {
-  const hit = cache.get(key);
-  if (!hit) return null;
-  if (Date.now() - hit.ts > CACHE_TTL) { cache.delete(key); return null; }
-  return hit.data;
+  return cache.get(key);
 }
 
 function cacheSet(key, data) {
-  cache.set(key, { data, ts: Date.now() });
-  return data;
+  return cache.set(key, data);
 }
 
 function padCik(cik) {
@@ -615,6 +611,11 @@ async function getFinancialReportFromEdgar(symbol, period = 'annual', limit = 4)
 function clearCache() {
   cache.clear();
 }
+
+// Load persisted cache from DB on startup
+cache.loadFromDb().then(count => {
+  if (count > 0) console.log(`[EDGAR] Restored ${count} cached entries from DB`);
+}).catch(() => {});
 
 module.exports = {
   isUsStock,

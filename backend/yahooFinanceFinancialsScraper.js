@@ -1,18 +1,14 @@
 const axios = require('axios');
 const yahooService = require('./yahooService');
-const yahooFinanceCache = new Map();
-const CACHE_TTL = 24 * 60 * 60 * 1000;
+const PersistentCache = require('./cacheService');
+const yahooFinanceCache = new PersistentCache('yahoo', 24 * 60 * 60 * 1000);
 
 function cacheGet(key) {
-  const hit = yahooFinanceCache.get(key);
-  if (!hit) return null;
-  if (Date.now() - hit.ts > CACHE_TTL) { yahooFinanceCache.delete(key); return null; }
-  return hit.data;
+  return yahooFinanceCache.get(key);
 }
 
 function cacheSet(key, data) {
-  yahooFinanceCache.set(key, { data, ts: Date.now() });
-  return data;
+  return yahooFinanceCache.set(key, data);
 }
 
 function getDateStr(d) {
@@ -706,6 +702,11 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
 function clearCache() {
   yahooFinanceCache.clear();
 }
+
+// Load persisted cache from DB on startup
+yahooFinanceCache.loadFromDb().then(count => {
+  if (count > 0) console.log(`[YahooFinance] Restored ${count} cached entries from DB`);
+}).catch(() => {});
 
 module.exports = {
   getCompanyProfile,

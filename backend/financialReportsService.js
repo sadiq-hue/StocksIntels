@@ -3,25 +3,17 @@ const marketService = require('./marketService');
 const edgarService = require('./edgarService');
 const yahooFinanceScraper = require('./yahooFinanceFinancialsScraper');
 const { pool } = require('./db');
+const PersistentCache = require('./cacheService');
 
 const FINANCIALS_PROVIDER = process.env.FINANCIALS_PROVIDER || 'yahoo-finance';
-const CACHE_TTL = 24 * 60 * 60 * 1000;
+const financialCache = new PersistentCache('finrep', 24 * 60 * 60 * 1000);
 
-const financialCache = new Map();
-
-function cacheGet(key, ttl = CACHE_TTL) {
-  const cached = financialCache.get(key);
-  if (!cached) return null;
-  if (Date.now() - cached.timestamp > ttl) {
-    financialCache.delete(key);
-    return null;
-  }
-  return cached.data;
+function cacheGet(key) {
+  return financialCache.get(key);
 }
 
 function cacheSet(key, data) {
-  financialCache.set(key, { data, timestamp: Date.now() });
-  return data;
+  return financialCache.set(key, data);
 }
 
 function validateDateString(dateStr) {
@@ -502,7 +494,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           const netIncome = inc.netIncome || 0;
           const eps = inc.eps || 0;
           const sharesOut = (netIncome && eps && (netIncome > 0 === eps > 0)) ? Math.abs(netIncome / eps) : 0;
-          const mc = quote?.marketCap || km.marketCap || 0;
+          const mc = quote?.marketCap || km.marketCap || computeMarketCap(price, netIncome, eps, sharesOut) || 0;
           const revenue = inc.revenue || 0;
           const equity = bal.totalStockholdersEquity || bal.totalEquity || 0;
           const divYield = divYieldFromHistory !== null ? divYieldFromHistory : km.dividendYield || 0;
@@ -571,6 +563,11 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
 function clearCache() {
   financialCache.clear();
 }
+
+// Load persisted cache from DB on startup
+financialCache.loadFromDb().then(count => {
+  if (count > 0) console.log(`[FinancialReports] Restored ${count} cached entries from DB`);
+}).catch(() => {});
 
 module.exports = {
   getCompanyProfile,

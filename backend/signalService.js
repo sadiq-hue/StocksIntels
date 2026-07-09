@@ -11,11 +11,13 @@ const { getAggregatedSentiment } = require('./newsService');
 const { getKeyMetrics, getQuote, getCompanyProfile } = require('./financialReportsService');
 const { calculateSMA } = require('./technicalIndicators');
 const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL_SYMBOLS, SECTOR_AVG_PE, INDUSTRY_MEDIAN_EV_EBITDA, TBILI_RATE, KNOWN_FUNDAMENTALS, NSE_FUNDAMENTALS } = require('./stockData');
+const edgarService = require('./edgarService');
 const { getEffectiveSectorPE, getGrade, determineSignal, determineTradeType, getSectorMacroAdjustment, analyzeFundamentals, analyzeTechnicals, analyzeFinancials, generateReason } = require('./analysisEngine');
 const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
 const mlModel = require('./mlSignalModel');
 const engineConfig = require('./engineConfig');
 const { trackSignalQuality, logHealth, detectSignalDrift, getQualityScore } = require('./monitorService');
+const PersistentCache = require('./cacheService');
 
 console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)');
 
@@ -110,9 +112,8 @@ function _buildBaselineCache() {
 const _priceHistoryCache = new Map();
 const PRICE_HISTORY_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
-// Financial report cache for fundamental analysis (daily refresh)
-const _financialReportCache = new Map();
-const FINANCIAL_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+// Financial report cache for fundamental analysis (daily refresh, persisted to DB on restart)
+const _financialReportCache = new PersistentCache('sigfin', 24 * 60 * 60 * 1000);
 
 // Signal performance tracker (in-memory, rolling 100 signals per symbol)
 const _signalOutcomes = new Map();
@@ -248,12 +249,12 @@ async function prefetchWeeklyData(symbols) {
 async function fetchRealFinancialMetrics(symbol) {
   if (NSE_SYMBOLS.includes(symbol)) return null;
   const cached = _financialReportCache.get(symbol);
-  if (cached && Date.now() - cached.ts < FINANCIAL_CACHE_TTL) return cached.data;
+  if (cached) return cached;
   try {
     const { default: YahooFinance } = await import('yahoo-finance2');
     const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
     const qs = await yf.quoteSummary(symbol, { modules: ['financialData', 'defaultKeyStatistics', 'summaryDetail', 'summaryProfile'] });
-    if (!qs?.financialData) { _financialReportCache.set(symbol, { data: null, ts: Date.now() }); return null; }
+    if (!qs?.financialData) { _financialReportCache.set(symbol, null); return null; }
 
     const fd = qs.financialData;
     const dk = qs.defaultKeyStatistics || {};
@@ -344,11 +345,11 @@ async function fetchRealFinancialMetrics(symbol) {
     } catch { /* fundamentalsTimeSeries optional — metrics already populated from quoteSummary */ }
 
     const hasUsableMetrics = metrics.peRatio || metrics.roe || metrics.revenueGrowth || metrics.currentRatio;
-    _financialReportCache.set(symbol, { data: hasUsableMetrics ? metrics : null, ts: Date.now() });
+    _financialReportCache.set(symbol, hasUsableMetrics ? metrics : null);
     return hasUsableMetrics ? metrics : null;
   } catch (e) {
     console.warn(`[SignalService] Failed to fetch real financials for ${symbol}: ${e.message}`);
-    _financialReportCache.set(symbol, { data: null, ts: Date.now() });
+    _financialReportCache.set(symbol, null);
     return null;
   }
 }
@@ -731,15 +732,13 @@ function updateSectorAverages() {
       sectorData[stock.sector].count++;
     }
     // Also check real financial cache for US stocks
-    if (_financialReportCache.has(sym)) {
-      const fm = _financialReportCache.get(sym);
-      if (fm && fm.data && fm.data.peRatio) {
-        const stock = getFundamentals(sym);
-        if (stock && stock.sector) {
-          if (!sectorData[stock.sector]) sectorData[stock.sector] = { sum: 0, count: 0 };
-          sectorData[stock.sector].sum += fm.data.peRatio;
-          sectorData[stock.sector].count++;
-        }
+    const fm = _financialReportCache.get(sym);
+    if (fm && fm.peRatio) {
+      const stock = getFundamentals(sym);
+      if (stock && stock.sector) {
+        if (!sectorData[stock.sector]) sectorData[stock.sector] = { sum: 0, count: 0 };
+        sectorData[stock.sector].sum += fm.peRatio;
+        sectorData[stock.sector].count++;
       }
     }
   }
@@ -1501,7 +1500,7 @@ async function fetchRealFundamentals(symbol) {
 // fetchRealFinancialMetrics() — this is only useful for NSE stocks missing from NSE_FUNDAMENTALS.
 async function warmFMPCache(symbols) {
   const MAX_SYMBOLS = 50;
-  const toFetch = symbols.filter(s => !_financialReportCache.has(s)).slice(0, MAX_SYMBOLS);
+  const toFetch = symbols.filter(s => !_financialReportCache.get(s)).slice(0, MAX_SYMBOLS);
   if (toFetch.length === 0) return;
   console.warn(`[SignalService] warmFMPCache: fetching ${toFetch.length} symbols ` +
     `(FMP rate limit: 250/day, will use ${toFetch.length * 3} requests)`);
@@ -1546,11 +1545,9 @@ function getFundamentals(symbol) {
     ...base
   };
   // Merge real financial metrics from Yahoo Finance for US stocks
-  if (_financialReportCache.has(symbol)) {
-    const fm = _financialReportCache.get(symbol);
-    if (fm && Date.now() - fm.ts < FINANCIAL_CACHE_TTL) {
-      Object.assign(result, fm.data);
-    }
+  const fm = _financialReportCache.get(symbol);
+  if (fm) {
+    Object.assign(result, fm);
   }
   if (!result.name || result.name === symbol) {
     result.name = resolveStockName(symbol);
@@ -1658,6 +1655,9 @@ async function getSignalHistory({ ticker, signal, market, sector, limit = 100, o
 detectMarketRegime().catch(() => {});
 _loadForwardPredictionsFromDb().catch(() => {});
 _loadSignalCacheFromDb().catch(() => {});
+_financialReportCache.loadFromDb().then(count => {
+  if (count > 0) console.log(`[SignalService] Restored ${count} financial report cache entries from DB`);
+}).catch(() => {});
 setTimeout(() => {
   generateSignals(null, true).catch(() => {});
   generateSignals(null, false, true).catch(() => {});
@@ -1729,8 +1729,8 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   const signals = [];
   // When marketData is provided (e.g. from publisher), only process those symbols
   const rawSymbols = marketData ? Object.keys(marketData) : ALL_SYMBOLS;
-  // Skip NSE symbols — NSE data source unavailable
-  const symbols = rawSymbols.filter(s => !NSE_SYMBOLS.includes(s));
+  // Skip NSE symbols and US stocks without SEC EDGAR CIK mapping (no reliable financial data)
+  const symbols = rawSymbols.filter(s => !NSE_SYMBOLS.includes(s) && edgarService.cikLookup(s));
   const cfg = engineConfig.getConfig();
   const maxSymbols = cfg.maxSymbols || 200;
   if (!marketData && symbols.length > maxSymbols) {
