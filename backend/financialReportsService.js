@@ -47,6 +47,7 @@ async function ensureTTMValues(symbol, incHist) {
   let ttmRevenue = 0;
   let ttmNetIncome = 0;
   let ttmEps = 0;
+  let ttmPeriods = '';
   let sharesOut = 0;
   let forwardPE = 0;
 
@@ -106,6 +107,7 @@ async function ensureTTMValues(symbol, incHist) {
         ttmRevenue = edgarTtm.revenue;
         ttmNetIncome = edgarTtm.netIncome;
         if (!ttmEps && edgarTtm.eps > 0) ttmEps = edgarTtm.eps;
+        if (edgarTtm.periods) ttmPeriods = edgarTtm.periods;
       }
     } catch {}
   }
@@ -119,7 +121,7 @@ async function ensureTTMValues(symbol, incHist) {
   if (!ttmRevenue) ttmRevenue = incHist?.[0]?.revenue || 0;
   if (!ttmNetIncome) ttmNetIncome = incHist?.[0]?.netIncome || 0;
 
-  return { revenue: ttmRevenue, netIncome: ttmNetIncome, eps: ttmEps, forwardPE };
+  return { revenue: ttmRevenue, netIncome: ttmNetIncome, eps: ttmEps, forwardPE, periods: ttmPeriods };
 }
 
 function validateDateString(dateStr) {

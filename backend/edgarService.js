@@ -624,7 +624,8 @@ async function getTTMFromEdgar(symbol) {
       const units = entries.units;
       const usd = units?.USD || units?.USD_per_share || units?.['USD/shares'] || units?.shares || units?.pure;
       if (!usd || usd.length === 0) continue;
-      return usd.filter(e => e.fy && e.fp && (e.fp === 'FY' || e.fp.startsWith('Q')));
+      // Only include YTD cumulative entries (frame ending in 'I') for quarters, and FY for annual
+      return usd.filter(e => e.fy && e.fp && (e.fp === 'FY' || (e.fp.startsWith('Q') && e.frame && e.frame.endsWith('I'))));
     }
     return [];
   }

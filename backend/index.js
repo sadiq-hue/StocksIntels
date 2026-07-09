@@ -3561,7 +3561,7 @@ app.get('/api/financials/debug/:symbol', async (req, res) => {
       edgarResultCount: edgarResult?.data?.incomeStatementHistory?.length || 0,
       edgarError: edgarResult?.error,
       edgarIncomeHistory: (edgarResult?.data?.incomeStatementHistory || []).slice(0, 2),
-      ttmFallback: { revenue: ttm?.revenue, netIncome: ttm?.netIncome, eps: ttm?.eps, forwardPE: ttm?.forwardPE },
+      ttmFallback: { revenue: ttm?.revenue, netIncome: ttm?.netIncome, eps: ttm?.eps, forwardPE: ttm?.forwardPE, periods: ttm?.periods },
       proxyPoolSize: proxyService.getWorkingCount(),
     });
   } catch (error) {
