@@ -617,45 +617,72 @@ async function getTTMFromEdgar(symbol) {
 
   const facts = data.facts?.['us-gaap'] || {};
 
-  function getQuarterlyEntries(facts, tagKeys) {
+  function getSecEntries(facts, tagKeys) {
     for (const tag of tagKeys) {
       const entries = factLookup(facts, tag);
       if (!entries) continue;
       const units = entries.units;
       const usd = units?.USD || units?.USD_per_share || units?.['USD/shares'] || units?.shares || units?.pure;
       if (!usd || usd.length === 0) continue;
-      // Separate YTD cumulative quarters (frame ends with 'I') and full-year entries
-      const quarters = usd.filter(e => e.fy && e.fp && e.fp.startsWith('Q') && e.frame && e.frame.endsWith('I'));
-      const fy = usd.filter(e => e.fy && e.fp === 'FY' && e.frame && !e.frame.endsWith('I'));
-      return { quarters, fy };
+      return usd;
     }
-    return null;
+    return [];
   }
 
-  function computeTtmFromCumulative(quarters, fyEntries) {
-    // Group quarterly entries by fy, sort within each fy
+  function extractTtm(entries) {
+    // Separate quarterly (Q1-Q3), FY, and non-period entries
+    const q = entries.filter(e => e.fy && e.fp && e.fp.startsWith('Q'));
+    const fy = entries.filter(e => e.fy && e.fp === 'FY');
+    if (q.length === 0) return null;
+
+    // Group by fiscal year
     const byFy = {};
-    for (const e of quarters) {
+    for (const e of q) {
       if (!byFy[e.fy]) byFy[e.fy] = [];
       byFy[e.fy].push(e);
     }
-    // For each FY with quarterly data, compute standalone quarter values
+
     const standalone = [];
     const order = { Q1: 1, Q2: 2, Q3: 3 };
-    for (const [fy, list] of Object.entries(byFy)) {
+
+    for (const [fyStr, list] of Object.entries(byFy)) {
+      const fyNum = parseInt(fyStr);
       const sorted = list.sort((a, b) => (order[a.fp] || 0) - (order[b.fp] || 0));
-      let prev = 0;
+
+      // Detect if cumulative (non-decreasing) or standalone (any decrease means standalone)
+      let isCumulative = true;
+      let prevCheck = 0;
       for (const e of sorted) {
-        const val = e.val - prev;
-        if (!isNaN(val) && val >= 0) {
-          standalone.push({ fy: parseInt(fy), fp: e.fp, val, filed: e.filed || `${fy}-12-31` });
-        }
-        prev = e.val;
+        if (e.val < prevCheck) { isCumulative = false; break; }
+        prevCheck = e.val;
       }
-      // Compute Q4 as FY total minus Q3 cumulative
-      const fyEntry = fyEntries.find(e => e.fy === parseInt(fy));
-      if (fyEntry && fyEntry.val > prev) {
-        standalone.push({ fy: parseInt(fy), fp: 'Q4', val: fyEntry.val - prev, filed: fyEntry.filed || `${fy}-12-31` });
+
+      if (isCumulative && sorted.length >= 2) {
+        // De-cumulate
+        let prev = 0;
+        for (const e of sorted) {
+          const val = e.val - prev;
+          if (val >= 0) {
+            standalone.push({ fy: fyNum, fp: e.fp, val, filed: e.filed || `${fyNum}-12-31` });
+          }
+          prev = e.val;
+        }
+        // Q4 from FY total
+        const fyEntry = fy.find(e => e.fy === fyNum);
+        if (fyEntry && fyEntry.val > prev) {
+          standalone.push({ fy: fyNum, fp: 'Q4', val: fyEntry.val - prev, filed: fyEntry.filed || `${fyNum}-12-31` });
+        }
+      } else {
+        // Standalone values — use directly
+        for (const e of sorted) {
+          standalone.push({ fy: fyNum, fp: e.fp, val: e.val, filed: e.filed || `${fyNum}-12-31` });
+        }
+        // Q4 from FY minus sum of Q1-Q3
+        const fyEntry = fy.find(e => e.fy === fyNum);
+        const sumQ = sorted.reduce((s, e) => s + e.val, 0);
+        if (fyEntry && fyEntry.val > sumQ) {
+          standalone.push({ fy: fyNum, fp: 'Q4', val: fyEntry.val - sumQ, filed: fyEntry.filed || `${fyNum}-12-31` });
+        }
       }
     }
 
@@ -664,17 +691,15 @@ async function getTTMFromEdgar(symbol) {
     return sorted.slice(0, 4);
   }
 
-  const revData = getQuarterlyEntries(facts, US_GAAP_TAGS.revenue);
-  const niData = getQuarterlyEntries(facts, US_GAAP_TAGS.netIncome);
-  const epsData = getQuarterlyEntries(facts, US_GAAP_TAGS.epsBasic);
-  const epsDilData = getQuarterlyEntries(facts, US_GAAP_TAGS.epsDiluted);
+  const revEntries = getSecEntries(facts, US_GAAP_TAGS.revenue);
+  const niEntries = getSecEntries(facts, US_GAAP_TAGS.netIncome);
+  const epsEntries = getSecEntries(facts, US_GAAP_TAGS.epsBasic);
+  const epsDilEntries = getSecEntries(facts, US_GAAP_TAGS.epsDiluted);
 
-  if (!revData || revData.quarters.length === 0) return null;
-
-  const revQ = computeTtmFromCumulative(revData.quarters, revData.fy);
-  const niQ = computeTtmFromCumulative(niData?.quarters || [], niData?.fy || []);
-  const epsQ = computeTtmFromCumulative(epsData?.quarters || [], epsData?.fy || []);
-  const epsDilQ = computeTtmFromCumulative(epsDilData?.quarters || [], epsDilData?.fy || []);
+  const revQ = extractTtm(revEntries);
+  const niQ = extractTtm(niEntries);
+  const epsQ = extractTtm(epsEntries);
+  const epsDilQ = extractTtm(epsDilEntries);
 
   if (!revQ || revQ.length < 4) return null;
 
