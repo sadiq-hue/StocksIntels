@@ -21,6 +21,8 @@ import {
   TrendingUp, TrendingDown, Search, Star, BarChart3, Building2,
   DollarSign, Activity, ArrowUpDown, Sparkles, TrendingUpIcon,
   ChevronLeft, ChevronRight, Loader2, ExternalLink, X, Zap,
+  Info, Shield, Clock, Wallet, Gauge, Target, LineChart,
+  CandlestickChart, ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react";
 import { globalStocks, kenyanStocks, type StockListItem, type StockMarket } from "../data/stockUniverses";
 import {
@@ -526,13 +528,17 @@ export function StockAnalysisPage() {
   const avgPrice = prices.length > 0 ? prices.reduce((a: number, b: number) => a + b, 0) / prices.length : displayPrice;
   const periodChange = prices.length > 1 ? ((currentPrice - prices[0]) / prices[0] * 100).toFixed(2) : "0.00";
 
+  const isPositive = displayChange >= 0;
+  const signalIsBullish = displaySignal === "Strong Buy" || displaySignal === "Buy" || displayChange > 2;
+  const signalIsBearish = displaySignal === "Strong Sell" || displaySignal === "Sell" || displayChange < -2;
+
   return (
-    <div className="mx-auto max-w-[1600px] p-4 md:p-6 space-y-6">
-      {/* Header */}
+    <div className="mx-auto max-w-[1600px] p-4 md:p-6 space-y-5">
+      {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9]">
+            <div className="p-2 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-sm">
               <TrendingUpIcon className="size-5 text-white" />
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">Stock Analysis</h1>
@@ -542,7 +548,9 @@ export function StockAnalysisPage() {
         <div className="flex items-center gap-2">
           <div className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-xl bg-card border shadow-sm">
             <Sparkles className="size-4 text-[#0D7490]" />
-            <span className="text-sm font-medium text-muted-foreground">{liveQuote?.provider === 'afx' ? 'AFX Live' : liveQuote?.provider ? 'Live' : 'Real-time Data'}</span>
+            <span className="text-sm font-medium text-muted-foreground">
+              {liveQuote?.provider === 'afx' ? 'AFX Live' : liveQuote?.provider ? 'Live' : 'Real-time Data'}
+            </span>
           </div>
           <Link
             to="/app/stocks"
@@ -553,7 +561,7 @@ export function StockAnalysisPage() {
         </div>
       </div>
 
-      {/* Market Tabs */}
+      {/* ── Market Tabs ── */}
       <Tabs
         value={activeMarket}
         onValueChange={(v) => {
@@ -573,13 +581,48 @@ export function StockAnalysisPage() {
         </TabsList>
       </Tabs>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        {/* Sidebar */}
+      {/* ── Pro Upgrade Prompt ── */}
+      {showProPrompt && promptTicker && (
+        <div className="bg-gradient-to-r from-[#0D7490] to-[#0a5f8a] rounded-lg shadow-lg p-4 flex items-start gap-3 animate-fade-in">
+          <div className="shrink-0 mt-0.5">
+            <Zap className="size-5 text-yellow-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white">
+              You&apos;ve been watching {promptTicker} — Pro users get real-time signals and sentiment alerts on this stock.
+            </p>
+            <div className="flex items-center gap-3 mt-2">
+              <Link
+                to="/pricing"
+                className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#0D7490] hover:bg-yellow-300 transition-colors"
+              >
+                <Zap className="size-3.5" />
+                See Pro Plans
+              </Link>
+              <button
+                onClick={dismissPrompt}
+                className="text-xs text-white/70 hover:text-white transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+          <button
+            onClick={dismissPrompt}
+            className="shrink-0 text-white/50 hover:text-white transition-colors"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
+      {/* ── Main Grid ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-5">
+        {/* ═══ Sidebar ═══ */}
         <div className="xl:col-span-1 space-y-4">
           <Card className="border shadow-sm xl:sticky xl:top-6 xl:max-h-[calc(100vh-8rem)] flex flex-col">
             <div className="p-4 border-b border-border">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-sm text-foreground">
                   {activeMarket === "nse" ? "Kenyan Stocks" : "Global Stocks"}
                 </h3>
@@ -623,18 +666,19 @@ export function StockAnalysisPage() {
                 </div>
               </div>
             </div>
-            <div className="p-3 space-y-1 min-h-0 flex-1 overflow-y-auto">
+            <div className="p-2 space-y-0.5 min-h-0 flex-1 overflow-y-auto">
               {paginatedStocks.length > 0 ? (
                 paginatedStocks.map((stock) => {
                   const isActive = activeSelection.ticker === stock.ticker;
                   const live = getQuote(stock.ticker);
                   const listPrice = live?.price && live.price > 0 ? live.price : stock.price;
                   const listChange = live?.changePercent ?? stock.change;
+                  const isPos = listChange >= 0;
                   return (
                     <button
                       key={stock.ticker}
                       onClick={() => setSelectedStock(stock)}
-                      className={`w-full rounded-lg p-3 text-left transition-all ${
+                      className={`w-full rounded-lg px-3 py-2.5 text-left transition-all ${
                         isActive
                           ? "bg-[#0D7490] text-white shadow-sm"
                           : "hover:bg-accent"
@@ -648,7 +692,7 @@ export function StockAnalysisPage() {
                               isActive ? "text-yellow-300" : "text-muted-foreground hover:text-yellow-500"
                             }`}
                           >
-                            <Star className={`size-3.5 ${favorites.includes(stock.ticker) ? "fill-current" : ""}`} />
+                            <Star className={`size-3 ${favorites.includes(stock.ticker) ? "fill-current" : ""}`} />
                           </button>
                           <div className="min-w-0">
                             <div className={`text-sm font-semibold truncate ${isActive ? "text-white" : "text-foreground"}`}>
@@ -664,9 +708,9 @@ export function StockAnalysisPage() {
                             {formatPrice(listPrice)}
                           </div>
                           <div className={`flex items-center justify-end gap-0.5 text-[11px] font-medium ${
-                            listChange >= 0 ? "text-emerald-600" : "text-red-500"
+                            isPos ? "text-emerald-400" : "text-red-400"
                           }`}>
-                            {listChange >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+                            {isPos ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
                             {listChange > 0 ? "+" : ""}{listChange.toFixed(2)}%
                           </div>
                         </div>
@@ -680,7 +724,6 @@ export function StockAnalysisPage() {
                   No stocks found
                 </div>
               )}
-              {/* Yahoo search results when local finds nothing */}
               {searchTerm.length > 0 && filteredStocks.length === 0 && yahooSearching && (
                 <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
                   <Loader2 size={14} className="animate-spin mr-2" />
@@ -736,50 +779,15 @@ export function StockAnalysisPage() {
               </div>
             </div>
           </Card>
-
         </div>
 
-        {/* Main Content */}
-        <div className="xl:col-span-3 space-y-6">
-          {/* Pro upgrade prompt */}
-          {showProPrompt && promptTicker && (
-            <div className="bg-gradient-to-r from-[#0D7490] to-[#0a5f8a] rounded-lg shadow-lg p-4 flex items-start gap-3">
-              <div className="shrink-0 mt-0.5">
-                <Zap className="size-5 text-yellow-300" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white">
-                  You've been watching {promptTicker} — Pro users get real-time signals and sentiment alerts on this stock.
-                </p>
-                <div className="flex items-center gap-3 mt-2">
-                  <Link
-                    to="/pricing"
-                    className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#0D7490] hover:bg-yellow-300 transition-colors"
-                  >
-                    <Zap className="size-3.5" />
-                    See Pro Plans
-                  </Link>
-                  <button
-                    onClick={dismissPrompt}
-                    className="text-xs text-white/70 hover:text-white transition-colors"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-              <button
-                onClick={dismissPrompt}
-                className="shrink-0 text-white/50 hover:text-white transition-colors"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-          )}
+        {/* ═══ Main Content ═══ */}
+        <div className="xl:col-span-3 space-y-5">
 
-          {/* Stock Header */}
+          {/* ── Stock Header ── */}
           <Card className="border shadow-sm overflow-hidden">
             <div className="p-5">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="flex size-14 items-center justify-center rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-sm">
                     <TrendingUp className="size-7 text-white" />
@@ -798,80 +806,97 @@ export function StockAnalysisPage() {
                         }`} />
                       </button>
                       <Badge variant="secondary" className="rounded-full text-xs">
-                        {activeSelection.market === "nse" ? "Kenyan" : "Global"}
+                        {activeSelection.market === "nse" ? "NSE" : "Global"}
+                      </Badge>
+                      <Badge className={`rounded-full text-xs border ${
+                        isRegular
+                          ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                          : isPreMarket
+                          ? "bg-amber-100 text-amber-700 border-amber-200"
+                          : isPostMarket
+                          ? "bg-blue-100 text-blue-700 border-blue-200"
+                          : "bg-muted text-muted-foreground border-border"
+                      }`}>
+                        <Clock className="size-3 mr-1" />
+                        {isRegular ? "Market Open" : isPreMarket ? "Pre-Market" : isPostMarket ? "After Hours" : "Closed"}
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{activeSelection.name}</p>
                   </div>
                 </div>
+
                 <div className="text-right">
-                  <div className="text-3xl font-bold text-foreground">
+                  <div className="text-3xl font-bold text-foreground tracking-tight">
                     {formatCurrency(activeSelection)}{formatPrice(regularPrice)}
                   </div>
-                  <div className={`flex items-center justify-end gap-1.5 mt-0.5 ${
-                    displayChange >= 0 ? "text-emerald-600" : "text-red-500"
+                  <div className={`flex items-center justify-end gap-1.5 mt-1 ${
+                    isPositive ? "text-emerald-600" : "text-red-500"
                   }`}>
-                    {displayChange >= 0 ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}
-                    <span className="font-semibold">{liveQuote?.change != null ? `${liveQuote.change > 0 ? "+" : ""}${liveQuote.change.toFixed(2)}` : ""}</span>
+                    {isPositive ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                    {liveQuote?.change != null && (
+                      <span className="font-semibold">{liveQuote.change > 0 ? "+" : ""}{liveQuote.change.toFixed(2)}</span>
+                    )}
                     <span className="font-semibold">({displayChange > 0 ? "+" : ""}{displayChange.toFixed(2)}%)</span>
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
                     {sessionLabel}: {formatSessionTime(liveQuote?.currentTradingPeriod?.regular?.end)}
                   </div>
-                  {altPrice != null && (
-                    <>
-                      <div className="text-2xl font-bold text-foreground mt-3">
-                        {formatCurrency(activeSelection)}{formatPrice(altPrice)}
+                  {altPrice != null && altSessionLabel && (
+                    <div className="mt-2 pt-2 border-t border-border">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className="text-[11px] text-muted-foreground">{altSessionLabel}:</span>
+                        <span className={`text-sm font-semibold ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                          {formatCurrency(activeSelection)}{formatPrice(altPrice)}
+                        </span>
+                        <span className={`text-[11px] font-medium ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                          ({altChangePct != null ? `${altChangePct > 0 ? "+" : ""}${altChangePct.toFixed(2)}%` : ""})
+                        </span>
                       </div>
-                      <div className={`flex items-center justify-end gap-1.5 ${
-                        (altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"
-                      }`}>
-                        {altChangePct != null && altChangePct >= 0 ? <TrendingUp className="size-3.5" /> : <TrendingDown className="size-3.5" />}
-                        <span className="font-semibold">{altChange != null ? `${altChange > 0 ? "+" : ""}${altChange.toFixed(2)}` : ""}</span>
-                        <span className="font-semibold">({altChangePct != null ? `${altChangePct > 0 ? "+" : ""}${altChangePct.toFixed(2)}%` : ""})</span>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        {formatAltTime(altTime)}
                       </div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">
-                        {altSessionLabel}: {formatAltTime(altTime)}
-                      </div>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {/* Metadata Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
                 {[
-                  { icon: Building2, label: "Sector", value: activeSelection.sector },
-                  { icon: BarChart3, label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : activeSelection.volume },
-                  { icon: DollarSign, label: "Market Cap", value: companyProfile?.marketCap ? `$${(companyProfile.marketCap / 1e9).toFixed(1)}B` : activeSelection.marketCap },
-                  { icon: Activity, label: "P/E", value: companyProfile?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A") },
+                  { icon: Building2, label: "Sector", value: activeSelection.sector, color: "text-foreground" },
+                  { icon: Activity, label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : activeSelection.volume, color: "text-foreground" },
+                  { icon: Wallet, label: "Market Cap", value: companyProfile?.marketCap ? `$${(companyProfile.marketCap / 1e9).toFixed(1)}B` : activeSelection.marketCap, color: "text-foreground" },
+                  { icon: BarChart3, label: "P/E Ratio", value: companyProfile?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A"), color: "text-foreground" },
                 ].map((m) => (
-                  <div key={m.label} className="rounded-lg bg-muted/50 p-3 border">
-                    <div className="flex items-center gap-1.5 mb-1">
+                  <div key={m.label} className="rounded-lg bg-muted/40 p-3 border border-border/50">
+                    <div className="flex items-center gap-1.5 mb-1.5">
                       <m.icon className="size-3.5 text-[#0D7490]" />
                       <span className="text-[11px] font-medium text-muted-foreground">{m.label}</span>
                     </div>
-                  <div className="text-sm font-semibold text-foreground">{m.value}</div>
-                </div>
-              ))}
+                    <div className={`text-sm font-semibold ${m.color}`}>{m.value}</div>
+                  </div>
+                ))}
               </div>
+
               {activeSelection.market === "nse" && nseInsights && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-medium">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-medium">
+                    <DollarSign className="size-3" />
                     KES/USD: 1 USD = {nseInsights.fxRate || 130} KES
                   </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-muted-foreground border border-border text-[11px]">
-                    ↗ Dollar-adjusted returns may differ due to FX volatility
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-muted text-muted-foreground border border-border text-[11px]">
+                    <Info className="size-3" />
+                    Dollar-adjusted returns may differ due to FX volatility
                   </span>
                 </div>
               )}
             </div>
           </Card>
 
-          {/* Chart */}
+          {/* ── Price Chart ── */}
           <Card className="border shadow-sm overflow-hidden">
             <div className="p-5">
-              {/* Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                 <div>
                   <h3 className="text-base font-semibold text-foreground">Price Trend</h3>
                   <p className="text-xs text-muted-foreground">
@@ -880,7 +905,7 @@ export function StockAnalysisPage() {
                     {historySource === 'live' ? ' — Yahoo Finance' : ''}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-1.5">
                   {["1M", "3M", "6M", "1Y"].map((p) => (
                     <button
                       key={p}
@@ -898,43 +923,40 @@ export function StockAnalysisPage() {
               </div>
 
               {/* Key Stats Bar */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mb-6">
-                <div className="sm:col-span-1 md:col-span-2 rounded-lg bg-muted/50 p-2.5 border">
-                  <div className="text-[11px] font-medium text-muted-foreground mb-1">Current Price</div>
-                  <div className={`text-xl md:text-2xl font-bold ${displayChange >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-5">
+                <div className="rounded-lg bg-muted/40 p-3 border border-border/50 sm:col-span-1">
+                  <div className="text-[11px] font-medium text-muted-foreground mb-0.5">Price</div>
+                  <div className={`text-lg md:text-xl font-bold ${isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
                     {formatCurrency(activeSelection)}{formatPrice(currentPrice)}
                   </div>
-                  <div className={`text-xs font-semibold mt-0.5 ${displayChange >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {displayChange >= 0 ? '▲ +' : '▼ '}{displayChange.toFixed(2)}%
+                  <div className={`text-xs font-semibold mt-0.5 ${isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {isPositive ? <ChevronUp className="size-3 inline-block" /> : <ChevronDown className="size-3 inline-block" />}
+                    {' '}{displayChange > 0 ? "+" : ""}{displayChange.toFixed(2)}%
                   </div>
                 </div>
-                <div className="rounded-lg bg-muted/50 p-2.5 border">
+                <div className="rounded-lg bg-muted/40 p-3 border border-border/50">
                   <div className="text-[11px] font-medium text-muted-foreground mb-0.5">Prev Close</div>
                   <div className="text-sm font-semibold text-foreground">
                     {formatCurrency(activeSelection)}{formatPrice(liveQuote?.previousClose ?? (chartData.length > 1 ? chartData[chartData.length - 2]?.price : displayPrice))}
                   </div>
                 </div>
-                <div className="rounded-lg bg-muted/50 p-2.5 border">
+                <div className="rounded-lg bg-muted/40 p-3 border border-border/50">
                   <div className="text-[11px] font-medium text-muted-foreground mb-0.5">Open</div>
                   <div className="text-sm font-semibold text-foreground">
                     {formatCurrency(activeSelection)}{formatPrice(chartData.length > 0 ? chartData[chartData.length - 1]?.open : displayPrice)}
                   </div>
                 </div>
-                <div className="rounded-lg bg-muted/50 p-2.5 border">
+                <div className="rounded-lg bg-muted/40 p-3 border border-border/50">
                   <div className="text-[11px] font-medium text-muted-foreground mb-0.5">High</div>
                   <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection)}{formatPrice(highPrice)}</div>
                 </div>
-                <div className="rounded-lg bg-muted/50 p-2.5 border">
+                <div className="rounded-lg bg-muted/40 p-3 border border-border/50">
                   <div className="text-[11px] font-medium text-muted-foreground mb-0.5">Low</div>
                   <div className="text-sm font-semibold text-red-500">{formatCurrency(activeSelection)}{formatPrice(lowPrice)}</div>
                 </div>
-                <div className="rounded-lg bg-muted/50 p-2.5 border">
-                  <div className="text-[11px] font-medium text-muted-foreground mb-0.5">Avg</div>
-                  <div className="text-sm font-semibold text-blue-600">{formatCurrency(activeSelection)}{formatPrice(avgPrice)}</div>
-                </div>
               </div>
 
-              {/* Chart */}
+              {/* Chart Area */}
               {activeSelection.market === "global" && !tvFailed ? (
                 <TradingViewChart symbol={activeSelection.ticker} market={activeSelection.market} onError={() => setTvFailed(true)} />
               ) : chartLoading && chartHistory.length === 0 ? (
@@ -947,12 +969,16 @@ export function StockAnalysisPage() {
                 </div>
               ) : (
                 <div className="space-y-0">
-                  <ResponsiveContainer width="100%" height={240}>
+                  <ResponsiveContainer width="100%" height={280}>
                     <AreaChart data={chartData} margin={{ top: 5, right: 12, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#0D7490" stopOpacity={0.35} />
                           <stop offset="100%" stopColor="#0D7490" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="volGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#0EA5E9" stopOpacity={0.4} />
+                          <stop offset="100%" stopColor="#0EA5E9" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -970,7 +996,7 @@ export function StockAnalysisPage() {
                           const d = payload[0]?.payload;
                           const isUp = d?.price >= d?.open;
                           return (
-                            <div className="bg-card border border-border rounded-lg shadow-lg p-3 text-xs space-y-1" style={{ fontSize: 12, minWidth: 160 }}>
+                            <div className="bg-card border border-border rounded-lg shadow-lg p-3 text-xs space-y-1" style={{ minWidth: 180 }}>
                               <div className="font-semibold text-foreground mb-1.5 border-b border-border pb-1">{d?.fullDate || label}</div>
                               <div className="flex justify-between gap-4">
                                 <span className="text-muted-foreground">Open</span>
@@ -1025,8 +1051,10 @@ export function StockAnalysisPage() {
                       )}
                     </AreaChart>
                   </ResponsiveContainer>
+
+                  {/* Volume Chart */}
                   <ResponsiveContainer width="100%" height={60}>
-                    <AreaChart data={chartData} margin={{ top: 0, right: 12, left: 0, bottom: 2 }}>
+                    <AreaChart data={chartData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                       <XAxis
                         dataKey="date"
@@ -1040,8 +1068,7 @@ export function StockAnalysisPage() {
                         dataKey="volume"
                         stroke="#0EA5E9"
                         strokeWidth={1}
-                        fill="#0EA5E9"
-                        fillOpacity={0.5}
+                        fill="url(#volGrad)"
                         dot={false}
                       />
                     </AreaChart>
@@ -1049,6 +1076,7 @@ export function StockAnalysisPage() {
                 </div>
               )}
 
+              {/* Chart Legend */}
               {chartData.length > 0 && (
                 <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4 pt-4 border-t border-border">
                   <div className="flex items-center gap-2">
@@ -1066,10 +1094,10 @@ export function StockAnalysisPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className={`size-3 rounded-sm ${displayChange >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                    <div className={`size-3 rounded-sm ${isPositive ? 'bg-emerald-500' : 'bg-red-500'}`} />
                     <div>
                       <div className="text-[11px] font-medium text-muted-foreground">CHANGE</div>
-                      <div className={`text-sm font-semibold ${displayChange >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                      <div className={`text-sm font-semibold ${isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
                         {displayChange >= 0 ? '+' : ''}{displayChange.toFixed(2)}%
                       </div>
                     </div>
@@ -1097,22 +1125,22 @@ export function StockAnalysisPage() {
             </div>
           </Card>
 
-          {/* NSE Insights — only for Kenyan stocks */}
+          {/* ── NSE Insights ── */}
           {activeSelection.market === "nse" && (
             <Card className="border shadow-sm overflow-hidden">
               <div className="p-5">
                 <div className="flex items-center gap-2 mb-4">
-                  <svg className="size-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                  <Shield className="size-4 text-muted-foreground" />
                   <h3 className="text-sm font-semibold text-foreground">NSE Insights</h3>
                   {insightsLoading && <Loader2 className="size-3.5 animate-spin text-muted-foreground ml-1" />}
                 </div>
                 {nseInsights ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     {/* Financial Health */}
-                    <div className="rounded-lg border p-3">
+                    <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
                       <div className="flex items-center gap-1.5 mb-2">
                         <div className={`size-2.5 rounded-full ${nseInsights.financialHealth.level === 'good' ? 'bg-emerald-500' : nseInsights.financialHealth.level === 'watch' ? 'bg-amber-500' : 'bg-red-500'}`} />
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Financial Health</span>
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Financial Health</span>
                       </div>
                       <div className={`text-lg font-bold ${nseInsights.financialHealth.level === 'good' ? 'text-emerald-600' : nseInsights.financialHealth.level === 'watch' ? 'text-amber-600' : 'text-red-600'}`}>
                         {nseInsights.financialHealth.label}
@@ -1121,7 +1149,7 @@ export function StockAnalysisPage() {
                         <div className="mt-1.5 space-y-0.5">
                           {nseInsights.financialHealth.issues.slice(0, 2).map((issue: string, i: number) => (
                             <div key={i} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
-                              <span className="text-red-400 mt-0.5">•</span>
+                              <AlertTriangle className="size-3 text-red-400 mt-0.5 shrink-0" />
                               <span>{issue}</span>
                             </div>
                           ))}
@@ -1130,34 +1158,46 @@ export function StockAnalysisPage() {
                     </div>
 
                     {/* Liquidity Risk */}
-                    <div className="rounded-lg border p-3">
+                    <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
                       <div className="flex items-center gap-1.5 mb-2">
                         <div className={`size-2.5 rounded-full ${nseInsights.liquidity.score >= 70 ? 'bg-emerald-500' : nseInsights.liquidity.score >= 40 ? 'bg-amber-500' : 'bg-red-500'}`} />
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Liquidity Risk</span>
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Liquidity Risk</span>
                       </div>
                       <div className={`text-lg font-bold ${nseInsights.liquidity.score >= 70 ? 'text-emerald-600' : nseInsights.liquidity.score >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
                         {nseInsights.liquidity.label}
                       </div>
-                      <div className="mt-1 text-[11px] text-muted-foreground space-y-0.5">
-                        <div>Avg Vol: {(nseInsights.liquidity.avgDailyVolume / 1000).toFixed(0)}K</div>
-                        <div>Spread: {nseInsights.liquidity.bidAskSpread}%</div>
-                        <div>Exit: ~{nseInsights.liquidity.daysToExit}d (KES 500K pos)</div>
+                      <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
+                        <div className="flex justify-between">
+                          <span>Avg Vol</span>
+                          <span className="font-medium text-foreground">{(nseInsights.liquidity.avgDailyVolume / 1000).toFixed(0)}K</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Spread</span>
+                          <span className="font-medium text-foreground">{nseInsights.liquidity.bidAskSpread}%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Exit (500K)</span>
+                          <span className="font-medium text-foreground">~{nseInsights.liquidity.daysToExit}d</span>
+                        </div>
                       </div>
                     </div>
 
                     {/* Earnings Countdown */}
-                    <div className="rounded-lg border p-3">
+                    <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
                       <div className="flex items-center gap-1.5 mb-2">
-                        <svg className="size-3 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Earnings</span>
+                        <CalendarIcon className="size-3 text-muted-foreground" />
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Next Earnings</span>
                       </div>
                       {nseInsights.earnings.length > 0 ? (
                         <div>
                           <div className="text-lg font-bold text-foreground">{nseInsights.earnings[0].daysUntil}d</div>
                           <div className="text-[11px] text-muted-foreground mt-0.5">
-                            {nseInsights.earnings[0].quarter} — {nseInsights.earnings[0].date}
+                            {nseInsights.earnings[0].quarter}
                           </div>
                           <div className="text-[11px] text-muted-foreground">
+                            {nseInsights.earnings[0].date}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground font-medium mt-1">
                             EPS est: KES {nseInsights.earnings[0].epsEstimate}
                           </div>
                         </div>
@@ -1167,22 +1207,22 @@ export function StockAnalysisPage() {
                     </div>
 
                     {/* Corporate Actions */}
-                    <div className="rounded-lg border p-3">
+                    <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
                       <div className="flex items-center gap-1.5 mb-2">
-                        <svg className="size-3 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Corporate Actions</span>
+                        <Bell className="size-3 text-muted-foreground" />
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Corporate Actions</span>
                       </div>
                       {nseInsights.corporateActions.length > 0 ? (
                         <div className="space-y-1.5">
                           {nseInsights.corporateActions.map((ca: any, i: number) => (
                             <div key={i} className="text-[11px]">
                               <div className="flex items-center gap-1">
-                                <span className={`font-semibold ${ca.type === 'suspension' ? 'text-red-600' : ca.type === 'dividend' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                  {ca.type === 'suspension' ? '⚠' : ca.type === 'dividend' ? '💵' : '📋'}
-                                </span>
-                                <span className="font-medium text-foreground">{ca.title}</span>
+                                <span className={`size-1.5 rounded-full shrink-0 ${
+                                  ca.type === 'suspension' ? 'bg-red-500' : ca.type === 'dividend' ? 'bg-emerald-500' : 'bg-amber-500'
+                                }`} />
+                                <span className="font-medium text-foreground truncate">{ca.title}</span>
                               </div>
-                              <div className="text-muted-foreground ml-4">{ca.date}</div>
+                              <div className="text-muted-foreground ml-2.5">{ca.date}</div>
                             </div>
                           ))}
                         </div>
@@ -1192,104 +1232,128 @@ export function StockAnalysisPage() {
                     </div>
                   </div>
                 ) : !insightsLoading ? (
-                  <div className="text-xs text-muted-foreground">No data available</div>
+                  <div className="text-xs text-muted-foreground text-center py-4">No NSE insights available</div>
                 ) : null}
               </div>
             </Card>
           )}
 
-          {/* Analytics Grid */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            {/* Signal */}
+          {/* ── Analytics Grid ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            {/* Trading Signal */}
             <Card className="border shadow-sm">
               <div className="p-5">
-                <h3 className="text-sm font-semibold text-foreground mb-3">Trading Signal</h3>
+                <h3 className="text-sm font-semibold text-foreground mb-4">Trading Signal</h3>
                 {loadingData ? (
                   <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
                 ) : (
-                  <div>
+                  <div className="space-y-3">
+                    {/* Signal Badge + Confidence */}
                     <div className={`rounded-lg border-2 p-4 ${
-                      stockSignal?.signal === "Strong Buy" || stockSignal?.signal === "Buy" || displayChange > 2
+                      signalIsBullish
                         ? "border-emerald-200 bg-emerald-50/50"
-                        : stockSignal?.signal === "Strong Sell" || stockSignal?.signal === "Sell" || displayChange < -2
+                        : signalIsBearish
                         ? "border-red-200 bg-red-50/50"
                         : "border-amber-200 bg-amber-50/50"
                     }`}>
-                      <div className={`text-xl font-bold mb-1 ${
-                        stockSignal?.signal === "Strong Buy" || stockSignal?.signal === "Buy" || displayChange > 2 ? "text-emerald-700" :
-                        stockSignal?.signal === "Strong Sell" || stockSignal?.signal === "Sell" || displayChange < -2 ? "text-red-700" : "text-amber-700"
-                      }`}>
-                        {displaySignal}
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-xl font-bold ${
+                          signalIsBullish ? "text-emerald-700" :
+                          signalIsBearish ? "text-red-700" : "text-amber-700"
+                        }`}>
+                          {displaySignal}
+                        </span>
+                        {stockSignal?.type && (
+                          <Badge variant="outline" className="text-[10px] rounded-full">{stockSignal.type}</Badge>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${
                             displayConfidence >= 70 ? "bg-emerald-500" : displayConfidence >= 50 ? "bg-amber-500" : "bg-red-500"
                           }`} style={{ width: `${displayConfidence}%` }} />
                         </div>
-                        <span className="text-xs font-semibold text-muted-foreground">{displayConfidence}%</span>
+                        <span className="text-xs font-semibold text-muted-foreground">{displayConfidence}% confidence</span>
                       </div>
                       {stockSignal?.reason && (
                         <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{stockSignal.reason}</p>
                       )}
                     </div>
+
+                    {/* Entry / Targets Grid */}
                     {(stockSignal?.entry || stockSignal?.stopLoss || stockSignal?.target1) && (
-                      <div className="grid grid-cols-2 gap-2 mt-3">
+                      <div className="grid grid-cols-2 gap-2">
                         {stockSignal?.entry && (
-                          <div className="bg-muted/50 rounded-lg p-2 border">
-                            <div className="text-[10px] font-medium text-muted-foreground">Entry</div>
-                            <div className="text-xs font-semibold text-foreground">{formatCurrency(activeSelection)}{formatPrice(stockSignal.entry)}</div>
+                          <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
+                            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target Entry</div>
+                            <div className="text-sm font-semibold text-foreground">{formatCurrency(activeSelection)}{formatPrice(stockSignal.entry)}</div>
                           </div>
                         )}
                         {stockSignal?.stopLoss && (
-                          <div className="bg-muted/50 rounded-lg p-2 border">
-                            <div className="text-[10px] font-medium text-muted-foreground">Stop Loss</div>
-                            <div className="text-xs font-semibold text-red-500">{formatCurrency(activeSelection)}{formatPrice(stockSignal.stopLoss)}</div>
+                          <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
+                            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Stop Loss</div>
+                            <div className="text-sm font-semibold text-red-500">{formatCurrency(activeSelection)}{formatPrice(stockSignal.stopLoss)}</div>
                           </div>
                         )}
                         {stockSignal?.target1 && (
-                          <div className="bg-muted/50 rounded-lg p-2 border">
-                            <div className="text-[10px] font-medium text-muted-foreground">Target 1</div>
-                            <div className="text-xs font-semibold text-emerald-600">{formatCurrency(activeSelection)}{formatPrice(stockSignal.target1)}</div>
+                          <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
+                            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target 1</div>
+                            <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection)}{formatPrice(stockSignal.target1)}</div>
                           </div>
                         )}
                         {stockSignal?.target2 && (
-                          <div className="bg-muted/50 rounded-lg p-2 border">
-                            <div className="text-[10px] font-medium text-muted-foreground">Target 2</div>
-                            <div className="text-xs font-semibold text-emerald-600">{formatCurrency(activeSelection)}{formatPrice(stockSignal.target2)}</div>
+                          <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
+                            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target 2</div>
+                            <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection)}{formatPrice(stockSignal.target2)}</div>
                           </div>
                         )}
                         {stockSignal?.riskReward && (
-                          <div className="bg-muted/50 rounded-lg p-2 border">
-                            <div className="text-[10px] font-medium text-muted-foreground">R/R Ratio</div>
-                            <div className="text-xs font-semibold text-foreground">1:{stockSignal.riskReward.toFixed(1)}</div>
-                          </div>
-                        )}
-                        {stockSignal?.type && (
-                          <div className="bg-muted/50 rounded-lg p-2 border">
-                            <div className="text-[10px] font-medium text-muted-foreground">Trade Type</div>
-                            <div className="text-xs font-semibold text-foreground">{stockSignal.type}</div>
+                          <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
+                            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Risk/Reward</div>
+                            <div className="text-sm font-semibold text-foreground">1:{stockSignal.riskReward.toFixed(1)}</div>
                           </div>
                         )}
                         {stockSignal?.timeframe && (
-                          <div className="bg-muted/50 rounded-lg p-2 border">
-                            <div className="text-[10px] font-medium text-muted-foreground">Timeframe</div>
-                            <div className="text-xs font-semibold text-foreground">{stockSignal.timeframe}</div>
+                          <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
+                            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Timeframe</div>
+                            <div className="text-sm font-semibold text-foreground">{stockSignal.timeframe}</div>
                           </div>
                         )}
                       </div>
                     )}
-                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                      {stockSignal?.mlWinProb && <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-50 text-blue-700 border border-blue-200 font-medium">ML: {stockSignal.mlWinProb}</span>}
-                      {stockSignal?.regime && <span className="px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground border border-border">{stockSignal.regime}</span>}
-                      {stockSignal?.weeklyTrend && <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${stockSignal.weeklyTrend === "Bullish" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>{stockSignal.weeklyTrend}</span>}
-                      {stockSignal?.positionSize && <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-50 text-purple-700 border border-purple-100 font-medium">Size: {stockSignal.positionSize}</span>}
-                      {stockSignal?.var95 && <span className="px-1.5 py-0.5 rounded text-[10px] bg-orange-50 text-orange-700 border border-orange-100">VaR: {stockSignal.var95}</span>}
-                      {stockSignal?.cvar95 && <span className="px-1.5 py-0.5 rounded text-[10px] bg-orange-50 text-orange-700 border border-orange-100">CVaR: {stockSignal.cvar95}</span>}
-                    </div>
-                    {stockSignal?.sector && (
-                      <div className="mt-1 text-[11px] text-muted-foreground">
-                        Sector: {stockSignal.sector} {stockSignal.market ? `· ${stockSignal.market}` : ''}
+
+                    {/* Tags */}
+                    {[
+                      stockSignal?.mlWinProb && { label: `ML: ${stockSignal.mlWinProb}`, cls: "bg-blue-50 text-blue-700 border-blue-200" },
+                      stockSignal?.regime && { label: stockSignal.regime, cls: "bg-muted text-muted-foreground border-border" },
+                      stockSignal?.weeklyTrend && { label: stockSignal.weeklyTrend, cls: stockSignal.weeklyTrend === "Bullish" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200" },
+                      stockSignal?.positionSize && { label: `Size: ${stockSignal.positionSize}`, cls: "bg-purple-50 text-purple-700 border-purple-100" },
+                      stockSignal?.var95 && { label: `VaR: ${stockSignal.var95}`, cls: "bg-orange-50 text-orange-700 border-orange-100" },
+                      stockSignal?.cvar95 && { label: `CVaR: ${stockSignal.cvar95}`, cls: "bg-orange-50 text-orange-700 border-orange-100" },
+                    ].filter(Boolean).map((tag: any, i) => (
+                      <span key={i} className={`inline-flex px-2 py-0.5 rounded text-[10px] font-medium border ${tag.cls}`}>
+                        {tag.label}
+                      </span>
+                    )).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          stockSignal?.mlWinProb && { label: `ML: ${stockSignal.mlWinProb}`, cls: "bg-blue-50 text-blue-700 border-blue-200" },
+                          stockSignal?.regime && { label: stockSignal.regime, cls: "bg-muted text-muted-foreground border-border" },
+                          stockSignal?.weeklyTrend && { label: stockSignal.weeklyTrend, cls: stockSignal.weeklyTrend === "Bullish" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200" },
+                          stockSignal?.positionSize && { label: `Size: ${stockSignal.positionSize}`, cls: "bg-purple-50 text-purple-700 border-purple-100" },
+                          stockSignal?.var95 && { label: `VaR: ${stockSignal.var95}`, cls: "bg-orange-50 text-orange-700 border-orange-100" },
+                          stockSignal?.cvar95 && { label: `CVaR: ${stockSignal.cvar95}`, cls: "bg-orange-50 text-orange-700 border-orange-100" },
+                        ].filter(Boolean).map((tag: any, i) => (
+                          <span key={i} className={`inline-flex px-2 py-0.5 rounded text-[10px] font-medium border ${tag.cls}`}>
+                            {tag.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {(stockSignal?.sector || stockSignal?.market) && (
+                      <div className="text-[11px] text-muted-foreground">
+                        {stockSignal.sector && `Sector: ${stockSignal.sector}`}{stockSignal.sector && stockSignal.market ? ' · ' : ''}{stockSignal.market || ''}
                       </div>
                     )}
                   </div>
@@ -1297,11 +1361,12 @@ export function StockAnalysisPage() {
               </div>
             </Card>
 
-            {/* Technical Indicators */}
+            {/* Key Indicators */}
             <Card className="border shadow-sm">
               <div className="p-5">
                 <h3 className="text-sm font-semibold text-foreground mb-4">Key Indicators</h3>
                 <div className="space-y-4">
+
                   {/* RSI */}
                   <div>
                     <div className="flex justify-between items-center mb-1.5">
@@ -1310,24 +1375,24 @@ export function StockAnalysisPage() {
                         rsi > 70 ? "text-red-500" : rsi < 30 ? "text-emerald-600" : "text-amber-600"
                       }`}>{rsi.toFixed(1)}</span>
                     </div>
-                    <div className="relative h-2 bg-muted rounded-full overflow-hidden">
-                      <div className="absolute inset-0 flex">
-                        <div className="h-full bg-red-200/50" style={{ width: '30%' }} />
-                        <div className="h-full bg-amber-200/50" style={{ width: '40%' }} />
-                        <div className="h-full bg-emerald-200/50" style={{ width: '30%' }} />
-                      </div>
+                    <div className="relative h-3 bg-muted rounded-full overflow-hidden">
+                      <div className="absolute inset-0 rounded-full" style={{
+                        background: 'linear-gradient(to right, #059669, #059669 30%, #d97706 30%, #d97706 70%, #dc2626 70%, #dc2626 100%)',
+                        opacity: 0.15,
+                      }} />
                       <div
-                        className="h-full bg-current rounded-full transition-all duration-300 relative"
+                        className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
                         style={{
                           width: `${Math.min(100, Math.max(0, rsi))}%`,
-                          color: rsi > 70 ? '#dc2626' : rsi < 30 ? '#059669' : '#d97706',
+                          background: rsi > 70 ? '#dc2626' : rsi < 30 ? '#059669' : '#d97706',
+                          opacity: 0.8,
                         }}
                       />
                     </div>
                     <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
                       <span>0</span>
-                      <span>30</span>
-                      <span>70</span>
+                      <span className="text-emerald-600 font-medium">30</span>
+                      <span className="text-red-500 font-medium">70</span>
                       <span>100</span>
                     </div>
                     <div className="text-[11px] text-muted-foreground mt-1">
@@ -1343,24 +1408,24 @@ export function StockAnalysisPage() {
                         macdSignal === "Bullish" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
                       }`}>{macdSignal}</Badge>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="bg-muted/50 rounded p-1.5">
-                        <span className="text-muted-foreground">MACD Line</span>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="bg-muted/40 rounded p-2 border border-border/50">
+                        <div className="text-[10px] text-muted-foreground mb-0.5">MACD Line</div>
                         <div className="font-semibold text-foreground">{macdLine.toFixed(4)}</div>
                       </div>
-                      <div className="bg-muted/50 rounded p-1.5">
-                        <span className="text-muted-foreground">Signal</span>
+                      <div className="bg-muted/40 rounded p-2 border border-border/50">
+                        <div className="text-[10px] text-muted-foreground mb-0.5">Signal</div>
                         <div className="font-semibold text-foreground">{(macdLine - macdHistogram).toFixed(4)}</div>
                       </div>
-                      <div className="bg-muted/50 rounded p-1.5 col-span-2">
-                        <span className="text-muted-foreground">Histogram</span>
+                      <div className="bg-muted/40 rounded p-2 border border-border/50">
+                        <div className="text-[10px] text-muted-foreground mb-0.5">Histogram</div>
                         <div className={`font-semibold ${macdHistogram >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                           {macdHistogram >= 0 ? '+' : ''}{macdHistogram.toFixed(4)}
-                          <span className="text-muted-foreground font-normal ml-1">
-                            {macdHistogram >= 0 ? '↑ gaining momentum' : '↓ losing momentum'}
-                          </span>
                         </div>
                       </div>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-1">
+                      {macdHistogram >= 0 ? '↑ Momentum gaining' : '↓ Momentum fading'}
                     </div>
                   </div>
 
@@ -1372,28 +1437,40 @@ export function StockAnalysisPage() {
                         {sma20 > sma50 ? 'Golden Cross' : 'Death Cross'}
                       </span>
                     </div>
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex justify-between items-center">
-                        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#f59e0b]" /> SMA 20</span>
-                        <div className="text-right">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs bg-muted/40 rounded p-2 border border-border/50">
+                        <span className="flex items-center gap-1.5">
+                          <span className="size-2.5 rounded-full bg-[#f59e0b]" />
+                          <span className="text-muted-foreground">SMA 20</span>
+                        </span>
+                        <div className="flex items-center gap-2">
                           <span className="font-semibold text-foreground">{formatPrice(sma20)}</span>
-                          <span className={`ml-1.5 ${currentPrice >= sma20 ? 'text-emerald-600' : 'text-red-500'}`}>
+                          <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${
+                            currentPrice >= sma20 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                          }`}>
                             {currentPrice >= sma20 ? 'above' : 'below'}
                           </span>
                         </div>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#ef4444]" /> SMA 50</span>
-                        <div className="text-right">
+                      <div className="flex items-center justify-between text-xs bg-muted/40 rounded p-2 border border-border/50">
+                        <span className="flex items-center gap-1.5">
+                          <span className="size-2.5 rounded-full bg-[#ef4444]" />
+                          <span className="text-muted-foreground">SMA 50</span>
+                        </span>
+                        <div className="flex items-center gap-2">
                           <span className="font-semibold text-foreground">{formatPrice(sma50)}</span>
-                          <span className={`ml-1.5 ${currentPrice >= sma50 ? 'text-emerald-600' : 'text-red-500'}`}>
+                          <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${
+                            currentPrice >= sma50 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                          }`}>
                             {currentPrice >= sma50 ? 'above' : 'below'}
                           </span>
                         </div>
                       </div>
-                      <div className="flex justify-between items-center text-muted-foreground">
+                      <div className="flex justify-between text-xs text-muted-foreground px-1">
                         <span>Gap</span>
-                        <span className="font-medium">{formatPrice(Math.abs(sma20 - sma50))} ({Math.abs(sma20 - sma50) / displayPrice > 0 ? (Math.abs(sma20 - sma50) / displayPrice * 100).toFixed(1) : '0.0'}%)</span>
+                        <span className="font-medium text-foreground">
+                          {formatPrice(Math.abs(sma20 - sma50))} ({(Math.abs(sma20 - sma50) / displayPrice * 100).toFixed(1)}%)
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1406,13 +1483,13 @@ export function StockAnalysisPage() {
                         {bbPosition > 80 ? 'Near Upper' : bbPosition < 20 ? 'Near Lower' : 'Middle Zone'}
                       </span>
                     </div>
-                    <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="relative h-3 bg-muted rounded-full overflow-hidden">
                       <div className="absolute inset-0 bg-gradient-to-r from-emerald-400/30 via-amber-400/30 to-red-400/30" />
                       <div className="absolute left-0 right-0 top-0 h-full flex items-center justify-center">
                         <div className="w-px h-full bg-foreground/20" />
                       </div>
                       <div
-                        className="size-3 rounded-full border-2 border-white shadow-md transition-all absolute top-1/2 -translate-y-1/2"
+                        className="size-3.5 rounded-full border-2 border-white shadow-md transition-all absolute top-1/2 -translate-y-1/2"
                         style={{
                           left: `${Math.min(95, Math.max(5, bbPosition))}%`,
                           backgroundColor: bbPosition > 80 ? '#dc2626' : bbPosition < 20 ? '#059669' : '#d97706',
@@ -1420,9 +1497,9 @@ export function StockAnalysisPage() {
                       />
                     </div>
                     <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-                      <span>{bbLower.toFixed(0)}</span>
-                      <span className="font-medium text-foreground">{((bbUpper + bbLower) / 2).toFixed(0)}</span>
-                      <span>{bbUpper.toFixed(0)}</span>
+                      <span>{formatPrice(bbLower)}</span>
+                      <span className="font-medium text-foreground">{formatPrice((bbUpper + bbLower) / 2)}</span>
+                      <span>{formatPrice(bbUpper)}</span>
                     </div>
                   </div>
 
@@ -1436,7 +1513,7 @@ export function StockAnalysisPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${atrPct > 3 ? 'bg-red-500' : atrPct > 1.5 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                           style={{ width: `${Math.min(100, atrPct * 20)}%` }}
@@ -1455,26 +1532,42 @@ export function StockAnalysisPage() {
             <FinancialMetrics symbol={activeSelection.ticker} sector={activeSelection.sector} />
           </div>
 
-          {/* Holders */}
+          {/* ── Top Holders ── */}
           {holders.length > 0 && (
             <Card className="border shadow-sm">
               <div className="p-5">
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-4">
                   <Building2 className="size-4 text-muted-foreground" />
                   <h3 className="font-semibold text-sm text-foreground">Top Holders</h3>
+                  <Badge variant="secondary" className="rounded-full text-[10px] ml-auto">{holders.length} holders</Badge>
                 </div>
-                <div className="space-y-2">
-                  {holders.map((h, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground truncate">{h.holder}</p>
-                        <p className="text-muted-foreground">
-                          {h.pctHeld ? `${h.pctHeld.toFixed(1)}%` : `${(h.shares || 0).toLocaleString()} shares`}
-                        </p>
+                <div className="space-y-2.5">
+                  {holders.slice(0, 10).map((h, i) => {
+                    const pct = h.pctHeld ?? 0;
+                    return (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="text-[11px] font-medium text-muted-foreground w-5 text-right shrink-0">
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-xs font-medium text-foreground truncate">{h.holder}</p>
+                            <span className={`text-xs font-semibold shrink-0 ml-2 ${
+                              pct > 5 ? 'text-[#0D7490]' : 'text-muted-foreground'
+                            }`}>
+                              {pct > 0 ? `${pct.toFixed(1)}%` : `${(h.shares || 0).toLocaleString()} shares`}
+                            </span>
+                          </div>
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] rounded-full transition-all"
+                              style={{ width: `${Math.min(100, pct * 5)}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <span className="text-muted-foreground ml-2">{h.dateOfReport?.slice(0, 10) || ''}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </Card>
@@ -1482,5 +1575,22 @@ export function StockAnalysisPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ── Inline SVG icon components for NSE Insights ── */
+function CalendarIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function Bell({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    </svg>
   );
 }

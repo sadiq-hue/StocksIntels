@@ -94,7 +94,6 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
     ? (revenue - prevRevenue) / prevRevenue : null;
 
   const netIncome = inc?.netIncome ?? null;
-  const prevNetIncome = prevInc?.netIncome ?? null;
   const epsGrowth = inc?.eps != null && prevInc?.eps != null && prevInc.eps !== 0
     ? (inc.eps - prevInc.eps) / Math.abs(prevInc.eps) : null;
 
@@ -127,19 +126,19 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
         <div className="space-y-4">
           {/* Profitability & Efficiency */}
           <div>
-            <div className="text-[11px] font-semibold text-[#0D7490] uppercase tracking-wider mb-2">Profitability</div>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="text-[11px] font-semibold text-[#0D7490] uppercase tracking-wider mb-2.5">Profitability</div>
+            <div className="grid grid-cols-2 gap-2">
               <MetricBox label="ROIC" value={pct(roic, 1)} color={badgeColor(roic, v => v > 0.1)} sub="Return on Invested Capital" />
               <MetricBox label="ROE" value={pct(roe, 1)} color={badgeColor(roe, v => v > 0.15)} sub="Return on Equity" />
               <MetricBox label="Op. Margin" value={pct(opMargin, 1)} color={badgeColor(opMargin, v => v > 0.1)} sub="Operating Efficiency" />
-              <MetricBox label="Net Margin" value={inc?.netIncomeRatio != null ? pct(inc.netIncomeRatio, 1) : "—"} color={badgeColor(inc?.netIncomeRatio, v => v > 0.05)} sub="Profit per Revenue $ " />
+              <MetricBox label="Net Margin" value={inc?.netIncomeRatio != null ? pct(inc.netIncomeRatio, 1) : "—"} color={badgeColor(inc?.netIncomeRatio, v => v > 0.05)} sub="Profit per Revenue $" />
             </div>
           </div>
 
           {/* Valuation */}
           <div className="border-t border-border pt-3">
-            <div className="text-[11px] font-semibold text-[#0D7490] uppercase tracking-wider mb-2">Valuation</div>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="text-[11px] font-semibold text-[#0D7490] uppercase tracking-wider mb-2.5">Valuation</div>
+            <div className="grid grid-cols-2 gap-2">
               <MetricBox label="P/E" value={ratio(pe, 1)} color={badgeColor(pe, v => v > 0 && v < 25)} sub="Price-to-Earnings" />
               <MetricBox label="P/B" value={ratio(pb, 1)} color={badgeColor(pb, v => v > 0 && v < 3)} sub="Price-to-Book" />
               <MetricBox label="P/S" value={ratio(ps, 1)} color={badgeColor(ps, v => v > 0 && v < 5)} sub="Price-to-Sales" />
@@ -149,8 +148,8 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
 
           {/* Growth */}
           <div className="border-t border-border pt-3">
-            <div className="text-[11px] font-semibold text-[#0D7490] uppercase tracking-wider mb-2">Growth</div>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="text-[11px] font-semibold text-[#0D7490] uppercase tracking-wider mb-2.5">Growth</div>
+            <div className="grid grid-cols-2 gap-2">
               <MetricBox label="Revenue Growth" value={pct(revenueGrowth, 1)} color={badgeColor(revenueGrowth, v => v > 0.05)} sub="YoY Revenue Change" />
               <MetricBox label="EPS Growth" value={pct(epsGrowth, 1)} color={badgeColor(epsGrowth, v => v > 0.05)} sub="YoY Earnings/Share" />
               <MetricBox label="Free Cash Flow" value={fcf != null ? formatLargeNum(fcf) : "—"} color={badgeColor(fcf, v => v > 0)} sub="Operating CF − CapEx" />
@@ -160,8 +159,8 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
 
           {/* Financial Health */}
           <div className="border-t border-border pt-3">
-            <div className="text-[11px] font-semibold text-[#0D7490] uppercase tracking-wider mb-2">Financial Health</div>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="text-[11px] font-semibold text-[#0D7490] uppercase tracking-wider mb-2.5">Leverage & Liquidity</div>
+            <div className="grid grid-cols-2 gap-2">
               <MetricBox label="D/E Ratio" value={ratio(de, 1)} color={badgeColor(de, v => v > 0 && v < 1.5)} sub="Debt-to-Equity" />
               <MetricBox label="Current Ratio" value={ratio(cr, 1)} color={badgeColor(cr, v => v > 1.5)} sub="Assets ÷ Liabilities" />
               <MetricBox label="FCF Yield" value={pct(fcfYield, 1)} color={badgeColor(fcfYield, v => v > 0.03)} sub="Free Cash Flow Yield" />
@@ -172,8 +171,8 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
           {/* Balance Sheet Summary */}
           {(totalAssets != null || totalLiabilities != null) && (
             <div className="border-t border-border pt-3">
-              <div className="text-[11px] font-semibold text-[#0D7490] uppercase tracking-wider mb-2">Balance Sheet</div>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="text-[11px] font-semibold text-[#0D7490] uppercase tracking-wider mb-2.5">Balance Sheet</div>
+              <div className="grid grid-cols-2 gap-2">
                 {totalAssets != null && <MetricBox label="Total Assets" value={formatLargeNum(totalAssets)} color="text-foreground" sub="Reported" />}
                 {totalLiabilities != null && <MetricBox label="Total Liabilities" value={formatLargeNum(totalLiabilities)} color={totalLiabilities > (totalAssets ?? 0) * 0.7 ? "text-red-500" : "text-foreground"} sub="vs. Assets" />}
                 {equity != null && <MetricBox label="Shareholders Equity" value={formatLargeNum(equity)} color={equity > 0 ? "text-emerald-600" : "text-red-500"} sub="Book Value" />}
@@ -189,8 +188,8 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
 
 function MetricBox({ label, value, color, sub }: { label: string; value: string; color: string; sub: string }) {
   return (
-    <div className="bg-background rounded-lg p-2 border">
-      <div className="text-[11px] font-medium text-muted-foreground">{label}</div>
+    <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
+      <div className="text-[11px] font-medium text-muted-foreground mb-0.5">{label}</div>
       <div className={`text-sm font-semibold ${color}`}>{value}</div>
       <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">{sub}</div>
     </div>
