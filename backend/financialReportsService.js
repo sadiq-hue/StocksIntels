@@ -41,7 +41,7 @@ function getDateStr(d) {
 async function ensureTTMValues(symbol, incHist) {
   // If the scraper already produced a TTM item with EPS, use it as-is
   if (incHist?.[0]?.period === 'ttm' && incHist[0].eps > 0) {
-    return { revenue: incHist[0].revenue, netIncome: incHist[0].netIncome, eps: incHist[0].eps, forwardPE: 0 };
+    return { revenue: incHist[0].revenue, netIncome: incHist[0].netIncome, eps: incHist[0].eps, forwardPE: 0, periods: 'ttm_prepended' };
   }
 
   let ttmRevenue = 0;

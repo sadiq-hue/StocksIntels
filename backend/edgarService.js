@@ -617,14 +617,13 @@ async function getTTMFromEdgar(symbol) {
 
   const facts = data.facts?.['us-gaap'] || {};
 
-  // Get ALL revenue entries with their fields for debugging
+  // Collect entries from ALL revenue tags for debugging
   function dumpEntries(facts, tagKeys) {
+    const all = [];
     for (const tag of tagKeys) {
       const entries = factLookup(facts, tag);
       if (!entries) continue;
       const units = entries.units;
-      // Collect from ALL unit types
-      const all = [];
       for (const unitName of Object.keys(units)) {
         const arr = units[unitName];
         if (Array.isArray(arr)) {
@@ -633,16 +632,17 @@ async function getTTMFromEdgar(symbol) {
           }
         }
       }
-      return all;
     }
-    return [];
+    return all;
   }
 
   const revRaw = dumpEntries(facts, US_GAAP_TAGS.revenue);
   const epsRaw = dumpEntries(facts, US_GAAP_TAGS.epsBasic);
 
-  // Helper: get entries from USD unit only, with fy+fp
-  function getUsdEntries(facts, tagKeys) {
+  // Helper: get entries from USD unit, preferring the tag with the most quarterly entries
+  function getBestEntries(facts, tagKeys) {
+    let best = [];
+    let bestQuarterCount = -1;
     for (const tag of tagKeys) {
       const entries = factLookup(facts, tag);
       if (!entries) continue;
@@ -651,17 +651,22 @@ async function getTTMFromEdgar(symbol) {
         if (!unitName.includes('USD') && !unitName.includes('shares') && !unitName.includes('pure')) continue;
         const arr = entries.units[unitName];
         if (!Array.isArray(arr) || arr.length === 0) continue;
-        return arr;
+        const quarterCount = arr.filter(e => e.fp && e.fp.startsWith('Q')).length;
+        if (bestQuarterCount === -1 || quarterCount > bestQuarterCount) {
+          best = arr;
+          bestQuarterCount = quarterCount;
+        }
       }
     }
-    return [];
+    return best;
   }
 
-  const revUsd = getUsdEntries(facts, US_GAAP_TAGS.revenue);
-  const niUsd = getUsdEntries(facts, US_GAAP_TAGS.netIncome);
-  const epsUsd = getUsdEntries(facts, US_GAAP_TAGS.epsBasic);
+  const revUsd = getBestEntries(facts, US_GAAP_TAGS.revenue);
+  const niUsd = getBestEntries(facts, US_GAAP_TAGS.netIncome);
+  const epsUsd = getBestEntries(facts, US_GAAP_TAGS.epsBasic);
 
   // For each metric, group by fy+fp, prefer entries with frame ending in 'I',
+  // then prefer entries without frame (current period) over entries with frame (comparisons),
   // then de-cumulate to get standalone quarters, then take last 4
   function bestPerQuarter(entries) {
     const best = {};
@@ -673,6 +678,9 @@ async function getTTMFromEdgar(symbol) {
         best[key] = e;
       } else if (e.frame && e.frame.endsWith('I')) {
         // Prefer YTD cumulative entries
+        best[key] = e;
+      } else if (!e.frame && existing.frame) {
+        // Prefer current-period entries (no frame) over restated comparisons
         best[key] = e;
       } else if (e.fp === 'FY' && (!existing.frame || !existing.frame.endsWith('I'))) {
         best[key] = e;

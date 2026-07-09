@@ -3542,7 +3542,7 @@ app.get('/api/financials/debug/:symbol', async (req, res) => {
     const edgarService = require('./edgarService');
     const edgarResult = await edgarService.getFinancialReportFromEdgar(symbol, 'annual', 4).catch(e => ({ error: e.message }));
     const proxyService = require('./proxyService');
-    const ttm = await ensureTTMValues(symbol, full?.data?.incomeStatementHistory || []).catch(e => ({ error: e.message }));
+    const ttm = await ensureTTMValues(symbol, scraperResult?.data?.incomeStatementHistory || []).catch(e => ({ error: e.message }));
     res.json({
       symbol,
       fullReportSuccess: full?.success,
