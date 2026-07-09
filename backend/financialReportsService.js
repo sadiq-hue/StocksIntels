@@ -75,42 +75,41 @@ async function getQuote(symbol) {
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  try {
-    const marketQuote = await marketService.getStockQuote(symbol);
-    if (marketQuote) {
-      return cacheSet(cacheKey, marketQuote);
-    }
-  } catch (err) {
-    console.warn(`[FinancialReports] Quote fetch failed for ${symbol}`);
+  // Fetch live quote and full stats in parallel for the most complete data
+  const [marketQuote, tdResult] = await Promise.allSettled([
+    marketService.getStockQuote(symbol).catch(() => null),
+    symbol.startsWith('NSE:') ? Promise.resolve(null) : getTwelveDataStats(symbol),
+  ]);
+  const mq = marketQuote.status === 'fulfilled' ? marketQuote.value : null;
+  const td = tdResult.status === 'fulfilled' ? tdResult.value : null;
+
+  if (mq || td) {
+    return cacheSet(cacheKey, {
+      symbol: symbol.toUpperCase(),
+      price: mq?.price || td?.price || 0,
+      change: mq?.change || 0,
+      changesPercentage: mq?.changesPercentage || mq?.changePercent || 0,
+      dayLow: mq?.dayLow || td?.dayLow || 0,
+      dayHigh: mq?.dayHigh || td?.dayHigh || 0,
+      marketCap: mq?.marketCap || td?.marketCap || 0,
+      volume: mq?.volume || 0,
+      previousClose: mq?.previousClose || 0,
+      eps: td?.eps || mq?.eps || 0,
+      pe: td?.peRatio || 0,
+      forwardPE: td?.forwardPE || 0,
+      dividendYield: td?.dividendYield || 0,
+      netIncomeTTM: td?.netIncomeTTM || 0,
+      revenueTTM: td?.revenueTTM || 0,
+      sharesOutstanding: td?.sharesOutstanding || 0,
+      company_name: mq?.company_name || td?.company_name || symbol,
+      currency: mq?.currency || td?.currency || 'USD',
+      exchange: mq?.exchange || td?.exchange || 'Global',
+      lastUpdated: new Date().toISOString(),
+    });
   }
 
-  // Fallback: Twelve Data + Yahoo proxy (NSE stocks only use mystocks — no data from these)
+  // Last-resort fallback: Yahoo proxy
   if (!symbol.startsWith('NSE:')) {
-    try {
-      const { fetchQuoteWithStats } = require('./twelveDataService');
-      const tq = await fetchQuoteWithStats(symbol);
-      if (tq) {
-        const enriched = {
-          symbol: symbol.toUpperCase(),
-          price: tq.price,
-          change: tq.change || 0,
-          changesPercentage: tq.changePercent || 0,
-          dayLow: tq.dayLow || tq.price,
-          dayHigh: tq.dayHigh || tq.price,
-          marketCap: tq.marketCap || 0,
-          volume: tq.volume || 0,
-          previousClose: tq.previousClose || tq.price,
-          eps: tq.eps || 0,
-          pe: tq.peRatio || 0,
-          company_name: tq.company_name || symbol,
-          currency: tq.currency || 'USD',
-          exchange: tq.exchange || 'Global',
-          lastUpdated: tq.lastUpdated || new Date().toISOString(),
-        };
-        return cacheSet(cacheKey, enriched);
-      }
-    } catch {}
-
     try {
       const yf = require('./yahooFinanceFinancialsScraper');
       const yp = await yf.fetchPriceViaProxy(symbol);
@@ -137,6 +136,16 @@ async function getQuote(symbol) {
   }
 
   return null;
+}
+
+// Fetch Twelve Data statistics (separate helper so both quote paths run in parallel)
+async function getTwelveDataStats(symbol) {
+  try {
+    const { fetchQuoteWithStats } = require('./twelveDataService');
+    return await fetchQuoteWithStats(symbol);
+  } catch {
+    return null;
+  }
 }
 
 async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
@@ -215,12 +224,13 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
 
   const enrichedKm = edgarKmHistory.map((km, idx) => {
     const incItem = edgarIncHistory[idx] || {};
-    const eps = epsFromStats || km.netIncomePerShare ||
+    const liveEps = quoteValue?.eps || tds?.eps || 0;
+    const eps = liveEps || km.netIncomePerShare ||
       (km.sharesOutstanding > 0 && incItem.netIncome ? incItem.netIncome / km.sharesOutstanding : 0);
-    const pe = (price > 0 && eps > 0) ? price / eps : 0;
-    const sharesOut = km.sharesOutstanding || 0;
+    const pe = quoteValue?.pe > 0 ? quoteValue.pe : ((price > 0 && eps > 0) ? price / eps : 0);
+    const sharesOut = quoteValue?.sharesOutstanding || km.sharesOutstanding || 0;
     const computedMarketCap = marketCapFromQuote || (price > 0 && sharesOut > 0 ? price * sharesOut : 0);
-    const divYield = divYieldFromHistory !== null ? divYieldFromHistory : (tds?.dividendYield || km.dividendYield || 0);
+    const divYield = quoteValue?.dividendYield || tds?.dividendYield || km.dividendYield || divYieldFromHistory || 0;
     return {
       ...km, marketCap: computedMarketCap,
       sharesOutstanding: sharesOut,
@@ -480,28 +490,26 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           }
         }
 
-        // Compute dividend yield from dividend history
+        // Enrich keyMetrics with real ratios from quote price + financial data
         const divHist = yahooReport.data.dividendHistory || [];
         const totalAnnualDiv = divHist.slice(0, 4).reduce((sum, d) => sum + Math.abs(d.dividend || d.adjDividend || 0), 0);
         const divYieldFromHistory = (price > 0 && totalAnnualDiv > 0) ? totalAnnualDiv / price : null;
-
-        // Enrich keyMetrics with real ratios from quote price + financial data
         const incHist = yahooReport.data.incomeStatementHistory || [];
         const balHist = yahooReport.data.balanceSheetHistory || [];
         const enrichedKm = (yahooReport.data.keyMetricsHistory || []).map((km, idx) => {
           const inc = incHist[idx] || {};
           const bal = balHist[idx] || {};
-          const netIncome = inc.netIncome || 0;
-          const eps = inc.eps || 0;
-          const sharesOut = (netIncome && eps && (netIncome > 0 === eps > 0)) ? Math.abs(netIncome / eps) : 0;
+          const netIncome = quote?.netIncomeTTM || inc.netIncome || 0;
+          const eps = quote?.eps || inc.eps || 0;
+          const sharesOut = quote?.sharesOutstanding || ((netIncome && eps && (netIncome > 0 === eps > 0)) ? Math.abs(netIncome / eps) : 0);
           const mc = quote?.marketCap || km.marketCap || computeMarketCap(price, netIncome, eps, sharesOut) || 0;
-          const revenue = inc.revenue || 0;
+          const revenue = quote?.revenueTTM || inc.revenue || 0;
           const equity = bal.totalStockholdersEquity || bal.totalEquity || 0;
-          const divYield = divYieldFromHistory !== null ? divYieldFromHistory : km.dividendYield || 0;
+          const divYield = quote?.dividendYield || km.dividendYield || divYieldFromHistory || 0;
           return {
             ...km,
             marketCap: mc,
-            peRatio: (price > 0 && eps > 0) ? price / eps : (netIncome > 0 && mc > 0 ? mc / netIncome : 0),
+            peRatio: quote?.pe > 0 ? quote.pe : ((price > 0 && eps > 0) ? price / eps : (netIncome > 0 && mc > 0 ? mc / netIncome : 0)),
             priceToSalesRatio: (mc > 0 && revenue > 0) ? mc / revenue : 0,
             pbRatio: (mc > 0 && equity > 0) ? mc / equity : 0,
             earningsYield: (price > 0 && eps > 0) ? eps / price : 0,
