@@ -680,5 +680,6 @@ module.exports = {
   getDividendHistory,
   getFinancialReport,
   yahooFinanceScraper,
+  ensureTTMValues,
   clearCache,
 };
