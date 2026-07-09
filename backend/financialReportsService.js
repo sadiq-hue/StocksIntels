@@ -36,14 +36,9 @@ function getDateStr(d) {
   return String(d);
 }
 
-// Fallback TTM computation when the scraper's fundamentalTimeSeries call fails (e.g. on Railway).
-// Tries multiple strategies so the enrichment layer always has meaningful trailing 12-month values.
+// Compute TTM from SEC EDGAR as primary source (delayed but authoritative).
+// Only falls back to scraper cache when EDGAR fails entirely.
 async function ensureTTMValues(symbol, incHist) {
-  // If the scraper already produced a TTM item with EPS, use it as-is
-  if (incHist?.[0]?.period === 'ttm' && incHist[0].eps > 0) {
-    return { revenue: incHist[0].revenue, netIncome: incHist[0].netIncome, eps: incHist[0].eps, forwardPE: 0, periods: 'ttm_prepended' };
-  }
-
   let ttmRevenue = 0;
   let ttmNetIncome = 0;
   let ttmEps = 0;
@@ -61,83 +56,40 @@ async function ensureTTMValues(symbol, incHist) {
     forwardPE = fwdRaw?.raw ?? fwdRaw ?? 0;
   } catch {}
 
-  // Strategy 1: fundamentalsTimeSeries (full data — revenue, netIncome, basicEPS)
-  if (!ttmRevenue || !ttmNetIncome || !ttmEps) {
-    try {
-      const yf = await createYf();
-      const periodEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const periodStart = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const fts = await yf.fundamentalsTimeSeries(symbol, { period1: periodStart, period2: periodEnd, module: 'financials' });
-      if (fts && fts.length >= 4) {
-        const sorted = fts.filter(i => i.totalRevenue != null)
-          .sort((a, b) => (getDateStr(b.date) || '').localeCompare(getDateStr(a.date) || ''))
-          .slice(0, 4);
-        if (sorted.length >= 4) {
-          ttmRevenue = sorted.reduce((s, i) => s + (i.totalRevenue || 0), 0);
-          ttmNetIncome = sorted.reduce((s, i) => s + (i.netIncome || 0), 0);
-          ttmEps = sorted.reduce((s, i) => s + (i.basicEPS || 0), 0);
-        }
-      }
-    } catch {}
-  }
-
-  // Strategy 2: incomeStatementHistoryQuarterly (limited — only totalRevenue, netIncome)
-  if (!ttmNetIncome) {
-    try {
-      const yf = await createYf();
-      const qs = await yf.quoteSummary(symbol, { modules: ['incomeStatementHistoryQuarterly'] });
-      const hist = qs?.incomeStatementHistoryQuarterly?.incomeStatementHistory || [];
-      if (hist.length >= 4) {
-        const sorted = hist.filter(i => i.totalRevenue != null)
-          .sort((a, b) => (getDateStr(b.endDate) || '').localeCompare(getDateStr(a.endDate) || ''))
-          .slice(0, 4);
-        if (sorted.length >= 4) {
-          ttmRevenue = sorted.reduce((s, i) => s + ((i.totalRevenue?.raw ?? i.totalRevenue) || 0), 0);
-          ttmNetIncome = sorted.reduce((s, i) => s + ((i.netIncome?.raw ?? i.netIncome) || 0), 0);
-        }
-      }
-    } catch {}
-  }
-
-  // Strategy 3: SEC EDGAR quarterly data (free, no API key needed for US stocks)
-  if (!ttmNetIncome || !ttmEps) {
-    try {
-      const edgarTtm = await edgarService.getTTMFromEdgar(symbol);
-      if (edgarTtm && edgarTtm.revenue > 0 && edgarTtm.netIncome > 0) {
-        // Calibrate EDGAR TTM using FY EPS ratio (scraper/EDGAR) to approximate Yahoo's methodology
-        const scraperFY = incHist?.[0];
-        let calibrated = false;
-        if (scraperFY?.eps > 0) {
-          const edgarFYList = await edgarService.getIncomeStatementFromEdgar(symbol, 'annual', 1).catch(() => null);
-          const edgarFY = edgarFYList?.[0];
-          if (edgarFY?.eps > 0) {
-            const rawRatio = scraperFY.eps / edgarFY.eps;
-            // Cap calibration to ±25% to avoid amplifying data quality issues
-            const epsRatio = Math.min(Math.max(rawRatio, 0.8), 1.25);
-            ttmRevenue = edgarTtm.revenue * epsRatio;
-            ttmNetIncome = edgarTtm.netIncome * epsRatio;
-            ttmEps = edgarTtm.eps * epsRatio;
-            calibrated = true;
-          }
-        }
-        if (!calibrated) {
-          ttmRevenue = edgarTtm.revenue;
-          ttmNetIncome = edgarTtm.netIncome;
-          if (!ttmEps && edgarTtm.eps > 0) ttmEps = edgarTtm.eps;
-        }
-      }
-      if (edgarTtm?.periods) ttmPeriods = edgarTtm.periods;
-    } catch { ttmPeriods = 'EXCEPTION in getTTMFromEdgar'; }
-  }
+  // Primary source: SEC EDGAR quarterly data (free, authoritative, works on Railway)
+  try {
+    const edgarTtm = await edgarService.getTTMFromEdgar(symbol);
+    if (edgarTtm && edgarTtm.revenue > 0 && edgarTtm.netIncome > 0) {
+      ttmRevenue = edgarTtm.revenue;
+      ttmNetIncome = edgarTtm.netIncome;
+      ttmEps = edgarTtm.eps > 0 ? edgarTtm.eps : 0;
+      ttmPeriods = edgarTtm.periods || '';
+    } else if (edgarTtm?.periods) {
+      ttmPeriods = edgarTtm.periods;
+    }
+  } catch { ttmPeriods = 'EXCEPTION in getTTMFromEdgar'; }
 
   // If we still have no EPS but have sharesOutstanding and TTM netIncome, compute EPS
   if (!ttmEps && ttmNetIncome > 0 && sharesOut > 0) {
     ttmEps = ttmNetIncome / sharesOut;
   }
 
-  // If TTM revenue/netIncome are still 0, fall back to what the scraper returned
-  if (!ttmRevenue) ttmRevenue = incHist?.[0]?.revenue || 0;
-  if (!ttmNetIncome) ttmNetIncome = incHist?.[0]?.netIncome || 0;
+  // Fallback: scraper data only when EDGAR returned nothing AND scraper data is recent
+  if (!ttmRevenue && !ttmNetIncome) {
+    const scraperItem = incHist?.[0];
+    if (scraperItem) {
+      const scraperDate = scraperItem.date || scraperItem.endDate;
+      const isRecent = scraperDate && (Date.now() - new Date(scraperDate).getTime()) < 15 * 30 * 24 * 60 * 60 * 1000;
+      if (isRecent) {
+        ttmRevenue = scraperItem.revenue || 0;
+        ttmNetIncome = scraperItem.netIncome || 0;
+        if (!ttmEps && scraperItem.eps > 0) ttmEps = scraperItem.eps;
+        ttmPeriods = ttmPeriods || `scraper_fallback_fy${scraperDate}`;
+      } else {
+        ttmPeriods = ttmPeriods || `SCRAPER_STALE: ${scraperDate || 'unknown'} >15 months old`;
+      }
+    }
+  }
 
   return { revenue: ttmRevenue, netIncome: ttmNetIncome, eps: ttmEps, forwardPE, periods: ttmPeriods };
 }
