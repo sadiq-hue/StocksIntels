@@ -3541,6 +3541,8 @@ app.get('/api/financials/debug/:symbol', async (req, res) => {
     const scraperResult = await yahooScraper.getFinancialReport(symbol, 'annual', 4).catch(e => ({ error: e.message }));
     const edgarService = require('./edgarService');
     const edgarResult = await edgarService.getFinancialReportFromEdgar(symbol, 'annual', 4).catch(e => ({ error: e.message }));
+    const proxyService = require('./proxyService');
+    const ttm = await ensureTTMValues(symbol, full?.data?.incomeStatementHistory || []).catch(e => ({ error: e.message }));
     res.json({
       symbol,
       fullReportSuccess: full?.success,
@@ -3559,6 +3561,8 @@ app.get('/api/financials/debug/:symbol', async (req, res) => {
       edgarResultCount: edgarResult?.data?.incomeStatementHistory?.length || 0,
       edgarError: edgarResult?.error,
       edgarIncomeHistory: (edgarResult?.data?.incomeStatementHistory || []).slice(0, 2),
+      ttmFallback: { revenue: ttm?.revenue, netIncome: ttm?.netIncome, eps: ttm?.eps, forwardPE: ttm?.forwardPE },
+      proxyPoolSize: proxyService.getWorkingCount(),
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
