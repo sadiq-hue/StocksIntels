@@ -111,9 +111,9 @@ async function ensureTTMValues(symbol, incHist) {
           const edgarFYList = await edgarService.getIncomeStatementFromEdgar(symbol, 'annual', 1).catch(() => null);
           const edgarFY = edgarFYList?.[0];
           if (edgarFY?.eps > 0) {
-            const epsRatio = scraperFY.eps / edgarFY.eps;
-            // Apply EPS-derived calibration uniformly to all TTM metrics as a heuristic;
-            // empirically all three are ~6% low relative to Yahoo's TTM
+            const rawRatio = scraperFY.eps / edgarFY.eps;
+            // Cap calibration to ±25% to avoid amplifying data quality issues
+            const epsRatio = Math.min(Math.max(rawRatio, 0.8), 1.25);
             ttmRevenue = edgarTtm.revenue * epsRatio;
             ttmNetIncome = edgarTtm.netIncome * epsRatio;
             ttmEps = edgarTtm.eps * epsRatio;
