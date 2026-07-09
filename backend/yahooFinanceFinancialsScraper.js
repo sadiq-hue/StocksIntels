@@ -337,14 +337,15 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
   }
 
   // Annual: combine fiscal years from quoteSummary + trailing TTM
-  const [annualData, fts, yf2Fts] = await Promise.allSettled([
+  const [annualData, fts, yf2Quarterly] = await Promise.allSettled([
     fetchAnnualIncomeHistory(symbol),
     fetchAllFundamentals(symbol),
     (async () => {
       try {
         const { default: YahooFinance } = await import('yahoo-finance2');
         const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-        return await yf.fundamentalsTimeSeries(symbol, { period1: '1970-01-01', period2: new Date().toISOString().split('T')[0] });
+        const qs = await yf.quoteSummary(symbol, { modules: ['incomeStatementHistoryQuarterly'] });
+        return qs?.incomeStatementHistoryQuarterly?.incomeStatementHistory || null;
       } catch { return null; }
     })(),
   ]);
@@ -375,7 +376,7 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
     }
   }
 
-  // 2. Trailing TTM (most recent 4 quarters) from yahoo-finance2 fundamentalsTimeSeries
+  // 2. Trailing TTM (most recent 4 quarters)
   const ttmKeys = [
     'totalRevenue', 'reconciledCostOfRevenue', 'costOfRevenue',
     'grossProfit', 'operatingExpense', 'operatingIncome',
@@ -391,10 +392,24 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
     'totalOperatingIncomeAsReported', 'normalizedEBITDA',
   ];
   let ttmAdded = false;
-  if (yf2Fts.status === 'fulfilled' && yf2Fts.value) {
-    const quarterly = yf2Fts.value.filter(item =>
-      item.periodType === '3M' && item.totalRevenue != null
-    ).sort((a, b) => ((b.date || '')).localeCompare(a.date || ''));
+  // a) Try yahoo-finance2 incomeStatementHistoryQuarterly (same API that works for annual)
+  if (yf2Quarterly.status === 'fulfilled' && yf2Quarterly.value) {
+    const quarterly = yf2Quarterly.value
+      .filter(item => item.totalRevenue != null)
+      .slice(0, 4)
+      .map(item => ({
+        ...item,
+        periodType: '3M',
+        date: getDateStr(item.endDate) || item.date,
+        netIncome: item.netIncomeApplicableToCommonShares ?? item.netIncome ?? 0,
+        netIncomeCommonStockholders: item.netIncomeFromContinuingOps ?? item.netIncomeCommonStockholders ?? 0,
+        basicEPS: item.basicEPS ?? 0,
+        dilutedEPS: item.dilutedEPS ?? 0,
+        operatingRevenue: item.operatingRevenue ?? item.totalRevenue,
+        totalExpenses: item.totalOperatingExpenses ?? item.totalExpenses ?? 0,
+        ebitda: item.ebitda ?? item.normalizedEBITDA ?? 0,
+      }))
+      .sort((a, b) => ((b.date || b.endDate || '')).localeCompare(a.date || a.endDate || ''));
     if (quarterly.length >= 4) {
       const windows = computeTTM(quarterly, ttmKeys);
       if (windows.length > 0) {
@@ -403,6 +418,7 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
       }
     }
   }
+  // b) Fallback: EDGAR quarterly data
   if (!ttmAdded && fts.status === 'fulfilled' && fts.value) {
     const quarterly = fts.value.filter(item =>
       item.periodType === '3M' && item.totalRevenue != null
