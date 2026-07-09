@@ -617,25 +617,78 @@ async function getTTMFromEdgar(symbol) {
 
   const facts = data.facts?.['us-gaap'] || {};
 
-  function getSecEntries(facts, tagKeys) {
+  // Get ALL revenue entries with their fields for debugging
+  function dumpEntries(facts, tagKeys) {
     for (const tag of tagKeys) {
       const entries = factLookup(facts, tag);
       if (!entries) continue;
       const units = entries.units;
-      const usd = units?.USD || units?.USD_per_share || units?.['USD/shares'] || units?.shares || units?.pure;
-      if (!usd || usd.length === 0) continue;
-      return usd;
+      // Collect from ALL unit types
+      const all = [];
+      for (const unitName of Object.keys(units)) {
+        const arr = units[unitName];
+        if (Array.isArray(arr)) {
+          for (const e of arr) {
+            all.push({ ...e, unit: unitName });
+          }
+        }
+      }
+      return all;
     }
     return [];
   }
 
-  function extractTtm(entries) {
-    // Separate quarterly (Q1-Q3), FY, and non-period entries
-    const q = entries.filter(e => e.fy && e.fp && e.fp.startsWith('Q'));
-    const fy = entries.filter(e => e.fy && e.fp === 'FY');
-    if (q.length === 0) return null;
+  const revRaw = dumpEntries(facts, US_GAAP_TAGS.revenue);
+  const epsRaw = dumpEntries(facts, US_GAAP_TAGS.epsBasic);
 
-    // Group by fiscal year
+  // Helper: get entries from USD unit only, with fy+fp
+  function getUsdEntries(facts, tagKeys) {
+    for (const tag of tagKeys) {
+      const entries = factLookup(facts, tag);
+      if (!entries) continue;
+      const unitNames = Object.keys(entries.units);
+      for (const unitName of unitNames) {
+        if (!unitName.includes('USD') && !unitName.includes('shares') && !unitName.includes('pure')) continue;
+        const arr = entries.units[unitName];
+        if (!Array.isArray(arr) || arr.length === 0) continue;
+        return arr;
+      }
+    }
+    return [];
+  }
+
+  const revUsd = getUsdEntries(facts, US_GAAP_TAGS.revenue);
+  const niUsd = getUsdEntries(facts, US_GAAP_TAGS.netIncome);
+  const epsUsd = getUsdEntries(facts, US_GAAP_TAGS.epsBasic);
+
+  // For each metric, group by fy+fp, prefer entries with frame ending in 'I',
+  // then de-cumulate to get standalone quarters, then take last 4
+  function bestPerQuarter(entries) {
+    const best = {};
+    for (const e of entries) {
+      if (!e.fy || !e.fp) continue;
+      const key = `${e.fy}_${e.fp}`;
+      const existing = best[key];
+      if (!existing) {
+        best[key] = e;
+      } else if (e.frame && e.frame.endsWith('I')) {
+        // Prefer YTD cumulative entries
+        best[key] = e;
+      } else if (e.fp === 'FY' && (!existing.frame || !existing.frame.endsWith('I'))) {
+        best[key] = e;
+      }
+    }
+    return Object.values(best);
+  }
+
+  function computeTtm(entries) {
+    const q = entries.filter(e => e.fp && e.fp.startsWith('Q'));
+    const fyMap = {};
+    for (const e of entries) {
+      if (e.fp === 'FY') fyMap[e.fy] = e;
+    }
+
+    // Group quarters by fy, sort
     const byFy = {};
     for (const e of q) {
       if (!byFy[e.fy]) byFy[e.fy] = [];
@@ -647,68 +700,98 @@ async function getTTMFromEdgar(symbol) {
 
     for (const [fyStr, list] of Object.entries(byFy)) {
       const fyNum = parseInt(fyStr);
-      const sorted = list.sort((a, b) => (order[a.fp] || 0) - (order[b.fp] || 0));
+      // Deduplicate by fp (keep last one which is most recently filed)
+      const deduped = {};
+      for (const e of list) {
+        deduped[e.fp] = e;
+      }
+      const sorted = Object.values(deduped).sort((a, b) => (order[a.fp] || 0) - (order[b.fp] || 0));
+      if (sorted.length === 0) continue;
 
-      // Detect if cumulative (non-decreasing) or standalone (any decrease means standalone)
-      let isCumulative = true;
-      let prevCheck = 0;
+      // Check if cumulative by looking if values are non-decreasing
+      let isCumulative = sorted.length > 1;
+      let prevC = 0;
       for (const e of sorted) {
-        if (e.val < prevCheck) { isCumulative = false; break; }
-        prevCheck = e.val;
+        if (e.val < prevC) { isCumulative = false; break; }
+        prevC = e.val;
       }
 
-      if (isCumulative && sorted.length >= 2) {
-        // De-cumulate
-        let prev = 0;
-        for (const e of sorted) {
-          const val = e.val - prev;
-          if (val >= 0) {
-            standalone.push({ fy: fyNum, fp: e.fp, val, filed: e.filed || `${fyNum}-12-31` });
-          }
-          prev = e.val;
-        }
-        // Q4 from FY total
-        const fyEntry = fy.find(e => e.fy === fyNum);
-        if (fyEntry && fyEntry.val > prev) {
-          standalone.push({ fy: fyNum, fp: 'Q4', val: fyEntry.val - prev, filed: fyEntry.filed || `${fyNum}-12-31` });
+      let prev = 0;
+      for (const e of sorted) {
+        const val = isCumulative ? Math.max(0, e.val - prev) : e.val;
+        standalone.push({ fy: fyNum, fp: e.fp, val, filed: e.filed || '' });
+        prev = e.val;
+      }
+
+      // Q4 from FY
+      if (isCumulative) {
+        const fyEnt = fyMap[fyNum];
+        if (fyEnt && fyEnt.val > prev) {
+          standalone.push({ fy: fyNum, fp: 'Q4', val: fyEnt.val - prev, filed: fyEnt.filed || '' });
         }
       } else {
-        // Standalone values — use directly
-        for (const e of sorted) {
-          standalone.push({ fy: fyNum, fp: e.fp, val: e.val, filed: e.filed || `${fyNum}-12-31` });
-        }
-        // Q4 from FY minus sum of Q1-Q3
-        const fyEntry = fy.find(e => e.fy === fyNum);
+        const fyEnt = fyMap[fyNum];
         const sumQ = sorted.reduce((s, e) => s + e.val, 0);
-        if (fyEntry && fyEntry.val > sumQ) {
-          standalone.push({ fy: fyNum, fp: 'Q4', val: fyEntry.val - sumQ, filed: fyEntry.filed || `${fyNum}-12-31` });
+        if (fyEnt && fyEnt.val > sumQ) {
+          standalone.push({ fy: fyNum, fp: 'Q4', val: fyEnt.val - sumQ, filed: fyEnt.filed || '' });
         }
       }
     }
 
-    // Sort by filing date descending, take last 4
-    const sorted = standalone.sort((a, b) => (b.filed || '').localeCompare(a.filed || ''));
-    return sorted.slice(0, 4);
+    // Sort by fy desc, fp desc, take last 4 unique quarters
+    const fpOrder = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
+    standalone.sort((a, b) => {
+      if (a.fy !== b.fy) return b.fy - a.fy;
+      return (fpOrder[b.fp] || 0) - (fpOrder[a.fp] || 0);
+    });
+
+    // Deduplicate (fy+fp) and take first 4
+    const seen = new Set();
+    const result = [];
+    for (const e of standalone) {
+      const key = `${e.fy}_${e.fp}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(e);
+        if (result.length === 4) break;
+      }
+    }
+    return result.length === 4 ? result : null;
   }
 
-  const revEntries = getSecEntries(facts, US_GAAP_TAGS.revenue);
-  const niEntries = getSecEntries(facts, US_GAAP_TAGS.netIncome);
-  const epsEntries = getSecEntries(facts, US_GAAP_TAGS.epsBasic);
-  const epsDilEntries = getSecEntries(facts, US_GAAP_TAGS.epsDiluted);
+  const revBest = bestPerQuarter(revUsd);
+  const niBest = bestPerQuarter(niUsd);
+  const epsBest = bestPerQuarter(epsUsd);
 
-  const revQ = extractTtm(revEntries);
-  const niQ = extractTtm(niEntries);
-  const epsQ = extractTtm(epsEntries);
-  const epsDilQ = extractTtm(epsDilEntries);
+  const revTtm = computeTtm(revBest);
+  const niTtm = computeTtm(niBest);
+  const epsTtm = computeTtm(epsBest);
 
-  if (!revQ || revQ.length < 4) return null;
+  // Debug: summarize raw data
+  const revSummary = revUsd
+    .filter(e => e.fy)
+    .sort((a, b) => (b.filed || '').localeCompare(a.filed || ''))
+    .slice(0, 10)
+    .map(e => `fy${e.fy}_${e.fp || '?'}_${(e.val / 1e9).toFixed(1)}B_frame=${e.frame || '?'}`);
+
+  const epsSummary = epsUsd
+    .filter(e => e.fy)
+    .sort((a, b) => (b.filed || '').localeCompare(a.filed || ''))
+    .slice(0, 10)
+    .map(e => `fy${e.fy}_${e.fp || '?'}_${e.val}_frame=${e.frame || '?'}`);
+
+  if (!revTtm) {
+    return {
+      revenue: 0, netIncome: 0, eps: 0,
+      periods: `FAIL: revBest=${revBest.length} niBest=${niBest.length} epsBest=${epsBest.length} revRaw=${revRaw.length} revSample:${revSummary.join('|')} epsSample:${epsSummary.join('|')}`
+    };
+  }
 
   return {
-    revenue: revQ.reduce((s, i) => s + i.val, 0),
-    netIncome: niQ ? niQ.reduce((s, i) => s + i.val, 0) : 0,
-    eps: epsQ ? epsQ.reduce((s, i) => s + i.val, 0) : 0,
-    epsdiluted: epsDilQ ? epsDilQ.reduce((s, i) => s + i.val, 0) : 0,
-    periods: revQ.map(i => `FY${i.fy} ${i.fp}`).join(', '),
+    revenue: revTtm.reduce((s, i) => s + i.val, 0),
+    netIncome: niTtm ? niTtm.reduce((s, i) => s + i.val, 0) : 0,
+    eps: epsTtm ? epsTtm.reduce((s, i) => s + i.val, 0) : 0,
+    periods: revTtm.map(i => `FY${i.fy}_${i.fp}_${(i.val/1e9).toFixed(1)}B`).join(', '),
   };
 }
 

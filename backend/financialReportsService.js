@@ -107,9 +107,9 @@ async function ensureTTMValues(symbol, incHist) {
         ttmRevenue = edgarTtm.revenue;
         ttmNetIncome = edgarTtm.netIncome;
         if (!ttmEps && edgarTtm.eps > 0) ttmEps = edgarTtm.eps;
-        if (edgarTtm.periods) ttmPeriods = edgarTtm.periods;
       }
-    } catch {}
+      if (edgarTtm?.periods) ttmPeriods = edgarTtm.periods;
+    } catch { ttmPeriods = 'EXCEPTION in getTTMFromEdgar'; }
   }
 
   // If we still have no EPS but have sharesOutstanding and TTM netIncome, compute EPS
