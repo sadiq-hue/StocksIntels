@@ -28,21 +28,24 @@ function getDateStr(d) {
 async function ensureTTMValues(symbol, incHist) {
   // If the scraper already produced a TTM item with EPS, use it as-is
   if (incHist?.[0]?.period === 'ttm' && incHist[0].eps > 0) {
-    return { revenue: incHist[0].revenue, netIncome: incHist[0].netIncome, eps: incHist[0].eps };
+    return { revenue: incHist[0].revenue, netIncome: incHist[0].netIncome, eps: incHist[0].eps, forwardPE: 0 };
   }
 
   let ttmRevenue = incHist?.[0]?.revenue || 0;
   let ttmNetIncome = incHist?.[0]?.netIncome || 0;
   let ttmEps = incHist?.[0]?.eps || 0;
   let sharesOut = 0;
+  let forwardPE = 0;
 
-  // Get shares outstanding from defaultKeyStatistics (confirmed to work on Railway)
+  // Get shares outstanding & forwardPE from defaultKeyStatistics (confirmed to work on Railway)
   try {
     const { default: YahooFinance } = await import('yahoo-finance2');
     const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
     const qs = await yf.quoteSummary(symbol, { modules: ['defaultKeyStatistics'] });
     const raw = qs?.defaultKeyStatistics?.sharesOutstanding;
     sharesOut = raw?.raw ?? raw ?? 0;
+    const fwdRaw = qs?.defaultKeyStatistics?.forwardPE;
+    forwardPE = fwdRaw?.raw ?? fwdRaw ?? 0;
   } catch {}
 
   // Strategy 1: fundamentalsTimeSeries (full data — revenue, netIncome, basicEPS)
@@ -94,7 +97,7 @@ async function ensureTTMValues(symbol, incHist) {
   if (!ttmRevenue) ttmRevenue = incHist?.[0]?.revenue || 0;
   if (!ttmNetIncome) ttmNetIncome = incHist?.[0]?.netIncome || 0;
 
-  return { revenue: ttmRevenue, netIncome: ttmNetIncome, eps: ttmEps };
+  return { revenue: ttmRevenue, netIncome: ttmNetIncome, eps: ttmEps, forwardPE };
 }
 
 function validateDateString(dateStr) {
@@ -586,7 +589,11 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           const isCurrent = idx === 0;
           // Use TTM fallback values for the current (latest) period; historical periods use inc directly
           const netIncome = quote?.netIncomeTTM || (isCurrent ? ttm.netIncome : inc.netIncome) || inc.netIncome || 0;
-          const eps = quote?.eps || (isCurrent ? ttm.eps : inc.eps) || inc.eps || 0;
+          // EPS priority: Twelve Data → TTM fallback → scraper → forwardPE-derived → 0
+          let eps = quote?.eps || (isCurrent ? ttm.eps : inc.eps) || inc.eps || 0;
+          if (eps <= 0 && isCurrent && ttm.forwardPE > 0 && price > 0) {
+            eps = price / ttm.forwardPE;
+          }
           const sharesOut = quote?.sharesOutstanding || ((netIncome && eps && (netIncome > 0 === eps > 0)) ? Math.abs(netIncome / eps) : 0);
           const mc = quote?.marketCap || km.marketCap || computeMarketCap(price, netIncome, eps, sharesOut) || 0;
           const revenue = quote?.revenueTTM || (isCurrent ? ttm.revenue : inc.revenue) || inc.revenue || 0;
