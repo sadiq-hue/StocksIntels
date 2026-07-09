@@ -330,11 +330,16 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
   const totalAnnualDiv = divsValue.length > 0 ? Math.abs(divsValue[0].dividend || divsValue[0].adjDividend || 0) : 0;
   const divYieldFromHistory = (price > 0 && totalAnnualDiv > 0) ? totalAnnualDiv / price : null;
 
+  const ttm = await ensureTTMValues(symbol, edgarIncHistory);
+
   const enrichedKm = edgarKmHistory.map((km, idx) => {
     const incItem = edgarIncHistory[idx] || {};
+    const isCurrent = idx === 0;
     const liveEps = quoteValue?.eps || tds?.eps || 0;
-    const eps = liveEps || km.netIncomePerShare ||
+    const eps = liveEps || (isCurrent ? (ttm.eps || 0) : 0) || km.netIncomePerShare ||
       (km.sharesOutstanding > 0 && incItem.netIncome ? incItem.netIncome / km.sharesOutstanding : 0);
+    const netIncome = (isCurrent ? (ttm.netIncome || 0) : incItem.netIncome) || incItem.netIncome || 0;
+    const revenue = (isCurrent ? (ttm.revenue || 0) : incItem.revenue) || incItem.revenue || 0;
     const pe = quoteValue?.pe > 0 ? quoteValue.pe : ((price > 0 && eps > 0) ? price / eps : 0);
     const sharesOut = quoteValue?.sharesOutstanding || km.sharesOutstanding || 0;
     const computedMarketCap = marketCapFromQuote || (price > 0 && sharesOut > 0 ? price * sharesOut : 0);
@@ -343,7 +348,7 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
       ...km, marketCap: computedMarketCap,
       sharesOutstanding: sharesOut,
       peRatio: pe,
-      priceToSalesRatio: (price > 0 && km.revenuePerShare > 0) ? price / km.revenuePerShare : km.priceToSalesRatio,
+      priceToSalesRatio: (price > 0 && revenue > 0 && km.revenuePerShare > 0) ? price / km.revenuePerShare : (revenue > 0 && computedMarketCap > 0 ? computedMarketCap / revenue : km.priceToSalesRatio),
       earningsYield: pe > 0 ? 1 / pe : 0,
       dividendYield: divYield,
       dividendYieldPercentage: divYield * 100,
@@ -355,6 +360,18 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
     const mc = enrichedKm[0].marketCap || 0;
     if (equity > 0 && mc > 0) enrichedKm[0].pbRatio = mc / equity;
   }
+
+  // Override incomeStatement[0] with TTM values
+  const ttmIncome = edgarIncHistory[0] ? {
+    ...edgarIncHistory[0],
+    period: 'ttm',
+    revenue: ttm.revenue || edgarIncHistory[0].revenue,
+    netIncome: ttm.netIncome || edgarIncHistory[0].netIncome,
+    eps: ttm.eps || edgarIncHistory[0].eps,
+    epsdiluted: ttm.eps || edgarIncHistory[0].epsdiluted || edgarIncHistory[0].eps,
+    netIncomeRatio: ttm.revenue > 0 ? (ttm.netIncome || 0) / ttm.revenue : edgarIncHistory[0].netIncomeRatio,
+  } : null;
+  const ttmIncHist = ttmIncome ? [ttmIncome, ...edgarIncHistory.slice(1)] : edgarIncHistory;
 
   const computedCap = enrichedKm[0]?.marketCap || 0;
   const quoteResponse = quoteValue || (tds ? {
@@ -376,8 +393,8 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
     data: {
       profile: edgarReport.data.profile || { symbol, companyName: symbol, exchange: 'NASDAQ', currency: 'USD' },
       quote: quoteResponse,
-      incomeStatement: edgarIncHistory[0] || null,
-      incomeStatementHistory: edgarIncHistory,
+      incomeStatement: ttmIncome || edgarIncHistory[0] || null,
+      incomeStatementHistory: ttmIncHist,
       balanceSheet: edgarBalHistory[0] || null,
       balanceSheetHistory: edgarBalHistory,
       cashFlowStatement: edgarCfHistory[0] || null,
@@ -638,6 +655,19 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           };
         });
 
+        // Override incomeStatement[0] with TTM values so the frontend KPI row shows TTM data
+        const ttmIncome = incHist[0] ? {
+          ...incHist[0],
+          date: incHist[0].date,
+          period: 'ttm',
+          revenue: ttm.revenue || incHist[0].revenue,
+          netIncome: ttm.netIncome || incHist[0].netIncome,
+          eps: ttm.eps || incHist[0].eps,
+          epsdiluted: ttm.eps || incHist[0].epsdiluted || incHist[0].eps,
+          netIncomeRatio: ttm.revenue > 0 ? (ttm.netIncome || 0) / ttm.revenue : incHist[0].netIncomeRatio,
+        } : null;
+        const ttmIncHist = ttmIncome ? [ttmIncome, ...incHist.slice(1)] : incHist;
+
           return {
           ...yahooReport,
           symbol,
@@ -645,6 +675,8 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           availableProviders,
           data: {
             ...yahooReport.data,
+            incomeStatement: ttmIncome || yahooReport.data.incomeStatement,
+            incomeStatementHistory: ttmIncHist,
             keyMetrics: enrichedKm[0] || null,
             keyMetricsHistory: enrichedKm,
             quote: (() => {
