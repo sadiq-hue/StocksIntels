@@ -3536,17 +3536,23 @@ app.use('/api/notifications', ...authSubs);
 app.get('/api/financials/debug/:symbol', async (req, res) => {
   try {
     const symbol = req.params.symbol.toUpperCase();
-    const income = await getIncomeStatement(symbol).catch(e => ({ error: e.message }));
-    const ttm = await ensureTTMValues(symbol, income?.incomeStatementHistory || []).catch(e => ({ error: e.message }));
+    const full = await getFinancialReport(symbol, 'annual', 4).catch(e => ({ error: e.message }));
+    const yahooScraper = require('./yahooFinanceFinancialsScraper');
+    const scraperResult = await yahooScraper.getFinancialReport(symbol, 'annual', 4).catch(e => ({ error: e.message }));
     res.json({
       symbol,
-      incomeStatementItemCount: income?.incomeStatementHistory?.length || 0,
-      latestPeriod: income?.incomeStatementHistory?.[0]?.period || null,
-      latestRevenue: income?.incomeStatementHistory?.[0]?.revenue || 0,
-      latestNetIncome: income?.incomeStatementHistory?.[0]?.netIncome || 0,
-      latestEps: income?.incomeStatementHistory?.[0]?.eps || 0,
-      ttmFallback: ttm,
-      rawIncomeStatement: income?.incomeStatementHistory?.slice(0, 4) || [],
+      fullReportSuccess: full?.success,
+      fullReportSource: full?.source,
+      fullReportError: full?.error,
+      incomeStatementItemCount: full?.data?.incomeStatementHistory?.length || 0,
+      latestPeriod: full?.data?.incomeStatementHistory?.[0]?.period || null,
+      latestRevenue: full?.data?.incomeStatementHistory?.[0]?.revenue || 0,
+      latestNetIncome: full?.data?.incomeStatementHistory?.[0]?.netIncome || 0,
+      latestEps: full?.data?.incomeStatementHistory?.[0]?.eps || 0,
+      scraperResultSuccess: scraperResult?.success,
+      scraperResultCount: scraperResult?.data?.incomeStatementHistory?.length || 0,
+      scraperError: scraperResult?.error,
+      scraperIncomeHistory: (scraperResult?.data?.incomeStatementHistory || []).slice(0, 2),
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
