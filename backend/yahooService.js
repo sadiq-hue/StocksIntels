@@ -348,6 +348,33 @@ async function fetchQuote(symbol) {
     }, CACHE_TTL.quote, redisKey);
   }
 
+  // Proxy fallback for Railway deployments where direct Yahoo endpoints are blocked
+  if (!symbol.startsWith('NSE:')) {
+    try {
+      const proxyResult = await fetchPriceViaProxy(yahooSymbol);
+      if (proxyResult?.price) {
+        return cacheSet(quoteCache, cacheKey, {
+          symbol: symbol.toUpperCase(),
+          company_name: proxyResult.companyName || symbol.toUpperCase(),
+          price: proxyResult.price,
+          currency: proxyResult.currency || 'USD',
+          change: 0,
+          changePercent: 0,
+          changesPercentage: 0,
+          volume: 0,
+          dayHigh: proxyResult.price,
+          dayLow: proxyResult.price,
+          previousClose: proxyResult.previousClose || proxyResult.price,
+          marketCap: proxyResult.marketCap || 0,
+          timestamp: Math.floor(Date.now() / 1000),
+          lastUpdated: new Date().toISOString(),
+          exchange: proxyResult.exchange || 'Global',
+          provider: 'proxy',
+        }, CACHE_TTL.quote, redisKey);
+      }
+    } catch {}
+  }
+
   return null;
 }
 
