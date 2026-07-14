@@ -11484,9 +11484,12 @@ server.listen(port, '0.0.0.0', async () => {
       // Deferred warmFMPCache - don't await, fire and forget
       warmFMPCache(ALL_SYMBOLS).catch(() => {});
 
-      // Pre-warm the realtime quote cache so the first page loads are fast
+      // Pre-warm the realtime quote cache so the first page loads are fast.
+      // Skip NSE symbols (handled by the mystocks background auto-refresh) to
+      // avoid hammering live.mystocks.co.ke with a full-universe scrape at boot.
       setTimeout(() => {
-        getQuotesBatch(ALL_SYMBOLS).catch((e) => console.error('[warm] quote cache warm failed:', e.message));
+        const warmSymbols = ALL_SYMBOLS.filter((s) => !s.startsWith('NSE:'));
+        getQuotesBatch(warmSymbols).catch((e) => console.error('[warm] quote cache warm failed:', e.message));
       }, 8000);
 
       // Seed NSE stock fundamentals from static data into DB (background)

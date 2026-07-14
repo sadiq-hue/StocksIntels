@@ -155,15 +155,22 @@ async function fetchAllQuotes(force) {
 async function getQuoteForSymbol(symbol) {
   const cleanSymbol = symbol.replace('NSE:', '').toUpperCase();
   if (cache && cache[cleanSymbol]) return cache[cleanSymbol];
-  if (!cache) await fetchAllQuotes();
-  // On-demand fetch: if cache exists but this symbol is missing, scrape just this stock
-  if (cache && !cache[cleanSymbol]) {
-    console.log(`[myStocks] On-demand fetch for ${cleanSymbol}`);
-    const result = await scrapeStockPage(cleanSymbol);
-    if (result) {
-      cache[cleanSymbol] = result;
-      return result;
+  if (!cache) {
+    // Never block a request on a full-universe scrape. Kick off a background
+    // refresh and fetch just this one symbol on demand so the request can't hang.
+    fetchAllQuotes().catch(() => {});
+    const single = await scrapeStockPage(cleanSymbol);
+    if (single) {
+      if (!cache) cache = {};
+      cache[cleanSymbol] = single;
     }
+    return single || null;
+  }
+  // Cache exists but this symbol is missing -> scrape just this stock on demand
+  const result = await scrapeStockPage(cleanSymbol);
+  if (result) {
+    cache[cleanSymbol] = result;
+    return result;
   }
   return null;
 }

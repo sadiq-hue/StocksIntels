@@ -416,30 +416,46 @@ async function getStockQuote(symbol) {
 const CONCURRENCY = 40;
 const BATCH_TIMEOUT_MS = 25000;
 
+function withTimeout(promise, ms, label) {
+  let timer;
+  const t = new Promise((_, reject) =>
+    (timer = setTimeout(() => reject(new Error('timeout:' + label)), ms))
+  );
+  return Promise.race([promise, t]).finally(() => clearTimeout(timer));
+}
+
 async function fetchQuoteForSymbol(s) {
   let quote = null;
 
   if (s.startsWith('NSE:')) {
-    const mystocks = require('./mystocksScraper');
-    const msq = await mystocks.getQuoteForSymbol(s);
-    if (msq) {
-      quote = {
-        price: msq.price,
-        change: msq.change || 0,
-        changePercent: msq.changePercent || 0,
-        volume: msq.volume || 0,
-        dayHigh: msq.dayHigh || msq.price,
-        dayLow: msq.dayLow || msq.price,
-        previousClose: msq.previousClose || msq.price,
-        company_name: msq.name || msq.ticker || s,
-        timestamp: Math.floor(Date.now() / 1000),
-        lastUpdated: new Date().toISOString(),
-        provider: 'mystocks',
-      };
-      await enrichVolumeFromAfx(quote, s);
+    try {
+      const msq = await withTimeout(mystocks.getQuoteForSymbol(s), 12000, s);
+      if (msq) {
+        quote = {
+          price: msq.price,
+          change: msq.change || 0,
+          changePercent: msq.changePercent || 0,
+          volume: msq.volume || 0,
+          dayHigh: msq.dayHigh || msq.price,
+          dayLow: msq.dayLow || msq.price,
+          previousClose: msq.previousClose || msq.price,
+          company_name: msq.name || msq.ticker || s,
+          timestamp: Math.floor(Date.now() / 1000),
+          lastUpdated: new Date().toISOString(),
+          provider: 'mystocks',
+        };
+        try { await withTimeout(enrichVolumeFromAfx(quote, s), 8000, s + ':afx'); }
+        catch (e) { /* afx volume is optional */ }
+      }
+    } catch (e) {
+      console.warn(`[fetchQuoteForSymbol] NSE ${s} failed: ${e.message}`);
     }
   } else {
-    quote = await yahooService.fetchQuote(s);
+    try {
+      quote = await withTimeout(yahooService.fetchQuote(s), 12000, s);
+    } catch (e) {
+      console.warn(`[fetchQuoteForSymbol] Yahoo ${s} failed: ${e.message}`);
+    }
   }
 
   return quote;
