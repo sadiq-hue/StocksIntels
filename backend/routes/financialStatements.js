@@ -6,6 +6,8 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { storeParsedFinancials } = require('../financialStatementsStore');
+const { backfillAfricanFinancials } = require('../nseReportsDetector');
 
 const STOCKS_UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'stocks');
 if (!fs.existsSync(STOCKS_UPLOAD_DIR)) {
@@ -628,125 +630,43 @@ except Exception as ex:
 
 // ── Upload JSON financial data (manual entry) ──
 
-const KNOWN_FUNDAMENTAL_KEYS = ['revenue','net_profit','eps','dps','total_assets','total_liabilities','book_value','pe_ratio'];
-
-function normalizeFinancialData(raw) {
-  const out = {};
-  // Flatten known nested sections
-  const sections = ['balance_sheet', 'income_statement', 'cash_flow', 'per_share', 'ratios', 'metrics'];
-  for (const [key, value] of Object.entries(raw)) {
-    if (sections.includes(key) && value && typeof value === 'object' && !Array.isArray(value)) {
-      for (const [sk, sv] of Object.entries(value)) {
-        out[sk] = sv;
-      }
-    } else {
-      out[key] = value;
-    }
-  }
-  // Strip year suffixes — prefer non-suffixed key if both exist
-  for (const k of Object.keys(out)) {
-    const noYear = k.replace(/_\d{4}$/, '');
-    if (noYear !== k) {
-      if (out[noYear] === undefined) {
-        out[noYear] = out[k];
-      }
-      delete out[k];
-    }
-  }
-  // Map alternative key names to standard ones
-  const keyMap = { net_income_pat: 'net_income', earnings_per_share: 'eps', profit_after_tax: 'net_income', pat: 'net_income', dividend_per_share: 'dps', earnings_per_share_eps: 'eps', dividend_per_share_dps: 'dps', shares_outstanding_millions: 'shares_outstanding' };
-  for (const [src, dest] of Object.entries(keyMap)) {
-    if (out[src] !== undefined && out[dest] === undefined) {
-      out[dest] = src === 'shares_outstanding_millions' ? out[src] * 1000000 : out[src];
-    }
-  }
-  return out;
-}
-
 router.post('/financial-statements/upload-json', async (req, res) => {
   try {
-    let { ticker, stock_id, period_type, period_end_date, file_name, data } = req.body;
+    const { ticker, stock_id, period_type, period_end_date, file_name, data } = req.body;
     if (!data || typeof data !== 'object') return res.status(400).json({ error: 'data object is required' });
     if (!ticker && !stock_id) return res.status(400).json({ error: 'ticker or stock_id is required' });
 
-    // Normalize: flatten nested sections and map alternative key names
-    data = normalizeFinancialData(data);
-
-    // Resolve stock
-    let sid;
-    let tickerVal;
-    if (stock_id) {
-      const s = await pool.query('SELECT id, ticker FROM stocks WHERE id = $1', [stock_id]);
-      if (s.rows.length === 0) return res.status(404).json({ error: 'Stock not found' });
-      sid = s.rows[0].id;
-      tickerVal = s.rows[0].ticker;
-    } else {
-      const s = await pool.query('SELECT id FROM stocks WHERE ticker = $1 AND market = $2', [ticker.toUpperCase(), 'NSE']);
-      if (s.rows.length === 0) return res.status(404).json({ error: 'Stock not found for ticker ' + ticker });
-      sid = s.rows[0].id;
-      tickerVal = ticker.toUpperCase();
-    }
-
-    // Create financial_statements record
-    const ins = await pool.query(
-      `INSERT INTO financial_statements (stock_id, period_type, period_end_date, file_name, status, json_data, parsed_data, parsed_at, processed_by)
-       VALUES ($1, $2, $3, $4, 'completed', $5, $6, CURRENT_TIMESTAMP, 'json:manual')
-       RETURNING id`,
-      [sid, period_type || 'annual', period_end_date || null, file_name || (tickerVal + '_' + (period_end_date || 'manual') + '.json'), data, data]
-    );
-    const docId = ins.rows[0].id;
-
-    // Upsert into stock_fundamentals
-    try {
-      const ns = await pool.query('SELECT id FROM nse_stocks WHERE ticker = $1', [tickerVal]);
-      if (ns.rows.length > 0) {
-        const nseStockId = ns.rows[0].id;
-        const fundRow = {};
-        // Map known data fields to fundamentals columns
-        const fieldMap = {
-          total_revenue: 'revenue',
-          revenue: 'revenue',
-          net_income: 'net_profit',
-          net_profit: 'net_profit',
-          eps: 'eps',
-          dividend_per_share: 'dps',
-          dps: 'dps',
-          total_assets: 'total_assets',
-          total_liabilities: 'total_liabilities',
-          book_value: 'book_value',
-          book_value_per_share: 'book_value',
-          pe_ratio: 'pe_ratio',
-        };
-        for (const [srcKey, dbCol] of Object.entries(fieldMap)) {
-          if (data[srcKey] !== undefined && data[srcKey] !== null) {
-            fundRow[dbCol] = data[srcKey];
-          }
-        }
-        if (data.fiscal_year) fundRow.fiscal_year = data.fiscal_year;
-        else if (period_end_date) fundRow.fiscal_year = new Date(period_end_date).getFullYear();
-        if (period_type) fundRow.period = period_type;
-        if (Object.keys(fundRow).length > 0) {
-          if (!fundRow.fiscal_year) fundRow.fiscal_year = new Date().getFullYear();
-          const fk = Object.keys(fundRow);
-          const cols = ['stock_id', 'statement_id', ...fk];
-          const ph = cols.map((_, i) => '$' + (i + 1)).join(', ');
-          const vals = [nseStockId, docId, ...fk.map(k => fundRow[k])];
-          const updates = fk.map(k => k + ' = EXCLUDED.' + k).join(', ');
-          await pool.query(
-            `INSERT INTO stock_fundamentals (${cols.join(', ')}) VALUES (${ph}) ON CONFLICT (stock_id, statement_id) DO UPDATE SET ${updates}`,
-            vals
-          );
-        }
-      }
-    } catch (e) {
-      console.warn('[upload-json] stock_fundamentals insert failed for doc ' + docId + ': ' + e.message);
-    }
-
+    const { docId } = await storeParsedFinancials({ ticker, stock_id, period_type, period_end_date, file_name, data, processed_by: 'json:manual' });
     res.status(201).json({ id: docId, status: 'completed', message: 'Financial data uploaded successfully' });
   } catch (e) {
     console.error('upload-json error:', e.message);
+    if (/Stock not found/.test(e.message)) return res.status(404).json({ error: e.message });
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── AfricanFinancials historical backfill (paid scraping API) ────────────────
+// Triggers a one-shot scan of AfricanFinancials year archives and stores every
+// tracked Kenya report PDF it finds. Runs in the background; poll status via GET.
+let afBackfillStatus = { running: false, last: null };
+
+router.post('/backfill-af', async (req, res) => {
+  if (afBackfillStatus.running) {
+    return res.status(409).json({ error: 'Backfill already running', status: afBackfillStatus });
+  }
+  const years = (req.body && Array.isArray(req.body.years) && req.body.years.length)
+    ? req.body.years.map(Number).filter(y => y >= 2000 && y <= new Date().getFullYear())
+    : [2024];
+  afBackfillStatus = { running: true, last: { startedAt: new Date().toISOString(), years, result: null, error: null, finishedAt: null } };
+  backfillAfricanFinancials(years)
+    .then(result => { afBackfillStatus.last.result = result; afBackfillStatus.last.finishedAt = new Date().toISOString(); })
+    .catch(e => { afBackfillStatus.last.error = e.message; afBackfillStatus.last.finishedAt = new Date().toISOString(); })
+    .finally(() => { afBackfillStatus.running = false; });
+  res.json({ started: true, years, note: 'Backfill is running in the background. Poll GET /api/admin/backfill-af for progress.' });
+});
+
+router.get('/backfill-af', (_req, res) => {
+  res.json(afBackfillStatus);
 });
 
 module.exports = router;

@@ -221,6 +221,27 @@ function validateMetrics(data) {
   return issues;
 }
 
+// ── Hard rejection: quarantine clearly impossible parses ──
+function implausibleReasons(data) {
+  const reasons = [];
+  if (data.total_revenue != null && data.total_revenue < 0) reasons.push('negative revenue');
+  if (data.total_assets != null && data.total_assets < 0) reasons.push('negative total_assets');
+  if (data.total_liabilities != null && data.total_liabilities < 0) reasons.push('negative total_liabilities');
+  if (data.shareholders_equity != null && data.shareholders_equity < 0) reasons.push('negative equity');
+  if (data.total_revenue != null && data.net_income != null && data.net_income > 0 && data.total_revenue < data.net_income) reasons.push('revenue < net income');
+  if (data.eps != null && Math.abs(data.eps) > 1e8) reasons.push('EPS implausibly large (' + data.eps + ')');
+  if (data.total_assets != null && data.total_liabilities != null && data.shareholders_equity != null) {
+    const expected = data.total_assets - data.total_liabilities;
+    if (Math.abs(data.shareholders_equity - expected) > 0.5 * Math.max(Math.abs(data.shareholders_equity), 1)) {
+      reasons.push('equity ' + data.shareholders_equity + ' != assets ' + data.total_assets + ' - liab ' + data.total_liabilities + ' = ' + expected);
+    }
+  }
+  if (data.eps != null && data.dividend_per_share != null && Math.abs(data.eps) < Math.abs(data.dividend_per_share)) reasons.push('EPS < DPS');
+  return reasons;
+}
+
+function isImplausible(data) { return implausibleReasons(data).length > 0; }
+
 // ── Scale detection ──
 // Detect whether values are in actual KES, thousands, or millions
 // by looking for scale keywords in the text.
@@ -515,10 +536,125 @@ function tryGeminiModel(prompt, apiKey, model) {
   });
 }
 
+// ── Mistral (OCR + extraction) ──
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+const MISTRAL_OCR_MODEL = process.env.MISTRAL_OCR_MODEL || 'mistral-ocr-latest';
+const MISTRAL_EXTRACT_MODEL = process.env.MISTRAL_EXTRACT_MODEL || 'mistral-small-latest';
+
+function mistralPost(path, body, apiKey) {
+  return new Promise((resolve) => {
+    const data = JSON.stringify(body);
+    const url = new URL('https://api.mistral.ai' + path);
+    const opts = {
+      hostname: url.hostname,
+      path: url.pathname + url.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey,
+        'Content-Length': Buffer.byteLength(data),
+      },
+      timeout: 120000,
+    };
+    const req = https.request(opts, (res) => {
+      let chunks = '';
+      res.on('data', (c) => chunks += c);
+      res.on('end', () => {
+        try {
+          if (res.statusCode !== 200) {
+            console.error('[Mistral] HTTP ' + res.statusCode + ' on ' + path + ': ' + chunks.slice(0, 300));
+            resolve(null); return;
+          }
+          resolve(JSON.parse(chunks));
+        } catch (e) { console.error('[Mistral] parse error:', e.message); resolve(null); }
+      });
+    });
+    req.on('error', (e) => { console.error('[Mistral] request error:', e.message); resolve(null); });
+    req.on('timeout', () => { console.error('[Mistral] timeout on ' + path); req.destroy(); resolve(null); });
+    req.write(data);
+    req.end();
+  });
+}
+
+async function callMistralOcr(buffer) {
+  if (!MISTRAL_API_KEY) return null;
+  const b64 = buffer.toString('base64');
+  console.log('[Mistral] OCR request (' + (buffer.length / 1024).toFixed(0) + ' KB)');
+  const resp = await mistralPost('/v1/ocr', {
+    model: MISTRAL_OCR_MODEL,
+    document: { type: 'document_url', document_url: 'data:application/pdf;base64,' + b64 },
+    include_image_base64: false,
+  }, MISTRAL_API_KEY);
+  if (!resp || !Array.isArray(resp.pages)) return null;
+  return resp.pages.map(p => p.markdown || '').join('\n\n');
+}
+
+async function callMistralExtract(text, apiKey, model) {
+  const prompt = buildPrompt(text);
+  console.log('[Mistral] extraction request (text ' + text.length + ' chars, model ' + model + ')');
+  const resp = await mistralPost('/v1/chat/completions', {
+    model: model || MISTRAL_EXTRACT_MODEL,
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0,
+    response_format: { type: 'json_object' },
+  }, apiKey);
+  if (!resp || !resp.choices || !resp.choices[0]) { console.error('[Mistral] empty completion'); return null; }
+  const content = resp.choices[0].message.content;
+  try {
+    console.log('[Mistral] raw response: ' + content.slice(0, 400));
+    return JSON.parse(content.replace(/```(?:json)?\n?/gi, '').trim());
+  } catch (e) { console.error('[Mistral] JSON parse error:', e.message); return null; }
+}
+
 const EXPECTED_METRICS = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings','eps','dividend_per_share'];
+
+// Map the many labels LLMs use onto the canonical keys the frontend reads.
+const ALIAS_MAP = {
+  total_revenue: ['total_revenue','revenue','turnover','sales','total_sales','gross_revenue','net_revenue','total_turnover','total_income'],
+  cost_of_revenue: ['cost_of_revenue','cost_of_sales','cogs','cost_of_goods_sold'],
+  net_income: ['net_income','profit_after_tax','pat','net_profit','profit_for_year','profit_for_the_year','net_income_after_tax','profit_after_taxation'],
+  operating_income: ['operating_income','operating_profit','ebit','profit_from_operations','profit_before_interest_and_tax'],
+  eps: ['eps','earnings_per_share'],
+  dividend_per_share: ['dividend_per_share','dps','dividend','dividends_per_share'],
+  shareholders_equity: ['shareholders_equity','total_equity','equity','total_shareholders_equity','shareholders_funds','equity_attributable_to_owners','total_equity_attributable'],
+  total_assets: ['total_assets','assets'],
+  total_liabilities: ['total_liabilities','liabilities'],
+  total_debt: ['total_debt','total_borrowings','borrowings','debt'],
+  current_assets: ['current_assets'],
+  current_liabilities: ['current_liabilities'],
+  retained_earnings: ['retained_earnings','retained_earnings_reserve'],
+  cash_from_operations: ['cash_from_operations','operating_cash_flow','cash_from_operating_activities','net_cash_from_operations','cash_from_ops'],
+  cash_and_equivalents: ['cash_and_equivalents','cash_and_bank','cash_and_cash_equivalents','cash'],
+  free_cash_flow: ['free_cash_flow','fcf'],
+  shares_outstanding: ['shares_outstanding','num_shares','number_of_shares','shares','total_shares'],
+  book_value_per_share: ['book_value_per_share','bvps'],
+};
+
+function normalizeAliases(raw) {
+  if (!raw || typeof raw !== 'object') return raw;
+  const out = {};
+  for (const [canonical, aliases] of Object.entries(ALIAS_MAP)) {
+    for (const a of aliases) {
+      if (raw[a] !== undefined && raw[a] !== null && raw[a] !== '') {
+        const v = Number(raw[a]);
+        if (!isNaN(v)) { out[canonical] = Math.round(v * 100) / 100; break; }
+      }
+    }
+  }
+  // Preserve any other numeric keys we didn't explicitly map
+  for (const [k, v] of Object.entries(raw)) {
+    if (out[k] === undefined && typeof v === 'number' && !isNaN(v)) out[k] = Math.round(v * 100) / 100;
+  }
+  // Derive equity when missing but balance sheet is present
+  if (out.shareholders_equity == null && out.total_assets != null && out.total_liabilities != null) {
+    out.shareholders_equity = Math.round((out.total_assets - out.total_liabilities) * 100) / 100;
+  }
+  return out;
+}
 
 function tryLlm(text, apiKey, provider) {
   if (provider === 'gemini') return callGemini(text, apiKey, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
+  if (provider === 'mistral') return callMistralExtract(text, apiKey, MISTRAL_EXTRACT_MODEL);
   return callLlm(text, apiKey, process.env.OPENAI_MODEL || 'gpt-4o-mini');
 }
 
@@ -528,27 +664,36 @@ async function processText(text, docId, source) {
 
   // LLM-only extraction (no regex fallback)
   const llmProviders = [];
+  if (process.env.MISTRAL_API_KEY) llmProviders.push({ key: process.env.MISTRAL_API_KEY, name: 'mistral' });
   if (process.env.GEMINI_API_KEY) llmProviders.push({ key: process.env.GEMINI_API_KEY, name: 'gemini' });
   if (process.env.OPENAI_API_KEY) llmProviders.push({ key: process.env.OPENAI_API_KEY, name: 'openai' });
 
   for (const { key, name } of llmProviders) {
     console.log('[JSParser] Calling ' + name + ' for doc ' + docId + ', text length=' + text.length);
-    const llmResult = await tryLlm(text, key, name);
+    const llmResult = normalizeAliases(await tryLlm(text, key, name));
     if (llmResult) {
       let validCount = 0;
+      const cand = {};
       for (const k of EXPECTED_METRICS) {
         if (llmResult[k] !== null && llmResult[k] !== undefined && !isNaN(llmResult[k])) {
-          parsedData[k] = Math.round(llmResult[k] * 100) / 100;
+          cand[k] = Math.round(llmResult[k] * 100) / 100;
           validCount++;
         }
       }
       if (validCount >= 8) {
-        processedBy = 'js:' + name;
-        console.log('[JSParser] ' + name + ' extracted ' + validCount + ' metrics for doc ' + docId);
-        break;
+        if (!isImplausible(cand)) {
+          parsedData = cand;
+          processedBy = 'js:' + name;
+          console.log('[JSParser] ' + name + ' extracted ' + validCount + ' metrics for doc ' + docId);
+          break;
+        }
+        const why = implausibleReasons(cand).join('; ');
+        console.log('[JSParser] ' + name + ' result implausible (' + why + '), trying next provider');
+        parsedData = {};
+      } else {
+        parsedData = {};
+        console.log('[JSParser] ' + name + ' only returned ' + validCount + ' metrics (<8), trying next LLM');
       }
-      parsedData = {};
-      console.log('[JSParser] ' + name + ' only returned ' + validCount + ' metrics (<8), trying next LLM');
     } else {
       console.log('[JSParser] ' + name + ' returned null for doc ' + docId);
     }
@@ -588,20 +733,30 @@ async function processText(text, docId, source) {
   }
 
   const hasAnyData = Object.keys(parsedData).length > 0;
-  if (hasAnyData) {
+  if (hasAnyData && !isImplausible(parsedData) && !regexFallbackTried) {
     await pool.query(
       `UPDATE financial_statements SET status = 'completed', parsed_data = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
       [JSON.stringify(parsedData), processedBy, docId]
+    );
+  } else if (hasAnyData) {
+    // Either implausible, or came from the (unreliable) regex fallback — do NOT publish as authoritative.
+    const why = isImplausible(parsedData)
+      ? implausibleReasons(parsedData).join('; ')
+      : 'regex fallback extraction (unreliable) — not stored as authoritative';
+    console.log('[JSParser] Not storing as completed for doc ' + docId + ': ' + why);
+    await pool.query(
+      `UPDATE financial_statements SET status = 'failed', parsed_data = $1, error_message = $2, parsed_at = CURRENT_TIMESTAMP, processed_by = $3 WHERE id = $4`,
+      [JSON.stringify(parsedData), 'Rejected: ' + why, processedBy, docId]
     );
   } else {
     const preview = text.slice(0, 300).replace(/\0/g, '');
     let errorDetail;
     if (llmProviders.length === 0) {
-      errorDetail = 'No API keys configured (set GEMINI_API_KEY or OPENAI_API_KEY in Railway env vars)';
+      errorDetail = 'No API keys configured (set MISTRAL_API_KEY, GEMINI_API_KEY or OPENAI_API_KEY)';
     } else if (regexFallbackTried) {
-      errorDetail = 'LLM quota exceeded (429), regex fallback also returned no data';
+      errorDetail = 'LLM quota exceeded / returned no data, regex fallback also returned no data';
     } else {
-      errorDetail = 'LLM returned <8 valid metrics (check Railway logs for [Gemini] or [LLM] messages)';
+      errorDetail = 'LLM returned <8 valid metrics (check logs for [Mistral]/[Gemini]/[LLM] messages)';
     }
     await pool.query(
       `UPDATE financial_statements SET status = 'completed', parsed_data = '{}'::jsonb, error_message = $1, parsed_at = CURRENT_TIMESTAMP, processed_by = $2 WHERE id = $3`,
@@ -637,7 +792,12 @@ async function processText(text, docId, source) {
 
 async function parsePdfBuffer(buffer, docId) {
   try {
-    const text = extractPdfText(buffer);
+    let text = null;
+    if (MISTRAL_API_KEY) {
+      text = await callMistralOcr(buffer);
+      if (text && text.trim()) console.log('[JSParser] Mistral OCR produced ' + text.length + ' chars for doc ' + docId);
+    }
+    if (!text || !text.trim()) text = extractPdfText(buffer);
     if (!text.trim()) {
       await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = 'No text could be extracted from PDF' WHERE id = $1`, [docId]);
       return;

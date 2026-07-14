@@ -395,11 +395,9 @@ async function buildLocalNseReport(symbol) {
       [ticker, 'NSE']
     );
     if (stockResult.rows.length === 0) {
-      console.log(`[buildLocalNseReport] No stock found for ${ticker} in stocks table`);
       return null;
     }
     const stock = stockResult.rows[0];
-    console.log(`[buildLocalNseReport] Found stock: id=${stock.id}, name=${stock.name}, sector=${stock.sector}`);
 
     // Primary data source: financial_statements.parsed_data (populated by JSON upload / PDF parse)
     const stmtResult = await pool.query(
@@ -427,7 +425,6 @@ async function buildLocalNseReport(symbol) {
     const latest = validParsed[0] || {};
     const parsed = latest.parsed || null;
     const periodDate = latest.periodDate || now;
-    console.log(`[buildLocalNseReport] financial_statements: rows=${stmtResult.rows.length}, valid=${validParsed.length}, latestKeys=${parsed ? Object.keys(parsed).join(',') : 'none'}`);
 
     // Supplementary: stock_fundamentals (may have different schema on Railway; errors are non-fatal)
     let fundamentals = null;
@@ -482,7 +479,6 @@ async function buildLocalNseReport(symbol) {
       || f?.market_cap
       || (incomeShares > 0 && price > 0 ? Math.round(price * incomeShares) : 0)
       || 0;
-    console.log(`[buildLocalNseReport] ${ticker}: quote.mc=${quote?.marketCap}, hasExactShares=${hasExactShares}, equityShares=${equityShares}, incomeShares=${incomeShares}, sharesOut=${sharesOut}, f.mc=${f?.market_cap}, price=${price}, mc=${mc}`);
     // Ensure changesPercentage is computed if quote has change but no percentage
     if (quote && !quote.changesPercentage && quote.change && price > 0) {
       quote.changesPercentage = (quote.change / (price - quote.change)) * 100;

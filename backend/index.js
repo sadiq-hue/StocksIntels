@@ -11793,3 +11793,12 @@ server.listen(port, '0.0.0.0', async () => {
       console.error('[NSE-CorpActions] Initial scrape failed:', err.message);
     }
   }, 30000); // 30s after startup
+
+  // NSE automated financial-report detection (africanfinancials.com) — alerts + auto-parse
+  try {
+    const { startNseReportDetection } = require('./nseReportsDetector');
+    startNseReportDetection();
+    console.log('[NSE-Reports] Automated NSE report detector started (daily 7:05 AM)');
+  } catch (err) {
+    console.error('[NSE-Reports] Failed to start detector:', err.message);
+  }

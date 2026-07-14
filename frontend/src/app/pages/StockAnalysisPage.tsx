@@ -977,7 +977,7 @@ export function StockAnalysisPage() {
               </div>
 
               {/* Chart Area */}
-              {activeSelection.market === "global" && !tvFailed ? (
+              {(activeSelection.market === "global" || activeSelection.market === "nse") && !tvFailed ? (
                 <TradingViewChart symbol={activeSelection.ticker} market={activeSelection.market} onError={() => setTvFailed(true)} />
               ) : chartLoading && chartHistory.length === 0 ? (
                 <div className="flex items-center justify-center h-[340px] text-sm text-muted-foreground">
