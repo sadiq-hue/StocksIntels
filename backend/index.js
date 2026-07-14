@@ -11484,6 +11484,11 @@ server.listen(port, '0.0.0.0', async () => {
       // Deferred warmFMPCache - don't await, fire and forget
       warmFMPCache(ALL_SYMBOLS).catch(() => {});
 
+      // Pre-warm the realtime quote cache so the first page loads are fast
+      setTimeout(() => {
+        getQuotesBatch(ALL_SYMBOLS).catch((e) => console.error('[warm] quote cache warm failed:', e.message));
+      }, 8000);
+
       // Seed NSE stock fundamentals from static data into DB (background)
       const nseFundamentals = require('./nseFundamentalsSeeder');
       nseFundamentals.startAutoSeed();

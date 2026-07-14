@@ -413,7 +413,7 @@ async function getStockQuote(symbol) {
   return null;
 }
 
-const CONCURRENCY = 25;
+const CONCURRENCY = 40;
 const BATCH_TIMEOUT_MS = 25000;
 
 async function fetchQuoteForSymbol(s) {

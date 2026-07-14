@@ -15,6 +15,7 @@ import { kenyanStocks, globalStocks } from '../data/stockUniverses';
 import { useStockData } from '../contexts/StockDataContext';
 import { useRealtimeQuotes } from '../contexts/RealtimeQuotesContext';
 import { fetchAllNews, type NewsArticle } from '../services/newsService';
+import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from '../services/marketDataService';
 import { useAuth } from '../auth/AuthContext';
 
 function formatCompactNumber(value: number) {
@@ -62,6 +63,14 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 const MarketPage: React.FC = () => {
   const { nseStocks: ctxNse, globalStocks: ctxGlobal, allStocks, loading: ctxLoading, refresh: refreshCtx, getRealtimeQuote } = useStockData();
   const { getQuote } = useRealtimeQuotes();
+
+  // Paginated realtime quotes: only fetch the symbols currently visible
+  // (current NSE + Global page + favorites) instead of the entire universe.
+  const [localQuotes, setLocalQuotes] = useState<Record<string, RealtimeStockQuote>>({});
+
+  const liveQuoteFor = useCallback((symbol: string): RealtimeStockQuote | undefined => {
+    return localQuotes[symbol] ?? getQuote(symbol);
+  }, [localQuotes, getQuote]);
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -195,7 +204,7 @@ const MarketPage: React.FC = () => {
   // then overlay realtime quotes from the context (live AFX/Yahoo data).
   const nseStocksDisplay = useMemo(() => {
     return localNseStocks.map(local => {
-      const live = getQuote(local.symbol);
+      const live = liveQuoteFor(local.symbol);
       if (live && live.price != null) {
         return { ...local, price: live.price, changePercent: live.changePercent ?? null, volume: live.volume ?? null, provider: live.provider };
       }
@@ -205,7 +214,7 @@ const MarketPage: React.FC = () => {
 
   const globalStocksDisplay = useMemo(() => {
     return localGlobalStocks.map(local => {
-      const live = getQuote(local.symbol);
+      const live = liveQuoteFor(local.symbol);
       const pre = clientPreMarket[local.symbol];
       if (pre?.preMarketPrice != null) {
         return {
@@ -379,11 +388,43 @@ const MarketPage: React.FC = () => {
   const nseStocks = nseStocksDisplay;
   const globalStocksData = globalStocksDisplay;
 
-  const filteredNse = filterAndSort(nseStocks, nseSearch, nseSort);
-  const filteredGlobal = filterAndSort(globalStocksData, globalSearch, globalSort);
+  const filteredNse = useMemo(() => filterAndSort(nseStocks, nseSearch, nseSort), [nseStocks, nseSearch, nseSort]);
+  const filteredGlobal = useMemo(() => filterAndSort(globalStocksData, globalSearch, globalSort), [globalStocksData, globalSearch, globalSort]);
 
-  const paginatedNse = filteredNse.slice((nsePage - 1) * itemsPerPage, nsePage * itemsPerPage);
-  const paginatedGlobal = filteredGlobal.slice((globalPage - 1) * itemsPerPage, globalPage * itemsPerPage);
+  const paginatedNse = useMemo(() => filteredNse.slice((nsePage - 1) * itemsPerPage, nsePage * itemsPerPage), [filteredNse, nsePage]);
+  const paginatedGlobal = useMemo(() => filteredGlobal.slice((globalPage - 1) * itemsPerPage, globalPage * itemsPerPage), [filteredGlobal, globalPage]);
+
+  // Derive the exact set of symbols we need to fetch: the symbols on the
+  // currently visible pages plus any favorited symbols — not the whole universe.
+  const visibleQuoteSymbols = useMemo(() => {
+    const syms = [
+      ...paginatedNse.map((s: any) => s.symbol),
+      ...paginatedGlobal.map((s: any) => s.symbol),
+      ...favorites,
+    ].filter(Boolean);
+    return Array.from(new Set(syms)).sort().join(',');
+  }, [paginatedNse, paginatedGlobal, favorites]);
+
+  useEffect(() => {
+    const syms = visibleQuoteSymbols.split(',').filter(Boolean);
+    if (syms.length === 0) return;
+    let cancelled = false;
+    fetchRealtimeQuotesBatch(syms)
+      .then((data) => { if (!cancelled) setLocalQuotes((prev) => ({ ...prev, ...data })); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [visibleQuoteSymbols]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const syms = visibleQuoteSymbols.split(',').filter(Boolean);
+      if (syms.length === 0) return;
+      fetchRealtimeQuotesBatch(syms)
+        .then((data) => setLocalQuotes((prev) => ({ ...prev, ...data })))
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(id);
+  }, [visibleQuoteSymbols]);
 
   const nsePages = Math.max(1, Math.ceil(filteredNse.length / itemsPerPage));
   const globalPages = Math.max(1, Math.ceil(filteredGlobal.length / itemsPerPage));
