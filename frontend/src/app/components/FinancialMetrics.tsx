@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card } from "./ui/card";
-import { Loader2 } from "lucide-react";
+import { Loader2, Activity } from "lucide-react";
 import { fetchFinancialReport } from "../services/financialsService";
 import type { FinancialReport } from "../services/financialsService";
 
@@ -19,7 +19,8 @@ function formatLargeNum(n: number): string {
 
 function pct(v: number | null | undefined, decimals = 1): string {
   if (v == null || !isFinite(v)) return "—";
-  return `${v >= 0 ? "+" : ""}${v.toFixed(decimals)}%`;
+  // Backend returns ratio metrics (ROE, margins, yields, growth) as decimals; display as %
+  return `${v >= 0 ? "+" : ""}${(v * 100).toFixed(decimals)}%`;
 }
 
 function ratio(v: number | null | undefined, decimals = 2): string {
@@ -50,7 +51,7 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
     return (
       <Card className="border shadow-sm">
         <div className="p-5">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Financial Health</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4"><Activity className="size-4 text-[#0D7490]" /> Financial Health</h3>
           <div className="flex items-center justify-center py-8">
             <Loader2 className="size-5 animate-spin text-muted-foreground" />
           </div>
@@ -63,7 +64,7 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
     return (
       <Card className="border shadow-sm">
         <div className="p-5">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Financial Health</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4"><Activity className="size-4 text-[#0D7490]" /> Financial Health</h3>
           <p className="text-xs text-muted-foreground text-center py-8">No financial data available for {symbol}</p>
         </div>
       </Card>
@@ -122,7 +123,7 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
   return (
     <Card className="border shadow-sm">
       <div className="p-5">
-        <h3 className="text-sm font-semibold text-foreground mb-4">Financial Health</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4"><Activity className="size-4 text-[#0D7490]" /> Financial Health</h3>
         <div className="space-y-4">
           {/* Profitability & Efficiency */}
           <div>

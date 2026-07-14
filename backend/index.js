@@ -2569,7 +2569,8 @@ app.post('/api/stock-tracking/view', authenticateToken, async (req, res) => {
     );
     res.json({ ok: true });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to record stock view' });
+    // Non-critical tracking; degrade gracefully instead of 500
+    res.json({ ok: true });
   }
 });
 
@@ -2610,7 +2611,7 @@ app.get('/api/stock-tracking/consecutive-days', authenticateToken, async (req, r
       }),
     });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to check consecutive days' });
+    res.json({ ticker: ticker ? ticker.toUpperCase() : null, consecutiveDays: 0, qualifiesForPrompt: false, viewedToday: false });
   }
 });
 
@@ -2626,7 +2627,7 @@ app.post('/api/stock-tracking/dismiss-prompt', authenticateToken, async (req, re
     );
     res.json({ ok: true });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to dismiss prompt' });
+    res.json({ ok: true });
   }
 });
 
@@ -2642,7 +2643,7 @@ app.get('/api/stock-tracking/prompt-status', authenticateToken, async (req, res)
     );
     res.json({ dismissed: result.rows.length > 0 });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to check prompt status' });
+    res.json({ dismissed: false });
   }
 });
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, useMemo, type ReactNode } from "react";
 import { useRealtimeQuotes } from "./RealtimeQuotesContext";
+import { useAuth } from "../auth/AuthContext";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -42,6 +43,8 @@ export function StockDataProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const { quotes: realtimeQuotes, refetch: refetchQuotes } = useRealtimeQuotes();
+  const { user, loading: authLoading } = useAuth();
+  const didAuthRefetch = useRef(false);
 
   const fetchStocks = async () => {
     try {
@@ -109,6 +112,15 @@ export function StockDataProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => { fetchStocks(); }, []);
+
+  // Initial mount may run before the auth token is set, so /stocks/list 401s.
+  // Refetch once after auth resolves if we ended up with no stocks.
+  useEffect(() => {
+    if (!authLoading && !didAuthRefetch.current) {
+      didAuthRefetch.current = true;
+      if (allStocks.length === 0) fetchStocks();
+    }
+  }, [authLoading, allStocks.length]);
 
   // Merge real-time data into base stock data
   const mergedStocks = useMemo(() => {

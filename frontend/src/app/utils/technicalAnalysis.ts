@@ -23,15 +23,30 @@ const calculateEMA = (prices: number[], period: number): number => {
   return ema;
 };
 
+const buildEMASeries = (prices: number[], period: number): number[] => {
+  const multiplier = 2 / (period + 1);
+  const result: number[] = [];
+  let ema = prices[0];
+  for (let i = 0; i < prices.length; i++) {
+    ema = i === 0 ? prices[0] : prices[i] * multiplier + ema * (1 - multiplier);
+    result.push(ema);
+  }
+  return result;
+};
+
 export const calculateMACD = (prices: number[]) => {
-  const ema12 = calculateEMA(prices, 12);
-  const ema26 = calculateEMA(prices, 26);
-  const macd = ema12 - ema26;
-  const signal = calculateEMA([...prices.slice(-25), macd], 9);
+  if (prices.length < 35) return { macd: 0, signal: 0, histogram: 0 };
+  const ema12 = buildEMASeries(prices, 12);
+  const ema26 = buildEMASeries(prices, 26);
+  const macdSeries = prices.map((_, i) => ema12[i] - ema26[i]);
+  const signalSeries = buildEMASeries(macdSeries, 9);
+  const macd = macdSeries[macdSeries.length - 1];
+  const signal = signalSeries[signalSeries.length - 1];
+  const histogram = macd - signal;
   return {
     macd: parseFloat(macd.toFixed(4)),
     signal: parseFloat(signal.toFixed(4)),
-    histogram: parseFloat((macd - signal).toFixed(4)),
+    histogram: parseFloat(histogram.toFixed(4)),
   };
 };
 

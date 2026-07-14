@@ -487,9 +487,9 @@ export function StockAnalysisPage() {
     });
   }, [chartHistory]);
 
-  const { rsi, atr, atrPct, sma20, sma50, macdLine, macdSignal, macdHistogram, bbUpper, bbLower, bbPosition } = useMemo(() => {
+  const { rsi, atr, atrPct, sma20, sma50, macdLine, macdSignal, macdSignalLine, macdHistogram, bbUpper, bbLower, bbPosition } = useMemo(() => {
     const prices = chartData.map((d: any) => d.price);
-    if (prices.length === 0) return { rsi: 50, atr: 0, atrPct: 0, sma20: displayPrice, sma50: displayPrice, macdLine: 0, macdSignal: "Neutral", macdHistogram: 0, bbUpper: displayPrice, bbLower: displayPrice, bbPosition: 50 };
+    if (prices.length === 0) return { rsi: 50, atr: 0, atrPct: 0, sma20: displayPrice, sma50: displayPrice, macdLine: 0, macdSignal: "Neutral", macdSignalLine: 0, macdHistogram: 0, bbUpper: displayPrice, bbLower: displayPrice, bbPosition: 50 };
     const macd = calculateMACD(prices);
     const atrVal = calculateATR(chartData);
     const sma20Val = calculateSMA(prices, 20);
@@ -505,6 +505,7 @@ export function StockAnalysisPage() {
       sma50: sma50Val,
       macdLine: macd.macd,
       macdSignal: macd.macd > macd.signal ? "Bullish" : "Bearish",
+      macdSignalLine: macd.signal,
       macdHistogram: macd.histogram,
       bbUpper: bb.upper,
       bbLower: bb.lower,
@@ -786,6 +787,7 @@ export function StockAnalysisPage() {
 
           {/* ── Stock Header ── */}
           <Card className="border shadow-sm overflow-hidden">
+            <div className="h-1.5 w-full bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
             <div className="p-5">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -829,16 +831,18 @@ export function StockAnalysisPage() {
                   <div className="text-3xl font-bold text-foreground tracking-tight">
                     {formatCurrency(activeSelection)}{formatPrice(regularPrice)}
                   </div>
-                  <div className={`flex items-center justify-end gap-1.5 mt-1 ${
-                    isPositive ? "text-emerald-600" : "text-red-500"
-                  }`}>
-                    {isPositive ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                  <div className="flex items-center justify-end gap-1.5 mt-1.5">
+                    {isPositive ? <ChevronUp className="size-4 text-emerald-600" /> : <ChevronDown className="size-4 text-red-500" />}
                     {liveQuote?.change != null && (
-                      <span className="font-semibold">{liveQuote.change > 0 ? "+" : ""}{liveQuote.change.toFixed(2)}</span>
+                      <span className={`font-semibold ${isPositive ? "text-emerald-600" : "text-red-500"}`}>{liveQuote.change > 0 ? "+" : ""}{liveQuote.change.toFixed(2)}</span>
                     )}
-                    <span className="font-semibold">({displayChange > 0 ? "+" : ""}{displayChange.toFixed(2)}%)</span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      isPositive ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                    }`}>
+                      {displayChange > 0 ? "+" : ""}{displayChange.toFixed(2)}%
+                    </span>
                   </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                  <div className="text-[11px] text-muted-foreground mt-1">
                     {sessionLabel}: {formatSessionTime(liveQuote?.currentTradingPeriod?.regular?.end)}
                   </div>
                   {altPrice != null && altSessionLabel && (
@@ -1243,7 +1247,9 @@ export function StockAnalysisPage() {
             {/* Trading Signal */}
             <Card className="border shadow-sm">
               <div className="p-5">
-                <h3 className="text-sm font-semibold text-foreground mb-4">Trading Signal</h3>
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4">
+  <Target className="size-4 text-[#0D7490]" /> Trading Signal
+</h3>
                 {loadingData ? (
                   <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
                 ) : (
@@ -1364,7 +1370,9 @@ export function StockAnalysisPage() {
             {/* Key Indicators */}
             <Card className="border shadow-sm">
               <div className="p-5">
-                <h3 className="text-sm font-semibold text-foreground mb-4">Key Indicators</h3>
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4">
+  <LineChart className="size-4 text-[#0D7490]" /> Key Indicators
+</h3>
                 <div className="space-y-4">
 
                   {/* RSI */}
@@ -1415,7 +1423,7 @@ export function StockAnalysisPage() {
                       </div>
                       <div className="bg-muted/40 rounded p-2 border border-border/50">
                         <div className="text-[10px] text-muted-foreground mb-0.5">Signal</div>
-                        <div className="font-semibold text-foreground">{(macdLine - macdHistogram).toFixed(4)}</div>
+                        <div className="font-semibold text-foreground">{macdSignalLine.toFixed(4)}</div>
                       </div>
                       <div className="bg-muted/40 rounded p-2 border border-border/50">
                         <div className="text-[10px] text-muted-foreground mb-0.5">Histogram</div>
