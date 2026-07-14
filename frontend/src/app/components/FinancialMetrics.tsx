@@ -49,7 +49,7 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
 
   if (loading) {
     return (
-      <Card className="border shadow-sm">
+      <Card className="border-0 shadow-lg">
         <div className="p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4"><Activity className="size-4 text-[#0D7490]" /> Financial Health</h3>
           <div className="flex items-center justify-center py-8">
@@ -62,7 +62,7 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
 
   if (!report?.success || !report.data) {
     return (
-      <Card className="border shadow-sm">
+      <Card className="border-0 shadow-lg">
         <div className="p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4"><Activity className="size-4 text-[#0D7490]" /> Financial Health</h3>
           <p className="text-xs text-muted-foreground text-center py-8">No financial data available for {symbol}</p>
@@ -121,7 +121,7 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
   const totalLiabilities = bal?.totalLiabilities ?? null;
 
   return (
-    <Card className="border shadow-sm">
+    <Card className="border-0 shadow-lg">
       <div className="p-5">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4"><Activity className="size-4 text-[#0D7490]" /> Financial Health</h3>
         <div className="space-y-4">

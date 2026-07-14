@@ -6497,7 +6497,7 @@ app.get('/api/market/premarket', async (req, res) => {
             postMarketTime: meta.postMarketTime ?? null,
             regularMarketPrice: meta.regularMarketPrice ?? null,
             regularMarketPreviousClose: meta.chartPreviousClose ?? meta.previousClose ?? null,
-            marketState: meta.marketState || 'CLOSED',
+            marketState: sym.startsWith('NSE:') ? (isMarketOpen('NSE') ? 'REGULAR' : 'CLOSED') : (meta.marketState || 'CLOSED'),
             currentTradingPeriod: data?.chart?.result?.[0]?.meta?.currentTradingPeriod || null,
             exchange: meta.exchangeName || '',
             currency: meta.currency || 'USD',
@@ -7870,7 +7870,15 @@ app.post('/api/market/quotes', marketDataLimiter, async (req, res) => {
       return res.status(400).json({ error: 'symbols array is required' });
     }
     const quotes = await getQuotesBatch(symbols);
-    res.json({ quotes });
+    // Provider meta.marketState is unreliable for NSE; derive from exchange hours.
+    const enriched = {};
+    for (const sym of symbols) {
+      const q = quotes[sym];
+      if (!q) continue;
+      const market = sym.startsWith('NSE:') ? 'NSE' : 'Global';
+      enriched[sym] = { ...q, marketState: isMarketOpen(market) ? 'REGULAR' : 'CLOSED' };
+    }
+    res.json({ quotes: enriched });
   } catch (error) {
     console.error('Error fetching batch quotes:', error);
     res.status(500).json({ error: 'Failed to fetch quotes' });

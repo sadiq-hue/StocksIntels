@@ -25,6 +25,18 @@ import {
   CandlestickChart, ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react";
 import { globalStocks, kenyanStocks, type StockListItem, type StockMarket } from "../data/stockUniverses";
+
+// NSE trading hours: Mon–Fri 09:30–15:30 EAT (UTC+3). Provider marketState is
+// unreliable for NSE, so derive open/closed from exchange time on the client.
+function isNseMarketOpen(): boolean {
+  const now = new Date();
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false;
+  const utcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const eatMin = utcMin + 180;
+  return eatMin >= 570 && eatMin < 930;
+}
+
 import {
   calculateRSI, calculateMACD, calculateSMA, calculateATR, calculateBollingerBands,
 } from "../utils/technicalAnalysis";
@@ -354,9 +366,11 @@ export function StockAnalysisPage() {
 
   // Derived market-state helpers (yahoo takes priority when available)
   const marketState = yahooData?.marketState ? yahooData.marketState : (liveQuote?.marketState || 'CLOSED');
-  const isPreMarket = marketState === 'PRE';
-  const isPostMarket = marketState === 'POST';
-  const isRegular = marketState === 'REGULAR';
+  const isNse = activeSelection.market === "nse";
+  // For NSE, trust exchange hours over the (unreliable) provider marketState.
+  const isRegular = isNse ? isNseMarketOpen() : marketState === 'REGULAR';
+  const isPreMarket = !isNse && marketState === 'PRE';
+  const isPostMarket = !isNse && marketState === 'POST';
   const regularPrice = yahooRegularPrice ?? liveQuote?.regularMarketPrice ?? liveQuote?.price ?? liveQuote?.previousClose ?? activeSelection.price;
   const prePrice = yahooData?.preMarketPrice ?? liveQuote?.preMarketPrice;
   const postPrice = yahooData?.postMarketPrice ?? liveQuote?.postMarketPrice;
@@ -786,17 +800,17 @@ export function StockAnalysisPage() {
         <div className="xl:col-span-3 space-y-5">
 
           {/* ── Stock Header ── */}
-          <Card className="border shadow-sm overflow-hidden">
+          <Card className="border-0 shadow-lg overflow-hidden bg-gradient-to-br from-[#0D7490]/5 via-white to-[#0EA5E9]/5">
             <div className="h-1.5 w-full bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
-            <div className="p-5">
+            <div className="p-6">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex size-14 items-center justify-center rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-sm">
-                    <TrendingUp className="size-7 text-white" />
+                  <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-md">
+                    <TrendingUp className="size-8 text-white" />
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                      <h2 className="text-xl sm:text-2xl font-bold text-foreground">{activeSelection.ticker}</h2>
+                      <h2 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">{activeSelection.ticker}</h2>
                       <button
                         onClick={() => toggleFavorite(activeSelection.ticker)}
                         className="transition-transform hover:scale-110"
@@ -819,7 +833,9 @@ export function StockAnalysisPage() {
                           ? "bg-blue-100 text-blue-700 border-blue-200"
                           : "bg-muted text-muted-foreground border-border"
                       }`}>
-                        <Clock className="size-3 mr-1" />
+                        <span className={`size-1.5 rounded-full mr-1.5 ${
+                          isRegular ? "bg-emerald-500 animate-pulse" : isPreMarket ? "bg-amber-500" : isPostMarket ? "bg-blue-500" : "bg-gray-400"
+                        }`} />
                         {isRegular ? "Market Open" : isPreMarket ? "Pre-Market" : isPostMarket ? "After Hours" : "Closed"}
                       </Badge>
                     </div>
@@ -828,7 +844,7 @@ export function StockAnalysisPage() {
                 </div>
 
                 <div className="text-right">
-                  <div className="text-3xl font-bold text-foreground tracking-tight">
+                  <div className="text-4xl font-bold text-foreground tracking-tight">
                     {formatCurrency(activeSelection)}{formatPrice(regularPrice)}
                   </div>
                   <div className="flex items-center justify-end gap-1.5 mt-1.5">
@@ -865,14 +881,14 @@ export function StockAnalysisPage() {
               </div>
 
               {/* Metadata Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
                 {[
                   { icon: Building2, label: "Sector", value: activeSelection.sector, color: "text-foreground" },
                   { icon: Activity, label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : activeSelection.volume, color: "text-foreground" },
                   { icon: Wallet, label: "Market Cap", value: companyProfile?.marketCap ? `$${(companyProfile.marketCap / 1e9).toFixed(1)}B` : activeSelection.marketCap, color: "text-foreground" },
                   { icon: BarChart3, label: "P/E Ratio", value: companyProfile?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A"), color: "text-foreground" },
                 ].map((m) => (
-                  <div key={m.label} className="rounded-lg bg-muted/40 p-3 border border-border/50">
+                  <div key={m.label} className="rounded-xl bg-white/70 p-3 border border-white shadow-sm backdrop-blur">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <m.icon className="size-3.5 text-[#0D7490]" />
                       <span className="text-[11px] font-medium text-muted-foreground">{m.label}</span>
@@ -898,7 +914,7 @@ export function StockAnalysisPage() {
           </Card>
 
           {/* ── Price Chart ── */}
-          <Card className="border shadow-sm overflow-hidden">
+          <Card className="border-0 shadow-lg overflow-hidden">
             <div className="p-5">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                 <div>
@@ -909,15 +925,15 @@ export function StockAnalysisPage() {
                     {historySource === 'live' ? ' — Yahoo Finance' : ''}
                   </p>
                 </div>
-                <div className="flex gap-1.5">
+                <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
                   {["1M", "3M", "6M", "1Y"].map((p) => (
                     <button
                       key={p}
                       onClick={() => setChartPeriod(p)}
-                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                         chartPeriod === p
-                          ? "bg-[#0D7490] text-white shadow-sm"
-                          : "bg-muted text-muted-foreground hover:bg-accent"
+                          ? "bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white shadow-sm"
+                          : "text-muted-foreground hover:text-foreground hover:bg-white"
                       }`}
                     >
                       {p}
@@ -973,7 +989,7 @@ export function StockAnalysisPage() {
                 </div>
               ) : (
                 <div className="space-y-0">
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={320}>
                     <AreaChart data={chartData} margin={{ top: 5, right: 12, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
@@ -1131,7 +1147,7 @@ export function StockAnalysisPage() {
 
           {/* ── NSE Insights ── */}
           {activeSelection.market === "nse" && (
-            <Card className="border shadow-sm overflow-hidden">
+              <Card className="border-0 shadow-lg overflow-hidden">
               <div className="p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <Shield className="size-4 text-muted-foreground" />
@@ -1245,7 +1261,7 @@ export function StockAnalysisPage() {
           {/* ── Analytics Grid ── */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
             {/* Trading Signal */}
-            <Card className="border shadow-sm">
+            <Card className="border-0 shadow-lg">
               <div className="p-5">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4">
   <Target className="size-4 text-[#0D7490]" /> Trading Signal
@@ -1368,7 +1384,7 @@ export function StockAnalysisPage() {
             </Card>
 
             {/* Key Indicators */}
-            <Card className="border shadow-sm">
+            <Card className="border-0 shadow-lg">
               <div className="p-5">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4">
   <LineChart className="size-4 text-[#0D7490]" /> Key Indicators
