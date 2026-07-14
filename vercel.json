@@ -1,30 +1,3 @@
 {
-  "rootDirectory": "frontend",
-  "framework": "vite",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "npm install",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://stockintel-backend-production.up.railway.app/api/$1" },
-    { "source": "/socket.io/(.*)", "destination": "https://stockintel-backend-production.up.railway.app/socket.io/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(self)" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://s3.tradingview.com; style-src 'self' 'unsafe-inline' https://s3.tradingview.com; img-src 'self' data: https:; connect-src 'self' https://stockintel-backend-production.up.railway.app wss://stockintel-backend-production.up.railway.app; font-src 'self' data:; frame-ancestors 'none'" }
-      ]
-    },
-    {
-      "source": "/assets/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    }
-  ]
+  "rootDirectory": "frontend"
 }
