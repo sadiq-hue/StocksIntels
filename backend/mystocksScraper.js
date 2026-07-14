@@ -163,7 +163,14 @@ async function fetchAllQuotes(force) {
 
 async function getQuoteForSymbol(symbol) {
   const cleanSymbol = symbol.replace('NSE:', '').toUpperCase();
-  if (cache && cache[cleanSymbol]) return cache[cleanSymbol];
+  if (cache && cache[cleanSymbol]) {
+    // If the cached entry is missing volume (e.g. from a pre-fix bulk scrape),
+    // refresh it on demand so volume is always available downstream.
+    if (cache[cleanSymbol].volume) return cache[cleanSymbol];
+    const refreshed = await scrapeStockPage(cleanSymbol);
+    if (refreshed) { cache[cleanSymbol] = refreshed; return refreshed; }
+    return cache[cleanSymbol];
+  }
   if (!cache) {
     // Never block a request on a full-universe scrape. Kick off a background
     // refresh and fetch just this one symbol on demand so the request can't hang.
