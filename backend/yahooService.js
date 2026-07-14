@@ -244,17 +244,22 @@ async function fetchGoogleFinanceQuote(symbol) {
 }
 
 async function fetchV8Historical(symbol, range, interval) {
-  if (symbol.endsWith('.NR')) return null;
-  const host = pickHost();
-  const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}`;
-  try {
-    const { data } = await limiters.v8.schedule(() =>
-      proxyService.fetchWithProxyFallback(url)
-    );
-    return parseChartBars(data);
-  } catch {
-    return null;
+  if (symbol.endsWith('.NR')) {
+    // Nairobi (NSE) historical is only served by the v8 chart endpoint directly.
   }
+  const buildUrl = (host) =>
+    `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}`;
+  // Direct calls (proxyService hangs on the chart endpoint from this host)
+  for (const host of ['query1', 'query2']) {
+    try {
+      const { data } = await limiters.v8.schedule(() =>
+        require('axios').get(buildUrl(host), { timeout: 6000, headers: { 'User-Agent': UA } })
+      );
+      const bars = parseChartBars(data);
+      if (bars?.length) return bars;
+    } catch {}
+  }
+  return null;
 }
 
 async function fetchRapidapiHistorical(symbol, range, interval) {
