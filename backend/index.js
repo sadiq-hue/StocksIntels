@@ -6392,7 +6392,7 @@ app.get('/api/market/turnover', async (req, res) => {
     let nseTurnover = 0, nseVolume = 0;
     const { getQuoteForSymbol } = require('./mystocksScraper');
     for (const t of NSE_TURNOVER_TICKERS) {
-      const q = getQuoteForSymbol('NSE:' + t);
+      const q = await getQuoteForSymbol('NSE:' + t);
       if (q) { nseTurnover += (q.price || 0) * (q.volume || 0); nseVolume += q.volume || 0; }
     }
 
