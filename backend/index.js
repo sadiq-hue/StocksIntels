@@ -6414,12 +6414,18 @@ app.get('/api/market/turnover', async (req, res) => {
       }
     }
 
-    turnoverCache = {
+    const result = {
       nse: { turnover: nseTurnover, volume: nseVolume, count: NSE_TURNOVER_TICKERS.length },
       global: { turnover: globalTurnover, volume: globalVolume, count: GLOBAL_TURNOVER_TICKERS.length },
     };
-    turnoverCacheTime = now;
-    res.json(turnoverCache);
+    // Only cache once NSE data is actually available (the mystocks cache may still
+    // be warming on a fresh deploy); otherwise retry on the next request instead of
+    // serving a stale zero for 30s.
+    if (nseVolume > 0) {
+      turnoverCache = result;
+      turnoverCacheTime = now;
+    }
+    res.json(result);
   } catch (error) {
     console.error('Error computing turnover:', error.message);
     if (turnoverCacheTime) return res.json(turnoverCache);
