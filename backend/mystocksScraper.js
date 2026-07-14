@@ -54,16 +54,15 @@ async function scrapeStockPage(ticker) {
     if (loMatch) low = parseFloat(loMatch[1].replace(/,/g, '')) || price;
 
     let marketCap = 0;
+    let volume = 0;
     const dataDivMatch = html.match(/<div[^>]*id\s*=\s*rtDataJson[^>]*>\s*(\{[\s\S]*?\})\s*<\/div>/i);
     if (dataDivMatch) {
       const jsonStr = dataDivMatch[1].replace(/&quot;/g, '"');
       try {
         const data = JSON.parse(jsonStr);
-        console.log(`[myStocks] ${ticker}: rtDataJson parsed, keys=${Object.keys(data).join(',')}, data.length=${data.data?.length}`);
         if (data && Array.isArray(data.data) && data.data.length >= 11) {
-          const raw10 = data.data[10];
-          console.log(`[myStocks] ${ticker}: data.data[10]=${JSON.stringify(raw10)}`);
-          const mcStr = String(raw10 ?? '');
+          // Market cap at index 10 (e.g. "1.42T")
+          const mcStr = String(data.data[10] ?? '');
           const mcMatch = mcStr.match(/([\d,.]+)\s*([MBT])?/i);
           if (mcMatch) {
             let mcNum = parseFloat(mcMatch[1].replace(/,/g, ''));
@@ -72,28 +71,38 @@ async function scrapeStockPage(ticker) {
             else if (sfx === 'B') mcNum *= 1e9;
             else if (sfx === 'M') mcNum *= 1e6;
             marketCap = Math.round(mcNum) || 0;
-          } else {
-            console.log(`[myStocks] ${ticker}: no number match in data.data[10]=${mcStr}`);
           }
-        } else {
-          console.log(`[myStocks] ${ticker}: data array too short or missing (length=${data.data?.length})`);
+          // Volume at index 7 (e.g. "4.74M")
+          if (data.data.length >= 8) {
+            const volStr = String(data.data[7] ?? '');
+            const volMatch = volStr.match(/([\d,.]+)\s*([MBT])?/i);
+            if (volMatch) {
+              let volNum = parseFloat(volMatch[1].replace(/,/g, ''));
+              const vsfx = (volMatch[2] || '').toUpperCase();
+              if (vsfx === 'T') volNum *= 1e12;
+              else if (vsfx === 'B') volNum *= 1e9;
+              else if (vsfx === 'M') volNum *= 1e6;
+              else if (vsfx === 'K') volNum *= 1e3;
+              volume = Math.round(volNum) || 0;
+            }
+          }
         }
       } catch (e) {
         console.warn(`[myStocks] Failed to parse data JSON for ${ticker}: ${e.message}`);
       }
-    } else {
-      console.log(`[myStocks] ${ticker}: rtDataJson div NOT FOUND in HTML`);
     }
 
-    let volume = 0;
-    const volMatch = html.match(/([\d,.]+)\s*([MKB])?\s*Volume/i);
-    if (volMatch) {
-      let volNum = parseFloat(volMatch[1].replace(/,/g, ''));
-      const suffix = (volMatch[2] || '').toUpperCase();
-      if (suffix === 'M') volNum *= 1000000;
-      else if (suffix === 'B') volNum *= 1000000000;
-      else if (suffix === 'K') volNum *= 1000;
-      volume = Math.round(volNum) || 0;
+    // Fallback: some page variants expose volume directly in the HTML
+    if (!volume) {
+      const volMatch = html.match(/([\d,.]+)\s*([MKB])?\s*Volume/i);
+      if (volMatch) {
+        let volNum = parseFloat(volMatch[1].replace(/,/g, ''));
+        const suffix = (volMatch[2] || '').toUpperCase();
+        if (suffix === 'M') volNum *= 1000000;
+        else if (suffix === 'B') volNum *= 1000000000;
+        else if (suffix === 'K') volNum *= 1000;
+        volume = Math.round(volNum) || 0;
+      }
     }
 
     let name = ticker;

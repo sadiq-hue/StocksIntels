@@ -6388,10 +6388,9 @@ app.get('/api/market/turnover', async (req, res) => {
     return res.json(turnoverCache);
   }
   try {
-    // NSE: from AFX scraper (free, real-time, 60s cache)
+    // NSE: from mystocks scraper (afx.kwayisi.org is not reachable from this host)
     let nseTurnover = 0, nseVolume = 0;
-    const { fetchNseQuotes, getQuoteForSymbol } = require('./nseAfxScraper');
-    await fetchNseQuotes();
+    const { getQuoteForSymbol } = require('./mystocksScraper');
     for (const t of NSE_TURNOVER_TICKERS) {
       const q = getQuoteForSymbol('NSE:' + t);
       if (q) { nseTurnover += (q.price || 0) * (q.volume || 0); nseVolume += q.volume || 0; }
