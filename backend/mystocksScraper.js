@@ -27,68 +27,78 @@ async function scrapeStockPage(ticker) {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
     });
     const html = resp.data;
-    // Fallback: parse rtPrice2 from raw HTML (cheerio might not work with this HTML)
+    // Parse the embedded rtDataJson first — this is the reliable source for the
+    // current price on the current myStocks (myStocks Africa) live-quote pages,
+    // where the legacy rtPrice2/rtChange2 <b> tags are no longer rendered.
+    let jsonData = null;
+    const dataDivMatch = html.match(/<div[^>]*id\s*=\s*["']?rtDataJson["']?[^>]*>\s*(\{[\s\S]*?\})\s*<\/div>/i);
+    if (dataDivMatch) {
+      try {
+        jsonData = JSON.parse(dataDivMatch[1].replace(/&quot;/g, '"'));
+      } catch (e) {
+        console.warn(`[myStocks] Failed to parse data JSON for ${ticker}: ${e.message}`);
+      }
+    }
+
+    // Price — prefer legacy rtPrice2, fall back to rtDataJson data[0]
     let price = null;
     const priceMatch = html.match(/<b[^>]*id\s*=\s*rtPrice2[^>]*>\s*([0-9.,]+)\s*<\/b>/i);
-    if (priceMatch) {
-      price = parseFloat(priceMatch[1].replace(/,/g, ''));
-    }
+    if (priceMatch) price = parseFloat(priceMatch[1].replace(/,/g, ''));
     if (price === null || isNaN(price)) {
-      // Try cheerio as fallback
       const $ = cheerio.load(html);
       const priceEl = $('#rtPrice2');
-      if (priceEl.length) {
-        price = parseFloat(priceEl.text().trim().replace(/,/g, ''));
-      }
+      if (priceEl.length) price = parseFloat(priceEl.text().trim().replace(/,/g, ''));
+    }
+    if ((price === null || isNaN(price)) && jsonData?.data?.[0] != null) {
+      price = parseFloat(String(jsonData.data[0]).replace(/,/g, ''));
     }
     if (price === null || isNaN(price) || !price) return null;
 
+    // Change — prefer legacy rtChange2, fall back to rtDataJson data[1]
     let change = 0;
     const chMatch = html.match(/<b[^>]*id\s*=\s*rtChange2[^>]*>\s*([+-]?[0-9.,]+)\s*\(/i);
     if (chMatch) change = parseFloat(chMatch[1].replace(/,/g, '')) || 0;
+    else if (jsonData?.data?.[1] != null) {
+      const m = String(jsonData.data[1]).match(/([+-]?[\d.,]+)\s*\(/);
+      if (m) change = parseFloat(m[1].replace(/,/g, '')) || 0;
+    }
 
+    // High / Low — prefer legacy rtHi/rtLo, fall back to rtDataJson data[5]/data[6]
     let high = price, low = price;
     const hiMatch = html.match(/<b[^>]*id\s*=\s*rtHi[^>]*>\s*([0-9.,]+)\s*<\/b>/i);
     if (hiMatch) high = parseFloat(hiMatch[1].replace(/,/g, '')) || price;
     const loMatch = html.match(/<b[^>]*id\s*=\s*rtLo[^>]*>\s*([0-9.,]+)\s*<\/b>/i);
     if (loMatch) low = parseFloat(loMatch[1].replace(/,/g, '')) || price;
+    if ((!hiMatch || isNaN(high)) && jsonData?.data?.[5] != null) high = parseFloat(String(jsonData.data[5]).replace(/,/g, '')) || price;
+    if ((!loMatch || isNaN(low)) && jsonData?.data?.[6] != null) low = parseFloat(String(jsonData.data[6]).replace(/,/g, '')) || price;
 
     let marketCap = 0;
     let volume = 0;
-    const dataDivMatch = html.match(/<div[^>]*id\s*=\s*rtDataJson[^>]*>\s*(\{[\s\S]*?\})\s*<\/div>/i);
-    if (dataDivMatch) {
-      const jsonStr = dataDivMatch[1].replace(/&quot;/g, '"');
-      try {
-        const data = JSON.parse(jsonStr);
-        if (data && Array.isArray(data.data) && data.data.length >= 11) {
-          // Market cap at index 10 (e.g. "1.42T")
-          const mcStr = String(data.data[10] ?? '');
-          const mcMatch = mcStr.match(/([\d,.]+)\s*([MBT])?/i);
-          if (mcMatch) {
-            let mcNum = parseFloat(mcMatch[1].replace(/,/g, ''));
-            const sfx = (mcMatch[2] || '').toUpperCase();
-            if (sfx === 'T') mcNum *= 1e12;
-            else if (sfx === 'B') mcNum *= 1e9;
-            else if (sfx === 'M') mcNum *= 1e6;
-            marketCap = Math.round(mcNum) || 0;
-          }
-          // Volume at index 7 (e.g. "4.74M")
-          if (data.data.length >= 8) {
-            const volStr = String(data.data[7] ?? '');
-            const volMatch = volStr.match(/([\d,.]+)\s*([MBT])?/i);
-            if (volMatch) {
-              let volNum = parseFloat(volMatch[1].replace(/,/g, ''));
-              const vsfx = (volMatch[2] || '').toUpperCase();
-              if (vsfx === 'T') volNum *= 1e12;
-              else if (vsfx === 'B') volNum *= 1e9;
-              else if (vsfx === 'M') volNum *= 1e6;
-              else if (vsfx === 'K') volNum *= 1e3;
-              volume = Math.round(volNum) || 0;
-            }
-          }
+    if (jsonData && Array.isArray(jsonData.data) && jsonData.data.length >= 11) {
+      // Market cap at index 10 (e.g. "1.42T")
+      const mcStr = String(jsonData.data[10] ?? '');
+      const mcMatch = mcStr.match(/([\d,.]+)\s*([MBT])?/i);
+      if (mcMatch) {
+        let mcNum = parseFloat(mcMatch[1].replace(/,/g, ''));
+        const sfx = (mcMatch[2] || '').toUpperCase();
+        if (sfx === 'T') mcNum *= 1e12;
+        else if (sfx === 'B') mcNum *= 1e9;
+        else if (sfx === 'M') mcNum *= 1e6;
+        marketCap = Math.round(mcNum) || 0;
+      }
+      // Volume at index 7 (e.g. "4.74M")
+      if (jsonData.data.length >= 8) {
+        const volStr = String(jsonData.data[7] ?? '');
+        const volMatch = volStr.match(/([\d,.]+)\s*([MBT])?/i);
+        if (volMatch) {
+          let volNum = parseFloat(volMatch[1].replace(/,/g, ''));
+          const vsfx = (volMatch[2] || '').toUpperCase();
+          if (vsfx === 'T') volNum *= 1e12;
+          else if (vsfx === 'B') volNum *= 1e9;
+          else if (vsfx === 'M') volNum *= 1e6;
+          else if (vsfx === 'K') volNum *= 1e3;
+          volume = Math.round(volNum) || 0;
         }
-      } catch (e) {
-        console.warn(`[myStocks] Failed to parse data JSON for ${ticker}: ${e.message}`);
       }
     }
 
