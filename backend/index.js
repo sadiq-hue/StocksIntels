@@ -10627,6 +10627,16 @@ async function initDatabase() {
       await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = 'Server restarted while processing' WHERE status IN ('processing','pending')`);
     } catch {}
 
+    // ── Seed NSE financial statements from committed JSON (idempotent) ──
+    // Replays data/seed/nse_statements.json into this DB so every environment
+    // (incl. the deployed instance) has NSE reports without re-scraping.
+    try {
+      const { seedNseData } = require('./seedNseData');
+      await seedNseData();
+    } catch (seedErr) {
+      console.warn('[Migration] NSE seed warning:', seedErr.message);
+    }
+
     console.log('Database schema verified');
   } catch (err) {
     console.error('Database initialization failed:', err.message);
