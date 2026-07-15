@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-15T11:36:00.319Z",
+  "generatedAt": "2026-07-15T14:17:47.232Z",
   "stocks": [
     {
       "ticker": "ABSA",
@@ -341,23 +341,23 @@
         "total_debt": 75647933000,
         "total_assets": 428689603000,
         "total_revenue": 36921442000,
-        "current_assets": 155512000000,
+        "current_assets": 155519603000,
         "cost_of_revenue": 6781398000,
         "operating_income": 15548954000,
         "retained_earnings": 47252008000,
         "total_liabilities": 372242211000,
         "dividend_per_share": 1.1,
-        "current_liabilities": 274401349000,
+        "current_liabilities": 296894564000,
         "shareholders_equity": 56447392000,
         "cash_from_operations": 462000000000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:11.599Z"
+      "parsed_at": "2026-07-15 17:13:08.483806+03"
     },
     {
       "ticker": "ABSA",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2022-03-30",
       "file_name": "ABSA-Bank-Kenya-Plc-Unaudited-Group-Results-for-the-Period-Ended-31-Mar-2022.pdf",
       "file_size": null,
@@ -369,43 +369,45 @@
         "total_debt": 82112790000,
         "total_assets": 438718384000,
         "total_revenue": 9545388000,
+        "current_assets": 150665481000,
         "cost_of_revenue": 1928428000,
         "operating_income": 4015620000,
         "retained_earnings": 47933112000,
         "total_liabilities": 381856495000,
+        "current_liabilities": 295651137000,
         "shareholders_equity": 56861889000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:51.868Z"
+      "parsed_at": "2026-07-15 17:10:47.485822+03"
     },
     {
       "ticker": "ABSA",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "ABSA-Bank-Kenya-Plc-Unaudited-Group-Results-for-the-Period-Ended-30-Jun-2023.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": 1.53,
+        "eps": 1.42,
         "net_income": 8305176000,
         "total_debt": 4102591000,
-        "total_assets": 503738986000,
+        "total_assets": 504089207000,
         "total_revenue": 27363485000,
         "current_assets": 18139057000,
         "cost_of_revenue": 6008421000,
         "operating_income": 12071240000,
         "retained_earnings": 59513946000,
-        "total_liabilities": 439998325000,
+        "total_liabilities": 443700517000,
         "dividend_per_share": 0.2,
         "current_liabilities": 22109279000,
-        "shareholders_equity": 63740661000,
+        "shareholders_equity": 60388490000,
         "cash_from_operations": 4464334000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:41:59.971Z"
+      "parsed_at": "2026-07-15 17:10:50.104529+03"
     },
     {
       "ticker": "ABSA",
@@ -421,20 +423,22 @@
         "total_debt": 4294626000,
         "total_assets": 528301038000,
         "total_revenue": 52802147000,
+        "current_assets": 12692202000,
         "cost_of_revenue": 14469681000,
         "operating_income": 22259756000,
         "retained_earnings": 59830614000,
         "total_liabilities": 454876677000,
         "dividend_per_share": 1.55,
+        "current_liabilities": 10935164000,
         "shareholders_equity": 65424361000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:43:53.851Z"
+      "parsed_at": "2026-07-15 17:10:55.134278+03"
     },
     {
       "ticker": "ABSA",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-09-29",
       "file_name": "ABSA-Bank-Kenya-Plc-Unaudited-Group-Results-for-the-period-Ended-30-Sep-2025.pdf",
       "file_size": null,
@@ -445,7 +449,7 @@
         "net_income": 16918109000,
         "total_debt": 4130327000,
         "total_assets": 554319431000,
-        "total_revenue": 58267741000,
+        "total_revenue": 58267941000,
         "cost_of_revenue": 11513184000,
         "operating_income": 22043840000,
         "retained_earnings": 90753744000,
@@ -455,7 +459,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:03:48.894Z"
+      "parsed_at": "2026-07-15 17:10:37.029492+03"
     },
     {
       "ticker": "ABSA",
@@ -480,7 +484,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:04:36.590Z"
+      "parsed_at": "2026-07-15 17:10:39.620721+03"
     },
     {
       "ticker": "BAMB",
@@ -507,7 +511,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:42:10.230Z"
+      "parsed_at": "2026-07-14 18:42:10.23+03"
     },
     {
       "ticker": "BAT",
@@ -535,11 +539,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:03.834Z"
+      "parsed_at": "2026-07-15 17:10:44.705915+03"
     },
     {
       "ticker": "BAT",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "BAT-Kenya-Plc-Unaudited-Results-for-the-Six-Months-Ended-30-Jun-2023.pdf",
       "file_size": null,
@@ -563,7 +567,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:40:08.121Z"
+      "parsed_at": "2026-07-15 17:10:41.821206+03"
     },
     {
       "ticker": "BAT",
@@ -576,14 +580,13 @@
       "parsed_data": {
         "eps": 55.68,
         "net_income": 5568000000,
-        "total_debt": 2000000000,
-        "total_assets": 24050000000,
+        "total_assets": 18250000000,
         "total_revenue": 25557000000,
         "current_assets": 12243000000,
         "cost_of_revenue": 17632000000,
         "operating_income": 7925000000,
         "retained_earnings": 12488000000,
-        "total_liabilities": 7800000000,
+        "total_liabilities": 2000000000,
         "dividend_per_share": 50,
         "current_liabilities": 5800000000,
         "shareholders_equity": 16250000000,
@@ -591,7 +594,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:43:19.417Z"
+      "parsed_at": "2026-07-15 17:10:52.703308+03"
     },
     {
       "ticker": "BKG",
@@ -616,7 +619,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:40.927Z"
+      "parsed_at": "2026-07-14 18:57:40.927+03"
     },
     {
       "ticker": "BKG",
@@ -639,7 +642,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:44:37.309Z"
+      "parsed_at": "2026-07-14 18:44:37.309+03"
     },
     {
       "ticker": "BKG",
@@ -664,7 +667,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:21:58.559Z"
+      "parsed_at": "2026-07-15 10:21:58.559+03"
     },
     {
       "ticker": "BKG",
@@ -688,7 +691,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:00:55.677Z"
+      "parsed_at": "2026-07-14 19:00:55.677+03"
     },
     {
       "ticker": "BKG",
@@ -713,11 +716,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:00:14.796Z"
+      "parsed_at": "2026-07-14 19:00:14.796+03"
     },
     {
       "ticker": "BOC",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "BOC-Kenya-Plc-Unaudited-Group-Results-for-the-Six-Month-Period-Ended-30-Jun-2023.pdf",
       "file_size": null,
@@ -726,20 +729,20 @@
       "parsed_data": {
         "eps": 2.58,
         "net_income": 50360000,
+        "total_debt": 7678000,
         "total_assets": 2025087000,
         "total_revenue": 589987000,
         "current_assets": 1215087000,
         "operating_income": 71033000,
         "retained_earnings": 1511002000,
         "total_liabilities": 281595000,
-        "dividend_per_share": 0,
         "current_liabilities": 273917000,
         "shareholders_equity": 1743492000,
         "cash_from_operations": -114450000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:41:40.299Z"
+      "parsed_at": "2026-07-15 17:13:05.629638+03"
     },
     {
       "ticker": "BOC",
@@ -765,7 +768,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:46:20.714Z"
+      "parsed_at": "2026-07-15 17:12:11.199135+03"
     },
     {
       "ticker": "BOC",
@@ -791,7 +794,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:05:38.663Z"
+      "parsed_at": "2026-07-15 17:10:59.35195+03"
     },
     {
       "ticker": "BRIT",
@@ -818,7 +821,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:34.426Z"
+      "parsed_at": "2026-07-14 18:57:34.426+03"
     },
     {
       "ticker": "BRIT",
@@ -846,7 +849,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:44:43.640Z"
+      "parsed_at": "2026-07-14 18:44:43.64+03"
     },
     {
       "ticker": "BRIT",
@@ -873,11 +876,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:05:11.878Z"
+      "parsed_at": "2026-07-14 19:05:11.878+03"
     },
     {
       "ticker": "CABL",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "East-African-Cables-Plc-Unaudited-Results-For-The-Six-Months-Ended-30-June-2023.pdf",
       "file_size": null,
@@ -900,7 +903,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:42:28.646Z"
+      "parsed_at": "2026-07-15 17:10:57.318519+03"
     },
     {
       "ticker": "CABL",
@@ -913,7 +916,7 @@
       "parsed_data": {
         "eps": -0.81,
         "net_income": -391877000,
-        "total_debt": 3210554000,
+        "total_debt": 3212554000,
         "total_assets": 5408291000,
         "total_revenue": 2524553000,
         "current_assets": 912006000,
@@ -927,11 +930,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:46:28.895Z"
+      "parsed_at": "2026-07-15 17:11:01.739856+03"
     },
     {
       "ticker": "CARB",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2022-01-30",
       "file_name": "Carbacid-Investments-Plc-Unaudited-Consolidated-Results-for-the-Six-Months-Ended-31-Jan-2022.pdf",
       "file_size": null,
@@ -953,11 +956,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:10.025Z"
+      "parsed_at": "2026-07-14 18:57:10.025+03"
     },
     {
       "ticker": "CARB",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-01-30",
       "file_name": "Carbacid-Investments-Plc-Unaudited-Consolidated-Results-for-the-Six-Months-Ended-31-Jan-2023.pdf",
       "file_size": null,
@@ -979,11 +982,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:39:24.550Z"
+      "parsed_at": "2026-07-14 18:39:24.55+03"
     },
     {
       "ticker": "CARB",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2024-01-30",
       "file_name": "Carbacid-Investments-Plc-Unaudited-Consolidated-Results-for-the-Six-Months-Ended-31-Jan-2024.pdf",
       "file_size": null,
@@ -1005,7 +1008,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:43:37.710Z"
+      "parsed_at": "2026-07-14 18:43:37.71+03"
     },
     {
       "ticker": "CARB",
@@ -1032,11 +1035,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:03:01.032Z"
+      "parsed_at": "2026-07-14 19:03:01.032+03"
     },
     {
       "ticker": "CARB",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2026-01-30",
       "file_name": "Carbacid-Investments-Plc-Unaudited-Consolidated-Results-for-the-Six-Months-Ended-31-Jan-2026.pdf",
       "file_size": null,
@@ -1058,7 +1061,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:04:02.418Z"
+      "parsed_at": "2026-07-14 19:04:02.418+03"
     },
     {
       "ticker": "CGEN",
@@ -1085,11 +1088,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:59.334Z"
+      "parsed_at": "2026-07-14 18:56:59.334+03"
     },
     {
       "ticker": "CGEN",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-12-30",
       "file_name": "Car-General-Kenya-Plc-Consolidated-Audited-Financial-Statements-for-the-Period-Ended-31-December-2025.pdf",
       "file_size": null,
@@ -1113,7 +1116,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:51.793Z"
+      "parsed_at": "2026-07-14 18:56:51.793+03"
     },
     {
       "ticker": "CIC",
@@ -1137,7 +1140,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:11.234Z"
+      "parsed_at": "2026-07-14 18:57:11.234+03"
     },
     {
       "ticker": "CIC",
@@ -1164,7 +1167,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:47:00.301Z"
+      "parsed_at": "2026-07-14 18:47:00.301+03"
     },
     {
       "ticker": "CIC",
@@ -1191,7 +1194,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:00:27.805Z"
+      "parsed_at": "2026-07-14 19:00:27.805+03"
     },
     {
       "ticker": "CIC",
@@ -1215,11 +1218,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:05:15.591Z"
+      "parsed_at": "2026-07-14 19:05:15.591+03"
     },
     {
       "ticker": "COOP",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "Co-operative-Bank-of-Kenya-Ltd-Un-audited-Results-of-the-Group-the-Bank-for-the-Period-Ended-30-Jun-2023.pdf",
       "file_size": null,
@@ -1231,19 +1234,19 @@
         "total_debt": 59369099000,
         "total_assets": 664940098000,
         "total_revenue": 35170987000,
-        "current_assets": 26040493000,
+        "current_assets": 208650300000,
         "cost_of_revenue": 10443944000,
-        "operating_income": 16234689000,
+        "operating_income": 16407126000,
         "retained_earnings": 109756467000,
         "total_liabilities": 556378998000,
         "dividend_per_share": 1.5,
-        "current_liabilities": 26522131000,
+        "current_liabilities": 463874168000,
         "shareholders_equity": 108279987000,
         "cash_from_operations": 34436208000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:40:34.843Z"
+      "parsed_at": "2026-07-15 17:11:14.507792+03"
     },
     {
       "ticker": "COOP",
@@ -1259,7 +1262,7 @@
         "total_debt": 67334316000,
         "total_assets": 671131286000,
         "total_revenue": 71692638000,
-        "current_assets": 181630000000,
+        "current_assets": 181600000000,
         "cost_of_revenue": 23835187000,
         "operating_income": 32018124000,
         "retained_earnings": 111887778000,
@@ -1270,36 +1273,38 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:44:22.028Z"
+      "parsed_at": "2026-07-15 17:11:11.170426+03"
     },
     {
       "ticker": "COOP",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2024-03-30",
       "file_name": "Co-operative-Bank-of-Kenya-Ltd-Un-audited-Results-of-the-Group-the-Bank-for-the-Period-Ended-31-Mar-2024.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "net_income": 8911846000,
+        "eps": 121.5,
+        "net_income": 7145846000,
         "total_debt": 60050674000,
         "total_assets": 714071934000,
         "total_revenue": 18776098000,
-        "current_assets": 12814812000,
+        "current_assets": 128148120000,
         "cost_of_revenue": 7713270000,
         "operating_income": 8911846000,
         "retained_earnings": 119459897000,
         "total_liabilities": 588959298000,
-        "current_liabilities": 17449728000,
+        "dividend_per_share": 15,
+        "current_liabilities": 174497280000,
         "shareholders_equity": 127099178000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:59:21.760Z"
+      "parsed_at": "2026-07-15 17:11:08.918754+03"
     },
     {
       "ticker": "COOP",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-09-29",
       "file_name": "Co-operative-Bank-of-Kenya-Ltd-Un-audited-Results-of-the-Group-the-Bank-for-the-Period-Ended-30-Sep-2025.pdf",
       "file_size": null,
@@ -1311,18 +1316,18 @@
         "total_debt": 66512319000,
         "total_assets": 815266710000,
         "total_revenue": 67383790000,
-        "current_assets": 222545000000,
+        "current_assets": 221551000000,
         "cost_of_revenue": 22645588000,
         "operating_income": 29666871000,
         "retained_earnings": 144618164000,
         "total_liabilities": 620749280000,
         "dividend_per_share": 1,
-        "current_liabilities": 10203114000,
+        "current_liabilities": 242152980000,
         "shareholders_equity": 194517430000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:03:44.671Z"
+      "parsed_at": "2026-07-15 17:13:11.400182+03"
     },
     {
       "ticker": "COOP",
@@ -1344,11 +1349,11 @@
         "total_liabilities": 661318375000,
         "dividend_per_share": 2.5,
         "current_liabilities": 78957000,
-        "shareholders_equity": 165976932000
+        "shareholders_equity": 165976952000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:04:18.752Z"
+      "parsed_at": "2026-07-15 17:11:17.104725+03"
     },
     {
       "ticker": "CRWN",
@@ -1373,7 +1378,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:46.123Z"
+      "parsed_at": "2026-07-14 18:57:46.123+03"
     },
     {
       "ticker": "CRWN",
@@ -1399,7 +1404,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:42:37.440Z"
+      "parsed_at": "2026-07-14 18:42:37.44+03"
     },
     {
       "ticker": "CRWN",
@@ -1424,7 +1429,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:46:38.264Z"
+      "parsed_at": "2026-07-14 18:46:38.264+03"
     },
     {
       "ticker": "CRWN",
@@ -1450,7 +1455,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:02:45.975Z"
+      "parsed_at": "2026-07-14 19:02:45.975+03"
     },
     {
       "ticker": "CRWN",
@@ -1475,7 +1480,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:23.439Z"
+      "parsed_at": "2026-07-14 18:56:23.439+03"
     },
     {
       "ticker": "CTUM",
@@ -1498,7 +1503,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:36:17.943Z"
+      "parsed_at": "2026-07-15 10:36:17.943+03"
     },
     {
       "ticker": "DTK",
@@ -1511,7 +1516,7 @@
       "parsed_data": {
         "eps": 13.98,
         "net_income": 4413473000,
-        "total_debt": 24549994000,
+        "total_debt": 24549997000,
         "total_assets": 456842717000,
         "total_revenue": 26300505000,
         "current_assets": 104632000,
@@ -1520,17 +1525,17 @@
         "retained_earnings": 54854274000,
         "total_liabilities": 382289733000,
         "dividend_per_share": 3,
-        "current_liabilities": 345892941000,
+        "current_liabilities": 331451673000,
         "shareholders_equity": 74552984000,
         "cash_from_operations": 6876795000
       },
-      "error_message": null,
+      "error_message": "LLM quota exceeded / returned no data, regex fallback also returned no data. Text preview: DTB\n\nDIAMOND TRUST BANK\n\nAchieve More\n\n# The Board of Directors of Diamond Trust Bank Kenya Limited is pleased to announce the audited Group and Bank results for the year ended 31 December 2021\n\n|  STATEMENT OF FINANCIAL POSITION | GROUP |   | BANK  |   |\n| --- | --- | --- | --- | --- |\n|   |  Dec 2",
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:20.028Z"
+      "parsed_at": "2026-07-15 17:14:38.290515+03"
     },
     {
       "ticker": "DTK",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2022-03-30",
       "file_name": "Diamond-Trust-Bank-Kenya-Limited-Unaudited-Group-Bank-Results-for-the-Period-Ended-31-March-2022.pdf",
       "file_size": null,
@@ -1542,22 +1547,22 @@
         "total_debt": 25331714000,
         "total_assets": 471336425000,
         "total_revenue": 7315330000,
-        "current_assets": 100000000000,
+        "current_assets": 123610000000,
         "cost_of_revenue": 3695581000,
         "operating_income": 3421475000,
         "retained_earnings": 56783724000,
         "total_liabilities": 394729833000,
         "dividend_per_share": 0,
-        "current_liabilities": 370000000000,
-        "shareholders_equity": 69096848000
+        "current_liabilities": 376411000000,
+        "shareholders_equity": 76606592000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:52.500Z"
+      "parsed_at": "2026-07-15 17:14:44.210323+03"
     },
     {
       "ticker": "DTK",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "Diamond-Trust-Bank-Kenya-Limited-Unaudited-Group-Bank-Results-for-the-Six-Month-Period-Ended-30-Jun-2023.pdf",
       "file_size": null,
@@ -1576,9 +1581,9 @@
         "dividend_per_share": 5,
         "shareholders_equity": 82629534000
       },
-      "error_message": null,
+      "error_message": "LLM quota exceeded / returned no data, regex fallback also returned no data. Text preview: DTB\n\nDIAMOND TRUST BANK\n\nAchieve More\n\nThe Board of Directors of Diamond Trust Bank Kenya Limited is pleased to announce the unaudited Group and Bank results for the six months period ended 30 June 2023.\n\n|  STATEMENT OF FINANCIAL POSITION | GROUP |   |   |   |   | BANK |   |   |   |   | STATEMENT O",
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:41:03.911Z"
+      "parsed_at": "2026-07-15 17:14:59.103649+03"
     },
     {
       "ticker": "DTK",
@@ -1590,47 +1595,50 @@
       "status": "completed",
       "parsed_data": {
         "eps": 24.6,
-        "net_income": 6879176000,
-        "total_debt": 29074722000,
+        "net_income": 7794972000,
+        "total_debt": 29074712000,
         "total_assets": 635040842000,
         "total_revenue": 39729572000,
-        "current_assets": 162640000000,
+        "current_assets": 12248834000,
         "cost_of_revenue": 25736944000,
         "operating_income": 8860261000,
         "retained_earnings": 64370411000,
         "total_liabilities": 548689318000,
         "dividend_per_share": 6,
-        "current_liabilities": 530270000000,
+        "current_liabilities": 486090594000,
         "shareholders_equity": 74888755000,
         "cash_from_operations": 46417924000
       },
-      "error_message": null,
+      "error_message": "LLM quota exceeded / returned no data, regex fallback also returned no data. Text preview: **DTB** DASHIONG TRUST BANK\nBank with us. Bank on us.\n\nThe Board of Directors of Diamond Trust Bank Kenya Limited is pleased to announce the audited Group and Bank results for the year ended 31 December 2023\n\n|  STATEMENT OF FINANCIAL POSITION | GROUP |   | RANK  |   |\n| --- | --- | --- | --- | --- ",
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:45:42.433Z"
+      "parsed_at": "2026-07-15 17:14:51.44008+03"
     },
     {
       "ticker": "DTK",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2024-03-30",
       "file_name": "Diamond-Trust-Bank-Kenya-Limited-Unaudited-Group-and-Bank-results-for-the-period-ended-31-March-2024.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
+        "eps": 11.18,
         "net_income": 53298805000,
         "total_debt": 18479052000,
         "total_assets": 571887543000,
-        "total_revenue": 187730574000,
+        "total_revenue": 102567766000,
         "current_assets": 187730574000,
-        "cost_of_revenue": 101216151000,
+        "cost_of_revenue": 18479052000,
+        "operating_income": 4324959000,
         "retained_earnings": 53298805000,
         "total_liabilities": 490525593000,
+        "dividend_per_share": 4.19,
         "current_liabilities": 322460372000,
-        "shareholders_equity": 71884231000
+        "shareholders_equity": 57728626000
       },
-      "error_message": null,
+      "error_message": "LLM quota exceeded / returned no data, regex fallback also returned no data. Text preview: **DTB** DIAMOND TRUST BANK\n\nBank with us. Bank on us.\n\n# **The Board of Directors of Diamond Trust Bank Kenya Limited is pleased to announce the unaudited Group and Bank results for the period ended 31 March 2024.**[{\"box_2d\": [10, 75, 984, 634], \"label\": \"table\", \"caption\": \"<table><thead><tr><th r",
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:59:29.793Z"
+      "parsed_at": "2026-07-15 17:14:32.612356+03"
     },
     {
       "ticker": "DTK",
@@ -1643,7 +1651,7 @@
       "parsed_data": {
         "eps": 27.33,
         "net_income": 8819409000,
-        "total_debt": 8427186000,
+        "total_debt": 8427184000,
         "total_assets": 573886914000,
         "total_revenue": 41431935000,
         "current_assets": 19042398000,
@@ -1656,13 +1664,13 @@
         "shareholders_equity": 81778872000,
         "cash_from_operations": 17005070000
       },
-      "error_message": null,
+      "error_message": "LLM quota exceeded / returned no data, regex fallback also returned no data. Text preview: **DTB** DIAMOND TRUST BANK\n\nBank with us. Bank on us.\n\n# **The Board of Directors of Diamond Trust Bank Kenya Limited is pleased to announce the audited Group and Bank results for the year ended 31 December 2024**\n\n|  STATEMENT OF FINANCIAL POSITION | GROUP |   | BANK |   | STATEMENT OF COMPREHENSIV",
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:01:06.671Z"
+      "parsed_at": "2026-07-15 17:14:48.338843+03"
     },
     {
       "ticker": "DTK",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-06-29",
       "file_name": "Diamond-Trust-Bank-Kenya-Limited-Unaudited-Financial-Results-for-the-period-Ended-30-Jun-2025.pdf",
       "file_size": null,
@@ -1671,10 +1679,10 @@
       "parsed_data": {
         "eps": 17.04,
         "net_income": 5370088000,
-        "total_debt": 69932218000,
+        "total_debt": 69132218000,
         "total_assets": 611509119000,
         "total_revenue": 21927514000,
-        "current_assets": 380000000000,
+        "current_assets": 362000000000,
         "cost_of_revenue": 13515452000,
         "operating_income": 7173798000,
         "retained_earnings": 69255691000,
@@ -1683,36 +1691,36 @@
         "current_liabilities": 500000000000,
         "shareholders_equity": 100761839000
       },
-      "error_message": null,
+      "error_message": "LLM quota exceeded / returned no data, regex fallback also returned no data. Text preview: DTB\n\nDIAMOND\n\nTRUST\n\nBANK\n\nBank with us. Bank on us.\n\nThe Board of Directors of Diamond Trust Bank Kenya Limited is pleased to announce unaudited Group and Bank results for the period ended 30 June 2025\n\n|  STATEMENT OF FINANCIAL POSITION | GROUP |   |   |   | BANK |   |   |   | STATEMENT OF COMPREH",
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:02:36.412Z"
+      "parsed_at": "2026-07-15 17:15:02.117111+03"
     },
     {
       "ticker": "DTK",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-09-29",
       "file_name": "Diamond-Trust-Bank-Kenya-Limited-Unaudited-Financial-Results-for-the-period-Ended-30-Sep-2025.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": 7.52,
+        "eps": 7.5,
         "net_income": 8400000000,
-        "total_debt": 19327259000,
+        "total_debt": 58422609000,
         "total_assets": 641772628000,
-        "total_revenue": 41431935000,
-        "current_assets": 140000000000,
-        "cost_of_revenue": 21303888000,
+        "total_revenue": 34219934000,
+        "current_assets": 152000000000,
+        "cost_of_revenue": 18841075000,
         "operating_income": 11267626000,
         "retained_earnings": 71418006000,
-        "total_liabilities": 530524809000,
+        "total_liabilities": 530524810000,
         "dividend_per_share": 5,
-        "current_liabilities": 57524809000,
+        "current_liabilities": 570250055000,
         "shareholders_equity": 111247819000
       },
-      "error_message": null,
+      "error_message": "LLM quota exceeded / returned no data, regex fallback also returned no data. Text preview: DTB\n\nDIAMOND\nTRUST\nBANK\n\nBank with us. Bank on us.\n\nThe Board of Directors of Diamond Trust Bank Kenya Limited is pleased to announce the unaudited Group and Bank results for the nine months period ended 30 September 2025\n\n|  STATEMENT OF FINANCIAL POSITION | GROUP |   |   |   |   | BANK  |   |   | ",
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:03:53.903Z"
+      "parsed_at": "2026-07-15 17:14:35.611793+03"
     },
     {
       "ticker": "DTK",
@@ -1725,26 +1733,26 @@
       "parsed_data": {
         "eps": 33.65,
         "net_income": 9407239000,
-        "total_debt": 59894624000,
+        "total_debt": 59894622000,
         "total_assets": 659118478000,
         "total_revenue": 46692074000,
-        "current_assets": 251300000000,
+        "current_assets": 261510175000,
         "cost_of_revenue": 26114375000,
         "operating_income": 13934108000,
         "retained_earnings": 71143527000,
         "total_liabilities": 546079510000,
         "dividend_per_share": 9,
-        "current_liabilities": 529655390000,
+        "current_liabilities": 534252390000,
         "shareholders_equity": 113038968000,
         "cash_from_operations": 41239896000
       },
-      "error_message": null,
+      "error_message": "LLM quota exceeded / returned no data, regex fallback also returned no data. Text preview: **DTB** DIAMOND TRUST BANK\n\nBank with us. Bank on us.\n\n# **The Board of Directors of Diamond Trust Bank Kenya Limited is pleased to announce the audited Group and Bank results for the year ended 31 December 2025**\n\n|  STATEMENTS OF FINANCIAL POSITION | GROUP |   | BANK |   | STATEMENTS OF COMPREHENS",
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:05:05.466Z"
+      "parsed_at": "2026-07-15 17:14:56.047712+03"
     },
     {
       "ticker": "DTK",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2026-03-30",
       "file_name": "Diamond-Trust-Bank-Kenya-Limited-Unaudited-Financial-Results-for-the-period-Ended-31-Mar-2026.pdf",
       "file_size": null,
@@ -1755,17 +1763,15 @@
         "net_income": 3478117000,
         "total_assets": 660933003000,
         "total_revenue": 12944453000,
-        "current_assets": 456378554000,
+        "current_assets": 15175147000,
         "cost_of_revenue": 6139802000,
         "operating_income": 4805138000,
         "total_liabilities": 543241812000,
-        "dividend_per_share": 9,
-        "current_liabilities": 370131242000,
         "shareholders_equity": 117691191000
       },
-      "error_message": null,
+      "error_message": "LLM quota exceeded / returned no data, regex fallback also returned no data. Text preview: **DTB** DIAMOND TRUST BANK\n\nBank with us. Bank on us.\n\n# **The Board of Directors of Diamond Trust Bank Kenya Limited is pleased to announce the unaudited Group and Bank results for the period ended 31 March 2026**\n\n|  STATEMENT OF FINANCIAL POSITION | GROUP |   |   | GROUP |   |   | STATEMENT OF CO",
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:39.542Z"
+      "parsed_at": "2026-07-15 17:14:41.678335+03"
     },
     {
       "ticker": "EABL",
@@ -1793,11 +1799,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:55.778Z"
+      "parsed_at": "2026-07-14 18:56:55.778+03"
     },
     {
       "ticker": "EABL",
-      "period_type": "quarterly",
+      "period_type": "annual",
       "period_end_date": "2023-06-29",
       "file_name": "East-African-Breweries-Plc-Unaudited-Results-for-the-Half-Year-Ended-31st-December-2023.pdf",
       "file_size": null,
@@ -1821,11 +1827,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:43:19.268Z"
+      "parsed_at": "2026-07-14 18:43:19.268+03"
     },
     {
       "ticker": "EABL",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-12-30",
       "file_name": "East-African-Breweries-Plc-Audited-Results-for-the-Year-Ended-30th-June-2023.pdf",
       "file_size": null,
@@ -1849,11 +1855,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:39:27.883Z"
+      "parsed_at": "2026-07-14 18:39:27.883+03"
     },
     {
       "ticker": "EABL",
-      "period_type": "quarterly",
+      "period_type": "annual",
       "period_end_date": "2024-06-29",
       "file_name": "East-African-Breweries-Plc-Unaudited-Results-for-the-Half-Year-Ended-31st-December-2024.pdf",
       "file_size": null,
@@ -1877,7 +1883,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:00:16.219Z"
+      "parsed_at": "2026-07-14 19:00:16.219+03"
     },
     {
       "ticker": "EGAD",
@@ -1904,11 +1910,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:44.641Z"
+      "parsed_at": "2026-07-14 18:56:44.641+03"
     },
     {
       "ticker": "EGAD",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-12-30",
       "file_name": "Eaagads-Limited-Audited-Results-for-the-Financial-Year-Ended-31st-March-2023.pdf",
       "file_size": null,
@@ -1932,7 +1938,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:39:39.562Z"
+      "parsed_at": "2026-07-14 18:39:39.562+03"
     },
     {
       "ticker": "EQTY",
@@ -1960,11 +1966,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:24.575Z"
+      "parsed_at": "2026-07-14 18:57:24.575+03"
     },
     {
       "ticker": "EQTY",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2022-03-30",
       "file_name": "Equity-Group-Holdings-Plc-Un-audited-Financial-Statements-Other-Disclosures-for-the-Period-Ended-31-Mar-2022.pdf",
       "file_size": null,
@@ -1987,7 +1993,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:38:44.977Z"
+      "parsed_at": "2026-07-14 18:38:44.977+03"
     },
     {
       "ticker": "EQTY",
@@ -2012,7 +2018,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:45:01.081Z"
+      "parsed_at": "2026-07-14 18:45:01.081+03"
     },
     {
       "ticker": "EQTY",
@@ -2037,11 +2043,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:59:12.000Z"
+      "parsed_at": "2026-07-14 18:59:12+03"
     },
     {
       "ticker": "EQTY",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-09-29",
       "file_name": "Equity-Group-Holdings-Plc-Unaudited-Financial-Statements-Other-Disclosures-for-the-Period-Ended-30-Sep-2025.pdf",
       "file_size": null,
@@ -2062,7 +2068,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:03:17.999Z"
+      "parsed_at": "2026-07-14 19:03:17.999+03"
     },
     {
       "ticker": "EVRD",
@@ -2089,7 +2095,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:58.589Z"
+      "parsed_at": "2026-07-14 18:56:58.589+03"
     },
     {
       "ticker": "FTGH",
@@ -2116,7 +2122,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:28.794Z"
+      "parsed_at": "2026-07-14 18:57:28.794+03"
     },
     {
       "ticker": "FTGH",
@@ -2143,7 +2149,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:46:05.373Z"
+      "parsed_at": "2026-07-14 18:46:05.373+03"
     },
     {
       "ticker": "HAFC",
@@ -2170,7 +2176,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:36:01.347Z"
+      "parsed_at": "2026-07-15 10:36:01.347+03"
     },
     {
       "ticker": "HAFC",
@@ -2194,7 +2200,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:36:41.390Z"
+      "parsed_at": "2026-07-15 10:36:41.39+03"
     },
     {
       "ticker": "HAFC",
@@ -2218,7 +2224,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:36:58.367Z"
+      "parsed_at": "2026-07-15 10:36:58.367+03"
     },
     {
       "ticker": "HAFC",
@@ -2245,11 +2251,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:37:22.118Z"
+      "parsed_at": "2026-07-15 10:37:22.118+03"
     },
     {
       "ticker": "HAFC",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2026-03-30",
       "file_name": "HF-Group-Plc-Un-audited-Financial-Statements-and-other-Disclosures-for-the-Period-Ended-31-Mar-2026.pdf",
       "file_size": null,
@@ -2269,7 +2275,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:35:40.783Z"
+      "parsed_at": "2026-07-15 10:35:40.783+03"
     },
     {
       "ticker": "HAFR",
@@ -2284,7 +2290,7 @@
       },
       "error_message": null,
       "processed_by": "js:regex",
-      "parsed_at": "2026-07-14T16:02:42.321Z"
+      "parsed_at": "2026-07-14 19:02:42.321+03"
     },
     {
       "ticker": "HFCK",
@@ -2311,7 +2317,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:38.924Z"
+      "parsed_at": "2026-07-14 18:57:38.924+03"
     },
     {
       "ticker": "HFCK",
@@ -2335,7 +2341,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:45:00.689Z"
+      "parsed_at": "2026-07-14 18:45:00.689+03"
     },
     {
       "ticker": "HFCK",
@@ -2359,7 +2365,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:01:00.662Z"
+      "parsed_at": "2026-07-14 19:01:00.662+03"
     },
     {
       "ticker": "HFCK",
@@ -2383,11 +2389,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:05:29.515Z"
+      "parsed_at": "2026-07-14 19:05:29.515+03"
     },
     {
       "ticker": "HFCK",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2026-03-30",
       "file_name": "HF-Group-Plc-Un-audited-Financial-Statements-and-other-Disclosures-for-the-Period-Ended-31-Mar-2026.pdf",
       "file_size": null,
@@ -2407,7 +2413,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:25.082Z"
+      "parsed_at": "2026-07-14 18:56:25.082+03"
     },
     {
       "ticker": "IMH",
@@ -2419,26 +2425,26 @@
       "status": "completed",
       "parsed_data": {
         "eps": 4.92,
-        "net_income": 8130742000000,
-        "total_assets": 415180677000000,
-        "total_revenue": 29612514000000,
-        "current_assets": 10661714000000,
-        "cost_of_revenue": 12204574000000,
-        "operating_income": 11864076000000,
-        "retained_earnings": 43903009000000,
-        "total_liabilities": 341132600000000,
+        "net_income": 8130742000,
+        "total_assets": 415180677000,
+        "total_revenue": 29612514000,
+        "current_assets": 106617140000,
+        "cost_of_revenue": 12204574000,
+        "operating_income": 11864076000,
+        "retained_earnings": 43903009000,
+        "total_liabilities": 341132600000,
         "dividend_per_share": 1.5,
-        "current_liabilities": 341132600000000,
-        "shareholders_equity": 69593031000000,
-        "cash_from_operations": -8817668000000
+        "current_liabilities": 341132600000,
+        "shareholders_equity": 69593031000,
+        "cash_from_operations": -8817668000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:32.959Z"
+      "parsed_at": "2026-07-15 17:11:51.439659+03"
     },
     {
       "ticker": "IMH",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2022-03-30",
       "file_name": "IM-Holdings-Plc-Un-audited-Financial-Statements-Disclosures-for-the-Period-Ended-31-Mar-2022.pdf",
       "file_size": null,
@@ -2458,11 +2464,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:51.142Z"
+      "parsed_at": "2026-07-15 17:11:46.718903+03"
     },
     {
       "ticker": "IMH",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "IM-Group-Plc-Unaudited-Financial-Statements-for-the-Period-Ended-30-Jun-2023.pdf",
       "file_size": null,
@@ -2474,19 +2480,18 @@
         "total_debt": 0,
         "total_assets": 503497852000,
         "total_revenue": 19105446000,
-        "current_assets": 7011069000,
+        "current_assets": 3164230000,
         "cost_of_revenue": 9098007000,
         "operating_income": 6187719000,
         "retained_earnings": 51193383000,
         "total_liabilities": 419388240000,
         "dividend_per_share": 2.25,
-        "current_liabilities": 356757997000,
-        "shareholders_equity": 78119139000,
-        "cash_from_operations": 0
+        "current_liabilities": 189162000,
+        "shareholders_equity": 78119139000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:41:30.101Z"
+      "parsed_at": "2026-07-15 17:11:41.937375+03"
     },
     {
       "ticker": "IMH",
@@ -2502,23 +2507,23 @@
         "total_debt": 18271289000,
         "total_assets": 579710438000,
         "total_revenue": 40681731000,
-        "current_assets": 153410000000,
+        "current_assets": 155970000000,
         "cost_of_revenue": 21828708000,
         "operating_income": 10476682000,
         "retained_earnings": 57819358000,
         "total_liabilities": 484410183000,
         "dividend_per_share": 2.55,
-        "current_liabilities": 473630000000,
+        "current_liabilities": 484410183000,
         "shareholders_equity": 87699646000,
         "cash_from_operations": 27814534000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:44:22.115Z"
+      "parsed_at": "2026-07-15 17:11:48.847526+03"
     },
     {
       "ticker": "IMH",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2024-03-30",
       "file_name": "IM-Group-Plc-Un-audited-Financial-Results-of-the-Group-as-at-31-Mar-2024.pdf",
       "file_size": null,
@@ -2530,18 +2535,18 @@
         "total_debt": 14903229000,
         "total_assets": 532862567000,
         "total_revenue": 11544589000,
-        "current_assets": 116800000000,
+        "current_assets": 111695000000,
         "cost_of_revenue": 7980118000,
         "operating_income": 4307969000,
         "retained_earnings": 61962687000,
         "total_liabilities": 439301282000,
         "dividend_per_share": 2.55,
-        "current_liabilities": 404300000000,
+        "current_liabilities": 439301282000,
         "shareholders_equity": 87243801000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:21:57.724Z"
+      "parsed_at": "2026-07-15 17:11:44.344727+03"
     },
     {
       "ticker": "IMH",
@@ -2553,51 +2558,45 @@
       "status": "completed",
       "parsed_data": {
         "eps": 9.38,
-        "net_income": 16853749000,
+        "net_income": 15379279000,
         "total_debt": 14068877000,
         "total_assets": 581380300000,
         "total_revenue": 51218807000,
-        "current_assets": 153000000000,
+        "current_assets": 151331000000,
         "cost_of_revenue": 30543556000,
         "operating_income": 19879386000,
         "retained_earnings": 16289313000,
         "total_liabilities": 479633245000,
         "dividend_per_share": 3,
-        "current_liabilities": 77500000000,
-        "shareholders_equity": 84474863000,
+        "current_liabilities": 101550000000,
+        "shareholders_equity": 91587765000,
         "cash_from_operations": -10184768000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:01:05.299Z"
+      "parsed_at": "2026-07-15 17:11:39.299111+03"
     },
     {
       "ticker": "IMH",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-09-29",
       "file_name": "IM-GROUP-Financial-results_30-September-2025.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": 15,
-        "net_income": 22985253000,
+        "eps": 1.5,
+        "net_income": 72965253000,
         "total_debt": 10510161000,
         "total_assets": 640416878000,
-        "total_revenue": 108700000000,
-        "current_assets": 150000000000,
-        "cost_of_revenue": 45200000000,
-        "operating_income": 38500000000,
         "retained_earnings": 72965253000,
         "total_liabilities": 519166669000,
         "dividend_per_share": 1.5,
-        "current_liabilities": 475305180000,
-        "shareholders_equity": 113785836000,
-        "cash_from_operations": 35400000000
+        "shareholders_equity": 113785836000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:03:45.590Z"
+      "parsed_at": "2026-07-15 17:13:25.71531+03"
     },
     {
       "ticker": "IMH",
@@ -2609,21 +2608,21 @@
       "status": "completed",
       "parsed_data": {
         "eps": 8.68,
-        "net_income": 14720085000000,
-        "total_debt": 14666877000000,
-        "total_assets": 585934385000000,
-        "total_revenue": 50587347000000,
-        "cost_of_revenue": 36543926000000,
-        "operating_income": 18854445000000,
-        "retained_earnings": 62424819000000,
-        "total_liabilities": 479975936000000,
+        "net_income": 14720085000,
+        "total_debt": 14666877000,
+        "total_assets": 585934385000,
+        "total_revenue": 50587347000,
+        "cost_of_revenue": 36543926000,
+        "operating_income": 18854445000,
+        "retained_earnings": 62424819000,
+        "total_liabilities": 479975936000,
         "dividend_per_share": 3.93,
-        "shareholders_equity": 93812366000000,
-        "cash_from_operations": -14498478000000
+        "shareholders_equity": 93812366000,
+        "cash_from_operations": -14498478000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:05:02.435Z"
+      "parsed_at": "2026-07-15 17:12:13.359967+03"
     },
     {
       "ticker": "JUB",
@@ -2647,7 +2646,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:39.038Z"
+      "parsed_at": "2026-07-14 18:57:39.038+03"
     },
     {
       "ticker": "JUB",
@@ -2670,7 +2669,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:00:51.582Z"
+      "parsed_at": "2026-07-14 19:00:51.582+03"
     },
     {
       "ticker": "JUB",
@@ -2692,7 +2691,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:05:38.247Z"
+      "parsed_at": "2026-07-14 19:05:38.247+03"
     },
     {
       "ticker": "KAPC",
@@ -2718,11 +2717,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:43:17.962Z"
+      "parsed_at": "2026-07-14 18:43:17.962+03"
     },
     {
       "ticker": "KCB",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2022-03-30",
       "file_name": "KCB-Group-Plc-Unaudited-Financial-Statements-and-Other-Disclosures-for-the-Period-Ended-31-Mar-2022.pdf",
       "file_size": null,
@@ -2735,19 +2734,19 @@
         "total_assets": 1144988410000,
         "total_revenue": 106636407000,
         "cost_of_revenue": 24443213000,
-        "operating_income": 16032078000,
-        "retained_earnings": 144104127000,
+        "operating_income": 67816306000,
+        "retained_earnings": 131577505000,
         "total_liabilities": 983185358000,
         "dividend_per_share": 3,
         "shareholders_equity": 181823389000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:50.062Z"
+      "parsed_at": "2026-07-15 17:12:47.613052+03"
     },
     {
       "ticker": "KCB",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "KCB-Group-Plc-Unaudited-Financial-Statements-Other-Disclosures-for-the-Period-Ended-30-Jun-2023.pdf",
       "file_size": null,
@@ -2755,7 +2754,7 @@
       "status": "completed",
       "parsed_data": {
         "eps": 9.71,
-        "net_income": 15595576000,
+        "net_income": 15595276000,
         "total_debt": 65643452000,
         "total_assets": 1864390055000,
         "total_revenue": 73068353000,
@@ -2771,7 +2770,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:41:02.514Z"
+      "parsed_at": "2026-07-15 17:11:54.161622+03"
     },
     {
       "ticker": "KCB",
@@ -2794,13 +2793,13 @@
         "dividend_per_share": 12.71,
         "shareholders_equity": 228320538000
       },
-      "error_message": null,
+      "error_message": "LLM quota exceeded / returned no data, regex fallback also returned no data. Text preview: KCB GROUP PLC\nAUDITED FINANCIAL STATEMENTS AND OTHER DISCLOSURES FOR THE YEAR ENDED 31 DECEMBER 2023\n\n|   | KCB KENYA BANK |   | NATIONAL BANK OF KENYA |   | KCB GROUP PLC COMPANY |   | KCB GROUP PLC CONSOLIDATED  |   |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n|   | 31-Dec-22 Year End",
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:58:10.553Z"
+      "parsed_at": "2026-07-15 17:13:13.701305+03"
     },
     {
       "ticker": "KCB",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2024-03-30",
       "file_name": "KCB-Group-Plc-Un-audited-Financial-Statements-Other-Disclosures-for-the-Period-Ended-31-Mar-2024.pdf",
       "file_size": null,
@@ -2812,7 +2811,7 @@
         "total_assets": 122298948000,
         "total_revenue": 48487833000,
         "cost_of_revenue": 19022207000,
-        "operating_income": 11619526000,
+        "operating_income": 14619526000,
         "retained_earnings": 79600047000,
         "total_liabilities": 11795289000,
         "dividend_per_share": 0.24,
@@ -2820,7 +2819,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:21:58.600Z"
+      "parsed_at": "2026-07-15 17:11:56.666558+03"
     },
     {
       "ticker": "KCB",
@@ -2836,7 +2835,7 @@
         "total_debt": 18054403000,
         "total_assets": 1962320080000,
         "total_revenue": 204846691000,
-        "cost_of_revenue": 93472271000,
+        "cost_of_revenue": 93873673000,
         "operating_income": 81972627000,
         "retained_earnings": 243383785000,
         "total_liabilities": 1687431000000,
@@ -2845,11 +2844,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:00:40.687Z"
+      "parsed_at": "2026-07-15 17:12:08.699995+03"
     },
     {
       "ticker": "KCB",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-03-30",
       "file_name": "KCB-Group-Plc-Un-audited-Financial-Statements-Other-Disclosures-for-the-Period-Ended-31-Mar-2025.pdf",
       "file_size": null,
@@ -2870,11 +2869,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:02:11.759Z"
+      "parsed_at": "2026-07-15 17:12:05.930479+03"
     },
     {
       "ticker": "KCB",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-09-29",
       "file_name": "KCB-Group-Plc-Un-audited-Financial-Statements-Other-Disclosures-for-the-Period-Ended-30-Sep-2025.pdf",
       "file_size": null,
@@ -2895,7 +2894,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:03:43.605Z"
+      "parsed_at": "2026-07-15 17:11:59.559976+03"
     },
     {
       "ticker": "KCB",
@@ -2919,11 +2918,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:04:42.942Z"
+      "parsed_at": "2026-07-15 17:13:16.866419+03"
     },
     {
       "ticker": "KEGN",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2021-12-30",
       "file_name": "KenGen-Plc-Unaudited-Financial-Results-for-the-Six-Months-Ended-31-Dec-2021-1.pdf",
       "file_size": null,
@@ -2946,11 +2945,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:35:54.272Z"
+      "parsed_at": "2026-07-15 10:35:54.272+03"
     },
     {
       "ticker": "KEGN",
-      "period_type": "quarterly",
+      "period_type": "annual",
       "period_end_date": "2023-06-29",
       "file_name": "KenGen-Plc-Unaudited-Results-for-the-Half-Year-Ended-31st-December-2023.pdf",
       "file_size": null,
@@ -2973,11 +2972,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:36:28.961Z"
+      "parsed_at": "2026-07-15 10:36:28.961+03"
     },
     {
       "ticker": "KEGN",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-12-30",
       "file_name": "KenGen-Audited-Results-for-the-Year-Ended-30th-June-2025.pdf",
       "file_size": null,
@@ -3001,11 +3000,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:37:17.358Z"
+      "parsed_at": "2026-07-15 10:37:17.358+03"
     },
     {
       "ticker": "KNRE",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "Kenya-Re-Insurance-Corporation-Ltd-Consolidated-Statement-of-Comprehensive-Income-For-the-Period-Ending-30-Jun-2023.pdf",
       "file_size": null,
@@ -3026,7 +3025,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:42:43.612Z"
+      "parsed_at": "2026-07-14 18:42:43.612+03"
     },
     {
       "ticker": "KNRE",
@@ -3049,7 +3048,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:01:23.965Z"
+      "parsed_at": "2026-07-14 19:01:23.965+03"
     },
     {
       "ticker": "KNRE",
@@ -3074,11 +3073,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:04:59.851Z"
+      "parsed_at": "2026-07-14 19:04:59.851+03"
     },
     {
       "ticker": "KPLC",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2024-12-30",
       "file_name": "The-Kenya-Power-Lighting-Company-Plc-Unaudited-Trading-Results-for-the-6-months-ended-31-12-2024.pdf",
       "file_size": null,
@@ -3100,7 +3099,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:36:53.517Z"
+      "parsed_at": "2026-07-15 10:36:53.517+03"
     },
     {
       "ticker": "KPLC",
@@ -3127,7 +3126,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:37:06.703Z"
+      "parsed_at": "2026-07-15 10:37:06.703+03"
     },
     {
       "ticker": "KQ",
@@ -3142,11 +3141,11 @@
       },
       "error_message": null,
       "processed_by": "js:regex",
-      "parsed_at": "2026-07-14T16:04:51.736Z"
+      "parsed_at": "2026-07-14 19:04:51.736+03"
     },
     {
       "ticker": "KUKZ",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "Kakuzi-Plc-Unaudited-Results-for-the-Six-Months-Ended-30-Jun-2023.pdf",
       "file_size": null,
@@ -3168,7 +3167,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:42:21.707Z"
+      "parsed_at": "2026-07-14 18:42:21.707+03"
     },
     {
       "ticker": "KUKZ",
@@ -3192,7 +3191,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:02:21.659Z"
+      "parsed_at": "2026-07-14 19:02:21.659+03"
     },
     {
       "ticker": "KUKZ",
@@ -3218,7 +3217,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:04:50.298Z"
+      "parsed_at": "2026-07-14 19:04:50.298+03"
     },
     {
       "ticker": "LBTY",
@@ -3245,7 +3244,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:17.142Z"
+      "parsed_at": "2026-07-14 18:57:17.142+03"
     },
     {
       "ticker": "LBTY",
@@ -3273,7 +3272,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:45:57.336Z"
+      "parsed_at": "2026-07-14 18:45:57.336+03"
     },
     {
       "ticker": "LBTY",
@@ -3298,11 +3297,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:02:31.469Z"
+      "parsed_at": "2026-07-14 19:02:31.469+03"
     },
     {
       "ticker": "LIMT",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "Limuru-Tea-Plc-Unaudited-Results-for-the-Six-Months-Ended-30-Jun-2023.pdf",
       "file_size": null,
@@ -3323,7 +3322,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:42:07.122Z"
+      "parsed_at": "2026-07-15 17:11:29.947382+03"
     },
     {
       "ticker": "LIMT",
@@ -3341,7 +3340,7 @@
         "current_assets": 132335000,
         "operating_income": 10444000,
         "retained_earnings": 168218000,
-        "total_liabilities": 16497000,
+        "total_liabilities": 16517000,
         "dividend_per_share": 1,
         "current_liabilities": 17937000,
         "shareholders_equity": 192218000,
@@ -3349,7 +3348,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:44:14.692Z"
+      "parsed_at": "2026-07-15 17:12:21.257021+03"
     },
     {
       "ticker": "LIMT",
@@ -3362,11 +3361,11 @@
       "parsed_data": {
         "eps": -6.34,
         "net_income": 15215000,
-        "total_assets": 211824000,
+        "total_assets": 216192000,
         "total_revenue": 144003000,
         "current_assets": 120049000,
         "retained_earnings": 151153000,
-        "total_liabilities": 36671000,
+        "total_liabilities": 41039000,
         "dividend_per_share": 0,
         "current_liabilities": 15607000,
         "shareholders_equity": 175153000,
@@ -3374,7 +3373,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:01:15.499Z"
+      "parsed_at": "2026-07-15 17:12:23.131476+03"
     },
     {
       "ticker": "LIMT",
@@ -3399,7 +3398,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:45.276Z"
+      "parsed_at": "2026-07-15 17:12:25.195577+03"
     },
     {
       "ticker": "LKL",
@@ -3425,7 +3424,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:06.966Z"
+      "parsed_at": "2026-07-14 18:57:06.966+03"
     },
     {
       "ticker": "LKL",
@@ -3452,7 +3451,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:04:02.539Z"
+      "parsed_at": "2026-07-14 19:04:02.539+03"
     },
     {
       "ticker": "NBV",
@@ -3480,7 +3479,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:02:51.801Z"
+      "parsed_at": "2026-07-14 19:02:51.801+03"
     },
     {
       "ticker": "NCBA",
@@ -3507,11 +3506,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:17.143Z"
+      "parsed_at": "2026-07-15 17:12:27.694692+03"
     },
     {
       "ticker": "NCBA",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2022-03-30",
       "file_name": "NCBA-Group-Plc-Unaudited-Financial-Results-of-the-Bank-and-Group-for-the-Period-Ended-31-Mar-2022.pdf",
       "file_size": null,
@@ -3519,12 +3518,12 @@
       "status": "completed",
       "parsed_data": {
         "eps": 6.21,
-        "net_income": 10223644000,
+        "net_income": 3411478000,
         "total_debt": 5900165000,
         "total_assets": 591088037000,
-        "total_revenue": 49151256000,
-        "cost_of_revenue": 19477405000,
-        "operating_income": 15701369000,
+        "total_revenue": 13149884000,
+        "cost_of_revenue": 5070212000,
+        "operating_income": 5033009000,
         "retained_earnings": 44201725000,
         "total_liabilities": 513101008000,
         "dividend_per_share": 3,
@@ -3532,11 +3531,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:46.601Z"
+      "parsed_at": "2026-07-15 17:12:19.273374+03"
     },
     {
       "ticker": "NCBA",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "NCBA-Group-Plc-Unaudited-Financial-Results-of-the-Bank-and-Group-for-the-Period-Ended-30-Jun-2023.pdf",
       "file_size": null,
@@ -3548,19 +3547,19 @@
         "total_debt": 13135394000,
         "total_assets": 660324957000,
         "total_revenue": 31023188000,
-        "current_assets": 292379707000,
+        "current_assets": 257972529000,
         "cost_of_revenue": 13135394000,
         "operating_income": 12359216000,
         "retained_earnings": 60617808000,
         "total_liabilities": 572008561000,
         "dividend_per_share": 1.75,
-        "current_liabilities": 516637807000,
+        "current_liabilities": 252112542000,
         "shareholders_equity": 88316396000,
         "cash_from_operations": 18812595000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:41:25.579Z"
+      "parsed_at": "2026-07-15 17:13:23.26653+03"
     },
     {
       "ticker": "NCBA",
@@ -3576,22 +3575,22 @@
         "total_debt": 6411971000,
         "total_assets": 734621408000,
         "total_revenue": 63670638000,
-        "current_assets": 218800000000,
+        "current_assets": 2018797000,
         "cost_of_revenue": 30622641000,
         "operating_income": 25440202000,
         "retained_earnings": 64900509000,
         "total_liabilities": 637958230000,
         "dividend_per_share": 4.75,
-        "current_liabilities": 252660480000,
+        "current_liabilities": 5262915000,
         "shareholders_equity": 96663178000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:45:21.430Z"
+      "parsed_at": "2026-07-15 17:12:34.223844+03"
     },
     {
       "ticker": "NCBA",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2024-03-30",
       "file_name": "NCBA-Group-Plc-Unaudited-Financial-Results-of-the-Group-and-Bank-for-the-period-ended-31-Mar-2024.pdf",
       "file_size": null,
@@ -3603,14 +3602,14 @@
         "total_assets": 694872255000,
         "total_revenue": 15247457000,
         "cost_of_revenue": 10837219000,
-        "operating_income": 2624465000,
+        "operating_income": 5063445000,
         "retained_earnings": 47807671000,
         "total_liabilities": 596095518000,
         "shareholders_equity": 98776737000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:59:36.684Z"
+      "parsed_at": "2026-07-15 17:12:45.237547+03"
     },
     {
       "ticker": "NCBA",
@@ -3635,11 +3634,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:22:09.499Z"
+      "parsed_at": "2026-07-15 17:12:36.439623+03"
     },
     {
       "ticker": "NCBA",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-03-30",
       "file_name": "NCBA-Group-Plc-Unaudited-Financial-Results-of-the-Group-and-Bank-for-the-period-ended-31-Mar-2025.pdf",
       "file_size": null,
@@ -3660,13 +3659,13 @@
         "current_liabilities": 1644860000,
         "shareholders_equity": 116322909000
       },
-      "error_message": null,
+      "error_message": "LLM quota exceeded / returned no data, regex fallback also returned no data. Text preview: ![NCBA Logo]()\n\n# **The unaudited financial results of the Bank and Group for the period ended 31 March 2025**\n\n|  STATEMENT OF FINANCIAL POSITION | BANK |   |   | COMPANY |   |   | GROUP  |   |   |   |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n|   |  31 March 2025 (31 Marc",
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-15T07:22:24.461Z"
+      "parsed_at": "2026-07-15 17:13:31.002651+03"
     },
     {
       "ticker": "NCBA",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-09-29",
       "file_name": "NCBA-Group-Plc-Unaudited-Financial-Results-of-the-Group-and-Bank-for-the-period-ended-30-Sep-2025.pdf",
       "file_size": null,
@@ -3678,18 +3677,16 @@
         "total_debt": 7594333000,
         "total_assets": 665318803000,
         "total_revenue": 53644554000,
-        "current_assets": 11957243000,
         "cost_of_revenue": 18616925000,
         "operating_income": 20458934000,
         "retained_earnings": 89987073000,
         "total_liabilities": 545069902000,
         "dividend_per_share": 2.5,
-        "current_liabilities": 579020860000,
         "shareholders_equity": 120274609000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:03:47.555Z"
+      "parsed_at": "2026-07-15 17:12:39.521954+03"
     },
     {
       "ticker": "NMG",
@@ -3717,7 +3714,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:44.669Z"
+      "parsed_at": "2026-07-14 18:57:44.669+03"
     },
     {
       "ticker": "NMG",
@@ -3744,7 +3741,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:45:54.167Z"
+      "parsed_at": "2026-07-14 18:45:54.167+03"
     },
     {
       "ticker": "NMG",
@@ -3771,11 +3768,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:44.506Z"
+      "parsed_at": "2026-07-14 18:56:44.506+03"
     },
     {
       "ticker": "NSE",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "Nairobi-Securities-Exchange-Plc-Unaudited-Group-Results-for-the-Six-Months-Ended-30-Jun-2023-2.pdf",
       "file_size": null,
@@ -3796,7 +3793,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:43:07.181Z"
+      "parsed_at": "2026-07-14 18:43:07.181+03"
     },
     {
       "ticker": "NSE",
@@ -3824,7 +3821,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:36.445Z"
+      "parsed_at": "2026-07-14 18:56:36.445+03"
     },
     {
       "ticker": "OCH",
@@ -3851,11 +3848,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:02:58.189Z"
+      "parsed_at": "2026-07-14 19:02:58.189+03"
     },
     {
       "ticker": "PORT",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2021-12-30",
       "file_name": "East-African-Portland-Cement-Plc-Unaudited-Results-for-the-Six-Months-Ended-31-Dec-2021.pdf",
       "file_size": null,
@@ -3878,11 +3875,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:04.263Z"
+      "parsed_at": "2026-07-14 18:57:04.263+03"
     },
     {
       "ticker": "PORT",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-12-30",
       "file_name": "East-African-Portland-Cement-Plc-Unaudited-Results-for-the-Six-Months-Ended-31-Dec-2023.pdf",
       "file_size": null,
@@ -3905,7 +3902,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:43:25.820Z"
+      "parsed_at": "2026-07-14 18:43:25.82+03"
     },
     {
       "ticker": "PORT",
@@ -3933,7 +3930,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:23.990Z"
+      "parsed_at": "2026-07-14 18:56:23.99+03"
     },
     {
       "ticker": "SASN",
@@ -3956,7 +3953,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:58:56.010Z"
+      "parsed_at": "2026-07-14 18:58:56.01+03"
     },
     {
       "ticker": "SBIC",
@@ -3984,7 +3981,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:10.499Z"
+      "parsed_at": "2026-07-14 18:57:10.499+03"
     },
     {
       "ticker": "SBIC",
@@ -4012,7 +4009,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:40:21.905Z"
+      "parsed_at": "2026-07-14 18:40:21.905+03"
     },
     {
       "ticker": "SBIC",
@@ -4040,7 +4037,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:43:37.570Z"
+      "parsed_at": "2026-07-14 18:43:37.57+03"
     },
     {
       "ticker": "SBIC",
@@ -4068,7 +4065,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:00:30.796Z"
+      "parsed_at": "2026-07-14 19:00:30.796+03"
     },
     {
       "ticker": "SBIC",
@@ -4096,7 +4093,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:02:24.736Z"
+      "parsed_at": "2026-07-14 19:02:24.736+03"
     },
     {
       "ticker": "SBIC",
@@ -4124,7 +4121,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:04:31.249Z"
+      "parsed_at": "2026-07-14 19:04:31.249+03"
     },
     {
       "ticker": "SCAN",
@@ -4150,7 +4147,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:45.204Z"
+      "parsed_at": "2026-07-14 18:57:45.204+03"
     },
     {
       "ticker": "SCAN",
@@ -4173,7 +4170,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:41:40.601Z"
+      "parsed_at": "2026-07-14 18:41:40.601+03"
     },
     {
       "ticker": "SCAN",
@@ -4198,7 +4195,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:46:49.158Z"
+      "parsed_at": "2026-07-14 18:46:49.158+03"
     },
     {
       "ticker": "SCAN",
@@ -4221,7 +4218,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:05:57.115Z"
+      "parsed_at": "2026-07-14 19:05:57.115+03"
     },
     {
       "ticker": "SCBK",
@@ -4249,11 +4246,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:43:35.668Z"
+      "parsed_at": "2026-07-14 18:43:35.668+03"
     },
     {
       "ticker": "SCBK",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2026-03-30",
       "file_name": "Standard-Chartered-Bank-Kenya-Ltd-Consolidated-Company-Financial-Statements-Disclosures-for-the-Period-Ended-31-Mar-2026.pdf",
       "file_size": null,
@@ -4273,7 +4270,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:20.931Z"
+      "parsed_at": "2026-07-14 18:56:20.931+03"
     },
     {
       "ticker": "SCOM",
@@ -4301,7 +4298,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:39:50.440Z"
+      "parsed_at": "2026-07-14 18:39:50.44+03"
     },
     {
       "ticker": "SCOM",
@@ -4329,7 +4326,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:58:30.303Z"
+      "parsed_at": "2026-07-14 18:58:30.303+03"
     },
     {
       "ticker": "SCOM",
@@ -4357,11 +4354,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:31.159Z"
+      "parsed_at": "2026-07-14 18:56:31.159+03"
     },
     {
       "ticker": "SGL",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "The-Standard-Group-PLC-Unaudited-Group-Results-for-the-year-ended-30-Jun-2023.pdf",
       "file_size": null,
@@ -4382,7 +4379,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:42:25.378Z"
+      "parsed_at": "2026-07-14 18:42:25.378+03"
     },
     {
       "ticker": "SGL",
@@ -4410,7 +4407,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:00:26.882Z"
+      "parsed_at": "2026-07-14 19:00:26.882+03"
     },
     {
       "ticker": "SGL",
@@ -4438,34 +4435,34 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:04:03.693Z"
+      "parsed_at": "2026-07-14 19:04:03.693+03"
     },
     {
       "ticker": "SLAM",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "Sanlam-Kenya-Plc-Unaudited-Results-for-the-Period-Ended-30-Jun-2023.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": -1.4,
-        "net_income": -171954000,
+        "eps": 1.4,
+        "net_income": 171954000,
         "total_debt": 4330668000,
         "total_assets": 35644065000,
         "total_revenue": 3723602000,
-        "current_assets": 3219657000,
+        "current_assets": 3220265000,
         "cost_of_revenue": 3232675000,
-        "operating_income": -54736000,
-        "retained_earnings": -1848311000,
+        "operating_income": 54736000,
+        "retained_earnings": 1848311000,
         "total_liabilities": 34823714000,
         "current_liabilities": 2867729000,
         "shareholders_equity": 820351000,
-        "cash_from_operations": -143111000
+        "cash_from_operations": 143111000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T20:42:27.068Z"
+      "parsed_at": "2026-07-15 17:12:49.92287+03"
     },
     {
       "ticker": "SLAM",
@@ -4477,23 +4474,23 @@
       "status": "completed",
       "parsed_data": {
         "eps": -1.12,
-        "net_income": -126568000,
+        "net_income": 126568000,
         "total_debt": 4726814000,
         "total_assets": 35535212000,
         "total_revenue": 6936282000,
-        "current_assets": 3188573000,
-        "cost_of_revenue": 5048193000,
+        "current_assets": 3248413000,
+        "cost_of_revenue": 6250183000,
         "operating_income": 242787000,
         "retained_earnings": -2288343000,
         "total_liabilities": 34668962000,
         "dividend_per_share": 0,
-        "current_liabilities": 1057355000,
+        "current_liabilities": 1077365000,
         "shareholders_equity": 866250000,
         "cash_from_operations": -1151993000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T20:42:34.956Z"
+      "parsed_at": "2026-07-15 17:12:52.672786+03"
     },
     {
       "ticker": "SLAM",
@@ -4506,7 +4503,7 @@
       "parsed_data": {
         "eps": 6.67,
         "net_income": 1054887000,
-        "total_debt": 4253800000,
+        "total_debt": 4253799000,
         "total_assets": 39165932000,
         "total_revenue": 7359029000,
         "current_assets": 82055000,
@@ -4514,41 +4511,40 @@
         "operating_income": 1681132000,
         "retained_earnings": -2319915000,
         "total_liabilities": 37244795000,
-        "dividend_per_share": 0,
         "current_liabilities": 1210482000,
         "shareholders_equity": 1921137000,
         "cash_from_operations": -2582589000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T20:42:56.462Z"
+      "parsed_at": "2026-07-15 17:11:20.586456+03"
     },
     {
       "ticker": "SLAM",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2025-06-29",
       "file_name": "Sanlam-Kenya-Plc-Unaudited-Financial-Statements-for-the-Period-Ended-30-Jun-2025.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": 0.3,
-        "net_income": 30958000,
-        "total_debt": 1191831000,
-        "total_assets": 41348687000,
+        "eps": 1.88,
+        "net_income": 282210000,
+        "total_debt": 4216156000,
+        "total_assets": 39165932000,
         "total_revenue": 3737334000,
-        "current_assets": 4699412000,
+        "current_assets": 7205325000,
         "cost_of_revenue": 3329287000,
-        "operating_income": 49949000,
-        "retained_earnings": -1518045000,
-        "total_liabilities": 37399585000,
-        "current_liabilities": 5958543000,
-        "shareholders_equity": 3949102000,
-        "cash_from_operations": -1379182000
+        "operating_income": 494539000,
+        "retained_earnings": -2319915000,
+        "total_liabilities": 37244795000,
+        "current_liabilities": 5493385000,
+        "shareholders_equity": 1921137000,
+        "cash_from_operations": -2582589000
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T20:43:00.251Z"
+      "parsed_at": "2026-07-15 17:12:59.069627+03"
     },
     {
       "ticker": "SMER",
@@ -4575,11 +4571,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:44.237Z"
+      "parsed_at": "2026-07-14 18:57:44.237+03"
     },
     {
       "ticker": "SMER",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "Sameer-Africa-Plc-Financial-Results-of-the-Group-for-the-Six-Months-Ended-30-Jun-2023.pdf",
       "file_size": null,
@@ -4602,7 +4598,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:39:56.559Z"
+      "parsed_at": "2026-07-14 18:39:56.559+03"
     },
     {
       "ticker": "SMER",
@@ -4629,7 +4625,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:05:45.880Z"
+      "parsed_at": "2026-07-14 19:05:45.88+03"
     },
     {
       "ticker": "TOTL",
@@ -4657,7 +4653,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:40.385Z"
+      "parsed_at": "2026-07-14 18:57:40.385+03"
     },
     {
       "ticker": "TOTL",
@@ -4685,7 +4681,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:46:10.238Z"
+      "parsed_at": "2026-07-14 18:46:10.238+03"
     },
     {
       "ticker": "TOTL",
@@ -4713,7 +4709,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:29.116Z"
+      "parsed_at": "2026-07-14 18:56:29.116+03"
     },
     {
       "ticker": "TPSE",
@@ -4725,14 +4721,14 @@
       "status": "completed",
       "parsed_data": {
         "eps": -3.4,
-        "net_income": -632941000,
-        "total_debt": 6195472000,
-        "total_assets": 17429378000,
+        "net_income": 632941000,
+        "total_debt": 6194492000,
+        "total_assets": 17429380000,
         "total_revenue": 3287798000,
         "current_assets": 2029576000,
-        "operating_income": -419469000,
+        "operating_income": 284513000,
         "retained_earnings": 897958000,
-        "total_liabilities": 9732287000,
+        "total_liabilities": 9732293000,
         "dividend_per_share": 0,
         "current_liabilities": 2521714000,
         "shareholders_equity": 7697091000,
@@ -4740,11 +4736,11 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:55.886Z"
+      "parsed_at": "2026-07-15 17:12:56.997764+03"
     },
     {
       "ticker": "TPSE",
-      "period_type": "annual",
+      "period_type": "quarterly",
       "period_end_date": "2023-06-29",
       "file_name": "TPS-Eastern-Africa-Plc-Unaudited-Consolidated-Results-For-the-Six-Months-Ended-30-Jun-2023.pdf",
       "file_size": null,
@@ -4767,7 +4763,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:43:08.891Z"
+      "parsed_at": "2026-07-15 17:12:54.822947+03"
     },
     {
       "ticker": "TPSE",
@@ -4792,9 +4788,9 @@
         "shareholders_equity": 11360774000,
         "cash_from_operations": 2306121000
       },
-      "error_message": null,
+      "error_message": "Rejected: regex fallback extraction (unreliable) — not stored as authoritative",
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:46:10.680Z"
+      "parsed_at": "2026-07-15 17:13:03.167767+03"
     },
     {
       "ticker": "UMME",
@@ -4810,7 +4806,7 @@
       },
       "error_message": null,
       "processed_by": "js:regex",
-      "parsed_at": "2026-07-14T16:05:15.317Z"
+      "parsed_at": "2026-07-14 19:05:15.317+03"
     },
     {
       "ticker": "UNGA",
@@ -4835,7 +4831,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:57:03.482Z"
+      "parsed_at": "2026-07-14 18:57:03.482+03"
     },
     {
       "ticker": "UNGA",
@@ -4861,7 +4857,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:43:26.437Z"
+      "parsed_at": "2026-07-14 18:43:26.437+03"
     },
     {
       "ticker": "UNGA",
@@ -4886,7 +4882,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T16:04:02.812Z"
+      "parsed_at": "2026-07-14 19:04:02.812+03"
     },
     {
       "ticker": "WTK",
@@ -4913,7 +4909,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:42:56.310Z"
+      "parsed_at": "2026-07-14 18:42:56.31+03"
     },
     {
       "ticker": "XPRS",
@@ -4941,7 +4937,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:47.878Z"
+      "parsed_at": "2026-07-14 18:56:47.878+03"
     },
     {
       "ticker": "XPRS",
@@ -4968,7 +4964,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:39:57.883Z"
+      "parsed_at": "2026-07-14 18:39:57.883+03"
     },
     {
       "ticker": "XPRS",
@@ -4996,7 +4992,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:46:41.812Z"
+      "parsed_at": "2026-07-14 18:46:41.812+03"
     },
     {
       "ticker": "XPRS",
@@ -5023,7 +5019,7 @@
       },
       "error_message": null,
       "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14T15:56:34.621Z"
+      "parsed_at": "2026-07-14 18:56:34.621+03"
     }
   ]
 }

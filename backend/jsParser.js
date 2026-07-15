@@ -612,6 +612,30 @@ async function callMistralExtract(text, apiKey, model) {
 
 const EXPECTED_METRICS = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings','eps','dividend_per_share'];
 
+// Monetary statement figures that are subject to KShs '000 / millions scaling.
+// Small per-share figures (eps, dividend_per_share) must NEVER be scaled.
+const SCALE_METRICS = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
+
+// No legitimate company has > KShs 10 trillion in assets/revenue (largest global
+// banks are ~KShs 4-5 trillion). A uniform 1,000x scaling error pushes NSE
+// statements into the hundreds-of-trillions range, so clamp those back down.
+const SCALE_CAP = 1e13;
+function maxLargeMetric(o) {
+  return Math.max(o.total_assets || 0, o.total_revenue || 0, o.total_liabilities || 0, o.shareholders_equity || 0, o.net_income || 0);
+}
+function applyOverScaleCorrection(cand, docId) {
+  let guard = 0;
+  while (maxLargeMetric(cand) > SCALE_CAP && guard < 4) {
+    for (const k of SCALE_METRICS) {
+      if (cand[k] !== undefined && cand[k] !== null && cand[k] !== 0) {
+        cand[k] = Math.round((cand[k] / 1000) * 100) / 100;
+      }
+    }
+    guard++;
+  }
+  if (guard > 0) console.log('[JSParser] Applied over-scale correction (/1000 x' + guard + ') for doc ' + docId);
+}
+
 // Map the many labels LLMs use onto the canonical keys the frontend reads.
 const ALIAS_MAP = {
   total_revenue: ['total_revenue','revenue','turnover','sales','total_sales','gross_revenue','net_revenue','total_turnover','total_income'],
@@ -684,10 +708,11 @@ async function processText(text, docId, source) {
           validCount++;
         }
       }
-      if (validCount >= 8) {
-        if (!isImplausible(cand)) {
-          parsedData = cand;
-          processedBy = 'js:' + name;
+        if (validCount >= 8) {
+          applyOverScaleCorrection(cand, docId);
+          if (!isImplausible(cand)) {
+            parsedData = cand;
+            processedBy = 'js:' + name;
           console.log('[JSParser] ' + name + ' extracted ' + validCount + ' metrics for doc ' + docId);
           break;
         }
@@ -824,4 +849,4 @@ async function parseExtractedText(text, docId, fileName) {
   }
 }
 
-module.exports = { parsePdfBuffer, parseExtractedText };
+module.exports = { parsePdfBuffer, parseExtractedText, extractMetrics, detectScale, callMistralOcr };

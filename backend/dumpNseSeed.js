@@ -15,7 +15,7 @@ const { pool } = require('./db');
       s.sector,
       s.currency,
       fs.period_type,
-      fs.period_end_date,
+      fs.period_end_date::text AS period_end_date,
       fs.file_name,
       fs.file_size,
       fs.mime_type,
@@ -23,7 +23,7 @@ const { pool } = require('./db');
       fs.parsed_data,
       fs.error_message,
       fs.processed_by,
-      fs.parsed_at
+      fs.parsed_at::text AS parsed_at
     FROM financial_statements fs
     JOIN stocks s ON s.id = fs.stock_id
     WHERE s.market = 'NSE'
@@ -45,7 +45,7 @@ const { pool } = require('./db');
     statements.push({
       ticker: r.ticker,
       period_type: r.period_type,
-      period_end_date: r.period_end_date ? r.period_end_date.toISOString().slice(0, 10) : null,
+      period_end_date: r.period_end_date || null,
       file_name: r.file_name,
       file_size: r.file_size,
       mime_type: r.mime_type || 'application/pdf',
@@ -53,7 +53,7 @@ const { pool } = require('./db');
       parsed_data: r.parsed_data,
       error_message: r.error_message,
       processed_by: r.processed_by,
-      parsed_at: r.parsed_at ? r.parsed_at.toISOString() : null,
+      parsed_at: r.parsed_at || null,
     });
   }
 
