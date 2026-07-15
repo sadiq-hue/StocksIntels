@@ -31,10 +31,7 @@ async function seedNseData({ force = false } = {}) {
        JOIN stocks s ON s.id = fs.stock_id
        WHERE s.market = 'NSE' AND fs.status = 'completed'`
     );
-    if (existing.rows[0].c >= uniqueKeys.size) {
-      console.log(`[seedNseData] NSE data already present (${existing.rows[0].c} statements), skipping`);
-      return { skipped: true, existing: existing.rows[0].c };
-    }
+    console.log(`[seedNseData] existing NSE statements in DB: ${existing.rows[0].c}, in seed: ${uniqueKeys.size}`);
   }
 
   let stockUpserts = 0;
@@ -64,13 +61,43 @@ async function seedNseData({ force = false } = {}) {
     }
     const stockId = sr.rows[0].id;
 
+    if (!st.period_end_date) {
+      console.warn(`[seedNseData] Skipping ${st.ticker} ${st.period_type}: null period_end_date`);
+      skipped++;
+      continue;
+    }
+
     const dup = await pool.query(
       `SELECT 1 FROM financial_statements
-       WHERE stock_id = $1 AND period_end_date = $2 AND period_type = $3 LIMIT 1`,
+       WHERE stock_id = $1
+         AND (period_end_date AT TIME ZONE 'Africa/Nairobi')::date = $2::date
+         AND period_type = $3 LIMIT 1`,
       [stockId, st.period_end_date, st.period_type]
     );
     if (dup.rows.length > 0) {
-      skipped++;
+      const upd = await pool.query(
+        `UPDATE financial_statements SET
+           parsed_data = $1,
+           status = $2,
+           processed_by = $3,
+           file_name = $4,
+           file_size = $5,
+           mime_type = $6,
+           uploaded_at = COALESCE(uploaded_at, NOW())
+         WHERE stock_id = $7
+           AND (period_end_date AT TIME ZONE 'Africa/Nairobi')::date = $8::date
+           AND period_type = $9`,
+        [
+          st.parsed_data,
+          st.status || 'completed',
+          st.processed_by || 'seed',
+          st.file_name,
+          st.file_size,
+          st.mime_type,
+          stockId, st.period_end_date, st.period_type
+        ]
+      );
+      if (upd.rowCount > 0) skipped++;
       continue;
     }
 
@@ -82,7 +109,7 @@ async function seedNseData({ force = false } = {}) {
       [
         stockId,
         st.period_type,
-        st.period_end_date,
+        new Date(`${st.period_end_date}T00:00:00.000Z`),
         st.file_name,
         st.file_size || 0,
         st.mime_type || 'application/pdf',
@@ -96,8 +123,30 @@ async function seedNseData({ force = false } = {}) {
     inserted++;
   }
 
-  console.log(`[seedNseData] Upserted ${stockUpserts} new stocks; inserted ${inserted} statements (${skipped} skipped as duplicates)`);
-  return { stockUpserts, inserted, skipped };
+  const seedKeys = new Set(
+    statements
+      .filter((st) => st.period_end_date)
+      .map((st) => `${st.ticker}|${st.period_end_date}|${st.period_type}`)
+  );
+  const exist = await pool.query(
+    `SELECT fs.id, s.ticker,
+            (fs.period_end_date AT TIME ZONE 'Africa/Nairobi')::date::text AS nb_date,
+            fs.period_type
+     FROM financial_statements fs
+     JOIN stocks s ON s.id = fs.stock_id
+     WHERE s.market = 'NSE'`
+  );
+  const orphanIds = exist.rows
+    .filter((r) => !seedKeys.has(`${r.ticker}|${String(r.nb_date).slice(0, 10)}|${r.period_type}`))
+    .map((r) => r.id);
+  let orphanDeleted = 0;
+  if (orphanIds.length > 0) {
+    const del = await pool.query('DELETE FROM financial_statements WHERE id = ANY($1)', [orphanIds]);
+    orphanDeleted = del.rowCount || 0;
+  }
+
+  console.log(`[seedNseData] Upserted ${stockUpserts} new stocks; inserted ${inserted} statements (${skipped} updated as duplicates), ${orphanDeleted} orphans removed`);
+  return { stockUpserts, inserted, skipped, orphanDeleted };
 }
 
 if (require.main === module) {

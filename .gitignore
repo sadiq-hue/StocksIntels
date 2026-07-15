@@ -56,3 +56,13 @@ coverage/
 *.tgz
 .vercel
 .env*
+
+# Verification PDF cache (large)
+backend/verify_pdfs/
+# Process/debug artifacts
+backend/*_pid.txt
+frontend/*_pid.txt
+backend/verify_tmp/
+backend/_*.py
+backend/_*.js
+backend/cov_check.js

@@ -29,6 +29,7 @@ const { pool } = require('./db');
     WHERE s.market = 'NSE'
       AND fs.status = 'completed'
       AND fs.parsed_data IS NOT NULL
+      AND fs.period_end_date IS NOT NULL
     ORDER BY s.ticker, fs.period_end_date
   `);
 

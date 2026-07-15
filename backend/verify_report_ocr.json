@@ -1,0 +1,7354 @@
+[
+  {
+    "ticker": "NBV",
+    "period": "2025-12-29",
+    "file": "Nairobi-Business-Ventures-Plc-Financial-Statements-for-the-Year-Ended-31st-March-2025.pdf",
+    "ocr_chars": 8070,
+    "summary": {
+      "verified": 11,
+      "weak": 1,
+      "mismatch": 0,
+      "zero": 1,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "weak",
+        "value": 0.05,
+        "pdf_match": 0,
+        "rel_err": 0.05,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 32245000,
+        "pdf_match": 32245000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 602522000,
+        "pdf_match": 602522000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 3349991000,
+        "pdf_match": 3349991000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 508016000,
+        "pdf_match": 508016000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 3350000000,
+        "pdf_match": 3349991000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 359806000,
+        "pdf_match": 359806000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 31396000,
+        "pdf_match": 31396000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 1446492000,
+        "pdf_match": 1446492000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 843970000,
+        "pdf_match": 843970000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 1903499000,
+        "pdf_match": 1903499000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": -1385983000,
+        "pdf_match": -1385983000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "BAMB",
+    "period": "2023-06-28",
+    "file": "Bamburi-Cement-Plc-Unaudited-Group-Financial-Results-for-Six-Months-Ended-30-Jun-2023.pdf",
+    "ocr_chars": 4748,
+    "summary": {
+      "verified": 10,
+      "weak": 0,
+      "mismatch": 2,
+      "zero": 1,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 0.36,
+        "pdf_match": 0.36,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 89000000,
+        "pdf_match": 89000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 2869000000,
+        "pdf_match": 2890000000,
+        "rel_err": 0.0073,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "mismatch",
+        "value": 53612000000,
+        "pdf_match": 48043000000,
+        "rel_err": 0.1039,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 22260000000,
+        "pdf_match": 22260000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 11612000000,
+        "pdf_match": 11612000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 451000000,
+        "pdf_match": 451000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 17486000000,
+        "pdf_match": 17486000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 14569000000,
+        "pdf_match": 14829000000,
+        "rel_err": 0.0175,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "mismatch",
+        "value": 7837000000,
+        "pdf_match": 6437000000,
+        "rel_err": 0.1786,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 39963000000,
+        "pdf_match": 39963000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 2087000000,
+        "pdf_match": 2087000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "BAT",
+    "period": "2021-12-29",
+    "file": "BAT-Kenya-Plc-Audited-Results-for-the-Year-Ended-31-Dec-2021.pdf",
+    "ocr_chars": 6538,
+    "summary": {
+      "verified": 12,
+      "weak": 2,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 64.83,
+        "pdf_match": 64.83,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 6483000000,
+        "pdf_match": 6483000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 1939000000,
+        "pdf_match": 1939000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 24119000000,
+        "pdf_match": 24000000000,
+        "rel_err": 0.0049,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 40049000000,
+        "pdf_match": 40049000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 11814000000,
+        "pdf_match": 11814000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "weak",
+        "value": 16058000000,
+        "pdf_match": 16913000000,
+        "rel_err": 0.0506,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 9370000000,
+        "pdf_match": 9370000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 11137000000,
+        "pdf_match": 11137000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 9145000000,
+        "pdf_match": 9129000000,
+        "rel_err": 0.0017,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 53.5,
+        "pdf_match": 53.5,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "weak",
+        "value": 7206000000,
+        "pdf_match": 7416000000,
+        "rel_err": 0.0283,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 14974000000,
+        "pdf_match": 14974000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 6240000000,
+        "pdf_match": 6240000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "BAT",
+    "period": "2023-06-28",
+    "file": "BAT-Kenya-Plc-Unaudited-Results-for-the-Six-Months-Ended-30-Jun-2023.pdf",
+    "ocr_chars": 5974,
+    "summary": {
+      "verified": 12,
+      "weak": 2,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 28.22,
+        "pdf_match": 28.22,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 2822000000,
+        "pdf_match": 2822000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 1951000000,
+        "pdf_match": 1951000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "weak",
+        "value": 26569000000,
+        "pdf_match": 26000000000,
+        "rel_err": 0.0214,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 13124000000,
+        "pdf_match": 13124000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 14274000000,
+        "pdf_match": 14274000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 9237000000,
+        "pdf_match": 9200000000,
+        "rel_err": 0.004,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 3887000000,
+        "pdf_match": 3887000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 10204000000,
+        "pdf_match": 10204000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 12565000000,
+        "pdf_match": 12582000000,
+        "rel_err": 0.0014,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 5,
+        "pdf_match": 5,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "weak",
+        "value": 10614000000,
+        "pdf_match": 11000000000,
+        "rel_err": 0.0351,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 14004000000,
+        "pdf_match": 14004000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 1907000000,
+        "pdf_match": 1907000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "BRIT",
+    "period": "2021-12-29",
+    "file": "Britam-Holdings-Plc-Audited-Consolidated-Results-for-the-Financial-Year-Ended-31-Dec-2021.pdf",
+    "status": "ocr_failed",
+    "detail": "ocr failed",
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "CABL",
+    "period": "2023-06-28",
+    "file": "East-African-Cables-Plc-Unaudited-Results-For-The-Six-Months-Ended-30-June-2023.pdf",
+    "ocr_chars": 6127,
+    "summary": {
+      "verified": 10,
+      "weak": 2,
+      "mismatch": 1,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": -0.64,
+        "pdf_match": -0.64,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "mismatch",
+        "value": 214193000,
+        "pdf_match": 240250000,
+        "rel_err": 0.1085,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 1488036000,
+        "pdf_match": 1488036000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 5361859000,
+        "pdf_match": 5361859000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 1174493000,
+        "pdf_match": 1174493000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 891721000,
+        "pdf_match": 891721000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 882406000,
+        "pdf_match": 891721000,
+        "rel_err": 0.0104,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 20932000,
+        "pdf_match": 20736000,
+        "rel_err": 0.0094,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "weak",
+        "value": 1423629000,
+        "pdf_match": 1390886000,
+        "rel_err": 0.023,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "weak",
+        "value": 4846848000,
+        "pdf_match": 4585772000,
+        "rel_err": 0.0539,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 3358813000,
+        "pdf_match": 3358813000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 515011000,
+        "pdf_match": 515011000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 173039000,
+        "pdf_match": 173039000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "CARB",
+    "period": "2026-01-29",
+    "file": "Carbacid-Investments-Plc-Unaudited-Consolidated-Results-for-the-Six-Months-Ended-31-Jan-2026.pdf",
+    "ocr_chars": 5143,
+    "summary": {
+      "verified": 12,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 12
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 3.94,
+        "pdf_match": 3.94,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 1002914000,
+        "pdf_match": 1002914000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 500554000,
+        "pdf_match": 500554000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 6033183000,
+        "pdf_match": 6033183000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 2099850000,
+        "pdf_match": 2099850000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 1813184000,
+        "pdf_match": 1813184000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 878354000,
+        "pdf_match": 878354000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 4886715000,
+        "pdf_match": 4886715000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 891589000,
+        "pdf_match": 878354000,
+        "rel_err": 0.0148,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 646505000,
+        "pdf_match": 655496000,
+        "rel_err": 0.0137,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 5141594000,
+        "pdf_match": 5141594000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 920173000,
+        "pdf_match": 920173000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "CGEN",
+    "period": "2021-09-28",
+    "file": "Car-General-Kenya-Plc-Audited-Financial-Statements-for-the-Year-Ended-30-Sep-2021.pdf",
+    "ocr_chars": 13704,
+    "summary": {
+      "verified": 9,
+      "weak": 1,
+      "mismatch": 3,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 22.43,
+        "pdf_match": 22.43,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 867243000,
+        "pdf_match": 867243000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "mismatch",
+        "value": 1230513000,
+        "pdf_match": 1103242000,
+        "rel_err": 0.1034,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "mismatch",
+        "value": 14647609000,
+        "pdf_match": 17100000000.000002,
+        "rel_err": 0.1434,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 17141960000,
+        "pdf_match": 17141960000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 6882829000,
+        "pdf_match": 6882829000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "mismatch",
+        "value": 14090842000,
+        "pdf_match": 12294000000,
+        "rel_err": 0.1275,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 1606759000,
+        "pdf_match": 1606759000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 4382245000,
+        "pdf_match": 4382245000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "weak",
+        "value": 9794556000,
+        "pdf_match": 10000000000,
+        "rel_err": 0.0205,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 3.2,
+        "pdf_match": 3.2,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 7565255000,
+        "pdf_match": 7564780000,
+        "rel_err": 0.0001,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 4853053000,
+        "pdf_match": 4853053000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "CGEN",
+    "period": "2025-12-29",
+    "file": "Car-General-Kenya-Plc-Consolidated-Audited-Financial-Statements-for-the-Period-Ended-31-December-2025.pdf",
+    "ocr_chars": 12509,
+    "summary": {
+      "verified": 14,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 3.12,
+        "pdf_match": 3.12,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 2447735000,
+        "pdf_match": 2447735000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 1960264000,
+        "pdf_match": 2000000000,
+        "rel_err": 0.0199,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 11446338000,
+        "pdf_match": 11446338000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 25338614000,
+        "pdf_match": 25338614000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 11058122000,
+        "pdf_match": 11058122000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 20676554000,
+        "pdf_match": 20944744000,
+        "rel_err": 0.0128,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 3477328000,
+        "pdf_match": 3477328000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 7591189000,
+        "pdf_match": 7591189000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 3236604000,
+        "pdf_match": 3210046000,
+        "rel_err": 0.0082,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 0.3,
+        "pdf_match": 0.3,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 10325910000,
+        "pdf_match": 10447092000,
+        "rel_err": 0.0116,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 8209734000,
+        "pdf_match": 8209734000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 1284551000,
+        "pdf_match": 1284551000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "CRWN",
+    "period": "2025-12-29",
+    "file": "Crown-Paints-Kenya-Plc-Audited-Results-for-The-Year-Ended-31st-December-2025.pdf",
+    "ocr_chars": 4765,
+    "summary": {
+      "verified": 11,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 11
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 6.66,
+        "pdf_match": 6.66,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 948000000,
+        "pdf_match": 948000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 9610000000,
+        "pdf_match": 9610000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 15994000000,
+        "pdf_match": 15994000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 6937000000,
+        "pdf_match": 6937000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 1399000000,
+        "pdf_match": 1399000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 5515000000,
+        "pdf_match": 5515000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 3,
+        "pdf_match": 3,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 5053000000,
+        "pdf_match": 5053000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 4095000000,
+        "pdf_match": 4095000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 1796000000,
+        "pdf_match": 1796000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "CTUM",
+    "period": "2023-12-29",
+    "file": "Centum-Plc-Audited-Financial-Results-for-the-Year-Ended-31st-March-2023.pdf",
+    "ocr_chars": 16249,
+    "summary": {
+      "verified": 9,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 9
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": -4.28,
+        "pdf_match": -4.28,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 7316589000,
+        "pdf_match": 7300000000,
+        "rel_err": 0.0023,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 19678000000,
+        "pdf_match": 19678000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 113021000000,
+        "pdf_match": 113021000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 35432000000,
+        "pdf_match": 35432000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 75915000000,
+        "pdf_match": 75915000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 0.6,
+        "pdf_match": 0.6,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 37106000000,
+        "pdf_match": 37106000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 3090000000,
+        "pdf_match": 3090000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "DTK",
+    "period": "2023-06-28",
+    "file": "Diamond-Trust-Bank-Kenya-Limited-Unaudited-Group-Bank-Results-for-the-Six-Month-Period-Ended-30-Jun-2023.pdf",
+    "ocr_chars": 12581,
+    "summary": {
+      "verified": 11,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 11
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 14.31,
+        "pdf_match": 14.31,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 4001924000,
+        "pdf_match": 4001924000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 27559617000,
+        "pdf_match": 27692795000,
+        "rel_err": 0.0048,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 579218788000,
+        "pdf_match": 579218788000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 18655314000,
+        "pdf_match": 18655314000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 11783254000,
+        "pdf_match": 11783254000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 5953393000,
+        "pdf_match": 5953393000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 62851420000,
+        "pdf_match": 62851420000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 496589275000,
+        "pdf_match": 496589275000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 5,
+        "pdf_match": 5,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 82629534000,
+        "pdf_match": 82629534000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "DTK",
+    "period": "2024-03-29",
+    "file": "Diamond-Trust-Bank-Kenya-Limited-Unaudited-Group-and-Bank-results-for-the-period-ended-31-March-2024.pdf",
+    "ocr_chars": 28746,
+    "summary": {
+      "verified": 10,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 10
+    },
+    "results": {
+      "net_income": {
+        "status": "verified",
+        "value": 53298805000,
+        "pdf_match": 53298805000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 18479052000,
+        "pdf_match": 18479052000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 571887543000,
+        "pdf_match": 571887543000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 187730574000,
+        "pdf_match": 187730574000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 187730574000,
+        "pdf_match": 187730574000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 101216151000,
+        "pdf_match": 100522002000,
+        "rel_err": 0.0069,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 53298805000,
+        "pdf_match": 53298805000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 490525593000,
+        "pdf_match": 490525593000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 322460372000,
+        "pdf_match": 322460372000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 71884231000,
+        "pdf_match": 71884231000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "DTK",
+    "period": "2025-06-28",
+    "file": "Diamond-Trust-Bank-Kenya-Limited-Unaudited-Financial-Results-for-the-period-Ended-30-Jun-2025.pdf",
+    "ocr_chars": 12391,
+    "summary": {
+      "verified": 13,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 17.04,
+        "pdf_match": 17.04,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 5370088000,
+        "pdf_match": 5370088000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 69932218000,
+        "pdf_match": 70024973000,
+        "rel_err": 0.0013,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 611509119000,
+        "pdf_match": 611509119000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 21927514000,
+        "pdf_match": 21927514000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 380000000000,
+        "pdf_match": 381136850000,
+        "rel_err": 0.003,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 13515452000,
+        "pdf_match": 13515452000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 7173798000,
+        "pdf_match": 7173798000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 69255691000,
+        "pdf_match": 69255691000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 510747280000,
+        "pdf_match": 510747280000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 7,
+        "pdf_match": 7,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 500000000000,
+        "pdf_match": 501103634000,
+        "rel_err": 0.0022,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 100761839000,
+        "pdf_match": 100761839000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "DTK",
+    "period": "2025-09-28",
+    "file": "Diamond-Trust-Bank-Kenya-Limited-Unaudited-Financial-Results-for-the-period-Ended-30-Sep-2025.pdf",
+    "ocr_chars": 17329,
+    "summary": {
+      "verified": 11,
+      "weak": 2,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "weak",
+        "value": 7.52,
+        "pdf_match": 8,
+        "rel_err": 0.06,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 8400000000,
+        "pdf_match": 8400000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 19327259000,
+        "pdf_match": 19312569000,
+        "rel_err": 0.0008,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 641772628000,
+        "pdf_match": 641772628000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 41431935000,
+        "pdf_match": 41431935000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "weak",
+        "value": 140000000000,
+        "pdf_match": 135879000000,
+        "rel_err": 0.0294,
+        "pdf_scale": 1000000,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 21303888000,
+        "pdf_match": 21303888000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 11267626000,
+        "pdf_match": 11267626000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 71418006000,
+        "pdf_match": 71418006000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 530524809000,
+        "pdf_match": 523629000000,
+        "rel_err": 0.013,
+        "pdf_scale": 1000000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 5,
+        "pdf_match": 4.9,
+        "rel_err": 0.02,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 57524809000,
+        "pdf_match": 57910638000,
+        "rel_err": 0.0067,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 111247819000,
+        "pdf_match": 111247819000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "DTK",
+    "period": "2026-03-29",
+    "file": "Diamond-Trust-Bank-Kenya-Limited-Unaudited-Financial-Results-for-the-period-Ended-31-Mar-2026.pdf",
+    "ocr_chars": 13824,
+    "summary": {
+      "verified": 11,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 11
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 11.39,
+        "pdf_match": 11.39,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 3478117000,
+        "pdf_match": 3478117000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 660933003000,
+        "pdf_match": 660933003000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 12944453000,
+        "pdf_match": 12944453000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 456378554000,
+        "pdf_match": 456378554000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 6139802000,
+        "pdf_match": 6139802000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 4805138000,
+        "pdf_match": 4805138000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 543241812000,
+        "pdf_match": 541980000000,
+        "rel_err": 0.0023,
+        "pdf_scale": 1000000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 9,
+        "pdf_match": 9,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 370131242000,
+        "pdf_match": 373828000000,
+        "rel_err": 0.0099,
+        "pdf_scale": 1000000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 117691191000,
+        "pdf_match": 117691191000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "EABL",
+    "period": "2021-12-29",
+    "file": "East-African-Breweries-Plc-Unaudited-Half-Year-Results-for-the-Six-Months-Ended-31-Dec-2021.pdf",
+    "ocr_chars": 7603,
+    "summary": {
+      "verified": 12,
+      "weak": 1,
+      "mismatch": 1,
+      "zero": 0,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 8.45,
+        "pdf_match": 8.45,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 8738000000,
+        "pdf_match": 8738000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 43874000000,
+        "pdf_match": 44460000000,
+        "rel_err": 0.0132,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "mismatch",
+        "value": 109953000000,
+        "pdf_match": 96836000000,
+        "rel_err": 0.1193,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 54899000000,
+        "pdf_match": 54899000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 38899000000,
+        "pdf_match": 38899000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 28429000000,
+        "pdf_match": 28000000000,
+        "rel_err": 0.0151,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 12878000000,
+        "pdf_match": 12878000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 9236000000,
+        "pdf_match": 9236000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "weak",
+        "value": 85415000000,
+        "pdf_match": 78164000000,
+        "rel_err": 0.0849,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 3.75,
+        "pdf_match": 3.75,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 44592000000,
+        "pdf_match": 44592000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 24538000000,
+        "pdf_match": 24538000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 12618000000,
+        "pdf_match": 12618000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "EQTY",
+    "period": "2021-12-29",
+    "file": "Equity-Group-Holdings-Plc-Audited-Financial-Statements-Other-Disclosures-for-the-Period-Ended-31-Dec-2021.pdf",
+    "ocr_chars": 22107,
+    "summary": {
+      "verified": 13,
+      "weak": 1,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 1072.83,
+        "pdf_match": 1072.83,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 32184821000,
+        "pdf_match": 32184821000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 95333081000,
+        "pdf_match": 95333081000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 877414892000,
+        "pdf_match": 877414892000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 72296121000,
+        "pdf_match": 72296121000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 410514600000,
+        "pdf_match": 410395000000,
+        "rel_err": 0.0003,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 17231308000,
+        "pdf_match": 17231308000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 41842311000,
+        "pdf_match": 41842311000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 101757364000,
+        "pdf_match": 101757364000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 771015271000,
+        "pdf_match": 771015271000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 3,
+        "pdf_match": 3,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "weak",
+        "value": 486027090000,
+        "pdf_match": 469671798000,
+        "rel_err": 0.0337,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 106399621000,
+        "pdf_match": 106399621000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 127365000000,
+        "pdf_match": 127365000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "HAFC",
+    "period": "2021-12-29",
+    "file": "HF-Group-Plc-Audited-Financial-Statements-and-other-Disclosures-for-the-Period-Ended-31-Dec-2021.pdf",
+    "ocr_chars": 14923,
+    "summary": {
+      "verified": 13,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": -1.54,
+        "pdf_match": -1.54,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 593290000,
+        "pdf_match": 601606000,
+        "rel_err": 0.0138,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 4351209000,
+        "pdf_match": 4351209000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 52903518000,
+        "pdf_match": 52903518000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 2365981000,
+        "pdf_match": 2365981000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 1391875000,
+        "pdf_match": 1391875000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 2095238000,
+        "pdf_match": 2095238000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": -860012000,
+        "pdf_match": -860012000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": -2737700000,
+        "pdf_match": -2737700000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 44935230000,
+        "pdf_match": 44935230000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 601606000,
+        "pdf_match": 601606000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 7968288000,
+        "pdf_match": 7968288000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": -210846000,
+        "pdf_match": -210846000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "HFCK",
+    "period": "2021-12-29",
+    "file": "HF-Group-Plc-Audited-Financial-Statements-and-other-Disclosures-for-the-Period-Ended-31-Dec-2021.pdf",
+    "ocr_chars": 14923,
+    "summary": {
+      "verified": 13,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": -1.54,
+        "pdf_match": -1.54,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": -593290000,
+        "pdf_match": -593290000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 4351209000,
+        "pdf_match": 4351209000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 52903518000,
+        "pdf_match": 52903518000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 2365981000,
+        "pdf_match": 2365981000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 1391875000,
+        "pdf_match": 1391875000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 2095238000,
+        "pdf_match": 2095238000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": -860012000,
+        "pdf_match": -860012000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": -2737700000,
+        "pdf_match": -2737700000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 44935230000,
+        "pdf_match": 44935230000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 2267255000,
+        "pdf_match": 2267255000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 7968288000,
+        "pdf_match": 7968288000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": -210846000,
+        "pdf_match": -210846000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "IMH",
+    "period": "2021-12-29",
+    "file": "IM-Holdings-Plc-Audited-Financial-Results-for-the-Year-Ended-31-Dec-2021.pdf",
+    "ocr_chars": 15228,
+    "summary": {
+      "verified": 13,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 4.92,
+        "pdf_match": 4.92,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 8130742000000,
+        "pdf_match": 8130742000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 415180677000000,
+        "pdf_match": 415180677000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 29612514000000,
+        "pdf_match": 29612514000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 10661714000000,
+        "pdf_match": 10661714000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 12204574000000,
+        "pdf_match": 12204574000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 11864076000000,
+        "pdf_match": 11864076000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 43903009000000,
+        "pdf_match": 43903009000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 341132600000000,
+        "pdf_match": 341132600000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 1.5,
+        "pdf_match": 1.5,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 341132600000000,
+        "pdf_match": 341132600000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 69593031000000,
+        "pdf_match": 69593031000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": -8817668000000,
+        "pdf_match": -8817668000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "IMH",
+    "period": "2024-12-29",
+    "file": "IM-Group-Plc-Audited-Financial-Results-for-the-Year-Ended-31st-December-2024.pdf",
+    "ocr_chars": 14778,
+    "summary": {
+      "verified": 12,
+      "weak": 2,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 9.38,
+        "pdf_match": 9.38,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 16853749000,
+        "pdf_match": 16853749000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 14068877000,
+        "pdf_match": 14068877000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 581380300000,
+        "pdf_match": 581380300000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 51218807000,
+        "pdf_match": 51218807000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "weak",
+        "value": 153000000000,
+        "pdf_match": 149318000000,
+        "rel_err": 0.0241,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 30543556000,
+        "pdf_match": 30543556000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 19879386000,
+        "pdf_match": 19879386000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 16289313000,
+        "pdf_match": 16289313000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 479633245000,
+        "pdf_match": 479633245000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 3,
+        "pdf_match": 3,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "weak",
+        "value": 77500000000,
+        "pdf_match": 79139808000,
+        "rel_err": 0.0207,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 84474863000,
+        "pdf_match": 84474863000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": -10184768000,
+        "pdf_match": -10184768000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "KAPC",
+    "period": "2023-09-28",
+    "file": "Kapchorua-Tea-Kenya-Plc-Un-Audited-Summarised-Results-for-the-6-Months-Ended-30-Sep-2023.pdf",
+    "ocr_chars": 5565,
+    "summary": {
+      "verified": 11,
+      "weak": 1,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 12
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 37.88,
+        "pdf_match": 37.88,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 218095000,
+        "pdf_match": 218095000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 2628881000,
+        "pdf_match": 2628881000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 933021000,
+        "pdf_match": 933021000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 1146027000,
+        "pdf_match": 1146027000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 273057000,
+        "pdf_match": 273057000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 1468956000,
+        "pdf_match": 1468956000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "weak",
+        "value": 1534793000,
+        "pdf_match": 1468956000,
+        "rel_err": 0.0429,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 10,
+        "pdf_match": 10,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 285370000,
+        "pdf_match": 285370000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 1094088000,
+        "pdf_match": 1094088000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 159829000,
+        "pdf_match": 159829000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "KEGN",
+    "period": "2021-12-29",
+    "file": "KenGen-Plc-Unaudited-Financial-Results-for-the-Six-Months-Ended-31-Dec-2021-1.pdf",
+    "ocr_chars": 7241,
+    "summary": {
+      "verified": 12,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 1,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 0.78,
+        "pdf_match": 0.78,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 5121000000,
+        "pdf_match": 5121000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 431499000000,
+        "pdf_match": 431499000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 24793000000,
+        "pdf_match": 24793000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 45643000000,
+        "pdf_match": 45643000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 14130000000,
+        "pdf_match": 14130000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 7408000000,
+        "pdf_match": 7408000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 110848000000,
+        "pdf_match": 110848000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 218034000000,
+        "pdf_match": 216370000000,
+        "rel_err": 0.0076,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 21822000000,
+        "pdf_match": 21822000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 213465000000,
+        "pdf_match": 213465000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 11251000000,
+        "pdf_match": 11251000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "KEGN",
+    "period": "2023-06-28",
+    "file": "KenGen-Plc-Unaudited-Results-for-the-Half-Year-Ended-31st-December-2023.pdf",
+    "ocr_chars": 8090,
+    "summary": {
+      "verified": 12,
+      "weak": 1,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 0.45,
+        "pdf_match": 0.45,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 2959000000,
+        "pdf_match": 2959000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 234938000000,
+        "pdf_match": 234938000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 533499000000,
+        "pdf_match": 533499000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 28523000000,
+        "pdf_match": 28523000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 51922000000,
+        "pdf_match": 51922000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "weak",
+        "value": 3797000000,
+        "pdf_match": 4000000000,
+        "rel_err": 0.0508,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 4448000000,
+        "pdf_match": 4448000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 115563000000,
+        "pdf_match": 115563000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 258347000000,
+        "pdf_match": 259000000000,
+        "rel_err": 0.0025,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 23409000000,
+        "pdf_match": 23409000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 275152000000,
+        "pdf_match": 275152000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 16809000000,
+        "pdf_match": 16809000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "KPLC",
+    "period": "2025-06-28",
+    "file": "The-Kenya-Power-Lighting-Company-Plc-Audited-Financial-Results-for-the-Year-Ended-30-Jun-2025.pdf",
+    "ocr_chars": 7887,
+    "summary": {
+      "verified": 11,
+      "weak": 0,
+      "mismatch": 2,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 12.54,
+        "pdf_match": 12.54,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 24467000000,
+        "pdf_match": 24467000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 87640000000,
+        "pdf_match": 87640000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 389039000000,
+        "pdf_match": 389039000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 219285000000,
+        "pdf_match": 219285000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 98217000000,
+        "pdf_match": 98217000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "mismatch",
+        "value": 144664000000,
+        "pdf_match": 162278000000,
+        "rel_err": 0.1085,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 39467000000,
+        "pdf_match": 39467000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 279704000000,
+        "pdf_match": 275775000000,
+        "rel_err": 0.014,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "mismatch",
+        "value": 1,
+        "pdf_match": 0.8,
+        "rel_err": 0.2,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 117426000000,
+        "pdf_match": 117426000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 109335000000,
+        "pdf_match": 109335000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 39768000000,
+        "pdf_match": 39768000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "KQ",
+    "period": "2025-12-29",
+    "file": "Kenya-Airways-Plc-Audited-Group-Results-for-the-Year-Ended-31-Dec-2025.pdf",
+    "ocr_chars": 11291,
+    "summary": {
+      "verified": 1,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 1
+    },
+    "results": {
+      "total_revenue": {
+        "status": "verified",
+        "value": 16227000000,
+        "pdf_match": 16227000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "KUKZ",
+    "period": "2023-06-28",
+    "file": "Kakuzi-Plc-Unaudited-Results-for-the-Six-Months-Ended-30-Jun-2023.pdf",
+    "ocr_chars": 5234,
+    "summary": {
+      "verified": 9,
+      "weak": 1,
+      "mismatch": 1,
+      "zero": 1,
+      "total": 12
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 5.99,
+        "pdf_match": 5.99,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 117498000,
+        "pdf_match": 117498000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 6799028000,
+        "pdf_match": 6799028000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 873155000,
+        "pdf_match": 873155000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 3082254000,
+        "pdf_match": 3046519000,
+        "rel_err": 0.0116,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 149528000,
+        "pdf_match": 149528000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 5465134000,
+        "pdf_match": 5465134000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 1203079000,
+        "pdf_match": 1203079000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "mismatch",
+        "value": 380872000,
+        "pdf_match": 341270000,
+        "rel_err": 0.104,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 5595949000,
+        "pdf_match": 5595949000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "weak",
+        "value": 597169000,
+        "pdf_match": 654800000,
+        "rel_err": 0.088,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "KUKZ",
+    "period": "2025-12-29",
+    "file": "Kakuzi-Plc-Group-Results-for-the-Year-Ended-31-Dec-2025.pdf",
+    "ocr_chars": 8001,
+    "summary": {
+      "verified": 10,
+      "weak": 1,
+      "mismatch": 1,
+      "zero": 0,
+      "total": 12
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 19.77,
+        "pdf_match": 19.77,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 387573000,
+        "pdf_match": 387573000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 6824768000,
+        "pdf_match": 6824768000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 5368622000,
+        "pdf_match": 5368622000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "mismatch",
+        "value": 3158684000,
+        "pdf_match": 2751877000,
+        "rel_err": 0.1288,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 387573000,
+        "pdf_match": 387573000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 5116232000,
+        "pdf_match": 5116232000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 1256730000,
+        "pdf_match": 1256730000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 16,
+        "pdf_match": 16,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "weak",
+        "value": 406807000,
+        "pdf_match": 391528000,
+        "rel_err": 0.0376,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 5568038000,
+        "pdf_match": 5568038000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 853151000,
+        "pdf_match": 853151000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "LBTY",
+    "period": "2021-12-29",
+    "file": "Liberty-Kenya-Holdings-Plc-Audited-Results-of-the-Group-for-the-Year-Ended-31-Dec-2021.pdf",
+    "ocr_chars": 11370,
+    "summary": {
+      "verified": 7,
+      "weak": 3,
+      "mismatch": 2,
+      "zero": 1,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 0.15,
+        "pdf_match": 0.15,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 81827000,
+        "pdf_match": 81000000,
+        "rel_err": 0.0101,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 78863000,
+        "pdf_match": 78000000,
+        "rel_err": 0.0109,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 40476308000,
+        "pdf_match": 40000000000,
+        "rel_err": 0.0118,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 10913356000,
+        "pdf_match": 11000000000,
+        "rel_err": 0.0079,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "weak",
+        "value": 14411000000,
+        "pdf_match": 14000000000,
+        "rel_err": 0.0285,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 311546000,
+        "pdf_match": 312000000,
+        "rel_err": 0.0015,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "mismatch",
+        "value": 4478329000,
+        "pdf_match": 5000000000,
+        "rel_err": 0.1043,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "weak",
+        "value": 31661584000,
+        "pdf_match": 31000000000,
+        "rel_err": 0.0209,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 10011510000,
+        "pdf_match": 10000000000,
+        "rel_err": 0.0011,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "weak",
+        "value": 8814724000,
+        "pdf_match": 9000000000,
+        "rel_err": 0.0206,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "mismatch",
+        "value": 2292359000,
+        "pdf_match": 2022000000,
+        "rel_err": 0.1179,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "LBTY",
+    "period": "2023-12-29",
+    "file": "Liberty-Kenya-Holdings-Plc-Audited-Results-of-the-Group-for-the-Year-Ended-31st-December-2023.pdf",
+    "ocr_chars": 12052,
+    "summary": {
+      "verified": 7,
+      "weak": 6,
+      "mismatch": 1,
+      "zero": 0,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 1.22,
+        "pdf_match": 1.22,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 671979000,
+        "pdf_match": 671000000,
+        "rel_err": 0.0015,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "weak",
+        "value": 7267889000,
+        "pdf_match": 7000000000,
+        "rel_err": 0.0369,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 43761245000,
+        "pdf_match": 44000000000,
+        "rel_err": 0.0054,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 13981263000,
+        "pdf_match": 14000000000,
+        "rel_err": 0.0013,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 40107553000,
+        "pdf_match": 40000000000,
+        "rel_err": 0.0027,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "weak",
+        "value": 12537044000,
+        "pdf_match": 13000000000,
+        "rel_err": 0.0356,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "weak",
+        "value": 1099481000,
+        "pdf_match": 1000000000,
+        "rel_err": 0.0905,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "weak",
+        "value": 5193935000,
+        "pdf_match": 5000000000,
+        "rel_err": 0.0373,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 34184454000,
+        "pdf_match": 34000000000,
+        "rel_err": 0.0054,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 0.37,
+        "pdf_match": 0.373,
+        "rel_err": 0.003,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "weak",
+        "value": 32014334000,
+        "pdf_match": 33000000000,
+        "rel_err": 0.0299,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "weak",
+        "value": 9576815000,
+        "pdf_match": 10000000000,
+        "rel_err": 0.0423,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "mismatch",
+        "value": 4499586000,
+        "pdf_match": 5000000000,
+        "rel_err": 0.1001,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "LIMT",
+    "period": "2024-12-29",
+    "file": "Limuru-Tea-Plc-Audited-Results-for-the-Year-Ended-31st-December-2024.pdf",
+    "ocr_chars": 4749,
+    "summary": {
+      "verified": 9,
+      "weak": 0,
+      "mismatch": 1,
+      "zero": 1,
+      "total": 11
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": -6.34,
+        "pdf_match": -6.34,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 15215000,
+        "pdf_match": 14922000,
+        "rel_err": 0.0193,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 211824000,
+        "pdf_match": 208715000,
+        "rel_err": 0.0147,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 144003000,
+        "pdf_match": 144003000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 120049000,
+        "pdf_match": 120049000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 151153000,
+        "pdf_match": 151153000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "mismatch",
+        "value": 36671000,
+        "pdf_match": 31000000,
+        "rel_err": 0.1546,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 15607000,
+        "pdf_match": 15607000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 175153000,
+        "pdf_match": 175153000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": -7364000,
+        "pdf_match": -7364000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "NCBA",
+    "period": "2022-03-29",
+    "file": "NCBA-Group-Plc-Unaudited-Financial-Results-of-the-Bank-and-Group-for-the-Period-Ended-31-Mar-2022.pdf",
+    "ocr_chars": 19270,
+    "summary": {
+      "verified": 11,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 11
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 6.21,
+        "pdf_match": 6.21,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 10223644000,
+        "pdf_match": 10223644000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 5900165000,
+        "pdf_match": 5900165000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 591088037000,
+        "pdf_match": 591088037000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 49151256000,
+        "pdf_match": 49151256000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 19477405000,
+        "pdf_match": 19477405000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 15701369000,
+        "pdf_match": 15701369000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 44201725000,
+        "pdf_match": 44201725000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 513101008000,
+        "pdf_match": 513101008000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 3,
+        "pdf_match": 3,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 77987029000,
+        "pdf_match": 77987029000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "NCBA",
+    "period": "2025-03-29",
+    "file": "NCBA-Group-Plc-Unaudited-Financial-Results-of-the-Group-and-Bank-for-the-period-ended-31-Mar-2025.pdf",
+    "ocr_chars": 19898,
+    "summary": {
+      "verified": 13,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 3.33,
+        "pdf_match": 3.33,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 5482587000,
+        "pdf_match": 5482587000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 7889106000,
+        "pdf_match": 7889106000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 655973942000,
+        "pdf_match": 655973942000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 12333385000,
+        "pdf_match": 12333385000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 17248792000,
+        "pdf_match": 17248792000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 7202647000,
+        "pdf_match": 7202647000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 5423273000,
+        "pdf_match": 5423273000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 83204458000,
+        "pdf_match": 83204458000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 539651013000,
+        "pdf_match": 539651013000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 2.25,
+        "pdf_match": 2.25,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 1644860000,
+        "pdf_match": 1644860000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 116322909000,
+        "pdf_match": 116322909000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "reported"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "NMG",
+    "period": "2023-12-29",
+    "file": "Nation-Media-Group-Plc-Audited-Group-Financial-Results-for-the-Year-Ended-31-Dec-2023.pdf",
+    "ocr_chars": 7126,
+    "summary": {
+      "verified": 11,
+      "weak": 1,
+      "mismatch": 1,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "mismatch",
+        "value": 1.1,
+        "pdf_match": 1.5,
+        "rel_err": 0.2667,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "weak",
+        "value": 205700000,
+        "pdf_match": 188400000,
+        "rel_err": 0.0841,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 353800000,
+        "pdf_match": 353800000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 8215400000,
+        "pdf_match": 8215400000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 7116200000,
+        "pdf_match": 7116200000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 7302000000,
+        "pdf_match": 7302000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 1723300000,
+        "pdf_match": 1723200000,
+        "rel_err": 0.0001,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 431800000,
+        "pdf_match": 431800000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 7444800000,
+        "pdf_match": 7444800000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 353800000,
+        "pdf_match": 353800000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 3588100000,
+        "pdf_match": 3588100000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 7861600000,
+        "pdf_match": 7861600000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 346100000,
+        "pdf_match": 348800000,
+        "rel_err": 0.0077,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "OCH",
+    "period": "2025-06-28",
+    "file": "Olympia-Capital-Holdings-Limited-Half-year-unaudited-reports-as-at-August-2025.pdf",
+    "ocr_chars": 2614,
+    "summary": {
+      "verified": 11,
+      "weak": 0,
+      "mismatch": 1,
+      "zero": 1,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 0.36,
+        "pdf_match": 0.359,
+        "rel_err": 0.001,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 14368000,
+        "pdf_match": 14368000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 129382000,
+        "pdf_match": 128357000,
+        "rel_err": 0.0079,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 1974316000,
+        "pdf_match": 1974316000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 266768000,
+        "pdf_match": 266768000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 302804000,
+        "pdf_match": 302804000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 29142000,
+        "pdf_match": 29142000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 181754000,
+        "pdf_match": 181754000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 410205000,
+        "pdf_match": 410205000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "mismatch",
+        "value": 739332000,
+        "pdf_match": 602004000,
+        "rel_err": 0.1857,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 286380000,
+        "pdf_match": 286380000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 1234984000,
+        "pdf_match": 1234984000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "PORT",
+    "period": "2021-12-29",
+    "file": "East-African-Portland-Cement-Plc-Unaudited-Results-for-the-Six-Months-Ended-31-Dec-2021.pdf",
+    "ocr_chars": 4303,
+    "summary": {
+      "verified": 11,
+      "weak": 2,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": -10.08,
+        "pdf_match": -10.08,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": -907109000,
+        "pdf_match": -907109000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "weak",
+        "value": 194470000,
+        "pdf_match": 190000000,
+        "rel_err": 0.023,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 34245680000,
+        "pdf_match": 34245680000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 967601000,
+        "pdf_match": 967601000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 2625876000,
+        "pdf_match": 2625876000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "weak",
+        "value": 1347148000,
+        "pdf_match": 1389511000,
+        "rel_err": 0.0305,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": -814877000,
+        "pdf_match": -814877000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 17524261000,
+        "pdf_match": 17524261000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 14140914000,
+        "pdf_match": 14140914000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 13977298000,
+        "pdf_match": 13977298000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 20104766000,
+        "pdf_match": 20104766000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": -452480000,
+        "pdf_match": -452480000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "PORT",
+    "period": "2025-06-28",
+    "file": "East-African-Portland-Cement-Plc-Audited-Group-Results-for-the-Year-Ended-30-June-2025.pdf",
+    "ocr_chars": 5621,
+    "summary": {
+      "verified": 13,
+      "weak": 1,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 61.39,
+        "pdf_match": 61.39,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 5525310000,
+        "pdf_match": 5525310000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 5242705000,
+        "pdf_match": 5242705000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 50313292000,
+        "pdf_match": 50313292000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 7083567000,
+        "pdf_match": 7083567000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 7651029000,
+        "pdf_match": 7651029000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "weak",
+        "value": 6040216000,
+        "pdf_match": 5530000000,
+        "rel_err": 0.0845,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 1635271000,
+        "pdf_match": 1635271000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 24352354000,
+        "pdf_match": 24352354000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 16675306000,
+        "pdf_match": 16675306000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 1.25,
+        "pdf_match": 1.25,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 1432601000,
+        "pdf_match": 1414578000,
+        "rel_err": 0.0126,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 33637986000,
+        "pdf_match": 33637986000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 241874000,
+        "pdf_match": 241874000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "SCAN",
+    "period": "2023-06-28",
+    "file": "Wpp-Scangroup-Plc-Unaudited-Half-Year-Results-For-the-Period-Ended-30-Jun-2023.pdf",
+    "ocr_chars": 7043,
+    "summary": {
+      "verified": 6,
+      "weak": 1,
+      "mismatch": 2,
+      "zero": 0,
+      "total": 9
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": -0.3,
+        "pdf_match": -0.3,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 124526000,
+        "pdf_match": 124500000,
+        "rel_err": 0.0002,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 8210577000,
+        "pdf_match": 8210577000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "mismatch",
+        "value": 7269474000,
+        "pdf_match": 8210577000,
+        "rel_err": 0.1146,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "weak",
+        "value": 852311000,
+        "pdf_match": 890450000,
+        "rel_err": 0.0428,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 3206960000,
+        "pdf_match": 3223851000,
+        "rel_err": 0.0052,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 3161865000,
+        "pdf_match": 3161865000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 5003617000,
+        "pdf_match": 5003617000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "mismatch",
+        "value": 157572000,
+        "pdf_match": 178000000,
+        "rel_err": 0.1148,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "SCAN",
+    "period": "2025-12-29",
+    "file": "Wpp-Scangroup-Plc-Audited-Financial-Results-for-the-Year-Ended-31-Dec-2025.pdf",
+    "ocr_chars": 14441,
+    "summary": {
+      "verified": 5,
+      "weak": 3,
+      "mismatch": 1,
+      "zero": 0,
+      "total": 9
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": -1.61,
+        "pdf_match": -1.61,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "mismatch",
+        "value": 713673000,
+        "pdf_match": 639000000,
+        "rel_err": 0.1046,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 6330067000,
+        "pdf_match": 6330067000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 4303283000,
+        "pdf_match": 4312000000,
+        "rel_err": 0.002,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "weak",
+        "value": 1760888000,
+        "pdf_match": 1831437000,
+        "rel_err": 0.0385,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "weak",
+        "value": 2335365000,
+        "pdf_match": 2396000000,
+        "rel_err": 0.0253,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 2258952000,
+        "pdf_match": 2258952000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 3994702000,
+        "pdf_match": 3994702000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "weak",
+        "value": 678215000,
+        "pdf_match": 639000000,
+        "rel_err": 0.0578,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "SCOM",
+    "period": "2023-03-29",
+    "file": "Safaricom-PLC-Condensed-Audited-Results-for-the-Year-Ended-31-Mar-2023.pdf",
+    "ocr_chars": 16405,
+    "summary": {
+      "verified": 14,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 1.55,
+        "pdf_match": 1.55,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 52482800000,
+        "pdf_match": 52482800000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 48847200000,
+        "pdf_match": 48800000000,
+        "rel_err": 0.001,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 509207000000,
+        "pdf_match": 509207000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 310904800000,
+        "pdf_match": 310904800000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 72425500000,
+        "pdf_match": 72425500000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 92232100000,
+        "pdf_match": 91992400000,
+        "rel_err": 0.0026,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 84997400000,
+        "pdf_match": 84997400000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 121823600000,
+        "pdf_match": 121823600000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 245841100000,
+        "pdf_match": 245841100000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 1.2,
+        "pdf_match": 1.2,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 140377200000,
+        "pdf_match": 140377200000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 263365900000,
+        "pdf_match": 263365900000.00003,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 116151100000,
+        "pdf_match": 116151100000,
+        "rel_err": 0,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "SGL",
+    "period": "2023-06-28",
+    "file": "The-Standard-Group-PLC-Unaudited-Group-Results-for-the-year-ended-30-Jun-2023.pdf",
+    "ocr_chars": 6064,
+    "summary": {
+      "verified": 8,
+      "weak": 0,
+      "mismatch": 2,
+      "zero": 1,
+      "total": 11
+    },
+    "results": {
+      "eps": {
+        "status": "mismatch",
+        "value": 1.29,
+        "pdf_match": 1,
+        "rel_err": 0.2248,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 102906000,
+        "pdf_match": 102000000,
+        "rel_err": 0.0088,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 4927856000,
+        "pdf_match": 4927856000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 1260781000,
+        "pdf_match": 1260781000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 2151258000,
+        "pdf_match": 2151258000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "mismatch",
+        "value": 517437000,
+        "pdf_match": 578466000,
+        "rel_err": 0.1055,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 4849544000,
+        "pdf_match": 4927856000,
+        "rel_err": 0.0159,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 4546161000,
+        "pdf_match": 4546161000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 78312000,
+        "pdf_match": 78312000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 57033000,
+        "pdf_match": 57033000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "SLAM",
+    "period": "2025-06-28",
+    "file": "Sanlam-Kenya-Plc-Unaudited-Financial-Statements-for-the-Period-Ended-30-Jun-2025.pdf",
+    "ocr_chars": 5523,
+    "summary": {
+      "verified": 12,
+      "weak": 0,
+      "mismatch": 1,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 0.3,
+        "pdf_match": 0.3,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 30958000,
+        "pdf_match": 30958000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 1191831000,
+        "pdf_match": 1191831000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 41348687000,
+        "pdf_match": 41348687000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 3737334000,
+        "pdf_match": 3737334000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "mismatch",
+        "value": 4699412000,
+        "pdf_match": 4216156000,
+        "rel_err": 0.1028,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 3329287000,
+        "pdf_match": 3371581000,
+        "rel_err": 0.0125,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 49949000,
+        "pdf_match": 49949000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": -1518045000,
+        "pdf_match": -1518045000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 37399585000,
+        "pdf_match": 37399585000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 5958543000,
+        "pdf_match": 6000000000,
+        "rel_err": 0.0069,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 3949102000,
+        "pdf_match": 3949102000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": -1379182000,
+        "pdf_match": -1379182000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "SLAM",
+    "period": "null",
+    "file": "Sanlam-Kenya-Plc-Statement-to-Shareholders.pdf",
+    "ocr_chars": 2239,
+    "summary": {
+      "verified": 2,
+      "weak": 0,
+      "mismatch": 12,
+      "zero": 0,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "mismatch",
+        "value": 12.5,
+        "pdf_match": 31,
+        "rel_err": 0.5968,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "mismatch",
+        "value": 1800000000,
+        "pdf_match": 2002000000,
+        "rel_err": 0.1009,
+        "pdf_scale": 1000000,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 5000000000,
+        "pdf_match": 5000000000,
+        "rel_err": 0,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "mismatch",
+        "value": 52000000000,
+        "pdf_match": 31000000000,
+        "rel_err": 0.4038,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "mismatch",
+        "value": 14800000000,
+        "pdf_match": 31000000000,
+        "rel_err": 0.5226,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "mismatch",
+        "value": 22000000000,
+        "pdf_match": 31000000000,
+        "rel_err": 0.2903,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "mismatch",
+        "value": 11200000000,
+        "pdf_match": 5000000000,
+        "rel_err": 0.5536,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "mismatch",
+        "value": 2500000000,
+        "pdf_match": 2021000000,
+        "rel_err": 0.1916,
+        "pdf_scale": 1000000,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "mismatch",
+        "value": 8500000000,
+        "pdf_match": 5000000000,
+        "rel_err": 0.4118,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "mismatch",
+        "value": 38000000000,
+        "pdf_match": 31000000000,
+        "rel_err": 0.1842,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 5,
+        "pdf_match": 5,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "mismatch",
+        "value": 15000000000,
+        "pdf_match": 31000000000,
+        "rel_err": 0.5161,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "mismatch",
+        "value": 14000000000,
+        "pdf_match": 31000000000,
+        "rel_err": 0.5484,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "mismatch",
+        "value": 3200000000,
+        "pdf_match": 5000000000,
+        "rel_err": 0.36,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "SMER",
+    "period": "2021-12-29",
+    "file": "Sameer-Africa-Plc-Audited-Financial-Results-of-the-Group-for-the-Year-Ended-31-Dec-2021.pdf",
+    "ocr_chars": 10273,
+    "summary": {
+      "verified": 12,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 1,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 0.78,
+        "pdf_match": 0.78,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 217388000,
+        "pdf_match": 217388000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 495994000,
+        "pdf_match": 495994000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 1124090000,
+        "pdf_match": 1124090000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 651606000,
+        "pdf_match": 651606000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 342717000,
+        "pdf_match": 342717000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 377840000,
+        "pdf_match": 377840000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": -887504000,
+        "pdf_match": -887504000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 789991000,
+        "pdf_match": 789991000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 288367000,
+        "pdf_match": 288367000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 334099000,
+        "pdf_match": 334099000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 279958000,
+        "pdf_match": 279958000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "SMER",
+    "period": "2023-06-28",
+    "file": "Sameer-Africa-Plc-Financial-Results-of-the-Group-for-the-Six-Months-Ended-30-Jun-2023.pdf",
+    "ocr_chars": 5938,
+    "summary": {
+      "verified": 13,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 0.09,
+        "pdf_match": 0.09,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 24232000,
+        "pdf_match": 24232000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 500372000,
+        "pdf_match": 500372000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 1318932000,
+        "pdf_match": 1318932000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 201197000,
+        "pdf_match": 201197000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 455753000,
+        "pdf_match": 455753000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 26636000,
+        "pdf_match": 26594000,
+        "rel_err": 0.0016,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 125691000,
+        "pdf_match": 125691000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": -763008000,
+        "pdf_match": -763008000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 857434000,
+        "pdf_match": 857434000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 357062000,
+        "pdf_match": 357062000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 461498000,
+        "pdf_match": 461498000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 43174000,
+        "pdf_match": 43174000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "SMER",
+    "period": "2025-12-29",
+    "file": "Sameer-Africa-Plc-Audited-Financial-Results-of-the-Group-for-the-Year-Ended-31-Dec-2025.pdf",
+    "ocr_chars": 10328,
+    "summary": {
+      "verified": 12,
+      "weak": 0,
+      "mismatch": 0,
+      "zero": 1,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 0.99,
+        "pdf_match": 0.99,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 274343000,
+        "pdf_match": 274343000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 1719715000,
+        "pdf_match": 1719715000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 432739000,
+        "pdf_match": 432739000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 423669000,
+        "pdf_match": 423669000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 16666000,
+        "pdf_match": 16417000,
+        "rel_err": 0.0149,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 303638000,
+        "pdf_match": 303638000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": -256724000,
+        "pdf_match": -256724000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 704647000,
+        "pdf_match": 704647000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 691395000,
+        "pdf_match": 691395000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 1010068000,
+        "pdf_match": 1010068000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 191782000,
+        "pdf_match": 191782000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "TOTL",
+    "period": "2021-12-29",
+    "file": "Totalenergies-Marketing-Kenya-Plc-Audited-Financial-Statements-for-the-Year-Ended-31-Dec-2021.pdf",
+    "ocr_chars": 9426,
+    "summary": {
+      "verified": 12,
+      "weak": 1,
+      "mismatch": 1,
+      "zero": 0,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 4.35,
+        "pdf_match": 4.35,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 2738908000,
+        "pdf_match": 2738908000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "mismatch",
+        "value": 1171471000,
+        "pdf_match": 1310000000,
+        "rel_err": 0.1057,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 47030094000,
+        "pdf_match": 47030094000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 74710464000,
+        "pdf_match": 74710464000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 32554796000,
+        "pdf_match": 32554796000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "verified",
+        "value": 65909440000,
+        "pdf_match": 66000000000,
+        "rel_err": 0.0014,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 3992919000,
+        "pdf_match": 3992919000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 16668532000,
+        "pdf_match": 16668532000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "weak",
+        "value": 18419271000,
+        "pdf_match": 16668532000,
+        "rel_err": 0.095,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 1.31,
+        "pdf_match": 1.31,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 16179466000,
+        "pdf_match": 16179466000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 28610823000,
+        "pdf_match": 28610823000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 3617325000,
+        "pdf_match": 3617325000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "TOTL",
+    "period": "2025-12-29",
+    "file": "TotalEnergies-Marketing-Kenya-PLC-Audited-Financial-Results-for-the-Year-Ended-31-Dec-2025.pdf",
+    "ocr_chars": 9815,
+    "summary": {
+      "verified": 13,
+      "weak": 0,
+      "mismatch": 1,
+      "zero": 0,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 3.45,
+        "pdf_match": 3.45,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 3170890000,
+        "pdf_match": 3170890000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 2644270000,
+        "pdf_match": 2620774000,
+        "rel_err": 0.0089,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 65198218000,
+        "pdf_match": 65198218000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 154315367000,
+        "pdf_match": 154315367000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 31202361000,
+        "pdf_match": 31202361000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "mismatch",
+        "value": 92041552000,
+        "pdf_match": 72000000000,
+        "rel_err": 0.2177,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 3867500000,
+        "pdf_match": 3867500000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 21727252000,
+        "pdf_match": 21727252000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 31528876000,
+        "pdf_match": 31807847000,
+        "rel_err": 0.0088,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "verified",
+        "value": 3.45,
+        "pdf_match": 3.45,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 31807847000,
+        "pdf_match": 31807847000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 33669342000,
+        "pdf_match": 33669342000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 7646742000,
+        "pdf_match": 7646742000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "TPSE",
+    "period": "2021-12-29",
+    "file": "TPS-Eastern-Africa-Plc-Audited-Results-Summary-Financial-Statements-for-the-Year-Ended-31-Dec-2021.pdf",
+    "ocr_chars": 17643,
+    "summary": {
+      "verified": 10,
+      "weak": 2,
+      "mismatch": 0,
+      "zero": 1,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": -3.4,
+        "pdf_match": -3.4,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": -632941000,
+        "pdf_match": -632941000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "weak",
+        "value": 6195472000,
+        "pdf_match": 6000000000,
+        "rel_err": 0.0316,
+        "pdf_scale": 1000000000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 17429378000,
+        "pdf_match": 17645000000,
+        "rel_err": 0.0122,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 3287798000,
+        "pdf_match": 3287798000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 2029576000,
+        "pdf_match": 2029576000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "weak",
+        "value": -419469000,
+        "pdf_match": -437785000,
+        "rel_err": 0.0418,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 897958000,
+        "pdf_match": 897958000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 9732287000,
+        "pdf_match": 9815000000,
+        "rel_err": 0.0084,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 2521714000,
+        "pdf_match": 2521714000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 7697091000,
+        "pdf_match": 7697091000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 129484000,
+        "pdf_match": 129484000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "TPSE",
+    "period": "2023-12-29",
+    "file": "TPS-Eastern-Africa-Plc-Audited-Results-Summary-Financial-Statements-for-the-Year-Ended-31st-December-2023.pdf",
+    "ocr_chars": 14459,
+    "summary": {
+      "verified": 11,
+      "weak": 1,
+      "mismatch": 0,
+      "zero": 1,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": 2.89,
+        "pdf_match": 2.89,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": 870867000,
+        "pdf_match": 870867000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "weak",
+        "value": 4132631000,
+        "pdf_match": 4392668000,
+        "rel_err": 0.0592,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 19872082000,
+        "pdf_match": 20114000000,
+        "rel_err": 0.012,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 9684612000,
+        "pdf_match": 9684612000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 3694776000,
+        "pdf_match": 3694776000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": 2731895000,
+        "pdf_match": 2731895000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": 2051534000,
+        "pdf_match": 2051534000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 8511308000,
+        "pdf_match": 8620000000,
+        "rel_err": 0.0126,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 2822942000,
+        "pdf_match": 2822942000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 11360774000,
+        "pdf_match": 11360774000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": 2306121000,
+        "pdf_match": 2306121000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "UNGA",
+    "period": "2023-12-29",
+    "file": "Unga-Group-Plc-Unaudited-Financial-Results-for-the-Six-Months-Ended-31-Dec-2023.pdf",
+    "ocr_chars": 4545,
+    "summary": {
+      "verified": 7,
+      "weak": 2,
+      "mismatch": 2,
+      "zero": 1,
+      "total": 12
+    },
+    "results": {
+      "eps": {
+        "status": "mismatch",
+        "value": 2.49,
+        "pdf_match": 3,
+        "rel_err": 0.17,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "weak",
+        "value": 341559000,
+        "pdf_match": 350406000,
+        "rel_err": 0.0252,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 511302000,
+        "pdf_match": 511302000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 10900009000,
+        "pdf_match": 10900009000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 12426424000,
+        "pdf_match": 12426424000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 5870808000,
+        "pdf_match": 5870808000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "weak",
+        "value": 32232000,
+        "pdf_match": 31000000,
+        "rel_err": 0.0382,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 5408262000,
+        "pdf_match": 5490488000,
+        "rel_err": 0.015,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 4898219000,
+        "pdf_match": 4898219000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 5490488000,
+        "pdf_match": 5490488000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "mismatch",
+        "value": 1629231000,
+        "pdf_match": 1878737000,
+        "rel_err": 0.1328,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "XPRS",
+    "period": "2023-06-28",
+    "file": "Express-Kenya-Plc-Unaudited-Half-Year-Results-Consolidated-Financial-Statements-for-the-Period-Ended-30-Jun-2023.pdf",
+    "ocr_chars": 4303,
+    "summary": {
+      "verified": 11,
+      "weak": 2,
+      "mismatch": 0,
+      "zero": 0,
+      "total": 13
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": -0.73,
+        "pdf_match": -0.73,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": -35044000,
+        "pdf_match": -35044000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "weak",
+        "value": 13437000,
+        "pdf_match": 13718000,
+        "rel_err": 0.0205,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 1306880000,
+        "pdf_match": 1306880000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 14138000,
+        "pdf_match": 14138000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 63135000,
+        "pdf_match": 63135000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "weak",
+        "value": 46747000,
+        "pdf_match": 45728000,
+        "rel_err": 0.0218,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": -47505000,
+        "pdf_match": -47505000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": -524636000,
+        "pdf_match": -524636000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "verified",
+        "value": 718613000,
+        "pdf_match": 718613000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 43682000,
+        "pdf_match": 43682000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 588267000,
+        "pdf_match": 588267000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": -2193000,
+        "pdf_match": -2193000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000,
+        "scale_warn": false,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  },
+  {
+    "ticker": "XPRS",
+    "period": "2023-12-29",
+    "file": "Express-Kenya-Plc-Annual-Report-Consolidated-Financial-Statements-for-the-Period-Ended-31-Dec-2023.pdf",
+    "ocr_chars": 4916,
+    "summary": {
+      "verified": 11,
+      "weak": 2,
+      "mismatch": 0,
+      "zero": 1,
+      "total": 14
+    },
+    "results": {
+      "eps": {
+        "status": "verified",
+        "value": -2.17,
+        "pdf_match": -2.17,
+        "rel_err": 0,
+        "pdf_scale": 1,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "per_share"
+      },
+      "net_income": {
+        "status": "verified",
+        "value": -103425000,
+        "pdf_match": -103425000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_debt": {
+        "status": "verified",
+        "value": 401433000,
+        "pdf_match": 408779000,
+        "rel_err": 0.018,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      },
+      "total_assets": {
+        "status": "verified",
+        "value": 1330098000,
+        "pdf_match": 1330098000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_revenue": {
+        "status": "verified",
+        "value": 27494000,
+        "pdf_match": 27494000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "current_assets": {
+        "status": "verified",
+        "value": 72695000,
+        "pdf_match": 72695000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "cost_of_revenue": {
+        "status": "weak",
+        "value": 91105000,
+        "pdf_match": 87219000,
+        "rel_err": 0.0427,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "operating_income": {
+        "status": "verified",
+        "value": -92370000,
+        "pdf_match": -92370000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "retained_earnings": {
+        "status": "verified",
+        "value": -566025000,
+        "pdf_match": -566025000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "total_liabilities": {
+        "status": "weak",
+        "value": 849547000,
+        "pdf_match": 877392000,
+        "rel_err": 0.0317,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "dividend_per_share": {
+        "status": "zero",
+        "value": 0
+      },
+      "current_liabilities": {
+        "status": "verified",
+        "value": 39335000,
+        "pdf_match": 39335000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "reported"
+      },
+      "shareholders_equity": {
+        "status": "verified",
+        "value": 480551000,
+        "pdf_match": 474000000,
+        "rel_err": 0.0136,
+        "pdf_scale": 1000000,
+        "detected_scale": 1000000,
+        "scale_warn": false,
+        "note": "reported"
+      },
+      "cash_from_operations": {
+        "status": "verified",
+        "value": -3313000,
+        "pdf_match": -3313000,
+        "rel_err": 0,
+        "pdf_scale": 1000,
+        "detected_scale": 1000000,
+        "scale_warn": true,
+        "note": "computed"
+      }
+    },
+    "method": "mistral-ocr"
+  }
+]
