@@ -399,8 +399,17 @@ function extractPdfText(buffer) {
   return texts.join(' ');
 }
 
-function buildPrompt(text) {
+function buildPrompt(text, meta) {
   const isInsurance = /\binsurance\b/i.test(text);
+  meta = meta || {};
+  const periodType = meta.period_type || '';
+  const ped = meta.period_end_date || '';
+  const ticker = meta.ticker || '';
+  const interimNote = periodType === 'quarterly'
+    ? `\n\nPERIOD TYPE: quarterly (INTERIM report). The statement contains BOTH a single-period column (e.g. "3 months ended ${ped}" / "${ped} quarter") AND a cumulative year-to-date column (e.g. "9 months ended" / "6 months ended" / "year to date"). You MUST report figures for the SINGLE reporting quarter ONLY — the column whose header matches the period ${ped} — NEVER the cumulative/year-to-date column.`
+    : periodType === 'annual'
+    ? `\n\nPERIOD TYPE: annual (12-month / full-year report). Report the FULL-YEAR figure only.`
+    : '';
   const sector =
     text.match(/\b(bank|banking|financial\s+services?|fintech|insurance|sacco|microfinance)\b/i)
     ? (isInsurance ? 'insurance' : 'banking/financial') : 'general corporate';
@@ -413,8 +422,9 @@ function buildPrompt(text) {
 - operating_income: "Profit before tax" for banks`
     : `- total_revenue: Total revenue or sales
 - cost_of_revenue: Cost of revenue, cost of sales, or direct costs`;
-  return `Extract ALL 14 financial metrics from this Nairobi Stock Exchange financial statement. Sector: ${sector}.
+  return `Extract ALL 14 financial metrics from this Nairobi Stock Exchange financial statement. Sector: ${sector}.${interimNote}
 The text may be reported in thousands (KShs'000) or millions (KShs M) — you MUST convert every value to ABSOLUTE KENYA SHILLINGS (multiply by the reported scale factor).
+For banks, total_revenue MUST be "Total interest income" for the reporting period ONLY (do not include non-interest income, and for interim reports do not use the cumulative column).
 
 Return ONLY a JSON object with these exact keys. Use null ONLY if the value truly cannot be found:
 ${incomeNote}
@@ -442,8 +452,8 @@ Report text:
 ${text}`;
 }
 
-async function callLlm(text, apiKey, model) {
-  const prompt = buildPrompt(text);
+async function callLlm(text, apiKey, model, meta) {
+  const prompt = buildPrompt(text, meta);
   return new Promise((resolve) => {
     const body = JSON.stringify({
       model: model || 'gpt-4o-mini',
@@ -489,8 +499,8 @@ async function callLlm(text, apiKey, model) {
 
 const GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash'];
 
-async function callGemini(text, apiKey, model) {
-  const prompt = buildPrompt(text);
+async function callGemini(text, apiKey, model, meta) {
+  const prompt = buildPrompt(text, meta);
   const modelsToTry = model ? [model] : GEMINI_MODELS;
   for (const m of modelsToTry) {
     const result = await tryGeminiModel(prompt, apiKey, m);
@@ -594,8 +604,8 @@ async function callMistralOcr(buffer) {
   return resp.pages.map(p => p.markdown || '').join('\n\n');
 }
 
-async function callMistralExtract(text, apiKey, model) {
-  const prompt = buildPrompt(text);
+async function callMistralExtract(text, apiKey, model, meta) {
+  const prompt = buildPrompt(text, meta);
   console.log('[Mistral] extraction request (text ' + text.length + ' chars, model ' + model + ')');
   const resp = await mistralPost('/v1/chat/completions', {
     model: model || MISTRAL_EXTRACT_MODEL,
@@ -617,10 +627,10 @@ const EXPECTED_METRICS = ['total_revenue','net_income','cost_of_revenue','operat
 // Small per-share figures (eps, dividend_per_share) must NEVER be scaled.
 const SCALE_METRICS = ['total_revenue','net_income','cost_of_revenue','operating_income','cash_from_operations','total_assets','total_liabilities','total_debt','current_assets','current_liabilities','shareholders_equity','retained_earnings'];
 
-// No legitimate company has > KShs 10 trillion in assets/revenue (largest global
-// banks are ~KShs 4-5 trillion). A uniform 1,000x scaling error pushes NSE
-// statements into the hundreds-of-trillions range, so clamp those back down.
-const SCALE_CAP = 1e13;
+// No legitimate NSE company has > KShs 4 trillion in assets/revenue (largest
+// local banks ~KShs 2 trillion). A uniform 1,000x scaling error pushes NSE
+// statements into the trillions range, so clamp those back down.
+const SCALE_CAP = 4e12;
 function maxLargeMetric(o) {
   return Math.max(o.total_assets || 0, o.total_revenue || 0, o.total_liabilities || 0, o.shareholders_equity || 0, o.net_income || 0);
 }
@@ -681,10 +691,10 @@ function normalizeAliases(raw) {
   return out;
 }
 
-function tryLlm(text, apiKey, provider) {
-  if (provider === 'gemini') return callGemini(text, apiKey, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
-  if (provider === 'mistral') return callMistralExtract(text, apiKey, MISTRAL_EXTRACT_MODEL);
-  return callLlm(text, apiKey, process.env.OPENAI_MODEL || 'gpt-4o-mini');
+function tryLlm(text, apiKey, provider, meta) {
+  if (provider === 'gemini') return callGemini(text, apiKey, process.env.GEMINI_MODEL || 'gemini-2.5-flash', meta);
+  if (provider === 'mistral') return callMistralExtract(text, apiKey, MISTRAL_EXTRACT_MODEL, meta);
+  return callLlm(text, apiKey, process.env.OPENAI_MODEL || 'gpt-4o-mini', meta);
 }
 
 async function processText(text, docId, source) {
@@ -850,4 +860,4 @@ async function parseExtractedText(text, docId, fileName) {
   }
 }
 
-module.exports = { parsePdfBuffer, parseExtractedText, extractMetrics, detectScale, callMistralOcr };
+module.exports = { parsePdfBuffer, parseExtractedText, extractMetrics, detectScale, callMistralOcr, normalizeAliases, applyOverScaleCorrection, isImplausible, implausibleReasons };
