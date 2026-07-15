@@ -401,7 +401,7 @@ async function buildLocalNseReport(symbol) {
 
     // Primary data source: financial_statements.parsed_data (populated by JSON upload / PDF parse)
     const stmtResult = await pool.query(
-      `SELECT DISTINCT ON (period_end_date) parsed_data, period_end_date FROM financial_statements
+      `SELECT DISTINCT ON (period_end_date) parsed_data, period_end_date, period_type FROM financial_statements
        WHERE stock_id = $1 AND status = 'completed' AND parsed_data IS NOT NULL
        ORDER BY period_end_date DESC NULLS LAST, uploaded_at DESC`,
       [stock.id]
@@ -420,7 +420,7 @@ async function buildLocalNseReport(symbol) {
       }
       return p;
     }
-    const allParsed = statements.map(s => ({ parsed: normalizeParsed(s.parsed_data), periodDate: s.period_end_date }));
+    const allParsed = statements.map(s => ({ parsed: normalizeParsed(s.parsed_data), periodDate: s.period_end_date, periodType: s.period_type }));
     const validParsed = allParsed.filter(p => p.parsed);
     const latest = validParsed[0] || {};
     const parsed = latest.parsed || null;
@@ -465,14 +465,23 @@ async function buildLocalNseReport(symbol) {
     const quoteSymbol = `NSE:${ticker}`;
     const quote = await getQuote(quoteSymbol).catch(() => null);
     const price = quote?.price || 0;
-    const hasExactShares = parsed?.shares_outstanding != null && parsed.shares_outstanding > 0;
-    const equityShares = (parsed?.shareholders_equity > 0 && parsed?.book_value_per_share > 0)
-      ? Math.round(parsed.shareholders_equity / parsed.book_value_per_share) : 0;
-    const incomeShares = (parsed?.net_income && parsed?.eps && (parsed.net_income > 0 === parsed.eps > 0))
-      ? Math.round(Math.abs(parsed.net_income / parsed.eps)) : 0;
-    const sharesOut = hasExactShares ? parsed.shares_outstanding : (equityShares || incomeShares);
 
-    const divYield = f?.dividend_yield || (parsed?.dividend_per_share && price > 0 ? parsed.dividend_per_share / price : 0);
+    // Prefer an ANNUAL statement for per-share figures (shares outstanding, trailing P/E)
+    // so a quarterly latest period doesn't 4x the P/E or mismatch the share count.
+    const annualStmt = validParsed.find(v => v.periodType && String(v.periodType).toLowerCase() === 'annual' && v.parsed && v.parsed.eps > 0) || null;
+    const sharesSrc = annualStmt ? annualStmt.parsed : parsed;
+
+    const hasExactShares = sharesSrc?.shares_outstanding != null && sharesSrc.shares_outstanding > 0;
+    const equityShares = (sharesSrc?.shareholders_equity > 0 && sharesSrc?.book_value_per_share > 0)
+      ? Math.round(sharesSrc.shareholders_equity / sharesSrc.book_value_per_share) : 0;
+    const incomeShares = (sharesSrc?.net_income && sharesSrc?.eps && (sharesSrc.net_income > 0 === sharesSrc.eps > 0))
+      ? Math.round(Math.abs(sharesSrc.net_income / sharesSrc.eps)) : 0;
+    const sharesOut = hasExactShares ? sharesSrc.shares_outstanding : (equityShares || incomeShares);
+
+    const annualEps = annualStmt ? annualStmt.parsed.eps : (parsed?.eps || 0);
+    const peRatio = (price > 0 && annualEps > 0) ? price / annualEps : (f?.pe_ratio || 0);
+
+    const divYield = f?.dividend_yield || (sharesSrc?.dividend_per_share && price > 0 ? sharesSrc.dividend_per_share / price : 0);
     const mc = quote?.marketCap
       || (hasExactShares && price > 0 ? Math.round(price * sharesOut) : 0)
       || (equityShares > 0 && price > 0 ? Math.round(price * equityShares) : 0)
@@ -502,7 +511,7 @@ async function buildLocalNseReport(symbol) {
       const pBvps = p.book_value_per_share || (pEquity > 0 && pShares > 0 ? pEquity / pShares : 0);
       return {
         date: d, marketCap: mc,
-        peRatio: price > 0 && p.eps > 0 ? price / p.eps : (f?.pe_ratio || 0),
+        peRatio: price > 0 && annualEps > 0 ? price / annualEps : (price > 0 && p.eps > 0 ? price / p.eps : (f?.pe_ratio || 0)),
         pbRatio: price > 0 && pBvps > 0 ? price / pBvps : (f?.pb_ratio || 0),
         dividendYield: divYield, dividendYieldPercentage: divYield * 100,
         roe: p.net_income && pEquity ? p.net_income / pEquity : (f?.roe || 0),
@@ -531,8 +540,9 @@ async function buildLocalNseReport(symbol) {
           exchange: 'NSE', currency: stock.currency || 'KES', isEtf: false, image: '', lastUpdated: now },
         quote: { ...(quote || { symbol: ticker, price: 0, change: 0, changesPercentage: 0,
           dayLow: 0, dayHigh: 0, yearLow: 0, yearHigh: 0, avgVolume: 0, open: 0,
-          volume: 0, previousClose: 0, sharesOutstanding: sharesOut,
-          eps: parsed?.eps || 0, pe: f?.pe_ratio || 0, lastUpdated: now }), marketCap: mc },
+          volume: 0, previousClose: 0, sharesOutstanding: 0,
+          eps: 0, pe: 0, lastUpdated: now }), marketCap: mc,
+          sharesOutstanding: sharesOut, eps: parsed?.eps || 0, pe: peRatio },
         incomeStatement: incItem, incomeStatementHistory: incHistory,
         balanceSheet: balItem, balanceSheetHistory: balHistory,
         cashFlowStatement: cfItem, cashFlowStatementHistory: cfHistory,

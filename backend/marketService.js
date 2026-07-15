@@ -362,6 +362,86 @@ async function enrichVolumeFromAfx(quote, symbol) {
   } catch {}
 }
 
+// Resolve an NSE quote by trying multiple sources in order:
+//   mystocks.co.ke (has marketCap/change/volume) -> AFX (afx.kwayisi.org, free) -> Apify (needs key)
+// Lazy-requires each module so a missing/optional scraper never crashes boot.
+async function getNseBaseQuote(symbol) {
+  // 1) mystocks.co.ke — primary (has marketCap, change, volume)
+  let msq = null;
+  try {
+    const mysticks = require('./mysticksScraper');
+    msq = await mysticks.getQuoteForSymbol(symbol);
+  } catch (e) { /* mystocks optional / may be absent */ }
+
+  if (msq && msq.price) {
+    return {
+      price: msq.price,
+      change: msq.change || 0,
+      changesPercentage: msq.changePercent || 0,
+      changePercent: msq.changePercent || 0,
+      volume: msq.volume || 0,
+      marketCap: msq.marketCap || 0,
+      dayHigh: msq.dayHigh || msq.price,
+      dayLow: msq.dayLow || msq.price,
+      previousClose: msq.previousClose || msq.price,
+      company_name: msq.name || msq.ticker || symbol,
+      timestamp: Math.floor(Date.now() / 1000),
+      lastUpdated: new Date().toISOString(),
+      provider: 'mystocks',
+    };
+  }
+
+  // 2) AFX (afx.kwayisi.org) — free fallback for price/volume (only if mystocks lacked price)
+  let afx = null;
+  try {
+    const nseAfxMod = require('./nseAfxScraper');
+    await nseAfxMod.fetchNseQuotes();
+    afx = nseAfxMod.getQuoteForSymbol(symbol);
+  } catch (e) { /* afx optional */ }
+
+  if (afx && afx.price) {
+    return {
+      price: afx.price,
+      change: afx.change || 0,
+      changePercent: afx.changePercent || 0,
+      volume: afx.volume || 0,
+      dayHigh: afx.dayHigh || afx.price,
+      dayLow: afx.dayLow || afx.price,
+      previousClose: afx.previousClose || afx.price,
+      company_name: afx.name || afx.ticker || symbol,
+      timestamp: Math.floor(Date.now() / 1000),
+      lastUpdated: new Date().toISOString(),
+      provider: 'afx',
+    };
+  }
+
+  // 3) Apify (requires APIFY_API_KEY) — last-resort price source
+  if (process.env.APIFY_API_KEY) {
+    try {
+      const apifySvc = require('./apifyNseService');
+      await apifySvc.fetchNseQuotes();
+      const apify = apifySvc.getQuoteForSymbol(symbol);
+      if (apify && apify.price) {
+        return {
+          price: apify.price,
+          change: apify.change || 0,
+          changePercent: apify.changePercent || 0,
+          volume: apify.volume || 0,
+          dayHigh: apify.dayHigh || apify.price,
+          dayLow: apify.dayLow || apify.price,
+          previousClose: apify.previousClose || apify.price,
+          company_name: apify.name || apify.ticker || symbol,
+          timestamp: Math.floor(Date.now() / 1000),
+          lastUpdated: new Date().toISOString(),
+          provider: 'apify',
+        };
+      }
+    } catch (e) { /* apify optional */ }
+  }
+
+  return null;
+}
+
 async function getStockQuote(symbol) {
   if (!symbol) return null;
 
@@ -372,26 +452,11 @@ async function getStockQuote(symbol) {
 
   let quote = null;
 
-  // For NSE stocks, try mystocks first (it has change, marketCap, volume)
+  // For NSE stocks, resolve a quote from mystocks -> AFX -> Apify (price/marketCap)
   if (symbol.startsWith('NSE:')) {
-    const mystocks = require('./mystocksScraper');
-    const msq = await mystocks.getQuoteForSymbol(symbol);
-    if (msq) {
-      quote = {
-        price: msq.price,
-        change: msq.change || 0,
-        changesPercentage: msq.changePercent || 0,
-        changePercent: msq.changePercent || 0,
-        volume: msq.volume || 0,
-        marketCap: msq.marketCap || 0,
-        dayHigh: msq.dayHigh || msq.price,
-        dayLow: msq.dayLow || msq.price,
-        previousClose: msq.previousClose || msq.price,
-        company_name: msq.name || msq.ticker || symbol,
-        timestamp: Math.floor(Date.now() / 1000),
-        lastUpdated: new Date().toISOString(),
-        provider: 'mystocks',
-      };
+    const nseQuote = await getNseBaseQuote(symbol);
+    if (nseQuote) {
+      quote = nseQuote;
       await enrichVolumeFromAfx(quote, symbol);
     }
   }
@@ -429,21 +494,9 @@ async function fetchQuoteForSymbol(s) {
 
   if (s.startsWith('NSE:')) {
     try {
-      const msq = await withTimeout(mystocks.getQuoteForSymbol(s), 12000, s);
-      if (msq) {
-        quote = {
-          price: msq.price,
-          change: msq.change || 0,
-          changePercent: msq.changePercent || 0,
-          volume: msq.volume || 0,
-          dayHigh: msq.dayHigh || msq.price,
-          dayLow: msq.dayLow || msq.price,
-          previousClose: msq.previousClose || msq.price,
-          company_name: msq.name || msq.ticker || s,
-          timestamp: Math.floor(Date.now() / 1000),
-          lastUpdated: new Date().toISOString(),
-          provider: 'mystocks',
-        };
+      const nseQuote = await withTimeout(getNseBaseQuote(s), 12000, s);
+      if (nseQuote) {
+        quote = nseQuote;
         try { await withTimeout(enrichVolumeFromAfx(quote, s), 8000, s + ':afx'); }
         catch (e) { /* afx volume is optional */ }
       }
