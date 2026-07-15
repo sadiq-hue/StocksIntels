@@ -23,11 +23,18 @@ function normalize(summary, rawSymbol) {
   if (!summary || summary.price == null) return null;
   const price = Number(summary.price);
   if (!price || isNaN(price)) return null;
+  const change = Number(summary.change) || 0;
+  // API returns changePct as a FRACTION (e.g. 0.00565 = 0.565%); the rest of the
+  // app and the UI expect a PERCENTAGE, so convert. Derive from change if absent.
+  let changePct = Number(summary.changePct);
+  if (changePct && !isNaN(changePct)) changePct = changePct * 100;
+  else if (change && price) changePct = (change / (price - change)) * 100;
+  else changePct = 0;
   return {
     price,
-    change: Number(summary.change) || 0,
-    changesPercentage: Number(summary.changePct) || 0,
-    changePercent: Number(summary.changePct) || 0,
+    change,
+    changesPercentage: changePct,
+    changePercent: changePct,
     volume: Number(summary.volume) || 0,
     marketCap: Number(summary.marketCap) || 0, // not in quote payload; buildLocalNseReport computes price*shares
     open: Number(summary.open) || price,
