@@ -408,8 +408,9 @@ function buildPrompt(text) {
     ? `- total_revenue: "Gross written premium" or "Gross earned premium" or "Net earned premium" or "Insurance revenue" or "Total premium income" or "Premium income" for insurers (NOT claims)
 - cost_of_revenue: "Net claims incurred" or "Claims incurred" or "Net claims" for insurers`
     : sector === 'banking/financial'
-    ? `- total_revenue: "Total operating income" (net interest income + non-interest income) for banks
-- cost_of_revenue: "Total interest expenses" or "Interest expense" for banks`
+    ? `- total_revenue: "Total interest income" (gross interest income from loans, government securities, deposits and placements) for banks
+- cost_of_revenue: "Total interest expense" or "Interest expense" for banks (gross_profit = revenue - cost_of_revenue = Net Interest Income)
+- operating_income: "Profit before tax" for banks`
     : `- total_revenue: Total revenue or sales
 - cost_of_revenue: Cost of revenue, cost of sales, or direct costs`;
   return `Extract ALL 14 financial metrics from this Nairobi Stock Exchange financial statement. Sector: ${sector}.
