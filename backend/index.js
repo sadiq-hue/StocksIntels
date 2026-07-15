@@ -24,7 +24,7 @@ const cron = require('node-cron');
 const {
   getCompanyProfile, getQuote, getIncomeStatement, getBalanceSheet,
   getCashFlowStatement, getKeyMetrics, getDividendHistory, getFinancialReport,
-  ensureTTMValues, simfinService, clearCache: clearFinancialCache
+  ensureTTMValues, clearCache: clearFinancialCache
 } = require('./financialReportsService');
 const brokerService = require('./services/brokerService');
 const { fetchAnalystData } = require('./analystService');
@@ -3614,8 +3614,8 @@ app.get('/api/signal/:symbol', async (req, res) => {
   try {
     const symbol = req.params.symbol.toUpperCase();
     const signal = await getSignalForStock(symbol);
-    if (!signal) return res.status(404).json({ error: 'No signal found' });
-    res.json(signal);
+    if (!signal) return res.json({ signal: null, found: false });
+    res.json({ ...signal, found: true });
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
   }
@@ -4711,8 +4711,9 @@ app.post('/api/notifications/read-all', async (req, res) => {
 // --- Financial Reports Routes ---
 app.get('/api/financials/status', async (req, res) => {
   try {
-    const edgarStatus = require('./edgarService').getProviderStatus();
-    const simfinStatus = simfinService.getProviderStatus();
+    const safeStatus = (fn, fallback) => { try { return fn(); } catch { return fallback; } };
+    const edgarStatus = safeStatus(() => require('./edgarService').getProviderStatus(), { edgarConfigured: false, edgarApiKeyConfigured: false });
+    const simfinStatus = safeStatus(() => require('./simfinService').getProviderStatus(), { simfinConfigured: false, simfinApiKeyConfigured: false });
     const fmpApiKey = process.env.FMP_API_KEY || '';
     res.json({
       providerConfigured: Boolean(fmpApiKey),
@@ -5716,7 +5717,10 @@ app.get('/api/stock/:symbol/history', async (req, res) => {
       new Promise(resolve => setTimeout(() => resolve(null), 15000)),
     ]);
     if (!bars || bars.length === 0) {
-      return res.status(404).json({ error: 'No historical data found' });
+      // No historical data available (e.g. NSE symbol without Yahoo coverage).
+      // Return an empty 200 instead of 404 so the chart degrades gracefully
+      // without throwing in the client's fetch helper.
+      return res.json({ symbol: upper, bars: [], count: 0 });
     }
     res.json({ symbol: upper, bars, count: bars.length });
   } catch (error) {

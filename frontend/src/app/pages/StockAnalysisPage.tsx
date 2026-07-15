@@ -701,14 +701,17 @@ export function StockAnalysisPage() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <button
+                          <span
+                            role="button"
+                            tabIndex={0}
                             onClick={(e) => { e.stopPropagation(); toggleFavorite(stock.ticker); }}
-                            className={`shrink-0 transition-colors ${
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleFavorite(stock.ticker); } }}
+                            className={`shrink-0 cursor-pointer transition-colors ${
                               isActive ? "text-yellow-300" : "text-muted-foreground hover:text-yellow-500"
                             }`}
                           >
                             <Star className={`size-3 ${favorites.includes(stock.ticker) ? "fill-current" : ""}`} />
-                          </button>
+                          </span>
                           <div className="min-w-0">
                             <div className={`text-sm font-semibold truncate ${isActive ? "text-white" : "text-foreground"}`}>
                               {stock.ticker}

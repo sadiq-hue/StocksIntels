@@ -25,6 +25,19 @@ async function testConnection() {
   return result.rows[0];
 }
 
+// Keep the connection pool warm. The first DB query after a cold start (or after
+// the pool's idleTimeoutMillis elapses) pays a ~2s Postgres connection-
+// establishment cost, which makes the financials page feel slow on first load.
+// Pre-warm a couple of connections at boot and ping the pool on an interval
+// shorter than idleTimeoutMillis so an interactive user never hits a cold
+// connection for a single-stock lookup.
+function keepAlivePing() { pool.query('SELECT 1').catch(() => {}); }
+keepAlivePing();
+keepAlivePing();
+const keepAliveMs = Math.max(5000, (Number(process.env.DB_POOL_IDLE || 30000)) - 5000);
+const keepAliveTimer = setInterval(keepAlivePing, keepAliveMs);
+if (typeof keepAliveTimer.unref === 'function') keepAliveTimer.unref();
+
 module.exports = {
   pool,
   testConnection

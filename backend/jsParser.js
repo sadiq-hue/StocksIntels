@@ -400,10 +400,14 @@ function extractPdfText(buffer) {
 }
 
 function buildPrompt(text) {
+  const isInsurance = /\binsurance\b/i.test(text);
   const sector =
     text.match(/\b(bank|banking|financial\s+services?|fintech|insurance|sacco|microfinance)\b/i)
-    ? 'banking/financial' : 'general corporate';
-  const incomeNote = sector === 'banking/financial'
+    ? (isInsurance ? 'insurance' : 'banking/financial') : 'general corporate';
+  const incomeNote = sector === 'insurance'
+    ? `- total_revenue: "Gross written premium" or "Gross earned premium" or "Net earned premium" or "Insurance revenue" or "Total premium income" or "Premium income" for insurers (NOT claims)
+- cost_of_revenue: "Net claims incurred" or "Claims incurred" or "Net claims" for insurers`
+    : sector === 'banking/financial'
     ? `- total_revenue: "Total operating income" (net interest income + non-interest income) for banks
 - cost_of_revenue: "Total interest expenses" or "Interest expense" for banks`
     : `- total_revenue: Total revenue or sales

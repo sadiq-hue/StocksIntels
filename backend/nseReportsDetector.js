@@ -25,11 +25,11 @@ const MAX_PDF_BYTES = 25 * 1024 * 1024;
 const NSE_NAMES = {
   ABSA: 'ABSA Bank Kenya Plc', ALP: 'Africa Logistics Properties Industrial I-REIT', AMAC: 'Africa Mega Agricorp Plc',
   ARM: 'ARM Cement Plc', BAMB: 'Bamburi Cement', BAT: 'British American Tobacco Kenya Plc', BKG: 'BK Group Plc',
-  BOC: 'BOC Kenya Plc', BRIT: 'Britam Holdings Plc', CABL: 'East African Cables Plc', CARB: 'Carbacid Investments Plc',
-  CGEN: 'Car and General (K)', CIC: 'CIC Insurance Group', COOP: 'Co-operative Bank of Kenya', CRWN: 'Crown Paints Kenya Plc',
+  BBK: 'Bank of Baroda (K) Ltd', BOC: 'BOC Kenya Plc', BRIT: 'Britam Holdings Plc', CABL: 'East African Cables Plc', CARB: 'Carbacid Investments Plc',
+  CGEN: 'Car and General (K)', CFCI: 'CFC Insurance Holdings Ltd', CIC: 'CIC Insurance Group', COOP: 'Co-operative Bank of Kenya', CRWN: 'Crown Paints Kenya Plc',
   CTUM: 'Centum Investment Company Plc', DCON: 'Deacons (East Africa) Plc', DTK: 'Diamond Trust Bank Kenya',
   EABL: 'East African Breweries', EGAD: 'Eaagads', EQTY: 'Equity Group Holdings Plc', EVRD: 'Eveready East Africa',
-  FTGH: 'Flame Tree Group Holdings', GLD: 'ABSA NewGold ETF', HAFR: 'Home Afrika', HBE: 'Homeboyz Entertainment Plc',
+  FTGH: 'Flame Tree Group Holdings', GLD: 'ABSA NewGold ETF',   HAFC: 'HF Group PLC', HAFR: 'Home Afrika', HBE: 'Homeboyz Entertainment Plc',
   HFCK: 'HFCB Group Plc', IMH: 'I & M Holdings Plc', JUB: 'Jubilee Holdings', KAPC: 'Kapchorua Tea Kenya Plc',
   KCB: 'KCB Group Plc', KEGN: 'Kenya Electricity Generating Company Plc', KNRE: 'Kenya Re-Insurance Corporation',
   KPC: 'Kenya Pipeline Company Plc', KPLC: 'Kenya Power and Lighting Company Plc', KQ: 'Kenya Airways Plc',
@@ -38,7 +38,7 @@ const NSE_NAMES = {
   NCBA: 'NCBA Group Plc', NMG: 'Nation Media Group Plc', NSE: 'Nairobi Securities Exchange Plc', OCH: 'Olympia Capital Holdings',
   PORT: 'East African Portland Cement', SASN: 'Sasini Plc', SBIC: 'Stanbic Holdings Plc', SCAN: 'WPP ScanGroup Plc',
   SCBK: 'Standard Chartered Bank Kenya', SCOM: 'Safaricom Plc', SGL: 'Standard Group Plc', SKL: 'Shri Krishana Overseas Plc',
-  SLAM: 'Sanlam Allianz Holdings (Kenya) Plc', SMER: 'Sameer Africa Plc', SMWF: 'Satrix MSCI World Feeder ETF',
+  SLAM: 'Sanlam Kenya Plc', SMER: 'Sameer Africa Plc', SMWF: 'Satrix MSCI World Feeder ETF',
   TCL: 'Trans-Century Plc', TOTL: 'TotalEnergies Marketing Kenya Plc', TPSE: 'TPS Eastern Africa (Serena)',
   UCHM: 'Uchumi Supermarket Plc', UMME: 'Umeme', UNGA: 'Unga Group', WTK: 'Williamson Tea Kenya Plc', XPRS: 'Express Kenya Plc',
 };
@@ -77,8 +77,15 @@ const MANUAL = {
   HFCK: ['hf group', 'hfgroup', 'hfcb group'],
   BKG: ['bk group', 'bk group plc'],
   GLD: ['newgold', 'new gold etf'],
-  SLAM: ['sanlam allianz', 'sanlam allianz holdings'],
+  SLAM: ['sanlam allianz', 'sanlam allianz holdings', 'sanlam kenya', 'sanlam kenya plc'],
   CGEN: ['car general', 'car general kenya'],
+  CTUM: ['centum'],
+  KEGN: ['kengen', 'kenya electricity generating'],
+  KPLC: ['kenya power', 'kenya power lighting'],
+  TPRI: ['tps', 'serena'],
+  BBK: ['baroda', 'bank of baroda'],
+  CFCI: ['cfc insurance'],
+  HAFC: ['hf group plc'],
 };
 for (const [ticker, list] of Object.entries(MANUAL)) list.forEach(a => addAlias(ticker, a));
 

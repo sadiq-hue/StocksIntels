@@ -548,9 +548,43 @@ async function buildLocalNseReport(symbol) {
   }
 }
 
+// Detect NSE-listed stocks so we never fall through to Yahoo Finance / SEC EDGAR
+// (which have no NSE coverage). Matches the `NSE:` prefix or a stocks row with market='NSE'.
+async function isNseStock(symbol) {
+  let ticker = symbol;
+  if (ticker.startsWith('NSE:')) ticker = ticker.slice(4);
+  try {
+    const r = await pool.query(
+      'SELECT 1 FROM stocks WHERE UPPER(ticker) = $1 AND market = $2 LIMIT 1',
+      [ticker, 'NSE']
+    );
+    return r.rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function getFinancialReport(symbol, period = 'annual', limit = 4, providerOverride = null) {
   try {
     const isUs = edgarService.isUsStock(symbol);
+
+    // NSE-listed stocks: serve local NSE data only. Yahoo Finance / SEC EDGAR have
+    // no NSE coverage, so falling through to them just produces a failed Yahoo fetch
+    // (or wrong US data) instead of the authoritative NSE source.
+    const isNse = symbol.toUpperCase().startsWith('NSE:') || await isNseStock(symbol);
+    if (isNse) {
+      const nseLocal = await buildLocalNseReport(symbol);
+      if (nseLocal) return nseLocal;
+      const clean = symbol.toUpperCase().startsWith('NSE:') ? symbol.slice(4) : symbol;
+      return {
+        success: false,
+        symbol: clean,
+        source: 'nse-upload',
+        availableProviders: ['nse-upload'],
+        error: `No NSE financial data available yet for ${clean}.`,
+      };
+    }
+
     const activeProvider = providerOverride || FINANCIALS_PROVIDER;
 
     // For stocks with locally uploaded financial data (e.g. JSON upload for NSE),
