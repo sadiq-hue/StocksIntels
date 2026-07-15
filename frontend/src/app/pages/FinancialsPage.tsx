@@ -80,6 +80,20 @@ function getDividendFrequency(history: { date?: string | null }[]): string {
   return "Annual";
 }
 
+function findPriorYearPeriod(items, idx) {
+  const base = items[idx];
+  if (!base || !base.date) return null;
+  const baseMonth = new Date(base.date).getMonth();
+  const baseType = base.periodType;
+  for (let j = idx + 1; j < items.length; j++) {
+    const d = new Date(items[j].date);
+    if (d.getMonth() !== baseMonth) continue;
+    if (baseType && items[j].periodType && items[j].periodType !== baseType) continue;
+    return items[j];
+  }
+  return null;
+}
+
 const PROVIDER_LABELS: Record<string, { label: string; color: string }> = {
   "sec-edgar": { label: "SEC EDGAR", color: "bg-blue-100 text-blue-800" },
   simfin: { label: "SimFin", color: "bg-orange-100 text-orange-800" },
@@ -98,10 +112,13 @@ function HorizontalStatementTable({ data, metrics, currency }: { data: any[]; me
       <table className="w-full text-sm text-right border-collapse">
         <thead>
           <tr className="bg-muted border-b border-border">
-            <th className="text-left p-3.5 font-bold text-muted-foreground uppercase tracking-wider sticky left-0 bg-muted z-10 w-56 border-r border-border text-[11px]">Fiscal Year</th>
-            {data.map((item, i) => (
-              <th key={i} className="p-3.5 font-bold text-foreground whitespace-nowrap text-xs">FY {new Date(item.date).getFullYear()}</th>
-            ))}
+              <th className="text-left p-3.5 font-bold text-muted-foreground uppercase tracking-wider sticky left-0 bg-muted z-10 w-56 border-r border-border text-[11px]">Period</th>
+              {data.map((item, i) => {
+                const d = new Date(item.date);
+                const yr = d.getFullYear();
+                const label = item.periodType === 'annual' ? `FY ${yr}` : `Q${Math.floor(d.getMonth() / 3) + 1} ${yr}`;
+                return <th key={i} className="p-3.5 font-bold text-foreground whitespace-nowrap text-xs">{label}</th>;
+              })}
           </tr>
           <tr className="bg-card border-b border-border">
             <th className="text-left p-3.5 font-medium text-muted-foreground sticky left-0 bg-card z-10 border-r border-border text-[11px]">Period Ending</th>
@@ -130,9 +147,9 @@ function HorizontalStatementTable({ data, metrics, currency }: { data: any[]; me
                 <tr className="border-b border-border bg-muted/50">
                   <td className="text-left p-2.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider sticky left-0 bg-muted/50 z-10 border-r border-border">Growth (YoY)</td>
                   {data.map((item, i) => {
-                    const nextItem = data[i + 1];
-                    if (!nextItem || !item[m.key] || !nextItem[m.key]) return <td key={i} className="p-2.5 text-muted-foreground text-[11px]">—</td>;
-                    const growth = ((item[m.key] - nextItem[m.key]) / nextItem[m.key]) * 100;
+                    const prior = findPriorYearPeriod(data, i);
+                    if (!prior || !item[m.key] || !prior[m.key] || prior[m.key] === 0) return <td key={i} className="p-2.5 text-muted-foreground text-[11px]">—</td>;
+                    const growth = ((item[m.key] - prior[m.key]) / prior[m.key]) * 100;
                     return (
                       <td key={i} className={`p-2.5 font-bold text-[11px] ${growth >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {growth >= 0 ? '+' : ''}{growth.toFixed(2)}%
