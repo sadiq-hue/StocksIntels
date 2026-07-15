@@ -5020,6 +5020,31 @@
       "error_message": null,
       "processed_by": "js:mistral",
       "parsed_at": "2026-07-14 18:56:34.621+03"
+    },
+    {
+      "ticker": "NCBA",
+      "period_type": "annual",
+      "period_end_date": "2025-12-31",
+      "file_name": "NCBA-Group-Plc-Audited-Financial-Results-of-the-Group-and-Bank-for-the-year-ended-31st-December-2025-1.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "total_revenue": 73329654000,
+        "cost_of_revenue": 24053335000,
+        "operating_income": 27798618000,
+        "net_income": 23393518000,
+        "total_assets": 716047157000,
+        "total_liabilities": 588621591000,
+        "total_debt": 7565293000,
+        "shareholders_equity": 127425566000,
+        "retained_earnings": 89425201000,
+        "eps": 14.2,
+        "dividend_per_share": 7.1
+      },
+      "error_message": null,
+      "processed_by": "js:mistral",
+      "parsed_at": "2026-07-15T16:25:29.000Z"
     }
   ]
 }

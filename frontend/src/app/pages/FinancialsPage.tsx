@@ -407,6 +407,35 @@ export function FinancialsPage() {
   const activeSource = report?.source || "unknown";
   const availableProviders = (report?.availableProviders || ["yahoo-finance"]) as DataProvider[];
 
+  // NSE banks/financials report under banking terminology. Relabel the
+  // income-statement rows so "Cost of Revenue" → "Interest & Operating Expenses"
+  // and "Gross Profit" → "Net Interest Income" for those issuers (applies to all
+  // NSE financial-sector stocks, not just one ticker).
+  const isBank = profile?.exchange === 'NSE' && /bank|financial|insurance|investment|sacco|microfin|building society/i.test(
+    `${profile?.sector || ''} ${profile?.industry || ''} ${profile?.companyName || ''}`
+  );
+  const incomeMetrics = isBank
+    ? [
+        { label: "Revenue", key: "revenue", kind: "currency", calcGrowth: true },
+        { label: "Interest & Operating Expenses", key: "costOfRevenue", kind: "currency" },
+        { label: "Net Interest Income", key: "grossProfit", kind: "currency", calcGrowth: true },
+        { label: "Operating Expenses", key: "operatingExpenses", kind: "currency" },
+        { label: "Operating Income", key: "operatingIncome", kind: "currency", calcGrowth: true },
+        { label: "Net Income", key: "netIncome", kind: "currency", calcGrowth: true },
+        { label: "EPS (Diluted)", key: "eps", kind: "number" },
+        { label: "EBITDA", key: "ebitda", kind: "currency" },
+      ]
+    : [
+        { label: "Revenue", key: "revenue", kind: "currency", calcGrowth: true },
+        { label: "Cost of Revenue", key: "costOfRevenue", kind: "currency" },
+        { label: "Gross Profit", key: "grossProfit", kind: "currency", calcGrowth: true },
+        { label: "Operating Expenses", key: "operatingExpenses", kind: "currency" },
+        { label: "Operating Income", key: "operatingIncome", kind: "currency", calcGrowth: true },
+        { label: "Net Income", key: "netIncome", kind: "currency", calcGrowth: true },
+        { label: "EPS (Diluted)", key: "eps", kind: "number" },
+        { label: "EBITDA", key: "ebitda", kind: "currency" },
+      ];
+
   // Auto-sync provider only after data loads (e.g. switching to a stock that doesn't support sec-edgar)
   useEffect(() => {
     if (report && availableProviders.length > 0 && !availableProviders.includes(provider)) {
@@ -757,16 +786,7 @@ export function FinancialsPage() {
           {/* ═══ INCOME STATEMENT ═══ */}
           <TabsContent value="income" className="mt-0 outline-none">
             <HorizontalStatementTable currency={profile?.currency || "USD"}
-              metrics={[
-                { label: "Revenue", key: "revenue", kind: "currency", calcGrowth: true },
-                { label: "Cost of Revenue", key: "costOfRevenue", kind: "currency" },
-                { label: "Gross Profit", key: "grossProfit", kind: "currency", calcGrowth: true },
-                { label: "Operating Expenses", key: "operatingExpenses", kind: "currency" },
-                { label: "Operating Income", key: "operatingIncome", kind: "currency", calcGrowth: true },
-                { label: "Net Income", key: "netIncome", kind: "currency", calcGrowth: true },
-                { label: "EPS (Diluted)", key: "eps", kind: "number" },
-                { label: "EBITDA", key: "ebitda", kind: "currency" },
-              ]}
+              metrics={incomeMetrics}
               data={incHistory} />
           </TabsContent>
 
