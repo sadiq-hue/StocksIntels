@@ -373,7 +373,7 @@ async function getNseBaseQuote(symbol) {
     msq = await mysticks.getQuoteForSymbol(symbol);
   } catch (e) { /* mystocks optional / may be absent */ }
 
-  if (msq && msq.price) {
+  if (msq && Number(msq.price) > 0) {
     return {
       price: msq.price,
       change: msq.change || 0,
@@ -399,7 +399,7 @@ async function getNseBaseQuote(symbol) {
     afx = nseAfxMod.getQuoteForSymbol(symbol);
   } catch (e) { /* afx optional */ }
 
-  if (afx && afx.price) {
+  if (afx && Number(afx.price) > 0) {
     return {
       price: afx.price,
       change: afx.change || 0,
@@ -421,7 +421,7 @@ async function getNseBaseQuote(symbol) {
       const apifySvc = require('./apifyNseService');
       await apifySvc.fetchNseQuotes();
       const apify = apifySvc.getQuoteForSymbol(symbol);
-      if (apify && apify.price) {
+      if (apify && Number(apify.price) > 0) {
         return {
           price: apify.price,
           change: apify.change || 0,

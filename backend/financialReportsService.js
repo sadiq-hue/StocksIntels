@@ -151,7 +151,8 @@ async function getCompanyProfile(symbol) {
 async function getQuote(symbol) {
   const cacheKey = `${symbol}_quote`;
   const cached = cacheGet(cacheKey);
-  if (cached) return cached;
+  // A cached NSE quote with no price is useless (it masks a working fallback); don't serve it.
+  if (cached && !(symbol.startsWith('NSE:') && !cached.price)) return cached;
 
   // Fetch live quote and full stats in parallel for the most complete data
   const [marketQuote, tdResult] = await Promise.allSettled([
@@ -162,7 +163,7 @@ async function getQuote(symbol) {
   const td = tdResult.status === 'fulfilled' ? tdResult.value : null;
 
   if (mq || td) {
-    return cacheSet(cacheKey, {
+    const result = {
       symbol: symbol.toUpperCase(),
       price: mq?.price || td?.price || 0,
       change: mq?.change || 0,
@@ -183,7 +184,10 @@ async function getQuote(symbol) {
       currency: mq?.currency || td?.currency || 'USD',
       exchange: mq?.exchange || td?.exchange || 'Global',
       lastUpdated: new Date().toISOString(),
-    });
+    };
+    // Don't cache NSE quotes that failed to resolve a price — let the next call retry the fallback chain.
+    if (!(symbol.startsWith('NSE:') && !result.price)) cacheSet(cacheKey, result);
+    return result;
   }
 
   // Last-resort fallback: Yahoo proxy
