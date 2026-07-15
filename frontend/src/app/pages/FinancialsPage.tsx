@@ -287,6 +287,7 @@ export function FinancialsPage() {
   const [yahooSuggesting, setYahooSuggesting] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const yahooSuggestRef = useRef<ReturnType<typeof setTimeout>>();
+  const lastFetchedSymbol = useRef<string>(selectedSymbol);
   const { getQuote } = useRealtimeQuotes();
   const contextSymbol = selectedMarket === "nse" ? `NSE:${selectedSymbol}` : selectedSymbol;
   const liveQuote = getQuote(contextSymbol);
@@ -342,6 +343,12 @@ export function FinancialsPage() {
 
   useEffect(() => {
     let active = true;
+    // Clear the previously-viewed stock's report so we never display stale
+    // data (e.g. AAPL's Yahoo figures) while the new symbol loads or if it fails.
+    if (selectedSymbol !== lastFetchedSymbol.current) {
+      setReport(null);
+      lastFetchedSymbol.current = selectedSymbol;
+    }
     setIsLoading(true);
     setError(null);
     const limit = period === "annual" ? 4 : 6;
@@ -351,7 +358,12 @@ export function FinancialsPage() {
         if (!payload.success) throw new Error(payload.error || "Unable to load financial report");
         setReport(payload);
       })
-      .catch((err: Error) => { if (!active) return; setError(err.message || "Failed to load financial report"); })
+      .catch((err: Error) => {
+        if (!active) return;
+        // Only drop the report if it belongs to a different symbol (keep it on a same-symbol refresh failure)
+        setReport((prev) => (prev && prev.symbol !== selectedSymbol ? prev : null));
+        setError(err.message || "Failed to load financial report");
+      })
       .finally(() => { if (!active) return; setIsLoading(false); setIsRefreshing(false); });
 
     setFilingsLoading(true);
