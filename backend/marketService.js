@@ -363,10 +363,36 @@ async function enrichVolumeFromAfx(quote, symbol) {
 }
 
 // Resolve an NSE quote by trying multiple sources in order:
-//   mystocks.co.ke (has marketCap/change/volume) -> AFX (afx.kwayisi.org, free) -> Apify (needs key)
+//   mystocks.africa Partner API (authoritative, delayed) -> mystocks.co.ke scraper
+//   -> AFX (afx.kwayisi.org, free) -> Apify (needs key)
 // Lazy-requires each module so a missing/optional scraper never crashes boot.
 async function getNseBaseQuote(symbol) {
-  // 1) mystocks.co.ke — primary (has marketCap, change, volume)
+  // 0) mystocks.africa Partner API — primary, authoritative live (delayed) quotes
+  if (process.env.MYSTOCKS_AFRICA_API_KEY) {
+    try {
+      const msa = require('./mystocksAfricaApi');
+      const msaQ = await msa.getQuoteForSymbol(symbol);
+      if (msaQ && Number(msaQ.price) > 0) {
+        return {
+          price: msaQ.price,
+          change: msaQ.change || 0,
+          changesPercentage: msaQ.changePercent || 0,
+          changePercent: msaQ.changePercent || 0,
+          volume: msaQ.volume || 0,
+          marketCap: msaQ.marketCap || 0,
+          dayHigh: msaQ.dayHigh || msaQ.price,
+          dayLow: msaQ.dayLow || msaQ.price,
+          previousClose: msaQ.previousClose || msaQ.price,
+          company_name: msaQ.company_name || symbol,
+          timestamp: Math.floor(Date.now() / 1000),
+          lastUpdated: new Date().toISOString(),
+          provider: 'mystocksAfrica',
+        };
+      }
+    } catch (e) { /* fall through to other sources */ }
+  }
+
+  // 1) mystocks.co.ke — fallback (has marketCap, change, volume)
   let msq = null;
   try {
     const mysticks = require('./mysticksScraper');
