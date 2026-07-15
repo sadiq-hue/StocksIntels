@@ -116,7 +116,10 @@ function HorizontalStatementTable({ data, metrics, currency }: { data: any[]; me
               {data.map((item, i) => {
                 const d = new Date(item.date);
                 const yr = d.getFullYear();
-                const label = item.periodType === 'annual' ? `FY ${yr}` : `Q${Math.floor(d.getMonth() / 3) + 1} ${yr}`;
+                const pt = item.periodType;
+                const isQuarterly = pt === 'quarterly' || pt === '3M';
+                const isTtm = pt === 'TTM';
+                const label = isTtm ? `TTM ${yr}` : isQuarterly ? `Q${Math.floor(d.getMonth() / 3) + 1} ${yr}` : `FY ${yr}`;
                 return <th key={i} className="p-3.5 font-bold text-foreground whitespace-nowrap text-xs">{label}</th>;
               })}
           </tr>
