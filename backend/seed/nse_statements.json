@@ -4549,6 +4549,50 @@
       "parsed_at": "2026-07-16 13:00:00.000000+03"
     },
     {
+      "ticker": "SASN",
+      "period_type": "annual",
+      "period_end_date": "2025-09-30",
+      "file_name": "Sasini-PLC-Annual-Report-And-Financial-Statement-Year-Ended-30.09.2025.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 0.85,
+        "net_income": 188010000,
+        "total_revenue": 8440492000,
+        "cost_of_revenue": 7430000000,
+        "operating_income": 407600000,
+        "dividend_per_share": 0,
+        "total_assets": 17500000000,
+        "shareholders_equity": 14600000000
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 13:05:00.000000+03"
+    },
+    {
+      "ticker": "SASN",
+      "period_type": "quarterly",
+      "period_end_date": "2026-03-31",
+      "file_name": "Sasini-Plc-Half-Year-Results-Unaudited-2026.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": -0.75,
+        "net_income": -170800000,
+        "total_revenue": 3010000000,
+        "cost_of_revenue": 2393000000,
+        "operating_income": -141830000,
+        "dividend_per_share": 0,
+        "total_assets": 17600000000,
+        "shareholders_equity": 14400000000
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 13:06:00.000000+03"
+    },
+    {
       "ticker": "SBIC",
       "period_type": "annual",
       "period_end_date": "2021-12-30",
