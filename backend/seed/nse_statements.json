@@ -5833,6 +5833,25 @@
       "parsed_at": "2026-07-16 14:35:00.000000+03"
     },
     {
+      "ticker": "WTK",
+      "period_type": "annual",
+      "period_end_date": "2026-03-31",
+      "file_name": "Williamson-Tea-Kenya-Plc-Audited-Results-Year-Ended-31-Mar-2026.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 3.31,
+        "net_income": 120800000,
+        "total_revenue": 3400000000,
+        "operating_income": -41500000,
+        "dividend_per_share": 15
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 15:00:00.000000+03"
+    },
+    {
       "ticker": "XPRS",
       "period_type": "annual",
       "period_end_date": "2021-12-30",
