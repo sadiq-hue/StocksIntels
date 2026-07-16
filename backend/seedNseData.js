@@ -68,13 +68,18 @@ async function seedNseData({ force = false } = {}) {
     }
 
     const dup = await pool.query(
-      `SELECT 1 FROM financial_statements
+      `SELECT id, status FROM financial_statements
        WHERE stock_id = $1
          AND (period_end_date AT TIME ZONE 'Africa/Nairobi')::date = $2::date
          AND period_type = $3 LIMIT 1`,
       [stockId, st.period_end_date, st.period_type]
     );
     if (dup.rows.length > 0) {
+      if (dup.rows[0].status === 'pending_review') {
+        console.log(`[seedNseData] Skipping ${st.ticker} ${st.period_type} ${st.period_end_date}: pending_review exists, won't overwrite`);
+        skipped++;
+        continue;
+      }
       const upd = await pool.query(
         `UPDATE financial_statements SET
            parsed_data = $1,
