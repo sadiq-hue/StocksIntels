@@ -416,7 +416,11 @@ export function FinancialsPage() {
   const isExchange = /securities exchange|stock exchange|bourse/i.test(
     `${profile?.companyName || ''} ${profile?.industry || ''} ${profile?.sector || ''}`
   );
-  const isBank = !isExchange && profile?.exchange === 'NSE' && /bank|financial|insurance|investment|sacco|microfin|building society/i.test(
+  // Investment HOLDING companies (e.g. Olympia Capital) and exchange operators
+  // are not lenders: they have no interest margins, so banking labels are wrong.
+  const nonBankTickers = new Set(['NSE', 'OCH']);
+  const isNonBankTicker = nonBankTickers.has((selectedSymbol || '').toUpperCase());
+  const isBank = !isExchange && !isNonBankTicker && profile?.exchange === 'NSE' && /bank|financial|insurance|investment|sacco|microfin|building society/i.test(
     `${profile?.sector || ''} ${profile?.industry || ''} ${profile?.companyName || ''}`
   );
   const incomeMetrics = isBank
