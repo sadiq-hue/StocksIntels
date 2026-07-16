@@ -1289,7 +1289,7 @@
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": 121.5,
+        "eps": 1.21,
         "net_income": 7145846000,
         "total_debt": 60050674000,
         "total_assets": 714071934000,
@@ -1299,7 +1299,7 @@
         "operating_income": 8911846000,
         "retained_earnings": 119459897000,
         "total_liabilities": 588959298000,
-        "dividend_per_share": 15,
+        "dividend_per_share": 0,
         "current_liabilities": 174497280000,
         "shareholders_equity": 127099178000
       },
@@ -1343,18 +1343,20 @@
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "net_income": 39885253000,
+        "net_income": 29754529000,
         "total_debt": 61697075000,
         "total_assets": 827552327000,
         "total_revenue": 93137204000,
         "current_assets": 16245290000,
         "cost_of_revenue": 30286442000,
-        "operating_income": 39885253000,
+        "operating_income": 40287435000,
         "retained_earnings": 143705139000,
         "total_liabilities": 661318375000,
         "dividend_per_share": 2.5,
         "current_liabilities": 78957000,
-        "shareholders_equity": 165976952000
+        "shareholders_equity": 165976952000,
+        "eps": 5.04,
+        "shares_outstanding": 5867180000
       },
       "error_message": null,
       "processed_by": "js:mistral",
@@ -5084,6 +5086,25 @@
         "dividend_per_share": 5.75,
         "total_assets": 1970992243000,
         "shareholders_equity": 309503855000
+      }
+    },
+    {
+      "ticker": "COOP",
+      "period_end_date": "2024-12-30",
+      "period_type": "annual",
+      "status": "completed",
+      "source": "nse-upload",
+      "file_name": "COOP-FY2024-audited",
+      "parsed_data": {
+        "period_end_date": "2024-12-30",
+        "period_type": "annual",
+        "total_revenue": 75400000000,
+        "cost_of_revenue": 23880000000,
+        "operating_income": 34780319000,
+        "net_income": 25456345000,
+        "eps": 4.33,
+        "dividend_per_share": 1.5,
+        "shares_outstanding": 5867180000
       }
     }
   ]
