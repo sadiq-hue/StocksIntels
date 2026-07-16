@@ -5154,8 +5154,8 @@
         "total_assets": 47030094000,
         "total_revenue": 74710464000,
         "current_assets": 32554796000,
-        "cost_of_revenue": 65909440000,
-        "operating_income": 3992919000,
+        "cost_of_revenue": 66523000000,
+        "operating_income": 3900000000,
         "retained_earnings": 16668532000,
         "total_liabilities": 18419271000,
         "dividend_per_share": 1.31,
@@ -5164,8 +5164,50 @@
         "cash_from_operations": 3617325000
       },
       "error_message": null,
-      "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14 18:57:40.385+03"
+      "processed_by": "js:audit-correction",
+      "parsed_at": "2026-07-16 12:00:00.000+03"
+    },
+    {
+      "ticker": "TOTL",
+      "period_type": "annual",
+      "period_end_date": "2022-12-30",
+      "file_name": "TotalEnergies-Marketing-Kenya-PLC-Audited-Financial-Statements-for-the-Year-Ended-31-Dec-2022.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 3.88,
+        "net_income": 2444327000,
+        "total_revenue": 102802000000,
+        "cost_of_revenue": 93888000000,
+        "operating_income": 4213000000,
+        "dividend_per_share": 1.31,
+        "cash_from_operations": 2890000000
+      },
+      "error_message": null,
+      "processed_by": "js:audit-correction",
+      "parsed_at": "2026-07-16 12:00:00.000+03"
+    },
+    {
+      "ticker": "TOTL",
+      "period_type": "annual",
+      "period_end_date": "2024-12-30",
+      "file_name": "TotalEnergies-Marketing-Kenya-PLC-Audited-Financial-Results-for-the-Year-Ended-31-Dec-2024.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 2.36,
+        "net_income": 1487433000,
+        "total_revenue": 114213000000,
+        "cost_of_revenue": 105989000000,
+        "operating_income": 4283000000,
+        "dividend_per_share": 1.92,
+        "cash_from_operations": 2070000000
+      },
+      "error_message": null,
+      "processed_by": "js:audit-correction",
+      "parsed_at": "2026-07-16 12:00:00.000+03"
     },
     {
       "ticker": "TOTL",
@@ -5176,14 +5218,14 @@
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": 4.48,
+        "eps": 4.8,
         "net_income": 3022924000,
         "total_debt": 7005257000,
         "total_assets": 75315472000,
         "total_revenue": 120718400000,
         "current_assets": 52736893000,
-        "cost_of_revenue": 35713605000,
-        "operating_income": 4619420000,
+        "cost_of_revenue": 108640000000,
+        "operating_income": 4958000000,
         "retained_earnings": 20486381000,
         "total_liabilities": 43090449000,
         "dividend_per_share": 1.92,
@@ -5205,13 +5247,13 @@
       "status": "completed",
       "parsed_data": {
         "eps": 3.45,
-        "net_income": 3170890000,
-        "total_debt": 2644270000,
+        "net_income": 2170880000,
+        "total_debt": 0,
         "total_assets": 65198218000,
-        "total_revenue": 154315367000,
+        "total_revenue": 104019000000,
         "current_assets": 31202361000,
-        "cost_of_revenue": 92041552000,
-        "operating_income": 3867500000,
+        "cost_of_revenue": 92863000000,
+        "operating_income": 5154000000,
         "retained_earnings": 21727252000,
         "total_liabilities": 31528876000,
         "dividend_per_share": 3.45,
@@ -5220,8 +5262,8 @@
         "cash_from_operations": 7646742000
       },
       "error_message": null,
-      "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14 18:56:29.116+03"
+      "processed_by": "js:audit-correction",
+      "parsed_at": "2026-07-16 12:00:00.000+03"
     },
     {
       "ticker": "TPSE",
