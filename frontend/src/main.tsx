@@ -2,6 +2,7 @@
   import { createRoot } from "react-dom/client";
 import { AuthProvider } from "./app/auth/AuthContext";
 import { ThemeProvider } from "next-themes";
+import { ErrorBoundary } from "./app/components/ErrorBoundary";
 
 // Global fetch interceptor: adds JWT Authorization header to all API requests
 const originalFetch = window.fetch;
@@ -37,7 +38,9 @@ createRoot(document.getElementById("root")!).render(
             <StockDataProvider>
               <PortfolioDataProvider>
                 <PaperTradingProvider>
-                  <App />
+                  <ErrorBoundary>
+                    <App />
+                  </ErrorBoundary>
                 </PaperTradingProvider>
               </PortfolioDataProvider>
             </StockDataProvider>
