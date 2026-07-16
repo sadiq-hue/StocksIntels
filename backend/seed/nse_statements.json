@@ -4915,8 +4915,8 @@
     },
     {
       "ticker": "UNGA",
-      "period_type": "annual",
-      "period_end_date": "2021-12-30",
+      "period_type": "quarterly",
+      "period_end_date": "2021-12-31",
       "file_name": "Unga-Group-Plc-Un-audited-Financial-Results-for-the-Six-Months-Ended-31-Dec-2021.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
@@ -4940,8 +4940,8 @@
     },
     {
       "ticker": "UNGA",
-      "period_type": "annual",
-      "period_end_date": "2023-12-30",
+      "period_type": "quarterly",
+      "period_end_date": "2023-12-31",
       "file_name": "Unga-Group-Plc-Unaudited-Financial-Results-for-the-Six-Months-Ended-31-Dec-2023.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
@@ -4966,8 +4966,8 @@
     },
     {
       "ticker": "UNGA",
-      "period_type": "annual",
-      "period_end_date": "2025-12-30",
+      "period_type": "quarterly",
+      "period_end_date": "2025-12-31",
       "file_name": "Unga-Group-Plc-Unaudited-Financial-Results-for-the-Six-Months-Ended-31-Dec-2025.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
@@ -4988,6 +4988,32 @@
       "error_message": null,
       "processed_by": "js:mistral",
       "parsed_at": "2026-07-14 19:04:02.812+03"
+    },
+    {
+      "ticker": "UNGA",
+      "period_type": "annual",
+      "period_end_date": "2025-06-30",
+      "file_name": "Unga-Group-Plc-Financial-Results-for-the-Year-Ended-30-June-2025.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 1.73,
+        "net_income": 222100000,
+        "total_assets": 11890000000,
+        "total_revenue": 26130000000,
+        "current_assets": 5190580000,
+        "operating_income": 699580000,
+        "retained_earnings": 3490000000,
+        "total_liabilities": 8390000000,
+        "dividend_per_share": 0,
+        "current_liabilities": 4109641000,
+        "shareholders_equity": 3490000000,
+        "cash_from_operations": 817421000
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 12:30:00.000000+03"
     },
     {
       "ticker": "WTK",
