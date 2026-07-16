@@ -232,6 +232,11 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3zm4 3h.01M12 8h.01M16 6h.01M8 14h.01M12 12h.01M16 10h.01M8 18h.01M12 16h.01M16 14h.01"/></svg>
         Stocks
       </div>
+      <div class="nav-item" data-tab="pending-reports" onclick="switchTab('pending-reports')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Pending Reports
+        <span id="prBadge" class="ml-auto text-xs"></span>
+      </div>
       <div class="nav-item" data-tab="upload-json" onclick="switchTab('upload-json')">
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 3v12"/></svg>
         Upload JSON
@@ -1050,6 +1055,32 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       </div>
     </div>
 
+    <!-- Tab: Pending Reports -->
+    <div id="tab-pending-reports" class="flex-1 hidden flex-col" style="min-height:0">
+      <div class="admin-header flex items-center justify-between shrink-0">
+        <h1 class="text-lg font-bold text-gray-900">Pending NSE Reports</h1>
+        <div class="flex items-center gap-3">
+          <span id="prCountBadge" class="text-sm text-gray-500"></span>
+          <button class="btn btn-primary text-xs py-1" onclick="fetchPendingReports()">
+            <svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+      <div class="flex-1 p-6" style="overflow-y:auto;min-height:0">
+        <div id="prEmptyState" class="hidden text-center py-16">
+          <svg class="size-16 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <p class="text-gray-500 font-medium">No pending reports</p>
+          <p class="text-gray-400 text-sm mt-1">All auto-detected NSE financial statements have been reviewed.</p>
+        </div>
+        <div id="prLoadingState" class="hidden text-center py-16">
+          <div class="size-6 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin mx-auto mb-3"></div>
+          <p class="text-sm text-gray-400">Loading pending reports...</p>
+        </div>
+        <div id="prList" class="space-y-4"></div>
+      </div>
+    </div>
+
     <!-- Tab: JSON Upload -->
     <div id="tab-upload-json" class="flex-1 hidden min-h-0 scroll p-6" style="background:#f9fafb">
       <div style="background:linear-gradient(135deg,#0D7490,#0EA5E9);border-radius:14px;padding:20px 24px;color:#fff;margin-bottom:20px;position:relative;overflow:hidden">
@@ -1748,6 +1779,7 @@ function switchTab(tab) {
   if (tab === 'chat') { fetchActiveChats(); initSocket(); }
   if (tab === 'payments') fetchPayments();
   if (tab === 'stocks') fetchStocks();
+  if (tab === 'pending-reports') fetchPendingReports();
   if (tab === 'signal-outcomes') fetchSignalOutcomes();
   if (tab === 'notifications') fetchNotifications();
   if (tab === 'followers') fetchFollowers();
@@ -1766,7 +1798,7 @@ function switchTab(tab) {
     }
   }
 }
-['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','engine','audit','settings'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
+['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','user-activity','engine','audit','settings'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
 
 // ── Dashboard ──
 async function fetchDashboard() {
@@ -3392,6 +3424,97 @@ async function fetchPayments() {
   } catch {}
 }
 
+// ── Pending Reports ──
+async function pollPendingCount() {
+  try {
+    const res = await fetch('/api/admin/financial-statements/pending');
+    if (res.ok) {
+      const data = await res.json();
+      const count = Array.isArray(data.items) ? data.items.length : 0;
+      const badge = document.getElementById('prBadge');
+      if (count > 0) {
+        badge.textContent = count;
+        badge.className = 'ml-auto text-xs font-semibold bg-red-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center';
+      } else {
+        badge.textContent = '';
+        badge.className = 'ml-auto text-xs';
+      }
+    }
+  } catch {}
+}
+
+async function fetchPendingReports() {
+  const list = document.getElementById('prList');
+  const empty = document.getElementById('prEmptyState');
+  const loading = document.getElementById('prLoadingState');
+  loading.classList.remove('hidden');
+  empty.classList.add('hidden');
+  list.innerHTML = '';
+  try {
+    const res = await fetch('/api/admin/financial-statements/pending');
+    if (!res.ok) { loading.classList.add('hidden'); list.innerHTML = '<div class="text-center py-8 text-red-500 text-sm">Failed to load: ' + res.status + '</div>'; return; }
+    const data = await res.json();
+    loading.classList.add('hidden');
+    const reports = data.items || data || [];
+    if (!Array.isArray(reports)) { list.innerHTML = '<div class="text-center py-8 text-red-500 text-sm">Unexpected response format</div>'; return; }
+    document.getElementById('prCountBadge').textContent = reports.length + ' pending';
+    if (reports.length === 0) { empty.classList.remove('hidden'); return; }
+    list.innerHTML = reports.map(r => {
+      const stmt = typeof r.parsed_data === 'string' ? JSON.parse(r.parsed_data) : (r.parsed_data || {});
+      const bs = stmt.balance_sheet || {};
+      const inc = stmt.income_statement || {};
+      const ps = stmt.per_share || {};
+      return `
+      <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-200">
+          <div class="flex items-center gap-3">
+            <span class="text-sm font-bold text-gray-900">${esc(r.ticker || '?')}</span>
+            <span class="text-xs text-gray-500">${esc(r.period_type || 'annual')}</span>
+            <span class="pill pill-verified">${esc(r.period_end_date ? new Date(r.period_end_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '')}</span>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-primary text-xs py-1" onclick="approveReport(${r.id})">Approve</button>
+            <button class="btn btn-danger text-xs py-1" onclick="rejectReport(${r.id})">Reject</button>
+          </div>
+        </div>
+        <div class="px-5 py-3 text-xs text-gray-600 space-y-1">
+          ${r.file_name ? '<p><span class="text-gray-400">Source:</span> ' + esc(r.file_name) + '</p>' : ''}
+          ${r.processed_by ? '<p><span class="text-gray-400">Processed by:</span> ' + esc(r.processed_by) + '</p>' : ''}
+          ${bs.total_assets ? '<p><span class="text-gray-400">Assets:</span> ' + Number(bs.total_assets).toLocaleString() + '</p>' : ''}
+          ${bs.total_liabilities ? '<p><span class="text-gray-400">Liabilities:</span> ' + Number(bs.total_liabilities).toLocaleString() + '</p>' : ''}
+          ${bs.shareholders_equity ? '<p><span class="text-gray-400">Equity:</span> ' + Number(bs.shareholders_equity).toLocaleString() + '</p>' : ''}
+          ${inc.total_revenue ? '<p><span class="text-gray-400">Revenue:</span> ' + Number(inc.total_revenue).toLocaleString() + '</p>' : ''}
+          ${inc.net_income_pat || inc.net_income ? '<p><span class="text-gray-400">Net Income:</span> ' + Number(inc.net_income_pat || inc.net_income).toLocaleString() + '</p>' : ''}
+          ${ps.earnings_per_share ? '<p><span class="text-gray-400">EPS:</span> ' + Number(ps.earnings_per_share).toFixed(2) + '</p>' : ''}
+          ${ps.dividend_per_share ? '<p><span class="text-gray-400">DPS:</span> ' + Number(ps.dividend_per_share).toFixed(2) + '</p>' : ''}
+          ${r.error_message ? '<p class="text-red-500">Error: ' + esc(r.error_message) + '</p>' : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    loading.classList.add('hidden');
+    list.innerHTML = '<div class="text-center py-8 text-red-500 text-sm">Error: ' + e.message + '</div>';
+  }
+}
+
+async function approveReport(id) {
+  if (!confirm('Approve this financial statement? It will be visible to all users.')) return;
+  try {
+    const res = await fetch('/api/admin/financial-statements/' + id + '/approve', { method: 'POST' });
+    if (res.ok) { toast('Report approved', 'success'); fetchPendingReports(); }
+    else { const e = await res.json(); toast(e.error || 'Failed to approve', 'error'); }
+  } catch { toast('Error approving report', 'error'); }
+}
+
+async function rejectReport(id) {
+  if (!confirm('Reject this financial statement? It will be removed.')) return;
+  try {
+    const res = await fetch('/api/admin/financial-statements/' + id + '/reject', { method: 'POST' });
+    if (res.ok) { toast('Report rejected', 'success'); fetchPendingReports(); }
+    else { const e = await res.json(); toast(e.error || 'Failed to reject', 'error'); }
+  } catch { toast('Error rejecting report', 'error'); }
+}
+
 // ── Stocks ──
 let stocksPage = 1;
 let stocksTotal = 0;
@@ -4526,7 +4649,7 @@ async function handleVerifyOtp() {
     toast('Welcome back, ' + (data.user.full_name || 'Admin'), 'success');
     // Restore tab from URL path
     const pathTab = location.pathname.replace('/admin/', '') || 'dashboard';
-    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','audit','settings'];
+    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','user-activity','audit','settings'];
     switchTab(validTabs.includes(pathTab) ? pathTab : 'dashboard');
     initSocket();
     setInterval(function(){ updateGreeting(); fetchDashboard(); }, 30000);
@@ -4535,6 +4658,8 @@ async function handleVerifyOtp() {
     setInterval(fetchSignalStats, 30000);
     setInterval(fetchNotifications, 30000);
     setInterval(fetchStocks, 60000);
+    setInterval(pollPendingCount, 60000);
+    pollPendingCount();
   } catch (e) {
     showLoginError('Network error. Is the server running?');
     btn.disabled = false; btn.textContent = 'Verify & Sign In';
@@ -4698,7 +4823,7 @@ async function fetchUserActivity(page) {
     initSocket();
     // Restore tab from URL path
     const pathTab = location.pathname.replace('/admin/', '') || 'dashboard';
-    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','signal-outcomes','notifications','followers','user-activity','audit','settings'];
+    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','user-activity','audit','settings'];
     const initialTab = validTabs.includes(pathTab) ? pathTab : 'dashboard';
     switchTab(initialTab);
     setInterval(function(){ updateGreeting(); fetchDashboard(); }, 30000);
@@ -4707,6 +4832,8 @@ async function fetchUserActivity(page) {
     setInterval(fetchSignalStats, 30000);
     setInterval(fetchNotifications, 30000);
     setInterval(fetchStocks, 60000);
+    setInterval(pollPendingCount, 60000);
+    pollPendingCount();
   }
 })();
 
