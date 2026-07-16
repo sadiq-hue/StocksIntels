@@ -2242,6 +2242,50 @@
       "parsed_at": "2026-07-14 18:46:05.373+03"
     },
     {
+      "ticker": "FTGH",
+      "period_type": "annual",
+      "period_end_date": "2024-12-30",
+      "file_name": "Flame-Tree-Group-Holdings-Ltd-Audited-Financial-Statements-for-the-Year-Ended-31-Dec-2024.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 1.13,
+        "net_income": 201800000,
+        "total_revenue": 4463000000,
+        "cost_of_revenue": 2711350287,
+        "operating_income": 470000000,
+        "shareholders_equity": 1216000000,
+        "dividend_per_share": 0,
+        "cash_from_operations": 157160000
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 12:40:00.000000+03"
+    },
+    {
+      "ticker": "FTGH",
+      "period_type": "annual",
+      "period_end_date": "2025-12-30",
+      "file_name": "Flame-Tree-Group-Holdings-Ltd-Audited-Financial-Statements-for-the-Year-Ended-31-Dec-2025.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": -0.09,
+        "net_income": -15900000,
+        "total_revenue": 4229969673,
+        "cost_of_revenue": 2632411154,
+        "operating_income": 233387814,
+        "shareholders_equity": 1520000000,
+        "dividend_per_share": 0,
+        "cash_from_operations": 157160000
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 12:40:00.000000+03"
+    },
+    {
       "ticker": "HAFC",
       "period_type": "annual",
       "period_end_date": "2021-12-30",
