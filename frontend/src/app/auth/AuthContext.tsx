@@ -164,6 +164,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           headers['Authorization'] = `Bearer ${newToken}`;
           res = await fetch(`${API_URL}${url}`, { ...options, credentials: 'include', headers });
         }
+      } else if (tokenRef.current) {
+        // Invalid/missing token — the persisted session is stale. Clear it so the
+        // app falls back to unauthenticated instead of repeatedly 401-ing.
+        localStorage.removeItem("stockintel_token");
+        localStorage.removeItem("stockintel_user");
+        tokenRef.current = null;
+        setToken(null);
+        setUser(null);
+        setStoreToken(null);
       }
     }
     return res;
