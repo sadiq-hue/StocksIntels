@@ -11,14 +11,6 @@ let _lastGlobalSnapshot = null;
 let _lastFetch = 0;
 const REFRESH_INTERVAL = 30000;
 
-// ─── Yahoo Treasury Symbol Mapping ──────────────────────────────────────
-const YAHOO_TREASURY_MAP = {
-  'US-T-5Y': { symbol: '^FVX', name: 'CBOE 5-Year Treasury Yield' },
-  'US-T-10Y': { symbol: '^TNX', name: 'CBOE 10-Year Treasury Yield' },
-  'US-T-30Y': { symbol: '^TYX', name: 'CBOE 30-Year Treasury Yield' },
-  'US-T-3M': { symbol: '^IRX', name: 'CBOE 13-Week T-Bill Yield' },
-};
-
 // ─── Kenyan Bond Inventory — June 2026 CBK Auction Data ────────────────
 // Yields from CBK weekly/monthly auction results. Source: CBK, Mansa Markets, Cbonds
 // T-bill yields: May 25 auction; Bond yields: latest reopenings
@@ -95,41 +87,52 @@ const MARKET_ACCESS = {
 };
 
 // ─── Real-Time Bond Yields via Yahoo Proxy ──────────────────────────────
-async function fetchRealYields() {
+// Each global bond maps to one or more candidate Yahoo symbols; the first that
+// returns a valid yield wins. US Treasuries are the most reliable; others fall
+// back to latest-known estimates when the proxy is unavailable.
+const GLOBAL_YIELD_SYMBOLS = {
+  'US-T-3M': ['^IRX', '^TNX'],
+  'US-T-5Y': ['^FVX'],
+  'US-T-10Y': ['^TNX'],
+  'US-T-30Y': ['^TYX'],
+  'UK-GILT-10Y': ['^UK10Y', 'GB10Y.GB.BS', 'GB10Y.GB'],
+  'DE-BUND-10Y': ['^DE10Y', 'DE10Y.DE.BS', 'DE10Y.DE'],
+  'JP-GOV-10Y': ['^JP10Y', 'JP10Y.JP.BS', 'JP10Y.JP'],
+  'IN-GOV-10Y': ['IN10Y.NS', '^IN10Y'],
+  'NG-GOV-10Y': ['^NG10Y', 'NG10Y.NS'],
+  'ZA-GOV-10Y': ['^ZA10Y', 'ZA10Y.JO'],
+};
+
+async function fetchOneYield(symbol) {
   try {
     const { fetchPriceViaProxy } = require('./yahooFinanceFinancialsScraper');
+    const data = await fetchPriceViaProxy(symbol);
+    if (data?.price && data.price > 0) return +data.price.toFixed(2);
+  } catch { /* try next symbol */ }
+  return null;
+}
 
-    const EXTRA_GLOBAL = {
-      'UK-GILT-10Y': { symbol: '^UK10', name: 'UK 10-Year Gilt Yield' },
-      'DE-BUND-10Y': { symbol: '^DE10YD', name: 'Germany 10-Year Bund Yield' },
-      'JP-GOV-10Y': { symbol: '^JP10YT', name: 'Japan 10-Year JGB Yield' },
-      'IN-GOV-10Y': { symbol: 'IN10YD.NS', name: 'India 10-Year Bond Yield' },
-      'NG-GOV-10Y': { symbol: '^NG10YD', name: 'Nigeria 10-Year Bond Yield' },
-      'ZA-GOV-10Y': { symbol: '^ZA10YD', name: 'South Africa 10-Year Bond Yield' },
-    };
-
-    const allSymbols = { ...YAHOO_TREASURY_MAP, ...EXTRA_GLOBAL };
+async function fetchRealYields() {
+  try {
     const yields = {};
-
-    const entries = Object.entries(allSymbols);
+    const entries = Object.entries(GLOBAL_YIELD_SYMBOLS);
     for (let i = 0; i < entries.length; i += 5) {
       const batch = entries.slice(i, i + 5);
       const results = await Promise.allSettled(
-        batch.map(async ([bondId, mapping]) => {
-          const data = await fetchPriceViaProxy(mapping.symbol);
-          if (data?.price && data.price > 0) {
-            return { bondId, ytm: +data.price.toFixed(2), price: data.price, source: 'live' };
+        batch.map(async ([bondId, symbols]) => {
+          for (const sym of symbols) {
+            const y = await fetchOneYield(sym);
+            if (y != null) return { bondId, ytm: y, source: 'live' };
           }
           return null;
         })
       );
       for (const r of results) {
         if (r.status === 'fulfilled' && r.value) {
-          yields[r.value.bondId] = { ytm: r.value.ytm, price: r.value.price, source: r.value.source };
+          yields[r.value.bondId] = { ytm: r.value.ytm, price: 100, source: r.value.source };
         }
       }
     }
-
     return yields;
   } catch (e) {
     console.error('[Bonds] Proxy fetch failed:', e.message);
