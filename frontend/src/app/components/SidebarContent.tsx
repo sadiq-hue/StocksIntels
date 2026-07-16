@@ -10,7 +10,7 @@ import { useBeginnerMode } from "../contexts/BeginnerModeContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
-export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+export function SidebarContent({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
   const location = useLocation();
   const { beginnerMode, toggleBeginnerMode } = useBeginnerMode();
   const [marketStatus, setMarketStatus] = useState<{ nse: { open: boolean; label: string; eventLabel: string }; global: { open: boolean; label: string; eventLabel: string } } | null>(null);
@@ -69,36 +69,42 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <>
-      <div className="p-6">
-        <div className="flex items-center gap-3">
-          <img src="/logo1.jpg" alt="" className="size-8 object-contain" />
-          <div className="flex-1 min-w-0">
-            <p className="text-muted-foreground text-xs">African & Global Markets</p>
+      <div className={`${collapsed ? "px-2 py-4" : "p-6"}`}>
+        <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3"}`}>
+          <img src="/logo1.jpg" alt="" className="size-8 object-contain flex-shrink-0" />
+          {!collapsed && (
+            <div className="flex-1 min-w-0">
+              <p className="text-muted-foreground text-xs">African & Global Markets</p>
+            </div>
+          )}
+        </div>
+        {!collapsed && (
+          <div className="flex items-center gap-2 mt-3">
+            {marketStatus && ["nse", "global"].map((m) => {
+              const s = marketStatus[m as "nse" | "global"];
+              return (
+                <div key={m} className={`flex flex-col items-center px-3 py-1.5 rounded-lg border flex-1 ${s.open ? "bg-green-50 border-green-200" : "bg-sidebar-accent border-sidebar-border"}`}>
+                  <span className={`text-[10px] font-semibold uppercase ${s.open ? "text-green-700" : "text-muted-foreground"}`}>
+                    {m.toUpperCase()}
+                  </span>
+                  <span className={`text-[11px] font-medium ${s.open ? "text-green-600" : "text-muted-foreground"}`}>
+                    {s.label}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-        </div>
-        <div className="flex items-center gap-2 mt-3">
-          {marketStatus && ["nse", "global"].map((m) => {
-            const s = marketStatus[m as "nse" | "global"];
-            return (
-              <div key={m} className={`flex flex-col items-center px-3 py-1.5 rounded-lg border flex-1 ${s.open ? "bg-green-50 border-green-200" : "bg-sidebar-accent border-sidebar-border"}`}>
-                <span className={`text-[10px] font-semibold uppercase ${s.open ? "text-green-700" : "text-muted-foreground"}`}>
-                  {m.toUpperCase()}
-                </span>
-                <span className={`text-[11px] font-medium ${s.open ? "text-green-600" : "text-muted-foreground"}`}>
-                  {s.label}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        )}
       </div>
 
       <nav className="flex-1 px-3 space-y-6 overflow-y-auto">
         {sections.map((section) => (
           <div key={section.title}>
-            <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider px-3 mb-2">
-              {section.title}
-            </p>
+            {!collapsed && (
+              <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider px-3 mb-2">
+                {section.title}
+              </p>
+            )}
             {section.items.map((item) => {
               const Icon = item.icon;
               return (
@@ -106,14 +112,17 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   key={item.path}
                   to={item.path}
                   onClick={onNavigate}
+                  title={collapsed ? item.label : undefined}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 transition-all ${
+                    collapsed ? "justify-center" : ""
+                  } ${
                     isActive(item.path)
                       ? "bg-[#0D7490] text-white shadow-sm"
                       : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                   }`}
                 >
                   <Icon className="w-5 h-5 flex-shrink-0" />
-                  <span className="text-sm">{item.label}</span>
+                  {!collapsed && <span className="text-sm">{item.label}</span>}
                 </Link>
               );
             })}
@@ -121,49 +130,58 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-sidebar-border">
-        <div className="bg-sidebar-accent p-3 rounded-lg border border-sidebar-border">
-          <p className="text-muted-foreground text-xs mb-1">Market Status</p>
-          {marketStatus ? (
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${marketStatus.nse.open ? 'bg-[#10B981] animate-pulse' : 'bg-muted-foreground'}`}></div>
-                <span className="text-sidebar-foreground text-sm font-medium">NSE</span>
-                <span className={`text-xs ml-auto ${marketStatus.nse.open ? 'text-[#10B981]' : 'text-muted-foreground'}`}>
-                  {marketStatus.nse.label} · {marketStatus.nse.eventLabel}
-                </span>
+      {!collapsed && (
+        <div className="p-4 border-t border-sidebar-border">
+          <div className="bg-sidebar-accent p-3 rounded-lg border border-sidebar-border">
+            <p className="text-muted-foreground text-xs mb-1">Market Status</p>
+            {marketStatus ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${marketStatus.nse.open ? 'bg-[#10B981] animate-pulse' : 'bg-muted-foreground'}`}></div>
+                  <span className="text-sidebar-foreground text-sm font-medium">NSE</span>
+                  <span className={`text-xs ml-auto ${marketStatus.nse.open ? 'text-[#10B981]' : 'text-muted-foreground'}`}>
+                    {marketStatus.nse.label} · {marketStatus.nse.eventLabel}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${marketStatus.global.open ? 'bg-[#10B981] animate-pulse' : 'bg-muted-foreground'}`}></div>
+                  <span className="text-sidebar-foreground text-sm font-medium">Global</span>
+                  <span className={`text-xs ml-auto ${marketStatus.global.open ? 'text-[#10B981]' : 'text-muted-foreground'}`}>
+                    {marketStatus.global.label} · {marketStatus.global.eventLabel}
+                  </span>
+                </div>
               </div>
+            ) : (
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${marketStatus.global.open ? 'bg-[#10B981] animate-pulse' : 'bg-muted-foreground'}`}></div>
-                <span className="text-sidebar-foreground text-sm font-medium">Global</span>
-                <span className={`text-xs ml-auto ${marketStatus.global.open ? 'text-[#10B981]' : 'text-muted-foreground'}`}>
-                  {marketStatus.global.label} · {marketStatus.global.eventLabel}
-                </span>
+                <div className="w-2 h-2 bg-muted-foreground rounded-full"></div>
+                <span className="text-muted-foreground text-sm">Loading...</span>
               </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-muted-foreground rounded-full"></div>
-              <span className="text-muted-foreground text-sm">Loading...</span>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="px-4 pb-2">
+      <div className={`${collapsed ? "px-2 pb-2" : "px-4 pb-2"}`}>
         <button
           onClick={toggleBeginnerMode}
+          title={collapsed ? (beginnerMode ? 'Beginner Mode ON' : 'Beginner Mode') : undefined}
           className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs transition-all ${
+            collapsed ? "justify-center" : ""
+          } ${
             beginnerMode
               ? 'bg-amber-100 text-amber-800 border border-amber-200'
               : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
           }`}
         >
           <Lightbulb className={`size-3.5 ${beginnerMode ? 'text-amber-600' : ''}`} />
-          <span className="flex-1 text-left font-medium">{beginnerMode ? 'Beginner Mode ON' : 'Beginner Mode'}</span>
-          <div className={`w-7 h-4 rounded-full transition-colors ${beginnerMode ? 'bg-amber-500' : 'bg-muted-foreground/30'} relative`}>
-            <div className={`absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-transform ${beginnerMode ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
-          </div>
+          {!collapsed && (
+            <>
+              <span className="flex-1 text-left font-medium">{beginnerMode ? 'Beginner Mode ON' : 'Beginner Mode'}</span>
+              <div className={`w-7 h-4 rounded-full transition-colors ${beginnerMode ? 'bg-amber-500' : 'bg-muted-foreground/30'} relative`}>
+                <div className={`absolute top-0.5 size-3 rounded-full bg-white shadow-sm transition-transform ${beginnerMode ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+              </div>
+            </>
+          )}
         </button>
       </div>
     </>
