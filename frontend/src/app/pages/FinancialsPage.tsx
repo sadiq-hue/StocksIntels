@@ -420,7 +420,10 @@ export function FinancialsPage() {
   // are not lenders: they have no interest margins, so banking labels are wrong.
   const nonBankTickers = new Set(['NSE', 'OCH', 'CTUM']);
   const isNonBankTicker = nonBankTickers.has((selectedSymbol || '').toUpperCase());
-  const isBank = !isExchange && !isNonBankTicker && profile?.exchange === 'NSE' && /bank|financial|insurance|investment|sacco|microfin|building society/i.test(
+  // Insurance firms are not lenders: they earn premiums and pay claims, not
+  // interest margins, so banking ("Net Interest Income") labels are wrong for
+  // them. Exclude the "insurance" token from the banking relabel entirely.
+  const isBank = !isExchange && !isNonBankTicker && profile?.exchange === 'NSE' && /bank|financial|sacco|microfin|building society/i.test(
     `${profile?.sector || ''} ${profile?.industry || ''} ${profile?.companyName || ''}`
   );
   const incomeMetrics = isBank
