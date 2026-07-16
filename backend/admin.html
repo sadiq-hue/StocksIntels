@@ -1061,6 +1061,10 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <h1 class="text-lg font-bold text-gray-900">Pending NSE Reports</h1>
         <div class="flex items-center gap-3">
           <span id="prCountBadge" class="text-sm text-gray-500"></span>
+          <button id="detectNowBtn" class="btn btn-secondary text-xs py-1" onclick="triggerDetection()">
+            <svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Detect Now
+          </button>
           <button class="btn btn-primary text-xs py-1" onclick="fetchPendingReports()">
             <svg class="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             Refresh
@@ -1071,7 +1075,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <div id="prEmptyState" class="hidden text-center py-16">
           <svg class="size-16 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
           <p class="text-gray-500 font-medium">No pending reports</p>
-          <p class="text-gray-400 text-sm mt-1">All auto-detected NSE financial statements have been reviewed.</p>
+          <p class="text-gray-400 text-sm mt-1">Auto-detector runs every 6 hours. Click <strong>Detect Now</strong> to scan for new NSE filings immediately.</p>
         </div>
         <div id="prLoadingState" class="hidden text-center py-16">
           <div class="size-6 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin mx-auto mb-3"></div>
@@ -3441,6 +3445,27 @@ async function pollPendingCount() {
       }
     }
   } catch {}
+}
+
+async function triggerDetection() {
+  const btn = document.getElementById('detectNowBtn');
+  if (btn.disabled) return;
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = 'Scanning...';
+  try {
+    const res = await fetch('/api/admin/detect-nse-reports', { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      toast(data.message || 'Detection complete', 'success');
+    } else {
+      const e = await res.json().catch(()=>({}));
+      toast(e.error || 'Detection failed (' + res.status + ')', 'error');
+    }
+  } catch { toast('Network error running detection', 'error'); }
+  finally { btn.disabled = false; btn.innerHTML = orig; }
+  fetchPendingReports();
+  pollPendingCount();
 }
 
 async function fetchPendingReports() {
