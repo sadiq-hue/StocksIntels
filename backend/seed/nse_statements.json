@@ -5349,18 +5349,64 @@
     {
       "ticker": "UMME",
       "period_type": "annual",
+      "period_end_date": "2023-12-30",
+      "file_name": "Umeme-Limited-Audited-Financial-Statements-for-the-Year-Ended-31-Dec-2023.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 0.25,
+        "net_income": 408200000,
+        "total_revenue": 74700000000,
+        "cost_of_revenue": 49300000000,
+        "operating_income": 1480000000,
+        "dividend_per_share": 2.66
+      },
+      "error_message": null,
+      "processed_by": "js:audit-correction",
+      "parsed_at": "2026-07-16 12:00:00.000+03"
+    },
+    {
+      "ticker": "UMME",
+      "period_type": "annual",
+      "period_end_date": "2024-12-30",
+      "file_name": "Umeme-Limited-Audited-Financial-Statements-for-the-Year-Ended-31-Dec-2024.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": -11.02,
+        "net_income": -17914666667,
+        "total_revenue": 81216280702,
+        "cost_of_revenue": 52380070175,
+        "operating_income": -20314035088,
+        "dividend_per_share": 0,
+        "shareholders_equity": 8473000000
+      },
+      "error_message": null,
+      "processed_by": "js:audit-correction",
+      "parsed_at": "2026-07-16 12:00:00.000+03"
+    },
+    {
+      "ticker": "UMME",
+      "period_type": "annual",
       "period_end_date": "2025-12-30",
       "file_name": "Umeme-Limited-Audited-Financial-Statements-for-the-Year-Ended-31-Dec-2025.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "net_income": -11376,
-        "total_revenue": 530035
+        "eps": -4.83,
+        "net_income": -7844701754,
+        "total_revenue": 18597017543,
+        "cost_of_revenue": 15094736842,
+        "operating_income": -6146526316,
+        "dividend_per_share": 0,
+        "shareholders_equity": -12420600000
       },
       "error_message": null,
-      "processed_by": "js:regex",
-      "parsed_at": "2026-07-14 19:05:15.317+03"
+      "processed_by": "js:audit-correction",
+      "parsed_at": "2026-07-16 12:00:00.000+03"
     },
     {
       "ticker": "UNGA",
