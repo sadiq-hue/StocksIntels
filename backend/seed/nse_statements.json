@@ -1592,6 +1592,46 @@
       "parsed_at": "2026-07-15 10:36:17.943+03"
     },
     {
+      "ticker": "CTUM",
+      "period_type": "annual",
+      "period_end_date": "2024-03-31",
+      "file_name": "Centum-Plc-Audited-Financial-Results-for-the-Year-Ended-31st-March-2024.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 4.27,
+        "net_income": 2603741000,
+        "total_revenue": 11289000000,
+        "cost_of_revenue": 0,
+        "operating_income": 2908145000,
+        "dividend_per_share": 0.32
+      },
+      "error_message": null,
+      "processed_by": "audit:FY2024",
+      "parsed_at": "2026-07-16 12:00:00.000+03"
+    },
+    {
+      "ticker": "CTUM",
+      "period_type": "annual",
+      "period_end_date": "2025-03-31",
+      "file_name": "Centum-Plc-Audited-Financial-Results-for-the-Year-Ended-31st-March-2025.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 1.24,
+        "net_income": 812817000,
+        "total_revenue": 6078000000,
+        "cost_of_revenue": 0,
+        "operating_income": 2135482000,
+        "dividend_per_share": 0.32
+      },
+      "error_message": null,
+      "processed_by": "audit:FY2025",
+      "parsed_at": "2026-07-16 12:00:00.000+03"
+    },
+    {
       "ticker": "DTK",
       "period_type": "annual",
       "period_end_date": "2021-12-30",

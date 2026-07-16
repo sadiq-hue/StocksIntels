@@ -418,7 +418,7 @@ export function FinancialsPage() {
   );
   // Investment HOLDING companies (e.g. Olympia Capital) and exchange operators
   // are not lenders: they have no interest margins, so banking labels are wrong.
-  const nonBankTickers = new Set(['NSE', 'OCH']);
+  const nonBankTickers = new Set(['NSE', 'OCH', 'CTUM']);
   const isNonBankTicker = nonBankTickers.has((selectedSymbol || '').toUpperCase());
   const isBank = !isExchange && !isNonBankTicker && profile?.exchange === 'NSE' && /bank|financial|insurance|investment|sacco|microfin|building society/i.test(
     `${profile?.sector || ''} ${profile?.industry || ''} ${profile?.companyName || ''}`
