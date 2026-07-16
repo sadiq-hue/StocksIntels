@@ -1170,12 +1170,12 @@
       "ticker": "CGEN",
       "period_type": "quarterly",
       "period_end_date": "2025-12-30",
-      "file_name": "Car-General-Kenya-Plc-Consolidated-Audited-Financial-Statements-for-the-Period-Ended-31-December-2025.pdf",
+      "file_name": "Car-and-General-Kenya-PLC-Q4-or-FY-unaudited-or-audited-results-December-2025.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": 3.12,
+        "eps": 30.5,
         "net_income": 2447735000,
         "total_debt": 1960264000,
         "total_assets": 11446338000,
@@ -1185,7 +1185,7 @@
         "operating_income": 3477328000,
         "retained_earnings": 7591189000,
         "total_liabilities": 3236604000,
-        "dividend_per_share": 0.3,
+        "dividend_per_share": 3.42,
         "current_liabilities": 10325910000,
         "shareholders_equity": 8209734000,
         "cash_from_operations": 1284551000
