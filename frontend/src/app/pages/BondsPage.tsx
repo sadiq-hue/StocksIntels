@@ -62,9 +62,9 @@ export function BondsPage() {
 
   useEffect(() => { load(); }, [market]);
 
-  // Auto-refresh every 30s
+  // Auto-refresh every 30 minutes
   useEffect(() => {
-    const interval = setInterval(load, 30000);
+    const interval = setInterval(load, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }, [market]);
 
@@ -164,7 +164,7 @@ export function BondsPage() {
       {summary?.lastUpdated && (
         <div className="flex items-center gap-3">
           <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-            <Clock className="size-3" /> Last updated: {new Date(summary.lastUpdated).toLocaleTimeString()} &middot; Auto-refreshes every 30s
+             <Clock className="size-3" /> Last updated: {new Date(summary.lastUpdated).toLocaleTimeString()} &middot; Auto-refreshes every 30m
           </p>
           <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${summary.hasLiveData ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
             {summary.hasLiveData ? '● Live' : '● CBK Auction'}
