@@ -4718,29 +4718,6 @@
       "parsed_at": "2026-07-14 18:46:49.158+03"
     },
     {
-      "ticker": "SCAN",
-      "period_type": "annual",
-      "period_end_date": "2025-12-30",
-      "file_name": "Wpp-Scangroup-Plc-Audited-Financial-Results-for-the-Year-Ended-31-Dec-2025.pdf",
-      "file_size": null,
-      "mime_type": "application/pdf",
-      "status": "completed",
-      "parsed_data": {
-        "eps": -1.61,
-        "net_income": 713673000,
-        "total_assets": 6330067000,
-        "current_assets": 4303283000,
-        "retained_earnings": 1760888000,
-        "total_liabilities": 2335365000,
-        "current_liabilities": 2258952000,
-        "shareholders_equity": 3994702000,
-        "cash_from_operations": 678215000
-      },
-      "error_message": null,
-      "processed_by": "js:mistral",
-      "parsed_at": "2026-07-14 19:05:57.115+03"
-    },
-    {
       "ticker": "SCBK",
       "period_type": "annual",
       "period_end_date": "2023-12-30",

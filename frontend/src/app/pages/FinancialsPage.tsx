@@ -523,7 +523,7 @@ export function FinancialsPage() {
       {/* ─── KPI Row ─── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiCard label="Market Cap" value={formatCompactNumber(quote?.marketCap || (quote?.price > 0 && quote?.sharesOutstanding ? quote.price * quote.sharesOutstanding : 0))} sub={profile?.currency || "USD"} icon={<Globe className="w-4 h-4" />} />
-        <KpiCard label="P/E Ratio" value={formatRatio(latestMet?.peRatio || calculatedPe || quote?.pe || 0)} sub="Trailing 12M" icon={<Activity className="w-4 h-4" />} />
+        <KpiCard label="P/E Ratio" value={formatRatio((latestInc?.eps && latestInc.eps > 0) ? (latestMet?.peRatio || calculatedPe || quote?.pe || 0) : 0)} sub="Trailing 12M" icon={<Activity className="w-4 h-4" />} />
         <KpiCard label="Revenue" value={formatCurrency(latestInc?.revenue || 0, profile?.currency || "USD")} sub={latestInc?.date ? formatDate(latestInc.date) : ''} icon={<BarChart3 className="w-4 h-4" />} />
         <KpiCard label="Net Income" value={formatCurrency(latestInc?.netIncome || 0, profile?.currency || "USD")} sub={`Margin ${formatPercent(latestInc?.netIncomeRatio ? latestInc.netIncomeRatio * 100 : 0, 1)}`} icon={<Wallet className="w-4 h-4" />} positive />
         <KpiCard label="EPS" value={formatRatio(latestInc?.eps || 0, 2)} sub={`Diluted: ${formatRatio(latestInc?.epsdiluted || 0, 2)}`} icon={<ChartBar className="w-4 h-4" />} />
