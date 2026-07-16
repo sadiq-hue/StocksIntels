@@ -3699,7 +3699,7 @@
         "net_income": -84501000,
         "total_revenue": 1473485000,
         "cost_of_revenue": 1016078000,
-        "operating_income": -102878000,
+        "operating_income": 30461000,
         "shareholders_equity": 862622000,
         "total_assets": 3127041000,
         "dividend_per_share": 0
@@ -3721,7 +3721,7 @@
         "net_income": -571331000,
         "total_revenue": 1071031000,
         "cost_of_revenue": 881120000,
-        "operating_income": -630117000,
+        "operating_income": -402002000,
         "shareholders_equity": 289780000,
         "total_assets": 2787792000,
         "dividend_per_share": 0
@@ -3743,7 +3743,7 @@
         "net_income": -237905000,
         "total_revenue": 1538188000,
         "cost_of_revenue": 1207666000,
-        "operating_income": -285125000,
+        "operating_income": 165000000,
         "shareholders_equity": 23429000,
         "total_assets": 2070276000,
         "dividend_per_share": 0
@@ -3785,12 +3785,11 @@
       "parsed_data": {
         "eps": -0.04,
         "net_income": -10995000,
-        "total_debt": 1091890000,
         "total_assets": 2343732000,
         "total_revenue": 524178000,
         "current_assets": 892935000,
         "cost_of_revenue": 284431000,
-        "operating_income": -10995000,
+        "operating_income": 71800000,
         "retained_earnings": -632760000,
         "total_liabilities": 2340717000,
         "current_liabilities": 1822560000,
