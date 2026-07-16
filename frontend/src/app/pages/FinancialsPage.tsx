@@ -312,6 +312,16 @@ export function FinancialsPage() {
   const contextSymbol = selectedMarket === "nse" ? `NSE:${selectedSymbol}` : selectedSymbol;
   const liveQuote = getQuote(contextSymbol);
 
+  // Static universe lookup — used as a fallback when the live report has no
+  // profile (e.g. newly listed NSE stocks like KPC that aren't yet seeded).
+  // Guarantees correct name, exchange (NSE), currency (KES) and price.
+  const staticStock = useMemo(
+    () => [...kenyanStocks, ...globalStocks].find(
+      (s) => s.ticker.toUpperCase() === selectedSymbol.toUpperCase()
+    ),
+    [selectedSymbol]
+  );
+
   const searchIndex = useMemo(() =>
     [...kenyanStocks, ...globalStocks].map(s => ({ ticker: s.ticker, name: s.name, market: s.market })),
   []);
@@ -395,10 +405,21 @@ export function FinancialsPage() {
     return () => { active = false; };
   }, [selectedSymbol, period, refreshKey, provider]);
 
-  const profile = report?.data.profile as CompanyProfile | undefined;
+  const profile = (report?.data.profile as CompanyProfile | undefined) || (staticStock ? {
+    symbol: staticStock.ticker,
+    companyName: staticStock.name,
+    exchange: staticStock.market === "nse" ? "NSE" : "NASDAQ/NYSE",
+    currency: staticStock.currency || (staticStock.market === "nse" ? "KES" : "USD"),
+    sector: staticStock.sector || "Other",
+    industry: staticStock.sector || "Other",
+    country: staticStock.market === "nse" ? "Kenya" : "USA",
+    website: "", description: "", ceo: "N/A", employees: 0, marketCap: 0, image: "", isEtf: false, lastUpdated: "",
+  } as CompanyProfile : undefined);
   const reportQuote = report?.data.quote as CompanyQuote | undefined;
   const baseQuote: CompanyQuote = reportQuote || { symbol: selectedSymbol, price: 0, change: 0, changesPercentage: 0, dayLow: 0, dayHigh: 0, yearLow: 0, yearHigh: 0, marketCap: 0, volume: 0, avgVolume: 0, open: 0, previousClose: 0, eps: 0, pe: 0, sharesOutstanding: 0, lastUpdated: "" };
-  const quote = liveQuote ? { ...baseQuote, symbol: liveQuote.symbol, price: liveQuote.price, change: liveQuote.change, changesPercentage: liveQuote.changePercent, volume: liveQuote.volume, dayHigh: liveQuote.dayHigh, dayLow: liveQuote.dayLow, previousClose: liveQuote.previousClose, lastUpdated: new Date(liveQuote.timestamp * 1000).toISOString() } : reportQuote;
+  const quote = liveQuote
+    ? { ...baseQuote, symbol: liveQuote.symbol, price: liveQuote.price, change: liveQuote.change, changesPercentage: liveQuote.changePercent, volume: liveQuote.volume, dayHigh: liveQuote.dayHigh, dayLow: liveQuote.dayLow, previousClose: liveQuote.previousClose, lastUpdated: new Date(liveQuote.timestamp * 1000).toISOString() }
+    : (reportQuote || (staticStock ? { ...baseQuote, symbol: contextSymbol, price: Number(staticStock.price) || 0, change: Number(staticStock.change) || 0, changesPercentage: 0, marketCap: 0, volume: 0, lastUpdated: "" } : undefined));
   const income = report?.data.incomeStatement as IncomeStatement | null | undefined;
   const balance = report?.data.balanceSheet as BalanceSheet | null | undefined;
   const cashFlow = report?.data.cashFlowStatement as CashFlowStatement | null | undefined;
