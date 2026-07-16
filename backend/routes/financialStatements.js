@@ -691,4 +691,52 @@ router.get('/detect-nse-reports', (_req, res) => {
   res.json(detectStatus);
 });
 
+// ── Admin approval gate for auto-detected NSE reports ──
+// Auto-parsed NSE statements are held at status='pending_review' and only go live
+// (status='completed') after an admin approves. This prevents a bad auto-parse from
+// reaching users. Rejected rows are set to 'failed' (with a reason) and won't be
+// re-parsed by the detector.
+router.get('/financial-statements/pending', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT fs.id, s.ticker, s.name, fs.period_type, fs.period_end_date, fs.file_name,
+              fs.parsed_data, fs.processed_by, fs.parsed_at, fs.error_message
+       FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id
+       WHERE fs.status = 'pending_review' AND fs.parsed_data IS NOT NULL
+       ORDER BY fs.parsed_at DESC NULLS LAST, fs.period_end_date DESC`
+    );
+    res.json({ count: rows.length, items: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/financial-statements/:id/approve', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { rows } = await pool.query('SELECT status, parsed_data FROM financial_statements WHERE id = $1', [id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    if (rows[0].status !== 'pending_review') return res.status(409).json({ error: 'Statement is not pending review (status: ' + rows[0].status + ')' });
+    if (!rows[0].parsed_data) return res.status(400).json({ error: 'No parsed data to approve' });
+    await pool.query(`UPDATE financial_statements SET status = 'completed', error_message = NULL WHERE id = $1`, [id]);
+    res.json({ id, status: 'completed', message: 'Approved and published' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/financial-statements/:id/reject', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const reason = (req.body && req.body.reason) || 'Rejected by admin';
+    const { rows } = await pool.query('SELECT status FROM financial_statements WHERE id = $1', [id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    if (rows[0].status !== 'pending_review') return res.status(409).json({ error: 'Statement is not pending review (status: ' + rows[0].status + ')' });
+    await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`, [reason, id]);
+    res.json({ id, status: 'failed', message: 'Rejected — will not be re-parsed by the detector' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

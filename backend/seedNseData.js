@@ -134,7 +134,10 @@ async function seedNseData({ force = false } = {}) {
             fs.period_type
      FROM financial_statements fs
      JOIN stocks s ON s.id = fs.stock_id
-     WHERE s.market = 'NSE'`
+     WHERE s.market = 'NSE'
+       -- Never delete rows the auto-detector is holding for admin review; they
+       -- are in-flight and not part of the static seed by design.
+       AND fs.status <> 'pending_review'`
   );
   const orphanIds = exist.rows
     .filter((r) => !seedKeys.has(`${r.ticker}|${String(r.nb_date).slice(0, 10)}|${r.period_type}`))

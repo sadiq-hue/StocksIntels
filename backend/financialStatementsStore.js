@@ -105,7 +105,10 @@ async function storeParsedFinancials({ ticker, stock_id, period_type, period_end
 }
 
 // Download + parse a PDF and store the result (automated detector path).
-async function storePdfReport({ ticker, period_type, period_end_date, file_name, pdfBuffer, processed_by }) {
+// `publishStatus` is the status assigned to a successfully parsed row. Auto-detected
+// NSE reports pass 'pending_review' so they are held for admin approval before going
+// live; manual uploads default to 'completed'.
+async function storePdfReport({ ticker, period_type, period_end_date, file_name, pdfBuffer, processed_by, publishStatus = 'completed' }) {
   if (!ticker) throw new Error('ticker is required');
   const s = await pool.query('SELECT id FROM stocks WHERE ticker = $1 AND market = $2', [ticker.toUpperCase(), 'NSE']);
   if (s.rows.length === 0) throw new Error('Stock not found for ticker ' + ticker);
@@ -158,6 +161,12 @@ async function storePdfReport({ ticker, period_type, period_end_date, file_name,
     ).catch(() => {});
   } else {
     await upsertFundamentals(tickerVal, docId, parsed, period_type, period_end_date);
+  }
+  // A successfully parsed row is published as `publishStatus` (completed for manual
+  // uploads, pending_review for auto-detected NSE reports awaiting admin approval).
+  if (hasData && status === 'completed') {
+    await pool.query('UPDATE financial_statements SET status = $1 WHERE id = $2', [publishStatus, docId]).catch(() => {});
+    status = publishStatus;
   }
   return { docId, parsed: hasData ? parsed : null, status };
 }

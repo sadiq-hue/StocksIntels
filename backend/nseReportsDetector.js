@@ -555,17 +555,18 @@ async function processFiling(pdf, suppressAlert) {
     return { matched: false };
   }
 
-  // Idempotency: skip filings already successfully parsed (avoids duplicate rows + re-spend on OCR).
-  // A row is only considered "done" if it completed AND actually produced parsed_data — rows left in a
-  // 'completed' state with an error_message or empty parsed_data (e.g. transient LLM-quota failures during a
-  // bulk seed) are re-processed so the detector self-heals broken periods on each cycle.
+  // Idempotency: skip filings already handled (avoids duplicate rows + re-spend on OCR).
+  // A row is "done" if it is 'completed' WITH parsed_data, OR 'pending_review' (auto-detected,
+  // awaiting admin approval). Rows left in a 'completed' state with an error_message or empty
+  // parsed_data (e.g. transient LLM-quota failures during a bulk seed) are re-processed so the
+  // detector self-heals broken periods on each cycle.
   try {
     const ex = await pool.query(
-      `SELECT 1 FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE s.ticker = $1 AND fs.period_end_date IS NOT DISTINCT FROM $2 AND fs.period_type IS NOT DISTINCT FROM $3 AND fs.status = 'completed' AND (fs.error_message IS NULL OR fs.error_message = '') AND fs.parsed_data IS NOT NULL LIMIT 1`,
+      `SELECT 1 FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE s.ticker = $1 AND fs.period_end_date IS NOT DISTINCT FROM $2 AND fs.period_type IS NOT DISTINCT FROM $3 AND fs.status IN ('completed','pending_review') AND (fs.error_message IS NULL OR fs.error_message = '') AND fs.parsed_data IS NOT NULL LIMIT 1`,
       [ticker, periodEnd, inferPeriodType(pdf.filename)]
     );
     if (ex.rowCount) {
-      console.log(`[NSE-Detector] Skip ${ticker} ${periodEnd || ''} (already completed with data)`);
+      console.log(`[NSE-Detector] Skip ${ticker} ${periodEnd || ''} (already completed/pending_review with data)`);
       await recordFiling({ key, company, ticker, url: pdf.url, filename: pdf.filename, periodEnd, audited, parsed: true, parseStatus: 'skipped-completed', source: pdf.source || 'nse' });
       return { matched: true, parsed: true, skipped: true };
     }
@@ -579,11 +580,17 @@ async function processFiling(pdf, suppressAlert) {
 
   try {
     const pdfBuffer = await downloadPdf(pdf.url);
-    const { docId, status } = await storePdfReport({ ticker, period_type: inferPeriodType(pdf.filename), period_end_date: periodEnd, file_name: pdf.filename, pdfBuffer, processed_by: 'auto-nse' });
-    const parsedOk = status === 'completed';
+    // Auto-detected NSE reports are held for admin approval (publishStatus='pending_review')
+    // so a bad auto-parse can't go live without review.
+    const { docId, status } = await storePdfReport({ ticker, period_type: inferPeriodType(pdf.filename), period_end_date: periodEnd, file_name: pdf.filename, pdfBuffer, processed_by: 'auto-nse', publishStatus: 'pending_review' });
+    const heldForReview = status === 'pending_review';
+    const parsedOk = heldForReview || status === 'completed';
     await recordFiling({ key, company, ticker, url: pdf.url, filename: pdf.filename, periodEnd, audited, parsed: parsedOk, parseStatus: status, source: pdf.source || 'nse' });
     const label = `${NSE_NAMES[ticker] || ticker} (${ticker})`;
-    if (parsedOk) {
+    if (heldForReview) {
+      if (!suppressAlert) await notifyAllUsers('🔍 New NSE report awaiting approval: ' + label, `A new financial report for ${label}${periodEnd ? ' (period ' + periodEnd + ')' : ''} was detected on the NSE and auto-parsed. It is held for admin review before going live. PDF: ${pdf.url}`, `/app/stock/${ticker}?market=nse`);
+      console.log(`[NSE-Detector] Parsed + held for review ${label} (doc ${docId})`);
+    } else if (status === 'completed') {
       if (!suppressAlert) await notifyAllUsers('📊 New NSE report auto-parsed: ' + label, `A new financial report for ${label}${periodEnd ? ' (period ' + periodEnd + ')' : ''} was detected on the NSE and automatically parsed into the database. PDF: ${pdf.url}`, `/app/stock/${ticker}?market=nse`);
       console.log(`[NSE-Detector] Parsed + stored ${label} (doc ${docId})`);
     } else {
