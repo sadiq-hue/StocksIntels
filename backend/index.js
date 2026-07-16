@@ -6393,12 +6393,23 @@ app.get('/api/market/turnover', async (req, res) => {
     return res.json(turnoverCache);
   }
   try {
-    // NSE: from mystocks scraper (afx.kwayisi.org is not reachable from this host)
-    let nseTurnover = 0, nseVolume = 0;
-    const { getQuoteForSymbol } = require('./mystocksScraper');
+    // NSE: from the MyStocks Africa Partner API (authoritative delayed live quotes,
+    // includes price + volume + change). Batched in a single call for efficiency.
+    let nseTurnover = 0, nseVolume = 0, nseCount = 0;
+    const { getBatchQuotes } = require('./mystocksAfricaApi');
+    let nseQuotes = {};
+    try {
+      nseQuotes = await getBatchQuotes(NSE_TURNOVER_TICKERS);
+    } catch (e) {
+      console.warn('[turnover] MyStocks Africa batch failed:', e.message);
+    }
     for (const t of NSE_TURNOVER_TICKERS) {
-      const q = await getQuoteForSymbol('NSE:' + t);
-      if (q) { nseTurnover += (q.price || 0) * (q.volume || 0); nseVolume += q.volume || 0; }
+      const q = nseQuotes[t];
+      if (q && q.price != null) {
+        nseTurnover += (q.price || 0) * (q.volume || 0);
+        nseVolume += q.volume || 0;
+        nseCount++;
+      }
     }
 
     // Global: parallel Yahoo chart API calls
@@ -6420,10 +6431,10 @@ app.get('/api/market/turnover', async (req, res) => {
     }
 
     const result = {
-      nse: { turnover: nseTurnover, volume: nseVolume, count: NSE_TURNOVER_TICKERS.length },
+      nse: { turnover: nseTurnover, volume: nseVolume, count: nseCount },
       global: { turnover: globalTurnover, volume: globalVolume, count: GLOBAL_TURNOVER_TICKERS.length },
     };
-    // Only cache once NSE data is actually available (the mystocks cache may still
+    // Only cache once NSE data is actually available (the quote cache may still
     // be warming on a fresh deploy); otherwise retry on the next request instead of
     // serving a stale zero for 30s.
     if (nseVolume > 0) {
