@@ -1820,7 +1820,7 @@ async function snapshotPortfolioValue(userId) {
 }
 
 async function getMarketSnapshot() {
-  const NSE_TICKERS = ['SCOM', 'EQTY', 'KCB', 'EABL', 'ABSA', 'SBIC', 'KLG', 'OLYM', 'CRAY', 'BAMB', 'UMEM', 'KPLC', 'NMG', 'TOTL', 'STAN', 'COOP', 'JUB', 'KNRE', 'LKL', 'CIC', 'HFCK', 'IMH', 'NCBA', 'BAT', 'KUKZ', 'SASN', 'SCBK', 'KEGN', 'CTUM', 'BRIT', 'CARB', 'KQ', 'PORT', 'WTK', 'KAPC', 'CGEN', 'CABL', 'UMME', 'REA', 'EGAD', 'LBTY', 'SLAM', 'BOC', 'MSC', 'UNGA', 'FTGH', 'TPS', 'HAFR', 'EVRD'];
+  const NSE_TICKERS = ['SCOM', 'EQTY', 'KCB', 'EABL', 'ABSA', 'SBIC', 'KLG', 'OLYM', 'CRAY', 'BAMB', 'UMEM', 'KPLC', 'NMG', 'TOTL', 'STAN', 'COOP', 'JUB', 'KNRE', 'LKL', 'CIC', 'HFCK', 'IMH', 'NCBA', 'BAT', 'KUKZ', 'SASN', 'SCBK', 'KEGN', 'CTUM', 'BRIT', 'CARB', 'KQ', 'PORT', 'WTK', 'KAPC', 'CGEN', 'CABL', 'UMME', 'REA', 'EGAD', 'LBTY', 'SLAM', 'BOC', 'MSC', 'UNGA', 'FTGH', 'TPS', 'HAFR', 'EVRD', 'KPC'];
   const GLOBAL_TICKERS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'NFLX', 'JPM', 'V', 'WMT', 'JNJ', 'PG', 'XOM', 'BAC', 'HD', 'DIS', 'CSCO', 'ADBE', 'CRM', 'INTC', 'AMD', 'PYPL', 'UBER', 'SQ', 'MA', 'UNH', 'COST', 'ABBV', 'CVX', 'PFE', 'TMO', 'ORCL', 'IBM', 'QCOM', 'AVGO', 'NKE', 'MRK', 'KO', 'PEP', 'MCD', 'BA', 'C', 'GS', 'MS', 'BK', 'AXP', 'CAT', 'GE', 'HON', 'LMT'];
   const indexSymbols = ['NSE:NSE20', 'NSE:NSEASI', 'NSE:NSE25', 'NSE:NSE10'];  const stockSymbols = [...NSE_TICKERS.map(t => 'NSE:' + t), ...GLOBAL_TICKERS];
   const allQuotes = await getQuotesBatch([...indexSymbols, ...stockSymbols]);

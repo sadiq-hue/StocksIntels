@@ -5,6 +5,7 @@ const proxyService = require('./proxyService');
 const yahooFinanceScraper = require('./yahooFinanceFinancialsScraper');
 const { pool } = require('./db');
 const PersistentCache = require('./cacheService');
+const { NSE_SYMBOLS } = require('./stockData');
 
 async function createYf() {
   const { default: YahooFinance } = await import('yahoo-finance2');
@@ -567,15 +568,17 @@ async function buildLocalNseReport(symbol) {
 async function isNseStock(symbol) {
   let ticker = symbol;
   if (ticker.startsWith('NSE:')) ticker = ticker.slice(4);
+  // Authoritative source: a stocks row with market='NSE'
   try {
     const r = await pool.query(
       'SELECT 1 FROM stocks WHERE UPPER(ticker) = $1 AND market = $2 LIMIT 1',
       [ticker, 'NSE']
     );
-    return r.rows.length > 0;
-  } catch {
-    return false;
-  }
+    if (r.rows.length > 0) return true;
+  } catch { /* fall through to list check */ }
+  // Fallback: canonical NSE ticker list (covers newly listed stocks like KPC
+  // that may not yet have a stocks row, so we never mis-route them to Yahoo)
+  return NSE_SYMBOLS.includes(ticker.toUpperCase());
 }
 
 async function getFinancialReport(symbol, period = 'annual', limit = 4, providerOverride = null) {
