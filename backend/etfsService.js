@@ -34,16 +34,57 @@ const ETF_LIST = [
 ];
 
 const tickers = ETF_LIST.map(e => e.ticker);
+const nseTickers = ETF_LIST.filter(e => e.currency === 'KES').map(e => e.ticker);
 
 let quotesCache = {};
 let cacheTime = 0;
 const CACHE_TTL = 30000;
+
+// NSE ETFs (KES) have no Yahoo coverage, so pull them from the MyStocks Africa
+// Partner API (authoritative delayed NSE quotes: price, change, volume).
+async function fetchNseEtQuotes() {
+  if (nseTickers.length === 0) return {};
+  try {
+    const { getBatchQuotes } = require('./mystocksAfricaApi');
+    const batch = await getBatchQuotes(nseTickers);
+    const out = {};
+    for (const [ticker, q] of Object.entries(batch)) {
+      if (q && q.price != null) {
+        const prevClose = q.previousClose || q.price;
+        const change = q.price - prevClose;
+        out[ticker] = {
+          price: q.price,
+          change: +change.toFixed(2),
+          changePercent: q.changePercent ?? +((change / prevClose) * 100).toFixed(2),
+          high: q.dayHigh ?? 0,
+          low: q.dayLow ?? 0,
+          volume: q.volume ?? 0,
+          previousClose: prevClose,
+          open: q.open ?? 0,
+          dataSource: 'mystocksAfrica',
+        };
+      }
+    }
+    return out;
+  } catch (e) {
+    console.error('[ETFs] MyStocks Africa NSE batch failed:', e.message);
+    return {};
+  }
+}
 
 async function fetchLiveQuotes() {
   const now = Date.now();
   if (quotesCache && now - cacheTime < CACHE_TTL) return quotesCache;
 
   let result = {};
+
+  // 0. NSE ETFs via MyStocks Africa Partner API (authoritative KES quotes)
+  try {
+    const nseQuotes = await fetchNseEtQuotes();
+    Object.assign(result, nseQuotes);
+  } catch (e) {
+    console.error('[ETFs] NSE ETF fetch failed:', e.message);
+  }
 
   // 1. Use marketService batch pipeline (yahoo-finance2 + RapidAPI + TwelveData)
   try {
@@ -110,10 +151,30 @@ async function fetchLiveQuotes() {
     console.error('[ETFs] Yahoo quote API fetch failed:', e.message);
   }
 
-  return {};
+  // Keep any NSE Partner API quotes we already have; only clear cache if empty.
+  if (Object.keys(result).length > 0) {
+    quotesCache = result;
+    cacheTime = now;
+  }
+  return result;
 }
 
-function getSyntheticQuote(ticker, basePrice) {
+function getSyntheticQuote(ticker, basePrice, currency) {
+  // KES (NSE) ETFs like NSEQ have no real-time feed from any provider, so we
+  // keep them at a stable reference price and DO NOT fabricate movement/volume.
+  if (currency === 'KES') {
+    return {
+      price: +basePrice.toFixed(2),
+      change: 0,
+      changePercent: 0,
+      high: +basePrice.toFixed(2),
+      low: +basePrice.toFixed(2),
+      volume: 0,
+      open: +basePrice.toFixed(2),
+      previousClose: +basePrice.toFixed(2),
+      dataSource: 'reference',
+    };
+  }
   const drift = (Math.random() - 0.48) * 1.5;
   const price = +(basePrice + drift).toFixed(2);
   const change = +(drift).toFixed(2);
@@ -153,7 +214,7 @@ async function getETFs(market) {
     if (live) {
       return { ...etf, ...live, lastUpdated: new Date().toISOString() };
     }
-    const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100);
+    const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100, etf.currency);
     return { ...etf, ...synth, lastUpdated: new Date().toISOString() };
   });
 }
@@ -168,7 +229,7 @@ async function getETFByTicker(ticker) {
   if (live) {
     return { ...etf, ...live, lastUpdated: new Date().toISOString() };
   }
-  const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100);
+  const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100, etf.currency);
   return { ...etf, ...synth, lastUpdated: new Date().toISOString() };
 }
 
@@ -179,7 +240,7 @@ async function getETFSummary() {
   const etfs = ETF_LIST.map(etf => {
     const live = liveQuotes[etf.ticker];
     if (live) return { ...etf, ...live };
-    const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100);
+    const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100, etf.currency);
     return { ...etf, ...synth };
   });
 

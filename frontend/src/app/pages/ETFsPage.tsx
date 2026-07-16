@@ -102,15 +102,27 @@ export function ETFsPage() {
 
     const update = async () => {
       const globalTickers = tickersRef.current;
-      if (globalTickers.length === 0) return;
 
+      // NSE (KES) ETFs have no Yahoo coverage — refresh them from the backend
+      // (MyStocks Africa Partner API), which already returns live NSE quotes.
+      let backendQuotes: Record<string, Partial<ETF>> = {};
+      try {
+        const res = await fetch(`${API_URL}/etfs?market=all`);
+        const data: ETF[] = await res.json();
+        for (const e of data) {
+          if (e.currency === "KES" && e.price != null) backendQuotes[e.ticker] = e;
+        }
+      } catch { /* ignore backend refresh */ }
+
+      // USD ETFs come straight from Yahoo for low-latency updates.
       const quotes = await fetchYahooQuotes(globalTickers);
       if (!mounted) return;
 
-      if (Object.keys(quotes).length > 0) {
+      const merged = { ...backendQuotes, ...quotes };
+      if (Object.keys(merged).length > 0) {
         setEtfs(prev =>
           prev.map(etf => {
-            const q = quotes[etf.ticker];
+            const q = merged[etf.ticker];
             if (q && q.price != null) {
               return { ...etf, ...q } as ETF;
             }
@@ -238,11 +250,11 @@ export function ETFsPage() {
                     <span className="text-foreground font-bold text-sm">{etf.ticker}</span>
                     <Badge variant="outline" className="text-[10px]">{etf.category}</Badge>
                     {etf.currency === "KES" && <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-700 border-amber-200">NSE</Badge>}
-                    {etf.dataSource === "yahoo" && (
+                    {etf.dataSource === "yahoo" || etf.dataSource === "mystocksAfrica" ? (
                       <span className="text-[8px] text-emerald-600 font-semibold uppercase tracking-wider flex items-center gap-0.5">
                         <Wifi className="size-2.5" /> Live
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <p className="text-sm text-muted-foreground truncate">{etf.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{etf.description}</p>
