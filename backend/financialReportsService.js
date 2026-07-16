@@ -109,6 +109,11 @@ async function getCompanyProfile(symbol) {
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
+  const isNse = await isNseStock(symbol);
+  const exchange = isNse ? 'NSE' : 'NASDAQ/NYSE';
+  const currency = isNse ? 'KES' : 'USD';
+  const country = isNse ? 'Kenya' : 'USA';
+
   const liveQuote = await marketService.getStockQuote(symbol);
   if (liveQuote) {
     return cacheSet(cacheKey, {
@@ -116,14 +121,14 @@ async function getCompanyProfile(symbol) {
       companyName: liveQuote.company_name || symbol,
       industry: 'N/A',
       sector: 'N/A',
-      country: symbol.startsWith('NSE:') ? 'Kenya' : 'USA',
+      country,
       website: '',
       description: '',
       ceo: 'N/A',
       employees: 0,
       marketCap: liveQuote.marketCap || 0,
-      exchange: liveQuote.exchange || (symbol.startsWith('NSE:') ? 'NSE' : 'NASDAQ/NYSE'),
-      currency: liveQuote.currency || (symbol.startsWith('NSE:') ? 'KES' : 'USD'),
+      exchange: liveQuote.exchange || exchange,
+      currency: liveQuote.currency || currency,
       isEtf: false,
       image: '',
       lastUpdated: new Date().toISOString()
@@ -135,14 +140,14 @@ async function getCompanyProfile(symbol) {
     companyName: symbol,
     industry: 'N/A',
     sector: 'N/A',
-    country: symbol.startsWith('NSE:') ? 'Kenya' : 'USA',
+    country,
     website: '',
     description: '',
     ceo: 'N/A',
     employees: 0,
     marketCap: 0,
-    exchange: symbol.startsWith('NSE:') ? 'NSE' : 'NASDAQ/NYSE',
-    currency: symbol.startsWith('NSE:') ? 'KES' : 'USD',
+    exchange,
+    currency,
     isEtf: false,
     image: '',
     lastUpdated: new Date().toISOString()
