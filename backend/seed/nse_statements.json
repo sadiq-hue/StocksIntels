@@ -5524,6 +5524,33 @@
     {
       "ticker": "XPRS",
       "period_type": "annual",
+      "period_end_date": "2024-12-30",
+      "file_name": "Express-Kenya-Plc-Financial-Statement-for-The-Year-Ended-31st-December-2024.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": -2.26,
+        "net_income": -107908000,
+        "total_debt": 359700000,
+        "total_assets": 1200000000,
+        "total_revenue": 26378184,
+        "current_assets": 70000000,
+        "cost_of_revenue": 98500000,
+        "operating_income": -95840000,
+        "retained_earnings": -606456980,
+        "total_liabilities": 788021084,
+        "current_liabilities": 65000000,
+        "shareholders_equity": 411978916,
+        "cash_from_operations": -2000000
+      },
+      "error_message": null,
+      "processed_by": "audit:FY2024",
+      "parsed_at": "2026-07-16 12:00:00.000+03"
+    },
+    {
+      "ticker": "XPRS",
+      "period_type": "annual",
       "period_end_date": "2025-12-30",
       "file_name": "Express-Kenya-Plc-Financial-Statement-for-The-Year-Ended-31st-December-2025.pdf",
       "file_size": null,
