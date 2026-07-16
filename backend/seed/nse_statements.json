@@ -1954,7 +1954,7 @@
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": 1072.83,
+        "eps": 8.54,
         "net_income": 32184821000,
         "total_debt": 95333081000,
         "total_assets": 877414892000,
@@ -2009,13 +2009,13 @@
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": 50.86,
-        "net_income": 41976207000,
+        "eps": 11.12,
+        "net_income": 43700000000,
         "total_debt": 126913514000,
         "total_assets": 1821436520000,
-        "total_revenue": 155638916000,
-        "cost_of_revenue": 51444708000,
-        "operating_income": 51878871000,
+        "total_revenue": 160900000000,
+        "cost_of_revenue": 56700000000,
+        "operating_income": 51900000000,
         "retained_earnings": 202886298000,
         "total_liabilities": 1603299417000,
         "dividend_per_share": 4,
@@ -2034,16 +2034,16 @@
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": 4.08,
-        "net_income": 16027119000,
+        "eps": 12.34,
+        "net_income": 48823358000,
         "total_debt": 109614685000,
         "total_assets": 1685877047000,
-        "total_revenue": 155992438000,
-        "cost_of_revenue": 51190823000,
-        "operating_income": 20413701000,
+        "total_revenue": 170285001000,
+        "cost_of_revenue": 61575230000,
+        "operating_income": 60739955000,
         "retained_earnings": 219885127000,
         "total_liabilities": 1467098441000,
-        "dividend_per_share": 4,
+        "dividend_per_share": 4.25,
         "shareholders_equity": 218778606000
       },
       "error_message": null,
@@ -5065,6 +5065,26 @@
       "error_message": null,
       "processed_by": "js:mistral",
       "parsed_at": "2026-07-15T16:25:29.000Z"
+    },
+    {
+      "ticker": "EQTY",
+      "period_end_date": "2025-12-31",
+      "period_type": "annual",
+      "status": "completed",
+      "source": "nse-upload",
+      "file_name": "EQTY-FY2025-audited",
+      "parsed_data": {
+        "period_end_date": "2025-12-31",
+        "period_type": "annual",
+        "total_revenue": 173638371000,
+        "cost_of_revenue": 46699113000,
+        "operating_income": 92114650000,
+        "net_income": 75547982000,
+        "eps": 20.01,
+        "dividend_per_share": 5.75,
+        "total_assets": 1970992243000,
+        "shareholders_equity": 309503855000
+      }
     }
   ]
 }
