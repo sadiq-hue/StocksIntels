@@ -3838,7 +3838,7 @@
       "status": "completed",
       "parsed_data": {
         "eps": -6.34,
-        "net_income": 15215000,
+        "net_income": -15215000,
         "total_assets": 216192000,
         "total_revenue": 144003000,
         "current_assets": 120049000,
@@ -3863,7 +3863,7 @@
       "status": "completed",
       "parsed_data": {
         "eps": -21.88,
-        "net_income": 52511000,
+        "net_income": -52511000,
         "total_assets": 163469000,
         "total_revenue": 131013000,
         "current_assets": 71616000,
