@@ -3041,6 +3041,66 @@
       "parsed_at": "2026-07-14 18:43:17.962+03"
     },
     {
+      "ticker": "KAPC",
+      "period_type": "annual",
+      "period_end_date": "2023-03-31",
+      "file_name": "Kapchorua-Tea-Kenya-Plc-Audited-Results-Year-Ended-31-Mar-2023.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 20.10,
+        "net_income": 314510000,
+        "total_revenue": 1773794000,
+        "operating_income": 402150000,
+        "dividend_per_share": 25,
+        "retained_earnings": 1408956000
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 14:30:00.000000+03"
+    },
+    {
+      "ticker": "KAPC",
+      "period_type": "annual",
+      "period_end_date": "2024-03-31",
+      "file_name": "Kapchorua-Tea-Kenya-Plc-Audited-Results-Year-Ended-31-Mar-2024.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 25.52,
+        "net_income": 399358000,
+        "total_revenue": 2193918000,
+        "operating_income": 579240000,
+        "dividend_per_share": 50,
+        "retained_earnings": 1408956000
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 14:31:00.000000+03"
+    },
+    {
+      "ticker": "KAPC",
+      "period_type": "annual",
+      "period_end_date": "2025-03-31",
+      "file_name": "Kapchorua-Tea-Kenya-Plc-Audited-Results-Year-Ended-31-Mar-2025.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 11.58,
+        "net_income": 181177000,
+        "total_revenue": 2218731000,
+        "operating_income": 248240000,
+        "dividend_per_share": 25,
+        "retained_earnings": 1408956000
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 14:32:00.000000+03"
+    },
+    {
         "ticker": "KCB",
         "period_type": "quarterly",
         "period_end_date": "2022-03-30",
@@ -5695,6 +5755,62 @@
       "error_message": null,
       "processed_by": "js:mistral",
       "parsed_at": "2026-07-14 18:42:56.31+03"
+    },
+    {
+      "ticker": "WTK",
+      "period_type": "annual",
+      "period_end_date": "2023-03-31",
+      "file_name": "Williamson-Tea-Kenya-Plc-Audited-Results-Year-Ended-31-Mar-2023.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 29.42,
+        "net_income": 515200000,
+        "total_revenue": 4019821000,
+        "dividend_per_share": 25
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 14:33:00.000000+03"
+    },
+    {
+      "ticker": "WTK",
+      "period_type": "annual",
+      "period_end_date": "2024-03-31",
+      "file_name": "Williamson-Tea-Kenya-Plc-Audited-Results-Year-Ended-31-Mar-2024.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 28.41,
+        "net_income": 526953000,
+        "total_revenue": 4194358000,
+        "operating_income": 330376000,
+        "dividend_per_share": 25
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 14:34:00.000000+03"
+    },
+    {
+      "ticker": "WTK",
+      "period_type": "annual",
+      "period_end_date": "2025-03-31",
+      "file_name": "Williamson-Tea-Kenya-Plc-Audited-Results-Year-Ended-31-Mar-2025.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": -8.76,
+        "net_income": -166439000,
+        "total_revenue": 4108740000,
+        "operating_income": -392220000,
+        "dividend_per_share": 10
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 14:35:00.000000+03"
     },
     {
       "ticker": "XPRS",
