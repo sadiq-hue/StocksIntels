@@ -51,8 +51,8 @@ export function BondsPage() {
         fetch(`${API_URL}/bonds?market=${market}`),
         fetch(`${API_URL}/bonds/summary`),
       ]);
-      setBonds(await bondsRes.json());
-      setSummary(await summaryRes.json());
+      if (bondsRes.ok) setBonds(await bondsRes.json());
+      if (summaryRes.ok) setSummary(await summaryRes.json());
     } catch (e) {
       console.error("Failed to load bonds:", e);
     } finally {
@@ -126,36 +126,36 @@ export function BondsPage() {
           <Card className="p-4">
             <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">KE 10-Year Yield</p>
             <div className="flex items-center gap-2">
-              <p className="text-2xl font-bold text-foreground">{summary.kenya10Y.toFixed(2)}%</p>
-              <span className={`flex items-center gap-0.5 text-xs font-medium ${summary.kenya10YChange >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                {summary.kenya10YChange >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
-                {summary.kenya10YChange >= 0 ? "+" : ""}{summary.kenya10YChange.toFixed(2)}%
+              <p className="text-2xl font-bold text-foreground">{(summary.kenya10Y ?? 0).toFixed(2)}%</p>
+              <span className={`flex items-center gap-0.5 text-xs font-medium ${(summary.kenya10YChange ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {(summary.kenya10YChange ?? 0) >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+                {(summary.kenya10YChange ?? 0) >= 0 ? "+" : ""}{(summary.kenya10YChange ?? 0).toFixed(2)}%
               </span>
             </div>
           </Card>
           <Card className="p-4">
             <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">US 10-Year Yield</p>
             <div className="flex items-center gap-2">
-              <p className="text-2xl font-bold text-foreground">{summary.us10Y.toFixed(2)}%</p>
-              <span className={`flex items-center gap-0.5 text-xs font-medium ${summary.us10YChange >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                {summary.us10YChange >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
-                {summary.us10YChange >= 0 ? "+" : ""}{summary.us10YChange.toFixed(2)}%
+              <p className="text-2xl font-bold text-foreground">{(summary.us10Y ?? 0).toFixed(2)}%</p>
+              <span className={`flex items-center gap-0.5 text-xs font-medium ${(summary.us10YChange ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {(summary.us10YChange ?? 0) >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+                {(summary.us10YChange ?? 0) >= 0 ? "+" : ""}{(summary.us10YChange ?? 0).toFixed(2)}%
               </span>
             </div>
           </Card>
           <Card className="p-4">
             <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">KE 91-Day T-Bill</p>
             <div className="flex items-center gap-2">
-              <p className="text-2xl font-bold text-foreground">{summary.kenyaTbill91D.toFixed(2)}%</p>
-              <span className={`flex items-center gap-0.5 text-xs font-medium ${summary.kenyaTbill91DChange >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                {summary.kenyaTbill91DChange >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
-                {summary.kenyaTbill91DChange >= 0 ? "+" : ""}{summary.kenyaTbill91DChange.toFixed(2)}%
+              <p className="text-2xl font-bold text-foreground">{(summary.kenyaTbill91D ?? 0).toFixed(2)}%</p>
+              <span className={`flex items-center gap-0.5 text-xs font-medium ${(summary.kenyaTbill91DChange ?? 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {(summary.kenyaTbill91DChange ?? 0) >= 0 ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+                {(summary.kenyaTbill91DChange ?? 0) >= 0 ? "+" : ""}{(summary.kenyaTbill91DChange ?? 0).toFixed(2)}%
               </span>
             </div>
           </Card>
           <Card className="p-4">
             <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">KE-US Spread</p>
-            <p className="text-2xl font-bold text-foreground">{(summary.kenya10Y - summary.us10Y).toFixed(2)}%</p>
+            <p className="text-2xl font-bold text-foreground">{((summary.kenya10Y ?? 0) - (summary.us10Y ?? 0)).toFixed(2)}%</p>
             <p className="text-[10px] text-amber-600 font-medium mt-1">Risk premium</p>
           </Card>
         </div>
@@ -169,6 +169,12 @@ export function BondsPage() {
           <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${summary.hasLiveData ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
             {summary.hasLiveData ? '● Live' : '● CBK Auction'}
           </span>
+        </div>
+      )}
+
+      {!summary && !loading && (
+        <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+          Bond summary is temporarily unavailable. Showing listed bonds below.
         </div>
       )}
 
@@ -227,7 +233,7 @@ export function BondsPage() {
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase font-semibold">YTM</p>
                       <div className="flex items-center justify-center gap-1">
-                        <p className="text-sm font-bold text-[#0D7490]">{bond.ytm.toFixed(2)}%</p>
+                        <p className="text-sm font-bold text-[#0D7490]">{(bond.ytm ?? 0).toFixed(2)}%</p>
                         <span className={`text-[9px] ${isPositive ? "text-emerald-600" : "text-red-600"}`}>
                           {isPositive ? "▲" : "▼"}
                         </span>
@@ -238,7 +244,7 @@ export function BondsPage() {
                     </div>
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase font-semibold">Price</p>
-                      <p className="text-sm font-bold text-foreground">{bond.price.toFixed(2)}</p>
+                      <p className="text-sm font-bold text-foreground">{(bond.price ?? 0).toFixed(2)}</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-muted-foreground uppercase font-semibold">Maturity</p>
@@ -328,13 +334,15 @@ export function BondsPage() {
                 <th className="text-right py-2 text-muted-foreground font-medium">Spread</th>
               </tr></thead>
               <tbody>
-                {summary.yieldCurve.map(p => {
-                  const spread = p.kenya - p.us;
+                {(summary.yieldCurve || []).map(p => {
+                  const kenya = p.kenya ?? 0;
+                  const us = p.us ?? 0;
+                  const spread = kenya - us;
                   return (
                     <tr key={p.term} className="border-b border-muted hover:bg-muted/50">
                       <td className="py-2.5 text-foreground font-medium">{p.term}</td>
-                      <td className="py-2.5 text-right text-foreground">{p.kenya.toFixed(2)}%</td>
-                      <td className="py-2.5 text-right text-foreground">{p.us.toFixed(2)}%</td>
+                      <td className="py-2.5 text-right text-foreground">{kenya.toFixed(2)}%</td>
+                      <td className="py-2.5 text-right text-foreground">{us.toFixed(2)}%</td>
                       <td className={`py-2.5 text-right font-medium ${spread > 8 ? "text-amber-600" : "text-foreground"}`}>+{spread.toFixed(2)}%</td>
                     </tr>
                   );
