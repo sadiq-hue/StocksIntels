@@ -112,13 +112,28 @@ async function storePdfReport({ ticker, period_type, period_end_date, file_name,
   const sid = s.rows[0].id;
   const tickerVal = ticker.toUpperCase();
 
-  const ins = await pool.query(
-    `INSERT INTO financial_statements (stock_id, period_type, period_end_date, file_name, status, processed_by)
-      VALUES ($1, $2, $3, $4, 'processing', $5)
-     RETURNING id`,
-    [sid, period_type || 'annual', period_end_date || null, file_name || (tickerVal + '_auto.pdf'), processed_by || 'auto-nse']
+  // Reuse an existing row for the same period (upsert on stock_id+period_end_date+period_type)
+  // so re-parsing a previously failed/broken period self-heals instead of creating duplicates.
+  const existing = await pool.query(
+    `SELECT id FROM financial_statements WHERE stock_id = $1 AND period_end_date IS NOT DISTINCT FROM $2 AND period_type IS NOT DISTINCT FROM $3 LIMIT 1`,
+    [sid, period_end_date || null, period_type || 'annual']
   );
-  const docId = ins.rows[0].id;
+  let docId;
+  if (existing.rows.length > 0) {
+    docId = existing.rows[0].id;
+    await pool.query(
+      `UPDATE financial_statements SET file_name = $1, status = 'processing', processed_by = $2, error_message = NULL, parsed_data = NULL, parsed_at = NULL WHERE id = $3`,
+      [file_name || (tickerVal + '_auto.pdf'), processed_by || 'auto-nse', docId]
+    );
+  } else {
+    const ins = await pool.query(
+      `INSERT INTO financial_statements (stock_id, period_type, period_end_date, file_name, status, processed_by)
+        VALUES ($1, $2, $3, $4, 'processing', $5)
+       RETURNING id`,
+      [sid, period_type || 'annual', period_end_date || null, file_name || (tickerVal + '_auto.pdf'), processed_by || 'auto-nse']
+    );
+    docId = ins.rows[0].id;
+  }
 
   let parsed = null;
   let status = 'failed';

@@ -555,17 +555,26 @@ async function processFiling(pdf, suppressAlert) {
     return { matched: false };
   }
 
-  // Idempotency: skip filings already successfully parsed (avoids duplicate rows + re-spend on OCR)
+  // Idempotency: skip filings already successfully parsed (avoids duplicate rows + re-spend on OCR).
+  // A row is only considered "done" if it completed AND actually produced parsed_data — rows left in a
+  // 'completed' state with an error_message or empty parsed_data (e.g. transient LLM-quota failures during a
+  // bulk seed) are re-processed so the detector self-heals broken periods on each cycle.
   try {
     const ex = await pool.query(
-      `SELECT 1 FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE s.ticker = $1 AND fs.period_end_date IS NOT DISTINCT FROM $2 AND fs.period_type IS NOT DISTINCT FROM $3 AND fs.status = 'completed' LIMIT 1`,
+      `SELECT 1 FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE s.ticker = $1 AND fs.period_end_date IS NOT DISTINCT FROM $2 AND fs.period_type IS NOT DISTINCT FROM $3 AND fs.status = 'completed' AND (fs.error_message IS NULL OR fs.error_message = '') AND fs.parsed_data IS NOT NULL LIMIT 1`,
       [ticker, periodEnd, inferPeriodType(pdf.filename)]
     );
     if (ex.rowCount) {
-      console.log(`[NSE-Detector] Skip ${ticker} ${periodEnd || ''} (already completed)`);
+      console.log(`[NSE-Detector] Skip ${ticker} ${periodEnd || ''} (already completed with data)`);
       await recordFiling({ key, company, ticker, url: pdf.url, filename: pdf.filename, periodEnd, audited, parsed: true, parseStatus: 'skipped-completed', source: pdf.source || 'nse' });
       return { matched: true, parsed: true, skipped: true };
     }
+    // Log (but still re-process) if a broken 'completed' row exists for this period
+    const broken = await pool.query(
+      `SELECT 1 FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE s.ticker = $1 AND fs.period_end_date IS NOT DISTINCT FROM $2 AND fs.period_type IS NOT DISTINCT FROM $3 AND fs.status = 'completed' AND (fs.error_message IS NOT NULL AND fs.error_message <> '') AND fs.parsed_data IS NULL LIMIT 1`,
+      [ticker, periodEnd, inferPeriodType(pdf.filename)]
+    );
+    if (broken.rowCount) console.log(`[NSE-Detector] Re-processing broken ${ticker} ${periodEnd || ''} (prior parse failed, retrying)`);
   } catch (_) { /* fall through and process */ }
 
   try {
