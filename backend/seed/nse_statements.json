@@ -3101,6 +3101,26 @@
       "parsed_at": "2026-07-16 14:32:00.000000+03"
     },
     {
+      "ticker": "KAPC",
+      "period_type": "annual",
+      "period_end_date": "2026-03-31",
+      "file_name": "Kapchorua-Tea-Kenya-Plc-Audited-Results-Year-Ended-31-Mar-2026.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 12.59,
+        "net_income": 196940000,
+        "total_revenue": 1663000000,
+        "operating_income": 163430000,
+        "dividend_per_share": 30,
+        "retained_earnings": 1630000000
+      },
+      "error_message": null,
+      "processed_by": "js:audit",
+      "parsed_at": "2026-07-16 14:40:00.000000+03"
+    },
+    {
         "ticker": "KCB",
         "period_type": "quarterly",
         "period_end_date": "2022-03-30",
