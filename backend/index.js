@@ -5943,16 +5943,40 @@ app.get('/api/nse/insights/:ticker', async (req, res) => {
     const daysToExit = avgVolume > 500000 ? 1 : avgVolume > 100000 ? 3 : avgVolume > 25000 ? 10 : 30;
     const liquidityScore = avgVolume > 500000 ? 90 : avgVolume > 100000 ? 70 : avgVolume > 25000 ? 50 : avgVolume > 5000 ? 30 : 10;
 
-    // Financial health
+    // Financial health — derived from the actual NSE financial statements
+    // (the same data backing the Financials page), not the generic fundamentals table.
     let healthScore = 70;
     let healthIssues = [];
-    if (fund.debtToEquity && fund.debtToEquity > 1.5) { healthScore -= 15; healthIssues.push('High debt-to-equity ratio'); }
-    if (fund.currentRatio && fund.currentRatio < 0.8) { healthScore -= 15; healthIssues.push('Low liquidity ratio (current ratio < 0.8)'); }
-    if (fund.roe && fund.roe < 0) { healthScore -= 20; healthIssues.push('Negative return on equity'); }
+    let realStmt = null;
+    try {
+      const nseReport = await getFinancialReport(tickerUC, 'annual', 4).catch(() => null);
+      const balHist = nseReport?.data?.balanceSheetHistory || [];
+      const incHist = nseReport?.data?.incomeStatementHistory || [];
+      realStmt = balHist[0] || null;
+      const incLatest = incHist[0] || null;
+      if (realStmt) {
+        const equity = realStmt.totalEquity || realStmt.totalStockholdersEquity || 0;
+        const debt = realStmt.totalDebt || (realStmt.totalLiabilities || 0) - (realStmt.totalCurrentLiabilities || 0);
+        const totalLiab = realStmt.totalLiabilities || 0;
+        const curAssets = realStmt.totalCurrentAssets || 0;
+        const curLiab = realStmt.totalCurrentLiabilities || 0;
+        const debtToEquity = equity > 0 ? (debt || totalLiab) / equity : 0;
+        const currentRatio = curLiab > 0 ? curAssets / curLiab : 0;
+        const roe = equity > 0 && incLatest ? incLatest.netIncome / equity : 0;
+        const netMargin = incLatest && incLatest.revenue > 0 ? incLatest.netIncome / incLatest.revenue : 0;
+        if (debtToEquity > 1.5) { healthScore -= 15; healthIssues.push('High debt-to-equity ratio'); }
+        if (currentRatio > 0 && currentRatio < 0.8) { healthScore -= 15; healthIssues.push('Low liquidity ratio (current ratio < 0.8)'); }
+        if (roe < 0) { healthScore -= 20; healthIssues.push('Negative return on equity'); }
+        if (netMargin < 0) { healthScore -= 10; healthIssues.push('Negative net profit margin'); }
+        if (incLatest && incLatest.operatingIncome != null && incLatest.operatingIncome < 0 && incLatest.netIncome < 0) { healthScore -= 15; healthIssues.push('Operating and net losses'); }
+        else if (incLatest && incLatest.netIncome != null && incLatest.netIncome < 0) { healthScore -= 15; healthIssues.push('Net loss for the period'); }
+      }
+    } catch (stmtErr) {
+      console.log(`[nse/insights] statement-based health fallback for ${tickerUC}: ${stmtErr.message}`);
+    }
+    // Fall back to fundamentals table for any gap-level flags not covered above
     if (fund.altmanZ && fund.altmanZ < 1.8) { healthScore -= 25; healthIssues.push('Altman Z-score suggests financial distress risk'); }
-    if (fund.epsGrowth && fund.epsGrowth < -10) { healthScore -= 10; healthIssues.push('Declining earnings growth'); }
-    if (fund.peRatio && fund.peRatio < 0) { healthScore -= 15; healthIssues.push('Negative earnings (negative P/E ratio)'); }
-    if (fund.marginChange && fund.marginChange < -3) { healthScore -= 10; healthIssues.push('Contracting profit margins'); }
+    if (fund.epsGrowth && fund.epsGrowth < -10 && !healthIssues.some(i => i.includes('loss'))) { healthScore -= 10; healthIssues.push('Declining earnings growth'); }
     if (tickerUC === 'KPLC') { healthScore = Math.min(healthScore, 25); healthIssues.push('CMA watchlist — regulatory compliance concerns'); }
     if (tickerUC === 'KQ') { healthScore = Math.min(healthScore, 30); healthIssues.push('Persistent operating losses'); }
     const healthLevel = healthScore >= 65 ? 'good' : healthScore >= 40 ? 'watch' : 'distress';
