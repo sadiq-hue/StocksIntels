@@ -20,6 +20,7 @@ import { NotificationsPage } from "./pages/NotificationsPage";
 import { IpoPage } from "./pages/IpoPage";
 import { DerivativesPage } from "./pages/DerivativesPage";
 import { AdminStocks } from "./pages/AdminStocks";
+import { AdminPendingReports } from "./pages/AdminPendingReports";
 
 export const router = createBrowserRouter([
   {
@@ -52,6 +53,7 @@ export const router = createBrowserRouter([
       { path: "ipos", Component: IpoPage },
       { path: "derivatives", Component: DerivativesPage },
       { path: "admin/stocks", Component: AdminStocks },
+      { path: "admin/pending-reports", Component: AdminPendingReports },
     ],
   },
   { path: "/markets", loader: () => redirect("/app/markets") },
