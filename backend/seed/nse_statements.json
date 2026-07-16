@@ -4545,14 +4545,14 @@
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": 41.3,
-        "net_income": 15802000000,
-        "total_revenue": 34797000000,
+        "eps": 52.65,
+        "net_income": 20060587000,
+        "total_revenue": 33265303000,
         "cost_of_revenue": 3141000000,
-        "operating_income": 22437000000,
-        "dividend_per_share": 32,
-        "total_assets": 428962175000,
-        "shareholders_equity": 61532267000
+        "operating_income": 28210000000,
+        "dividend_per_share": 45,
+        "total_assets": 384574089000,
+        "shareholders_equity": 71800000000
       },
       "error_message": null,
       "processed_by": "js:audit",
@@ -4567,14 +4567,14 @@
       "mime_type": "application/pdf",
       "status": "completed",
       "parsed_data": {
-        "eps": 43.7,
-        "net_income": 16728000000,
-        "total_revenue": 36512000000,
+        "eps": 32.47,
+        "net_income": 12436571000,
+        "total_revenue": 28891842000,
         "cost_of_revenue": 3288000000,
-        "operating_income": 23910000000,
-        "dividend_per_share": 33,
-        "total_assets": 428962175000,
-        "shareholders_equity": 61532267000
+        "operating_income": 16837000000,
+        "dividend_per_share": 31,
+        "total_assets": 363491556000,
+        "shareholders_equity": 66300000000
       },
       "error_message": null,
       "processed_by": "js:audit",
