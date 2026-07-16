@@ -411,7 +411,12 @@ export function FinancialsPage() {
   // income-statement rows so "Cost of Revenue" → "Interest & Operating Expenses"
   // and "Gross Profit" → "Net Interest Income" for those issuers (applies to all
   // NSE financial-sector stocks, not just one ticker).
-  const isBank = profile?.exchange === 'NSE' && /bank|financial|insurance|investment|sacco|microfin|building society/i.test(
+  // Exclude exchange operators (e.g. Nairobi Securities Exchange): they are not
+  // lenders and have no interest margins, so banking labels would be misleading.
+  const isExchange = /securities exchange|stock exchange|bourse/i.test(
+    `${profile?.companyName || ''} ${profile?.industry || ''} ${profile?.sector || ''}`
+  );
+  const isBank = !isExchange && profile?.exchange === 'NSE' && /bank|financial|insurance|investment|sacco|microfin|building society/i.test(
     `${profile?.sector || ''} ${profile?.industry || ''} ${profile?.companyName || ''}`
   );
   const incomeMetrics = isBank
