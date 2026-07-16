@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { storeParsedFinancials } = require('../financialStatementsStore');
-const { backfillAfricanFinancials } = require('../nseReportsDetector');
+const { backfillAfricanFinancials, runDetection } = require('../nseReportsDetector');
 
 const STOCKS_UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'stocks');
 if (!fs.existsSync(STOCKS_UPLOAD_DIR)) {
@@ -667,6 +667,28 @@ router.post('/backfill-af', async (req, res) => {
 
 router.get('/backfill-af', (_req, res) => {
   res.json(afBackfillStatus);
+});
+
+// ── On-demand NSE report detection (same loop the scheduler runs every ~6h) ──
+// Kicks off a single scrape + parse cycle immediately instead of waiting for the
+// next interval. Broken/quota-failed periods are re-parsed automatically. Runs in
+// the background; poll GET /api/admin/detect-nse-reports for progress.
+let detectStatus = { running: false, last: null };
+
+router.post('/detect-nse-reports', async (req, res) => {
+  if (detectStatus.running) {
+    return res.status(409).json({ error: 'Detection already running', status: detectStatus });
+  }
+  detectStatus = { running: true, last: { startedAt: new Date().toISOString(), result: null, error: null, finishedAt: null } };
+  runDetection()
+    .then(result => { detectStatus.last.result = result; detectStatus.last.finishedAt = new Date().toISOString(); })
+    .catch(e => { detectStatus.last.error = e.message; detectStatus.last.finishedAt = new Date().toISOString(); })
+    .finally(() => { detectStatus.running = false; });
+  res.json({ started: true, note: 'NSE report detection is running in the background. Poll GET /api/admin/detect-nse-reports for progress.' });
+});
+
+router.get('/detect-nse-reports', (_req, res) => {
+  res.json(detectStatus);
 });
 
 module.exports = router;
