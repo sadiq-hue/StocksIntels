@@ -5,6 +5,7 @@ import {
   LineChart, Newspaper, FileText, MessageSquare, Users,
   BarChart3, Briefcase, Layers, User, LifeBuoy,
   DollarSign, TrendingUp, GraduationCap, Lightbulb,
+  ChevronsLeft, ChevronsRight,
 } from "lucide-react";
 import { useBeginnerMode } from "../contexts/BeginnerModeContext";
 
