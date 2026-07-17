@@ -7,6 +7,11 @@ const BASE_URL = 'https://www.alphavantage.co/query';
 
 const cache = new PersistentCache('alphavantage_fin', 24 * 60 * 60 * 1000);
 
+// Alpha Vantage uses dash for class shares (BRK-B not BRK.B)
+function toAlphaSymbol(symbol) {
+  return symbol.replace(/\./g, '-').split(':')[0];
+}
+
 // Shared rate limiter: 5 calls/min free tier → 12s minimum interval.
 // Uses a mutex so concurrent calls serialize properly (race-free).
 let lastCallTime = 0;
@@ -58,7 +63,7 @@ async function fetchOverview(symbol) {
   if (isNseSymbol(symbol)) return null;
 
   try {
-    const data = await rateLimitedFetch({ function: 'OVERVIEW', symbol });
+    const data = await rateLimitedFetch({ function: 'OVERVIEW', symbol: toAlphaSymbol(symbol) });
     if (!data || !data.Symbol) return null;
     const result = normalizeOverview(data, symbol);
     cache.set(cacheKey, result);
@@ -131,7 +136,7 @@ async function fetchIncomeStatement(symbol, period = 'annual') {
   if (isNseSymbol(symbol)) return [];
 
   try {
-    const data = await rateLimitedFetch({ function: 'INCOME_STATEMENT', symbol });
+    const data = await rateLimitedFetch({ function: 'INCOME_STATEMENT',  symbol: toAlphaSymbol(symbol) });
     const reports = isAnnual ? data?.annualReports : data?.quarterlyReports;
     if (!reports || !Array.isArray(reports) || reports.length === 0) return [];
     const result = reports.map(r => normalizeIncomeItem(r));
@@ -178,7 +183,7 @@ async function fetchBalanceSheet(symbol, period = 'annual') {
   if (isNseSymbol(symbol)) return [];
 
   try {
-    const data = await rateLimitedFetch({ function: 'BALANCE_SHEET', symbol });
+    const data = await rateLimitedFetch({ function: 'BALANCE_SHEET',  symbol: toAlphaSymbol(symbol) });
     const reports = isAnnual ? data?.annualReports : data?.quarterlyReports;
     if (!reports || !Array.isArray(reports) || reports.length === 0) return [];
     const result = reports.map(r => normalizeBalanceItem(r));
@@ -228,7 +233,7 @@ async function fetchCashFlow(symbol, period = 'annual') {
   if (isNseSymbol(symbol)) return [];
 
   try {
-    const data = await rateLimitedFetch({ function: 'CASH_FLOW', symbol });
+    const data = await rateLimitedFetch({ function: 'CASH_FLOW', symbol: toAlphaSymbol(symbol) });
     const reports = isAnnual ? data?.annualReports : data?.quarterlyReports;
     if (!reports || !Array.isArray(reports) || reports.length === 0) return [];
     const result = reports.map(r => normalizeCashFlowItem(r));
