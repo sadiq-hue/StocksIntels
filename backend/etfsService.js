@@ -86,68 +86,105 @@ async function fetchLiveQuotes() {
     console.error('[ETFs] NSE ETF fetch failed:', e.message);
   }
 
-  // 1. Direct Yahoo Finance quote API (most reliable for USD ETFs)
-  try {
-    const symbols = tickers.filter(t => t !== 'NSEQ').join(',');
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
-    const res = await axios.get(url, {
-      timeout: 15000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-      },
-    });
-    const quoteResult = res.data?.quoteResponse?.result;
-    if (quoteResult && Array.isArray(quoteResult)) {
-      for (const q of quoteResult) {
-        if (!q || !q.symbol) continue;
-        const price = q.regularMarketPrice;
-        if (price == null) continue;
-        const prevClose = q.regularMarketPreviousClose ?? price;
-        const change = price - prevClose;
-        result[q.symbol] = {
-          price,
-          change: +change.toFixed(2),
-          changePercent: prevClose !== price ? +((change / prevClose) * 100).toFixed(2) : 0,
-          high: q.regularMarketDayHigh || 0,
-          low: q.regularMarketDayLow || 0,
-          volume: q.regularMarketVolume || 0,
-          previousClose: prevClose,
-          open: q.regularMarketOpen || 0,
-          aum: q.totalAssets,
-          expenseRatio: q.annualReportExpenseRatio,
-          dividendYield: q.trailingAnnualDividendYield ? q.trailingAnnualDividendYield * 100 : undefined,
-          dataSource: 'yahoo',
-        };
+  // 1. Alpha Vantage batch (primary — reliable free API, 5 calls/min for all 27 USD ETFs)
+  const alphaKey = process.env.ALPHA_VANTAGE_API_KEY;
+  if (alphaKey) {
+    try {
+      const usSymbols = tickers.filter(t => t !== 'NSEQ');
+      const url = `https://www.alphavantage.co/query?function=BATCH_STOCK_QUOTES&symbols=${encodeURIComponent(usSymbols.join(','))}&apikey=${alphaKey}`;
+      const res = await axios.get(url, { timeout: 15000 });
+      const quotes = res.data?.['Stock Quotes'];
+      if (quotes && Array.isArray(quotes)) {
+        for (const q of quotes) {
+          const sym = q['1. symbol'];
+          const price = parseFloat(q['2. price']);
+          if (!sym || isNaN(price)) continue;
+          const prevClose = price - parseFloat(q['3. change'] || 0);
+          result[sym] = {
+            price,
+            change: +parseFloat(q['3. change'] || 0).toFixed(2),
+            changePercent: +parseFloat((q['4. change percent'] || '0%').replace('%', '')).toFixed(2),
+            high: 0, low: 0,
+            volume: parseInt(q['5. volume'] || 0, 10),
+            previousClose: +prevClose.toFixed(2),
+            open: 0,
+            dataSource: 'alphavantage',
+          };
+        }
+        const covered = usSymbols.filter(s => result[s]).length;
+        console.log(`[ETFs] Alpha Vantage returned ${covered}/${usSymbols.length} USD tickers`);
       }
+    } catch (e) {
+      console.error('[ETFs] Alpha Vantage batch failed:', e.message);
     }
-    if (Object.keys(result).length > 0) {
+    if (tickers.filter(t => t !== 'NSEQ').every(t => result[t])) {
       quotesCache = result;
       cacheTime = now;
       return result;
     }
+  }
+
+  // 2. Yahoo Finance fallback (fill in any tickers Alpha Vantage missed)
+  try {
+    const missing = tickers.filter(t => !result[t] && t !== 'NSEQ');
+    if (missing.length > 0) {
+      const symbols = missing.join(',');
+      const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
+      const res = await axios.get(url, {
+        timeout: 15000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+        },
+      });
+      const quoteResult = res.data?.quoteResponse?.result;
+      if (quoteResult && Array.isArray(quoteResult)) {
+        for (const q of quoteResult) {
+          if (!q || !q.symbol || result[q.symbol]) continue;
+          const price = q.regularMarketPrice;
+          if (price == null) continue;
+          const prevClose = q.regularMarketPreviousClose ?? price;
+          const change = price - prevClose;
+          result[q.symbol] = {
+            price,
+            change: +change.toFixed(2),
+            changePercent: prevClose !== price ? +((change / prevClose) * 100).toFixed(2) : 0,
+            high: q.regularMarketDayHigh || 0,
+            low: q.regularMarketDayLow || 0,
+            volume: q.regularMarketVolume || 0,
+            previousClose: prevClose,
+            open: q.regularMarketOpen || 0,
+            aum: q.totalAssets,
+            expenseRatio: q.annualReportExpenseRatio,
+            dividendYield: q.trailingAnnualDividendYield ? q.trailingAnnualDividendYield * 100 : undefined,
+            dataSource: 'yahoo',
+          };
+        }
+      }
+    }
   } catch (e) {
-    console.error('[ETFs] Yahoo v7 quote failed:', e.message);
-    // Fallback: try v8 chart endpoint as alternative
+    console.error('[ETFs] Yahoo v7 fallback failed:', e.message);
+    // v8 chart endpoint as last Yahoo resort
     try {
-      const symbols = tickers.filter(t => t !== 'NSEQ').join(',');
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbols.split(',')[0])}?interval=1d&range=1d`;
-      const res = await axios.get(url, { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-      const meta = res.data?.chart?.result?.[0]?.meta;
-      if (meta && meta.regularMarketPrice != null) {
-        // v8 only returns one ticker per call, but better than nothing
-        result[symbols.split(',')[0]] = {
-          price: meta.regularMarketPrice,
-          change: 0, changePercent: 0, high: 0, low: 0, volume: 0,
-          previousClose: meta.chartPreviousClose ?? meta.regularMarketPrice,
-          open: 0, aum: undefined, expenseRatio: undefined, dividendYield: undefined,
-          dataSource: 'yahoo',
-        };
+      const missing = tickers.filter(t => !result[t] && t !== 'NSEQ');
+      if (missing.length > 0) {
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(missing[0])}?interval=1d&range=1d`;
+        const res = await axios.get(url, { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const meta = res.data?.chart?.result?.[0]?.meta;
+        if (meta && meta.regularMarketPrice != null) {
+          result[missing[0]] = {
+            price: meta.regularMarketPrice,
+            change: 0, changePercent: 0, high: 0, low: 0, volume: 0,
+            previousClose: meta.chartPreviousClose ?? meta.regularMarketPrice,
+            open: 0, aum: undefined, expenseRatio: undefined, dividendYield: undefined,
+            dataSource: 'yahoo',
+          };
+        }
       }
     } catch {}
   }
 
-  // 2. marketService batch pipeline (fallback for tickers Yahoo didn't cover or when v7 fails)
+  // 3. marketService batch pipeline (last fallback)
   try {
     const missing = tickers.filter(t => !result[t] && t !== 'NSEQ');
     if (missing.length > 0) {
