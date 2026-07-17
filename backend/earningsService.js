@@ -1,3 +1,4 @@
+const axios = require('axios');
 const signalService = require('./signalService');
 const nseAfxScraper = require('./nseAfxScraper');
 
@@ -8,17 +9,6 @@ let lastSyncTime = 0;
 let syncInProgress = false;
 
 const CACHE_TTL = 1000 * 60 * 60;
-const BATCH_SIZE = 10;
-const BATCH_DELAY_FAST = 400;
-const BATCH_DELAY_SLOW = 1000;
-
-function toYahooSymbol(symbol) {
-  const clean = symbol.replace('NSE:', '').toUpperCase();
-  if (signalService.NSE_SYMBOLS.includes(clean)) {
-    return clean + '.NR';
-  }
-  return clean.replace('.', '-');
-}
 
 function getQuarter(date) {
   const m = date.getMonth();
@@ -30,79 +20,6 @@ function getQuarter(date) {
 
 function getFY(year, month) {
   return month >= 9 ? year + 1 : year;
-}
-
-function buildEvents(symbol, quote, details) {
-  const isNse = signalService.NSE_SYMBOLS.includes(symbol);
-  const fund = signalService.getFundamentals(symbol);
-  const name = fund?.name || quote?.shortName || quote?.longName || symbol;
-  const sector = fund?.sector || 'Other';
-  const currency = isNse ? 'KES' : 'USD';
-  const events = [];
-
-  const finQuarterly = details?.earnings?.financialsChart?.quarterly || [];
-  const finByDate = {};
-  for (const fq of finQuarterly) {
-    if (fq.date) finByDate[fq.date] = fq;
-  }
-
-  if (details?.earnings?.earningsChart?.quarterly) {
-    for (const q of details.earnings.earningsChart.quarterly) {
-      if (!q.periodEndDate && !q.reportedDate) continue;
-      const d = q.reportedDate ? new Date(q.reportedDate * 1000) : new Date(q.periodEndDate * 1000);
-      const est = typeof q.estimate === 'number' ? q.estimate : 0;
-      const act = typeof q.actual === 'number' ? q.actual : 0;
-      const sp = parseFloat(q.surprisePct) || 0;
-      const finMatch = finByDate[q.date];
-      const rev = finMatch?.revenue || 0;
-      events.push({
-        id: `${symbol}-${q.date}`,
-        ticker: symbol, name, date: d.toISOString(),
-        dateStr: `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`,
-        quarter: q.fiscalQuarter || getQuarter(d), fiscalYear: d.getFullYear(),
-        estEPS: Math.max(est, 0.01), actualEPS: Math.max(act, 0.01),
-        surprise: sp, isBeat: sp >= 0,
-        market: isNse ? 'nse' : 'global', sector, currency,
-        marketCap: details?.defaultKeyStatistics?.enterpriseValue || fund?.marketCap || 0,
-        revenue: rev,
-      });
-    }
-  }
-
-  const cal = details?.calendarEvents?.earnings;
-  if (cal?.earningsDate?.length) {
-    for (const ds of cal.earningsDate) {
-      const d = new Date(ds);
-      if (isNaN(d.getTime())) continue;
-      events.push({
-        id: `${symbol}-${d.toISOString().slice(0, 10)}`,
-        ticker: symbol, name, date: d.toISOString(),
-        dateStr: `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`,
-        quarter: getQuarter(d), fiscalYear: getFY(d.getFullYear(), d.getMonth()),
-        estEPS: Math.max(cal.earningsAverage || 0, 0.01), actualEPS: 0,
-        surprise: 0, isBeat: true,
-        market: isNse ? 'nse' : 'global', sector, currency,
-        marketCap: details?.defaultKeyStatistics?.enterpriseValue || fund?.marketCap || 0,
-        revenue: cal.revenueAverage ? +(cal.revenueAverage / 1e9).toFixed(1) : 0,
-      });
-    }
-  }
-
-  if (events.length === 0 && quote?.earningsTimestamp) {
-    const d = new Date(quote.earningsTimestamp);
-    events.push({
-      id: `${symbol}-${d.toISOString().slice(0, 10)}`,
-      ticker: symbol, name, date: d.toISOString(),
-      dateStr: `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`,
-      quarter: getQuarter(d), fiscalYear: getFY(d.getFullYear(), d.getMonth()),
-      estEPS: Math.max(quote.epsForward || 0, 0.01), actualEPS: 0,
-      surprise: 0, isBeat: true,
-      market: isNse ? 'nse' : 'global', sector, currency,
-      marketCap: quote.marketCap || fund?.marketCap || 0, revenue: 0,
-    });
-  }
-
-  return events;
 }
 
 function generateNseFallbackEvents(symbol, price) {
@@ -157,81 +74,64 @@ async function syncEarnings() {
 
   try {
     nseAfxScraper.fetchNseQuotes().catch(() => {});
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-
+    const alphaKey = process.env.ALPHA_VANTAGE_API_KEY;
     const allEvents = [];
-    const symbols = signalService.ALL_SYMBOLS;
-    const symbolsWithEarnings = [];
-    const nsePriceMap = {};
 
-    const processBatch = async (start, end) => {
-      const batch = symbols.slice(start, end);
-      const yahooBatch = batch.map(toYahooSymbol);
+    // 1. Alpha Vantage EARNINGS_CALENDAR — all upcoming earnings in one call
+    if (alphaKey) {
       try {
-        const quotes = await yf.quote(yahooBatch);
-        for (let j = 0; j < quotes.length; j++) {
-          const q = quotes[j];
-          const origSymbol = batch[j];
-          const isNse = signalService.NSE_SYMBOLS.includes(origSymbol);
-          if (q?.earningsTimestamp) {
-            symbolsWithEarnings.push({ symbol: origSymbol, quote: q, yahooSymbol: q.symbol || yahooBatch[j] });
-          } else if (isNse && q?.regularMarketPrice) {
-            nsePriceMap[origSymbol] = q.regularMarketPrice;
-          }
-        }
-      } catch (e) {}
-    };
+        const url = `https://www.alphavantage.co/query?function=EARNINGS_CALENDAR&horizon=12month&apikey=${alphaKey}`;
+        const res = await axios.get(url, { timeout: 20000 });
+        const csv = res.data;
+        if (typeof csv === 'string') {
+          const lines = csv.trim().split('\n');
+          const headers = lines[0].split(',');
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(',');
+            const ticker = cols[0] || '';
+            if (!ticker) continue;
+            const isNse = signalService.NSE_SYMBOLS.includes(ticker);
+            const fund = signalService.getFundamentals(ticker);
+            const name = cols[1] || fund?.name || ticker;
+            const sector = fund?.sector || 'Other';
+            const reportDate = new Date(cols[2]);
+            if (isNaN(reportDate.getTime())) continue;
+            const qEnd = cols[3] ? new Date(cols[3]) : reportDate;
+            const quarter = getQuarter(qEnd);
+            const fiscalYear = qEnd.getFullYear();
+            const estEps = parseFloat(cols[4]) || 0;
 
-    for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
-      await processBatch(i, Math.min(i + BATCH_SIZE, symbols.length));
-      if (i + BATCH_SIZE < symbols.length) {
-        await new Promise(r => setTimeout(r, i < 50 ? BATCH_DELAY_FAST : BATCH_DELAY_SLOW));
+            allEvents.push({
+              id: `${ticker}-${reportDate.toISOString().slice(0, 10)}`,
+              ticker, name, date: reportDate.toISOString(),
+              dateStr: `${MONTHS[reportDate.getMonth()]} ${reportDate.getDate()}, ${reportDate.getFullYear()}`,
+              quarter, fiscalYear,
+              estEPS: Math.max(estEps, 0.01),
+              actualEPS: 0,
+              surprise: 0, isBeat: true,
+              market: isNse ? 'nse' : 'global', sector,
+              currency: cols[5] || (isNse ? 'KES' : 'USD'),
+              marketCap: fund?.marketCap || 0,
+              revenue: 0,
+            });
+          }
+          console.log(`[Earnings] Alpha Vantage returned ${allEvents.length} earnings events`);
+        }
+      } catch (e) {
+        console.error('[Earnings] Alpha Vantage calendar failed:', e.message);
       }
     }
 
+    // 2. NSE fallback events for Kenyan stocks not covered by Alpha Vantage
+    const nseSymbolsWithEvents = new Set(allEvents.filter(e => e.market === 'nse').map(e => e.ticker));
     for (const nseSym of signalService.NSE_SYMBOLS) {
-      if (!symbolsWithEarnings.some(s => s.symbol === nseSym)) {
-        const price = nsePriceMap[nseSym] || 0;
-        const events = generateNseFallbackEvents(nseSym, price);
+      if (!nseSymbolsWithEvents.has(nseSym)) {
+        const events = generateNseFallbackEvents(nseSym, 0);
         allEvents.push(...events);
       }
     }
 
-    earningsCache = [...allEvents];
-    lastSyncTime = Date.now();
-
-    for (let i = 0; i < symbolsWithEarnings.length; i += BATCH_SIZE) {
-      const batch = symbolsWithEarnings.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(batch.map(async ({ symbol, quote, yahooSymbol }) => {
-        try {
-          const details = await yf.quoteSummary(yahooSymbol, {
-            modules: ['calendarEvents', 'earnings', 'defaultKeyStatistics'],
-          });
-          return { symbol, quote, details };
-        } catch {
-          return { symbol, quote, details: null };
-        }
-      }));
-      for (const r of results) {
-        if (r.status === 'fulfilled') {
-          const { symbol, quote, details } = r.value;
-          const yahooEvents = buildEvents(symbol, quote, details);
-          const idx = allEvents.findIndex(e => e.ticker === symbol);
-          if (idx >= 0) {
-            allEvents.splice(idx, 1, ...yahooEvents);
-          } else {
-            allEvents.push(...yahooEvents);
-          }
-        }
-      }
-      earningsCache = [...allEvents];
-      lastSyncTime = Date.now();
-      if (i + BATCH_SIZE < symbolsWithEarnings.length) {
-        await new Promise(r => setTimeout(r, BATCH_DELAY_SLOW));
-      }
-    }
-
+    allEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
     earningsCache = allEvents;
     lastSyncTime = Date.now();
   } catch (e) {
