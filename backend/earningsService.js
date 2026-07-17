@@ -8,7 +8,12 @@ let earningsCache = [];
 let lastSyncTime = 0;
 let syncInProgress = false;
 
+const historicalCache = {};
+let historicalFetchInProgress = false;
+let historicalQueue = [];
+
 const CACHE_TTL = 1000 * 60 * 60;
+const ALPHA_RATE_LIMIT_MS = 12000;
 
 function getQuarter(date) {
   const m = date.getMonth();
@@ -68,6 +73,94 @@ function generateNseFallbackEvents(symbol, price) {
   return events;
 }
 
+function buildHistoricalEvents(ticker, data) {
+  const fund = signalService.getFundamentals(ticker);
+  const isNse = signalService.NSE_SYMBOLS.includes(ticker);
+  const name = fund?.name || ticker;
+  const sector = fund?.sector || 'Other';
+  const events = [];
+  const quarterly = data?.quarterlyEarnings || [];
+  for (const q of quarterly) {
+    const reportDate = new Date(q.reportedDate);
+    if (isNaN(reportDate.getTime())) continue;
+    const est = parseFloat(q.estimatedEPS) || 0;
+    const act = parseFloat(q.reportedEPS) || 0;
+    const surprisePct = parseFloat(q.surprisePercentage) || 0;
+    const fiscalQ = Math.floor(reportDate.getMonth() / 3);
+    events.push({
+      id: `${ticker}-${q.reportedDate}`,
+      ticker, name, date: reportDate.toISOString(),
+      dateStr: `${MONTHS[reportDate.getMonth()]} ${reportDate.getDate()}, ${reportDate.getFullYear()}`,
+      quarter: `Q${fiscalQ + 1}`, fiscalYear: reportDate.getFullYear(),
+      estEPS: Math.max(est, 0.01),
+      actualEPS: Math.max(act, 0.01),
+      surprise: +surprisePct.toFixed(2),
+      isBeat: surprisePct >= 0,
+      market: isNse ? 'nse' : 'global', sector,
+      currency: isNse ? 'KES' : 'USD',
+      marketCap: fund?.marketCap || 0,
+      revenue: 0,
+    });
+  }
+  return events;
+}
+
+function mergeHistoricalIntoCache(ticker) {
+  const events = historicalCache[ticker];
+  if (!events || events.length === 0) return;
+  const existingIds = new Set(earningsCache.map(e => e.id));
+  for (const ev of events) {
+    if (!existingIds.has(ev.id)) {
+      earningsCache.push(ev);
+      existingIds.add(ev.id);
+    }
+  }
+  earningsCache.sort((a, b) => new Date(a.date) - new Date(b.date));
+}
+
+async function fetchHistoricalForSymbol(ticker) {
+  const alphaKey = process.env.ALPHA_VANTAGE_API_KEY;
+  if (!alphaKey || historicalCache[ticker]) return;
+  try {
+    const url = `https://www.alphavantage.co/query?function=EARNINGS&symbol=${encodeURIComponent(ticker)}&apikey=${alphaKey}`;
+    const res = await axios.get(url, { timeout: 15000 });
+    const data = res.data;
+    if (data && data.quarterlyEarnings) {
+      historicalCache[ticker] = buildHistoricalEvents(ticker, data);
+      mergeHistoricalIntoCache(ticker);
+      console.log(`[Earnings] History loaded: ${ticker} (${historicalCache[ticker].length} quarters)`);
+    }
+  } catch (e) {
+    historicalCache[ticker] = [];
+  }
+}
+
+async function drainHistoricalQueue() {
+  if (historicalFetchInProgress || historicalQueue.length === 0) return;
+  historicalFetchInProgress = true;
+  while (historicalQueue.length > 0) {
+    const ticker = historicalQueue.shift();
+    await fetchHistoricalForSymbol(ticker);
+    if (historicalQueue.length > 0) {
+      await new Promise(r => setTimeout(r, ALPHA_RATE_LIMIT_MS));
+    }
+  }
+  historicalFetchInProgress = false;
+}
+
+function enqueueHistoricalFetch(tickers) {
+  let newCount = 0;
+  for (const t of tickers) {
+    if (!(t in historicalCache) && !historicalQueue.includes(t)) {
+      historicalQueue.push(t);
+      newCount++;
+    }
+  }
+  if (newCount > 0) {
+    drainHistoricalQueue();
+  }
+}
+
 async function syncEarnings() {
   if (syncInProgress) return;
   syncInProgress = true;
@@ -76,8 +169,9 @@ async function syncEarnings() {
     nseAfxScraper.fetchNseQuotes().catch(() => {});
     const alphaKey = process.env.ALPHA_VANTAGE_API_KEY;
     const allEvents = [];
+    const trackedSet = new Set(signalService.ALL_SYMBOLS);
 
-    // 1. Alpha Vantage EARNINGS_CALENDAR — all upcoming earnings in one call
+    // 1. Alpha Vantage EARNINGS_CALENDAR — upcoming earnings in one call
     if (alphaKey) {
       try {
         const url = `https://www.alphavantage.co/query?function=EARNINGS_CALENDAR&horizon=12month&apikey=${alphaKey}`;
@@ -85,7 +179,6 @@ async function syncEarnings() {
         const csv = res.data;
         if (typeof csv === 'string') {
           const lines = csv.trim().split('\n');
-          const headers = lines[0].split(',');
           for (let i = 1; i < lines.length; i++) {
             const cols = lines[i].split(',');
             const ticker = cols[0] || '';
@@ -115,14 +208,22 @@ async function syncEarnings() {
               revenue: 0,
             });
           }
-          console.log(`[Earnings] Alpha Vantage returned ${allEvents.length} earnings events`);
+          console.log(`[Earnings] Alpha Vantage returned ${allEvents.length} upcoming earnings events`);
         }
       } catch (e) {
         console.error('[Earnings] Alpha Vantage calendar failed:', e.message);
       }
     }
 
-    // 2. NSE fallback events for Kenyan stocks not covered by Alpha Vantage
+    // 2. Historical earnings from per-ticker EARNINGS endpoint (cached once)
+    const historicalTickers = [...trackedSet].filter(t => !signalService.NSE_SYMBOLS.includes(t));
+    enqueueHistoricalFetch(historicalTickers);
+
+    for (const [ticker, events] of Object.entries(historicalCache)) {
+      allEvents.push(...events);
+    }
+
+    // 3. NSE fallback events
     const nseSymbolsWithEvents = new Set(allEvents.filter(e => e.market === 'nse').map(e => e.ticker));
     for (const nseSym of signalService.NSE_SYMBOLS) {
       if (!nseSymbolsWithEvents.has(nseSym)) {
@@ -134,6 +235,7 @@ async function syncEarnings() {
     allEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
     earningsCache = allEvents;
     lastSyncTime = Date.now();
+    console.log(`[Earnings] Cache updated: ${allEvents.length} total events (${Object.keys(historicalCache).length} tickers with history)`);
   } catch (e) {
     console.error('[Earnings] Sync failed:', e.message);
   } finally {
