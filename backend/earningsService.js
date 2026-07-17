@@ -11,9 +11,45 @@ let syncInProgress = false;
 const historicalCache = {};
 let historicalFetchInProgress = false;
 let historicalQueue = [];
+let dbPersistCounter = 0;
 
 const CACHE_TTL = 1000 * 60 * 60;
 const ALPHA_RATE_LIMIT_MS = 12000;
+const DB_PERSIST_EVERY = 10;
+
+let pool = null;
+try { pool = require('./db').pool; } catch {}
+
+async function persistHistoricalCache() {
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO app_cache (cache_key, cache_value, updated_at) VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (cache_key) DO UPDATE SET cache_value = $2::jsonb, updated_at = NOW()`,
+      ['earnings_historical_cache', JSON.stringify(historicalCache)]
+    );
+  } catch {}
+}
+
+async function loadHistoricalCache() {
+  if (!pool) return;
+  try {
+    const result = await pool.query(
+      `SELECT cache_value FROM app_cache WHERE cache_key = 'earnings_historical_cache'`
+    );
+    if (result.rows.length > 0 && result.rows[0].cache_value) {
+      const saved = result.rows[0].cache_value;
+      let loaded = 0;
+      for (const [ticker, events] of Object.entries(saved)) {
+        if (events && events.length > 0) {
+          historicalCache[ticker] = events;
+          loaded++;
+        }
+      }
+      console.log(`[Earnings] Restored ${loaded} tickers with historical data from DB`);
+    }
+  } catch {}
+}
 
 function getQuarter(date) {
   const m = date.getMonth();
@@ -128,6 +164,8 @@ async function fetchHistoricalForSymbol(ticker) {
     if (data && data.quarterlyEarnings) {
       historicalCache[ticker] = buildHistoricalEvents(ticker, data);
       mergeHistoricalIntoCache(ticker);
+      dbPersistCounter++;
+      if (dbPersistCounter % DB_PERSIST_EVERY === 0) persistHistoricalCache();
       console.log(`[Earnings] History loaded: ${ticker} (${historicalCache[ticker].length} quarters)`);
     }
   } catch (e) {
@@ -145,6 +183,7 @@ async function drainHistoricalQueue() {
       await new Promise(r => setTimeout(r, ALPHA_RATE_LIMIT_MS));
     }
   }
+  await persistHistoricalCache();
   historicalFetchInProgress = false;
 }
 
@@ -303,6 +342,7 @@ async function getEarningsCriteria() {
   return { sectors: sectors.length > 0 ? sectors : ['Technology', 'Financial', 'Healthcare'], markets: ['nse', 'global'] };
 }
 
+loadHistoricalCache();
 setTimeout(syncEarnings, 2000);
 
 module.exports = { getUpcomingEarnings, getEarningsCriteria };
