@@ -75,29 +75,61 @@ async function fetchGlobalQuote(symbol) {
 }
 
 async function fetchGoogleFinanceQuote(symbol) {
-  const cheerio = require('cheerio');
   const axios = require('axios');
   const [base, exchange = 'NASDAQ'] = symbol.split(':');
-  const url = `https://www.google.com/finance/quote/${base}:${exchange}`;
-  try {
-    const res = await axios.get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
-      timeout: 5000,
-    });
-    const $ = cheerio.load(res.data);
-    const priceEl = $('div[data-last-price]').first();
-    if (priceEl.length) {
-      const price = parseFloat(priceEl.attr('data-last-price'));
-      if (price && !isNaN(price)) return { price, currency: 'USD', change: 0, changePercent: 0 };
-    }
-    const scriptText = $('script').text();
-    const m = scriptText.match(/"price":(\d+(?:\.\d+)?)/);
-    if (m) {
-      const price = parseFloat(m[1]);
-      if (price && !isNaN(price)) return { price, currency: 'USD', change: 0, changePercent: 0 };
-    }
-  } catch {}
+  const exchMap = {
+    'SPY':'NYSEARCA','VOO':'NYSEARCA','QQQ':'NASDAQ','VTI':'NYSEARCA',
+    'BND':'NASDAQ','AGG':'NYSEARCA','VXUS':'NASDAQ','GLD':'NYSEARCA',
+    'SLV':'NYSEARCA','TLT':'NASDAQ','IWM':'NYSEARCA','DIA':'NYSEARCA',
+    'XLF':'NYSEARCA','XLK':'NYSEARCA','ARKK':'NYSEARCA',
+    'EEM':'NYSEARCA','IEMG':'NASDAQ','VWO':'NYSEARCA','VEU':'NYSEARCA',
+    'EZA':'NYSEARCA','AFK':'NYSEARCA','IJR':'NYSEARCA','TIP':'NYSEARCA',
+    'VNQ':'NYSEARCA','VUG':'NASDAQ','VTV':'NYSEARCA','IVV':'NYSEARCA',
+    'SHY':'NASDAQ','JPM':'NYSE','DIS':'NYSE','BAC':'NYSE',
+    'NFLX':'NASDAQ','AMD':'NASDAQ','INTC':'NASDAQ','CSCO':'NASDAQ',
+  };
+  const exch = exchMap[base] || exchange;
+
+  for (const url of [
+    `https://www.google.com/finance/quote/${base}:${exch}`,
+    `https://www.google.com/finance/quote/${base}`,
+  ]) {
+    try {
+      const res = await axios.get(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept-Language': 'en-US,en;q=0.9' },
+        timeout: 8000, maxRedirects: 5,
+      });
+      const ds2 = extractDataArray(res.data, 'ds:2');
+      if (!ds2) continue;
+      const inner = ds2[0]?.[0]?.[0];
+      if (!inner) continue;
+      const priceArr = inner[5];
+      if (!priceArr || priceArr[0] == null) continue;
+      return { price: priceArr[0], currency: inner[4] || 'USD', change: priceArr[1] || 0, changePercent: priceArr[2] || 0 };
+    } catch {}
+  }
   return null;
+}
+
+function extractDataArray(body, key) {
+  const marker = `AF_initDataCallback({key: '${key}'`;
+  const start = body.indexOf(marker);
+  if (start === -1) return null;
+  const dataPos = body.indexOf('data:', start);
+  if (dataPos === -1) return null;
+  let i = dataPos + 5;
+  while (body[i] !== '[' && i < body.length) i++;
+  if (body[i] !== '[') return null;
+  let depth = 0, jsonStart = i, jsonEnd = -1, inString = false;
+  for (; i < body.length; i++) {
+    const ch = body[i];
+    if (inString) { if (ch === '\\') i++; else if (ch === '"') inString = false; continue; }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '[') depth++;
+    else if (ch === ']') { depth--; if (depth === 0) { jsonEnd = i + 1; break; } }
+  }
+  if (jsonEnd === -1) return null;
+  try { return JSON.parse(body.substring(jsonStart, jsonEnd)); } catch { return null; }
 }
 
 async function fetchBatchNSEQuotes(symbols) {

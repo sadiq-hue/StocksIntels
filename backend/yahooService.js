@@ -218,29 +218,75 @@ async function fetchRapidapiQuote(symbol) {
 
 async function fetchGoogleFinanceQuote(symbol) {
   if (breakers.google.isOpen()) return null;
-  const cheerio = require('cheerio');
-  const clean = symbol.replace('.NR', '').replace('=X', '');
-  try {
-    const resp = await require('axios').get(`https://www.google.com/finance/quote/${clean}`, {
-      headers: { 'User-Agent': UA },
-      timeout: 5000,
-    });
-    const $ = cheerio.load(resp.data);
-    const priceEl = $('div[data-last-price]').first();
-    if (priceEl.length) {
-      const price = parseFloat(priceEl.attr('data-last-price'));
-      if (price && !isNaN(price)) return { price };
-    }
-    const scriptText = $('script').text();
-    const m = scriptText.match(/"price":(\d+(?:\.\d+)?)/);
-    if (m) {
-      const price = parseFloat(m[1]);
-      if (price && !isNaN(price)) return { price };
-    }
-    return null;
-  } catch {
-    return null;
+  const clean = symbol.replace('.NR', '').replace('=X', '').split(':')[0];
+
+  // Common US exchange mapping for Google Finance URLs
+  const exchMap = {
+    'SPY':'NYSEARCA','VOO':'NYSEARCA','QQQ':'NASDAQ','VTI':'NYSEARCA',
+    'BND':'NASDAQ','AGG':'NYSEARCA','VXUS':'NASDAQ','GLD':'NYSEARCA',
+    'SLV':'NYSEARCA','TLT':'NASDAQ','IWM':'NYSEARCA','DIA':'NYSEARCA',
+    'XLF':'NYSEARCA','XLK':'NYSEARCA','ARKK':'NYSEARCA',
+    'EEM':'NYSEARCA','IEMG':'NASDAQ','VWO':'NYSEARCA','VEU':'NYSEARCA',
+    'EZA':'NYSEARCA','AFK':'NYSEARCA','IJR':'NYSEARCA','TIP':'NYSEARCA',
+    'VNQ':'NYSEARCA','VUG':'NASDAQ','VTV':'NYSEARCA','IVV':'NYSEARCA',
+    'SHY':'NASDAQ','JPM':'NYSE','DIS':'NYSE','BAC':'NYSE','WMT':'NYSE',
+    'JNJ':'NYSE','PG':'NYSE','KO':'NYSE','PEP':'NASDAQ','BRK.B':'NYSE',
+    'XOM':'NYSE','CVX':'NYSE','WFC':'NYSE','C':'NYSE','GS':'NYSE',
+    'MS':'NYSE','V':'NYSE','MA':'NYSE','UNH':'NYSE','HD':'NYSE',
+    'MCD':'NYSE','NKE':'NYSE','INTC':'NASDAQ','CSCO':'NASDAQ',
+    'CMCSA':'NASDAQ','ADBE':'NASDAQ','CRM':'NYSE','ORCL':'NYSE',
+    'AMD':'NASDAQ','NFLX':'NASDAQ','AMGN':'NASDAQ','GILD':'NASDAQ',
+    'QCOM':'NASDAQ','TXN':'NASDAQ','MDLZ':'NASDAQ','ISRG':'NASDAQ',
+    'KR':'NYSE','BBY':'NYSE','TGT':'NYSE','COST':'NASDAQ',
+  };
+  const exchange = exchMap[clean] || 'NASDAQ';
+
+  for (const url of [
+    `https://www.google.com/finance/quote/${clean}:${exchange}`,
+    `https://www.google.com/finance/quote/${clean}`,
+  ]) {
+    try {
+      const resp = await require('axios').get(url, {
+        headers: { 'User-Agent': UA, 'Accept-Language': 'en-US,en;q=0.9' },
+        timeout: 8000, maxRedirects: 5,
+      });
+      const ds2 = extractDataArray(resp.data, 'ds:2');
+      if (!ds2) continue;
+      const inner = ds2[0]?.[0]?.[0];
+      if (!inner) continue;
+      const priceArr = inner[5];
+      if (!priceArr || priceArr[0] == null) continue;
+      const result = { price: priceArr[0], change: priceArr[1] || 0, changePercent: priceArr[2] || 0, currency: inner[4] || 'USD', companyName: inner[2] || '' };
+      const ds8 = extractDataArray(resp.data, 'ds:8');
+      if (ds8) {
+        const row = ds8[0]?.[0];
+        if (row && row.length >= 7) { result.previousClose = row[2]; result.dayLow = row[4]; result.dayHigh = row[5]; }
+      }
+      return result;
+    } catch {}
   }
+  return null;
+}
+
+function extractDataArray(body, key) {
+  const marker = `AF_initDataCallback({key: '${key}'`;
+  const start = body.indexOf(marker);
+  if (start === -1) return null;
+  const dataPos = body.indexOf('data:', start);
+  if (dataPos === -1) return null;
+  let i = dataPos + 5;
+  while (body[i] !== '[' && i < body.length) i++;
+  if (body[i] !== '[') return null;
+  let depth = 0, jsonStart = i, jsonEnd = -1, inString = false;
+  for (; i < body.length; i++) {
+    const ch = body[i];
+    if (inString) { if (ch === '\\') i++; else if (ch === '"') inString = false; continue; }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '[') depth++;
+    else if (ch === ']') { depth--; if (depth === 0) { jsonEnd = i + 1; break; } }
+  }
+  if (jsonEnd === -1) return null;
+  try { return JSON.parse(body.substring(jsonStart, jsonEnd)); } catch { return null; }
 }
 
 async function fetchV8Historical(symbol, range, interval) {
@@ -327,16 +373,16 @@ async function fetchQuote(symbol) {
   if (google?.price) {
     return cacheSet(quoteCache, cacheKey, {
       symbol: symbol.toUpperCase(),
-      company_name: symbol.toUpperCase(),
+      company_name: google.companyName || symbol.toUpperCase(),
       price: google.price,
-      currency: 'USD',
-      change: 0,
-      changePercent: 0,
-      changesPercentage: 0,
+      currency: google.currency || 'USD',
+      change: google.change || 0,
+      changePercent: google.changePercent || 0,
+      changesPercentage: google.changePercent || 0,
       volume: 0,
-      dayHigh: google.price,
-      dayLow: google.price,
-      previousClose: google.price,
+      dayHigh: google.dayHigh || google.price,
+      dayLow: google.dayLow || google.price,
+      previousClose: google.previousClose || google.price,
       marketCap: 0,
       timestamp: Math.floor(Date.now() / 1000),
       lastUpdated: new Date().toISOString(),
