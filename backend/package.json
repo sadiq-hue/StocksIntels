@@ -4,8 +4,8 @@
   "description": "Backend for StocksIntels",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+    "start": "node --max-http-header-size=100000000 index.js",
+    "dev": "nodemon --max-http-header-size=100000000 index.js",
     "load-test:setup": "node ../load-test/setup-test-users.js",
     "load-test": "artillery run ../load-test/artillery.yml",
     "load-test:report": "artillery report artillery-report.json",

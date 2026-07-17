@@ -706,32 +706,69 @@ async function fetchFromAlphaVantage() {
   }
 }
 
+// Fetch the article page and extract a real meta description excerpt
+const https = require('https');
+const yahooAgent = new https.Agent({ maxHeaderSize: 100000000 });
+async function fetchYahooExcerpt(url) {
+  if (!url || url === '#') return null;
+  try {
+    const res = await axios.get(url, {
+      timeout: 8000,
+      httpsAgent: yahooAgent,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+    });
+    const $ = cheerio.load(res.data);
+    const desc =
+      $('meta[property="og:description"]').attr('content') ||
+      $('meta[name="description"]').attr('content') ||
+      '';
+    const clean = desc.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').trim();
+    return clean.length > 20 ? clean.substring(0, 300) : null;
+  } catch {
+    return null;
+  }
+}
+
 // Fetch news from Yahoo Finance RSS (reliable, no API key)
 async function fetchFromYahoo() {
   try {
     const feed = await rssParser.parseURL('https://finance.yahoo.com/news/rssindex');
     if (!feed?.items?.length) return [];
-    const articles = [];
+    const base = [];
     for (const item of feed.items.slice(0, 30)) {
       const title = item.title?.trim();
       if (!title || title.length < 10) continue;
       const pubDate = item.isoDate ? new Date(item.isoDate) : new Date();
       const relatedStocks = extractRelatedStocks(title);
-      const excerpt = (item.contentSnippet || item.content || '').trim().substring(0, 300);
-      articles.push({
+      base.push({
+        title, pubDate, relatedStocks,
         id: `yahoo-${item.guid || item.link || Math.random().toString(36).slice(2)}`,
-        headline: title.substring(0, 200),
-        source: 'Yahoo Finance',
-        timestamp: item.isoDate ? getTimeAgo(pubDate) : 'just now',
-        publishedAt: pubDate.toISOString(),
-        category: classifyArticle(title, excerpt, relatedStocks),
-        relatedStocks,
-        sentiment: analyzeSentiment(title + ' ' + excerpt),
-        excerpt: excerpt || 'Read the full story on Yahoo Finance.',
         url: item.link || '#',
         imageUrl: item.mediaContent?.url || null,
       });
     }
+
+    // Scrape real excerpts for the top articles in parallel (bounded for speed)
+    const excerptTasks = base.slice(0, 12).map(a => fetchYahooExcerpt(a.url));
+    const excerpts = await Promise.all(excerptTasks);
+
+    const articles = base.map((a, i) => {
+      const excerpt = excerpts[i] || 'Read the full story on Yahoo Finance.';
+      return {
+        id: a.id,
+        headline: a.title.substring(0, 200),
+        source: 'Yahoo Finance',
+        timestamp: getTimeAgo(a.pubDate),
+        publishedAt: a.pubDate.toISOString(),
+        category: classifyArticle(a.title, excerpt, a.relatedStocks),
+        relatedStocks: a.relatedStocks,
+        sentiment: analyzeSentiment(a.title + ' ' + excerpt),
+        excerpt,
+        url: a.url,
+        imageUrl: a.imageUrl,
+      };
+    });
+
     console.log(`✅ Fetched ${articles.length} articles from Yahoo Finance RSS`);
     return articles;
   } catch (e) {
