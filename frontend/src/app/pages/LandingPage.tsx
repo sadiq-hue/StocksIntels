@@ -158,6 +158,124 @@ const faqs = [
   { q: "Is there a mobile app?", a: "The web app works on mobile browsers. We do not have an iOS or Android app yet but the site is fully responsive and works on phone screens." },
 ];
 
+function LiveTickerItem({ sym, fallback, fallbackChange, up: fallbackUp, isNse }: { sym: string; fallback: string; fallbackChange: string; up: boolean; isNse: boolean }) {
+  const { getQuote } = useRealtimeQuotes();
+  const q = getQuote(sym) || getQuote(`NSE:${sym}`);
+  const price = q?.price ? q.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : fallback;
+  const change = q?.changePercent != null ? `${q.changePercent >= 0 ? '+' : ''}${q.changePercent.toFixed(1)}%` : fallbackChange;
+  const up = q?.changePercent != null ? q.changePercent >= 0 : fallbackUp;
+  const currency = isNse ? "KSh" : "$";
+
+  const prev = useRef<string>(price);
+  const [flash, setFlash] = useState<"up" | "down" | null>(null);
+  useEffect(() => {
+    if (prev.current !== price) {
+      setFlash(up ? "up" : "down");
+      prev.current = price;
+      const t = setTimeout(() => setFlash(null), 700);
+      return () => clearTimeout(t);
+    }
+  }, [price, up]);
+
+  return (
+    <div className={`flex items-center gap-2 px-5 py-1.5 bg-white/60 backdrop-blur-sm border border-gray-100 rounded-lg mx-1.5 shrink-0 transition-colors duration-500 ${
+      flash === "up" ? "bg-emerald-100 border-emerald-200" : flash === "down" ? "bg-red-100 border-red-200" : ""
+    }`}>
+      <span className="font-bold text-xs text-gray-900">{sym}</span>
+      <span className="text-xs text-gray-600">{currency}{price}</span>
+      <span className={`text-xs font-semibold ${up ? "text-emerald-600" : "text-red-500"}`}>{change}</span>
+    </div>
+  );
+}
+
+function HeroStockCard() {
+  const { getQuote } = useRealtimeQuotes();
+  const scom = getQuote("SCOM") || getQuote("NSE:SCOM");
+  const price = scom?.price ?? 17.50;
+  const chg = scom?.changePercent ?? 2.3;
+  const isUp = chg >= 0;
+
+  const prev = useRef<number>(price);
+  const [flash, setFlash] = useState<"up" | "down" | null>(null);
+  useEffect(() => {
+    if (prev.current !== price) {
+      setFlash(price > prev.current ? "up" : "down");
+      prev.current = price;
+      const t = setTimeout(() => setFlash(null), 700);
+      return () => clearTimeout(t);
+    }
+  }, [price]);
+
+  return (
+    <div className={`bg-white rounded-2xl border border-gray-200 shadow-2xl shadow-[#0D7490]/10 p-6 relative transition-colors duration-500 ${flash === "up" ? "ring-2 ring-emerald-300" : flash === "down" ? "ring-2 ring-red-300" : ""}`}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 ${isUp ? 'bg-emerald-100' : 'bg-red-100'} rounded-xl flex items-center justify-center`}>
+            <TrendingUp className={`w-5 h-5 ${isUp ? 'text-emerald-600' : 'text-red-600'}`} />
+          </div>
+          <div>
+            <p className="font-bold text-gray-900">SCOM</p>
+            <p className="text-xs text-gray-500">Safaricom PLC</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-2xl font-bold text-gray-900 transition-colors duration-300">KES {price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <p className={`text-sm font-semibold ${isUp ? 'text-emerald-600' : 'text-red-600'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}% today</p>
+        </div>
+      </div>
+      <svg className="w-full h-24" viewBox="0 0 400 80">
+        <defs>
+          <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#0D7490" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#0D7490" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d="M0 60 Q20 55 40 58 T80 50 T120 45 T160 48 T200 35 T240 38 T280 30 T320 32 T360 25 T400 20 L400 80 L0 80 Z" fill="url(#heroGrad)" />
+        <path d="M0 60 Q20 55 40 58 T80 50 T120 45 T160 48 T200 35 T240 38 T280 30 T320 32 T360 25 T400 20" fill="none" stroke="#0D7490" strokeWidth="2.5" />
+        <circle cx="400" cy="20" r="4" fill="#0D7490" />
+      </svg>
+      <div className="flex items-center justify-between mt-2 text-xs text-gray-400">
+        <span>9:30 AM</span>
+        <span>10:15 AM</span>
+        <span>11:00 AM</span>
+        <span>12:30 PM</span>
+        <span>Now</span>
+      </div>
+    </div>
+  );
+}
+
+function FloatingMiniCards() {
+  const { getQuote } = useRealtimeQuotes();
+  const cards = [
+    { sym: "AAPL", fallback: "+3.2", iconBg: "bg-blue-100", iconColor: "text-blue-600", anim: "animate-[float-3d_6s_ease-in-out_infinite]", pos: "-top-6 -right-4" },
+    { sym: "NVDA", fallback: "+4.1", iconBg: "bg-purple-100", iconColor: "text-purple-600", anim: "animate-[float-3d_7s_ease-in-out_infinite] animation-delay-1s", pos: "-bottom-4 -left-6" },
+    { sym: "EQTY", fallback: "+1.1", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", anim: "animate-[float-3d_8s_ease-in-out_infinite] animation-delay-2s", pos: "top-1/2 -right-8" },
+  ];
+  return (
+    <>
+      {cards.map(c => {
+        const q = getQuote(c.sym);
+        const chg = q?.changePercent ?? parseFloat(c.fallback);
+        const isUp = chg >= 0;
+        return (
+          <div key={c.sym} className={`absolute ${c.pos} bg-white rounded-xl border border-gray-200 shadow-xl p-3 ${c.anim}`}>
+            <div className="flex items-center gap-2">
+              <div className={`w-8 h-8 ${c.iconBg} rounded-lg flex items-center justify-center`}>
+                <TrendingUp className={`w-4 h-4 ${c.iconColor}`} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-900">{c.sym}</p>
+                <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}%</p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -320,22 +438,9 @@ export function LandingPage() {
                 { sym: "GOOGL", fallback: "347.11", fallbackChange: "-0.7%", up: false, isNse: false },
                 { sym: "NVDA", fallback: "192.87", fallbackChange: "+0.0%", up: true, isNse: false },
               ];
-              const items = tickerSymbols.map(t => {
-                const q = getQuote(t.sym) || getQuote(`NSE:${t.sym}`);
-                return {
-                  sym: t.sym,
-                  price: q?.price ? q.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : t.fallback,
-                  change: q?.changePercent != null ? `${q.changePercent >= 0 ? '+' : ''}${q.changePercent.toFixed(1)}%` : t.fallbackChange,
-                  up: q?.changePercent != null ? q.changePercent >= 0 : t.up,
-                  currency: t.isNse ? "KSh" : "$",
-                };
-              });
-              return [...items, ...items].map((s, i) => (
-                <div key={i} className="flex items-center gap-2 px-5 py-1.5 bg-white/60 backdrop-blur-sm border border-gray-100 rounded-lg mx-1.5 shrink-0">
-                  <span className="font-bold text-xs text-gray-900">{s.sym}</span>
-                  <span className="text-xs text-gray-600">{s.currency}{s.price}</span>
-                  <span className={`text-xs font-semibold ${s.up ? "text-emerald-600" : "text-red-500"}`}>{s.change}</span>
-                </div>
+              const items = [...tickerSymbols, ...tickerSymbols];
+              return items.map((t, i) => (
+                <LiveTickerItem key={i} sym={t.sym} fallback={t.fallback} fallbackChange={t.fallbackChange} up={t.up} isNse={t.isNse} />
               ));
             })()}
           </div>
@@ -389,78 +494,9 @@ export function LandingPage() {
 
             {/* Right: Stock Cards */}
             <div className="hidden lg:block relative">
-              {/* Main dashboard card */}
-              {(() => {
-                const scom = getQuote("SCOM") || getQuote("NSE:SCOM");
-                const price = scom?.price ?? 17.50;
-                const chg = scom?.changePercent ?? 2.3;
-                const isUp = chg >= 0;
-                return (
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl shadow-[#0D7490]/10 p-6 relative">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 ${isUp ? 'bg-emerald-100' : 'bg-red-100'} rounded-xl flex items-center justify-center`}>
-                        <TrendingUp className={`w-5 h-5 ${isUp ? 'text-emerald-600' : 'text-red-600'}`} />
-                      </div>
-                      <div>
-                        <p className="font-bold text-gray-900">SCOM</p>
-                        <p className="text-xs text-gray-500">Safaricom PLC</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-900">KES {price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                      <p className={`text-sm font-semibold ${isUp ? 'text-emerald-600' : 'text-red-600'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}% today</p>
-                    </div>
-                  </div>
-                {/* Mini chart */}
-                <svg className="w-full h-24" viewBox="0 0 400 80">
-                  <defs>
-                    <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#0D7490" stopOpacity="0.3" />
-                      <stop offset="100%" stopColor="#0D7490" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  <path d="M0 60 Q20 55 40 58 T80 50 T120 45 T160 48 T200 35 T240 38 T280 30 T320 32 T360 25 T400 20 L400 80 L0 80 Z" fill="url(#heroGrad)" />
-                  <path d="M0 60 Q20 55 40 58 T80 50 T120 45 T160 48 T200 35 T240 38 T280 30 T320 32 T360 25 T400 20" fill="none" stroke="#0D7490" strokeWidth="2.5" />
-                  <circle cx="400" cy="20" r="4" fill="#0D7490" />
-                </svg>
-                <div className="flex items-center justify-between mt-2 text-xs text-gray-400">
-                  <span>9:30 AM</span>
-                  <span>10:15 AM</span>
-                  <span>11:00 AM</span>
-                  <span>12:30 PM</span>
-                  <span>Now</span>
-                </div>
-              </div>
-                );
-              })()}
-
+              <HeroStockCard />
               {/* Floating mini cards */}
-              {(() => {
-                const cards = [
-                  { sym: "AAPL", fallback: "+3.2", color: "blue", anim: "animate-[float-3d_6s_ease-in-out_infinite]", pos: "-top-6 -right-4" },
-                  { sym: "NVDA", fallback: "+4.1", color: "purple", anim: "animate-[float-3d_7s_ease-in-out_infinite] animation-delay-1s", pos: "-bottom-4 -left-6" },
-                  { sym: "EQTY", fallback: "+1.1", color: "emerald", anim: "animate-[float-3d_8s_ease-in-out_infinite] animation-delay-2s", pos: "top-1/2 -right-8" },
-                ];
-                return cards.map(c => {
-                  const q = getQuote(c.sym);
-                  const chg = q?.changePercent ?? parseFloat(c.fallback);
-                  const isUp = chg >= 0;
-                  return (
-                    <div key={c.sym} className={`absolute ${c.pos} bg-white rounded-xl border border-gray-200 shadow-xl p-3 ${c.anim}`}>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 bg-${c.color}-100 rounded-lg flex items-center justify-center`}>
-                          <TrendingUp className={`w-4 h-4 text-${c.color}-600`} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-gray-900">{c.sym}</p>
-                          <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}%</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
+              <FloatingMiniCards />
             </div>
           </div>
 
