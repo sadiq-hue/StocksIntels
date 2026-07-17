@@ -90,23 +90,29 @@ async function fetchLiveQuotes() {
   try {
     const symbols = tickers.filter(t => t !== 'NSEQ').join(',');
     const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
-    const res = await axios.get(url, { timeout: 15000 });
+    const res = await axios.get(url, {
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+      },
+    });
     const quoteResult = res.data?.quoteResponse?.result;
     if (quoteResult && Array.isArray(quoteResult)) {
       for (const q of quoteResult) {
         if (!q || !q.symbol) continue;
         const price = q.regularMarketPrice;
-        const prevClose = q.regularMarketPreviousClose;
         if (price == null) continue;
-        const change = prevClose != null ? price - prevClose : 0;
+        const prevClose = q.regularMarketPreviousClose ?? price;
+        const change = price - prevClose;
         result[q.symbol] = {
           price,
           change: +change.toFixed(2),
-          changePercent: prevClose != null ? +((change / prevClose) * 100).toFixed(2) : 0,
+          changePercent: prevClose !== price ? +((change / prevClose) * 100).toFixed(2) : 0,
           high: q.regularMarketDayHigh || 0,
           low: q.regularMarketDayLow || 0,
           volume: q.regularMarketVolume || 0,
-          previousClose: prevClose ?? price,
+          previousClose: prevClose,
           open: q.regularMarketOpen || 0,
           aum: q.totalAssets,
           expenseRatio: q.annualReportExpenseRatio,
@@ -115,11 +121,33 @@ async function fetchLiveQuotes() {
         };
       }
     }
+    if (Object.keys(result).length > 0) {
+      quotesCache = result;
+      cacheTime = now;
+      return result;
+    }
   } catch (e) {
-    console.error('[ETFs] Yahoo quote API fetch failed:', e.message);
+    console.error('[ETFs] Yahoo v7 quote failed:', e.message);
+    // Fallback: try v8 chart endpoint as alternative
+    try {
+      const symbols = tickers.filter(t => t !== 'NSEQ').join(',');
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbols.split(',')[0])}?interval=1d&range=1d`;
+      const res = await axios.get(url, { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const meta = res.data?.chart?.result?.[0]?.meta;
+      if (meta && meta.regularMarketPrice != null) {
+        // v8 only returns one ticker per call, but better than nothing
+        result[symbols.split(',')[0]] = {
+          price: meta.regularMarketPrice,
+          change: 0, changePercent: 0, high: 0, low: 0, volume: 0,
+          previousClose: meta.chartPreviousClose ?? meta.regularMarketPrice,
+          open: 0, aum: undefined, expenseRatio: undefined, dividendYield: undefined,
+          dataSource: 'yahoo',
+        };
+      }
+    } catch {}
   }
 
-  // 2. marketService batch pipeline (fallback for tickers Yahoo didn't cover)
+  // 2. marketService batch pipeline (fallback for tickers Yahoo didn't cover or when v7 fails)
   try {
     const missing = tickers.filter(t => !result[t] && t !== 'NSEQ');
     if (missing.length > 0) {
@@ -138,7 +166,7 @@ async function fetchLiveQuotes() {
               volume: q.volume ?? 0,
               previousClose: q.previousClose ?? q.price,
               open: q.open ?? 0,
-              dataSource: q.provider || 'live',
+              dataSource: 'yahoo',
             };
           }
         }
