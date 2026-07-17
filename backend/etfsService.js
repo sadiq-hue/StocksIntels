@@ -3,9 +3,9 @@
 const axios = require('axios');
 
 const ETF_LIST = [
-  { ticker: 'SPY', name: 'SPDR S&P 500 ETF Trust', category: 'US Equity', expenseRatio: 0.09, aum: 600000000000, dividendYield: 1.20, description: 'Tracks the S&P 500 Index', currency: 'USD' },
+  { ticker: 'SPY', name: 'SPDR S&P 500 ETF Trust', category: 'US Equity', expenseRatio: 0.09, aum: 791000000000, dividendYield: 1.20, description: 'Tracks the S&P 500 Index', currency: 'USD' },
   { ticker: 'QQQ', name: 'Invesco QQQ Trust', category: 'US Equity', expenseRatio: 0.20, aum: 300000000000, dividendYield: 0.55, description: 'Tracks the Nasdaq-100 Index', currency: 'USD' },
-  { ticker: 'VOO', name: 'Vanguard S&P 500 ETF', category: 'US Equity', expenseRatio: 0.03, aum: 450000000000, dividendYield: 1.25, description: 'Low-cost S&P 500 exposure', currency: 'USD' },
+  { ticker: 'VOO', name: 'Vanguard S&P 500 ETF', category: 'US Equity', expenseRatio: 0.03, aum: 610000000000, dividendYield: 1.25, description: 'Low-cost S&P 500 exposure', currency: 'USD' },
   { ticker: 'VTI', name: 'Vanguard Total Stock Market ETF', category: 'US Equity', expenseRatio: 0.03, aum: 400000000000, dividendYield: 1.30, description: 'Tracks the CRSP US Total Market Index', currency: 'USD' },
   { ticker: 'BND', name: 'Vanguard Total Bond Market ETF', category: 'Bond', expenseRatio: 0.03, aum: 320000000000, dividendYield: 4.40, description: 'Broad US investment-grade bond exposure', currency: 'USD' },
   { ticker: 'AGG', name: 'iShares Core US Aggregate Bond ETF', category: 'Bond', expenseRatio: 0.03, aum: 110000000000, dividendYield: 4.50, description: 'Tracks the Bloomberg US Aggregate Bond Index', currency: 'USD' },
@@ -15,12 +15,12 @@ const ETF_LIST = [
   { ticker: 'IEMG', name: 'iShares Core MSCI Emerging Markets ETF', category: 'Emerging Markets', expenseRatio: 0.09, aum: 100000000000, dividendYield: 2.60, description: 'Low-cost emerging market exposure', currency: 'USD' },
   { ticker: 'XLF', name: 'Financial Select Sector SPDR Fund', category: 'Sector', expenseRatio: 0.09, aum: 48000000000, dividendYield: 1.70, description: 'US financial sector stocks', currency: 'USD' },
   { ticker: 'XLK', name: 'Technology Select Sector SPDR Fund', category: 'Sector', expenseRatio: 0.09, aum: 70000000000, dividendYield: 0.60, description: 'US technology sector stocks', currency: 'USD' },
-  { ticker: 'GLD', name: 'SPDR Gold Shares', category: 'Commodity', expenseRatio: 0.40, aum: 82000000000, dividendYield: 0, description: 'Gold bullion backed ETF', currency: 'USD' },
+  { ticker: 'GLD', name: 'SPDR Gold Shares', category: 'Commodity', expenseRatio: 0.40, aum: 75000000000, dividendYield: 0, description: 'Gold bullion backed ETF', currency: 'USD' },
   { ticker: 'SLV', name: 'iShares Silver Trust', category: 'Commodity', expenseRatio: 0.50, aum: 16000000000, dividendYield: 0, description: 'Silver bullion backed ETF', currency: 'USD' },
   { ticker: 'TLT', name: 'iShares 20+ Year Treasury Bond ETF', category: 'Bond', expenseRatio: 0.15, aum: 58000000000, dividendYield: 4.50, description: 'Long-term US Treasury exposure', currency: 'USD' },
   { ticker: 'SHY', name: 'iShares 1-3 Year Treasury Bond ETF', category: 'Bond', expenseRatio: 0.15, aum: 38000000000, dividendYield: 4.00, description: 'Short-term US Treasury exposure', currency: 'USD' },
   { ticker: 'VWO', name: 'Vanguard FTSE Emerging Markets ETF', category: 'Emerging Markets', expenseRatio: 0.08, aum: 115000000000, dividendYield: 2.70, description: 'Emerging market stock exposure', currency: 'USD' },
-  { ticker: 'IVV', name: 'iShares Core S&P 500 ETF', category: 'US Equity', expenseRatio: 0.03, aum: 400000000000, dividendYield: 1.25, description: 'Core S&P 500 exposure', currency: 'USD' },
+  { ticker: 'IVV', name: 'iShares Core S&P 500 ETF', category: 'US Equity', expenseRatio: 0.03, aum: 565000000000, dividendYield: 1.25, description: 'Core S&P 500 exposure', currency: 'USD' },
   { ticker: 'VUG', name: 'Vanguard Growth ETF', category: 'US Equity', expenseRatio: 0.04, aum: 140000000000, dividendYield: 0.48, description: 'US large-cap growth stocks', currency: 'USD' },
   { ticker: 'VTV', name: 'Vanguard Value ETF', category: 'US Equity', expenseRatio: 0.04, aum: 130000000000, dividendYield: 2.10, description: 'US large-cap value stocks', currency: 'USD' },
   { ticker: 'IJR', name: 'iShares Core S&P Small-Cap ETF', category: 'US Equity', expenseRatio: 0.06, aum: 90000000000, dividendYield: 1.40, description: 'US small-cap equity exposure', currency: 'USD' },
@@ -29,7 +29,7 @@ const ETF_LIST = [
   { ticker: 'DIA', name: 'SPDR Dow Jones Industrial Average ETF', category: 'US Equity', expenseRatio: 0.16, aum: 38000000000, dividendYield: 2.00, description: 'Tracks the Dow Jones Industrial Average', currency: 'USD' },
   { ticker: 'ARKK', name: 'ARK Innovation ETF', category: 'Sector', expenseRatio: 0.75, aum: 16000000000, dividendYield: 0, description: 'Disruptive innovation companies', currency: 'USD' },
   { ticker: 'EZA', name: 'iShares MSCI South Africa ETF', category: 'Africa', expenseRatio: 0.59, aum: 550000000, dividendYield: 3.40, description: 'South African equity exposure', currency: 'USD' },
-  { ticker: 'AFK', name: 'VanEck Africa Index ETF', category: 'Africa', expenseRatio: 0.78, aum: 250000000, dividendYield: 2.70, description: 'Pan-African equity exposure', currency: 'USD' },
+  { ticker: 'AFK', name: 'VanEck Africa Index ETF', category: 'Africa', expenseRatio: 0.78, aum: 210000000, dividendYield: 2.70, description: 'Pan-African equity exposure', currency: 'USD' },
   { ticker: 'NSEQ', name: 'NSE Equity Index Fund', category: 'Africa', expenseRatio: 1.20, aum: 50000000, dividendYield: 4.50, description: 'Nairobi Securities Exchange tracker', currency: 'KES' },
 ];
 
