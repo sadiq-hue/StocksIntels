@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
-const YAHOO_BASE = "https://query1.finance.yahoo.com/v8/finance/chart";
+const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart";
+const YAHOO_QUOTE = "https://query1.finance.yahoo.com/v7/finance/quote";
 
 interface ETF {
   ticker: string; name: string; category: string;
@@ -28,41 +29,40 @@ interface Summary {
 }
 
 async function fetchYahooQuotes(tickers: string[]): Promise<Record<string, Partial<ETF>>> {
-  const results = await Promise.allSettled(tickers.map(ticker =>
-    fetch(`${YAHOO_BASE}/${ticker}?interval=1d&range=1d`, {
-      headers: { Accept: "application/json" },
-    })
-      .then(r => r.json())
-      .then(d => {
-        const meta = d?.chart?.result?.[0]?.meta;
-        if (!meta || meta.regularMarketPrice == null) return null;
-        const price = meta.regularMarketPrice;
-        const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
-        const change = price - prevClose;
-        return {
-          ticker,
-          price,
-          change: +change.toFixed(2),
-          changePercent: +((change / prevClose) * 100).toFixed(2),
-          high: meta.regularMarketDayHigh ?? 0,
-          low: meta.regularMarketDayLow ?? 0,
-          volume: meta.regularMarketVolume ?? 0,
-          open: meta.regularMarketOpen ?? 0,
-          previousClose: prevClose,
-          dataSource: "yahoo",
-          lastUpdated: new Date().toISOString(),
-        };
-      })
-      .catch(() => null)
-  ));
+  if (tickers.length === 0) return {};
+  try {
+    const url = `${YAHOO_QUOTE}?symbols=${encodeURIComponent(tickers.join(","))}`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return {};
+    const data = await res.json();
+    const results = data?.quoteResponse?.result;
+    if (!Array.isArray(results)) return {};
 
-  const quotes: Record<string, Partial<ETF>> = {};
-  for (const r of results) {
-    if (r.status === "fulfilled" && r.value) {
-      quotes[r.value.ticker] = r.value;
+    const quotes: Record<string, Partial<ETF>> = {};
+    for (const q of results) {
+      const ticker = q.symbol;
+      const price = q.regularMarketPrice;
+      const prevClose = q.regularMarketPreviousClose;
+      if (price == null || prevClose == null) continue;
+      const change = price - prevClose;
+      quotes[ticker] = {
+        ticker,
+        price,
+        change: +change.toFixed(2),
+        changePercent: +((change / prevClose) * 100).toFixed(2),
+        high: q.regularMarketDayHigh || 0,
+        low: q.regularMarketDayLow || 0,
+        volume: q.regularMarketVolume || 0,
+        open: q.regularMarketOpen || 0,
+        previousClose: prevClose,
+        dataSource: "yahoo",
+        lastUpdated: new Date().toISOString(),
+      };
     }
+    return quotes;
+  } catch {
+    return {};
   }
-  return quotes;
 }
 
 export function ETFsPage() {
