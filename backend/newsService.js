@@ -122,7 +122,6 @@ const KENYAN_NEWS_SOURCES = [
 const GLOBAL_RSS_FEEDS = [
   { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114', source: 'CNBC' },
   { url: 'https://feeds.marketwatch.com/marketwatch/topstories', source: 'MarketWatch' },
-  { url: 'https://finance.yahoo.com/news/rssindex', source: 'Yahoo Finance' },
   { url: 'https://www.ft.com/rss/home', source: 'Financial Times' },
   { url: 'https://www.theguardian.com/business/rss', source: 'The Guardian' },
 ];
@@ -707,6 +706,40 @@ async function fetchFromAlphaVantage() {
   }
 }
 
+// Fetch news from Yahoo Finance RSS (reliable, no API key)
+async function fetchFromYahoo() {
+  try {
+    const feed = await rssParser.parseURL('https://finance.yahoo.com/news/rssindex');
+    if (!feed?.items?.length) return [];
+    const articles = [];
+    for (const item of feed.items.slice(0, 30)) {
+      const title = item.title?.trim();
+      if (!title || title.length < 10) continue;
+      const pubDate = item.isoDate ? new Date(item.isoDate) : new Date();
+      const relatedStocks = extractRelatedStocks(title);
+      const excerpt = (item.contentSnippet || item.content || '').trim().substring(0, 300);
+      articles.push({
+        id: `yahoo-${item.guid || item.link || Math.random().toString(36).slice(2)}`,
+        headline: title.substring(0, 200),
+        source: 'Yahoo Finance',
+        timestamp: item.isoDate ? getTimeAgo(pubDate) : 'just now',
+        publishedAt: pubDate.toISOString(),
+        category: classifyArticle(title, excerpt, relatedStocks),
+        relatedStocks,
+        sentiment: analyzeSentiment(title + ' ' + excerpt),
+        excerpt: excerpt || 'Read the full story on Yahoo Finance.',
+        url: item.link || '#',
+        imageUrl: item.mediaContent?.url || null,
+      });
+    }
+    console.log(`✅ Fetched ${articles.length} articles from Yahoo Finance RSS`);
+    return articles;
+  } catch (e) {
+    console.error('Error fetching from Yahoo Finance RSS:', e.message);
+    return [];
+  }
+}
+
 // Wrapper that aborts slow calls (rate-limiters can queue for minutes)
 async function withTimeout(promise, ms = 8000) {
   return Promise.race([
@@ -723,7 +756,7 @@ async function getAllNews(limit = 50, categoryFilter) {
   }
 
   try {
-    const [kenyanBusinessNews, kwsNews, globalRssNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews] = await Promise.allSettled([
+    const [kenyanBusinessNews, kwsNews, globalRssNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews, yahooNews] = await Promise.allSettled([
       getKenyanBusinessNews(),
       fetchFromKWS(),
       fetchFromGlobalRSS(),
@@ -731,6 +764,7 @@ async function getAllNews(limit = 50, categoryFilter) {
       withTimeout(fetchFromFinnhub(), 8000),
       withTimeout(fetchFromBenzinga(), 8000),
       withTimeout(fetchFromAlphaVantage(), 12000),
+      withTimeout(fetchFromYahoo(), 12000),
     ]);
 
     const extract = r => r.status === 'fulfilled' ? r.value : [];
@@ -740,6 +774,7 @@ async function getAllNews(limit = 50, categoryFilter) {
       ...extract(kenyanBusinessNews),
       ...extract(globalRssNews),
       ...extract(alphaVantageNews),
+      ...extract(yahooNews),
       ...extract(newsApiNews),
       ...extract(finnhubNews),
     ];
