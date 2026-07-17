@@ -175,6 +175,7 @@ async function fetchAllFundamentals(symbol) {
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
+  // 1) SEC EDGAR (authoritative for US-domiciled stocks)
   try {
     const edgarService = require('./edgarService');
     const edgarReport = await edgarService.getFinancialReportFromEdgar(symbol, 'annual', 4);
@@ -237,6 +238,66 @@ async function fetchAllFundamentals(symbol) {
     }
     if (items.length > 0) return cacheSet(cacheKey, items);
   } catch {}
+
+  // 2) yahoo-finance2 fundamentalsTimeSeries (works for non-US stocks like GRAB, NIO, etc.)
+  try {
+    const yf = await createYf();
+    const periodEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const periodStart = new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const fts = await yf.fundamentalsTimeSeries(symbol, {
+      period1: periodStart,
+      period2: periodEnd,
+      module: 'financials',
+    });
+    if (!fts || fts.length === 0) return null;
+
+    const items = fts
+      .filter(f => f.date)
+      .sort((a, b) => (getDateStr(b.date) || '').localeCompare(getDateStr(a.date) || ''))
+      .slice(0, 4)
+      .map(f => ({
+        date: getDateStr(f.date),
+        periodType: f.periodType === '3M' ? '3M' : 'FY',
+        totalRevenue: f.totalRevenue || 0,
+        operatingRevenue: f.operatingRevenue || f.totalRevenue || 0,
+        costOfRevenue: f.costOfRevenue || f.reconciledCostOfRevenue || 0,
+        grossProfit: f.grossProfit || 0,
+        operatingIncome: f.operatingIncome || f.totalOperatingIncomeAsReported || 0,
+        netIncome: f.netIncome || 0,
+        netIncomeCommonStockholders: f.netIncomeCommonStockholders || f.netIncome || 0,
+        netIncomeApplicableToCommonShares: f.netIncomeApplicableToCommonShares || f.netIncome || 0,
+        EBITDA: f.EBITDA || 0,
+        EBIT: f.EBIT || f.EBITDA || 0,
+        pretaxIncome: f.pretaxIncome || f.incomeBeforeTax || 0,
+        taxProvision: f.taxProvision || f.incomeTaxExpense || 0,
+        interestExpense: f.interestExpense || 0,
+        researchAndDevelopment: f.researchAndDevelopment || f.rAndDExpense || 0,
+        sellingGeneralAndAdministration: f.sellingGeneralAndAdministration || f.sgaExpense || 0,
+        totalExpenses: f.totalExpenses || f.totalOperatingExpenses || 0,
+        basicEPS: f.basicEPS || 0,
+        dilutedEPS: f.dilutedEPS || f.basicEPS || 0,
+        basicAverageShares: f.basicAverageShares || 0,
+        dilutedAverageShares: f.dilutedAverageShares || f.basicAverageShares || 0,
+        totalAssets: f.totalAssets || 0,
+        totalLiabilities: f.totalLiabilities || f.totalLiabilitiesNetMinorityInterest || 0,
+        totalEquity: f.totalEquity || f.commonStockEquity || f.stockholdersEquity || 0,
+        totalCurrentAssets: f.totalCurrentAssets || f.currentAssets || 0,
+        totalCurrentLiabilities: f.totalCurrentLiabilities || f.currentLiabilities || 0,
+        inventory: f.inventory || 0,
+        goodwill: f.goodwill || 0,
+        intangibleAssets: f.intangibleAssets || 0,
+        longTermDebt: f.longTermDebt || f.longTermDebtAndCapitalLeaseObligation || 0,
+        totalDebt: f.totalDebt || f.longTermDebt || 0,
+        cashAndCashEquivalents: f.cashAndCashEquivalents || f.cashCashEquivalentsAndShortTermInvestments || 0,
+        operatingCashFlow: f.operatingCashFlow || 0,
+        capitalExpenditure: f.capitalExpenditure || f.purchaseOfPPE || 0,
+        freeCashFlow: f.freeCashFlow || 0,
+        cashDividendsPaid: f.cashDividendsPaid || f.commonStockDividendPaid || 0,
+        marketCap: f.marketCap || 0,
+      }));
+    if (items.length > 0) return cacheSet(cacheKey, items);
+  } catch {}
+
   return null;
 }
 
@@ -495,9 +556,11 @@ async function getBalanceSheet(symbol, period = 'annual', limit = 4) {
   const allData = await fetchAllFundamentals(symbol);
   if (!allData) return null;
 
-  // Accept both 3M (quarterly) and FY (annual) period types
   const items = allData
-    .filter(item => (item.periodType === '3M' || item.periodType === 'FY') && item.totalAssets != null)
+    .filter(item =>
+      (item.periodType === '3M' || item.periodType === 'FY') &&
+      item.totalAssets != null && item.totalAssets > 0
+    )
     .sort((a, b) => {
       const da = getDateStr(a.date) || '';
       const db = getDateStr(b.date) || '';
@@ -568,10 +631,9 @@ async function getCashFlowStatement(symbol, period = 'annual', limit = 4) {
     'netDebt',
   ];
 
-  // Accept both 3M (quarterly) and FY (annual) period types
-  const hasQuarterly = allData.some(item => item.periodType === '3M' && item.operatingCashFlow != null);
+  const hasQuarterly = allData.some(item => item.periodType === '3M' && item.operatingCashFlow != null && item.operatingCashFlow !== 0);
   const items = allData
-    .filter(item => (hasQuarterly ? item.periodType === '3M' : true) && item.operatingCashFlow != null)
+    .filter(item => (hasQuarterly ? item.periodType === '3M' : true) && item.operatingCashFlow != null && item.operatingCashFlow !== 0)
     .sort((a, b) => {
       const da = getDateStr(a.date) || '';
       const db = getDateStr(b.date) || '';

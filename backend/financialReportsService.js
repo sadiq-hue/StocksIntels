@@ -280,6 +280,12 @@ async function getBalanceSheet(symbol, period = 'annual', limit = 4) {
     if (result && result.length > 0) return cacheSet(cacheKey, result.slice(0, limit));
   } catch {}
 
+  // SEC EDGAR fallback for US stocks
+  try {
+    const result = await edgarService.getBalanceSheetFromEdgar(symbol, period, limit);
+    if (result && result.length > 0) return cacheSet(cacheKey, result.slice(0, limit));
+  } catch {}
+
   return cacheSet(cacheKey, []);
 }
 
@@ -300,6 +306,12 @@ async function getCashFlowStatement(symbol, period = 'annual', limit = 4) {
     if (result && result.length > 0) return cacheSet(cacheKey, result.slice(0, limit));
   } catch {}
 
+  // SEC EDGAR fallback for US stocks
+  try {
+    const result = await edgarService.getCashFlowFromEdgar(symbol, period, limit);
+    if (result && result.length > 0) return cacheSet(cacheKey, result.slice(0, limit));
+  } catch {}
+
   return cacheSet(cacheKey, []);
 }
 
@@ -310,7 +322,33 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4) {
 
   if (symbol.startsWith('NSE:') || await isNseStock(symbol)) return cacheSet(cacheKey, []);
 
-  // Build from Alpha Vantage overview (richest single-source for key metrics)
+  // Yahoo scraper first (fast, works for most stocks, uses yahoo-finance2)
+  try {
+    const result = await yahooFinanceScraper.getKeyMetrics(symbol, period, limit);
+    if (result && result.length > 0) {
+      // Enrich with live quote data (fills marketCap, PE ratio from current price)
+      try {
+        const quote = await getQuote(symbol);
+        if (quote) {
+          for (const km of result) {
+            const price = quote.price || 0;
+            const eps = km.netIncomePerShare || quote.eps || 0;
+            const sharesOut = quote.sharesOutstanding || ((km.revenuePerShare > 0 && quote.revenueTTM > 0) ? Math.round(quote.revenueTTM / km.revenuePerShare) : 0);
+            const mc = quote.marketCap || computeMarketCap(price, km.netIncomePerShare * sharesOut, eps, sharesOut) || 0;
+            if (mc > 0) km.marketCap = mc;
+            if (quote.pe > 0 && !km.peRatio) km.peRatio = quote.pe;
+            if (!km.peRatio && price > 0 && eps > 0) km.peRatio = price / eps;
+            if (!km.forwardPE && quote.forwardPE > 0) km.forwardPE = quote.forwardPE;
+            if (mc > 0 && km.revenuePerShare > 0 && sharesOut > 0) km.priceToSalesRatio = mc / (km.revenuePerShare * sharesOut);
+            if (mc > 0 && eps > 0) km.earningsYield = eps * (sharesOut || 1) / mc;
+          }
+        }
+      } catch {}
+      return cacheSet(cacheKey, result);
+    }
+  } catch {}
+
+  // Alpha Vantage fallback (richest single-source for key metrics)
   try {
     const overview = await alphaVantageService.fetchOverview(symbol);
     if (overview) {
@@ -351,9 +389,10 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4) {
     }
   } catch {}
 
+  // SEC EDGAR fallback for US stocks
   try {
-    const result = await yahooFinanceScraper.getKeyMetrics(symbol, period, limit);
-    if (result && result.length > 0) return cacheSet(cacheKey, result);
+    const result = await edgarService.getKeyMetricsFromEdgar(symbol, period, limit);
+    if (result && result.length > 0) return cacheSet(cacheKey, result.slice(0, limit));
   } catch {}
 
   return cacheSet(cacheKey, []);
