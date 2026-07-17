@@ -10,7 +10,7 @@ import {
 import {
   fetchAllNews, fetchNewsSummary,
   filterNewsByCategory,
-  searchNews,
+  searchNews, fetchArticleExcerpt,
   type NewsArticle, type NewsSummary,
 } from "../services/newsService";
 
@@ -91,65 +91,97 @@ export function NewsPage() {
   const currentArticles = searchResults !== null ? searchResults :
     filterNewsByCategory(newsItems, tab as any);
 
-  const renderArticle = (article: NewsArticle) => (
-    <Card
-      key={article.id}
-      className={`p-5 hover:border-[#0D7490]/50 transition-all cursor-pointer group ${article.hot ? 'border-amber-300/50 bg-amber-50/30' : ''}`}
-      onClick={() => window.open(article.url, "_blank")}
-    >
-      <div className="flex items-start gap-4">
-        <div className={`p-2.5 rounded-lg shrink-0 ${article.hot ? 'bg-amber-100' : 'bg-muted'}`}>
-          {article.hot ? <TrendingUp className="size-5 text-amber-600" /> : <Newspaper className="size-5 text-[#0D7490]" />}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-4 mb-1.5">
-            <h3 className="text-foreground font-semibold group-hover:text-[#0D7490] transition-colors line-clamp-2 text-sm">
-              {article.headline}
-            </h3>
-            <ExternalLink className="size-3.5 text-muted-foreground shrink-0 mt-1" />
+  const ArticleCard = ({ article }: { article: NewsArticle }) => {
+    const [excerpt, setExcerpt] = useState<string | null>(null);
+    const [loadingExcerpt, setLoadingExcerpt] = useState(false);
+
+    const loadExcerpt = async () => {
+      if (excerpt !== null || loadingExcerpt || !article.url || article.url === "#") return;
+      setLoadingExcerpt(true);
+      const text = await fetchArticleExcerpt(article.url);
+      setExcerpt(text);
+      setLoadingExcerpt(false);
+    };
+
+    const isFallback = !excerpt || excerpt === "Read the full story on Yahoo Finance.";
+    const showExcerpt = excerpt !== null && !isFallback;
+
+    return (
+      <Card
+        key={article.id}
+        className={`p-5 hover:border-[#0D7490]/50 transition-all cursor-pointer group ${article.hot ? 'border-amber-300/50 bg-amber-50/30' : ''}`}
+        onClick={() => window.open(article.url, "_blank")}
+      >
+        <div className="flex items-start gap-4">
+          <div className={`p-2.5 rounded-lg shrink-0 ${article.hot ? 'bg-amber-100' : 'bg-muted'}`}>
+            {article.hot ? <TrendingUp className="size-5 text-amber-600" /> : <Newspaper className="size-5 text-[#0D7490]" />}
           </div>
-          <p className="text-xs text-muted-foreground mb-2.5 line-clamp-2">{article.excerpt}</p>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="flex items-center gap-1 text-muted-foreground">
-              <Clock className="size-3" /> {article.timestamp}
-            </span>
-            <span className="text-muted-foreground">·</span>
-            <span className="text-muted-foreground">{article.source}</span>
-            {(article.relatedStocks || []).length > 0 && (
-              <div className="flex items-center gap-1">
-                {(article.relatedStocks || []).slice(0, 3).map(s => (
-                  <Badge key={s} variant="outline" className="text-[9px] px-1.5 py-0">{s}</Badge>
-                ))}
-              </div>
-            )}
-            {article.hot && article.hotType && (
-              <Badge className={`${getHotTypeColor(article.hotType)} text-[9px] px-1.5 py-0 font-semibold`}>
-                {article.hotType}
-              </Badge>
-            )}
-            <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${article.category === "nse" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-blue-100 text-blue-700 border-blue-200"}`}>
-              <span className="flex items-center gap-1">
-                {article.category === "nse" ? <MapPin className="size-2.5" /> : <Globe className="size-2.5" />}
-                {article.category === "nse" ? "NSE" : "Global"}
-              </span>
-            </Badge>
-            <Badge className={`${getSentimentColor(article.sentiment)} text-[9px] px-1.5 py-0`}>
-              {article.sentiment}
-            </Badge>
-            {article.sentimentScore != null && (
-              <Badge
-                variant="outline"
-                className="text-[9px] px-1.5 py-0 bg-white/60"
-                title={`Alpha Vantage sentiment score: ${article.sentimentScore.toFixed(3)}`}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-4 mb-1.5">
+              <h3 className="text-foreground font-semibold group-hover:text-[#0D7490] transition-colors line-clamp-2 text-sm">
+                {article.headline}
+              </h3>
+              <ExternalLink className="size-3.5 text-muted-foreground shrink-0 mt-1" />
+            </div>
+
+            {showExcerpt ? (
+              <p className="text-xs text-muted-foreground mb-2.5 line-clamp-3">{excerpt}</p>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); loadExcerpt(); }}
+                className="mb-2.5 text-xs font-medium text-[#0D7490] hover:underline inline-flex items-center gap-1"
               >
-                AV {article.sentimentScore >= 0 ? "+" : ""}{article.sentimentScore.toFixed(2)}
-              </Badge>
+                {loadingExcerpt ? (
+                  <>Loading summary…</>
+                ) : (
+                  <><Newspaper className="size-3" /> Read summary</>
+                )}
+              </button>
             )}
+
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <Clock className="size-3" /> {article.timestamp}
+              </span>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-muted-foreground">{article.source}</span>
+              {(article.relatedStocks || []).length > 0 && (
+                <div className="flex items-center gap-1">
+                  {(article.relatedStocks || []).slice(0, 3).map(s => (
+                    <Badge key={s} variant="outline" className="text-[9px] px-1.5 py-0">{s}</Badge>
+                  ))}
+                </div>
+              )}
+              {article.hot && article.hotType && (
+                <Badge className={`${getHotTypeColor(article.hotType)} text-[9px] px-1.5 py-0 font-semibold`}>
+                  {article.hotType}
+                </Badge>
+              )}
+              <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${article.category === "nse" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-blue-100 text-blue-700 border-blue-200"}`}>
+                <span className="flex items-center gap-1">
+                  {article.category === "nse" ? <MapPin className="size-2.5" /> : <Globe className="size-2.5" />}
+                  {article.category === "nse" ? "NSE" : "Global"}
+                </span>
+              </Badge>
+              <Badge className={`${getSentimentColor(article.sentiment)} text-[9px] px-1.5 py-0`}>
+                {article.sentiment}
+              </Badge>
+              {article.sentimentScore != null && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] px-1.5 py-0 bg-white/60"
+                  title={`Alpha Vantage sentiment score: ${article.sentimentScore.toFixed(3)}`}
+                >
+                  AV {article.sentimentScore >= 0 ? "+" : ""}{article.sentimentScore.toFixed(2)}
+                </Badge>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </Card>
-  );
+      </Card>
+    );
+  };
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
@@ -270,7 +302,7 @@ export function NewsPage() {
                 </p>
               </Card>
             ) : (
-              currentArticles.map(renderArticle)
+              currentArticles.map(a => <ArticleCard key={a.id} article={a} />)
             )}
           </TabsContent>
         ))}

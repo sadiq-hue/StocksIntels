@@ -734,41 +734,26 @@ async function fetchFromYahoo() {
   try {
     const feed = await rssParser.parseURL('https://finance.yahoo.com/news/rssindex');
     if (!feed?.items?.length) return [];
-    const base = [];
+    const articles = [];
     for (const item of feed.items.slice(0, 30)) {
       const title = item.title?.trim();
       if (!title || title.length < 10) continue;
       const pubDate = item.isoDate ? new Date(item.isoDate) : new Date();
       const relatedStocks = extractRelatedStocks(title);
-      base.push({
-        title, pubDate, relatedStocks,
+      articles.push({
         id: `yahoo-${item.guid || item.link || Math.random().toString(36).slice(2)}`,
+        headline: title.substring(0, 200),
+        source: 'Yahoo Finance',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: classifyArticle(title, '', relatedStocks),
+        relatedStocks,
+        sentiment: analyzeSentiment(title),
+        excerpt: 'Read the full story on Yahoo Finance.',
         url: item.link || '#',
         imageUrl: item.mediaContent?.url || null,
       });
     }
-
-    // Scrape real excerpts for the top articles in parallel (bounded for speed)
-    const excerptTasks = base.slice(0, 12).map(a => fetchYahooExcerpt(a.url));
-    const excerpts = await Promise.all(excerptTasks);
-
-    const articles = base.map((a, i) => {
-      const excerpt = excerpts[i] || 'Read the full story on Yahoo Finance.';
-      return {
-        id: a.id,
-        headline: a.title.substring(0, 200),
-        source: 'Yahoo Finance',
-        timestamp: getTimeAgo(a.pubDate),
-        publishedAt: a.pubDate.toISOString(),
-        category: classifyArticle(a.title, excerpt, a.relatedStocks),
-        relatedStocks: a.relatedStocks,
-        sentiment: analyzeSentiment(a.title + ' ' + excerpt),
-        excerpt,
-        url: a.url,
-        imageUrl: a.imageUrl,
-      };
-    });
-
     console.log(`✅ Fetched ${articles.length} articles from Yahoo Finance RSS`);
     return articles;
   } catch (e) {

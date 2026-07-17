@@ -119,3 +119,14 @@ export async function searchNews(query: string): Promise<NewsArticle[]> {
     (a.relatedStocks || []).some(s => s.toLowerCase().includes(q))
   );
 }
+
+export async function fetchArticleExcerpt(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${API_BASE}/news/excerpt?url=${encodeURIComponent(url)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.excerpt || null;
+  } catch {
+    return null;
+  }
+}

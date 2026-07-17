@@ -3768,6 +3768,22 @@ app.get('/api/news/hot', async (req, res) => {
   }
 });
 
+// Lazy excerpt fetcher (used by Yahoo Finance cards to avoid scraping on every load)
+app.get('/api/news/excerpt', async (req, res) => {
+  try {
+    const url = req.query.url;
+    if (!url || typeof url !== 'string' || !/^https?:\/\//.test(url)) {
+      return res.status(400).json({ error: 'Valid url required' });
+    }
+    const { fetchYahooExcerpt } = require('./newsService');
+    const excerpt = await fetchYahooExcerpt(url);
+    if (!excerpt) return res.json({ excerpt: null });
+    res.json({ excerpt });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch excerpt' });
+  }
+});
+
 // --- Watchlist Routes (with in-memory fallback when DB unavailable) ---
 const _watchlistMemory = {};
 
