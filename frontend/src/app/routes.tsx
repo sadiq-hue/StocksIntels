@@ -50,6 +50,7 @@ export const router = createBrowserRouter([
       { path: "settings", Component: SettingsPage }, 
       { path: "ipos", Component: IpoPage },
       { path: "derivatives", Component: DerivativesPage },
+      { path: "dashboard", loader: () => redirect("/app") },
       { path: "admin/stocks", Component: AdminStocks },
     ],
   },
