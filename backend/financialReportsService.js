@@ -159,7 +159,11 @@ async function getQuote(symbol) {
   const cacheKey = `${symbol}_quote`;
   const cached = cacheGet(cacheKey);
   // A cached NSE quote with no price is useless (it masks a working fallback); don't serve it.
-  if (cached && !(symbol.startsWith('NSE:') && !cached.price)) return cached;
+  // Also skip cache if quote is older than 60s (stale price)
+  if (cached && !(symbol.startsWith('NSE:') && !cached.price)) {
+    const age = Date.now() - new Date(cached.lastUpdated || 0).getTime();
+    if (age < 60000) return cached;
+  }
 
   // Fetch live quote and full stats in parallel for the most complete data
   const [marketQuote, tdResult] = await Promise.allSettled([
