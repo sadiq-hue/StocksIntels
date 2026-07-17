@@ -320,17 +320,9 @@ async function fetchQuote(symbol) {
   if (cached) return cached;
 
   const yahooSymbol = toYahooSymbol(symbol);
-  let quote = await fetchV8Quote(yahooSymbol);
-  if (quote) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
-
-  quote = await fetchYf2Quote(yahooSymbol);
-  if (quote) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
-
-  quote = await fetchRapidapiQuote(yahooSymbol);
-  if (quote) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
-
   if (symbol.startsWith('NSE:')) return null;
 
+  // 1. Google Finance scrape — fastest and most reliable free option (no IP blocks)
   const google = await fetchGoogleFinanceQuote(yahooSymbol);
   if (google?.price) {
     return cacheSet(quoteCache, cacheKey, {
@@ -353,7 +345,7 @@ async function fetchQuote(symbol) {
     }, CACHE_TTL.quote, redisKey);
   }
 
-  // Proxy fallback for Railway deployments where direct Yahoo endpoints are blocked
+  // 2. Proxy fallback — Yahoo v8 via free proxy pool or CORS relay
   if (!symbol.startsWith('NSE:')) {
     try {
       const proxyResult = await fetchPriceViaProxy(yahooSymbol);
@@ -379,6 +371,18 @@ async function fetchQuote(symbol) {
       }
     } catch {}
   }
+
+  // 3. Yahoo V8 direct (works from local dev, usually blocked on cloud)
+  let quote = await fetchV8Quote(yahooSymbol);
+  if (quote) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
+
+  // 4. yahoo-finance2 npm package
+  quote = await fetchYf2Quote(yahooSymbol);
+  if (quote) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
+
+  // 5. RapidAPI (needs RAPIDAPI_KEY)
+  quote = await fetchRapidapiQuote(yahooSymbol);
+  if (quote) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
 
   return null;
 }

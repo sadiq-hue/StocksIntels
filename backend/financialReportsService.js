@@ -3,6 +3,7 @@ const marketService = require('./marketService');
 const edgarService = require('./edgarService');
 const proxyService = require('./proxyService');
 const yahooFinanceScraper = require('./yahooFinanceFinancialsScraper');
+const alphaVantageService = require('./alphaVantageFinancialsService');
 const { pool } = require('./db');
 const PersistentCache = require('./cacheService');
 const { NSE_SYMBOLS } = require('./stockData');
@@ -241,6 +242,20 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
+  if (symbol.startsWith('NSE:') || await isNseStock(symbol)) return cacheSet(cacheKey, []);
+
+  // 1. Yahoo scraper
+  try {
+    const result = await yahooFinanceScraper.getIncomeStatement(symbol, period, limit);
+    if (result && result.length > 0) return cacheSet(cacheKey, result);
+  } catch {}
+
+  // 2. Alpha Vantage fallback
+  try {
+    const result = await alphaVantageService.fetchIncomeStatement(symbol, period);
+    if (result && result.length > 0) return cacheSet(cacheKey, result.slice(0, limit));
+  } catch {}
+
   return cacheSet(cacheKey, []);
 }
 
@@ -248,6 +263,18 @@ async function getBalanceSheet(symbol, period = 'annual', limit = 4) {
   const cacheKey = `${symbol}_balance_${period}_${limit}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
+
+  if (symbol.startsWith('NSE:') || await isNseStock(symbol)) return cacheSet(cacheKey, []);
+
+  try {
+    const result = await yahooFinanceScraper.getBalanceSheet(symbol, period, limit);
+    if (result && result.length > 0) return cacheSet(cacheKey, result);
+  } catch {}
+
+  try {
+    const result = await alphaVantageService.fetchBalanceSheet(symbol, period);
+    if (result && result.length > 0) return cacheSet(cacheKey, result.slice(0, limit));
+  } catch {}
 
   return cacheSet(cacheKey, []);
 }
@@ -257,6 +284,18 @@ async function getCashFlowStatement(symbol, period = 'annual', limit = 4) {
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
+  if (symbol.startsWith('NSE:') || await isNseStock(symbol)) return cacheSet(cacheKey, []);
+
+  try {
+    const result = await yahooFinanceScraper.getCashFlowStatement(symbol, period, limit);
+    if (result && result.length > 0) return cacheSet(cacheKey, result);
+  } catch {}
+
+  try {
+    const result = await alphaVantageService.fetchCashFlow(symbol, period);
+    if (result && result.length > 0) return cacheSet(cacheKey, result.slice(0, limit));
+  } catch {}
+
   return cacheSet(cacheKey, []);
 }
 
@@ -265,6 +304,54 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4) {
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
+  if (symbol.startsWith('NSE:') || await isNseStock(symbol)) return cacheSet(cacheKey, []);
+
+  // Build from Alpha Vantage overview (richest single-source for key metrics)
+  try {
+    const overview = await alphaVantageService.fetchOverview(symbol);
+    if (overview) {
+      const price = overview.analystTargetPrice || 0;
+      const eps = overview.eps || overview.dilutedEPSTTM || 0;
+      const marketCap = overview.marketCap || 0;
+      const revenue = overview.revenueTTM || 0;
+      const equity = 0;
+      const item = {
+        date: overview.latestQuarter || '',
+        period: 'ttm',
+        marketCap,
+        peRatio: overview.peRatio || (price > 0 && eps > 0 ? price / eps : 0),
+        pbRatio: overview.marketCap > 0 && overview.bookValue > 0 && (overview.sharesOutstanding || 0) > 0
+          ? overview.marketCap / (overview.bookValue * (overview.sharesOutstanding || 1)) : 0,
+        priceToSalesRatio: marketCap > 0 && revenue > 0 ? marketCap / revenue : 0,
+        debtToEquity: 0,
+        currentRatio: 0,
+        dividendYield: overview.dividendYield || 0,
+        dividendYieldPercentage: (overview.dividendYield || 0) * 100,
+        earningsYield: eps > 0 && price > 0 ? eps / price : 0,
+        returnOnEquity: overview.returnOnEquityTTM || 0,
+        returnOnAssets: overview.returnOnAssetsTTM || 0,
+        profitMargin: overview.profitMargin || 0,
+        operatingMargin: overview.operatingMarginTTM || 0,
+        revenueGrowth: overview.quarterlyRevenueGrowthYOY || 0,
+        earningsGrowth: overview.quarterlyEarningsGrowthYOY || 0,
+        sharesOutstanding: overview.sharesOutstanding || 0,
+        revenuePerShare: overview.revenuePerShareTTM || 0,
+        netIncomePerShare: eps,
+        bookValue: overview.bookValue || 0,
+        forwardPE: overview.forwardPE || 0,
+        targetPrice: overview.analystTargetPrice || 0,
+        dividendPerShare: overview.dividendPerShare || 0,
+        source: 'alphavantage',
+      };
+      return cacheSet(cacheKey, [item]);
+    }
+  } catch {}
+
+  try {
+    const result = await yahooFinanceScraper.getKeyMetrics(symbol, period, limit);
+    if (result && result.length > 0) return cacheSet(cacheKey, result);
+  } catch {}
+
   return cacheSet(cacheKey, []);
 }
 
@@ -272,6 +359,28 @@ async function getDividendHistory(symbol, limit = 8) {
   const cacheKey = `${symbol}_dividends_${limit}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
+
+  if (symbol.startsWith('NSE:') || await isNseStock(symbol)) return cacheSet(cacheKey, []);
+
+  // 1. Yahoo scraper
+  try {
+    const result = await yahooFinanceScraper.getDividendHistory(symbol, limit);
+    if (result && result.length > 0) return cacheSet(cacheKey, result);
+  } catch {}
+
+  // 2. Alpha Vantage overview (dividend per share + dates)
+  try {
+    const overview = await alphaVantageService.fetchOverview(symbol);
+    if (overview?.dividendPerShare) {
+      return cacheSet(cacheKey, [{
+        date: overview.dividendDate || overview.exDividendDate || '',
+        dividend: overview.dividendPerShare,
+        adjDividend: overview.dividendPerShare,
+        currency: overview.currency || 'USD',
+        source: 'alphavantage',
+      }]);
+    }
+  } catch {}
 
   return cacheSet(cacheKey, []);
 }
@@ -714,12 +823,102 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           }
         };
       }
-      // Fallback to SEC EDGAR for US stocks when Yahoo Finance has no data
+      // Alpha Vantage fallback when Yahoo Finance has no data (1 quick OVERVIEW call)
+      console.log(`[FinancialReports] Yahoo Finance empty for ${symbol}; trying Alpha Vantage fallback`);
+      const alphaOverview = await alphaVantageService.fetchOverview(symbol).catch(() => null);
+      if (alphaOverview) {
+        availableProviders.push('alphavantage');
+        // Try to pull already-cached statement data too
+        const [cachedInc, cachedBal, cachedCf] = await Promise.all([
+          alphaVantageService.fetchIncomeStatement(symbol, period).catch(() => []),
+          alphaVantageService.fetchBalanceSheet(symbol, period).catch(() => []),
+          alphaVantageService.fetchCashFlow(symbol, period).catch(() => []),
+        ]);
+        const price = alphaOverview.analystTargetPrice || 0;
+        const eps = alphaOverview.eps || alphaOverview.dilutedEPSTTM || 0;
+        const marketCap = alphaOverview.marketCap || 0;
+        const revenue = alphaOverview.revenueTTM || 0;
+        const netIncome = alphaOverview.revenueTTM && alphaOverview.profitMargin
+          ? alphaOverview.revenueTTM * alphaOverview.profitMargin : 0;
+        const overviewQuote = await getQuote(symbol).catch(() => null);
+        const livePrice = overviewQuote?.price || price;
+        const liveMc = overviewQuote?.marketCap || marketCap;
+
+        const alphaProfile = {
+          symbol, companyName: alphaOverview.name || symbol,
+          industry: alphaOverview.industry || '', sector: alphaOverview.sector || '',
+          country: alphaOverview.country || 'USA', website: '', description: alphaOverview.description || '',
+          ceo: 'N/A', employees: 0, marketCap: liveMc || marketCap,
+          exchange: alphaOverview.exchange || '', currency: alphaOverview.currency || 'USD',
+          cik: alphaOverview.cik, isEtf: false, image: '', lastUpdated: new Date().toISOString(),
+        };
+        const alphaKeyMetrics = {
+          marketCap: liveMc || marketCap, sharesOutstanding: alphaOverview.sharesOutstanding || 0,
+          peRatio: alphaOverview.peRatio || (livePrice > 0 && eps > 0 ? livePrice / eps : 0),
+          priceToSalesRatio: revenue > 0 && marketCap > 0 ? marketCap / revenue : 0,
+          pbRatio: 0, debtToEquity: 0, currentRatio: 0,
+          dividendYield: alphaOverview.dividendYield || 0,
+          dividendYieldPercentage: (alphaOverview.dividendYield || 0) * 100,
+          earningsYield: eps > 0 && livePrice > 0 ? eps / livePrice : 0,
+          returnOnEquity: alphaOverview.returnOnEquityTTM || 0,
+          returnOnAssets: alphaOverview.returnOnAssetsTTM || 0,
+          profitMargin: alphaOverview.profitMargin || 0,
+          operatingMargin: alphaOverview.operatingMarginTTM || 0,
+          revenueGrowth: alphaOverview.quarterlyRevenueGrowthYOY || 0,
+          earningsGrowth: alphaOverview.quarterlyEarningsGrowthYOY || 0,
+          revenuePerShare: alphaOverview.revenuePerShareTTM || 0,
+          netIncomePerShare: eps, bookValue: alphaOverview.bookValue || 0,
+          forwardPE: alphaOverview.forwardPE || 0, targetPrice: alphaOverview.analystTargetPrice || 0,
+          dividendPerShare: alphaOverview.dividendPerShare || 0,
+        };
+        const alphaQuote = {
+          symbol, price: livePrice || 0, change: overviewQuote?.change || 0,
+          changesPercentage: overviewQuote?.changesPercentage || 0,
+          marketCap: liveMc || marketCap, eps, pe: alphaKeyMetrics.peRatio,
+          dividendYield: alphaOverview.dividendYield || 0,
+          currency: alphaOverview.currency || 'USD', exchange: alphaOverview.exchange || '',
+          lastUpdated: new Date().toISOString(), source: 'alphavantage',
+        };
+
+        const result = {
+          success: true, symbol, source: 'alphavantage', availableProviders,
+          lastUpdated: new Date().toISOString(),
+          data: {
+            profile: alphaProfile, quote: alphaQuote,
+            incomeStatement: cachedInc[0] || null,
+            incomeStatementHistory: cachedInc.slice(0, limit),
+            balanceSheet: cachedBal[0] || null,
+            balanceSheetHistory: cachedBal.slice(0, limit),
+            cashFlowStatement: cachedCf[0] || null,
+            cashFlowStatementHistory: cachedCf.slice(0, limit),
+            keyMetrics: alphaKeyMetrics, keyMetricsHistory: [alphaKeyMetrics],
+            dividendHistory: alphaOverview.dividendPerShare
+              ? [{ date: alphaOverview.dividendDate || alphaOverview.exDividendDate || '',
+                  dividend: alphaOverview.dividendPerShare,
+                  adjDividend: alphaOverview.dividendPerShare,
+                  currency: alphaOverview.currency || 'USD' }] : [],
+            filings: [],
+          }
+        };
+
+        // Background-fill income/balance/cashflow if none were cached
+        if (cachedInc.length === 0 && cachedBal.length === 0 && cachedCf.length === 0) {
+          alphaVantageService.buildFinancialReport(symbol, period, limit)
+            .then(fullReport => {
+              if (fullReport) {
+                console.log(`[AlphaVantage] Background backfill complete for ${symbol}`);
+              }
+            }).catch(() => {});
+        }
+
+        return result;
+      }
+      // Fallback to SEC EDGAR for US stocks when Yahoo / AlphaVantage has no data
       if (isUs) {
-        console.log(`[FinancialReports] Yahoo Finance empty for ${symbol}; trying SEC EDGAR fallback`);
+        console.log(`[FinancialReports] Yahoo/AlphaVantage empty for ${symbol}; trying SEC EDGAR fallback`);
         return buildEdgarReport(symbol, period, limit, availableProviders);
       }
-      return { success: false, symbol, source: 'yahoo-finance', error: `Yahoo Finance returned no data for ${symbol}` };
+      return { success: false, symbol, source: 'yahoo-finance', error: `No data for ${symbol} from Yahoo, Alpha Vantage, or EDGAR` };
     }
 
     // SEC EDGAR — US stocks only
