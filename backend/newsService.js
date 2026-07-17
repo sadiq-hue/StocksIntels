@@ -657,6 +657,56 @@ async function fetchFromBenzinga() {
   }
 }
 
+// Fetch news & sentiment from Alpha Vantage NEWS_SENTIMENT endpoint
+async function fetchFromAlphaVantage() {
+  const alphaKey = process.env.ALPHA_VANTAGE_API_KEY;
+  if (!alphaKey) return [];
+  try {
+    const url = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey=${alphaKey}&limit=50`;
+    const res = await axios.get(url, { timeout: 12000 });
+    const feed = res.data?.feed;
+    if (!Array.isArray(feed) || feed.length === 0) return [];
+    return feed.map(a => {
+      const pubDate = a.time_published
+        ? new Date(
+            `${a.time_published.slice(0,4)}-${a.time_published.slice(4,6)}-${a.time_published.slice(6,8)}T${a.time_published.slice(9,11)}:${a.time_published.slice(11,13)}:${a.time_published.slice(13,15)}`
+          )
+        : new Date();
+      if (isNaN(pubDate.getTime())) pubDate = new Date();
+
+      const label = (a.overall_sentiment_label || '').toLowerCase();
+      let sentiment = 'neutral';
+      if (label.includes('bullish')) sentiment = 'positive';
+      else if (label.includes('bearish')) sentiment = 'negative';
+
+      const relatedStocks = Array.isArray(a.ticker_sentiment)
+        ? a.ticker_sentiment.map(t => (t.ticker || '').toUpperCase()).filter(Boolean)
+        : [];
+
+      const title = a.title || '';
+      const excerpt = a.summary || '';
+
+      return {
+        id: `av-${a.url ? a.url.replace(/[^a-z0-9]/gi, '').slice(-24) : Math.random().toString(36).slice(2)}`,
+        headline: title.substring(0, 200),
+        source: a.source || 'Alpha Vantage',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: classifyArticle(title, excerpt, relatedStocks),
+        relatedStocks,
+        sentiment,
+        sentimentScore: typeof a.overall_sentiment_score === 'number' ? a.overall_sentiment_score : null,
+        excerpt: excerpt.substring(0, 300),
+        url: a.url || '#',
+        imageUrl: a.banner_image || null,
+      };
+    });
+  } catch (e) {
+    console.error('Error fetching from Alpha Vantage news:', e.message);
+    return [];
+  }
+}
+
 // Wrapper that aborts slow calls (rate-limiters can queue for minutes)
 async function withTimeout(promise, ms = 8000) {
   return Promise.race([
@@ -673,13 +723,14 @@ async function getAllNews(limit = 50, categoryFilter) {
   }
 
   try {
-    const [kenyanBusinessNews, kwsNews, globalRssNews, newsApiNews, finnhubNews, benzingaNews] = await Promise.allSettled([
+    const [kenyanBusinessNews, kwsNews, globalRssNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews] = await Promise.allSettled([
       getKenyanBusinessNews(),
       fetchFromKWS(),
       fetchFromGlobalRSS(),
       withTimeout(fetchFromNewsAPI(), 8000),
       withTimeout(fetchFromFinnhub(), 8000),
       withTimeout(fetchFromBenzinga(), 8000),
+      withTimeout(fetchFromAlphaVantage(), 12000),
     ]);
 
     const extract = r => r.status === 'fulfilled' ? r.value : [];
@@ -688,6 +739,7 @@ async function getAllNews(limit = 50, categoryFilter) {
       ...extract(kwsNews),
       ...extract(kenyanBusinessNews),
       ...extract(globalRssNews),
+      ...extract(alphaVantageNews),
       ...extract(newsApiNews),
       ...extract(finnhubNews),
     ];

@@ -136,6 +136,15 @@ export function NewsPage() {
             <Badge className={`${getSentimentColor(article.sentiment)} text-[9px] px-1.5 py-0`}>
               {article.sentiment}
             </Badge>
+            {article.sentimentScore != null && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1.5 py-0 bg-white/60"
+                title={`Alpha Vantage sentiment score: ${article.sentimentScore.toFixed(3)}`}
+              >
+                AV {article.sentimentScore >= 0 ? "+" : ""}{article.sentimentScore.toFixed(2)}
+              </Badge>
+            )}
           </div>
         </div>
       </div>

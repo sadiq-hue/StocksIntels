@@ -10,6 +10,7 @@ export interface NewsArticle {
   category: "nse" | "global";
   relatedStocks: string[];
   sentiment: "positive" | "negative" | "neutral";
+  sentimentScore?: number | null;
   url: string;
   imageUrl?: string | null;
   hot?: boolean;
