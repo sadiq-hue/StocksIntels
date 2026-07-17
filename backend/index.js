@@ -6145,6 +6145,73 @@ app.get('/api/global/ipos', async (req, res) => {
   }
 });
 
+// --- Alpha Vantage IPO Calendar (Global) ---
+app.get('/api/alpha/ipos', async (req, res) => {
+  try {
+    const alphaKey = process.env.ALPHA_VANTAGE_API_KEY;
+    if (!alphaKey) return res.status(503).json({ error: 'Alpha Vantage not configured' });
+
+    const url = `https://www.alphavantage.co/query?function=IPO_CALENDAR&apikey=${alphaKey}`;
+    const response = await axios.get(url, { timeout: 20000 });
+    const csv = response.data;
+    if (typeof csv !== 'string') return res.status(502).json({ error: 'Unexpected Alpha Vantage response' });
+
+    const lines = csv.trim().split('\n');
+    if (lines.length < 2) return res.json([]);
+
+    const header = lines[0].split(',').map(h => h.trim());
+    const nameIdx = header.indexOf('name');
+    const symbolIdx = header.indexOf('symbol');
+    const exchangeIdx = header.indexOf('exchange');
+    const dateIdx = header.indexOf('date');
+    const priceIdx = header.indexOf('price');
+    const sharesIdx = header.indexOf('shares');
+    const statusIdx = header.indexOf('status');
+
+    const ipos = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',');
+      const symbol = cols[symbolIdx] || '';
+      if (!symbol) continue;
+      const name = cols[nameIdx] || symbol;
+      const dateStr = cols[dateIdx] || '';
+      const listingDate = dateStr ? new Date(dateStr) : null;
+      if (listingDate && isNaN(listingDate.getTime())) continue;
+
+      const rawStatus = (cols[statusIdx] || '').toLowerCase();
+      let status = 'upcoming';
+      if (rawStatus.includes('priced') || rawStatus.includes('filed') || rawStatus.includes('expected')) status = 'upcoming';
+      else if (rawStatus.includes('withdrawn') || rawStatus.includes('postponed')) status = 'withdrawn';
+      else if (rawStatus.includes('traded') || rawStatus.includes('listed')) status = 'listed';
+
+      const offerPrice = cols[priceIdx] ? parseFloat(cols[priceIdx].replace(/[^0-9.]/g, '')) : null;
+      const shares = cols[sharesIdx] ? parseInt(cols[sharesIdx].replace(/[^0-9]/g, ''), 10) : null;
+
+      ipos.push({
+        id: symbol,
+        company_name: name,
+        ticker: symbol,
+        exchange: cols[exchangeIdx] || null,
+        status,
+        listing_date: listingDate ? listingDate.toISOString().split('T')[0] : null,
+        offer_price: isNaN(offerPrice) ? null : offerPrice,
+        current_price: null,
+        price_change_pct: null,
+        price_change: null,
+        oversubscription_pct: null,
+        description: shares ? `Expected to offer ${shares.toLocaleString()} shares.` : null,
+        sector: null,
+      });
+    }
+
+    ipos.sort((a, b) => new Date(a.listing_date || 0).getTime() - new Date(b.listing_date || 0).getTime());
+    res.json(ipos);
+  } catch (err) {
+    console.error('Error fetching Alpha Vantage IPO calendar:', err.message);
+    res.status(500).json({ error: 'Failed to fetch Alpha Vantage IPO calendar' });
+  }
+});
+
 // --- Global Corporate Actions ---
 app.get('/api/global/corporate-actions', async (req, res) => {
   try {

@@ -39,7 +39,12 @@ export function IpoPage() {
     setLoading(true);
     Promise.all([
       fetch(`${API_BASE}/nse/ipos`).then(r => r.json()).then(d => { if (Array.isArray(d)) setNseIpos(d); }).catch(() => {}),
-      fetch(`${API_BASE}/global/ipos`).then(r => r.json()).then(d => { if (Array.isArray(d)) setGlobalIpos(d); }).catch(() => {}),
+      fetch(`${API_BASE}/alpha/ipos`).then(r => r.json()).then(d => {
+        if (Array.isArray(d) && d.length) setGlobalIpos(d);
+        else return fetch(`${API_BASE}/global/ipos`).then(r => r.json()).then(fb => { if (Array.isArray(fb)) setGlobalIpos(fb); });
+      }).catch(() => {
+        fetch(`${API_BASE}/global/ipos`).then(r => r.json()).then(fb => { if (Array.isArray(fb)) setGlobalIpos(fb); }).catch(() => {});
+      }),
     ]).finally(() => setLoading(false));
   }, []);
 
