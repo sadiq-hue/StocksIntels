@@ -10,7 +10,7 @@ import {
 import {
   fetchAllNews, fetchNewsSummary,
   filterNewsByCategory,
-  searchNews, fetchArticleExcerpt,
+  searchNews, fetchArticleExcerpt, generateSummary,
   type NewsArticle, type NewsSummary,
 } from "../services/newsService";
 
@@ -99,7 +99,7 @@ export function NewsPage() {
       if (excerpt !== null || loadingExcerpt || !article.url || article.url === "#") return;
       setLoadingExcerpt(true);
       const text = await fetchArticleExcerpt(article.url);
-      setExcerpt(text);
+      setExcerpt(text || generateSummary(article));
       setLoadingExcerpt(false);
     };
 

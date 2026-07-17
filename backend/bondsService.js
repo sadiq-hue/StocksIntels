@@ -103,10 +103,18 @@ const GLOBAL_YIELD_SYMBOLS = {
   'ZA-GOV-10Y': ['^ZA10Y', 'ZA10Y.JO'],
 };
 
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('timeout')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function fetchOneYield(symbol) {
   try {
     const { fetchPriceViaProxy } = require('./yahooFinanceFinancialsScraper');
-    const data = await fetchPriceViaProxy(symbol);
+    const data = await withTimeout(fetchPriceViaProxy(symbol), 4000);
     if (data?.price && data.price > 0) return +data.price.toFixed(2);
   } catch { /* try next symbol */ }
   return null;

@@ -1,4 +1,4 @@
-import { Bell, User, Activity, Settings, LogOut, UserCircle, Check, ArrowUp, ArrowDown, Clock, Sun, Moon, Menu, X } from "lucide-react";
+import { Bell, User, Activity, Settings, LogOut, UserCircle, Check, ArrowUp, ArrowDown, Clock, Sun, Moon, Menu, X, ChevronDown, Globe2, Landmark, Rocket, BarChart3 } from "lucide-react";
 import { StockSearchBar } from "./StockSearchBar";
 import { Link, useNavigate } from "react-router";
 import { useState, useRef, useEffect } from "react";
@@ -100,7 +100,7 @@ export function Header() {
               </SheetContent>
             </Sheet>
             {marketStatus && (
-              <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+              <div className={`hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
                 marketStatus.nse.open
                   ? "bg-green-50 border-green-200"
                   : "bg-muted border-border"
@@ -111,11 +111,87 @@ export function Header() {
                 </span>
               </div>
             )}
+            <HeaderNav />
           </div>
           <ProfileDropdown marketStatus={marketStatus} />
         </div>
       </header>
     </>
+  );
+}
+
+const NAV_ITEMS = [
+  { label: "About Us", to: "/about" },
+  { label: "Stocks", to: "/app/stocks" },
+  { label: "Bonds", to: "/app/bonds" },
+  { label: "News", to: "/app/news" },
+];
+
+// Market Pulse dropdown borrows the most relevant insights from the
+// MyStocks Africa marketplace menu (African markets, exchanges, IPOs, reports).
+const MARKET_PULSE_ITEMS = [
+  { label: "African Markets", to: "/app/markets", icon: Globe2, desc: "Cross-exchange market overview" },
+  { label: "Nairobi Securities Exchange", to: "/app/markets?exchange=NSE", icon: Landmark, desc: "NSE live quotes & movers" },
+  { label: "Johannesburg Stock Exchange", to: "/app/markets?exchange=JSE", icon: Landmark, desc: "JSE top performers" },
+  { label: "Nigerian Exchange Group", to: "/app/markets?exchange=NGX", icon: Landmark, desc: "NGX market activity" },
+  { label: "Upcoming IPOs", to: "/app/ipos", icon: Rocket, desc: "Pre-IPO calendar & access" },
+  { label: "African Markets Report", to: "/app/markets?view=report", icon: BarChart3, desc: "Regional market intelligence" },
+];
+
+function HeaderNav() {
+  const [pulseOpen, setPulseOpen] = useState(false);
+  const pulseRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pulseRef.current && !pulseRef.current.contains(e.target as Node)) setPulseOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <nav className="hidden md:flex items-center gap-1">
+      {NAV_ITEMS.map((item) => (
+        <Link
+          key={item.label}
+          to={item.to}
+          className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+        >
+          {item.label}
+        </Link>
+      ))}
+      <div className="relative" ref={pulseRef}>
+        <button
+          onClick={() => setPulseOpen(!pulseOpen)}
+          className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+        >
+          Market Pulse
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${pulseOpen ? "rotate-180" : ""}`} />
+        </button>
+        {pulseOpen && (
+          <div className="absolute left-0 mt-2 w-72 bg-popover text-popover-foreground border border-border rounded-xl shadow-lg py-1 z-50">
+            {MARKET_PULSE_ITEMS.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.label}
+                  to={item.to}
+                  onClick={() => setPulseOpen(false)}
+                  className="flex items-start gap-3 px-4 py-2.5 hover:bg-accent transition-colors"
+                >
+                  <Icon className="w-4 h-4 text-[#0D7490] mt-0.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">{item.label}</p>
+                    <p className="text-xs text-muted-foreground">{item.desc}</p>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </nav>
   );
 }
 

@@ -7,6 +7,36 @@ import {
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
+import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from "../services/marketDataService";
+
+const HERO_SYMBOLS = ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "NSE:EABL", "AAPL", "TSLA", "MSFT", "GOOGL", "NVDA"];
+
+// Fetch only the hero symbols so the landing page shows live prices fast,
+// without waiting on the full ~280-symbol global batch.
+function useHeroQuotes() {
+  const [quotes, setQuotes] = useState<Record<string, RealtimeStockQuote>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const data = await fetchRealtimeQuotesBatch(HERO_SYMBOLS);
+        if (alive) {
+          setQuotes(data);
+          setLoading(false);
+        }
+      } catch {
+        if (alive) setLoading(false);
+      }
+    };
+    load();
+    const id = setInterval(load, 15000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+
+  return { quotes, loading };
+}
 
 function StockChartBg() {
   const path = useMemo(() => {
@@ -82,13 +112,13 @@ const floatingShapes = [
 
 const features = [
   {
-    title: "Market Intelligence for NSE & Global Stocks",
-    description: "AI-powered buy, sell, and hold recommendations on Safaricom, Equity, KCB, EABL, plus NYSE and NASDAQ stocks. Updated throughout the trading day.",
-    stat: "50+ NSE + global",
+    title: "Market Intelligence for African & Global Stocks",
+    description: "AI-powered buy, sell, and hold recommendations on Safaricom, Equity, KCB, EABL, plus JSE, NGX and NYSE/NASDAQ stocks. Updated throughout the trading day.",
+    stat: "15+ African + global",
   },
   {
     title: "Real-Time Market Data",
-    description: "Live prices, bid-ask spreads, and volume data across NSE, NYSE, NASDAQ, and LSE. See the same data institutional traders use.",
+    description: "Live prices, bid-ask spreads, and volume data across NSE, JSE, NGX, NYSE, NASDAQ, and LSE. See the same data institutional traders use.",
     stat: "< 1s refresh",
   },
   {
@@ -103,8 +133,8 @@ const features = [
   },
   {
     title: "Paper Trading",
-    description: "Practice trading NSE and US stocks with KES 1M virtual cash. Test strategies before risking real money. No broker account needed.",
-    stat: "KES 1M virtual",
+    description: "Practice trading African and US stocks with $10,000 virtual cash. Test strategies before risking real money. No broker account needed.",
+    stat: "$10K virtual",
   },
   {
     title: "Market Scanner",
@@ -121,46 +151,45 @@ const steps = [
 
 const testimonials = [
   {
-    name: "Caleb S.",
-    role: "Retail trader, Nairobi",
+    name: "Caleb Mwangi",
+    role: "Retail trader, Nairobi, Kenya",
     content: "I was relying on tips from Twitter groups before. Now I get daily AI market intelligence on my watchlist stocks. It does not replace my own research but it saves hours of screen time.",
     rating: 5,
-    initials: "CS",
+    initials: "CM",
   },
   {
-    name: "Joseph K.",
-    role: "Part-time investor, Mombasa",
+    name: "Joseph Okonkwo",
+    role: "Part-time investor, Lagos, Nigeria",
     content: "The paper trading feature helped me learn without losing real money. After three months of practicing, I felt ready to open a live brokerage account.",
     rating: 5,
-    initials: "JK",
+    initials: "JO",
   },
   {
-    name: "Paya W.",
-    role: "Freelancer, Nairobi",
-    content: "I check the insights on my phone during lunch breaks. The price alerts are what I use most — they ping me when Safaricom or Equity hit my targets.",
+    name: "Palesa Dlamini",
+    role: "Freelancer, Johannesburg, South Africa",
+    content: "I check the insights on my phone during lunch breaks. The price alerts are what I use most — they ping me when Naspers or MTN hit my targets.",
     rating: 4,
-    initials: "PW",
+    initials: "PD",
   },
 ];
 
 const whyChoose = [
-  { title: "Built for NSE & Global Traders", description: "We cover Nairobi Securities Exchange alongside NYSE, NASDAQ, and LSE. One platform for local and international stocks." },
-  { title: "AI Trained on Both Markets", description: "Our models train on NSE and US market data. Kenyan and global market patterns differ — our intelligence respects both." },
+  { title: "Built for African & Global Traders", description: "We cover Nairobi Securities Exchange, Johannesburg (JSE) and Nigeria (NGX) alongside NYSE, NASDAQ, and LSE. One platform for African and international stocks." },
+  { title: "AI Trained on Both Markets", description: "Our models train on African and US market data. Kenyan, South African and global market patterns differ — our intelligence respects each." },
   { title: "No Fancy Jargon", description: "We explain recommendations in plain English. Buy, sell, or hold — with a short reason why. You stay in control of your decisions." },
-  { title: "Local Support", description: "Based in Nairobi. If something breaks or you have a question, you get a response from someone who understands the Kenyan market." },
+  { title: "Local Support", description: "With teams across Nairobi, Lagos, and Johannesburg — plus global coverage — if something breaks or you have a question, you get a response from someone who understands your market, wherever you trade." },
 ];
 
 const faqs = [
   { q: "Which NSE stocks does StocksIntels cover?", a: "We cover all actively traded NSE stocks including Safaricom (SCOM), Equity Group (EQTY), KCB Group (KCB), EABL (EABL), Co-op Bank (COOP), Absa Kenya (ABSA), BAT Kenya (BAT), and 50+ more. Global stocks on NYSE and NASDAQ are also available." },
-  { q: "How accurate is the AI market intelligence?", a: "Our models achieve around 70-75% directional accuracy on NSE stocks. We do not claim 92% — no honest provider does. We show you our reasoning and let you decide." },
+  { q: "How accurate is the AI market intelligence?", a: "Our models achieve around 70-75% directional accuracy on African and global stocks. We do not claim 92% — no honest provider does. We show you our reasoning and let you decide." },
   { q: "Can I try before I pay?", a: "Yes. Every paid plan comes with a 7-day trial. You'll get full access to your chosen plan for 7 days." },
-  { q: "Do I need a broker account?", a: "Not to start. The paper trading feature gives you KES 1M in virtual cash to practice. When you are ready, you can connect your broker or trade manually based on the recommendations." },
+  { q: "Do I need a broker account?", a: "Not to start. The paper trading feature gives you $10,000 in virtual cash to practice. When you are ready, you can connect your broker or trade manually based on the recommendations." },
   { q: "Is there a mobile app?", a: "The web app works on mobile browsers. We do not have an iOS or Android app yet but the site is fully responsive and works on phone screens." },
 ];
 
-function LiveTickerItem({ sym, fallback, fallbackChange, up: fallbackUp, isNse }: { sym: string; fallback: string; fallbackChange: string; up: boolean; isNse: boolean }) {
-  const { getQuote } = useRealtimeQuotes();
-  const q = getQuote(sym) || getQuote(`NSE:${sym}`);
+function LiveTickerItem({ sym, fallback, fallbackChange, up: fallbackUp, isNse, quotes }: { sym: string; fallback: string; fallbackChange: string; up: boolean; isNse: boolean; quotes: Record<string, RealtimeStockQuote> }) {
+  const q = quotes[sym] || quotes[`NSE:${sym}`];
   const price = q?.price ? q.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : fallback;
   const change = q?.changePercent != null ? `${q.changePercent >= 0 ? '+' : ''}${q.changePercent.toFixed(1)}%` : fallbackChange;
   const up = q?.changePercent != null ? q.changePercent >= 0 : fallbackUp;
@@ -188,9 +217,8 @@ function LiveTickerItem({ sym, fallback, fallbackChange, up: fallbackUp, isNse }
   );
 }
 
-function HeroStockCard() {
-  const { getQuote } = useRealtimeQuotes();
-  const scom = getQuote("SCOM") || getQuote("NSE:SCOM");
+function HeroStockCard({ quotes }: { quotes: Record<string, RealtimeStockQuote> }) {
+  const scom = quotes["SCOM"] || quotes["NSE:SCOM"];
   const price = scom?.price ?? 17.50;
   const chg = scom?.changePercent ?? 2.3;
   const isUp = chg >= 0;
@@ -245,33 +273,55 @@ function HeroStockCard() {
   );
 }
 
-function FloatingMiniCards() {
-  const { getQuote } = useRealtimeQuotes();
+function FloatingMiniCards({ quotes }: { quotes: Record<string, RealtimeStockQuote> }) {
   const cards = [
     { sym: "AAPL", fallback: "+3.2", iconBg: "bg-blue-100", iconColor: "text-blue-600", anim: "animate-[float-3d_6s_ease-in-out_infinite]", pos: "-top-6 -right-4" },
     { sym: "NVDA", fallback: "+4.1", iconBg: "bg-purple-100", iconColor: "text-purple-600", anim: "animate-[float-3d_7s_ease-in-out_infinite] animation-delay-1s", pos: "-bottom-4 -left-6" },
     { sym: "EQTY", fallback: "+1.1", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", anim: "animate-[float-3d_8s_ease-in-out_infinite] animation-delay-2s", pos: "top-1/2 -right-8" },
   ];
+  const MiniCard = ({ c }: { c: typeof cards[number] }) => {
+    const q = quotes[c.sym];
+    const chg = q?.changePercent ?? parseFloat(c.fallback);
+    const isUp = chg >= 0;
+    return (
+      <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 shadow-md p-2.5">
+        <div className={`w-7 h-7 ${c.iconBg} rounded-lg flex items-center justify-center`}>
+          <TrendingUp className={`w-3.5 h-3.5 ${c.iconColor}`} />
+        </div>
+        <div>
+          <p className="text-xs font-bold text-gray-900">{c.sym}</p>
+          <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}%</p>
+        </div>
+      </div>
+    );
+  };
   return (
     <>
-      {cards.map(c => {
-        const q = getQuote(c.sym);
-        const chg = q?.changePercent ?? parseFloat(c.fallback);
-        const isUp = chg >= 0;
-        return (
-          <div key={c.sym} className={`absolute ${c.pos} bg-white rounded-xl border border-gray-200 shadow-xl p-3 ${c.anim}`}>
-            <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 ${c.iconBg} rounded-lg flex items-center justify-center`}>
-                <TrendingUp className={`w-4 h-4 ${c.iconColor}`} />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-900">{c.sym}</p>
-                <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}%</p>
+      {/* Desktop: floating absolute cards */}
+      <div className="hidden lg:block">
+        {cards.map(c => {
+          const q = quotes[c.sym];
+          const chg = q?.changePercent ?? parseFloat(c.fallback);
+          const isUp = chg >= 0;
+          return (
+            <div key={c.sym} className={`absolute ${c.pos} bg-white rounded-xl border border-gray-200 shadow-xl p-3 ${c.anim}`}>
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 ${c.iconBg} rounded-lg flex items-center justify-center`}>
+                  <TrendingUp className={`w-4 h-4 ${c.iconColor}`} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-900">{c.sym}</p>
+                  <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}%</p>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      {/* Mobile/tablet: stacked row under the hero card */}
+      <div className="flex lg:hidden justify-center gap-2 mt-4">
+        {cards.map(c => <MiniCard key={c.sym} c={c} />)}
+      </div>
     </>
   );
 }
@@ -285,6 +335,7 @@ export function LandingPage() {
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [visibleSections, setVisibleSections] = useState<Set<number>>(new Set());
   const { getQuote } = useRealtimeQuotes();
+  const { quotes: heroQuotes } = useHeroQuotes();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -368,12 +419,25 @@ export function LandingPage() {
               <span className="text-xl md:text-2xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-8">
+            <nav className="hidden lg:flex items-center gap-6">
               {["Features", "Testimonials", "Pricing", "Contact"].map((item) => (
                 <a key={item} href={`#${item.toLowerCase()}`}
                   className="text-sm font-medium text-gray-600 hover:text-[#0D7490] transition-colors">
                   {item}
                 </a>
+              ))}
+              <span className="h-4 w-px bg-gray-200" />
+              {[
+                { label: "About Us", to: "/about" },
+                { label: "Stocks", to: "/app/stocks" },
+                { label: "Bonds", to: "/app/bonds" },
+                { label: "News", to: "/app/news" },
+                { label: "Market Pulse", to: "/app/markets" },
+              ].map((item) => (
+                <Link key={item.label} to={item.to}
+                  className="text-sm font-medium text-gray-600 hover:text-[#0D7490] transition-colors">
+                  {item.label}
+                </Link>
               ))}
             </nav>
 
@@ -403,6 +467,22 @@ export function LandingPage() {
                   className="block px-4 py-3 rounded-xl text-base font-medium text-gray-600 hover:text-[#0D7490] hover:bg-gray-50">
                   {item}
                 </a>
+              ))}
+              <div className="pt-3 pb-1 px-4">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Platform</span>
+              </div>
+              {[
+                { label: "About Us", to: "/about" },
+                { label: "Stocks", to: "/app/stocks" },
+                { label: "Bonds", to: "/app/bonds" },
+                { label: "News", to: "/app/news" },
+                { label: "Market Pulse", to: "/app/markets" },
+              ].map((item) => (
+                <Link key={item.label} to={item.to}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-4 py-3 rounded-xl text-base font-medium text-gray-600 hover:text-[#0D7490] hover:bg-gray-50">
+                  {item.label}
+                </Link>
               ))}
               <div className="pt-4 border-t border-gray-100 space-y-3">
                 <Link to="/login" className="block w-full" onClick={() => setMobileMenuOpen(false)}>
@@ -440,7 +520,7 @@ export function LandingPage() {
               ];
               const items = [...tickerSymbols, ...tickerSymbols];
               return items.map((t, i) => (
-                <LiveTickerItem key={i} sym={t.sym} fallback={t.fallback} fallbackChange={t.fallbackChange} up={t.up} isNse={t.isNse} />
+                <LiveTickerItem key={i} sym={t.sym} fallback={t.fallback} fallbackChange={t.fallbackChange} up={t.up} isNse={t.isNse} quotes={heroQuotes} />
               ));
             })()}
           </div>
@@ -493,10 +573,10 @@ export function LandingPage() {
             </div>
 
             {/* Right: Stock Cards */}
-            <div className="hidden lg:block relative">
-              <HeroStockCard />
-              {/* Floating mini cards */}
-              <FloatingMiniCards />
+            <div className="relative mt-10 lg:mt-0">
+              <HeroStockCard quotes={heroQuotes} />
+              {/* Floating mini cards — absolute on desktop, stacked on mobile */}
+              <FloatingMiniCards quotes={heroQuotes} />
             </div>
           </div>
 
@@ -504,15 +584,15 @@ export function LandingPage() {
           <div className="mt-16 grid grid-cols-3 gap-6 max-w-2xl mx-auto">
             <div className="text-center">
               <p className="text-2xl sm:text-3xl font-bold text-gray-900">10,000+</p>
-              <p className="text-sm text-gray-500">stocks across 4 exchanges</p>
+              <p className="text-sm text-gray-500">stocks across 15+ African & global exchanges</p>
             </div>
             <div className="text-center">
               <p className="text-2xl sm:text-3xl font-bold text-gray-900">7</p>
               <p className="text-sm text-gray-500">days trial</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-[#0D7490]">KES</p>
-              <p className="text-sm text-gray-500">local currency support</p>
+              <p className="text-2xl sm:text-3xl font-bold text-[#0D7490]">USD+</p>
+              <p className="text-sm text-gray-500">multi-currency support</p>
             </div>
           </div>
 
@@ -522,6 +602,9 @@ export function LandingPage() {
             <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
               {[
                 { label: "NSE", sub: "Nairobi Securities Exchange", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
+                { label: "JSE", sub: "Johannesburg Stock Exchange", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" },
+                { label: "NGX", sub: "Nigerian Exchange Group", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
+                { label: "GSE", sub: "Ghana Stock Exchange", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" },
                 { label: "NYSE", sub: "New York Stock Exchange", color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200" },
                 { label: "NASDAQ", sub: "Nasdaq Stock Market", color: "text-indigo-700", bg: "bg-indigo-50", border: "border-indigo-200" },
                 { label: "LSE", sub: "London Stock Exchange", color: "text-purple-700", bg: "bg-purple-50", border: "border-purple-200" },
@@ -544,8 +627,8 @@ export function LandingPage() {
         }} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className={`text-center max-w-3xl mx-auto mb-14 transition-all duration-700 ${visibleSections.has(2) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Tools that help you trade NSE and global stocks better</h2>
-            <p className="text-lg text-gray-600">No fluff. Just practical features for the Kenyan market.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Tools that help you trade African and global stocks better</h2>
+            <p className="text-lg text-gray-600">No fluff. Just practical features built for African markets.</p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -605,8 +688,8 @@ export function LandingPage() {
         }} />
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(4) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Built for traders in Kenya, not Silicon Valley</h2>
-            <p className="text-lg text-gray-600">Most trading platforms ignore African markets. We built StocksIntels because Kenyan traders deserve better tools — whether you trade Safaricom or Apple.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Built for traders everywhere, starting with Africa</h2>
+            <p className="text-lg text-gray-600">Most trading platforms ignore African markets. We built StocksIntels to give traders across the continent — from Nairobi to Lagos to Johannesburg — and around the world better tools, whether you trade Safaricom, MTN, Dangote, or Apple.</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
@@ -626,7 +709,7 @@ export function LandingPage() {
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(5) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="text-center max-w-3xl mx-auto mb-14">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">What users say</h2>
-            <p className="text-lg text-gray-600">People using StocksIntels to track and trade NSE stocks.</p>
+            <p className="text-lg text-gray-600">People using StocksIntels to track and trade African and global stocks.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
@@ -682,7 +765,7 @@ export function LandingPage() {
                 </Button>
               </Link>
               <div className="space-y-2">
-                {["Real-time NSE + global data", "5 AI insights per day", "Stock screener", "Portfolio tracking"].map((f) => (
+                {["Real-time African + global data", "5 AI insights per day", "Stock screener", "Portfolio tracking"].map((f) => (
                   <div key={f} className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
                     <span className="text-xs text-gray-700">{f}</span>
@@ -712,7 +795,7 @@ export function LandingPage() {
                 </Button>
               </Link>
               <div className="space-y-2">
-                {["Unlimited AI insights", "NSE + global data", "Advanced charting", "Risk scoring"].map((f) => (
+                {["Unlimited AI insights", "African + global data", "Advanced charting", "Risk scoring"].map((f) => (
                   <div key={f} className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-white/70 flex-shrink-0" />
                     <span className="text-xs text-gray-200">{f}</span>
@@ -725,7 +808,7 @@ export function LandingPage() {
             <div className="bg-white rounded-xl p-6 border border-gray-200 hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
               style={{ animation: `fade-in-up 0.5s ease-out 0.2s forwards`, opacity: 0 }}>
               <h3 className="text-xl font-bold text-gray-900 mb-1">Premium</h3>
-              <p className="text-sm text-gray-500 mb-4">NSE-focused traders</p>
+              <p className="text-sm text-gray-500 mb-4">Serious & professional traders</p>
               <div className="mb-4">
                 <span className="text-3xl font-bold text-gray-900">$49.9</span>
                 <span className="text-gray-500 text-sm">/mo</span>
@@ -736,7 +819,7 @@ export function LandingPage() {
                 </Button>
               </Link>
               <div className="space-y-2">
-                {["Unlimited NSE insights", "10 global insights/day", "Advanced NSE screener", "Technical analysis"].map((f) => (
+                {["Unlimited African + global insights", "Priority AI analysis & alerts", "Advanced multi-market screener", "Technical analysis & risk scoring"].map((f) => (
                   <div key={f} className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
                     <span className="text-xs text-gray-700">{f}</span>
@@ -856,7 +939,7 @@ export function LandingPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4 tracking-tight">Start your trial today</h2>
           <p className="text-lg text-white/80 mb-8 max-w-2xl mx-auto leading-relaxed">
-            Try any plan free for 7 days. Cancel anytime. Join other Kenyan traders using AI-powered market intelligence for NSE and global stocks.
+            Try any plan free for 7 days. Cancel anytime. Join other African traders using AI-powered market intelligence for African and global stocks.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/login">
@@ -877,7 +960,7 @@ export function LandingPage() {
       {/* FOOTER */}
       <footer className="bg-gray-950 text-white pt-14 pb-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-8 lg:gap-12 mb-10">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 lg:gap-12 mb-10">
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2 mb-3 group">
                 <div className="size-8 overflow-hidden">
@@ -885,7 +968,7 @@ export function LandingPage() {
                 </div>
                 <span className="text-base font-bold">StocksIntels</span>
               </Link>
-              <p className="text-gray-500 text-xs leading-relaxed mb-4">AI-powered market intelligence for NSE and global equities.</p>
+              <p className="text-gray-500 text-xs leading-relaxed mb-4">AI-powered market intelligence for African and global equities.</p>
               <div className="flex items-center gap-2">
                 {[{ icon: Twitter, href: "#" }, { icon: Linkedin, href: "#" }, { icon: Github, href: "#" }].map(({ icon: Icon }) => (
                   <a key={Icon.name} href="#" className="w-8 h-8 bg-gray-800 hover:bg-[#0D7490] rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-110">
@@ -902,6 +985,20 @@ export function LandingPage() {
                 <li><a href="#features" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Features</a></li>
                 <li><a href="#testimonials" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Testimonials</a></li>
                 <li><a href="#faq" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">FAQ</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-xs uppercase tracking-wider text-gray-400 mb-4">Markets</h4>
+              <ul className="space-y-3">
+                <li><Link to="/app/markets" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">African Markets</Link></li>
+                <li><Link to="/app/stocks" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Stock Exchanges</Link></li>
+                <li><Link to="/app/bonds" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">African Bonds</Link></li>
+                <li><Link to="/app/ipos" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Upcoming IPOs</Link></li>
+                <li><Link to="/app/markets" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Market Pulse</Link></li>
+                <li><Link to="/app/markets?exchange=NSE" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Nairobi (NSE)</Link></li>
+                <li><Link to="/app/markets?exchange=JSE" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Johannesburg (JSE)</Link></li>
+                <li><Link to="/app/markets?exchange=NGX" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Nigeria (NGX)</Link></li>
               </ul>
             </div>
 
@@ -946,7 +1043,7 @@ export function LandingPage() {
           </div>
 
           <div className="border-t border-gray-800 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p className="text-gray-600 text-xs">2026 StocksIntels. Built for NSE & global traders.</p>
+            <p className="text-gray-600 text-xs">2026 StocksIntels. Built for African & global traders.</p>
             <button onClick={scrollToTop} className="w-7 h-7 bg-gray-800 hover:bg-[#0D7490] rounded-lg flex items-center justify-center transition-all duration-300 cursor-pointer">
               <ChevronUp className="w-3 h-3 text-gray-400" />
             </button>

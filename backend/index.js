@@ -3773,14 +3773,13 @@ app.get('/api/news/excerpt', async (req, res) => {
   try {
     const url = req.query.url;
     if (!url || typeof url !== 'string' || !/^https?:\/\//.test(url)) {
-      return res.status(400).json({ error: 'Valid url required' });
+      return res.status(400).json({ excerpt: null });
     }
     const { fetchYahooExcerpt } = require('./newsService');
     const excerpt = await fetchYahooExcerpt(url);
-    if (!excerpt) return res.json({ excerpt: null });
-    res.json({ excerpt });
+    return res.json({ excerpt: excerpt || null });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch excerpt' });
+    return res.json({ excerpt: null });
   }
 });
 

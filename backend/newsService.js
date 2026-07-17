@@ -718,11 +718,19 @@ async function fetchYahooExcerpt(url) {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
     });
     const $ = cheerio.load(res.data);
-    const desc =
+    let desc =
       $('meta[property="og:description"]').attr('content') ||
       $('meta[name="description"]').attr('content') ||
       '';
-    const clean = desc.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').trim();
+    if (!desc || desc.length < 20) {
+      desc = JSON.stringify($('script[type="application/ld+json"]').map((i, el) => {
+        try { return JSON.parse($(el).contents().text()).description; } catch { return null; }
+      }).get()).replace(/[\[\]"]/g, ' ').trim();
+    }
+    if (!desc || desc.length < 20) {
+      desc = $('p').first().text().trim();
+    }
+    const clean = desc.replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
     return clean.length > 20 ? clean.substring(0, 300) : null;
   } catch {
     return null;

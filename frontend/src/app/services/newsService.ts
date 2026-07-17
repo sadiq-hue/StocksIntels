@@ -130,3 +130,27 @@ export async function fetchArticleExcerpt(url: string): Promise<string | null> {
     return null;
   }
 }
+
+// Build a readable summary from the article's own metadata when the
+// live page scrape is unavailable (most news sites block bot scraping).
+export function generateSummary(article: {
+  headline: string;
+  source?: string;
+  category?: string;
+  sentiment?: string;
+  relatedStocks?: string[];
+}): string {
+  const stocks = (article.relatedStocks || []).filter(Boolean);
+  const stockText = stocks.length
+    ? ` This story is most relevant to ${stocks.slice(0, 3).join(", ")}.`
+    : "";
+  const sentimentText =
+    article.sentiment === "positive"
+      ? "The reported tone is positive."
+      : article.sentiment === "negative"
+      ? "The reported tone is negative."
+      : "Coverage appears neutral in tone.";
+  const cat = article.category ? ` Tagged under ${article.category}.` : "";
+  const source = article.source ? ` (via ${article.source})` : "";
+  return `Summary: ${article.headline}.${cat} ${sentimentText}${stockText}${source}`;
+}
