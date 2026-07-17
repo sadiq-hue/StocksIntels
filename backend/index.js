@@ -6160,46 +6160,50 @@ app.get('/api/alpha/ipos', async (req, res) => {
     if (lines.length < 2) return res.json([]);
 
     const header = lines[0].split(',').map(h => h.trim());
-    const nameIdx = header.indexOf('name');
     const symbolIdx = header.indexOf('symbol');
+    const nameIdx = header.indexOf('name');
+    const dateIdx = header.indexOf('ipoDate');
+    const lowIdx = header.indexOf('priceRangeLow');
+    const highIdx = header.indexOf('priceRangeHigh');
+    const currencyIdx = header.indexOf('currency');
     const exchangeIdx = header.indexOf('exchange');
-    const dateIdx = header.indexOf('date');
-    const priceIdx = header.indexOf('price');
-    const sharesIdx = header.indexOf('shares');
-    const statusIdx = header.indexOf('status');
 
     const ipos = [];
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split(',');
-      const symbol = cols[symbolIdx] || '';
-      if (!symbol) continue;
-      const name = cols[nameIdx] || symbol;
-      const dateStr = cols[dateIdx] || '';
+      const symbol = (cols[symbolIdx] || '').trim();
+      if (!symbol || symbol.length > 12) continue;
+      const name = (cols[nameIdx] || symbol).trim();
+      const dateStr = (cols[dateIdx] || '').trim();
       const listingDate = dateStr ? new Date(dateStr) : null;
       if (listingDate && isNaN(listingDate.getTime())) continue;
 
-      const rawStatus = (cols[statusIdx] || '').toLowerCase();
-      let status = 'upcoming';
-      if (rawStatus.includes('priced') || rawStatus.includes('filed') || rawStatus.includes('expected')) status = 'upcoming';
-      else if (rawStatus.includes('withdrawn') || rawStatus.includes('postponed')) status = 'withdrawn';
-      else if (rawStatus.includes('traded') || rawStatus.includes('listed')) status = 'listed';
+      const low = parseFloat((cols[lowIdx] || '').replace(/[^0-9.]/g, ''));
+      const high = parseFloat((cols[highIdx] || '').replace(/[^0-9.]/g, ''));
+      let offerPrice = null;
+      if (!isNaN(low) && !isNaN(high)) offerPrice = (low + high) / 2;
+      else if (!isNaN(low)) offerPrice = low;
+      else if (!isNaN(high)) offerPrice = high;
 
-      const offerPrice = cols[priceIdx] ? parseFloat(cols[priceIdx].replace(/[^0-9.]/g, '')) : null;
-      const shares = cols[sharesIdx] ? parseInt(cols[sharesIdx].replace(/[^0-9]/g, ''), 10) : null;
+      const currency = (cols[currencyIdx] || 'USD').trim();
+      const exchange = (cols[exchangeIdx] || '').trim() || null;
+      const status = listingDate && listingDate < new Date() ? 'listed' : 'upcoming';
 
       ipos.push({
         id: symbol,
         company_name: name,
         ticker: symbol,
-        exchange: cols[exchangeIdx] || null,
+        exchange,
         status,
         listing_date: listingDate ? listingDate.toISOString().split('T')[0] : null,
-        offer_price: isNaN(offerPrice) ? null : offerPrice,
+        offer_price: offerPrice,
         current_price: null,
         price_change_pct: null,
         price_change: null,
         oversubscription_pct: null,
-        description: shares ? `Expected to offer ${shares.toLocaleString()} shares.` : null,
+        description: (low && high && !isNaN(low) && !isNaN(high))
+          ? `Expected price range: ${currency} ${low}–${high}`
+          : null,
         sector: null,
       });
     }
