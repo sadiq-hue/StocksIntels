@@ -138,6 +138,9 @@ async function fetchLiveQuotes() {
           volume: q.regularMarketVolume || 0,
           previousClose: prevClose,
           open: q.regularMarketOpen || 0,
+          aum: q.totalAssets,
+          expenseRatio: q.annualReportExpenseRatio,
+          dividendYield: q.trailingAnnualDividendYield ? q.trailingAnnualDividendYield * 100 : undefined,
           dataSource: 'yahoo',
         };
       }
@@ -157,6 +160,25 @@ async function fetchLiveQuotes() {
     cacheTime = now;
   }
   return result;
+}
+
+function mergeLiveQuote(etf, live) {
+  return {
+    ...etf,
+    price: live.price,
+    change: live.change ?? 0,
+    changePercent: live.changePercent ?? 0,
+    high: live.high ?? 0,
+    low: live.low ?? 0,
+    volume: live.volume ?? 0,
+    open: live.open ?? 0,
+    previousClose: live.previousClose ?? live.price,
+    aum: live.aum != null && live.aum > 0 ? live.aum : etf.aum,
+    expenseRatio: live.expenseRatio != null && live.expenseRatio > 0 ? +(live.expenseRatio * 100).toFixed(2) : etf.expenseRatio,
+    dividendYield: live.dividendYield != null ? +live.dividendYield.toFixed(2) : etf.dividendYield,
+    dataSource: live.dataSource || 'yahoo',
+    lastUpdated: new Date().toISOString(),
+  };
 }
 
 function getSyntheticQuote(ticker, basePrice, currency) {
@@ -211,9 +233,7 @@ async function getETFs(market) {
 
   return all.map(etf => {
     const live = liveQuotes[etf.ticker];
-    if (live) {
-      return { ...etf, ...live, lastUpdated: new Date().toISOString() };
-    }
+    if (live) return mergeLiveQuote(etf, live);
     const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100, etf.currency);
     return { ...etf, ...synth, lastUpdated: new Date().toISOString() };
   });
@@ -226,9 +246,7 @@ async function getETFByTicker(ticker) {
   const liveQuotes = await fetchLiveQuotes();
   const live = liveQuotes[ticker.toUpperCase()];
 
-  if (live) {
-    return { ...etf, ...live, lastUpdated: new Date().toISOString() };
-  }
+  if (live) return mergeLiveQuote(etf, live);
   const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100, etf.currency);
   return { ...etf, ...synth, lastUpdated: new Date().toISOString() };
 }
@@ -239,7 +257,7 @@ async function getETFSummary() {
 
   const etfs = ETF_LIST.map(etf => {
     const live = liveQuotes[etf.ticker];
-    if (live) return { ...etf, ...live };
+    if (live) return mergeLiveQuote(etf, live);
     const synth = getSyntheticQuote(etf.ticker, BASE_PRICES[etf.ticker] || 100, etf.currency);
     return { ...etf, ...synth };
   });
