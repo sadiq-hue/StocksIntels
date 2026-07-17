@@ -86,39 +86,9 @@ async function fetchLiveQuotes() {
     console.error('[ETFs] NSE ETF fetch failed:', e.message);
   }
 
-  // 1. Use marketService batch pipeline (yahoo-finance2 + RapidAPI + TwelveData)
+  // 1. Direct Yahoo Finance quote API (most reliable for USD ETFs)
   try {
-    const { getQuotesBatch } = require('./marketService');
-    const batch = await getQuotesBatch(tickers);
-    if (batch && Object.keys(batch).length > 0) {
-      for (const [sym, q] of Object.entries(batch)) {
-        if (q && q.price != null) {
-          result[sym] = {
-            price: q.price,
-            change: q.change ?? 0,
-            changePercent: q.changePercent ?? 0,
-            high: q.dayHigh ?? 0,
-            low: q.dayLow ?? 0,
-            volume: q.volume ?? 0,
-            previousClose: q.previousClose ?? q.price,
-            open: q.open ?? 0,
-            dataSource: q.provider || 'live',
-          };
-        }
-      }
-      if (Object.keys(result).length > 0) {
-        quotesCache = result;
-        cacheTime = now;
-        return result;
-      }
-    }
-  } catch (e) {
-    console.error('[ETFs] marketService batch failed:', e.message);
-  }
-
-  // 2. Fallback: direct Yahoo Finance quote API
-  try {
-    const symbols = tickers.join(',');
+    const symbols = tickers.filter(t => t !== 'NSEQ').join(',');
     const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}`;
     const res = await axios.get(url, { timeout: 15000 });
     const quoteResult = res.data?.quoteResponse?.result;
@@ -127,16 +97,16 @@ async function fetchLiveQuotes() {
         if (!q || !q.symbol) continue;
         const price = q.regularMarketPrice;
         const prevClose = q.regularMarketPreviousClose;
-        if (price == null || prevClose == null) continue;
-        const change = price - prevClose;
+        if (price == null) continue;
+        const change = prevClose != null ? price - prevClose : 0;
         result[q.symbol] = {
           price,
           change: +change.toFixed(2),
-          changePercent: +((change / prevClose) * 100).toFixed(2),
+          changePercent: prevClose != null ? +((change / prevClose) * 100).toFixed(2) : 0,
           high: q.regularMarketDayHigh || 0,
           low: q.regularMarketDayLow || 0,
           volume: q.regularMarketVolume || 0,
-          previousClose: prevClose,
+          previousClose: prevClose ?? price,
           open: q.regularMarketOpen || 0,
           aum: q.totalAssets,
           expenseRatio: q.annualReportExpenseRatio,
@@ -144,17 +114,40 @@ async function fetchLiveQuotes() {
           dataSource: 'yahoo',
         };
       }
-      if (Object.keys(result).length > 0) {
-        quotesCache = result;
-        cacheTime = now;
-        return result;
-      }
     }
   } catch (e) {
     console.error('[ETFs] Yahoo quote API fetch failed:', e.message);
   }
 
-  // Keep any NSE Partner API quotes we already have; only clear cache if empty.
+  // 2. marketService batch pipeline (fallback for tickers Yahoo didn't cover)
+  try {
+    const missing = tickers.filter(t => !result[t] && t !== 'NSEQ');
+    if (missing.length > 0) {
+      const { getQuotesBatch } = require('./marketService');
+      const batch = await getQuotesBatch(missing);
+      if (batch && Object.keys(batch).length > 0) {
+        for (const [sym, q] of Object.entries(batch)) {
+          if (result[sym]) continue;
+          if (q && q.price != null) {
+            result[sym] = {
+              price: q.price,
+              change: q.change ?? 0,
+              changePercent: q.changePercent ?? 0,
+              high: q.dayHigh ?? 0,
+              low: q.dayLow ?? 0,
+              volume: q.volume ?? 0,
+              previousClose: q.previousClose ?? q.price,
+              open: q.open ?? 0,
+              dataSource: q.provider || 'live',
+            };
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[ETFs] marketService batch failed:', e.message);
+  }
+
   if (Object.keys(result).length > 0) {
     quotesCache = result;
     cacheTime = now;

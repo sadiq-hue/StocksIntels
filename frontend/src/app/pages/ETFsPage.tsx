@@ -1,15 +1,13 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import {
-  Search, RefreshCcw, TrendingUp, TrendingDown,
-  Layers, Clock, Wifi, WifiOff,
+  Search, TrendingUp, TrendingDown,
+  Layers, Clock, Wifi,
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
-const YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart";
-const YAHOO_QUOTE = "https://query1.finance.yahoo.com/v7/finance/quote";
 
 interface ETF {
   ticker: string; name: string; category: string;
@@ -28,43 +26,6 @@ interface Summary {
   totalVolume: number; advancing: number; declining: number;
 }
 
-async function fetchYahooQuotes(tickers: string[]): Promise<Record<string, Partial<ETF>>> {
-  if (tickers.length === 0) return {};
-  try {
-    const url = `${YAHOO_QUOTE}?symbols=${encodeURIComponent(tickers.join(","))}`;
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) return {};
-    const data = await res.json();
-    const results = data?.quoteResponse?.result;
-    if (!Array.isArray(results)) return {};
-
-    const quotes: Record<string, Partial<ETF>> = {};
-    for (const q of results) {
-      const ticker = q.symbol;
-      const price = q.regularMarketPrice;
-      const prevClose = q.regularMarketPreviousClose;
-      if (price == null || prevClose == null) continue;
-      const change = price - prevClose;
-      quotes[ticker] = {
-        ticker,
-        price,
-        change: +change.toFixed(2),
-        changePercent: +((change / prevClose) * 100).toFixed(2),
-        high: q.regularMarketDayHigh || 0,
-        low: q.regularMarketDayLow || 0,
-        volume: q.regularMarketVolume || 0,
-        open: q.regularMarketOpen || 0,
-        previousClose: prevClose,
-        dataSource: "yahoo",
-        lastUpdated: new Date().toISOString(),
-      };
-    }
-    return quotes;
-  } catch {
-    return {};
-  }
-}
-
 export function ETFsPage() {
   const [etfs, setEtfs] = useState<ETF[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -73,76 +34,30 @@ export function ETFsPage() {
   const [search, setSearch] = useState("");
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [liveStatus, setLiveStatus] = useState<"connecting" | "live" | "offline">("connecting");
-  const tickersRef = useRef<string[]>([]);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [etfsRes, summaryRes] = await Promise.all([
-          fetch(`${API_URL}/etfs?market=all`),
-          fetch(`${API_URL}/etfs/summary`),
-        ]);
-        const data: ETF[] = await etfsRes.json();
-        setEtfs(data);
-        setSummary(await summaryRes.json());
-        tickersRef.current = data.filter(e => e.currency !== "KES").map(e => e.ticker);
-        setLastUpdate(new Date());
-      } catch (e) {
-        console.error("Failed to load ETFs:", e);
-      } finally {
-        setInitialLoading(false);
-      }
-    };
-    load();
-  }, []);
-
-  useEffect(() => {
-    if (initialLoading) return;
-    let mounted = true;
-
-    const update = async () => {
-      const globalTickers = tickersRef.current;
-
-      // NSE (KES) ETFs have no Yahoo coverage — refresh them from the backend
-      // (MyStocks Africa Partner API), which already returns live NSE quotes.
-      let backendQuotes: Record<string, Partial<ETF>> = {};
-      try {
-        const res = await fetch(`${API_URL}/etfs?market=all`);
-        const data: ETF[] = await res.json();
-        for (const e of data) {
-          if (e.currency === "KES" && e.price != null) backendQuotes[e.ticker] = e;
-        }
-      } catch { /* ignore backend refresh */ }
-
-      // USD ETFs come straight from Yahoo for low-latency updates.
-      const quotes = await fetchYahooQuotes(globalTickers);
-      if (!mounted) return;
-
-      const merged = { ...backendQuotes, ...quotes };
-      if (Object.keys(merged).length > 0) {
-        setEtfs(prev =>
-          prev.map(etf => {
-            const q = merged[etf.ticker];
-            if (q && q.price != null) {
-              return { ...etf, ...q } as ETF;
-            }
-            return etf;
-          })
-        );
-        setLiveStatus("live");
-      } else {
-        setLiveStatus(prev => prev === "connecting" ? prev : "offline");
-      }
+  const loadAll = async () => {
+    try {
+      const [etfsRes, summaryRes] = await Promise.all([
+        fetch(`${API_URL}/etfs?market=all`),
+        fetch(`${API_URL}/etfs/summary`),
+      ]);
+      const data: ETF[] = await etfsRes.json();
+      setEtfs(data);
+      setSummary(await summaryRes.json());
+      setLiveStatus(data.some(e => e.dataSource === "yahoo" || e.dataSource === "mystocksAfrica") ? "live" : "offline");
       setLastUpdate(new Date());
-    };
+    } catch (e) {
+      console.error("Failed to load ETFs:", e);
+    } finally {
+      setInitialLoading(false);
+    }
+  };
 
-    update();
-    const interval = setInterval(update, 30000);
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [initialLoading]);
+  useEffect(() => {
+    loadAll();
+    const interval = setInterval(loadAll, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const liveSummary = useMemo((): Summary | null => {
     if (!summary || etfs.length === 0) return summary;
@@ -156,7 +71,7 @@ export function ETFsPage() {
       topGainers: sortedByChange.slice(0, 5),
       topLosers: [...sortedByChange].reverse().slice(0, 5),
       totalVolume: etfs.reduce((s, e) => s + (e.volume || 0), 0),
-      hasLiveData: etfs.some(e => e.dataSource === "yahoo"),
+      hasLiveData: etfs.some(e => e.dataSource === "yahoo" || e.dataSource === "mystocksAfrica"),
     };
   }, [etfs, summary]);
 
@@ -188,7 +103,7 @@ export function ETFsPage() {
             </p>
           )}
           <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${liveStatus === "live" ? "bg-emerald-100 text-emerald-700" : liveStatus === "connecting" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
-            {liveStatus === "live" ? <Wifi className="size-2.5" /> : <WifiOff className="size-2.5" />}
+            <Wifi className="size-2.5" />
             {liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Offline"}
           </span>
         </div>
