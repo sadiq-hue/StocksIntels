@@ -377,38 +377,38 @@ export function SettingsPage() {
     switch (activeSection) {
       case "profile":
         return (
-          <Card className="bg-white border-gray-200 p-4 md:p-6">
+          <Card className="bg-card border-border p-4 md:p-6">
             <div className="flex items-center gap-3 mb-6">
               <User className="w-6 h-6 text-[#0D7490]" />
-              <h3 className="text-gray-900 text-xl">Profile Settings</h3>
+              <h3 className="text-foreground text-xl">Profile Settings</h3>
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="text-gray-700 text-sm mb-2 block">Full Name</label>
+                <label className="text-muted-foreground text-sm mb-2 block">Full Name</label>
                 <Input
                   value={profile.full_name}
                   onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
-                  className="bg-white border-gray-200 text-gray-900"
+                  className="bg-card border-border text-foreground"
                 />
               </div>
 
               <div>
-                <label className="text-gray-700 text-sm mb-2 block">Email</label>
+                <label className="text-muted-foreground text-sm mb-2 block">Email</label>
                 <Input
                   value={profile.email}
                   onChange={(e) => setProfile({ ...profile, email: e.target.value })}
                   type="email"
-                  className="bg-white border-gray-200 text-gray-900"
+                  className="bg-card border-border text-foreground"
                 />
               </div>
 
               <div>
-                <label className="text-gray-700 text-sm mb-2 block">Phone Number</label>
+                <label className="text-muted-foreground text-sm mb-2 block">Phone Number</label>
                 <Input
                   value={profile.phone}
                   onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                  className="bg-white border-gray-200 text-gray-900"
+                  className="bg-card border-border text-foreground"
                 />
               </div>
 
@@ -435,17 +435,17 @@ export function SettingsPage() {
 
       case "notifications":
         return (
-          <Card className="bg-white border-gray-200 p-4 md:p-6">
+          <Card className="bg-card border-border p-4 md:p-6">
             <div className="flex items-center gap-3 mb-6">
               <Bell className="w-6 h-6 text-[#0D7490]" />
-              <h3 className="text-gray-900 text-xl">Notification Preferences</h3>
+              <h3 className="text-foreground text-xl">Notification Preferences</h3>
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg border border-border">
                 <div>
-                  <div className="text-gray-900 font-medium">Price Alerts</div>
-                  <div className="text-gray-600 text-sm">Get notified when stocks hit target prices</div>
+                  <div className="text-foreground font-medium">Price Alerts</div>
+                  <div className="text-muted-foreground text-sm">Get notified when stocks hit target prices</div>
                 </div>
                 <Switch 
                   checked={notifications.priceAlerts}
@@ -453,10 +453,10 @@ export function SettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg border border-border">
                 <div>
-                  <div className="text-gray-900 font-medium">Trading Signals</div>
-                  <div className="text-gray-600 text-sm">Receive AI-generated trading signals</div>
+                  <div className="text-foreground font-medium">Trading Signals</div>
+                  <div className="text-muted-foreground text-sm">Receive AI-generated trading signals</div>
                 </div>
                 <Switch 
                   checked={notifications.tradingSignals}
@@ -464,10 +464,10 @@ export function SettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg border border-border">
                 <div>
-                  <div className="text-gray-900 font-medium">Market News</div>
-                  <div className="text-gray-600 text-sm">Stay updated with NSE news</div>
+                  <div className="text-foreground font-medium">Market News</div>
+                  <div className="text-muted-foreground text-sm">Stay updated with NSE news</div>
                 </div>
                 <Switch 
                   checked={notifications.marketNews}
@@ -475,10 +475,10 @@ export function SettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg border border-border">
                 <div>
-                  <div className="text-gray-900 font-medium">Portfolio Updates</div>
-                  <div className="text-gray-600 text-sm">Daily portfolio performance summary</div>
+                  <div className="text-foreground font-medium">Portfolio Updates</div>
+                  <div className="text-muted-foreground text-sm">Daily portfolio performance summary</div>
                 </div>
                 <Switch 
                   checked={notifications.portfolioUpdates}
@@ -486,10 +486,10 @@ export function SettingsPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <div className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg border border-border">
                 <div>
-                  <div className="text-gray-900 font-medium">Chat Messages</div>
-                  <div className="text-gray-600 text-sm">Notifications from trading groups</div>
+                  <div className="text-foreground font-medium">Chat Messages</div>
+                  <div className="text-muted-foreground text-sm">Notifications from trading groups</div>
                 </div>
                 <Switch 
                   checked={notifications.chatMessages}
@@ -538,24 +538,24 @@ export function SettingsPage() {
 
       case "email-reports":
         return (
-          <Card className="bg-white border-gray-200 p-4 md:p-6">
+          <Card className="bg-card border-border p-4 md:p-6">
             <div className="flex items-center gap-3 mb-6">
               <Mail className="w-6 h-6 text-[#0D7490]" />
-              <h3 className="text-gray-900 text-xl">Email Reports</h3>
+              <h3 className="text-foreground text-xl">Email Reports</h3>
             </div>
 
             <div className="space-y-4">
-              <div className="text-gray-600 text-sm mb-2">
+              <div className="text-muted-foreground text-sm mb-2">
                 Request your daily reports to be sent to your email instantly. These are the same reports scheduled for automatic delivery at midnight EAT.
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+                <div className="p-4 bg-muted rounded-lg border border-border">
                   <div className="flex items-center gap-2 mb-2">
                     <TrendingUp className="w-5 h-5 text-[#0D7490]" />
-                    <div className="text-gray-900 font-medium">Market Sentiment</div>
+                    <div className="text-foreground font-medium">Market Sentiment</div>
                   </div>
-                  <div className="text-gray-600 text-sm mb-3">
+                  <div className="text-muted-foreground text-sm mb-3">
                     Daily sentiment report with NSE & global gainers/losers and AI signal overview.
                   </div>
                   <Button
@@ -574,12 +574,12 @@ export function SettingsPage() {
                   </Button>
                 </div>
 
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+                <div className="p-4 bg-muted rounded-lg border border-border">
                   <div className="flex items-center gap-2 mb-2">
                     <BarChart3 className="w-5 h-5 text-[#0D7490]" />
-                    <div className="text-gray-900 font-medium">Real Portfolio</div>
+                    <div className="text-foreground font-medium">Real Portfolio</div>
                   </div>
-                  <div className="text-gray-600 text-sm mb-3">
+                  <div className="text-muted-foreground text-sm mb-3">
                     Portfolio report with current holdings, P&L, sector allocation, and best/worst performers.
                   </div>
                   <Button
@@ -598,12 +598,12 @@ export function SettingsPage() {
                   </Button>
                 </div>
 
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+                <div className="p-4 bg-muted rounded-lg border border-border">
                   <div className="flex items-center gap-2 mb-2">
                     <LineChart className="w-5 h-5 text-[#0D7490]" />
-                    <div className="text-gray-900 font-medium">Paper Trading</div>
+                    <div className="text-foreground font-medium">Paper Trading</div>
                   </div>
-                  <div className="text-gray-600 text-sm mb-3">
+                  <div className="text-muted-foreground text-sm mb-3">
                     Paper trading portfolio report with simulated holdings, P&L, and cash balance.
                   </div>
                   <Button
@@ -622,12 +622,12 @@ export function SettingsPage() {
                   </Button>
                 </div>
 
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+                <div className="p-4 bg-muted rounded-lg border border-border">
                   <div className="flex items-center gap-2 mb-2">
                     <Newspaper className="w-5 h-5 text-amber-600" />
-                    <div className="text-gray-900 font-medium">Hot News</div>
+                    <div className="text-foreground font-medium">Hot News</div>
                   </div>
-                  <div className="text-gray-600 text-sm mb-3">
+                  <div className="text-muted-foreground text-sm mb-3">
                     Breaking news alerts (IPO, earnings, mergers, regulatory changes) that could move markets.
                   </div>
                   <Button
@@ -646,12 +646,12 @@ export function SettingsPage() {
                   </Button>
                 </div>
 
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 md:col-span-3">
+                <div className="p-4 bg-muted rounded-lg border border-border md:col-span-3">
                   <div className="flex items-center gap-2 mb-2">
                     <Globe className="w-5 h-5 text-[#0D7490]" />
-                    <div className="text-gray-900 font-medium">Weekly Market Digest</div>
+                    <div className="text-foreground font-medium">Weekly Market Digest</div>
                   </div>
-                  <div className="text-gray-600 text-sm mb-3">
+                  <div className="text-muted-foreground text-sm mb-3">
                     Weekly roundup of top gainers/losers, market news, and AI signals from African and global markets. Sent every Sunday at 8 AM EAT.
                   </div>
                   <div className="flex items-center justify-between mb-3">
@@ -660,7 +660,7 @@ export function SettingsPage() {
                         checked={weeklyDigestOptedIn}
                         onCheckedChange={handleWeeklyDigestToggle}
                       />
-                      <span className="text-sm text-gray-600">{weeklyDigestOptedIn ? 'Subscribed' : 'Unsubscribed'}</span>
+                      <span className="text-sm text-muted-foreground">{weeklyDigestOptedIn ? 'Subscribed' : 'Unsubscribed'}</span>
                     </div>
                     <Button
                       onClick={() => handleSendReport("digest")}
@@ -679,12 +679,12 @@ export function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 md:col-span-3">
+                <div className="p-4 bg-muted rounded-lg border border-border md:col-span-3">
                   <div className="flex items-center gap-2 mb-2">
                     <TrendingUp className="w-5 h-5 text-[#0D7490]" />
-                    <div className="text-gray-900 font-medium">Daily Market Brief</div>
+                    <div className="text-foreground font-medium">Daily Market Brief</div>
                   </div>
-                  <div className="text-gray-600 text-sm mb-3">
+                  <div className="text-muted-foreground text-sm mb-3">
                     Morning briefing with index snapshots, yesterday's top movers, AI signal of the day, global overnight data, and analyst take. Sent weekdays at 7 AM EAT.
                   </div>
                   <div className="flex items-center justify-between mb-3">
@@ -693,7 +693,7 @@ export function SettingsPage() {
                         checked={dailyBriefOptedIn}
                         onCheckedChange={handleDailyBriefToggle}
                       />
-                      <span className="text-sm text-gray-600">{dailyBriefOptedIn ? 'Subscribed' : 'Unsubscribed'}</span>
+                      <span className="text-sm text-muted-foreground">{dailyBriefOptedIn ? 'Subscribed' : 'Unsubscribed'}</span>
                     </div>
                     <Button
                       onClick={() => handleSendReport("brief")}
@@ -712,12 +712,12 @@ export function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 md:col-span-3">
+                <div className="p-4 bg-muted rounded-lg border border-border md:col-span-3">
                   <div className="flex items-center gap-2 mb-2">
                     <BarChart3 className="w-5 h-5 text-[#0D7490]" />
-                    <div className="text-gray-900 font-medium">Earnings & Corporate Actions</div>
+                    <div className="text-foreground font-medium">Earnings & Corporate Actions</div>
                   </div>
-                  <div className="text-gray-600 text-sm mb-3">
+                  <div className="text-muted-foreground text-sm mb-3">
                     Earnings calendar, AI-powered results summaries, corporate actions alerts, and global earnings with Africa impact. Sent every Friday at 10 AM EAT.
                   </div>
                   <div className="flex items-center justify-between mb-3">
@@ -726,7 +726,7 @@ export function SettingsPage() {
                         checked={earningsReportOptedIn}
                         onCheckedChange={handleEarningsReportToggle}
                       />
-                      <span className="text-sm text-gray-600">{earningsReportOptedIn ? 'Subscribed' : 'Unsubscribed'}</span>
+                      <span className="text-sm text-muted-foreground">{earningsReportOptedIn ? 'Subscribed' : 'Unsubscribed'}</span>
                     </div>
                     <Button
                       onClick={() => handleSendReport("earnings")}
@@ -751,29 +751,29 @@ export function SettingsPage() {
 
       case "security":
         return (
-          <Card className="bg-white border-gray-200 p-4 md:p-6">
+          <Card className="bg-card border-border p-4 md:p-6">
             <div className="flex items-center gap-3 mb-6">
               <Shield className="w-6 h-6 text-[#0D7490]" />
-              <h3 className="text-gray-900 text-xl">Security Settings</h3>
+              <h3 className="text-foreground text-xl">Security Settings</h3>
             </div>
 
             <div className="space-y-6">
               <div>
-                <h4 className="text-gray-900 font-medium mb-4">Change Password</h4>
+                <h4 className="text-foreground font-medium mb-4">Change Password</h4>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-gray-700 text-sm mb-2 block">Current Password</label>
+                    <label className="text-muted-foreground text-sm mb-2 block">Current Password</label>
                     <div className="relative">
                       <Input
                         type={showCurrentPassword ? "text" : "password"}
                         value={security.currentPassword}
                         onChange={(e) => setSecurity({ ...security, currentPassword: e.target.value })}
-                        className="bg-white border-gray-200 text-gray-900 pr-10"
+                        className="bg-card border-border text-foreground pr-10"
                       />
                       <button
                         type="button"
                         onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gray-700"
                       >
                         {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -781,18 +781,18 @@ export function SettingsPage() {
                   </div>
 
                   <div>
-                    <label className="text-gray-700 text-sm mb-2 block">New Password</label>
+                    <label className="text-muted-foreground text-sm mb-2 block">New Password</label>
                     <div className="relative">
                       <Input
                         type={showNewPassword ? "text" : "password"}
                         value={security.newPassword}
                         onChange={(e) => setSecurity({ ...security, newPassword: e.target.value })}
-                        className="bg-white border-gray-200 text-gray-900 pr-10"
+                        className="bg-card border-border text-foreground pr-10"
                       />
                       <button
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gray-700"
                       >
                         {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -800,12 +800,12 @@ export function SettingsPage() {
                   </div>
 
                   <div>
-                    <label className="text-gray-700 text-sm mb-2 block">Confirm New Password</label>
+                    <label className="text-muted-foreground text-sm mb-2 block">Confirm New Password</label>
                     <Input
                       type="password"
                       value={security.confirmPassword}
                       onChange={(e) => setSecurity({ ...security, confirmPassword: e.target.value })}
-                      className="bg-white border-gray-200 text-gray-900"
+                      className="bg-card border-border text-foreground"
                     />
                   </div>
 
@@ -826,10 +826,10 @@ export function SettingsPage() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="text-gray-900 font-medium mb-2">Two-Factor Authentication</h4>
-                <p className="text-gray-600 text-sm mb-4">Add an extra layer of security to your account</p>
-                <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
+              <div className="pt-4 border-t border-border">
+                <h4 className="text-foreground font-medium mb-2">Two-Factor Authentication</h4>
+                <p className="text-muted-foreground text-sm mb-4">Add an extra layer of security to your account</p>
+                <Button variant="outline" className="border-border text-muted-foreground hover:bg-muted">
                   Enable 2FA
                 </Button>
               </div>
@@ -839,25 +839,25 @@ export function SettingsPage() {
 
       case "privacy":
         return (
-          <Card className="bg-white border-gray-200 p-4 md:p-6">
+          <Card className="bg-card border-border p-4 md:p-6">
             <div className="flex items-center gap-3 mb-6">
               <Database className="w-6 h-6 text-[#0D7490]" />
-              <h3 className="text-gray-900 text-xl">Data & Privacy</h3>
+              <h3 className="text-foreground text-xl">Data & Privacy</h3>
             </div>
 
             <div className="space-y-6">
               <div>
-                <h4 className="text-gray-900 font-medium mb-4">Data Visibility</h4>
+                <h4 className="text-foreground font-medium mb-4">Data Visibility</h4>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg border border-border">
                     <div>
-                      <div className="text-gray-900 font-medium">Profile Visibility</div>
-                      <div className="text-gray-600 text-sm">Control who can see your profile</div>
+                      <div className="text-foreground font-medium">Profile Visibility</div>
+                      <div className="text-muted-foreground text-sm">Control who can see your profile</div>
                     </div>
                     <select
                       value={privacy.dataVisibility}
                       onChange={(e) => handlePrivacyChange("dataVisibility", e.target.value)}
-                      className="bg-white border border-gray-200 text-gray-900 rounded-lg px-3 py-2"
+                      className="bg-card border border-border text-foreground rounded-lg px-3 py-2"
                     >
                       <option value="public">Public</option>
                       <option value="friends">Friends Only</option>
@@ -865,10 +865,10 @@ export function SettingsPage() {
                     </select>
                   </div>
 
-                  <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg border border-border">
                     <div>
-                      <div className="text-gray-900 font-medium">Analytics</div>
-                      <div className="text-gray-600 text-sm">Allow anonymous usage analytics</div>
+                      <div className="text-foreground font-medium">Analytics</div>
+                      <div className="text-muted-foreground text-sm">Allow anonymous usage analytics</div>
                     </div>
                     <Switch 
                       checked={privacy.allowAnalytics}
@@ -876,10 +876,10 @@ export function SettingsPage() {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg border border-border">
                     <div>
-                      <div className="text-gray-900 font-medium">Show Portfolio</div>
-                      <div className="text-gray-600 text-sm">Let others view your portfolio</div>
+                      <div className="text-foreground font-medium">Show Portfolio</div>
+                      <div className="text-muted-foreground text-sm">Let others view your portfolio</div>
                     </div>
                     <Switch 
                       checked={privacy.showPortfolio}
@@ -887,10 +887,10 @@ export function SettingsPage() {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg border border-border">
                     <div>
-                      <div className="text-gray-900 font-medium">Show in Community Directory</div>
-                      <div className="text-gray-600 text-sm">Appear in the traders directory and be discoverable</div>
+                      <div className="text-foreground font-medium">Show in Community Directory</div>
+                      <div className="text-muted-foreground text-sm">Appear in the traders directory and be discoverable</div>
                     </div>
                     <Switch 
                       checked={profile.visible_in_directory}
@@ -916,13 +916,13 @@ export function SettingsPage() {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="text-gray-900 font-medium mb-4">Data Management</h4>
+              <div className="pt-4 border-t border-border">
+                <h4 className="text-foreground font-medium mb-4">Data Management</h4>
                 <div className="space-y-3">
                   <Button 
                     variant="outline"
                     onClick={handleExportData}
-                    className="border-gray-300 text-gray-700 hover:bg-gray-50 w-full justify-start"
+                    className="border-border text-muted-foreground hover:bg-muted w-full justify-start"
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Export My Data
@@ -950,8 +950,8 @@ export function SettingsPage() {
   return (
     <div className="p-4 md:p-6 max-w-[1200px] mx-auto">
       <div className="mb-6">
-        <h2 className="text-gray-900 text-xl md:text-2xl mb-1">Settings</h2>
-        <p className="text-gray-600">Manage your account and preferences</p>
+        <h2 className="text-foreground text-xl md:text-2xl mb-1">Settings</h2>
+        <p className="text-muted-foreground">Manage your account and preferences</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -963,7 +963,7 @@ export function SettingsPage() {
               className={`flex-shrink-0 lg:w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all whitespace-nowrap ${
                 activeSection === item.id
                   ? "bg-[#0D7490] text-white border border-[#0D7490]"
-                  : "bg-white border border-gray-200 text-gray-700 hover:text-gray-900 hover:border-[#0D7490]"
+                  : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-[#0D7490]"
               }`}
             >
               <item.icon className="w-5 h-5" />

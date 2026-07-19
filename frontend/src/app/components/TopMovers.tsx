@@ -15,8 +15,8 @@ export function TopMovers() {
   ];
 
   return (
-    <Card className="bg-white border-gray-200 p-6">
-      <h3 className="text-gray-900 mb-4">Top Movers</h3>
+    <Card className="bg-card border-border p-6">
+      <h3 className="text-foreground mb-4">Top Movers</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <div className="flex items-center gap-2 text-green-600 mb-3">
@@ -25,10 +25,10 @@ export function TopMovers() {
           </div>
           <div className="space-y-2">
             {gainers.map((stock) => (
-              <div key={stock.ticker} className="bg-gray-50 p-3 rounded border border-gray-100 flex justify-between items-center">
+              <div key={stock.ticker} className="bg-muted p-3 rounded border border-border flex justify-between items-center">
                 <div>
-                  <div className="text-gray-900 font-semibold">{stock.ticker}</div>
-                  <div className="text-gray-500 text-xs">{stock.name}</div>
+                  <div className="text-foreground font-semibold">{stock.ticker}</div>
+                  <div className="text-muted-foreground text-xs">{stock.name}</div>
                 </div>
                 <div className="text-green-600 font-semibold">{stock.change}</div>
               </div>
@@ -42,10 +42,10 @@ export function TopMovers() {
           </div>
           <div className="space-y-2">
             {losers.map((stock) => (
-              <div key={stock.ticker} className="bg-gray-50 p-3 rounded border border-gray-100 flex justify-between items-center">
+              <div key={stock.ticker} className="bg-muted p-3 rounded border border-border flex justify-between items-center">
                 <div>
-                  <div className="text-gray-900 font-semibold">{stock.ticker}</div>
-                  <div className="text-gray-500 text-xs">{stock.name}</div>
+                  <div className="text-foreground font-semibold">{stock.ticker}</div>
+                  <div className="text-muted-foreground text-xs">{stock.name}</div>
                 </div>
                 <div className="text-red-600 font-semibold">{stock.change}</div>
               </div>

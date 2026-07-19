@@ -13,29 +13,29 @@ export function ActiveStocks() {
   ];
 
   return (
-    <Card className="bg-white border-gray-200 p-6">
-      <h3 className="text-gray-900 mb-4">Active NSE Stocks</h3>
+    <Card className="bg-card border-border p-6">
+      <h3 className="text-foreground mb-4">Active NSE Stocks</h3>
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow className="border-gray-200 hover:bg-gray-50">
-              <TableHead className="text-gray-600">Ticker</TableHead>
-              <TableHead className="text-gray-600">Price (KES)</TableHead>
-              <TableHead className="text-gray-600">Change</TableHead>
-              <TableHead className="text-gray-600">Volume</TableHead>
+            <TableRow className="border-border hover:bg-muted">
+              <TableHead className="text-muted-foreground">Ticker</TableHead>
+              <TableHead className="text-muted-foreground">Price (KES)</TableHead>
+              <TableHead className="text-muted-foreground">Change</TableHead>
+              <TableHead className="text-muted-foreground">Volume</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {stocks.map((stock) => (
-              <TableRow key={stock.ticker} className="border-gray-200 hover:bg-gray-50 cursor-pointer">
-                <TableCell className="text-gray-900 font-semibold">
-                  <Link to={`/stock/${stock.ticker}`}>{stock.ticker}</Link>
-                </TableCell>
-                <TableCell className="text-gray-900">{stock.price}</TableCell>
+                <TableRow key={stock.ticker} className="border-border hover:bg-muted cursor-pointer">
+                  <TableCell className="text-foreground font-semibold">
+                    <Link to={`/stock/${stock.ticker}`}>{stock.ticker}</Link>
+                  </TableCell>
+                  <TableCell className="text-foreground">{stock.price}</TableCell>
                 <TableCell className={stock.isPositive ? 'text-[#10B981]' : 'text-[#EF4444]'}>
                   {stock.change}
                 </TableCell>
-                <TableCell className="text-gray-600">{stock.volume}</TableCell>
+                <TableCell className="text-muted-foreground">{stock.volume}</TableCell>
               </TableRow>
             ))}
           </TableBody>

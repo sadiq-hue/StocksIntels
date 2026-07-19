@@ -1709,7 +1709,7 @@ export function PortfolioPage() {
               <History className="w-5 h-5 text-[#0D7490]" />
               Trade History
             </h3>
-            <Badge variant="outline" className="text-xs border-gray-300 text-muted-foreground w-fit">
+            <Badge variant="outline" className="text-xs border-border text-muted-foreground w-fit">
               {brokers.reduce((sum, b) => sum + (b.latestSnapshot?.trade_history?.length || 0), 0)} trades
             </Badge>
           </div>
@@ -1899,7 +1899,7 @@ export function PortfolioPage() {
 
               {/* Key Metrics */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-3 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
+                <div className="p-3 rounded-xl bg-gradient-to-b from-muted to-card border text-center">
                   <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Diversification</div>
                   <div className={`text-2xl font-bold ${portfolioAdvice.diversification.score >= 70 ? 'text-emerald-600' : portfolioAdvice.diversification.score >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
                     {portfolioAdvice.diversification.score}%
@@ -1909,7 +1909,7 @@ export function PortfolioPage() {
                       style={{ width: `${portfolioAdvice.diversification.score}%` }} />
                   </div>
                 </div>
-                <div className="p-3 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center overflow-hidden">
+                <div className="p-3 rounded-xl bg-gradient-to-b from-muted to-card border text-center overflow-hidden">
                   <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Risk Level</div>
                   <div className={`text-lg font-bold break-words ${portfolioAdvice.riskAssessment.startsWith('Low') ? 'text-emerald-600' : portfolioAdvice.riskAssessment.startsWith('Moderate') ? 'text-amber-600' : 'text-red-600'}`}>
                     {portfolioAdvice.riskAssessment.split(' —')[0]}
@@ -1918,7 +1918,7 @@ export function PortfolioPage() {
                     {portfolioAdvice.riskAssessment.includes('—') ? portfolioAdvice.riskAssessment.split('— ')[1].substring(0, 40) + '...' : ''}
                   </div>
                 </div>
-                <div className="p-3 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
+                <div className="p-3 rounded-xl bg-gradient-to-b from-muted to-card border text-center">
                   <div className="text-[11px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Positions</div>
                   <div className="text-2xl font-bold text-foreground">{portfolioAdvice.recommendations.length}</div>
                   <div className="mt-1 text-[11px] text-muted-foreground">
@@ -2418,12 +2418,12 @@ export function PortfolioPage() {
             <div className="space-y-5">
               {/* Market Conditions Bar */}
               {portfolioAdvice.marketContext && (
-                <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl p-4 border">
+                <div className="bg-gradient-to-r from-muted to-card rounded-xl p-4 border">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="p-1 rounded bg-indigo-100">
                       <Activity className="w-3.5 h-3.5 text-indigo-600" />
                     </div>
-                    <span className="text-sm font-semibold text-gray-800">Market Pulse</span>
+                    <span className="text-sm font-semibold text-foreground">Market Pulse</span>
                     <div className="flex gap-1.5 ml-auto">
                       <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${portfolioAdvice.marketContext.direction.nse === 'bullish' ? 'bg-emerald-100 text-emerald-700' : portfolioAdvice.marketContext.direction.nse === 'bearish' ? 'bg-red-100 text-red-700' : 'bg-muted text-muted-foreground'}`}>
                         NSE {portfolioAdvice.marketContext.direction.nse.toUpperCase()}
@@ -2485,7 +2485,7 @@ export function PortfolioPage() {
 
               {/* Key Metrics */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-4 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
+                <div className="p-4 rounded-xl bg-gradient-to-b from-muted to-card border text-center">
                   <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Diversification</div>
                   <div className={`text-3xl font-bold ${portfolioAdvice.diversification.score >= 70 ? 'text-emerald-600' : portfolioAdvice.diversification.score >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
                     {portfolioAdvice.diversification.score}%
@@ -2496,7 +2496,7 @@ export function PortfolioPage() {
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-2">{portfolioAdvice.diversification.message}</div>
                 </div>
-                <div className="p-4 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center overflow-hidden">
+                <div className="p-4 rounded-xl bg-gradient-to-b from-muted to-card border text-center overflow-hidden">
                   <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Risk Level</div>
                   <div className={`text-2xl font-bold break-words ${portfolioAdvice.riskAssessment.startsWith('Low') ? 'text-emerald-600' : portfolioAdvice.riskAssessment.startsWith('Moderate') ? 'text-amber-600' : 'text-red-600'}`}>
                     {portfolioAdvice.riskAssessment.split(' —')[0]}
@@ -2505,7 +2505,7 @@ export function PortfolioPage() {
                     {portfolioAdvice.riskAssessment.includes('—') ? portfolioAdvice.riskAssessment.split('— ')[1] : ''}
                   </div>
                 </div>
-                <div className="p-4 rounded-xl bg-gradient-to-b from-gray-50 to-white border text-center">
+                <div className="p-4 rounded-xl bg-gradient-to-b from-muted to-card border text-center">
                   <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Positions</div>
                   <div className="text-3xl font-bold text-foreground">{portfolioAdvice.recommendations.length}</div>
                   <div className="mt-1 flex items-center justify-center gap-2 text-[11px]">
@@ -2528,7 +2528,7 @@ export function PortfolioPage() {
                     const isSell = rec.action === 'Reduce' || rec.action === 'Trim' || rec.action === 'Take Partial Profits';
                     const allocNum = parseInt(rec.allocation);
                     return (
-                      <div key={i} className={`p-3.5 rounded-xl border-l-[5px] ${isBuy ? 'border-l-emerald-500 bg-gradient-to-r from-emerald-50/60 to-white border-emerald-100 border-t border-r border-b' : isSell ? 'border-l-red-500 bg-gradient-to-r from-red-50/60 to-white border-red-100 border-t border-r border-b' : 'border-l-gray-400 bg-gradient-to-r from-gray-50/60 to-white border-border border-t border-r border-b'}`}>
+                      <div key={i} className={`p-3.5 rounded-xl border-l-[5px] ${isBuy ? 'border-l-emerald-500 bg-gradient-to-r from-emerald-50/60 to-white border-emerald-100 border-t border-r border-b' : isSell ? 'border-l-red-500 bg-gradient-to-r from-red-50/60 to-white border-red-100 border-t border-r border-b' : 'border-l-gray-400 bg-gradient-to-r from-muted to-card border-border border-t border-r border-b'}`}>
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <button onClick={() => { setShowAdvice(false); navigate(`/app/stock/${rec.ticker}`); }} className="font-semibold text-foreground hover:text-[#0D7490] text-sm">
@@ -2571,7 +2571,7 @@ export function PortfolioPage() {
                       <div key={i} className="text-xs text-muted-foreground py-2 px-3 rounded-lg bg-muted border border-border flex items-start gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-[#0D7490] mt-1.5 shrink-0" />
                         <div>
-                          <span className="font-medium text-gray-800">{a.headline}</span>
+                          <span className="font-medium text-foreground">{a.headline}</span>
                           {a.source && <span className="text-muted-foreground ml-1">— {a.source}</span>}
                         </div>
                       </div>
@@ -2779,7 +2779,7 @@ export function PortfolioPage() {
                 )}
 
                 <div
-                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${csvDragOver ? "border-[#0D7490] bg-blue-50" : "border-gray-300"}`}
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${csvDragOver ? "border-[#0D7490] bg-blue-50" : "border-border"}`}
                   onDragOver={(e) => { e.preventDefault(); setCsvDragOver(true); }}
                   onDragLeave={() => setCsvDragOver(false)}
                   onDrop={(e) => {

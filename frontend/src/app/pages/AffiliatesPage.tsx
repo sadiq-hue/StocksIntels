@@ -52,7 +52,7 @@ const payoutStatusBadge = (status: string) => {
     paid: "bg-emerald-100 text-emerald-700",
     rejected: "bg-red-100 text-red-600",
   };
-  return styles[status] || "bg-gray-100 text-gray-600";
+  return styles[status] || "bg-muted text-muted-foreground";
 };
 
 const statusBadge = (status: string) => {
@@ -61,7 +61,7 @@ const statusBadge = (status: string) => {
     pending: "bg-yellow-100 text-yellow-700",
     cancelled: "bg-red-100 text-red-600",
   };
-  return styles[status] || "bg-gray-100 text-gray-600";
+  return styles[status] || "bg-muted text-muted-foreground";
 };
 
 export function AffiliatesPage() {
@@ -176,7 +176,7 @@ export function AffiliatesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 pt-24 pb-12 flex items-center justify-center">
+      <div className="min-h-screen bg-muted pt-24 pb-12 flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-[#0D7490] animate-spin" />
       </div>
     );
@@ -184,24 +184,24 @@ export function AffiliatesPage() {
 
   if (!stats?.registered) {
     return (
-      <div className="min-h-screen bg-gray-50 pt-24 pb-12">
+      <div className="min-h-screen bg-muted pt-24 pb-12">
         <div className="max-w-3xl mx-auto px-4">
-          <Card className="p-6 sm:p-10 border-gray-100 text-center">
+          <Card className="p-6 sm:p-10 border-border text-center">
             <div className="w-20 h-20 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-[#0D7490]/20">
               <Gift className="w-10 h-10 text-white" />
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3">Earn Money by Referring Traders</h1>
-            <p className="text-gray-600 max-w-xl mx-auto mb-8 leading-relaxed">
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-3">Earn Money by Referring Traders</h1>
+            <p className="text-muted-foreground max-w-xl mx-auto mb-8 leading-relaxed">
               Share StocksIntels with other traders and earn commissions on every referral that subscribes.
               Our program rewards you for helping grow the community.
             </p>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8">
               {commissionRates.map((c) => (
-                <div key={c.tier} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">{c.tier}</p>
+                <div key={c.tier} className="p-4 bg-muted rounded-xl border border-border">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">{c.tier}</p>
                   <p className="text-xl font-bold text-[#0D7490]">{c.rate}</p>
-                  <p className="text-[11px] text-gray-400">{c.per}</p>
+                  <p className="text-[11px] text-muted-foreground">{c.per}</p>
                 </div>
               ))}
             </div>
@@ -212,14 +212,14 @@ export function AffiliatesPage() {
                 placeholder="Your full name"
                 value={registrantName}
                 onChange={(e) => setRegistrantName(e.target.value)}
-                className="w-full px-4 h-12 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-white outline-none transition-all text-gray-900"
+                className="w-full px-4 h-12 bg-muted border border-border rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-card outline-none transition-all text-foreground"
               />
               <input
                 type="email"
                 placeholder="Your email address"
                 value={registrantEmail}
                 onChange={(e) => setRegistrantEmail(e.target.value)}
-                className="w-full px-4 h-12 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-white outline-none transition-all text-gray-900"
+                className="w-full px-4 h-12 bg-muted border border-border rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-card outline-none transition-all text-foreground"
               />
             </div>
 
@@ -247,24 +247,24 @@ export function AffiliatesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-24 pb-12">
+    <div className="min-h-screen bg-muted pt-24 pb-12">
       <div className="max-w-6xl mx-auto px-4">
         <div className="mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Affiliate Dashboard</h1>
-          <p className="text-gray-600 mt-1">Track your referrals and earnings</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Affiliate Dashboard</h1>
+          <p className="text-muted-foreground mt-1">Track your referrals and earnings</p>
         </div>
 
         {/* Referral Link */}
         {stats.referral_link && (
-          <Card className="p-6 border-gray-100 mb-8">
+          <Card className="p-6 border-border mb-8">
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div className="size-10 shrink-0 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
                   <Link className="w-5 h-5 text-[#0D7490]" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Your Referral Link</p>
-                  <p className="text-sm font-medium text-gray-900 truncate">{stats.referral_link}</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Your Referral Link</p>
+                  <p className="text-sm font-medium text-foreground truncate">{stats.referral_link}</p>
                 </div>
               </div>
               <Button
@@ -290,7 +290,7 @@ export function AffiliatesPage() {
               </div>
               <span className="text-[11px] font-medium text-muted-foreground">Total Earned</span>
             </div>
-            <div className="text-xl font-bold text-gray-900">{formatCurrency(stats.total_earned || 0)}</div>
+            <div className="text-xl font-bold text-foreground">{formatCurrency(stats.total_earned || 0)}</div>
           </Card>
 
           <Card className="border shadow-sm p-5">
@@ -300,7 +300,7 @@ export function AffiliatesPage() {
               </div>
               <span className="text-[11px] font-medium text-muted-foreground">Pending Balance</span>
             </div>
-            <div className="text-xl font-bold text-gray-900">{formatCurrency(stats.pending_balance || 0)}</div>
+            <div className="text-xl font-bold text-foreground">{formatCurrency(stats.pending_balance || 0)}</div>
           </Card>
 
           <Card className="border shadow-sm p-5">
@@ -310,7 +310,7 @@ export function AffiliatesPage() {
               </div>
               <span className="text-[11px] font-medium text-muted-foreground">Total Referrals</span>
             </div>
-            <div className="text-xl font-bold text-gray-900">{stats.total_referrals ?? 0}</div>
+            <div className="text-xl font-bold text-foreground">{stats.total_referrals ?? 0}</div>
           </Card>
 
           <Card className="border shadow-sm p-5">
@@ -320,19 +320,19 @@ export function AffiliatesPage() {
               </div>
               <span className="text-[11px] font-medium text-muted-foreground">Pending Referrals</span>
             </div>
-            <div className="text-xl font-bold text-gray-900">{stats.pending_referrals ?? 0}</div>
+            <div className="text-xl font-bold text-foreground">{stats.pending_referrals ?? 0}</div>
           </Card>
         </div>
 
         {/* Tabbed Section */}
         <div className="overflow-x-auto mb-6">
-          <div className="flex items-center gap-1 p-1 bg-gray-100/80 border rounded-lg w-full min-w-0">
+          <div className="flex items-center gap-1 p-1 bg-muted/80 border rounded-lg w-full min-w-0">
             <button
               onClick={() => setActiveTab("referrals")}
               className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
                 activeTab === "referrals"
-                  ? "bg-white text-gray-900 shadow-sm border"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-card text-foreground shadow-sm border"
+                  : "text-muted-foreground hover:text-muted-foreground"
               }`}
             >
               <Users className="size-3.5 sm:size-4" />
@@ -342,8 +342,8 @@ export function AffiliatesPage() {
               onClick={() => setActiveTab("commissions")}
               className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
                 activeTab === "commissions"
-                  ? "bg-white text-gray-900 shadow-sm border"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-card text-foreground shadow-sm border"
+                  : "text-muted-foreground hover:text-muted-foreground"
               }`}
             >
               <DollarSign className="size-3.5 sm:size-4" />
@@ -353,8 +353,8 @@ export function AffiliatesPage() {
               onClick={() => setActiveTab("payouts")}
               className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
                 activeTab === "payouts"
-                  ? "bg-white text-gray-900 shadow-sm border"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-card text-foreground shadow-sm border"
+                  : "text-muted-foreground hover:text-muted-foreground"
               }`}
             >
               <Wallet className="size-3.5 sm:size-4" />
@@ -364,42 +364,42 @@ export function AffiliatesPage() {
         </div>
 
         {activeTab === "referrals" ? (
-          <Card className="border-gray-100 overflow-hidden">
+          <Card className="border-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50/80">
-                    <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Tier</th>
-                    <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Commission</th>
-                    <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                  <tr className="border-b border-border bg-muted/80">
+                    <th className="text-left px-6 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Name</th>
+                    <th className="text-left px-6 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Email</th>
+                    <th className="text-left px-6 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Tier</th>
+                    <th className="text-left px-6 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Commission</th>
+                    <th className="text-left px-6 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                    <th className="text-left px-6 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
                   </tr>
                 </thead>
                 <tbody>
                   {referrals.length > 0 ? (
                     referrals.map((ref) => (
-                      <tr key={ref.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                        <td className="px-6 py-4 font-medium text-gray-900">{ref.full_name}</td>
-                        <td className="px-6 py-4 text-gray-600">{ref.email}</td>
+                      <tr key={ref.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                        <td className="px-6 py-4 font-medium text-foreground">{ref.full_name}</td>
+                        <td className="px-6 py-4 text-muted-foreground">{ref.email}</td>
                         <td className="px-6 py-4">
                           <span className="text-[11px] font-semibold text-[#0D7490] bg-[#0D7490]/5 px-2 py-1 rounded-md uppercase">
                             {ref.subscription_tier}
                           </span>
                         </td>
-                        <td className="px-6 py-4 font-semibold text-gray-900">${parseFloat(ref.commission_amount).toFixed(2)}</td>
+                        <td className="px-6 py-4 font-semibold text-foreground">${parseFloat(ref.commission_amount).toFixed(2)}</td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex text-[11px] font-semibold px-2 py-1 rounded-md ${statusBadge(ref.status)}`}>
                             {ref.status.charAt(0).toUpperCase() + ref.status.slice(1)}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-gray-500">{new Date(ref.created_at).toLocaleDateString()}</td>
+                        <td className="px-6 py-4 text-muted-foreground">{new Date(ref.created_at).toLocaleDateString()}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
+                      <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                         <Users className="w-8 h-8 mx-auto mb-3 text-gray-300" />
                         <p className="text-sm font-medium">No referrals yet</p>
                         <p className="text-xs mt-1">Share your referral link to start earning commissions</p>
@@ -413,10 +413,10 @@ export function AffiliatesPage() {
         ) : activeTab === "commissions" ? (
           <div className="grid md:grid-cols-2 gap-3 sm:gap-4">
             {commissionRates.map((c) => (
-              <Card key={c.tier} className="border-gray-100 p-6 flex items-center justify-between">
+              <Card key={c.tier} className="border-border p-6 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{c.tier}</p>
-                  <p className="text-xs text-gray-500">{c.per}</p>
+                  <p className="text-sm font-semibold text-foreground">{c.tier}</p>
+                  <p className="text-xs text-muted-foreground">{c.per}</p>
                 </div>
                 <p className="text-2xl font-bold text-[#0D7490]">{c.rate}</p>
               </Card>
@@ -425,16 +425,16 @@ export function AffiliatesPage() {
         ) : (
           <div className="space-y-6">
             {/* Withdraw Form */}
-            <Card className="border-gray-100 p-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-1">Request Withdrawal</h3>
-                <p className="text-xs text-gray-500 mb-4">
-                  Your balance of <span className="font-semibold text-gray-700">{formatCurrency(stats.pending_balance || 0)}</span> is ready for withdrawal (minimum $1)
+            <Card className="border-border p-6">
+                <h3 className="text-sm font-semibold text-foreground mb-1">Request Withdrawal</h3>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Your balance of <span className="font-semibold text-muted-foreground">{formatCurrency(stats.pending_balance || 0)}</span> is ready for withdrawal (minimum $1)
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 mb-3">
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="w-full sm:w-48 px-4 h-10 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-white outline-none transition-all text-sm text-gray-900"
+                    className="w-full sm:w-48 px-4 h-10 bg-muted border border-border rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-card outline-none transition-all text-sm text-foreground"
                   >
                     <option value="mpesa">M-Pesa</option>
                     <option value="airtel">Airtel Money</option>
@@ -446,7 +446,7 @@ export function AffiliatesPage() {
                     placeholder="Phone number or payment details"
                     value={paymentDetails}
                     onChange={(e) => setPaymentDetails(e.target.value)}
-                    className="w-full px-4 h-10 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-white outline-none transition-all text-sm text-gray-900"
+                    className="w-full px-4 h-10 bg-muted border border-border rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-card outline-none transition-all text-sm text-foreground"
                   />
                 </div>
                 <Button
@@ -463,39 +463,39 @@ export function AffiliatesPage() {
               </Card>
 
             {/* Payout History */}
-            <Card className="border-gray-100 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-900">Payout History</h3>
+            <Card className="border-border overflow-hidden">
+              <div className="px-6 py-4 border-b border-border">
+                <h3 className="text-sm font-semibold text-foreground">Payout History</h3>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-100 bg-gray-50/80">
-                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Amount</th>
-                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Method</th>
-                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Details</th>
-                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                    <tr className="border-b border-border bg-muted/80">
+                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Amount</th>
+                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Method</th>
+                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Details</th>
+                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                      <th className="text-left px-6 py-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
                     </tr>
                   </thead>
                   <tbody>
                     {payouts.length > 0 ? (
                       payouts.map((p) => (
-                        <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                          <td className="px-6 py-4 font-semibold text-gray-900">${parseFloat(p.amount).toFixed(2)}</td>
-                          <td className="px-6 py-4 text-gray-600 capitalize">{p.payment_method}</td>
-                          <td className="px-6 py-4 text-gray-600">{p.payment_details}</td>
+                        <tr key={p.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                          <td className="px-6 py-4 font-semibold text-foreground">${parseFloat(p.amount).toFixed(2)}</td>
+                          <td className="px-6 py-4 text-muted-foreground capitalize">{p.payment_method}</td>
+                          <td className="px-6 py-4 text-muted-foreground">{p.payment_details}</td>
                           <td className="px-6 py-4">
                             <span className={`inline-flex text-[11px] font-semibold px-2 py-1 rounded-md ${payoutStatusBadge(p.status)}`}>
                               {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-gray-500">{new Date(p.created_at).toLocaleDateString()}</td>
+                          <td className="px-6 py-4 text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                        <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
                           <Clock className="w-8 h-8 mx-auto mb-3 text-gray-300" />
                           <p className="text-sm font-medium">No payouts yet</p>
                           <p className="text-xs mt-1">Earn commissions from referrals to request a withdrawal</p>

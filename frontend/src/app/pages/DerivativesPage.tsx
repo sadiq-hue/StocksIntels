@@ -128,7 +128,7 @@ export function DerivativesPage() {
                 </div>
                 <h3 className="text-xs font-semibold text-foreground">{concept.title}</h3>
               </div>
-              <p className="text-xs text-gray-600 leading-relaxed">{concept.content}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">{concept.content}</p>
             </Card>
           );
         })}
@@ -136,10 +136,10 @@ export function DerivativesPage() {
 
       {/* Tab Toggle */}
       <div className="flex gap-1 bg-muted rounded-lg p-1 mb-4 w-fit">
-        <button onClick={() => setTab('nse')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${tab === 'nse' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setTab('nse')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${tab === 'nse' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
           NSE Events
         </button>
-        <button onClick={() => setTab('global')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${tab === 'global' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setTab('global')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${tab === 'global' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
           <Globe className="size-3" /> Global Events
         </button>
       </div>
@@ -204,7 +204,7 @@ export function DerivativesPage() {
           <AlertTriangle className="size-4 text-amber-600 mt-0.5 shrink-0" />
           <div>
             <h3 className="text-xs font-semibold text-amber-800 mb-1">Derivatives Risk Warning</h3>
-            <p className="text-xs text-gray-600 leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Derivatives trading involves substantial risk of loss and is not suitable for all investors. The NSE derivatives market
               may have limited liquidity. Always ensure you understand the terms of each contract before trading. Consider consulting
               a licensed financial advisor. Past performance of derivatives is not indicative of future results.

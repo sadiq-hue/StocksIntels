@@ -54,8 +54,8 @@ export function Watchlist() {
   }, [user?.id]);
 
   return (
-    <Card className="bg-white border-gray-200 shadow-sm overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between py-4 border-b border-gray-50">
+    <Card className="bg-card border-border shadow-sm overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between py-4 border-b border-muted">
         <CardTitle className="text-lg font-bold flex items-center gap-2">
           <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
           My Watchlist
@@ -67,28 +67,28 @@ export function Watchlist() {
       <CardContent className="p-0">
         {loading ? (
           <div className="flex justify-center items-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : items.length === 0 ? (
           <div className="text-center py-8 px-4">
-            <p className="text-gray-400 text-sm mb-4">Your watchlist is empty</p>
+            <p className="text-muted-foreground text-sm mb-4">Your watchlist is empty</p>
             <Link to="/app/markets">
-              <button className="text-xs flex items-center gap-1 mx-auto bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 transition-colors">
+              <button className="text-xs flex items-center gap-1 mx-auto bg-muted hover:bg-accent px-3 py-1.5 rounded-full border border-border transition-colors">
                 <PlusCircle className="w-3 h-3" /> Add Stocks
               </button>
             </Link>
           </div>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-border">
             {items.map((stock) => (
               <Link key={stock.symbol} to={`/app/stock/${stock.symbol.replace('NSE:', '')}`}>
-                <div className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group">
+                <div className="p-4 hover:bg-muted transition-colors flex items-center justify-between group">
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold text-gray-900">{stock.symbol.replace('NSE:', '')}</span>
-                    <span className="text-xs text-gray-500 truncate max-w-[120px]">{stock.company_name}</span>
+                    <span className="text-sm font-bold text-foreground">{stock.symbol.replace('NSE:', '')}</span>
+                    <span className="text-xs text-muted-foreground truncate max-w-[120px]">{stock.company_name}</span>
                   </div>
                   <div className="text-right flex flex-col items-end">
-                    <span className="text-sm font-semibold text-gray-900">KES {stock.price?.toFixed(2)}</span>
+                    <span className="text-sm font-semibold text-foreground">KES {stock.price?.toFixed(2)}</span>
                     <span className={`text-xs flex items-center gap-0.5 ${(stock.changePercent || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                       {(stock.changePercent || 0) >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       {Math.abs(stock.changePercent || 0).toFixed(2)}%

@@ -488,7 +488,7 @@ export function DashboardPage() {
           </div>
           <div className="flex items-center gap-3">
             <Link to="/app/markets" className="w-full sm:w-auto">
-              <Button className="bg-white text-[#0D7490] hover:bg-gray-100 shadow-sm w-full sm:w-auto">
+              <Button className="bg-card text-[#0D7490] hover:bg-muted shadow-sm w-full sm:w-auto">
                 <Globe className="size-4 mr-2" />
                 View Markets
               </Button>
@@ -542,7 +542,7 @@ export function DashboardPage() {
         <Card className="mt-4 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-200">
           <div className="flex items-start gap-3">
             <Lightbulb className="size-4 text-amber-600 mt-0.5 shrink-0" />
-            <div className="text-xs text-gray-700 leading-relaxed">
+            <div className="text-xs text-muted-foreground leading-relaxed">
               <span className="font-semibold text-amber-800">Beginner Mode Active.</span>{' '}
               <strong>Portfolio Value</strong> = total worth of your investments. <strong>NSE / Global</strong> = which market your stocks trade on.
               <strong> Holdings</strong> = number of different stocks you own. <strong>AI Signals</strong> = automated buy/sell suggestions.
@@ -1165,7 +1165,7 @@ export function DashboardPage() {
                           </Badge>
                         </>
                       )}
-                      <Badge className={`text-[10px] border-0 px-1.5 ${item.sentiment === "positive" ? "bg-green-100 text-green-700" : item.sentiment === "negative" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}`}>
+                      <Badge className={`text-[10px] border-0 px-1.5 ${item.sentiment === "positive" ? "bg-green-100 text-green-700" : item.sentiment === "negative" ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>
                         {item.sentiment}
                       </Badge>
                     </div>
@@ -1259,7 +1259,7 @@ export function DashboardPage() {
         };
         return (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedStock(null)}>
-            <div className="bg-white rounded-xl max-w-md w-full shadow-xl border border-gray-200 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-card rounded-xl max-w-md w-full shadow-xl border border-border overflow-hidden" onClick={e => e.stopPropagation()}>
               {/* Header */}
               <div className="bg-gradient-to-r from-[#0D7490] to-[#0A5F7A] p-4 text-white relative">
                 <button onClick={() => setSelectedStock(null)} className="absolute top-2 right-2 p-1 hover:bg-white/20 rounded-md transition-colors"><X className="size-4" /></button>
@@ -1274,20 +1274,20 @@ export function DashboardPage() {
               <div className="p-4 space-y-4">
                 {/* Price row */}
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                    <p className="text-[10px] text-gray-400 font-medium">Price</p>
-                    <p className="text-lg font-bold text-gray-900">{s.currency === 'USD' ? '$' : 'KES '}{s.price.toFixed(2)}</p>
+                  <div className="bg-muted rounded-lg p-3 border border-border">
+                    <p className="text-[10px] text-muted-foreground font-medium">Price</p>
+                    <p className="text-lg font-bold text-foreground">{s.currency === 'USD' ? '$' : 'KES '}{s.price.toFixed(2)}</p>
                   </div>
                   <div className={`rounded-lg p-3 border ${s.change >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-                    <p className="text-[10px] text-gray-400 font-medium">Change</p>
+                    <p className="text-[10px] text-muted-foreground font-medium">Change</p>
                     <p className={`text-lg font-bold flex items-center gap-1 ${s.change >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                       {s.change >= 0 ? <ArrowUpRight className="size-4" /> : <ArrowDownRight className="size-4" />}
                       {s.change >= 0 ? '+' : ''}{s.change}%
                     </p>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                    <p className="text-[10px] text-gray-400 font-medium">Volume</p>
-                    <p className="text-lg font-bold text-gray-900">{s.volume}</p>
+                  <div className="bg-muted rounded-lg p-3 border border-border">
+                    <p className="text-[10px] text-muted-foreground font-medium">Volume</p>
+                    <p className="text-lg font-bold text-foreground">{s.volume}</p>
                   </div>
                 </div>
 
@@ -1295,7 +1295,7 @@ export function DashboardPage() {
                 {sig && (
                   <>
                     <div>
-                      <h4 className="text-xs font-semibold text-gray-900 mb-2">Trading Parameters</h4>
+                      <h4 className="text-xs font-semibold text-foreground mb-2">Trading Parameters</h4>
                       <div className="grid grid-cols-4 gap-2">
                         <div className="bg-blue-50 rounded-md p-2 text-center border border-blue-100"><p className="text-[9px] font-medium text-blue-600 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 font-mono">${sig.price.toFixed(2)}</p></div>
                         <div className="bg-red-50 rounded-md p-2 text-center border border-red-100"><p className="text-[9px] font-medium text-red-600 uppercase">Stop</p><p className="text-xs font-bold text-red-900 font-mono">${sig.price?.toFixed(2)}</p></div>
@@ -1306,7 +1306,7 @@ export function DashboardPage() {
                     {sig.reason && (
                       <div className="bg-[#0D7490]/5 rounded-lg p-3 border border-[#0D7490]/20">
                         <p className="text-[10px] font-semibold text-[#0D7490] uppercase mb-1">Signal Reason</p>
-                        <p className="text-xs text-gray-600 leading-relaxed">{sig.reason}</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{sig.reason}</p>
                       </div>
                     )}
                   </>
@@ -1317,7 +1317,7 @@ export function DashboardPage() {
                   <Link to={`/app/stock/${s.ticker}`} onClick={() => setSelectedStock(null)} className="flex-1 bg-[#0D7490] hover:bg-[#0A5F7A] text-white text-sm font-medium text-center py-2 px-4 rounded-lg transition-colors">
                     Full Analysis
                   </Link>
-                  <Link to={`/app/signals?ticker=${s.ticker}`} onClick={() => setSelectedStock(null)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium text-center py-2 px-4 rounded-lg transition-colors border border-gray-200">
+                  <Link to={`/app/signals?ticker=${s.ticker}`} onClick={() => setSelectedStock(null)} className="flex-1 bg-muted hover:bg-gray-200 text-muted-foreground text-sm font-medium text-center py-2 px-4 rounded-lg transition-colors border border-border">
                     View Signal
                   </Link>
                 </div>
@@ -1338,7 +1338,7 @@ export function DashboardPage() {
         const sentBg = sent.score >= 65 ? 'bg-emerald-50 border-emerald-200' : sent.score <= 40 ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200';
         return (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setPulseDetail(null)}>
-            <div className="bg-white rounded-xl max-w-md w-full shadow-xl border border-gray-200 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-card rounded-xl max-w-md w-full shadow-xl border border-border overflow-hidden" onClick={e => e.stopPropagation()}>
               {/* Header */}
               <div className="bg-gradient-to-r from-[#0D7490] to-[#0A5F7A] p-4 text-white relative">
                 <button onClick={() => setPulseDetail(null)} className="absolute top-2 right-2 p-1 hover:bg-white/20 rounded-md transition-colors"><X className="size-4" /></button>
@@ -1358,20 +1358,20 @@ export function DashboardPage() {
                     {/* Sentiment score */}
                     <div className={`rounded-lg p-3 ${sentBg}`}>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-semibold text-gray-700">Sentiment Score</span>
+                        <span className="text-xs font-semibold text-muted-foreground">Sentiment Score</span>
                         <span className={`text-sm font-bold ${sentColor}`}>{sent.label} ({sent.score}/100)</span>
                       </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <div className={`h-full rounded-full transition-all ${sent.score >= 65 ? 'bg-emerald-500' : sent.score <= 40 ? 'bg-red-500' : 'bg-yellow-500'}`} style={{ width: `${sent.score}%` }} />
                       </div>
                     </div>
 
                     {/* Index data */}
                     {idx && (
-                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                        <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">Index</p>
+                      <div className="bg-muted rounded-lg p-3 border border-border">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Index</p>
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-gray-900">{idx.value}</span>
+                          <span className="text-sm font-bold text-foreground">{idx.value}</span>
                           <span className={`text-xs font-semibold ${idx.change.startsWith('+') ? 'text-emerald-600' : 'text-red-600'}`}>{idx.change}</span>
                         </div>
                       </div>
@@ -1383,9 +1383,9 @@ export function DashboardPage() {
                         <p className="text-[10px] font-medium text-emerald-600 uppercase">Positive</p>
                         <p className="text-xl font-bold text-emerald-700">{sent.idxPositive}</p>
                       </div>
-                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 text-center">
-                        <p className="text-[10px] font-medium text-gray-400 uppercase">Total Tracked</p>
-                        <p className="text-xl font-bold text-gray-900">{sent.idxTotal}</p>
+                      <div className="bg-muted rounded-lg p-3 border border-border text-center">
+                        <p className="text-[10px] font-medium text-muted-foreground uppercase">Total Tracked</p>
+                        <p className="text-xl font-bold text-foreground">{sent.idxTotal}</p>
                       </div>
                     </div>
                   </>
@@ -1396,10 +1396,10 @@ export function DashboardPage() {
                     {sectorData.map((sec: any) => {
                       const avg = sec.avgChange;
                       return (
-                        <div key={sec.sector} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+                        <div key={sec.sector} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted transition-colors">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-gray-700">{sec.sector}</span>
-                            <span className="text-[10px] text-gray-400">({sec.count})</span>
+                            <span className="text-xs font-medium text-muted-foreground">{sec.sector}</span>
+                            <span className="text-[10px] text-muted-foreground">({sec.count})</span>
                           </div>
                           <span className={`text-xs font-semibold ${avg >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{avg >= 0 ? '+' : ''}{avg.toFixed(1)}%</span>
                         </div>

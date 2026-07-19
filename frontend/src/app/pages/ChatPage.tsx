@@ -870,7 +870,7 @@ export function ChatPage() {
                               <span className="text-xs font-semibold text-[#0D7490]">AI Assistant</span>
                               <span className="text-muted-foreground text-[11px]">{formatMessageTime(msg.created_at)}</span>
                             </div>
-                            <p className="text-sm text-gray-800 leading-relaxed">{msg.content}</p>
+                            <p className="text-sm text-foreground leading-relaxed">{msg.content}</p>
                           </div>
                         </div>
                       ) : (
@@ -889,7 +889,7 @@ export function ChatPage() {
                             {isOwn && editingMsgId === msg.id ? (
                               <div className="flex items-center gap-2">
                                 <Input ref={editInputRef} value={editText} onChange={(e) => setEditText(e.target.value)}
-                                  className="flex-1 bg-card border-gray-300 text-foreground text-sm" autoFocus
+                                  className="flex-1 bg-card border-border text-foreground text-sm" autoFocus
                                   onKeyDown={(e) => { if (e.key === 'Enter') handleEditMessage(msg.id); if (e.key === 'Escape') { setEditingMsgId(null); setEditText(''); } }} />
                                 <Button size="sm" onClick={() => handleEditMessage(msg.id)} className="bg-[#0D7490] text-white h-8 px-3 text-xs">Save</Button>
                                 <Button size="sm" variant="outline" onClick={() => { setEditingMsgId(null); setEditText(''); }} className="h-8 px-3 text-xs">Cancel</Button>
@@ -905,7 +905,7 @@ export function ChatPage() {
                                   </div>
                                 )}
                                 <div className={`rounded-2xl px-4 py-2.5 space-y-1 ${
-                                  isOwn ? "bg-[#0D7490] text-white rounded-tr-sm" : "bg-muted text-gray-800 rounded-tl-sm"
+                                  isOwn ? "bg-[#0D7490] text-white rounded-tr-sm" : "bg-muted text-foreground rounded-tl-sm"
                                 }`}>
                                   {msg.image_url && (
                                     <div className="mb-1">

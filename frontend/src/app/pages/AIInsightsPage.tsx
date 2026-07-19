@@ -47,7 +47,7 @@ function renderInline(text: string): ReactNode[] {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>;
+      return <strong key={i} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>;
     }
     if (/^https?:\/\//.test(part)) {
       return <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-[#0D7490] underline hover:text-[#0A5F7A]">{part}</a>;
@@ -70,8 +70,8 @@ function renderSegments(line: string, i: number): ReactNode {
           const changePos = changeMatch && parseFloat(changeMatch[1]) >= 0;
           return (
             <span key={j} className="leading-relaxed">
-              <span className="font-semibold text-gray-600 text-[11px] uppercase tracking-wide">{label}</span>{' '}
-              <span className={isPrice && changeMatch ? (changePos ? 'text-emerald-600 font-medium' : 'text-red-500 font-medium') : 'text-gray-800'}>{value}</span>
+              <span className="font-semibold text-muted-foreground text-[11px] uppercase tracking-wide">{label}</span>{' '}
+              <span className={isPrice && changeMatch ? (changePos ? 'text-emerald-600 font-medium' : 'text-red-500 font-medium') : 'text-foreground'}>{value}</span>
             </span>
           );
         }
@@ -79,12 +79,12 @@ function renderSegments(line: string, i: number): ReactNode {
         if (kvMatch) {
           return (
             <span key={j} className="leading-relaxed">
-              <span className="font-medium text-gray-500">{kvMatch[1]}:</span>{' '}
-              <span className="text-gray-800">{kvMatch[2]}</span>
+              <span className="font-medium text-muted-foreground">{kvMatch[1]}:</span>{' '}
+              <span className="text-foreground">{kvMatch[2]}</span>
             </span>
           );
         }
-        return <span key={j} className="text-gray-700">{renderInline(seg)}</span>;
+        return <span key={j} className="text-muted-foreground">{renderInline(seg)}</span>;
       })}
     </div>
   );
@@ -101,8 +101,8 @@ function MessageContent({ content }: { content: string }) {
     // Bullet points
     if (t.startsWith('•') || t.startsWith('- ')) {
       elements.push(
-        <div key={i} className="flex items-start gap-1.5 text-sm text-gray-700">
-          <span className="text-gray-400 mt-0.5 shrink-0 text-xs">●</span>
+        <div key={i} className="flex items-start gap-1.5 text-sm text-muted-foreground">
+          <span className="text-muted-foreground mt-0.5 shrink-0 text-xs">●</span>
           <span>{renderInline(t.replace(/^[•-]\s*/, ''))}</span>
         </div>
       );
@@ -115,7 +115,7 @@ function MessageContent({ content }: { content: string }) {
       elements.push(
         <div key={i} className="flex items-center gap-2 mt-3 mb-1.5">
           <div className="h-px flex-1 bg-gradient-to-r from-gray-200/60 to-transparent" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">{sectionEmoji[1]}</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">{sectionEmoji[1]}</span>
           <div className="h-px flex-1 bg-gradient-to-l from-gray-200/60 to-transparent" />
         </div>
       );
@@ -126,7 +126,7 @@ function MessageContent({ content }: { content: string }) {
     const sectionPlain = t.match(/^\*\*(.+?)\*\*$/);
     if (sectionPlain && !t.includes(':') && !t.includes('—')) {
       elements.push(
-        <div key={i} className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mt-2 mb-0.5">{sectionPlain[1]}</div>
+        <div key={i} className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mt-2 mb-0.5">{sectionPlain[1]}</div>
       );
       return;
     }
@@ -136,8 +136,8 @@ function MessageContent({ content }: { content: string }) {
     if (title && !t.includes(':')) {
       elements.push(
         <div key={i}>
-          <span className="text-base font-bold text-gray-900">{title[1]}</span>
-          {title[2] && <span className="text-sm text-gray-500 ml-1.5">— {title[2]}</span>}
+          <span className="text-base font-bold text-foreground">{title[1]}</span>
+          {title[2] && <span className="text-sm text-muted-foreground ml-1.5">— {title[2]}</span>}
         </div>
       );
       return;
@@ -148,7 +148,7 @@ function MessageContent({ content }: { content: string }) {
     if (signal) {
       elements.push(
         <div key={i} className="flex items-center gap-2 mt-1 mb-0.5">
-          <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Signal</span>
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Signal</span>
           <SignalBadge signal={signal[1]} confidence={parseInt(signal[2])} />
         </div>
       );
@@ -169,7 +169,7 @@ function MessageContent({ content }: { content: string }) {
 
     // Default paragraph
     elements.push(
-      <div key={i} className="text-sm text-gray-800 leading-relaxed">{renderInline(t)}</div>
+      <div key={i} className="text-sm text-foreground leading-relaxed">{renderInline(t)}</div>
     );
   });
 
@@ -258,30 +258,30 @@ export function AIInsightsPage() {
             <Sparkles className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="text-gray-900 text-xl md:text-2xl font-bold tracking-tight">AI Insights</h2>
-            <p className="text-gray-500 text-sm">Ask our AI analyst about stocks and market trends — NSE, NYSE, Nasdaq and more</p>
+            <h2 className="text-foreground text-xl md:text-2xl font-bold tracking-tight">AI Insights</h2>
+            <p className="text-muted-foreground text-sm">Ask our AI analyst about stocks and market trends — NSE, NYSE, Nasdaq and more</p>
           </div>
         </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0">
         {/* Live Signals Panel */}
-        <Card className="w-full md:w-80 bg-white border-gray-200 flex flex-col overflow-hidden shrink-0 shadow-sm max-h-[240px] md:max-h-none">
+        <Card className="w-full md:w-80 bg-card border-border flex flex-col overflow-hidden shrink-0 shadow-sm max-h-[240px] md:max-h-none">
           <button onClick={() => setShowSignals(!showSignals)}
-            className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100 hover:bg-gray-50/80 transition-colors group">
+            className="flex items-center justify-between px-4 py-3.5 border-b border-border hover:bg-muted/80 transition-colors group">
             <div className="flex items-center gap-2.5">
               <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-500/10 to-green-500/10">
                 <TrendingUp className="w-4 h-4 text-emerald-600" />
               </div>
               <div>
-                <span className="font-semibold text-sm text-gray-900">Live Signals</span>
+                <span className="font-semibold text-sm text-foreground">Live Signals</span>
                 {!signalsLoading && (
-                  <span className="text-[10px] text-gray-400 ml-2 font-normal">{topSignals.length} buys</span>
+                  <span className="text-[10px] text-muted-foreground ml-2 font-normal">{topSignals.length} buys</span>
                 )}
               </div>
             </div>
-            <div className="p-1 rounded-md group-hover:bg-gray-100 transition-colors">
-              {showSignals ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronUp className="w-3.5 h-3.5 text-gray-400" />}
+            <div className="p-1 rounded-md group-hover:bg-muted transition-colors">
+              {showSignals ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />}
             </div>
           </button>
           {showSignals && (
@@ -294,38 +294,38 @@ export function AIInsightsPage() {
                       <Loader2 className="w-6 h-6 text-[#0D7490]" />
                     </div>
                   </div>
-                  <span className="text-xs text-gray-400">Loading signals...</span>
+                  <span className="text-xs text-muted-foreground">Loading signals...</span>
                 </div>
               ) : topSignals.length > 0 ? (
                 topSignals.map((s, i) => {
                   const cfg = signalConfig[s.signal] || signalConfig['Hold'];
                   return (
                     <div key={i}
-                      className="group/card relative p-3 rounded-xl bg-white border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200 cursor-default">
+                      className="group/card relative p-3 rounded-xl bg-card border border-border hover:border-border hover:shadow-md transition-all duration-200 cursor-default">
                       {/* Confidence bar */}
-                      <div className="absolute top-0 left-3 right-3 h-0.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="absolute top-0 left-3 right-3 h-0.5 rounded-full bg-muted overflow-hidden">
                         <div className={`h-full rounded-full transition-all duration-500 ${cfg.bar}`}
                           style={{ width: `${s.confidence}%` }} />
                       </div>
                       <div className="flex items-center justify-between mb-2 mt-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-gray-900 tracking-tight">{s.ticker}</span>
+                          <span className="font-bold text-sm text-foreground tracking-tight">{s.ticker}</span>
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold text-white ${cfg.badge}`}>
                             {s.signal}
                           </span>
                         </div>
-                        <span className="text-[11px] font-medium text-gray-400">{s.type}</span>
+                        <span className="text-[11px] font-medium text-muted-foreground">{s.type}</span>
                       </div>
-                      <div className="text-gray-500 truncate text-[11px] mb-2.5">{s.name}</div>
+                      <div className="text-muted-foreground truncate text-[11px] mb-2.5">{s.name}</div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="font-semibold text-sm text-gray-900">{s.currency} {s.price.toFixed(2)}</span>
+                        <span className="font-semibold text-sm text-foreground">{s.currency} {s.price.toFixed(2)}</span>
                         <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                           s.change >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
                         }`}>
                           {s.change >= 0 ? '+' : ''}{s.change.toFixed(2)}
                         </span>
                       </div>
-                      <div className="flex items-center gap-3 text-[11px] text-gray-400">
+                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Target className="w-3 h-3" /> {s.currency} {s.target1}
                         </span>
@@ -335,14 +335,14 @@ export function AIInsightsPage() {
                       </div>
                       <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                         {s.mlWinProb && <span className="text-[9px] px-1 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-medium">ML: {s.mlWinProb}</span>}
-                        {s.regime && <span className="text-[9px] px-1 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">{s.regime}</span>}
+                        {s.regime && <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground border border-border">{s.regime}</span>}
                         {s.weeklyTrend && <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${s.weeklyTrend === "Bullish" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>{s.weeklyTrend}</span>}
                       </div>
                     </div>
                   );
                 })
               ) : (
-                <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
                   <TrendingUp className="w-8 h-8 mb-2 opacity-30" />
                   <span className="text-sm font-medium">No buy signals</span>
                   <span className="text-xs mt-1">Check back during market hours</span>
@@ -353,15 +353,15 @@ export function AIInsightsPage() {
         </Card>
 
         {/* Chat Panel */}
-        <Card className="flex-1 bg-white border-gray-200 p-0 flex flex-col overflow-hidden shadow-sm">
+        <Card className="flex-1 bg-card border-border p-0 flex flex-col overflow-hidden shadow-sm">
           {/* Chat header */}
-          <div className="px-4 py-3 md:px-6 md:py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center gap-3 shrink-0">
+          <div className="px-4 py-3 md:px-6 md:py-4 border-b border-border bg-gradient-to-r from-muted to-card flex items-center gap-3 shrink-0">
             <div className="p-2 rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10">
               <Brain className="w-4 h-4 text-[#0D7490]" />
             </div>
             <div>
-              <span className="text-sm font-semibold text-gray-900">AI Analyst</span>
-              <span className="text-[11px] text-gray-400 ml-2">Powered by signal engine</span>
+              <span className="text-sm font-semibold text-foreground">AI Analyst</span>
+              <span className="text-[11px] text-muted-foreground ml-2">Powered by signal engine</span>
             </div>
           </div>
 
@@ -374,7 +374,7 @@ export function AIInsightsPage() {
                     <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-sm mt-0.5 shrink-0">
                       <Sparkles className="w-3.5 h-3.5 text-white" />
                     </div>
-                    <div className="bg-gray-50 border border-gray-100 rounded-2xl rounded-tl-sm px-5 py-3.5 shadow-sm">
+                    <div className="bg-muted border border-border rounded-2xl rounded-tl-sm px-5 py-3.5 shadow-sm">
                       <MessageContent content={message.content} />
                     </div>
                   </div>
@@ -392,14 +392,14 @@ export function AIInsightsPage() {
                   <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-sm mt-0.5 shrink-0">
                     <Sparkles className="w-3.5 h-3.5 text-white" />
                   </div>
-                  <div className="bg-gray-50 border border-gray-100 rounded-2xl rounded-tl-sm px-5 py-3.5 shadow-sm">
+                  <div className="bg-muted border border-border rounded-2xl rounded-tl-sm px-5 py-3.5 shadow-sm">
                     <div className="flex items-center gap-2.5">
                       <div className="flex gap-1">
                         <span className="w-2 h-2 bg-[#0D7490] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                         <span className="w-2 h-2 bg-[#0D7490] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                         <span className="w-2 h-2 bg-[#0D7490] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                       </div>
-                      <span className="text-sm text-gray-400">Analyzing markets...</span>
+                      <span className="text-sm text-muted-foreground">Analyzing markets...</span>
                     </div>
                   </div>
                 </div>
@@ -409,14 +409,14 @@ export function AIInsightsPage() {
           </div>
 
           {/* Sample Questions & Input */}
-          <div className="border-t border-gray-100 bg-white px-4 py-3 md:px-6 md:py-4 space-y-3 shrink-0">
+          <div className="border-t border-border bg-card px-4 py-3 md:px-6 md:py-4 space-y-3 shrink-0">
             {messages.length === 1 && (
               <div className="flex flex-wrap gap-2">
                 {sampleQuestions.map((q, i) => {
                   const Icon = q.icon;
                   return (
                     <button key={i} onClick={() => handleSubmit(q.text)} disabled={loading}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 hover:text-gray-900 rounded-xl transition-all text-xs font-medium border border-gray-200 hover:border-[#0D7490]/30 hover:shadow-sm disabled:opacity-50">
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-muted hover:bg-accent text-muted-foreground hover:text-foreground rounded-xl transition-all text-xs font-medium border border-border hover:border-[#0D7490]/30 hover:shadow-sm disabled:opacity-50">
                       <Icon className="w-3.5 h-3.5" />
                       {q.text}
                     </button>
@@ -429,7 +429,7 @@ export function AIInsightsPage() {
               <div className="relative flex-1">
                 <Input value={input} onChange={(e) => setInput(e.target.value)} disabled={loading}
                   placeholder="Ask about stocks, trends, or strategies..."
-                  className="w-full bg-gray-50 border-gray-200 text-gray-900 pr-4 pl-4 h-11 rounded-xl focus:bg-white focus:border-[#0D7490]/40 focus:ring-2 focus:ring-[#0D7490]/10 transition-all placeholder:text-gray-400" />
+                  className="w-full bg-muted border-border text-foreground pr-4 pl-4 h-11 rounded-xl focus:bg-card focus:border-[#0D7490]/40 focus:ring-2 focus:ring-[#0D7490]/10 transition-all placeholder:text-muted-foreground" />
               </div>
               <Button type="submit" disabled={loading || !input.trim()}
                 className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] hover:from-[#0A5F7A] hover:to-[#0D7490] text-white px-5 h-11 rounded-xl shadow-md shadow-[#0D7490]/20 hover:shadow-lg hover:shadow-[#0D7490]/30 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed">

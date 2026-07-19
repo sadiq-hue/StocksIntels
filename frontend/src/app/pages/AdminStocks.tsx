@@ -59,7 +59,7 @@ function StatusBadge({ status }: { status: string }) {
     failed: "bg-red-100 text-red-800 border-red-200",
   };
   return (
-    <Badge className={`${variants[status] || "bg-gray-100"} font-medium`} variant="outline">
+    <Badge className={`${variants[status] || "bg-muted"} font-medium`} variant="outline">
       {status}
     </Badge>
   );

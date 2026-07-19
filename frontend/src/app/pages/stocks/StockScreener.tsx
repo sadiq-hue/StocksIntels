@@ -397,7 +397,7 @@ export function StockScreener() {
                         <span className="text-xs font-medium text-muted-foreground">{formatVolume(stock.volume)}</span>
                       </td>
                       <td className="px-4 py-3 text-right hidden xl:table-cell">
-                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${SIGNAL_COLORS[stock.signal] || "text-gray-600 bg-gray-50"}`}>
+                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${SIGNAL_COLORS[stock.signal] || "text-muted-foreground bg-muted"}`}>
                           {stock.signal}
                         </span>
                       </td>
@@ -487,7 +487,7 @@ export function StockScreener() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${SIGNAL_COLORS[stock.signal] || "text-gray-600 bg-gray-50"}`}>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${SIGNAL_COLORS[stock.signal] || "text-muted-foreground bg-muted"}`}>
                     {stock.signal}
                   </span>
                   <span className="text-[10px] text-muted-foreground">{stock.type}</span>

@@ -609,7 +609,7 @@ export function StockAnalysisPage() {
             <div className="flex items-center gap-3 mt-2">
               <Link
                 to="/pricing"
-                className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#0D7490] hover:bg-yellow-300 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-md bg-card px-3 py-1.5 text-xs font-semibold text-[#0D7490] hover:bg-yellow-300 transition-colors"
               >
                 <Zap className="size-3.5" />
                 See Pro Plans
@@ -891,7 +891,7 @@ export function StockAnalysisPage() {
                   { icon: Wallet, label: "Market Cap", value: companyProfile?.marketCap ? `$${(companyProfile.marketCap / 1e9).toFixed(1)}B` : activeSelection.marketCap, color: "text-foreground" },
                   { icon: BarChart3, label: "P/E Ratio", value: companyProfile?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A"), color: "text-foreground" },
                 ].map((m) => (
-                  <div key={m.label} className="rounded-xl bg-white/70 p-3 border border-white shadow-sm backdrop-blur">
+                  <div key={m.label} className="rounded-xl bg-card/70 p-3 border border-white shadow-sm backdrop-blur">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <m.icon className="size-3.5 text-[#0D7490]" />
                       <span className="text-[11px] font-medium text-muted-foreground">{m.label}</span>
@@ -936,7 +936,7 @@ export function StockAnalysisPage() {
                       className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                         chartPeriod === p
                           ? "bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white shadow-sm"
-                          : "text-muted-foreground hover:text-foreground hover:bg-white"
+                          : "text-muted-foreground hover:text-foreground hover:bg-card"
                       }`}
                     >
                       {p}
@@ -1293,7 +1293,7 @@ export function StockAnalysisPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                           <div className={`h-full rounded-full transition-all ${
                             displayConfidence >= 70 ? "bg-emerald-500" : displayConfidence >= 50 ? "bg-amber-500" : "bg-red-500"
                           }`} style={{ width: `${displayConfidence}%` }} />

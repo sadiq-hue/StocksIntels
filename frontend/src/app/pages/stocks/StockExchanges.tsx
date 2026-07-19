@@ -247,7 +247,7 @@ export function StockExchanges() {
           <p className="text-lg font-bold text-red-700">{nseDownCount}</p>
           <p className="text-[10px] text-red-600">{nseDownCount > 0 ? `Losers dragging` : "No losers"}</p>
         </Card>
-        <Card className="p-3 bg-gray-50/50 border-gray-200/50">
+        <Card className="p-3 bg-muted/50 border-border">
           <p className="text-[10px] uppercase font-semibold text-gray-600 tracking-wider">NSE Unchanged</p>
           <p className="text-lg font-bold text-gray-600">{nseFlatCount}</p>
           <p className="text-[10px] text-gray-500">Flat on the day</p>
@@ -279,7 +279,7 @@ export function StockExchanges() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <Badge className={`text-[10px] ${isOpen ? "bg-emerald-50 text-emerald-700" : isPre ? "bg-amber-50 text-amber-700" : isAfter ? "bg-indigo-50 text-indigo-700" : "bg-gray-100 text-gray-600"}`}>
+                  <Badge className={`text-[10px] ${isOpen ? "bg-emerald-50 text-emerald-700" : isPre ? "bg-amber-50 text-amber-700" : isAfter ? "bg-indigo-50 text-indigo-700" : "bg-muted text-muted-foreground"}`}>
                     <span className={`size-1.5 rounded-full mr-1.5 inline-block ${isOpen ? "bg-emerald-500" : isPre ? "bg-amber-500" : isAfter ? "bg-indigo-500" : "bg-gray-400"}`} />
                     {exStatus.label}
                   </Badge>

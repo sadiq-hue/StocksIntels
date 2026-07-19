@@ -895,7 +895,7 @@ export function SupportCenterPage() {
                               <div key={item.label} className="flex items-center gap-2.5 px-3 py-2 bg-white/70 rounded-lg border border-blue-50 hover:bg-white transition-colors">
                                 <span className="text-base">{item.icon}</span>
                                 <div>
-                                  <span className="font-semibold text-gray-800 text-xs">{item.label}</span>
+                                  <span className="font-semibold text-foreground text-xs">{item.label}</span>
                                   <span className="text-muted-foreground text-xs ml-1">&mdash; {item.desc}</span>
                                 </div>
                               </div>

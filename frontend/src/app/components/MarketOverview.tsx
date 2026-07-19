@@ -35,14 +35,14 @@ export function MarketOverview() {
   ];
 
   return (
-    <Card className="bg-white border-gray-200 p-6">
-      <h3 className="text-gray-900 mb-4">NSE Market Overview</h3>
+    <Card className="bg-card border-border p-6">
+      <h3 className="text-foreground mb-4">NSE Market Overview</h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {indices.map((index) => (
-          <div key={index.name} className="bg-gray-50 p-4 rounded-lg border border-gray-100">
-            <div className="text-gray-600 text-sm mb-1">{index.name}</div>
+          <div key={index.name} className="bg-muted p-4 rounded-lg border border-border">
+            <div className="text-muted-foreground text-sm mb-1">{index.name}</div>
             <div className="flex items-center justify-between">
-              <div className="text-gray-900 text-2xl">{index.value}</div>
+              <div className="text-foreground text-2xl">{index.value}</div>
               <div className={`flex items-center gap-1 ${index.isPositive ? 'text-green-600' : 'text-red-600'}`}>
                 {index.isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                 <span>{index.change}</span>

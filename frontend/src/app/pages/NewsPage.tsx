@@ -69,7 +69,7 @@ export function NewsPage() {
     switch (s) {
       case "positive": return "bg-emerald-100 text-emerald-700 border-emerald-200";
       case "negative": return "bg-red-100 text-red-700 border-red-200";
-      default: return "bg-gray-100 text-gray-700 border-gray-200";
+      default: return "bg-muted text-muted-foreground border-border";
     }
   };
 
@@ -84,7 +84,7 @@ export function NewsPage() {
       case 'Funding': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
       case 'Leadership': return 'bg-lime-100 text-lime-700 border-lime-200';
       case 'Crisis': return 'bg-red-100 text-red-700 border-red-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
+      default: return 'bg-muted text-muted-foreground border-border';
     }
   };
 
@@ -230,7 +230,7 @@ export function NewsPage() {
               <span className="text-[9px] text-muted-foreground">/</span>
               <span className="text-xs text-red-600 font-medium">{summary.negativeCount}</span>
               <span className="text-[9px] text-muted-foreground">/</span>
-              <span className="text-xs text-gray-600 font-medium">{summary.neutralCount}</span>
+              <span className="text-xs text-muted-foreground font-medium">{summary.neutralCount}</span>
             </div>
           </Card>
           <Card className="p-3">
@@ -241,7 +241,7 @@ export function NewsPage() {
           </Card>
           <Card className={`p-3 ${summary.hotCount > 0 ? 'bg-amber-50 border-amber-200' : ''}`}>
             <p className="text-[10px] text-muted-foreground uppercase font-semibold">Hot News</p>
-            <p className={`text-xl font-bold ${summary.hotCount > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+            <p className={`text-xl font-bold ${summary.hotCount > 0 ? 'text-amber-600' : 'text-muted-foreground'}`}>
               {summary.hotCount || 0}
             </p>
           </Card>

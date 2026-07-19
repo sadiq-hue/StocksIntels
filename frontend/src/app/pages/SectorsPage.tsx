@@ -163,11 +163,11 @@ export const SectorsPage: React.FC = () => {
         </Link>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">Sector Performance</h1>
-            <p className="text-gray-500 font-medium">Real-time industry strength and cross-exchange momentum tracking.</p>
+            <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">Sector Performance</h1>
+            <p className="text-muted-foreground font-medium">Real-time industry strength and cross-exchange momentum tracking.</p>
           </div>
           <div className="text-right">
-            <Badge variant="outline" className="text-gray-400 font-bold border-gray-200 uppercase tracking-widest text-[10px]">
+            <Badge variant="outline" className="text-muted-foreground font-bold border-border uppercase tracking-widest text-[10px]">
               Updated: {new Date().toLocaleTimeString()}
             </Badge>
           </div>
@@ -175,25 +175,25 @@ export const SectorsPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-5 border-gray-200 flex items-center gap-4">
+        <Card className="p-5 border-border flex items-center gap-4">
           <div className="w-12 h-12 shrink-0 bg-cyan-50 text-cyan-600 rounded-xl flex items-center justify-center"><Landmark size={24} /></div>
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase text-gray-400 tracking-wider">NSE Top Performer</p>
-            <p className="text-lg font-bold text-gray-900 truncate">{nseLeader?.displayName || "N/A"} ({nseLeader ? (nseLeader.change >= 0 ? "+" : "") + nseLeader.change + "%" : "—"})</p>
+            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-wider">NSE Top Performer</p>
+            <p className="text-lg font-bold text-foreground truncate">{nseLeader?.displayName || "N/A"} ({nseLeader ? (nseLeader.change >= 0 ? "+" : "") + nseLeader.change + "%" : "—"})</p>
           </div>
         </Card>
-        <Card className="p-5 border-gray-200 flex items-center gap-4">
+        <Card className="p-5 border-border flex items-center gap-4">
           <div className="w-12 h-12 shrink-0 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center"><Globe size={24} /></div>
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Global Top Performer</p>
-            <p className="text-lg font-bold text-gray-900 truncate">{globalLeader?.displayName || "N/A"} ({globalLeader ? (globalLeader.change >= 0 ? "+" : "") + globalLeader.change + "%" : "—"})</p>
+            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-wider">Global Top Performer</p>
+            <p className="text-lg font-bold text-foreground truncate">{globalLeader?.displayName || "N/A"} ({globalLeader ? (globalLeader.change >= 0 ? "+" : "") + globalLeader.change + "%" : "—"})</p>
           </div>
         </Card>
-        <Card className="p-5 border-gray-200 flex items-center gap-4">
+        <Card className="p-5 border-border flex items-center gap-4">
           <div className="w-12 h-12 shrink-0 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center"><BarChart3 size={24} /></div>
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Highest Volume</p>
-            <p className="text-lg font-bold text-gray-900 truncate">
+            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-wider">Highest Volume</p>
+            <p className="text-lg font-bold text-foreground truncate">
               {highestVolumeSector.name !== "N/A" ? highestVolumeSector.displayName + " (" + highestVolumeSector.volumeLabel + ")" : "N/A"}
             </p>
           </div>
@@ -202,16 +202,16 @@ export const SectorsPage: React.FC = () => {
 
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between pb-2">
         <div className="relative w-full md:w-96">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             type="text"
             placeholder="Search sectors or leaders..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 bg-white"
+            className="pl-10 bg-card"
           />
         </div>
-        <div className="flex flex-wrap bg-gray-100 p-1 rounded-lg">
+        <div className="flex flex-wrap bg-muted p-1 rounded-lg">
           {[
             { id: "all", label: "All Markets", icon: Activity },
             { id: "NSE", label: "NSE Only", icon: Landmark },
@@ -221,7 +221,7 @@ export const SectorsPage: React.FC = () => {
               key={tab.id}
               onClick={() => setMarketFilter(tab.id as any)}
               className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
-                marketFilter === tab.id ? "bg-white text-[#0D7490] shadow-sm" : "text-gray-500 hover:text-gray-700"
+                marketFilter === tab.id ? "bg-card text-[#0D7490] shadow-sm" : "text-muted-foreground hover:text-muted-foreground"
               }`}
             >
               <tab.icon size={14} />
@@ -232,25 +232,25 @@ export const SectorsPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 border-gray-200 overflow-hidden">
+        <Card className="lg:col-span-2 border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="bg-gray-50 border-b border-gray-100">
+              <thead className="bg-muted border-b border-border">
                 <tr>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-500 tracking-wider">Sector Name</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-500 tracking-wider">Market</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-500 tracking-wider text-right">1D Change</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-500 tracking-wider text-right">Volume</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase text-gray-500 tracking-wider">AI Sentiment</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-wider">Sector Name</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-wider">Market</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-wider text-right">1D Change</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-wider text-right">Volume</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase text-muted-foreground tracking-wider">AI Sentiment</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filteredSectors.map((sector) => (
-                  <tr key={sector.name} className="hover:bg-gray-50/50 transition-colors cursor-pointer group">
+                  <tr key={sector.name} className="hover:bg-muted/50 transition-colors cursor-pointer group">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="font-bold text-gray-900 group-hover:text-[#0D7490] transition-colors">{sector.displayName}</span>
-                        <span className="text-[10px] text-gray-400 font-bold uppercase">Leader: {sector.leading}</span>
+                        <span className="font-bold text-foreground group-hover:text-[#0D7490] transition-colors">{sector.displayName}</span>
+                        <span className="text-[10px] text-muted-foreground font-bold uppercase">Leader: {sector.leading}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -261,12 +261,12 @@ export const SectorsPage: React.FC = () => {
                     <td className={`px-6 py-4 text-right font-black ${sector.change >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                       {sector.change >= 0 ? "+" : ""}{sector.change}%
                     </td>
-                    <td className="px-6 py-4 text-right text-gray-600 font-medium text-sm">
+                    <td className="px-6 py-4 text-right text-muted-foreground font-medium text-sm">
                       {sector.volumeLabel}
                     </td>
                     <td className="px-6 py-4">
                       <div className={`text-[10px] font-black uppercase px-2 py-1 rounded inline-flex items-center gap-1 ${
-                        sector.sentiment.includes("Bullish") ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-gray-600"
+                        sector.sentiment.includes("Bullish") ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-muted-foreground"
                       }`}>
                         {sector.sentiment.includes("Bullish") && <Zap size={10} />}
                         {sector.sentiment}
@@ -280,9 +280,9 @@ export const SectorsPage: React.FC = () => {
         </Card>
 
         <div className="space-y-6">
-          <Card className="p-6 border-gray-200">
+          <Card className="p-6 border-border">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-              <h3 className="font-black text-gray-900 uppercase tracking-widest text-xs flex items-center gap-2">
+              <h3 className="font-black text-foreground uppercase tracking-widest text-xs flex items-center gap-2">
                 <TrendingUp size={16} className="text-[#0D7490]" />
                 Relative Strength
               </h3>
@@ -314,7 +314,7 @@ export const SectorsPage: React.FC = () => {
             <p className="text-xs text-white/80 leading-relaxed mb-4">
               The overall market posture remains <span className="font-black text-white">BULLISH</span>. Capital is rotating from Energy into Technology and Banking sectors across both global and local exchanges.
             </p>
-            <Button variant="outline" className="w-full bg-white/10 border-white/20 hover:bg-white/20 text-white font-bold text-xs">
+            <Button variant="outline" className="w-full bg-card/10 border-white/20 hover:bg-card/20 text-white font-bold text-xs">
               View Signal Details <ChevronRight size={14} className="ml-1" />
             </Button>
           </Card>

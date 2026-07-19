@@ -589,19 +589,19 @@ const MarketPage: React.FC = () => {
                 else if (name.includes('NSE 25')) description = 'Mid-cap focused index tracking 25 companies outside the top tier. Useful for measuring medium-sized company performance.';
                 else description = 'Track this index alongside NSE 20 and NASI for a complete market picture.';
                 return (
-                  <div key={idx.symbol} className="bg-white/70 rounded-lg p-3 border border-purple-100">
+                  <div key={idx.symbol} className="bg-card/70 rounded-lg p-3 border border-purple-100">
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-semibold text-purple-900">{name}</span>
                       <span className={`text-xs font-bold ${idx.change?.startsWith('+') ? 'text-emerald-600' : 'text-red-500'}`}>
                         {idx.change || idx.value}
                       </span>
                     </div>
-                    <p className="text-[11px] text-gray-600 leading-relaxed">{description}</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">{description}</p>
                   </div>
                 );
               })}
             </div>
-            <p className="text-[11px] text-gray-500 mt-3 italic">
+            <p className="text-[11px] text-muted-foreground mt-3 italic">
               The NSE 20 declined over 50% from 2015 to 2020. For a complete market view, track the NASI (NSE All Share Index) and NSE 25 alongside it.
             </p>
           </div>
@@ -1020,7 +1020,7 @@ const TinyCard = ({ s, p, c, v, pos }: any) => {
 };
 
 const NewsItem = ({ article }: { article: NewsArticle }) => {
-  const sentimentColor = article.sentiment === "positive" ? "bg-green-100 text-green-700" : article.sentiment === "negative" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600";
+  const sentimentColor = article.sentiment === "positive" ? "bg-green-100 text-green-700" : article.sentiment === "negative" ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground";
   return (
     <Card className="p-4 border shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => article.url && article.url !== "#" && window.open(article.url, "_blank")}>
       <div className="flex items-center gap-2 mb-1">

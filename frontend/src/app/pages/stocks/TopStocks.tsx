@@ -146,7 +146,7 @@ export function TopStocks() {
               {filtered.map((stock, idx) => {
                 const isPositive = (stock.change || 0) >= 0;
                 const showTrophy = idx < 3 && category === "gainers";
-                const signalClass = signalColors[stock.signal] || "bg-gray-100 text-gray-800";
+                const signalClass = signalColors[stock.signal] || "bg-muted text-foreground";
                 return (
                   <tr
                     key={`${stock.ticker}-${idx}`}

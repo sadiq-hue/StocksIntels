@@ -168,7 +168,7 @@ export function TopAnalysts() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-bold text-foreground truncate">{firm.name}</h3>
-                        <Badge className={`text-[10px] ${ratingColors[firm.rating] || "bg-gray-50 text-gray-700"}`}>
+                        <Badge className={`text-[10px] ${ratingColors[firm.rating] || "bg-muted text-muted-foreground"}`}>
                           {firm.rating}
                         </Badge>
                       </div>
@@ -219,7 +219,7 @@ export function TopAnalysts() {
                                 <p className="text-[9px] text-muted-foreground">{new Date(pick.publishedDate).toLocaleDateString()}</p>
                               )}
                             </div>
-                            <Badge className={`text-[10px] ${ratingColors[pick.rating] || "bg-gray-50 text-gray-700"}`}>
+                            <Badge className={`text-[10px] ${ratingColors[pick.rating] || "bg-muted text-muted-foreground"}`}>
                               {pick.rating === "Strong Buy" || pick.rating === "Buy" ? <ThumbsUp className="size-2.5 mr-1" /> : null}
                               {pick.rating}
                             </Badge>

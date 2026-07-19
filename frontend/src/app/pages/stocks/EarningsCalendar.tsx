@@ -84,7 +84,7 @@ function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () =
                   {isUpcoming ? "\u2014\u2014" : `${event.currency === "KES" ? "KES " : "$"}${event.actualEPS.toFixed(2)}`}
                 </p>
               </div>
-              <div className={`rounded-lg border p-3 text-center ${isUpcoming ? "bg-gray-50 border-gray-200" : event.isBeat ? "bg-emerald-50 border-emerald-100" : "bg-red-50 border-red-100"}`}>
+              <div className={`rounded-lg border p-3 text-center ${isUpcoming ? "bg-muted border-border" : event.isBeat ? "bg-emerald-50 border-emerald-100" : "bg-red-50 border-red-100"}`}>
                 <p className={`text-[10px] font-semibold uppercase mb-1 ${isUpcoming ? "text-gray-500" : event.isBeat ? "text-emerald-600" : "text-red-600"}`}>Surprise</p>
                 <div className={`flex items-center justify-center gap-1 text-lg font-black ${isUpcoming ? "text-gray-400" : event.isBeat ? "text-emerald-700" : "text-red-700"}`}>
                   {isUpcoming ? "\u2014\u2014" : <>{event.isBeat ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}{event.surprise >= 0 ? "+" : ""}{event.surprise}%</>}
@@ -352,7 +352,7 @@ export function EarningsCalendar() {
                         <p className="text-[10px] text-muted-foreground uppercase font-semibold">Act.</p>
                         <p className="text-sm font-mono font-bold">{e.actualEPS === 0 ? "\u2014\u2014" : `${e.currency === "KES" ? "KES " : "$"}${e.actualEPS.toFixed(2)}`}</p>
                       </div>
-                      <div className={`px-2.5 py-1.5 rounded-lg text-center ${e.actualEPS === 0 ? "bg-gray-50" : e.isBeat ? "bg-emerald-50" : "bg-red-50"}`}>
+                      <div className={`px-2.5 py-1.5 rounded-lg text-center ${e.actualEPS === 0 ? "bg-muted" : e.isBeat ? "bg-emerald-50" : "bg-red-50"}`}>
                         <p className={`text-xs font-bold flex items-center gap-0.5 ${e.actualEPS === 0 ? "text-gray-400" : e.isBeat ? "text-emerald-700" : "text-red-700"}`}>
                           {e.actualEPS === 0 ? "\u2014\u2014" : <>{e.isBeat ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}{e.surprise >= 0 ? "+" : ""}{e.surprise}%</>}
                         </p>

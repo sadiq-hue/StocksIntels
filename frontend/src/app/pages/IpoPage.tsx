@@ -26,7 +26,7 @@ const statusColors: Record<string, string> = {
   current: "bg-amber-100 text-amber-700 border-amber-200",
   listed: "bg-emerald-100 text-emerald-700 border-emerald-200",
   withdrawn: "bg-red-100 text-red-700 border-red-200",
-  info: "bg-gray-100 text-gray-500 border-gray-200",
+  info: "bg-muted text-muted-foreground border-border",
 };
 
 export function IpoPage() {
@@ -130,10 +130,10 @@ export function IpoPage() {
 
       {/* Tab Toggle */}
       <div className="flex gap-1 bg-muted rounded-lg p-1 mb-6 w-fit">
-        <button onClick={() => setTab('nse')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${tab === 'nse' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setTab('nse')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${tab === 'nse' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
           NSE IPOs
         </button>
-        <button onClick={() => setTab('global')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${tab === 'global' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+        <button onClick={() => setTab('global')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${tab === 'global' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
           <Globe className="size-3" /> Global IPOs
         </button>
       </div>
@@ -177,7 +177,7 @@ export function IpoPage() {
 
           {past.length > 0 && (
             <div>
-              <h2 className="text-sm font-semibold text-gray-500 mb-2">Other</h2>
+              <h2 className="text-sm font-semibold text-muted-foreground mb-2">Other</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {past.map(renderIpoCard)}
               </div>
@@ -197,13 +197,13 @@ export function IpoPage() {
           {tab === 'nse' ? 'About NSE IPOs' : 'About Global IPOs'}
         </h3>
         {tab === 'nse' ? (
-          <p className="text-xs text-gray-600 leading-relaxed">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             Initial Public Offerings (IPOs) on the Nairobi Securities Exchange allow companies to raise capital by listing shares to the public.
             Notable NSE IPOs include Safaricom (2008), KCB Group, and Co-op Bank. Investors can participate through approved stockbrokers.
             Oversubscription rates indicate investor demand — rates above 100% signal strong interest.
           </p>
         ) : (
-          <p className="text-xs text-gray-600 leading-relaxed">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             Global IPOs span major exchanges including the NYSE, NASDAQ, and international bourses. Notable offerings include Saudi Aramco
             (largest in history at $29.4B), Alibaba ($25B), and Arm Holdings (largest tech IPO of 2023). Oversubscription rates indicate
             investor demand — rates above 100% signal strong interest.
