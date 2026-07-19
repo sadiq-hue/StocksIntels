@@ -65,7 +65,7 @@ export function SecurityPage() {
             {sections.map((section) => {
               const Icon = section.icon;
               return (
-                <div key={section.title} className="bg-white border border-gray-100 rounded-2xl p-8 hover:shadow-lg transition-shadow">
+                <div key={section.title} className="bg-white border border-gray-100 rounded-2xl p-5 sm:p-8 hover:shadow-lg transition-shadow">
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 bg-[#0D7490]/10 rounded-xl flex items-center justify-center flex-shrink-0">
                       <Icon className="w-6 h-6 text-[#0D7490]" />

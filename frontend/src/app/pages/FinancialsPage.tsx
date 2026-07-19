@@ -112,7 +112,7 @@ function HorizontalStatementTable({ data, metrics, currency }: { data: any[]; me
       <table className="w-full text-sm text-right border-collapse">
         <thead>
           <tr className="bg-muted border-b border-border">
-              <th className="text-left p-3.5 font-bold text-muted-foreground uppercase tracking-wider sticky left-0 bg-muted z-10 w-56 border-r border-border text-[11px]">Period</th>
+              <th className="text-left p-3.5 font-bold text-muted-foreground uppercase tracking-wider sticky left-0 bg-muted z-10 w-32 md:w-56 border-r border-border text-[11px]">Period</th>
               {data.map((item, i) => {
                 const d = new Date(item.date);
                 const yr = d.getFullYear();

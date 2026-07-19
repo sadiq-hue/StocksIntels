@@ -617,7 +617,7 @@ export function ChatPage() {
   if (!user) return null;
 
   return (
-    <div className="p-4 md:p-6 max-w-[1800px] mx-auto h-[calc(100vh-140px)]">
+    <div className="p-4 md:p-6 max-w-[1800px] mx-auto min-h-[calc(100vh-140px)] lg:h-[calc(100vh-140px)]">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-foreground text-xl md:text-2xl mb-1">Chat & Trading Groups</h2>
@@ -629,9 +629,9 @@ export function ChatPage() {
         </a>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[calc(100%-80px)]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:h-[calc(100%-80px)]">
         {/* Left sidebar */}
-        <Card className={`lg:col-span-3 bg-card border-border p-4 flex flex-col gap-4 overflow-hidden ${showMobileSidebar ? '' : 'hidden lg:flex'}`}>
+        <Card className={`lg:col-span-3 bg-card border-border p-4 flex flex-col gap-4 overflow-hidden h-[calc(100vh-220px)] lg:h-auto ${showMobileSidebar ? '' : 'hidden lg:flex'}`}>
           <div>
             <h3 className="text-foreground mb-4 flex items-center gap-2">
               <Users className="w-5 h-5" />
@@ -674,7 +674,7 @@ export function ChatPage() {
         </Card>
 
         {/* Main Chat Area */}
-        <Card className={`lg:col-span-6 bg-card border-border flex flex-col overflow-hidden ${showMobileSidebar ? 'hidden lg:flex' : ''}`}>
+        <Card className={`lg:col-span-6 bg-card border-border flex flex-col overflow-hidden h-[calc(100vh-220px)] lg:h-auto ${showMobileSidebar ? 'hidden lg:flex' : ''}`}>
           {/* Chat header */}
           <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-border">
             <div className="flex items-center gap-3">
@@ -993,7 +993,7 @@ export function ChatPage() {
         </Card>
 
         {/* Right sidebar */}
-        <Card className="lg:col-span-3 bg-card border-border p-4 overflow-y-auto hidden lg:block">
+        <Card className={`lg:col-span-3 bg-card border-border p-4 overflow-y-auto lg:block ${showMobileSidebar ? 'hidden lg:block' : 'block'}`}>
           {currentGroup ? (
             <>
               {/* Stock Mentions */}

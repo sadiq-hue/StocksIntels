@@ -249,7 +249,7 @@ export function PricingPage() {
       {/* Pricing Cards */}
       <section className="pb-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {plans.map((plan) => {
               const Icon = plan.icon;
               const price = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
@@ -257,7 +257,7 @@ export function PricingPage() {
               return (
                 <div
                   key={plan.name}
-                  className={`relative rounded-2xl p-8 transition-all duration-300 ${
+                  className={`relative rounded-2xl p-6 sm:p-8 transition-all duration-300 ${
                     plan.popular
                       ? "bg-gray-900 text-white shadow-2xl shadow-gray-900/20 scale-105 z-10"
                       : "bg-white border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-xl hover:shadow-[#0D7490]/5"

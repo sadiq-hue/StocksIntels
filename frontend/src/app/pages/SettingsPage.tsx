@@ -955,12 +955,12 @@ export function SettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="space-y-2">
+        <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 -mx-4 px-4 lg:mx-0 lg:px-0">
           {sections.map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveSection(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+              className={`flex-shrink-0 lg:w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all whitespace-nowrap ${
                 activeSection === item.id
                   ? "bg-[#0D7490] text-white border border-[#0D7490]"
                   : "bg-white border border-gray-200 text-gray-700 hover:text-gray-900 hover:border-[#0D7490]"

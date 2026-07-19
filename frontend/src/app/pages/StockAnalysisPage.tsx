@@ -847,7 +847,7 @@ export function StockAnalysisPage() {
                 </div>
 
                 <div className="text-right">
-                  <div className="text-4xl font-bold text-foreground tracking-tight">
+                  <div className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight break-words">
                     {formatCurrency(activeSelection)}{formatPrice(regularPrice)}
                   </div>
                   <div className="flex items-center justify-end gap-1.5 mt-1.5">

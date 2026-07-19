@@ -186,7 +186,7 @@ export function AffiliatesPage() {
     return (
       <div className="min-h-screen bg-gray-50 pt-24 pb-12">
         <div className="max-w-3xl mx-auto px-4">
-          <Card className="p-10 border-gray-100 text-center">
+          <Card className="p-6 sm:p-10 border-gray-100 text-center">
             <div className="w-20 h-20 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-[#0D7490]/20">
               <Gift className="w-10 h-10 text-white" />
             </div>

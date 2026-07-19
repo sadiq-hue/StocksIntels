@@ -1500,7 +1500,7 @@ export function PortfolioPage() {
       {brokers.length > 0 && (
         <div className="flex flex-wrap gap-3">
           {brokers.map(b => (
-            <div key={b.id} className={`flex flex-col sm:flex-row sm:items-center gap-2 px-3 py-2 rounded-lg text-sm border ${
+            <div key={b.id} className={`flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 px-3 py-2 rounded-lg text-sm border max-w-full min-w-0 ${
               b.syncStatus === "error" ? "bg-red-50 border-red-200" :
               b.syncStatus === "syncing" ? "bg-blue-50 border-blue-200" :
               "bg-green-50 border-green-200"

@@ -212,19 +212,19 @@ export function WatchlistPage() {
         <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
           <Card className="border-border shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left min-w-[720px]">
                 <thead className="bg-muted border-b border-border">
                   <tr>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Asset</th>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Price</th>
-                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Conf</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden sm:table-cell">Conf</th>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Entry</th>
-                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Stop</th>
-                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">T1</th>
-                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">T2</th>
-                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">R:R</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden md:table-cell">Stop</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden md:table-cell">T1</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden lg:table-cell">T2</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden lg:table-cell">R:R</th>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Signal</th>
-                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Timeframe</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider hidden lg:table-cell">Timeframe</th>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Actions</th>
                   </tr>
                 </thead>
@@ -255,7 +255,7 @@ export function WatchlistPage() {
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right font-semibold text-foreground text-sm">
                         {stock.symbol.startsWith('NSE:') ? 'KES' : '$'} {s?.price?.toFixed(2) || '0.00'}
                       </td>
-                      <td className="px-3 py-3 md:px-4 md:py-4 text-right">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right hidden sm:table-cell">
                         <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
                           (s?.confidence || 0) >= 80 ? 'bg-emerald-100 text-emerald-700' :
                           (s?.confidence || 0) >= 70 ? 'bg-yellow-100 text-yellow-700' :
@@ -267,16 +267,16 @@ export function WatchlistPage() {
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-foreground">
                         {s?.entry ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.entry.toFixed(2)}` : '-'}
                       </td>
-                      <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm text-red-600 font-semibold">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm text-red-600 font-semibold hidden md:table-cell">
                         {s?.stopLoss ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.stopLoss.toFixed(2)}` : '-'}
                       </td>
-                      <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-emerald-600">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-emerald-600 hidden md:table-cell">
                         {s?.target1 ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.target1.toFixed(2)}` : '-'}
                       </td>
-                      <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-emerald-600">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-emerald-600 hidden lg:table-cell">
                         {s?.target2 ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.target2.toFixed(2)}` : '-'}
                       </td>
-                      <td className="px-3 py-3 md:px-4 md:py-4 text-right text-sm font-bold text-foreground">
+                      <td className="px-3 py-3 md:px-4 md:py-4 text-right text-sm font-bold text-foreground hidden lg:table-cell">
                         {s?.riskReward ? `1:${s.riskReward.toFixed(1)}` : '-'}
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4">
@@ -290,7 +290,7 @@ export function WatchlistPage() {
                           {s?.signal || 'Hold'}
                         </div>
                       </td>
-                      <td className="px-3 py-3 md:px-4 md:py-4">
+                      <td className="px-3 py-3 md:px-4 md:py-4 hidden lg:table-cell">
                         <span className="text-xs text-muted-foreground font-medium">{s?.timeframe || '-'}</span>
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right">

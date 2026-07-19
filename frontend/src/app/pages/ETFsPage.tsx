@@ -173,6 +173,11 @@ export function ETFsPage() {
                   </div>
                   <p className="text-sm text-muted-foreground truncate">{etf.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{etf.description}</p>
+                  <div className="flex md:hidden flex-wrap gap-x-4 gap-y-0.5 mt-1.5 text-[11px] text-muted-foreground">
+                    <span>Expense <span className="font-medium text-foreground">{etf.expenseRatio.toFixed(2)}%</span></span>
+                    <span>AUM <span className="font-medium text-foreground">{formatCompact(etf.aum)}</span></span>
+                    <span>Div <span className="font-medium text-foreground">{etf.dividendYield.toFixed(2)}%</span></span>
+                  </div>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-foreground font-semibold">{formatCurrency(etf.price)}</p>

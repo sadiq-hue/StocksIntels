@@ -151,7 +151,7 @@ function HeaderNav() {
   }, []);
 
   return (
-    <nav className="hidden md:flex items-center gap-1">
+    <nav className="hidden xl:flex items-center gap-1">
       {NAV_ITEMS.map((item) => (
         <Link
           key={item.label}

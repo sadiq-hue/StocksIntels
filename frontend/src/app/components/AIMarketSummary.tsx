@@ -51,7 +51,7 @@ export function AIMarketSummary() {
       ) : data ? (
         <>
           <p className="text-white/95 leading-relaxed">{data.summary}</p>
-          <div className="mt-4 flex items-center gap-4 text-sm">
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${sentimentColors[data.sentiment] || 'bg-gray-400'}`} />
               <span className="text-white/80">{data.sentiment}</span>

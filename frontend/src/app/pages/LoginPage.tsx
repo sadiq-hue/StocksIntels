@@ -432,7 +432,7 @@ export function LoginPage() {
                             <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-gray-400"}`} />
                             <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                               onFocus={() => setFocusedField("otpCode")} onBlur={() => setFocusedField(null)}
-                              className={cn(inputClasses("otpCode"), "text-center text-2xl tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
+                              className={cn(inputClasses("otpCode"), "text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
                           </div>
                           {countdown > 0 && <p className="text-xs text-gray-400 text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                           {countdown === 0 && (
@@ -471,7 +471,7 @@ export function LoginPage() {
                               <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-gray-400"}`} />
                               <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                                 onFocus={() => setFocusedField("otpCode")} onBlur={() => setFocusedField(null)}
-                                className={cn(inputClasses("otpCode"), "text-center text-2xl tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
+                                className={cn(inputClasses("otpCode"), "text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
                             </div>
                             {countdown > 0 && <p className="text-xs text-gray-400 text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                           </div>
@@ -503,7 +503,7 @@ export function LoginPage() {
                             <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "vcode" ? "text-[#0D7490]" : "text-gray-400"}`} />
                             <Input type="text" placeholder="000000" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                               onFocus={() => setFocusedField("vcode")} onBlur={() => setFocusedField(null)}
-                              className={cn(inputClasses("vcode"), "text-center text-2xl tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
+                              className={cn(inputClasses("vcode"), "text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
                           </div>
                           {countdown > 0 && <p className="text-xs text-gray-400 text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                         </div>
@@ -638,7 +638,7 @@ export function LoginPage() {
                         <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "code" ? "text-[#0D7490]" : "text-gray-400"}`} />
                         <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                           onFocus={() => setFocusedField("code")} onBlur={() => setFocusedField(null)}
-                          className={cn(inputClasses("code"), "text-center text-2xl tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
+                          className={cn(inputClasses("code"), "text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
                       </div>
                     </div>
                     <div className="space-y-1.5">

@@ -248,7 +248,7 @@ export function AdminStocks() {
 
         {/* ── Stocks Tab ── */}
         <TabsContent value="stocks" className="space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input

@@ -38,8 +38,7 @@ function createWidget(
       hide_side_toolbar: false,
       allow_symbol_change: false,
       save_image: false,
-      height: 480,
-      width: "100%",
+      autosize: true,
       studies: ["RSI@tv-basicstudies", "MACD@tv-basicstudies", "BB@tv-basicstudies", "Volume@tv-basicstudies"],
       disabled_features: ["use_localstorage_for_settings", "header_symbol_search"],
       overrides: {
@@ -114,20 +113,19 @@ export function TradingViewChart({ symbol, market, theme = "light", onError }: T
   return (
     <div className="relative w-full">
       {!scriptLoaded && !scriptFailed && (
-        <div className="flex items-center justify-center h-[480px] text-sm text-muted-foreground bg-muted/20 rounded-lg">
+        <div className="flex items-center justify-center h-[320px] sm:h-[480px] text-sm text-muted-foreground bg-muted/20 rounded-lg">
           <Loader2 className="size-5 animate-spin mr-2" /> Loading TradingView chart...
         </div>
       )}
       {scriptFailed && (
-        <div className="flex items-center justify-center h-[480px] text-sm text-muted-foreground bg-muted/20 rounded-lg">
+        <div className="flex items-center justify-center h-[320px] sm:h-[480px] text-sm text-muted-foreground bg-muted/20 rounded-lg">
           Failed to load TradingView chart library
         </div>
       )}
       <div
         id={containerId}
         ref={containerRef}
-        className={`w-full rounded-lg ${!scriptLoaded ? "hidden" : ""}`}
-        style={{ height: 480 }}
+        className={`w-full rounded-lg h-[320px] sm:h-[480px] ${!scriptLoaded ? "hidden" : ""}`}
       />
     </div>
   );
