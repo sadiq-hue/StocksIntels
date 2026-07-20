@@ -1,8 +1,7 @@
-import { Bell, User, Activity, Settings, LogOut, UserCircle, Check, ArrowUp, ArrowDown, Clock, Sun, Moon, Menu, X, ChevronDown, Globe2, Landmark, Rocket, BarChart3 } from "lucide-react";
+import { Bell, User, Activity, Settings, LogOut, UserCircle, Check, ArrowUp, ArrowDown, Clock, Menu, X, ChevronDown, Globe2, Landmark, Rocket, BarChart3 } from "lucide-react";
 import { StockSearchBar } from "./StockSearchBar";
 import { Link, useNavigate } from "react-router";
 import { useState, useRef, useEffect } from "react";
-import { useTheme } from "next-themes";
 import { useAuth, getTrialInfo } from "../auth/AuthContext";
 import { disconnectSocket } from "../services/socketService";
 import { useNotifications } from "../contexts/NotificationContext";
@@ -203,7 +202,6 @@ function ProfileDropdown({ marketStatus }: { marketStatus: { nse: { open: boolea
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -247,14 +245,6 @@ function ProfileDropdown({ marketStatus }: { marketStatus: { nse: { open: boolea
             <span className="text-muted-foreground text-sm font-medium">Markets Closed</span>
           </div>
         ) : null}
-
-        <button
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="p-2 hover:bg-muted rounded-lg transition-colors"
-          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-        >
-          {theme === "dark" ? <Sun className="w-5 h-5 text-muted-foreground" /> : <Moon className="w-5 h-5 text-muted-foreground" />}
-        </button>
 
         {/* Notifications */}
         <div className="relative" ref={notifRef}>
