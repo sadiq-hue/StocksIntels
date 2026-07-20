@@ -10,6 +10,7 @@ import { Card } from "../components/ui/card";
 import { jwtDecode } from "jwt-decode";
 import { useAuth } from "../auth/AuthContext";
 import { motion, AnimatePresence } from "motion/react";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -86,11 +87,11 @@ function CompactHero() {
             <img src="/logo1.jpg" alt="logo" className="size-full object-cover" />
           </div>
         <div className="text-left min-w-0">
-          <div className="text-gray-700 text-sm font-semibold">StocksIntels</div>
+          <div className="text-muted-foreground text-sm font-semibold">StocksIntels</div>
           <div className="text-[#0D7490] text-2xl font-extrabold leading-tight">StocksIntels</div>
         </div>
       </div>
-      <p className="text-gray-500 text-xs mt-2">Welcome back</p>
+      <p className="text-muted-foreground text-xs mt-2">Welcome back</p>
     </div>
   );
 }
@@ -221,7 +222,7 @@ export function LoginPage() {
         if (!fullName.trim()) { setError("Full name is required"); return; }
         if (password.length < 8) { setError("Password must be at least 8 characters"); return; }
         if (password !== confirmPassword) { setError("Passwords do not match"); return; }
-        if (pwStrength < 3) { setError("Password is too weak — include uppercase, lowercase, number or symbol"); return; }
+        if (pwStrength < 3) { setError("Password is too weak â€” include uppercase, lowercase, number or symbol"); return; }
         setIsLoading(true);
         // Try browser geolocation for accurate location
         const coords = await getBrowserCoords();
@@ -299,7 +300,7 @@ export function LoginPage() {
   }, [navigate, login, register, redirectTo]);
 
   const handleGoogleError = useCallback(() => {
-    setError("Google auth failed — check VITE_GOOGLE_CLIENT_ID in frontend/.env");
+    setError("Google auth failed â€” check VITE_GOOGLE_CLIENT_ID in frontend/.env");
   }, []);
 
   const loginWithGoogle = useCallback(() => {
@@ -318,16 +319,17 @@ export function LoginPage() {
   }, [searchParams]);
 
   const inputClasses = (fieldName: string) => cn(
-    "pl-10 pr-3 h-10 bg-gray-50/80 border-2 text-gray-900 rounded-xl transition-all duration-200",
-    "placeholder:text-gray-400",
+    "pl-10 pr-3 h-10 bg-gray-50/80 border-2 text-foreground rounded-xl transition-all duration-200",
+    "placeholder:text-muted-foreground",
     focusedField === fieldName
-      ? "border-[#0D7490] bg-white shadow-md shadow-[#0D7490]/8 ring-4 ring-[#0D7490]/5"
-      : "border-gray-200 hover:border-gray-300",
+      ? "border-[#0D7490] bg-card shadow-md shadow-[#0D7490]/8 ring-4 ring-[#0D7490]/5"
+      : "border-border hover:border-border",
     error && "border-red-300 focus:border-red-500"
   );
 
   return (
     <div className="min-h-screen overflow-auto overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-gray-50 flex relative">
+      <div className="absolute top-4 right-4 z-50"><ThemeToggle /></div>
       <StockChartBg />
       {floatingShapes.map((s, i) => (
         <div key={i} className="absolute rounded-full bg-[#0D7490]/[0.06] animate-float-3d pointer-events-none"
@@ -347,10 +349,10 @@ export function LoginPage() {
             <Card className="bg-white/90 backdrop-blur-xl border-gray-100/80 shadow-md shadow-gray-200/30 rounded-2xl p-4">
               
               <div className="mb-6">
-                <h2 className="text-gray-900 text-xl font-bold mb-1.5">
+                <h2 className="text-foreground text-xl font-bold mb-1.5">
                   {mode === "login" ? "Sign in" : mode === "register" ? "Create account" : mode === "forgot" ? "Reset Password" : mode === "otp-login" ? "Sign in with OTP" : "Set New Password"}
                 </h2>
-                <p className="text-gray-500 text-sm">
+                <p className="text-muted-foreground text-sm">
                   {mode === "login"
                     ? (loginStage === "password" ? "Enter your credentials to request a one-time password" : "Enter the OTP sent to your email")
                     : mode === "register"
@@ -384,9 +386,9 @@ export function LoginPage() {
                 {(mode === "login" || mode === "register") && (
                   <>
                     <div className="space-y-1.5">
-                      <label className="text-gray-700 text-sm font-semibold block ml-1">Email Address</label>
+                      <label className="text-muted-foreground text-sm font-semibold block ml-1">Email Address</label>
                       <div className="relative">
-                        <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-gray-400"}`} />
+                        <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                         <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
                           onFocus={() => setFocusedField("email")} onBlur={() => setFocusedField(null)}
                           className={inputClasses("email")} required autoComplete="email" disabled={(mode === "register" && regStage === "verify") || (mode === "login" && loginStage === "otp")} />
@@ -396,19 +398,19 @@ export function LoginPage() {
                       <>
                         <div className="space-y-1.5">
                           <div className="flex flex-wrap items-center justify-between gap-2 ml-1">
-                            <label className="text-gray-700 text-sm font-semibold">Password</label>
+                            <label className="text-muted-foreground text-sm font-semibold">Password</label>
                             <button type="button" onClick={() => { setMode("forgot"); clear(); }}
                               className="text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold hover:underline">
                               Forgot password?
                             </button>
                           </div>
                           <div className="relative">
-                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0D7490]" : "text-gray-400"}`} />
-                            <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
+                            <Input type={showPassword ? "text" : "password"} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" value={password} onChange={(e) => setPassword(e.target.value)}
                               onFocus={() => setFocusedField("password")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("password"), "pr-8 h-10")} required autoComplete="current-password" />
                             <button type="button" onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground transition-colors p-1 rounded-lg hover:bg-accent">
                               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                           </div>
@@ -427,14 +429,14 @@ export function LoginPage() {
                     {mode === "login" && loginStage === "otp" && (
                       <>
                         <div className="space-y-1.5">
-                          <label className="text-gray-700 text-sm font-semibold block ml-1">One-Time Password</label>
+                          <label className="text-muted-foreground text-sm font-semibold block ml-1">One-Time Password</label>
                           <div className="relative">
-                            <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-gray-400"}`} />
+                            <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                             <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                               onFocus={() => setFocusedField("otpCode")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("otpCode"), "text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
                           </div>
-                          {countdown > 0 && <p className="text-xs text-gray-400 text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
+                          {countdown > 0 && <p className="text-xs text-muted-foreground text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                           {countdown === 0 && (
                             <button type="button" onClick={handleResendLoginOtp} disabled={isLoading}
                               className="w-full text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold text-center disabled:opacity-50">
@@ -456,9 +458,9 @@ export function LoginPage() {
                     {mode === "otp-login" && (
                       <>
                         <div className="space-y-1.5">
-                          <label className="text-gray-700 text-sm font-semibold block ml-1">Email Address</label>
+                          <label className="text-muted-foreground text-sm font-semibold block ml-1">Email Address</label>
                           <div className="relative">
-                            <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-gray-400"}`} />
+                            <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                             <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
                               onFocus={() => setFocusedField("email")} onBlur={() => setFocusedField(null)}
                               className={inputClasses("email")} required autoComplete="email" disabled={otpStage === "verify"} />
@@ -466,14 +468,14 @@ export function LoginPage() {
                         </div>
                         {otpStage === "verify" && (
                           <div className="space-y-1.5">
-                            <label className="text-gray-700 text-sm font-semibold block ml-1">One-Time Password</label>
+                            <label className="text-muted-foreground text-sm font-semibold block ml-1">One-Time Password</label>
                             <div className="relative">
-                              <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-gray-400"}`} />
+                              <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                               <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                                 onFocus={() => setFocusedField("otpCode")} onBlur={() => setFocusedField(null)}
                                 className={cn(inputClasses("otpCode"), "text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
                             </div>
-                            {countdown > 0 && <p className="text-xs text-gray-400 text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
+                            {countdown > 0 && <p className="text-xs text-muted-foreground text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                           </div>
                         )}
                         <Button type="submit" disabled={isLoading || (otpStage === "send" ? !email : otpCode.length < 6)}
@@ -498,26 +500,26 @@ export function LoginPage() {
                     {mode === "register" && regStage === "verify" && (
                       <>
                         <div className="space-y-1.5">
-                          <label className="text-gray-700 text-sm font-semibold block ml-1">Verification Code</label>
+                          <label className="text-muted-foreground text-sm font-semibold block ml-1">Verification Code</label>
                           <div className="relative">
-                            <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "vcode" ? "text-[#0D7490]" : "text-gray-400"}`} />
+                            <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "vcode" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                             <Input type="text" placeholder="000000" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                               onFocus={() => setFocusedField("vcode")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("vcode"), "text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
                           </div>
-                          {countdown > 0 && <p className="text-xs text-gray-400 text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
+                          {countdown > 0 && <p className="text-xs text-muted-foreground text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-gray-700 text-sm font-semibold block ml-1">Full Name</label>
+                          <label className="text-muted-foreground text-sm font-semibold block ml-1">Full Name</label>
                           <div className="relative">
-                            <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "name" ? "text-[#0D7490]" : "text-gray-400"}`} />
+                            <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "name" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                             <Input type="text" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)}
                               onFocus={() => setFocusedField("name")} onBlur={() => setFocusedField(null)}
                               className={inputClasses("name")} required />
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-gray-700 text-sm font-semibold block ml-1">Country</label>
+                          <label className="text-muted-foreground text-sm font-semibold block ml-1">Country</label>
                           <div className="relative" data-country-dropdown>
                             <button type="button" onClick={() => { setCountryOpen(!countryOpen); setCountrySearch(""); }}
                               className={cn(inputClasses("country"), "h-10 w-full text-left flex items-center gap-2 pr-3 cursor-pointer")}>
@@ -527,40 +529,40 @@ export function LoginPage() {
                                   <span>{selectedCountry.name}</span>
                                 </>
                               ) : (
-                                <span className="text-gray-400">Select your country</span>
+                                <span className="text-muted-foreground">Select your country</span>
                               )}
-                              <svg className={`w-4 h-4 ml-auto text-gray-400 transition-transform ${countryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                              <svg className={`w-4 h-4 ml-auto text-muted-foreground transition-transform ${countryOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                             </button>
                             {countryOpen && (
-                              <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-hidden">
-                                <div className="sticky top-0 bg-white p-2 border-b border-gray-100">
+                              <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-xl shadow-lg max-h-60 overflow-hidden">
+                                <div className="sticky top-0 bg-card p-2 border-b border-border">
                                   <input type="text" placeholder="Search..." value={countrySearch} onChange={(e) => setCountrySearch(e.target.value)}
-                                    className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#0D7490]" autoFocus />
+                                    className="w-full px-3 py-1.5 text-sm border border-border rounded-lg focus:outline-none focus:border-[#0D7490]" autoFocus />
                                 </div>
                                 <div className="overflow-y-auto max-h-48">
                                   {filteredCountries.map((c) => (
                                     <button key={c.code} type="button"
                                       onClick={() => { setCountry(c.name); setCountryOpen(false); setCountrySearch(""); }}
-                                      className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-gray-50 ${country === c.name ? 'bg-[#0D7490]/5 text-[#0D7490] font-medium' : ''}`}>
+                                      className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-muted ${country === c.name ? 'bg-[#0D7490]/5 text-[#0D7490] font-medium' : ''}`}>
                                       <img src={`https://flagcdn.com/24x18/${c.code.toLowerCase()}.png`} alt="" className="w-5 h-3.5 object-cover rounded-sm" />
                                       <span>{c.name}</span>
                                     </button>
                                   ))}
-                                  {filteredCountries.length === 0 && <p className="px-3 py-2 text-sm text-gray-400">No countries found</p>}
+                                  {filteredCountries.length === 0 && <p className="px-3 py-2 text-sm text-muted-foreground">No countries found</p>}
                                 </div>
                               </div>
                             )}
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-gray-700 text-sm font-semibold block ml-1">Password</label>
+                          <label className="text-muted-foreground text-sm font-semibold block ml-1">Password</label>
                           <div className="relative">
-                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0D7490]" : "text-gray-400"}`} />
-                            <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
+                            <Input type={showPassword ? "text" : "password"} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" value={password} onChange={(e) => setPassword(e.target.value)}
                               onFocus={() => setFocusedField("password")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("password"), "pr-8 h-10")} required minLength={8} autoComplete="new-password" />
                             <button type="button" onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground transition-colors p-1 rounded-lg hover:bg-accent">
                               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                           </div>
@@ -569,23 +571,23 @@ export function LoginPage() {
                               <div className="flex gap-1">
                                 {[0, 1, 2, 3, 4].map((i) => (
                                   <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${
-                                    i <= pwStrength ? ["bg-red-400", "bg-orange-400", "bg-yellow-400", "bg-lime-500", "bg-emerald-500"][pwStrength] : "bg-gray-200"
+                                    i <= pwStrength ? ["bg-red-400", "bg-orange-400", "bg-yellow-400", "bg-lime-500", "bg-emerald-500"][pwStrength] : "bg-muted"
                                   }`} />
                                 ))}
                               </div>
-                              <p className="text-xs text-gray-400 mt-0.5 text-right">{pwLabel[pwStrength]}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5 text-right">{pwLabel[pwStrength]}</p>
                             </div>
                           )}
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-gray-700 text-sm font-semibold block ml-1">Confirm Password</label>
+                          <label className="text-muted-foreground text-sm font-semibold block ml-1">Confirm Password</label>
                           <div className="relative">
-                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "cpw" ? "text-[#0D7490]" : "text-gray-400"}`} />
-                            <Input type={showConfirmPw ? "text" : "password"} placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                            <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "cpw" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
+                            <Input type={showConfirmPw ? "text" : "password"} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
                               onFocus={() => setFocusedField("cpw")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("cpw"), "pr-8 h-10")} required minLength={8} autoComplete="new-password" />
                             <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground transition-colors p-1 rounded-lg hover:bg-accent">
                               {showConfirmPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                           </div>
@@ -595,7 +597,7 @@ export function LoginPage() {
                         </div>
                         <div className="flex gap-2">
                           <button type="button" onClick={() => { setRegStage("form"); setVerifyCode(""); setError(null); }}
-                            className="w-full sm:w-1/3 h-10 text-sm text-gray-500 hover:text-[#0D7490] font-semibold border border-gray-200 rounded-xl hover:bg-gray-50 transition-all">
+                            className="w-full sm:w-1/3 h-10 text-sm text-muted-foreground hover:text-[#0D7490] font-semibold border border-border rounded-xl hover:bg-muted transition-all">
                             Back
                           </button>
                           <Button type="submit" disabled={isLoading || verifyCode.length < 6 || !fullName.trim() || password.length < 8 || password !== confirmPassword || pwStrength < 3}
@@ -611,9 +613,9 @@ export function LoginPage() {
 
                 {(mode === "forgot") && (
                   <div className="space-y-1.5">
-                    <label className="text-gray-700 text-sm font-semibold block ml-1">Email Address</label>
+                    <label className="text-muted-foreground text-sm font-semibold block ml-1">Email Address</label>
                     <div className="relative">
-                      <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#AEB7C2]" : "text-gray-400"}`} />
+                      <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#AEB7C2]" : "text-muted-foreground"}`} />
                       <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
                         onFocus={() => setFocusedField("email")} onBlur={() => setFocusedField(null)}
                         className={inputClasses("email")} required autoComplete="email" />
@@ -633,28 +635,28 @@ export function LoginPage() {
                 {(mode === "reset") && (
                   <>
                     <div className="space-y-1.5">
-                      <label className="text-gray-700 text-sm font-semibold block ml-1">Reset Code</label>
+                      <label className="text-muted-foreground text-sm font-semibold block ml-1">Reset Code</label>
                       <div className="relative">
-                        <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "code" ? "text-[#0D7490]" : "text-gray-400"}`} />
+                        <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "code" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                         <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                           onFocus={() => setFocusedField("code")} onBlur={() => setFocusedField(null)}
                           className={cn(inputClasses("code"), "text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-gray-700 text-sm font-semibold block ml-1">New Password</label>
+                      <label className="text-muted-foreground text-sm font-semibold block ml-1">New Password</label>
                       <div className="relative">
-                        <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "pw" ? "text-[#0D7490]" : "text-gray-400"}`} />
-                          <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                        <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "pw" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
+                          <Input type={showPassword ? "text" : "password"} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
                             onFocus={() => setFocusedField("pw")} onBlur={() => setFocusedField(null)}
                             className={cn(inputClasses("pw"), "pr-8 h-10")} required minLength={6} />
                         <button type="button" onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg hover:bg-gray-100">
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground transition-colors p-1 rounded-lg hover:bg-accent">
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
-                    {countdown > 0 && <p className="text-xs text-gray-400 text-center">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
+                    {countdown > 0 && <p className="text-xs text-muted-foreground text-center">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                     <Button type="submit" disabled={isLoading || otpCode.length < 6 || newPassword.length < 6}
                       className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all disabled:opacity-70 text-sm">
                       {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Resetting...</span>
@@ -671,13 +673,13 @@ export function LoginPage() {
               {((mode === "login" && loginStage === "password") || mode === "register") && (
                 <>
                   <div className="flex items-center my-4">
-                    <div className="flex-1 h-px bg-gray-200" />
-                    <div className="px-3 text-xs text-gray-400 whitespace-nowrap bg-white/90 rounded mx-3">Or continue with</div>
-                    <div className="flex-1 h-px bg-gray-200" />
+                    <div className="flex-1 h-px bg-muted" />
+                    <div className="px-3 text-xs text-muted-foreground whitespace-nowrap bg-white/90 rounded mx-3">Or continue with</div>
+                    <div className="flex-1 h-px bg-muted" />
                   </div>
                   <div className="relative">
                     <button type="button" onClick={() => setSocialOpen(!socialOpen)}
-                      className="w-full flex flex-wrap items-center justify-between gap-2 h-11 px-4 bg-gray-50 rounded-xl border border-gray-200 text-sm font-semibold">
+                      className="w-full flex flex-wrap items-center justify-between gap-2 h-11 px-4 bg-muted rounded-xl border border-border text-sm font-semibold">
                       <span>Sign in with</span>
                       <svg className={`w-4 h-4 transition-transform ${socialOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 8l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </button>
@@ -685,7 +687,7 @@ export function LoginPage() {
                       <div className="mt-2 space-y-2">
                         <div>
                           <button type="button" onClick={() => loginWithGoogle()}
-                            className="w-full flex items-center justify-center gap-3 h-11 bg-white border border-gray-200 rounded-xl transition-all text-gray-700 font-semibold text-sm">
+                            className="w-full flex items-center justify-center gap-3 h-11 bg-card border border-border rounded-xl transition-all text-muted-foreground font-semibold text-sm">
                             <svg className="w-5 h-5" viewBox="0 0 533.5 544.3" xmlns="http://www.w3.org/2000/svg"><path d="M533.5 278.4c0-18.5-1.5-37.3-4.7-55.1H272v104.5h146.9c-6.3 33.8-25.5 62.5-54.3 81.6v67.8h87.7c51.3-47.3 81.2-116.9 81.2-198.8z" fill="#4285F4"/><path d="M272 544.3c73.5 0 135.3-24.1 180.4-65.4l-87.7-67.8c-24.4 16.4-55.7 26.1-92.7 26.1-71 0-131.3-48-152.8-112.5H31.8v70.5C76.9 494.9 168.2 544.3 272 544.3z" fill="#34A853"/><path d="M119.2 323.7c-11.9-35.3-11.9-73.1 0-108.4V144.8H31.8C11.3 190.9 0 233.6 0 278.4s11.3 87.5 31.8 133.6l87.4-88.3z" fill="#FBBC05"/><path d="M272 109.7c39.9-.6 78.2 14 107.4 40.3l80.5-80.5C404.7 24.5 345.5 0 272 0 168.2 0 76.9 49.4 31.8 144.8l87.4 70.5C140.7 157.7 201 109.7 272 109.7z" fill="#EA4335"/></svg>
                             <span>Sign in with Google</span>
                           </button>
@@ -695,7 +697,7 @@ export function LoginPage() {
                             <span>Continue with Apple</span>
                         </button>
                         <button type="button" onClick={() => { console.log('Passkey Sign in clicked'); }}
-                          className="w-full flex items-center justify-center gap-3 h-11 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-all text-gray-700 font-semibold text-sm">
+                          className="w-full flex items-center justify-center gap-3 h-11 bg-muted hover:bg-accent border border-border rounded-xl transition-all text-muted-foreground font-semibold text-sm">
                           <KeyRound className="w-5 h-5" />
                           <span>Sign in with Passkey</span>
                         </button>
@@ -704,10 +706,10 @@ export function LoginPage() {
                   </div>
                 </>
               )}
-              <div className="mt-4 pt-2 border-t border-gray-100">
+              <div className="mt-4 pt-2 border-t border-border">
                 {(mode === "login" || mode === "otp-login" || mode === "register") && (
-                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="mt-0 text-center text-gray-500 text-xs flex items-center justify-center gap-2">
-                    <span className="text-xs text-gray-500">{mode === "register" ? "Already have an account?" : "Don't have an account?"}</span>
+                  <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="mt-0 text-center text-muted-foreground text-xs flex items-center justify-center gap-2">
+                    <span className="text-xs text-muted-foreground">{mode === "register" ? "Already have an account?" : "Don't have an account?"}</span>
                       <button type="button" onClick={() => { setMode(mode === "register" ? "login" : "register"); setLoginStage("password"); setRegStage("form"); setVerifyCode(""); setError(null); }}
                       className="text-[#0D7490] hover:text-[#14A9B9] font-medium text-xs transition-colors">
                       {mode === "register" ? "Sign in" : "Create one now"}

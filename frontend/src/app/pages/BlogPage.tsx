@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { ArrowRight, Calendar, User } from "lucide-react";
 
 const posts = [
@@ -35,19 +36,22 @@ const posts = [
 
 export function BlogPage() {
   return (
-    <div className="min-h-screen bg-white">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap justify-between items-center gap-4 h-16">
             <Link to="/" className="flex items-center gap-2">
               <div className="size-9 overflow-hidden">
                 <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
               </div>
-              <span className="text-xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
+              <span className="text-xl font-bold text-foreground tracking-tight">StocksIntels</span>
             </Link>
-            <Link to="/login">
-              <Button variant="ghost" className="text-gray-600 hover:text-[#0D7490]">Sign In</Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Link to="/login">
+                <Button variant="ghost" className="text-muted-foreground hover:text-[#0D7490]">Sign In</Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -55,8 +59,8 @@ export function BlogPage() {
       <section className="pt-32 pb-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">Blog</p>
-          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">From the StocksIntels Team</h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+          <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4">From the StocksIntels Team</h1>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Market intelligence, AI research, and trading insights for African investors.
           </p>
         </div>
@@ -66,8 +70,8 @@ export function BlogPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="space-y-8">
             {posts.map((post) => (
-              <article key={post.title} className="bg-white border border-gray-100 rounded-2xl p-4 md:p-6 hover:shadow-lg transition-shadow">
-                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 mb-3">
+              <article key={post.title} className="bg-card border border-border rounded-2xl p-4 md:p-6 hover:shadow-lg transition-shadow">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-3">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#0D7490]/5 text-[#0D7490] rounded-full text-xs font-semibold">
                     {post.category}
                   </span>
@@ -80,10 +84,10 @@ export function BlogPage() {
                     {post.author}
                   </span>
                 </div>
-                <h2 className="text-xl font-bold text-gray-900 mb-3 hover:text-[#0D7490] transition-colors">
+                <h2 className="text-xl font-bold text-foreground mb-3 hover:text-[#0D7490] transition-colors">
                   {post.title}
                 </h2>
-                <p className="text-gray-600 leading-relaxed mb-4">{post.excerpt}</p>
+                <p className="text-muted-foreground leading-relaxed mb-4">{post.excerpt}</p>
                 <button className="inline-flex items-center gap-1 text-[#0D7490] font-semibold text-sm hover:text-[#0A5F7A] transition-colors">
                   Read More <ArrowRight className="w-4 h-4" />
                 </button>
@@ -92,7 +96,7 @@ export function BlogPage() {
           </div>
 
           <div className="mt-12 text-center">
-            <p className="text-gray-500 text-sm">
+            <p className="text-muted-foreground text-sm">
               New posts every week. Subscribe for updates at{' '}
               <a href="mailto:support@stocksintels.com" className="text-[#0D7490] hover:underline">support@stocksintels.com</a>
             </p>

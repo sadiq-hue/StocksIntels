@@ -6,6 +6,7 @@ import {
   ChevronRight, Clock, TrendingUp,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from "../services/marketDataService";
 
@@ -210,8 +211,8 @@ function LiveTickerItem({ sym, fallback, fallbackChange, up: fallbackUp, isNse, 
     <div className={`flex items-center gap-2 px-5 py-1.5 bg-white/60 backdrop-blur-sm border border-gray-100 rounded-lg mx-1.5 shrink-0 transition-colors duration-500 ${
       flash === "up" ? "bg-emerald-100 border-emerald-200" : flash === "down" ? "bg-red-100 border-red-200" : ""
     }`}>
-      <span className="font-bold text-xs text-gray-900">{sym}</span>
-      <span className="text-xs text-gray-600">{currency}{price}</span>
+      <span className="font-bold text-xs text-foreground">{sym}</span>
+      <span className="text-xs text-muted-foreground">{currency}{price}</span>
       <span className={`text-xs font-semibold ${up ? "text-emerald-600" : "text-red-500"}`}>{change}</span>
     </div>
   );
@@ -235,19 +236,19 @@ function HeroStockCard({ quotes }: { quotes: Record<string, RealtimeStockQuote> 
   }, [price]);
 
   return (
-    <div className={`bg-white rounded-2xl border border-gray-200 shadow-2xl shadow-[#0D7490]/10 p-6 relative transition-colors duration-500 ${flash === "up" ? "ring-2 ring-emerald-300" : flash === "down" ? "ring-2 ring-red-300" : ""}`}>
+    <div className={`bg-card rounded-2xl border border-border shadow-2xl shadow-[#0D7490]/10 p-6 relative transition-colors duration-500 ${flash === "up" ? "ring-2 ring-emerald-300" : flash === "down" ? "ring-2 ring-red-300" : ""}`}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 ${isUp ? 'bg-emerald-100' : 'bg-red-100'} rounded-xl flex items-center justify-center`}>
             <TrendingUp className={`w-5 h-5 ${isUp ? 'text-emerald-600' : 'text-red-600'}`} />
           </div>
           <div>
-            <p className="font-bold text-gray-900">SCOM</p>
-            <p className="text-xs text-gray-500">Safaricom PLC</p>
+            <p className="font-bold text-foreground">SCOM</p>
+            <p className="text-xs text-muted-foreground">Safaricom PLC</p>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-bold text-gray-900 transition-colors duration-300">KES {price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <p className="text-2xl font-bold text-foreground transition-colors duration-300">KES {price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           <p className={`text-sm font-semibold ${isUp ? 'text-emerald-600' : 'text-red-600'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}% today</p>
         </div>
       </div>
@@ -262,7 +263,7 @@ function HeroStockCard({ quotes }: { quotes: Record<string, RealtimeStockQuote> 
         <path d="M0 60 Q20 55 40 58 T80 50 T120 45 T160 48 T200 35 T240 38 T280 30 T320 32 T360 25 T400 20" fill="none" stroke="#0D7490" strokeWidth="2.5" />
         <circle cx="400" cy="20" r="4" fill="#0D7490" />
       </svg>
-      <div className="flex items-center justify-between mt-2 text-xs text-gray-400">
+        <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
         <span>9:30 AM</span>
         <span>10:15 AM</span>
         <span>11:00 AM</span>
@@ -284,12 +285,12 @@ function FloatingMiniCards({ quotes }: { quotes: Record<string, RealtimeStockQuo
     const chg = q?.changePercent ?? parseFloat(c.fallback);
     const isUp = chg >= 0;
     return (
-      <div className="flex items-center gap-2 bg-white rounded-xl border border-gray-200 shadow-md p-2.5">
-        <div className={`w-7 h-7 ${c.iconBg} rounded-lg flex items-center justify-center`}>
-          <TrendingUp className={`w-3.5 h-3.5 ${c.iconColor}`} />
-        </div>
-        <div>
-          <p className="text-xs font-bold text-gray-900">{c.sym}</p>
+        <div className="flex items-center gap-2 bg-card rounded-xl border border-border shadow-md p-2.5">
+          <div className={`w-7 h-7 ${c.iconBg} rounded-lg flex items-center justify-center`}>
+            <TrendingUp className={`w-3.5 h-3.5 ${c.iconColor}`} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-foreground">{c.sym}</p>
           <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}%</p>
         </div>
       </div>
@@ -304,13 +305,13 @@ function FloatingMiniCards({ quotes }: { quotes: Record<string, RealtimeStockQuo
           const chg = q?.changePercent ?? parseFloat(c.fallback);
           const isUp = chg >= 0;
           return (
-            <div key={c.sym} className={`absolute ${c.pos} bg-white rounded-xl border border-gray-200 shadow-xl p-3 ${c.anim}`}>
+            <div key={c.sym} className={`absolute ${c.pos} bg-card rounded-xl border border-border shadow-xl p-3 ${c.anim}`}>
               <div className="flex items-center gap-2">
                 <div className={`w-8 h-8 ${c.iconBg} rounded-lg flex items-center justify-center`}>
                   <TrendingUp className={`w-4 h-4 ${c.iconColor}`} />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-gray-900">{c.sym}</p>
+                  <p className="text-xs font-bold text-foreground">{c.sym}</p>
                   <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}%</p>
                 </div>
               </div>
@@ -400,7 +401,7 @@ export function LandingPage() {
   });
 
   return (
-    <div className="min-h-screen bg-white selection:bg-[#0D7490]/20 relative">
+    <div className="min-h-screen bg-background text-foreground selection:bg-[#0D7490]/20 relative">
       {/* Full-page floating stock elements */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         {renderFloatingShapes()}
@@ -416,17 +417,17 @@ export function LandingPage() {
               <div className="size-9 md:size-10 overflow-hidden">
                 <img src="/logo1.jpg" alt="" className="size-full object-cover" />
               </div>
-              <span className="text-xl md:text-2xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
+              <span className="text-xl md:text-2xl font-bold text-foreground tracking-tight">StocksIntels</span>
             </Link>
 
             <nav className="hidden lg:flex items-center gap-6">
               {["Features", "Testimonials", "Pricing", "Contact"].map((item) => (
                 <a key={item} href={`#${item.toLowerCase()}`}
-                  className="text-sm font-medium text-gray-600 hover:text-[#0D7490] transition-colors">
+                  className="text-sm font-medium text-muted-foreground hover:text-[#0D7490] transition-colors">
                   {item}
                 </a>
               ))}
-              <span className="h-4 w-px bg-gray-200" />
+              <span className="h-4 w-px bg-border" />
               {[
                 { label: "About Us", to: "/about" },
                 { label: "Stocks", to: "/app/stocks" },
@@ -435,15 +436,16 @@ export function LandingPage() {
                 { label: "Market Pulse", to: "/app/markets" },
               ].map((item) => (
                 <Link key={item.label} to={item.to}
-                  className="text-sm font-medium text-gray-600 hover:text-[#0D7490] transition-colors">
+                  className="text-sm font-medium text-muted-foreground hover:text-[#0D7490] transition-colors">
                   {item.label}
                 </Link>
               ))}
             </nav>
 
             <div className="hidden md:flex items-center gap-3">
+              <ThemeToggle />
               <Link to="/login">
-                <Button variant="ghost" className="text-gray-600 hover:text-[#0D7490] font-medium">Sign In</Button>
+                <Button variant="ghost" className="text-muted-foreground hover:text-[#0D7490] font-medium">Sign In</Button>
               </Link>
               <Link to="/login">
                 <Button className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white shadow-lg font-medium px-6">
@@ -452,24 +454,24 @@ export function LandingPage() {
               </Link>
             </div>
 
-            <button className="md:hidden p-2.5 rounded-xl hover:bg-gray-100 text-gray-600" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            <button className="md:hidden p-2.5 rounded-xl hover:bg-accent text-muted-foreground" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
         </div>
 
         {mobileMenuOpen && (
-          <div className="md:hidden bg-white border-b border-gray-100 shadow-xl">
+          <div className="md:hidden bg-card border-b border-border shadow-xl">
             <div className="px-4 py-6 space-y-1">
               {["Features", "Testimonials", "Pricing", "Contact"].map((item) => (
                 <a key={item} href={`#${item.toLowerCase()}`}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="block px-4 py-3 rounded-xl text-base font-medium text-gray-600 hover:text-[#0D7490] hover:bg-gray-50">
+                  className="block px-4 py-3 rounded-xl text-base font-medium text-muted-foreground hover:text-[#0D7490] hover:bg-muted">
                   {item}
                 </a>
               ))}
               <div className="pt-3 pb-1 px-4">
-                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Platform</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Platform</span>
               </div>
               {[
                 { label: "About Us", to: "/about" },
@@ -480,11 +482,11 @@ export function LandingPage() {
               ].map((item) => (
                 <Link key={item.label} to={item.to}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="block px-4 py-3 rounded-xl text-base font-medium text-gray-600 hover:text-[#0D7490] hover:bg-gray-50">
+                  className="block px-4 py-3 rounded-xl text-base font-medium text-muted-foreground hover:text-[#0D7490] hover:bg-muted">
                   {item.label}
                 </Link>
               ))}
-              <div className="pt-4 border-t border-gray-100 space-y-3">
+              <div className="pt-4 border-t border-border space-y-3">
                 <Link to="/login" className="block w-full" onClick={() => setMobileMenuOpen(false)}>
                   <Button variant="outline" className="w-full">Sign In</Button>
                 </Link>
@@ -538,13 +540,13 @@ export function LandingPage() {
                 <span className="text-xs font-semibold text-[#0D7490]">Live market data</span>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-[1.1] tracking-tight">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-[1.1] tracking-tight">
                 Your edge in{" "}
                 <span className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] bg-clip-text text-transparent">African and global</span>{" "}
                 markets.
               </h1>
 
-              <p className="text-lg sm:text-xl text-gray-600 mb-8 max-w-xl leading-relaxed">
+              <p className="text-lg sm:text-xl text-muted-foreground mb-8 max-w-xl leading-relaxed">
                 We track price, volume, fundamentals, sentiment, and macro conditions across African and global exchanges — turning data into market intelligence you can act on.
               </p>
 
@@ -556,13 +558,13 @@ export function LandingPage() {
                   </Button>
                 </Link>
                 <a href="#features">
-                  <Button variant="outline" size="lg" className="border-gray-300 text-gray-700 hover:bg-gray-50 px-8 py-6 text-base font-medium">
+                  <Button variant="outline" size="lg" className="border-border text-foreground hover:bg-muted px-8 py-6 text-base font-medium">
                     See How It Works
                   </Button>
                 </a>
               </div>
 
-              <div className="mt-8 flex flex-wrap items-center gap-6 text-gray-400">
+              <div className="mt-8 flex flex-wrap items-center gap-6 text-muted-foreground">
                 {["Real-time data", "AI-powered insights", "Portfolio tracking"].map((item) => (
                   <div key={item} className="flex items-center gap-2 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-green-500" />
@@ -583,22 +585,22 @@ export function LandingPage() {
           {/* Quick stats */}
           <div className="mt-16 grid grid-cols-3 gap-6 max-w-2xl mx-auto">
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-gray-900">10,000+</p>
-              <p className="text-sm text-gray-500">stocks across 15+ African & global exchanges</p>
+              <p className="text-2xl sm:text-3xl font-bold text-foreground">10,000+</p>
+              <p className="text-sm text-muted-foreground">stocks across 15+ African & global exchanges</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-gray-900">7</p>
-              <p className="text-sm text-gray-500">days trial</p>
+              <p className="text-2xl sm:text-3xl font-bold text-foreground">7</p>
+              <p className="text-sm text-muted-foreground">days trial</p>
             </div>
             <div className="text-center">
               <p className="text-2xl sm:text-3xl font-bold text-[#0D7490]">USD+</p>
-              <p className="text-sm text-gray-500">multi-currency support</p>
+              <p className="text-sm text-muted-foreground">multi-currency support</p>
             </div>
           </div>
 
           {/* Markets we cover */}
-          <div className="mt-12 pt-8 border-t border-gray-100">
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-widest mb-5 text-center">Markets we cover</p>
+          <div className="mt-12 pt-8 border-t border-border">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest mb-5 text-center">Markets we cover</p>
             <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
               {[
                 { label: "NSE", sub: "Nairobi Securities Exchange", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
@@ -611,7 +613,7 @@ export function LandingPage() {
               ].map((m) => (
                 <div key={m.label} className={`flex items-center gap-3 px-4 py-2.5 rounded-lg ${m.bg} ${m.border} border`}>
                   <span className={`font-black text-lg tracking-tight ${m.color}`}>{m.label}</span>
-                  <span className="text-xs text-gray-500 hidden sm:block">{m.sub}</span>
+                  <span className="text-xs text-muted-foreground hidden sm:block">{m.sub}</span>
                 </div>
               ))}
             </div>
@@ -620,28 +622,28 @@ export function LandingPage() {
       </section>
 
       {/* FEATURES */}
-      <section id="features" className="relative py-20 lg:py-28 bg-gray-50/80 overflow-hidden" ref={setSectionRef(2)}>
+      <section id="features" className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(2)}>
         <div className="absolute inset-0 opacity-[0.02]" style={{
           backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
           backgroundSize: "40px 40px",
         }} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className={`text-center max-w-3xl mx-auto mb-14 transition-all duration-700 ${visibleSections.has(2) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Tools that help you trade African and global stocks better</h2>
-            <p className="text-lg text-gray-600">No fluff. Just practical features built for African markets.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Tools that help you trade African and global stocks better</h2>
+            <p className="text-lg text-muted-foreground">No fluff. Just practical features built for African markets.</p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature, idx) => (
-              <div key={feature.title} className="group bg-white rounded-xl p-6 border border-gray-200 hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 transition-all duration-500 hover:-translate-y-1"
+              <div key={feature.title} className="group bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 transition-all duration-500 hover:-translate-y-1"
                 style={{ animation: `fade-in-up 0.6s ease-out ${idx * 0.1}s forwards`, opacity: 0 }}>
                 <div className="flex items-center gap-2 mb-3">
-                  <h3 className="text-lg font-bold text-gray-900 group-hover:text-[#0D7490] transition-colors duration-300">{feature.title}</h3>
+                  <h3 className="text-lg font-bold text-foreground group-hover:text-[#0D7490] transition-colors duration-300">{feature.title}</h3>
                   <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-[#0D7490]/10 text-[#0D7490] group-hover:bg-[#0D7490] group-hover:text-white transition-all duration-300">
                     {feature.stat}
                   </span>
                 </div>
-                <p className="text-gray-600 text-sm leading-relaxed group-hover:text-gray-900 transition-colors duration-300">{feature.description}</p>
+                <p className="text-muted-foreground text-sm leading-relaxed group-hover:text-foreground transition-colors duration-300">{feature.description}</p>
               </div>
             ))}
           </div>
@@ -649,11 +651,11 @@ export function LandingPage() {
       </section>
 
       {/* HOW IT WORKS */}
-      <section className="py-20 lg:py-28 bg-white" ref={setSectionRef(3)}>
+      <section className="py-20 lg:py-28 bg-card" ref={setSectionRef(3)}>
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(3) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Getting started takes five minutes</h2>
-            <p className="text-lg text-gray-600">Sign up, explore the markets, and start using AI market intelligence — no broker or credit card needed.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Getting started takes five minutes</h2>
+            <p className="text-lg text-muted-foreground">Sign up, explore the markets, and start using AI market intelligence — no broker or credit card needed.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
@@ -663,8 +665,8 @@ export function LandingPage() {
                 <div className="w-14 h-14 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:shadow-xl group-hover:shadow-[#0D7490]/20 group-hover:scale-110 transition-all duration-300">
                   <span className="text-white font-bold text-lg">{item.step}</span>
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-[#0D7490] transition-colors duration-300">{item.title}</h3>
-                <p className="text-gray-600 max-w-xs mx-auto leading-relaxed">{item.description}</p>
+                <h3 className="text-xl font-bold text-foreground mb-3 group-hover:text-[#0D7490] transition-colors duration-300">{item.title}</h3>
+                <p className="text-muted-foreground max-w-xs mx-auto leading-relaxed">{item.description}</p>
               </div>
             ))}
           </div>
@@ -681,23 +683,23 @@ export function LandingPage() {
       </section>
 
       {/* WHY CHOOSE US */}
-      <section className="relative py-20 lg:py-28 bg-gray-50/80 overflow-hidden" ref={setSectionRef(4)}>
+      <section className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(4)}>
         <div className="absolute inset-0 opacity-[0.015]" style={{
           backgroundImage: `linear-gradient(45deg, #0D7490 1px, transparent 1px)`,
           backgroundSize: "50px 50px",
         }} />
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(4) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Built for traders everywhere, starting with Africa</h2>
-            <p className="text-lg text-gray-600">Most trading platforms ignore African markets. We built StocksIntels to give traders across the continent — from Nairobi to Lagos to Johannesburg — and around the world better tools, whether you trade Safaricom, MTN, Dangote, or Apple.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Built for traders everywhere, starting with Africa</h2>
+            <p className="text-lg text-muted-foreground">Most trading platforms ignore African markets. We built StocksIntels to give traders across the continent — from Nairobi to Lagos to Johannesburg — and around the world better tools, whether you trade Safaricom, MTN, Dangote, or Apple.</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
             {whyChoose.map((item, idx) => (
-              <div key={item.title} className="group bg-white rounded-xl p-6 border border-gray-200 hover:border-[#0D7490]/30 hover:shadow-lg hover:shadow-[#0D7490]/5 transition-all duration-500 hover:-translate-y-1"
+                <div key={item.title} className="group bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-lg hover:shadow-[#0D7490]/5 transition-all duration-500 hover:-translate-y-1"
                 style={{ animation: `fade-in-up 0.5s ease-out ${idx * 0.1}s forwards`, opacity: 0 }}>
-                <h4 className="font-bold text-gray-900 mb-1.5 group-hover:text-[#0D7490] transition-colors duration-300">{item.title}</h4>
-                <p className="text-gray-600 text-sm leading-relaxed">{item.description}</p>
+                <h4 className="font-bold text-foreground mb-1.5 group-hover:text-[#0D7490] transition-colors duration-300">{item.title}</h4>
+                <p className="text-muted-foreground text-sm leading-relaxed">{item.description}</p>
               </div>
             ))}
           </div>
@@ -705,30 +707,30 @@ export function LandingPage() {
       </section>
 
       {/* TESTIMONIALS */}
-      <section id="testimonials" className="py-20 lg:py-28 bg-white" ref={setSectionRef(5)}>
+      <section id="testimonials" className="py-20 lg:py-28 bg-card" ref={setSectionRef(5)}>
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(5) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">What users say</h2>
-            <p className="text-lg text-gray-600">People using StocksIntels to track and trade African and global stocks.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">What users say</h2>
+            <p className="text-lg text-muted-foreground">People using StocksIntels to track and trade African and global stocks.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
             {testimonials.map((t, i) => (
-              <div key={i} className="group bg-white rounded-xl p-6 border border-gray-200 shadow-sm hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
+                <div key={i} className="group bg-card rounded-xl p-6 border border-border shadow-sm hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
                 style={{ animation: `fade-in-up 0.5s ease-out ${i * 0.15}s forwards`, opacity: 0 }}>
                 <div className="flex gap-1 mb-4">
                   {[...Array(t.rating)].map((_, i) => (
                     <Star key={i} className="w-4 h-4 text-amber-400 fill-amber-400" />
                   ))}
                 </div>
-                <p className="text-gray-700 mb-6 leading-relaxed text-sm group-hover:text-gray-900 transition-colors duration-300">{t.content}</p>
+                <p className="text-muted-foreground mb-6 leading-relaxed text-sm group-hover:text-foreground transition-colors duration-300">{t.content}</p>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-700 font-bold text-sm">
                     {t.initials}
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900 text-sm">{t.name}</p>
-                    <p className="text-gray-500 text-xs">{t.role}</p>
+                    <p className="font-semibold text-foreground text-sm">{t.name}</p>
+                    <p className="text-muted-foreground text-xs">{t.role}</p>
                   </div>
                 </div>
               </div>
@@ -738,37 +740,37 @@ export function LandingPage() {
       </section>
 
       {/* PRICING */}
-      <section id="pricing" className="relative py-20 lg:py-28 bg-gray-50/80 overflow-hidden" ref={setSectionRef(6)}>
+      <section id="pricing" className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(6)}>
         <div className="absolute inset-0 opacity-[0.015]" style={{
           backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
           backgroundSize: "30px 30px",
         }} />
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(6) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Simple pricing. Start your trial today.</h2>
-            <p className="text-lg text-gray-600">Try any plan free for 7 days.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Simple pricing. Start your trial today.</h2>
+            <p className="text-lg text-muted-foreground">Try any plan free for 7 days.</p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
             {/* Starter */}
-            <div className="bg-white rounded-xl p-6 border border-gray-200 hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
-              style={{ animation: `fade-in-up 0.5s ease-out 0s forwards`, opacity: 0 }}>
-              <h3 className="text-xl font-bold text-gray-900 mb-1">Starter</h3>
-              <p className="text-sm text-gray-500 mb-4">Retail investors</p>
-              <div className="mb-4">
-                <span className="text-3xl font-bold text-gray-900">$9.9</span>
-                <span className="text-gray-500 text-sm">/mo</span>
-              </div>
-              <Link to="/pricing">
-                <Button variant="outline" className="w-full mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer">
-                  Start Trial
-                </Button>
-              </Link>
-              <div className="space-y-2">
-                {["Real-time African + global data", "5 AI insights per day", "Stock screener", "Portfolio tracking"].map((f) => (
-                  <div key={f} className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                    <span className="text-xs text-gray-700">{f}</span>
+              <div className="bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
+                style={{ animation: `fade-in-up 0.5s ease-out 0s forwards`, opacity: 0 }}>
+                <h3 className="text-xl font-bold text-foreground mb-1">Starter</h3>
+                <p className="text-sm text-muted-foreground mb-4">Retail investors</p>
+                <div className="mb-4">
+                  <span className="text-3xl font-bold text-foreground">$9.9</span>
+                  <span className="text-muted-foreground text-sm">/mo</span>
+                </div>
+                <Link to="/pricing">
+                  <Button variant="outline" className="w-full mb-4 border-border text-foreground hover:bg-muted cursor-pointer">
+                    Start Trial
+                  </Button>
+                </Link>
+                <div className="space-y-2">
+                  {["Real-time African + global data", "5 AI insights per day", "Stock screener", "Portfolio tracking"].map((f) => (
+                    <div key={f} className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                      <span className="text-xs text-muted-foreground">{f}</span>
                   </div>
                 ))}
               </div>
@@ -805,24 +807,24 @@ export function LandingPage() {
             </div>
 
             {/* Premium */}
-            <div className="bg-white rounded-xl p-6 border border-gray-200 hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
-              style={{ animation: `fade-in-up 0.5s ease-out 0.2s forwards`, opacity: 0 }}>
-              <h3 className="text-xl font-bold text-gray-900 mb-1">Premium</h3>
-              <p className="text-sm text-gray-500 mb-4">Serious & professional traders</p>
-              <div className="mb-4">
-                <span className="text-3xl font-bold text-gray-900">$49.9</span>
-                <span className="text-gray-500 text-sm">/mo</span>
-              </div>
-              <Link to="/pricing">
-                <Button variant="outline" className="w-full mb-4 border-gray-300 text-gray-700 hover:bg-gray-50 cursor-pointer">
-                  Start Trial
-                </Button>
-              </Link>
-              <div className="space-y-2">
-                {["Unlimited African + global insights", "Priority AI analysis & alerts", "Advanced multi-market screener", "Technical analysis & risk scoring"].map((f) => (
-                  <div key={f} className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                    <span className="text-xs text-gray-700">{f}</span>
+              <div className="bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
+                style={{ animation: `fade-in-up 0.5s ease-out 0.2s forwards`, opacity: 0 }}>
+                <h3 className="text-xl font-bold text-foreground mb-1">Premium</h3>
+                <p className="text-sm text-muted-foreground mb-4">Serious & professional traders</p>
+                <div className="mb-4">
+                  <span className="text-3xl font-bold text-foreground">$49.9</span>
+                  <span className="text-muted-foreground text-sm">/mo</span>
+                </div>
+                <Link to="/pricing">
+                  <Button variant="outline" className="w-full mb-4 border-border text-foreground hover:bg-muted cursor-pointer">
+                    Start Trial
+                  </Button>
+                </Link>
+                <div className="space-y-2">
+                  {["Unlimited African + global insights", "Priority AI analysis & alerts", "Advanced multi-market screener", "Technical analysis & risk scoring"].map((f) => (
+                    <div key={f} className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                      <span className="text-xs text-muted-foreground">{f}</span>
                   </div>
                 ))}
               </div>
@@ -838,28 +840,28 @@ export function LandingPage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="py-20 lg:py-28 bg-white" ref={setSectionRef(7)}>
+      <section id="faq" className="py-20 lg:py-28 bg-card" ref={setSectionRef(7)}>
         <div className={`max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(7) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Common questions</h2>
-            <p className="text-lg text-gray-600">Honest answers about what StocksIntels does and does not do.</p>
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Common questions</h2>
+            <p className="text-lg text-muted-foreground">Honest answers about what StocksIntels does and does not do.</p>
           </div>
 
           <div className="space-y-3">
             {faqs.map((faq, i) => (
-              <div key={i} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:border-[#0D7490]/30 transition-all duration-300"
+                <div key={i} className="bg-card rounded-xl border border-border overflow-hidden hover:border-[#0D7490]/30 transition-all duration-300"
                 style={{ animation: `fade-in-up 0.4s ease-out ${i * 0.08}s forwards`, opacity: 0 }}>
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   className="w-full flex items-center justify-between gap-4 p-5 text-left cursor-pointer"
                 >
-                  <span className="font-semibold text-gray-900 text-sm">{faq.q}</span>
-                  <div className={`w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 transition-all duration-300 ${openFaq === i ? "bg-[#0D7490] rotate-90" : ""}`}>
-                    <ChevronRight className={`w-3.5 h-3.5 transition-colors duration-300 ${openFaq === i ? "text-white" : "text-gray-400"}`} />
+                  <span className="font-semibold text-foreground text-sm">{faq.q}</span>
+                  <div className={`w-6 h-6 rounded-full bg-accent flex items-center justify-center flex-shrink-0 transition-all duration-300 ${openFaq === i ? "bg-[#0D7490] rotate-90" : ""}`}>
+                    <ChevronRight className={`w-3.5 h-3.5 transition-colors duration-300 ${openFaq === i ? "text-white" : "text-muted-foreground"}`} />
                   </div>
                 </button>
                 <div className={`overflow-hidden transition-all duration-300 ${openFaq === i ? "max-h-48" : "max-h-0"}`}>
-                  <p className="px-5 pb-5 text-gray-600 text-sm leading-relaxed">{faq.a}</p>
+                  <p className="px-5 pb-5 text-muted-foreground text-sm leading-relaxed">{faq.a}</p>
                 </div>
               </div>
             ))}
@@ -868,58 +870,58 @@ export function LandingPage() {
       </section>
 
       {/* CONTACT */}
-      <section id="contact" className="py-20 lg:py-28 bg-gray-50/80" ref={setSectionRef(8)}>
+      <section id="contact" className="py-20 lg:py-28 bg-muted" ref={setSectionRef(8)}>
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(8) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
             <div>
-              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 tracking-tight">Get in touch</h2>
-              <p className="text-lg text-gray-600 mb-8 leading-relaxed">
+              <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Get in touch</h2>
+              <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
                 Questions about the platform? Found a bug? Want to suggest a feature? Reach out — we reply within 24 hours.
               </p>
 
               <div className="space-y-4">
-                <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
+                <div className="flex items-center gap-4 p-4 bg-card rounded-xl border border-border hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
                   <div className="w-10 h-10 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
                     <Phone className="w-5 h-5 text-[#0D7490]" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Phone</p>
-                    <a href="tel:+254792754435" className="text-gray-900 font-semibold hover:text-[#0D7490]">+254 792 754 435</a>
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Phone</p>
+                    <a href="tel:+254792754435" className="text-foreground font-semibold hover:text-[#0D7490]">+254 792 754 435</a>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
+                <div className="flex items-center gap-4 p-4 bg-card rounded-xl border border-border hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
                   <div className="w-10 h-10 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
                     <Mail className="w-5 h-5 text-[#0D7490]" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Email</p>
-                    <a href="mailto:support@stocksintels.com" className="text-gray-900 font-semibold hover:text-[#0D7490]">support@stocksintels.com</a>
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Email</p>
+                    <a href="mailto:support@stocksintels.com" className="text-foreground font-semibold hover:text-[#0D7490]">support@stocksintels.com</a>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
+                <div className="flex items-center gap-4 p-4 bg-card rounded-xl border border-border hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
                   <div className="w-10 h-10 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
                     <MapPin className="w-5 h-5 text-[#0D7490]" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Location</p>
-                    <p className="text-gray-900 font-semibold">Nairobi, Kenya</p>
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Location</p>
+                    <p className="text-foreground font-semibold">Nairobi, Kenya</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl p-6 lg:p-8 shadow-lg border border-gray-200 hover:shadow-xl transition-shadow duration-300">
-              <h3 className="text-xl font-bold text-gray-900 mb-2">Send us a message</h3>
-              <p className="text-gray-600 text-sm mb-6">We will get back to you within 24 hours.</p>
+            <div className="bg-card rounded-xl p-6 lg:p-8 shadow-lg border border-border hover:shadow-xl transition-shadow duration-300">
+              <h3 className="text-xl font-bold text-foreground mb-2">Send us a message</h3>
+              <p className="text-muted-foreground text-sm mb-6">We will get back to you within 24 hours.</p>
               <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <input type="text" placeholder="Your name" className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:border-[#0D7490] focus:ring-2 focus:ring-[#0D7490]/10 outline-none transition-all text-sm" />
-                  <input type="email" placeholder="Your email" className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:border-[#0D7490] focus:ring-2 focus:ring-[#0D7490]/10 outline-none transition-all text-sm" />
+                  <input type="text" placeholder="Your name" className="w-full px-4 py-3 rounded-lg border border-border bg-muted focus:bg-background focus:border-[#0D7490] focus:ring-2 focus:ring-[#0D7490]/10 outline-none transition-all text-sm" />
+                  <input type="email" placeholder="Your email" className="w-full px-4 py-3 rounded-lg border border-border bg-muted focus:bg-background focus:border-[#0D7490] focus:ring-2 focus:ring-[#0D7490]/10 outline-none transition-all text-sm" />
                 </div>
-                <input type="text" placeholder="Subject" className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:border-[#0D7490] focus:ring-2 focus:ring-[#0D7490]/10 outline-none transition-all text-sm" />
-                <textarea rows={4} placeholder="Tell us more..." className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:border-[#0D7490] focus:ring-2 focus:ring-[#0D7490]/10 outline-none transition-all text-sm resize-none" />
+                <input type="text" placeholder="Subject" className="w-full px-4 py-3 rounded-lg border border-border bg-muted focus:bg-background focus:border-[#0D7490] focus:ring-2 focus:ring-[#0D7490]/10 outline-none transition-all text-sm" />
+                <textarea rows={4} placeholder="Tell us more..." className="w-full px-4 py-3 rounded-lg border border-border bg-muted focus:bg-background focus:border-[#0D7490] focus:ring-2 focus:ring-[#0D7490]/10 outline-none transition-all text-sm resize-none" />
                 <Button className="w-full py-3 bg-[#0D7490] hover:bg-[#0A5F7A] text-white font-semibold shadow-lg transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
                   Send Message
                   <ArrowRight className="ml-2 w-4 h-4" />

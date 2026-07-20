@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
+import { ThemeToggle } from "../components/ThemeToggle";
 
 const sections = [
   {
@@ -38,19 +39,22 @@ const sections = [
 
 export function TermsPage() {
   return (
-    <div className="min-h-screen bg-white">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap justify-between items-center gap-4 h-16">
             <Link to="/" className="flex items-center gap-2">
               <div className="size-9 overflow-hidden">
                 <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
               </div>
-              <span className="text-xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
+              <span className="text-xl font-bold text-foreground tracking-tight">StocksIntels</span>
             </Link>
-            <Link to="/login">
-              <Button variant="ghost" className="text-gray-600 hover:text-[#0D7490]">Sign In</Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Link to="/login">
+                <Button variant="ghost" className="text-muted-foreground hover:text-[#0D7490]">Sign In</Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -58,20 +62,20 @@ export function TermsPage() {
       <section className="pt-32 pb-20">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">Terms of Service</p>
-          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-2">Terms of Service</h1>
-          <p className="text-gray-500 text-sm mb-12">Last updated: January 2026</p>
+          <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-2">Terms of Service</h1>
+          <p className="text-muted-foreground text-sm mb-12">Last updated: January 2026</p>
 
           <div className="space-y-10">
             {sections.map((section) => (
               <div key={section.title}>
-                <h2 className="text-xl font-bold text-gray-900 mb-3">{section.title}</h2>
-                <p className="text-gray-600 leading-relaxed">{section.content}</p>
+                <h2 className="text-xl font-bold text-foreground mb-3">{section.title}</h2>
+                <p className="text-muted-foreground leading-relaxed">{section.content}</p>
               </div>
             ))}
           </div>
 
-          <div className="mt-12 p-4 md:p-6 bg-gray-50 rounded-2xl">
-            <p className="text-gray-600 text-sm">
+          <div className="mt-12 p-4 md:p-6 bg-muted rounded-2xl">
+            <p className="text-muted-foreground text-sm">
               <strong>Contact:</strong>{' '}
               <a href="mailto:support@stocksintels.com" className="text-[#0D7490] hover:underline">support@stocksintels.com</a>
             </p>

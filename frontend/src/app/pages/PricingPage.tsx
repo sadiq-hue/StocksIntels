@@ -11,6 +11,7 @@ import {
   Loader2
 } from "lucide-react";
 import { Button } from "../components/ui/button";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { useAuth, getTrialInfo } from "../auth/AuthContext";
 import { toast } from "sonner";
 
@@ -115,7 +116,7 @@ export function PricingPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0D7490]" />
       </div>
     );
@@ -186,22 +187,25 @@ export function PricingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center gap-2">
               <div className="size-9 overflow-hidden">
                 <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
               </div>
-              <span className="text-xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
+              <span className="text-xl font-bold text-foreground tracking-tight">StocksIntels</span>
             </Link>
-            <Link to="/login">
-              <Button variant="ghost" className="text-gray-600 hover:text-[#0D7490]">
-                Sign In
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Link to="/login">
+                <Button variant="ghost" className="text-muted-foreground hover:text-[#0D7490]">
+                  Sign In
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -210,21 +214,21 @@ export function PricingPage() {
       <section className="pt-32 pb-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">Pricing</p>
-          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
+          <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4">
             Simple, transparent pricing
           </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-10">
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10">
             Choose the plan that fits your trading style. All plans include a 7-day free trial.
           </p>
 
           {/* Billing Toggle */}
-          <div className="inline-flex items-center gap-3 bg-gray-100 rounded-full p-1.5">
+          <div className="inline-flex items-center gap-3 bg-muted rounded-full p-1.5">
             <button
               onClick={() => setIsYearly(false)}
               className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all ${
                 !isYearly
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               Monthly
@@ -233,8 +237,8 @@ export function PricingPage() {
               onClick={() => setIsYearly(true)}
               className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
                 isYearly
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               Yearly
@@ -260,7 +264,7 @@ export function PricingPage() {
                   className={`relative rounded-2xl p-6 sm:p-8 transition-all duration-300 ${
                     plan.popular
                       ? "bg-gray-900 text-white shadow-2xl shadow-gray-900/20 scale-105 z-10"
-                      : "bg-white border border-gray-100 hover:border-[#0D7490]/20 hover:shadow-xl hover:shadow-[#0D7490]/5"
+                      : "bg-card border border-border hover:border-[#0D7490]/20 hover:shadow-xl hover:shadow-[#0D7490]/5"
                   }`}
                 >
                   {plan.popular && (
@@ -278,7 +282,7 @@ export function PricingPage() {
                       <Icon className={`w-6 h-6 ${plan.popular ? "text-white" : "text-[#0D7490]"}`} />
                     </div>
                     <h3 className="text-xl font-bold mb-1">{plan.name}</h3>
-                    <p className={`text-sm ${plan.popular ? "text-gray-400" : "text-gray-500"}`}>
+                    <p className={`text-sm ${plan.popular ? "text-gray-400" : "text-muted-foreground"}`}>
                       {plan.description}
                     </p>
                   </div>
@@ -286,7 +290,7 @@ export function PricingPage() {
                   <div className="mb-6">
                     <div className="flex items-baseline gap-1">
                       <span className="text-4xl font-bold">${price}</span>
-                      <span className={`text-sm ${plan.popular ? "text-gray-400" : "text-gray-500"}`}>
+                      <span className={`text-sm ${plan.popular ? "text-gray-400" : "text-muted-foreground"}`}>
                         /{isYearly ? "year" : "month"}
                       </span>
                     </div>
@@ -305,7 +309,7 @@ export function PricingPage() {
                         ? "bg-white text-gray-900 hover:bg-gray-100 shadow-xl"
                         : plan.ctaVariant === "default"
                         ? "bg-[#0D7490] hover:bg-[#0A5F7A] text-white shadow-lg shadow-[#0D7490]/25"
-                        : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                        : "border-border text-muted-foreground hover:bg-muted"
                     } ${plan.name !== "Free" && startingTrial === plan.name ? "opacity-70 cursor-not-allowed" : ""}`}
                     variant={plan.popular ? "default" : plan.ctaVariant}
                   >
@@ -323,7 +327,7 @@ export function PricingPage() {
                   </Button>
 
                   <div className="space-y-4">
-                    <p className={`text-sm font-semibold ${plan.popular ? "text-gray-300" : "text-gray-900"}`}>
+                    <p className={`text-sm font-semibold ${plan.popular ? "text-gray-300" : "text-foreground"}`}>
                       What's included:
                     </p>
                     {plan.features.map((feature) => (
@@ -336,15 +340,15 @@ export function PricingPage() {
                           </div>
                         ) : (
                           <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                            plan.popular ? "bg-white/10" : "bg-gray-100"
+                            plan.popular ? "bg-white/10" : "bg-muted"
                           }`}>
                             <X className={`w-3 h-3 ${plan.popular ? "text-gray-500" : "text-gray-400"}`} />
                           </div>
                         )}
                         <span className={`text-sm ${
                           feature.included
-                            ? plan.popular ? "text-gray-200" : "text-gray-700"
-                            : plan.popular ? "text-gray-500" : "text-gray-400"
+                            ? plan.popular ? "text-gray-200" : "text-muted-foreground"
+                            : plan.popular ? "text-gray-500" : "text-muted-foreground"
                         }`}>
                           {feature.text}
                         </span>
@@ -359,22 +363,22 @@ export function PricingPage() {
       </section>
 
       {/* Feature Comparison Table */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-muted">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Compare all features</h2>
-            <p className="text-gray-600">See exactly what you get with each plan</p>
+            <h2 className="text-3xl font-bold text-foreground mb-4">Compare all features</h2>
+            <p className="text-muted-foreground">See exactly what you get with each plan</p>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left py-4 px-6 text-sm font-semibold text-gray-900">Feature</th>
-                    <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">Starter</th>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-4 px-6 text-sm font-semibold text-foreground">Feature</th>
+                    <th className="text-center py-4 px-6 text-sm font-semibold text-foreground">Starter</th>
                     <th className="text-center py-4 px-6 text-sm font-semibold text-[#0D7490] bg-[#0D7490]/5">Pro</th>
-                    <th className="text-center py-4 px-6 text-sm font-semibold text-gray-900">Premium</th>
+                    <th className="text-center py-4 px-6 text-sm font-semibold text-foreground">Premium</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -392,11 +396,11 @@ export function PricingPage() {
                     { name: "Price (USD)", starter: "$9.9/mo", pro: "$19.9/mo", premium: "$49.9/mo" },
                     { name: "Price (KES)", starter: "1,299/mo", pro: "2,599/mo", premium: "6,499/mo" },
                   ].map((row, idx) => (
-                    <tr key={row.name} className={idx % 2 === 0 ? "bg-gray-50/50" : ""}>
-                      <td className="py-4 px-6 text-sm text-gray-700">{row.name}</td>
-                      <td className="py-4 px-6 text-center text-sm text-gray-600">{row.starter}</td>
+                    <tr key={row.name} className={idx % 2 === 0 ? "bg-muted/50" : ""}>
+                      <td className="py-4 px-6 text-sm text-muted-foreground">{row.name}</td>
+                      <td className="py-4 px-6 text-center text-sm text-muted-foreground">{row.starter}</td>
                       <td className="py-4 px-6 text-center text-sm font-medium text-[#0D7490] bg-[#0D7490]/5">{row.pro}</td>
-                      <td className="py-4 px-6 text-center text-sm text-gray-600">{row.premium}</td>
+                      <td className="py-4 px-6 text-center text-sm text-muted-foreground">{row.premium}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -410,25 +414,25 @@ export function PricingPage() {
       <section className="py-20">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Frequently asked questions</h2>
-            <p className="text-gray-600">Everything you need to know about our pricing</p>
+            <h2 className="text-3xl font-bold text-foreground mb-4">Frequently asked questions</h2>
+            <p className="text-muted-foreground">Everything you need to know about our pricing</p>
           </div>
 
           <div className="space-y-4">
             {faqs.map((faq, idx) => (
-              <div key={idx} className="border border-gray-100 rounded-xl overflow-hidden transition-all">
+              <div key={idx} className="border border-border rounded-xl overflow-hidden transition-all">
                 <button
                   onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
-                  className="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 transition-colors"
+                  className="w-full flex items-center justify-between p-6 text-left hover:bg-muted transition-colors"
                 >
-                  <span className="font-semibold text-gray-900 pr-4">{faq.question}</span>
-                  <HelpCircle className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${
+                  <span className="font-semibold text-foreground pr-4">{faq.question}</span>
+                  <HelpCircle className={`w-5 h-5 text-muted-foreground flex-shrink-0 transition-transform ${
                     openFaq === idx ? "rotate-180" : ""
                   }`} />
                 </button>
                 {openFaq === idx && (
                   <div className="px-6 pb-6">
-                    <p className="text-gray-600 leading-relaxed">{faq.answer}</p>
+                    <p className="text-muted-foreground leading-relaxed">{faq.answer}</p>
                   </div>
                 )}
               </div>
@@ -490,7 +494,7 @@ export function PricingPage() {
               </div>
               <span className="text-lg font-bold">StocksIntels</span>
             </div>
-            <p className="text-gray-500 text-sm">© 2026 StocksIntels. All rights reserved.</p>
+            <p className="text-muted-foreground text-sm">© 2026 StocksIntels. All rights reserved.</p>
           </div>
         </div>
       </footer>

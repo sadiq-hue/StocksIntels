@@ -3,6 +3,7 @@ import { useParams, Link, Navigate, useNavigate, useSearchParams } from "react-r
 import { Check, CreditCard, Landmark, ArrowRight, Shield, Zap, Crown, Loader2, CheckCircle2, X, Bitcoin } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { toast } from "sonner";
 import { useAuth } from "../auth/AuthContext";
 
@@ -202,38 +203,39 @@ export function SubscriptionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-24 pb-12">
+    <div className="min-h-screen bg-muted pt-24 pb-12">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/" className="flex items-center gap-2">
               <div className="size-9 overflow-hidden">
                 <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
               </div>
-              <span className="text-xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
+              <span className="text-xl font-bold text-foreground tracking-tight">StocksIntels</span>
             </Link>
+            <ThemeToggle />
           </div>
         </div>
       </header>
 
       <div className="max-w-4xl mx-auto px-4">
         <div className="text-center mb-10">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Complete your subscription</h1>
-          <p className="text-gray-600 mt-2">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Complete your subscription</h1>
+          <p className="text-muted-foreground mt-2">
             Secure checkout for the <span className="text-[#0D7490] font-bold">{selectedPlan.name}</span> plan
-            <span className="text-gray-500"> ({period === "yearly" ? "Yearly" : "Monthly"})</span>
+            <span className="text-muted-foreground"> ({period === "yearly" ? "Yearly" : "Monthly"})</span>
           </p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-8">
           {isSuccess ? (
-            <Card className="md:col-span-3 p-12 text-center border-gray-100 animate-in zoom-in-95 duration-500">
+            <Card className="md:col-span-3 p-12 text-center border-border animate-in zoom-in-95 duration-500">
               <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
                 <CheckCircle2 className="w-12 h-12" />
               </div>
-              <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-2">Subscription Confirmed!</h2>
-              <p className="text-gray-600 mb-8">Welcome to the <span className="font-bold text-[#0D7490]">{selectedPlan.name}</span> plan. Your account is now active.</p>
+              <h2 className="text-2xl md:text-3xl font-black text-foreground mb-2">Subscription Confirmed!</h2>
+              <p className="text-muted-foreground mb-8">Welcome to the <span className="font-bold text-[#0D7490]">{selectedPlan.name}</span> plan. Your account is now active.</p>
               <Button 
                 onClick={async () => { await refreshUser(); navigate("/app/dashboard"); }}
                 className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 h-12 font-bold shadow-lg shadow-[#0D7490]/20"
@@ -243,27 +245,27 @@ export function SubscriptionPage() {
               </Button>
             </Card>
           ) : pollStatus === "waiting" || pollStatus === "failed" ? (
-            <Card className="md:col-span-3 p-12 text-center border-gray-100">
+            <Card className="md:col-span-3 p-12 text-center border-border">
               {pollStatus === "waiting" ? (
                 <>
                   <div className="w-20 h-20 bg-[#0D7490]/10 rounded-full flex items-center justify-center mx-auto mb-6">
                     <Loader2 className="w-12 h-12 text-[#0D7490] animate-spin" />
                   </div>
-                  <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">Waiting for Payment</h2>
-                  <p className="text-gray-500 mb-2">STK Push sent to your phone. Enter your M-Pesa PIN to complete payment.</p>
-                  <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
+                  <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">Waiting for Payment</h2>
+                  <p className="text-muted-foreground mb-2">STK Push sent to your phone. Enter your M-Pesa PIN to complete payment.</p>
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Confirming payment...
                   </div>
-                  <p className="text-xs text-gray-400 mt-6">Reference: {paymentRef}</p>
+                  <p className="text-xs text-muted-foreground mt-6">Reference: {paymentRef}</p>
                 </>
               ) : (
                 <>
                   <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
                     <X className="w-12 h-12 text-red-600" />
                   </div>
-                  <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-2">Payment Failed</h2>
-                  <p className="text-gray-500 mb-8">Your payment was declined. Please try again.</p>
+                  <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">Payment Failed</h2>
+                  <p className="text-muted-foreground mb-8">Your payment was declined. Please try again.</p>
                   <Button onClick={() => { setPollStatus("idle"); setIsLoading(false); }} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 h-12 font-bold">
                     Try Again
                   </Button>
@@ -274,37 +276,37 @@ export function SubscriptionPage() {
             <>
           {/* Order Summary */}
           <div className="md:col-span-1">
-            <Card className="p-6 sticky top-28 border-gray-100">
+            <Card className="p-6 sticky top-28 border-border">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 shrink-0 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
                   <PlanIcon className="w-6 h-6 text-[#0D7490]" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-gray-900 leading-tight">{selectedPlan.name}</h3>
-                  <p className="text-xs text-gray-500 font-medium">{period === "yearly" ? "Yearly Plan" : "Monthly Plan"}</p>
+                  <h3 className="font-bold text-foreground leading-tight">{selectedPlan.name}</h3>
+                  <p className="text-xs text-muted-foreground font-medium">{period === "yearly" ? "Yearly Plan" : "Monthly Plan"}</p>
                 </div>
               </div>
               
-              <div className="border-y border-gray-100 py-4 my-4 space-y-3">
+              <div className="border-y border-border py-4 my-4 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span className="text-gray-900 font-bold">${price}</span>
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="text-foreground font-bold">${price}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Tax</span>
-                  <span className="text-gray-900 font-bold">$0.00</span>
+                  <span className="text-muted-foreground">Tax</span>
+                  <span className="text-foreground font-bold">$0.00</span>
                 </div>
               </div>
 
               <div className="flex justify-between items-center pt-2 mb-6">
-                <span className="font-bold text-gray-900">Total</span>
+                <span className="font-bold text-foreground">Total</span>
                 <span className="text-2xl font-black text-[#0D7490]">${price}</span>
               </div>
 
               <div className="space-y-3">
-                <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">Included features:</p>
+                <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2">Included features:</p>
                 {selectedPlan.features.map((f) => (
-                  <div key={f} className="flex items-start gap-2 text-xs text-gray-600">
+                  <div key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
                     <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
                     {f}
                   </div>
@@ -315,8 +317,8 @@ export function SubscriptionPage() {
 
           {/* Checkout Details */}
           <div className="md:col-span-2 space-y-6">
-            <Card className="p-8 border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+            <Card className="p-8 border-border">
+              <h2 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-[#0D7490]" />
                 Payment Method
               </h2>
@@ -325,29 +327,29 @@ export function SubscriptionPage() {
                 <button
                   onClick={() => setPaymentMethod("paypal")}
                   className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
-                    paymentMethod === "paypal" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-gray-50 hover:border-gray-200"
+                    paymentMethod === "paypal" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-muted hover:border-border"
                   }`}
                 >
-                  <CreditCard className={`w-6 h-6 ${paymentMethod === "paypal" ? "text-[#0D7490]" : "text-gray-400"}`} />
-                  <span className={`text-sm font-bold ${paymentMethod === "paypal" ? "text-[#0D7490]" : "text-gray-600"}`}>PayPal</span>
+                  <CreditCard className={`w-6 h-6 ${paymentMethod === "paypal" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
+                  <span className={`text-sm font-bold ${paymentMethod === "paypal" ? "text-[#0D7490]" : "text-muted-foreground"}`}>PayPal</span>
                 </button>
                 <button
                   onClick={() => setPaymentMethod("mpesa")}
                   className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
-                    paymentMethod === "mpesa" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-gray-50 hover:border-gray-200"
+                    paymentMethod === "mpesa" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-muted hover:border-border"
                   }`}
                 >
-                  <Landmark className={`w-6 h-6 ${paymentMethod === "mpesa" ? "text-[#0D7490]" : "text-gray-400"}`} />
-                  <span className={`text-sm font-bold ${paymentMethod === "mpesa" ? "text-[#0D7490]" : "text-gray-600"}`}>M-Pesa</span>
+                  <Landmark className={`w-6 h-6 ${paymentMethod === "mpesa" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
+                  <span className={`text-sm font-bold ${paymentMethod === "mpesa" ? "text-[#0D7490]" : "text-muted-foreground"}`}>M-Pesa</span>
                 </button>
                 <button
                   onClick={() => setPaymentMethod("crypto")}
                   className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
-                    paymentMethod === "crypto" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-gray-50 hover:border-gray-200"
+                    paymentMethod === "crypto" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-muted hover:border-border"
                   }`}
                 >
-                  <Bitcoin className={`w-6 h-6 ${paymentMethod === "crypto" ? "text-[#0D7490]" : "text-gray-400"}`} />
-                  <span className={`text-sm font-bold ${paymentMethod === "crypto" ? "text-[#0D7490]" : "text-gray-600"}`}>Crypto</span>
+                  <Bitcoin className={`w-6 h-6 ${paymentMethod === "crypto" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
+                  <span className={`text-sm font-bold ${paymentMethod === "crypto" ? "text-[#0D7490]" : "text-muted-foreground"}`}>Crypto</span>
                 </button>
               </div>
 
@@ -365,9 +367,9 @@ export function SubscriptionPage() {
                 ) : paymentMethod === "mpesa" ? (
                   <div className="space-y-4 animate-in fade-in duration-300">
                     <div>
-                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">M-Pesa Phone Number</label>
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">M-Pesa Phone Number</label>
                       <input 
-                        className="w-full px-4 h-12 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-white outline-none transition-all text-gray-900" 
+                        className="w-full px-4 h-12 bg-muted border border-border rounded-lg focus:ring-2 focus:ring-[#0D7490] focus:bg-white outline-none transition-all text-foreground" 
                         placeholder="254700000000" 
                         type="tel"
                         value={phoneNumber}
@@ -408,8 +410,8 @@ export function SubscriptionPage() {
                                   onClick={() => setSelectedCrypto({ ticker: c.ticker, network: c.networks[0] })}
                                 >
                                   <td className="py-2 pr-2">
-                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-[#0D7490]" : "border-gray-300"}`}>
-                                      {isSelected && <div className="w-2 h-2 rounded-full bg-[#0D7490]" />}
+                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-[#0D7490]" : "border-border"}`}>
+                                       {isSelected && <div className="w-2 h-2 rounded-full bg-[#0D7490]" />}
                                     </div>
                                   </td>
                                   <td className="py-2 pr-4 font-bold text-amber-900">{c.ticker}</td>
@@ -420,7 +422,7 @@ export function SubscriptionPage() {
                                 <tr key={c.ticker}>
                                   <td className="py-2 pr-2 align-top pt-3">
                                     <div
-                                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center cursor-pointer ${isSelected ? "border-[#0D7490]" : "border-gray-300"}`}
+                                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center cursor-pointer ${isSelected ? "border-[#0D7490]" : "border-border"}`}
                                       onClick={() => setSelectedCrypto({ ticker: c.ticker, network: c.networks[0] })}
                                     >
                                       {isSelected && <div className="w-2 h-2 rounded-full bg-[#0D7490]" />}
@@ -487,7 +489,7 @@ export function SubscriptionPage() {
                 )}
               </Button>
               
-              <p className="text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-6">
+              <p className="text-center text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-6">
                 Secure 256-bit SSL Encrypted Checkout
               </p>
             </Card>

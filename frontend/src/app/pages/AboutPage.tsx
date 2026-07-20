@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
+import { ThemeToggle } from "../components/ThemeToggle";
 import { Target, Eye, Heart, Users, ArrowRight } from "lucide-react";
 
 const values = [
@@ -28,19 +29,22 @@ const team = [
 
 export function AboutPage() {
   return (
-    <div className="min-h-screen bg-white">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap justify-between items-center gap-4 h-16">
             <Link to="/" className="flex items-center gap-2">
               <div className="size-9 overflow-hidden">
                 <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
               </div>
-              <span className="text-xl font-bold text-gray-900 tracking-tight">StocksIntels</span>
+              <span className="text-xl font-bold text-foreground tracking-tight">StocksIntels</span>
             </Link>
-            <Link to="/login">
-              <Button variant="ghost" className="text-gray-600 hover:text-[#0D7490]">Sign In</Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Link to="/login">
+                <Button variant="ghost" className="text-muted-foreground hover:text-[#0D7490]">Sign In</Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -48,9 +52,9 @@ export function AboutPage() {
       <section className="pt-32 pb-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">About</p>
-          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-8">About StocksIntels</h1>
+          <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-8">About StocksIntels</h1>
 
-          <div className="prose prose-lg max-w-none text-gray-600 space-y-6">
+          <div className="prose prose-lg max-w-none text-muted-foreground space-y-6">
             <p>
               StocksIntels was founded in Nairobi, Kenya, with a single conviction: African traders deserve the same caliber of market intelligence that institutional investors on Wall Street take for granted.
             </p>
@@ -61,11 +65,11 @@ export function AboutPage() {
         </div>
       </section>
 
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-muted">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Our Mission</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Our Mission</h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
               To democratize financial intelligence across Africa — making professional-grade market analysis accessible to every trader, from Nairobi to Lagos to Accra.
             </p>
           </div>
@@ -76,41 +80,41 @@ export function AboutPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">Our Team</p>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">Meet the People Behind StocksIntels</h2>
-            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Meet the People Behind StocksIntels</h2>
+            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
               We are a team of engineers, data scientists, and finance professionals based across East and West Africa. We understand the structural nuances of African markets — from NSE liquidity cycles to currency risk on cross-border trades — because we trade them ourselves.
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {team.map((member) => (
-              <div key={member.name} className="bg-white border border-gray-100 rounded-2xl p-6 text-center hover:shadow-lg transition-shadow">
+              <div key={member.name} className="bg-card border border-border rounded-2xl p-6 text-center hover:shadow-lg transition-shadow">
                 <div className="w-16 h-16 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <Users className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="font-bold text-gray-900">{member.name}</h3>
-                <p className="text-sm text-gray-500">{member.role}</p>
+                <h3 className="font-bold text-foreground">{member.name}</h3>
+                <p className="text-sm text-muted-foreground">{member.role}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-muted">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">Our Values</p>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">What We Stand For</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">What We Stand For</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {values.map((value) => {
               const Icon = value.icon;
               return (
-                <div key={value.title} className="bg-white border border-gray-100 rounded-2xl p-6 hover:shadow-lg transition-shadow">
+                <div key={value.title} className="bg-card border border-border rounded-2xl p-6 hover:shadow-lg transition-shadow">
                   <div className="w-12 h-12 bg-[#0D7490]/10 rounded-xl flex items-center justify-center mb-4">
                     <Icon className="w-6 h-6 text-[#0D7490]" />
                   </div>
-                  <h3 className="font-bold text-gray-900 mb-2">{value.title}</h3>
-                  <p className="text-sm text-gray-600 leading-relaxed">{value.description}</p>
+                  <h3 className="font-bold text-foreground mb-2">{value.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{value.description}</p>
                 </div>
               );
             })}
