@@ -1524,6 +1524,7 @@ app.use('/api/admin', require('./routes/financialStatements'));
 
 const port = process.env.PORT || 3001;
 app.get(['/admin', '/admin/*'], (req, res) => {
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
