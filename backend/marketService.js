@@ -395,12 +395,12 @@ async function getNseBaseQuote(symbol) {
 
   // If mystocksAfrica returned previousClose === price (API sometimes caches this),
   // try AFX to get the real previousClose and recompute change.
-  // If AFX has a completely different previousClose, use AFX's full price+previousClose pair.
   if (msaQuote && msaQuote.previousClose === msaQuote.price && msaQuote.change === 0 && (msaQuote.dayHigh || 0) !== (msaQuote.dayLow || 0)) {
     try {
       const nseAfxMod = require('./nseAfxScraper');
-      await nseAfxMod.fetchNseQuotes();
-      const afxEnrich = nseAfxMod.getQuoteForSymbol(symbol);
+      const enrichPromise = nseAfxMod.fetchNseQuotes().then(() => nseAfxMod.getQuoteForSymbol(symbol));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AFX enrich timeout')), 10000));
+      const afxEnrich = await Promise.race([enrichPromise, timeoutPromise]);
       if (afxEnrich && Number(afxEnrich.price) > 0 && afxEnrich.previousClose && afxEnrich.previousClose !== afxEnrich.price) {
         const realPrev = afxEnrich.previousClose;
         const derivedChange = msaQuote.price - realPrev;
@@ -412,12 +412,6 @@ async function getNseBaseQuote(symbol) {
         msaQuote.provider = 'mystocksAfrica+afx';
       }
     } catch (e) { /* AFX enrichment is best-effort */ }
-  }
-
-  // If MSA still has no useful change data after enrichment, fall through to AFX
-  // which scrapes the NSE website directly and has reliable change data
-  if (msaQuote && msaQuote.previousClose === msaQuote.price && msaQuote.change === 0 && (msaQuote.dayHigh || 0) !== (msaQuote.dayLow || 0)) {
-    msaQuote = null; // skip MSA, let sources below provide better data
   }
 
   if (msaQuote) {
