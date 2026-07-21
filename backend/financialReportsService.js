@@ -23,6 +23,14 @@ async function createYf() {
 const FINANCIALS_PROVIDER = process.env.FINANCIALS_PROVIDER || 'yahoo-finance';
 const financialCache = new PersistentCache('finrep', 24 * 60 * 60 * 1000);
 
+function companyLogoUrl(website) {
+  if (!website) return '';
+  try {
+    const host = new URL(website).hostname.replace(/^www\./, '');
+    return `https://logo.clearbit.com/${host}`;
+  } catch { return ''; }
+}
+
 function cacheGet(key) {
   return financialCache.get(key);
 }
@@ -893,7 +901,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           country: alphaOverview.country || 'USA', website: '', description: alphaOverview.description || '',
           ceo: 'N/A', employees: 0, marketCap: liveMc || marketCap,
           exchange: alphaOverview.exchange || '', currency: alphaOverview.currency || 'USD',
-          cik: alphaOverview.cik, isEtf: false, image: '', lastUpdated: new Date().toISOString(),
+          cik: alphaOverview.cik, isEtf: false, image: companyLogoUrl(alphaOverview.website || ''), lastUpdated: new Date().toISOString(),
         };
         const alphaKeyMetrics = {
           marketCap: liveMc || marketCap, sharesOutstanding: alphaOverview.sharesOutstanding || 0,

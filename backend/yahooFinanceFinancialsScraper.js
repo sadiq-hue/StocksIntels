@@ -34,6 +34,14 @@ function cacheSet(key, data) {
   return yahooFinanceCache.set(key, data);
 }
 
+function companyLogoUrl(website) {
+  if (!website) return '';
+  try {
+    const host = new URL(website).hostname.replace(/^www\./, '');
+    return `https://logo.clearbit.com/${host}`;
+  } catch { return ''; }
+}
+
 function getDateStr(d) {
   if (!d) return null;
   if (d instanceof Date) return d.toISOString().split('T')[0];
@@ -331,14 +339,17 @@ async function getCompanyProfile(symbol) {
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  const [qsResult, apResult] = await Promise.allSettled([
+  const [qsResult, apResult, priceResult] = await Promise.allSettled([
     fetchQuoteSummary(symbol, ['summaryProfile', 'financialData', 'defaultKeyStatistics']),
     fetchQuoteSummary(symbol, ['assetProfile']),
+    fetchQuoteSummary(symbol, ['price']),
   ]);
 
   const qs = qsResult.status === 'fulfilled' ? qsResult.value : null;
   const apData = apResult.status === 'fulfilled' ? apResult.value : null;
   const ap = apData?.assetProfile || null;
+  const priceData = priceResult.status === 'fulfilled' ? priceResult.value : null;
+  const priceLogo = priceData?.price?.logo || '';
 
   const sp = qs?.summaryProfile || ap || {};
   const fd = qs?.financialData || {};
@@ -376,7 +387,7 @@ async function getCompanyProfile(symbol) {
     // Force USD for known US stocks (CIK lookup succeeded)
     currency: edgarProfile ? 'USD' : (fd.financialCurrency || 'USD'),
     cik: cik ? Number(cik) : (edgarProfile?.cik || ''),
-    image: '',
+    image: priceLogo || companyLogoUrl(sp.website || ap?.website || edgarProfile?.website || ''),
     lastUpdated: new Date().toISOString(),
   };
 
