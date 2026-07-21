@@ -368,12 +368,13 @@ async function enrichVolumeFromAfx(quote, symbol) {
 // Lazy-requires each module so a missing/optional scraper never crashes boot.
 async function getNseBaseQuote(symbol) {
   // 0) mystocks.africa Partner API — primary, authoritative live (delayed) quotes
+  let msaQuote = null;
   if (process.env.MYSTOCKS_AFRICA_API_KEY) {
     try {
       const msa = require('./mystocksAfricaApi');
       const msaQ = await msa.getQuoteForSymbol(symbol);
       if (msaQ && Number(msaQ.price) > 0) {
-        return {
+        msaQuote = {
           price: msaQ.price,
           change: msaQ.change || 0,
           changesPercentage: msaQ.changePercent || 0,
@@ -390,6 +391,29 @@ async function getNseBaseQuote(symbol) {
         };
       }
     } catch (e) { /* fall through to other sources */ }
+  }
+
+  // If mystocksAfrica returned previousClose === price (API sometimes caches this),
+  // try AFX to get the real previousClose and recompute change.
+  if (msaQuote && msaQuote.previousClose === msaQuote.price && msaQuote.change === 0 && (msaQuote.dayHigh || 0) !== (msaQuote.dayLow || 0)) {
+    try {
+      const nseAfxMod = require('./nseAfxScraper');
+      await nseAfxMod.fetchNseQuotes();
+      const afxEnrich = nseAfxMod.getQuoteForSymbol(symbol);
+      if (afxEnrich && Number(afxEnrich.price) > 0 && afxEnrich.previousClose && afxEnrich.previousClose !== afxEnrich.price) {
+        const realPrev = afxEnrich.previousClose;
+        const derivedChange = msaQuote.price - realPrev;
+        const derivedPct = realPrev > 0 ? (derivedChange / realPrev) * 100 : 0;
+        msaQuote.previousClose = realPrev;
+        msaQuote.change = derivedChange;
+        msaQuote.changePercent = derivedPct;
+        msaQuote.changesPercentage = derivedPct;
+      }
+    } catch (e) { /* AFX enrichment is best-effort */ }
+  }
+
+  if (msaQuote) {
+    return msaQuote;
   }
 
   // 1) mystocks.co.ke — fallback (has marketCap, change, volume)
