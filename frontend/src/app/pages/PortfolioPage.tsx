@@ -967,7 +967,7 @@ export function PortfolioPage() {
                 <Card className="bg-card border-border p-4">
                   <div className="text-muted-foreground text-xs mb-1">Portfolio Value</div>
                   <div className="text-foreground text-xl font-bold">{dcFmt(paperAccount.portfolioValue)}</div>
-                  <div className="text-muted-foreground text-xs mt-1">NSE + Global combined</div>
+                  <div className="text-muted-foreground text-xs mt-1">NSE + Global in {dc}</div>
                 </Card>
                 <Card className="bg-card border-border p-4">
                   <div className="text-muted-foreground text-xs mb-1">Total Return</div>
@@ -1598,7 +1598,7 @@ export function PortfolioPage() {
         <Card className="bg-card border-border p-4">
           <div className="text-muted-foreground text-xs mb-1">Total Value</div>
           <div className="text-foreground text-xl font-bold">{dcFmt(enhancedTotals.combinedKesValue)}</div>
-          <div className="text-muted-foreground text-xs mt-1">NSE: {dcFmt(totals.nseValue)} &middot; Global: {dcFmtUsd(enhancedTotals.globalValue)}</div>
+          <div className="text-muted-foreground text-xs mt-1">NSE + Global in {dc}</div>
         </Card>
         <Card className="bg-card border-border p-4">
           <div className="text-muted-foreground text-xs mb-1">NSE Portfolio</div>
