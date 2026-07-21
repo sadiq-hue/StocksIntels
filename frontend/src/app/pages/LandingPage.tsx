@@ -9,6 +9,7 @@ import { Button } from "../components/ui/button";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from "../services/marketDataService";
+import { useSEO } from "../hooks/useSEO";
 
 const HERO_SYMBOLS = ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "NSE:EABL", "AAPL", "TSLA", "MSFT", "GOOGL", "NVDA"];
 
@@ -328,6 +329,13 @@ function FloatingMiniCards({ quotes }: { quotes: Record<string, RealtimeStockQuo
 }
 
 export function LandingPage() {
+  useSEO({
+    title: "StocksIntels – AI Stock Market Intelligence for African & Global Markets",
+    description: "AI-powered stock market intelligence for NSE Kenya, JSE, NGX, NYSE, and NASDAQ. Real-time prices, buy/sell signals, portfolio tracking, and market analysis for African and global traders.",
+    canonical: "/",
+    keywords: "Nairobi Securities Exchange, NSE Kenya, Safaricom stock, Equity Group, KCB, African stock market, AI stock signals, stock trading Kenya, JSE stocks, NYSE, portfolio tracker",
+  });
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);

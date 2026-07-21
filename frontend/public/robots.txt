@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Allow: /pricing
+Allow: /login
+Disallow: /app/
+Disallow: /api/
+Disallow: /admin
+
+Sitemap: https://stocksintels.com/sitemap.xml

@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { useSEO } from "../hooks/useSEO";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -96,6 +97,12 @@ function CompactHero() {
   );
 }
 export function LoginPage() {
+  useSEO({
+    title: "Login – Access Your StocksIntels Account",
+    description: "Log in to StocksIntels for AI-powered stock market intelligence, real-time prices, and portfolio tracking for African and global markets.",
+    canonical: "/login",
+  });
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/app";

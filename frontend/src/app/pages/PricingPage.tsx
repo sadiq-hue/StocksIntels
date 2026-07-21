@@ -14,6 +14,7 @@ import { Button } from "../components/ui/button";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { useAuth, getTrialInfo } from "../auth/AuthContext";
 import { toast } from "sonner";
+import { useSEO } from "../hooks/useSEO";
 
 const plans = [
   {
@@ -106,6 +107,13 @@ const faqs = [
 ];
 
 export function PricingPage() {
+  useSEO({
+    title: "Pricing – Affordable Stock Market Intelligence Plans",
+    description: "Choose a StocksIntels plan. Starter from $9.90/mo for African and global stock data, AI signals, and portfolio tracking. 7-day free trial on all plans.",
+    canonical: "/pricing",
+    keywords: "stock market intelligence pricing, African stock trading plans, NSE stock analysis pricing, AI stock signals subscription",
+  });
+
   const navigate = useNavigate();
   const { user, apiFetch, updateUser, isLoading } = useAuth();
   const [isYearly, setIsYearly] = useState(false);

@@ -7,9 +7,25 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://stockintel-backend-production.up.railway.app/api/$1" },
     { "source": "/socket.io/(.*)", "destination": "https://stockintel-backend-production.up.railway.app/socket.io/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/robots.txt", "destination": "/robots.txt" },
+    { "source": "/sitemap.xml", "destination": "/sitemap.xml" },
+    { "source": "/((?!robots\\.txt|sitemap\\.xml|assets/|logo1\\.jpg|favicon\\.ico).*)", "destination": "/index.html" }
   ],
   "headers": [
+    {
+      "source": "/robots.txt",
+      "headers": [
+        { "key": "Content-Type", "value": "text/plain" },
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
+      ]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        { "key": "Content-Type", "value": "application/xml" },
+        { "key": "Cache-Control", "value": "public, max-age=86400" }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [
