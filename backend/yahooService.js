@@ -263,7 +263,7 @@ async function fetchGoogleFinanceQuote(symbol) {
         if (row && row.length >= 7) { result.previousClose = row[2]; result.dayLow = row[4]; result.dayHigh = row[5]; }
         try {
           const html = typeof resp.data === 'string' ? resp.data : '';
-          const mcMatch = html.match(/Market\s*cap[^$]*\$?([\d,.]+)\s*([KMBT])/i);
+          const mcMatch = html.match(/Mkt\.\s*cap<\/div><div[^>]*>\$?([\d,.]+)\s*([KMBT])/i) || html.match(/Market\s*cap[^$]*\$?([\d,.]+)\s*([KMBT])/i);
           if (mcMatch) {
             const num = parseFloat(mcMatch[1].replace(/,/g, ''));
             const suffix = mcMatch[2].toUpperCase();
