@@ -5692,6 +5692,8 @@ app.get('/api/stock/:symbol', async (req, res) => {
     const lookup = market === 'nse' ? `NSE:${upper}` : upper;
     const quote = await getStockQuote(lookup);
     if (!quote) return res.status(404).json({ error: 'Stock not found' });
+    const isNse = lookup.startsWith('NSE:');
+    const marketOpen = isMarketOpen(isNse ? 'NSE' : 'Global');
     res.json({
       symbol: quote.symbol || upper,
       company_name: quote.company_name || upper,
@@ -5703,9 +5705,11 @@ app.get('/api/stock/:symbol', async (req, res) => {
       dayHigh: quote.dayHigh || quote.high || 0,
       dayLow: quote.dayLow || quote.low || 0,
       previousClose: quote.previousClose || quote.previous_close || 0,
-      currency: quote.currency || (lookup.startsWith('NSE:') ? 'KES' : 'USD'),
+      marketCap: quote.marketCap || 0,
+      currency: quote.currency || (isNse ? 'KES' : 'USD'),
       provider: quote.provider || 'synthetic',
-      exchange: quote.exchange || (lookup.startsWith('NSE:') ? 'NSE' : 'Global'),
+      exchange: quote.exchange || (isNse ? 'NSE' : 'Global'),
+      marketState: marketOpen ? 'REGULAR' : 'CLOSED',
       timestamp: quote.timestamp ? (typeof quote.timestamp === 'number' ? quote.timestamp : Math.floor(new Date(quote.timestamp).getTime() / 1000)) : Math.floor(Date.now() / 1000),
       lastUpdated: quote.lastUpdated || new Date().toISOString(),
     });
@@ -6639,7 +6643,7 @@ app.get('/api/market/premarket', async (req, res) => {
             postMarketTime: meta.postMarketTime ?? null,
             regularMarketPrice: meta.regularMarketPrice ?? null,
             regularMarketPreviousClose: meta.chartPreviousClose ?? meta.previousClose ?? null,
-            marketState: sym.startsWith('NSE:') ? (isMarketOpen('NSE') ? 'REGULAR' : 'CLOSED') : (meta.marketState || 'CLOSED'),
+            marketState: isMarketOpen(sym.startsWith('NSE:') ? 'NSE' : 'Global') ? 'REGULAR' : 'CLOSED',
             currentTradingPeriod: data?.chart?.result?.[0]?.meta?.currentTradingPeriod || null,
             exchange: meta.exchangeName || '',
             currency: meta.currency || 'USD',

@@ -82,6 +82,7 @@ interface LiveQuote {
   postMarketChangePercent?: number | null;
   postMarketTime?: number | null;
   marketState?: string;
+  marketCap?: number;
   currentTradingPeriod?: {
     pre?: { start?: number; end?: number; timezone?: string; gmtoffset?: number };
     regular?: { start?: number; end?: number; timezone?: string; gmtoffset?: number };
@@ -422,17 +423,15 @@ export function StockAnalysisPage() {
     let cancelled = false;
     const fetchData = async () => {
       setLoadingData(true);
-      try {
-        const signalRes = await fetch(`${API_URL}/signal/${ticker}`).then(r => r.ok ? r.json() : null);
-        if (!cancelled && signalRes) setStockSignal(signalRes);
-      } catch { /* silent */ }
-      try {
-        const res = await fetchFinancialReport(ticker, "annual", 2);
-        if (!cancelled) {
-          setFinancialReport(res);
-        }
-      } catch { /* silent */ }
-      if (!cancelled) setLoadingData(false);
+      const [signalRes, finRes] = await Promise.allSettled([
+        fetch(`${API_URL}/signal/${ticker}`).then(r => r.ok ? r.json() : null),
+        fetchFinancialReport(ticker, "annual", 2),
+      ]);
+      if (!cancelled) {
+        if (signalRes.status === 'fulfilled' && signalRes.value) setStockSignal(signalRes.value);
+        if (finRes.status === 'fulfilled') setFinancialReport(finRes.value);
+        setLoadingData(false);
+      }
     };
     fetchData();
     return () => { cancelled = true; };
@@ -968,7 +967,7 @@ export function StockAnalysisPage() {
                 {[
                   { icon: Building2, label: "Sector", value: activeSelection.sector, color: "text-foreground" },
                   { icon: Activity, label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : activeSelection.volume, color: "text-foreground" },
-                  { icon: Wallet, label: "Market Cap", value: financialReport?.data?.keyMetrics?.marketCap ? `$${(financialReport.data.keyMetrics.marketCap / 1e9).toFixed(1)}B` : activeSelection.marketCap, color: "text-foreground" },
+                  { icon: Wallet, label: "Market Cap", value: financialReport?.data?.keyMetrics?.marketCap ? `$${(financialReport.data.keyMetrics.marketCap / 1e9).toFixed(1)}B` : (liveQuote?.marketCap ? `$${(liveQuote.marketCap / 1e9).toFixed(1)}B` : activeSelection.marketCap), color: "text-foreground" },
                   { icon: BarChart3, label: "P/E Ratio", value: financialReport?.data?.keyMetrics?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A"), color: "text-foreground" },
                 ].map((m) => (
                   <div key={m.label} className="rounded-xl bg-card/60 p-3 border border-border shadow-sm backdrop-blur">
