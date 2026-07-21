@@ -121,7 +121,7 @@ async function scrapeStockPage(ticker) {
 
     return {
       ticker, name, price, change,
-      changePercent: change && price ? (change / (price - change)) * 100 : 0,
+      changePercent: (price - change) > 0 ? (change / (price - change)) * 100 : 0,
       volume, previousClose: price - change, dayHigh: high, dayLow: low,
       marketCap, currency: 'KES', market: 'NSE', provider: 'mystocks',
       timestamp: Math.floor(Date.now() / 1000),

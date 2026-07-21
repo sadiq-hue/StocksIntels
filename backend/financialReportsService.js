@@ -659,8 +659,9 @@ async function buildLocalNseReport(symbol) {
       || (incomeShares > 0 && price > 0 ? Math.round(price * incomeShares) : 0)
       || 0;
     // Ensure changesPercentage is computed if quote has change but no percentage
-    if (quote && !quote.changesPercentage && quote.change && price > 0) {
-      quote.changesPercentage = (quote.change / (price - quote.change)) * 100;
+    if (quote && !quote.changesPercentage && price > 0) {
+      const pc = quote.previousClose || (price - (quote.change || 0));
+      quote.changesPercentage = pc > 0 ? ((price - pc) / pc) * 100 : 0;
       quote.changePercent = quote.changesPercentage;
     }
     const totalDebt = parsed?.total_debt || 0;
@@ -863,8 +864,9 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
             keyMetricsHistory: enrichedKm,
             quote: (() => {
               const q = quote || { symbol, price: 0, change: 0, changesPercentage: 0, marketCap: 0 };
-              if (q.price > 0 && q.change && !q.changesPercentage) {
-                q.changesPercentage = (q.change / (q.price - q.change)) * 100;
+              if (q.price > 0 && !q.changesPercentage) {
+                const pc = q.previousClose || (q.price - (q.change || 0));
+                q.changesPercentage = pc > 0 ? ((q.price - pc) / pc) * 100 : 0;
               }
               return { ...q, marketCap: enrichedKm[0]?.marketCap || q.marketCap || 0 };
             })(),

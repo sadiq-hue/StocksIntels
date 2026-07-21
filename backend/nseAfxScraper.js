@@ -45,7 +45,7 @@ async function fetchNseQuotes() {
         if (isNaN(price)) return;
         quotes[ticker] = {
           ticker, name, price, change,
-          changePercent: change && price ? (change / (price - change)) * 100 : 0,
+          changePercent: (price - change) > 0 ? (change / (price - change)) * 100 : 0,
           volume, previousClose: price - change,
           currency: 'KES', market: 'NSE',
           provider: 'afx',

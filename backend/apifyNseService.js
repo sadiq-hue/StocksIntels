@@ -25,16 +25,16 @@ function mapActorItem(item) {
 
   if (!ticker || !price) return null;
 
-  const previousClose = Number(item.previousClose || item.previous_close || (price - change) || 0);
+  const previousClose = Number(item.previousClose || item.previous_close || 0);
 
   return {
     ticker,
     name,
     price,
-    change,
-    changePercent: changePercent || (change && price ? (change / (price - change)) * 100 : 0),
+    change: previousClose > 0 ? price - change : change,
+    changePercent: changePercent || (previousClose > 0 ? ((price - previousClose) / previousClose) * 100 : (change && price ? (change / (price - change)) * 100 : 0)),
     volume,
-    previousClose,
+    previousClose: previousClose || price - change,
     currency: 'KES',
     market: 'NSE',
     provider: 'apify',

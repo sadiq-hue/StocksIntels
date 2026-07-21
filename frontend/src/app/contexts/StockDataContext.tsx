@@ -86,7 +86,7 @@ export function StockDataProvider({ children }: { children: ReactNode }) {
           symbol: s.market === 'NSE' ? `NSE:${s.ticker}` : s.ticker,
           company_name: s.name || signal.name || '',
           price: typeof signal.price === 'number' ? signal.price : (parseFloat(signal.price) || 0),
-          changePercent: typeof signal.changePercent === 'number' ? signal.changePercent : (typeof signal.change === 'number' ? signal.change : 0),
+          changePercent: typeof signal.changePercent === 'number' ? signal.changePercent : 0,
           volume: typeof signal.volume === 'number' ? signal.volume : 0,
           currency: s.currency || 'USD',
           market_cap: signal.market_cap || '',
@@ -99,7 +99,7 @@ export function StockDataProvider({ children }: { children: ReactNode }) {
         symbol: s.market === 'NSE' ? `NSE:${s.ticker}` : (s.ticker || s.symbol || ''),
         company_name: s.company_name || s.name || '',
         price: typeof s.price === 'number' ? s.price : (parseFloat(s.price) || 0),
-        changePercent: typeof s.changePercent === 'number' ? s.changePercent : (typeof s.change === 'number' ? s.change : 0),
+        changePercent: typeof s.changePercent === 'number' ? s.changePercent : 0,
         volume: typeof s.volume === 'number' ? s.volume : (parseFloat(String(s.volume).replace(/[^0-9.]/g, '')) || 0),
         currency: s.currency || 'USD',
       }));
