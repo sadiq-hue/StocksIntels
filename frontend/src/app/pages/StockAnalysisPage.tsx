@@ -635,7 +635,7 @@ export function StockAnalysisPage() {
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-5">
         {/* ═══ Sidebar ═══ */}
         <div className="xl:col-span-1 space-y-4">
-          <Card className="border shadow-sm xl:sticky xl:top-6 xl:max-h-[calc(100vh-8rem)] flex flex-col">
+          <Card className="border border-border shadow-sm xl:sticky xl:top-6 xl:max-h-[calc(100vh-8rem)] flex flex-col">
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-sm text-foreground">
@@ -797,23 +797,73 @@ export function StockAnalysisPage() {
               </div>
             </div>
           </Card>
+
+          {/* Top Movers */}
+          <Card className="border border-border shadow-sm">
+            <div className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="flex size-6 items-center justify-center rounded-md bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white"><TrendingUp className="size-3.5" /></span>
+                <h3 className="font-semibold text-sm text-foreground">Top Movers</h3>
+                <Badge variant="secondary" className="rounded-full text-[10px] ml-auto">{activeMarket === "nse" ? "NSE" : "Global"}</Badge>
+              </div>
+              <div className="space-y-1">
+                {[...stockUniverse]
+                  .map((s) => {
+                    const q = getQuote(s.ticker);
+                    return {
+                      ...s,
+                      price: q?.price && q.price > 0 ? q.price : s.price,
+                      chg: q?.changePercent ?? s.change,
+                    };
+                  })
+                  .sort((a, b) => Math.abs(b.chg) - Math.abs(a.chg))
+                  .slice(0, 5)
+                  .map((m, i) => (
+                    <button
+                      key={m.ticker}
+                      onClick={() => setSelectedStock(m)}
+                      className="w-full flex items-center justify-between gap-2 rounded-lg px-2 py-2 hover:bg-accent transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] font-semibold text-muted-foreground w-4 text-right tabular-nums">{i + 1}</span>
+                        <span className={`size-1.5 rounded-full shrink-0 ${m.chg >= 0 ? "bg-emerald-500" : "bg-red-500"}`} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-foreground truncate">{m.ticker}</div>
+                          <div className="text-[11px] text-muted-foreground truncate">{m.name}</div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-sm font-semibold text-foreground tabular-nums">{formatPrice(m.price)}</div>
+                        <div className={`text-[11px] font-medium ${m.chg >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                          {m.chg > 0 ? "+" : ""}{m.chg.toFixed(2)}%
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          </Card>
         </div>
 
         {/* ═══ Main Content ═══ */}
         <div className="xl:col-span-3 space-y-5">
 
-          {/* ── Stock Header ── */}
-          <Card className="border-0 shadow-lg overflow-hidden bg-gradient-to-br from-[#0D7490]/5 via-white to-[#0EA5E9]/5">
-            <div className="h-1.5 w-full bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
-            <div className="p-6">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          {/* ── Stock Header (Hero) ── */}
+          <Card className="relative overflow-hidden border border-border shadow-sm">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#0D7490]/10 via-card to-[#0EA5E9]/10" />
+            <div className="pointer-events-none absolute -right-20 -top-24 size-56 rounded-full bg-[#0EA5E9]/15 blur-3xl" />
+            <div className="pointer-events-none absolute -left-16 -bottom-20 size-48 rounded-full bg-[#0D7490]/10 blur-3xl" />
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
+            <div className="relative p-5 sm:p-6">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                {/* Identity */}
                 <div className="flex items-center gap-4">
-                  <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-md">
+                  <div className="relative flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-lg">
                     <TrendingUp className="size-8 text-white" />
                   </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                      <h2 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">{activeSelection.ticker}</h2>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] bg-clip-text text-2xl sm:text-3xl font-extrabold tracking-tight text-transparent">{activeSelection.ticker}</h2>
                       <button
                         onClick={() => toggleFavorite(activeSelection.ticker)}
                         className="transition-transform hover:scale-110"
@@ -842,56 +892,72 @@ export function StockAnalysisPage() {
                         {isRegular ? "Market Open" : isPreMarket ? "Pre-Market" : isPostMarket ? "After Hours" : "Closed"}
                       </Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground">{activeSelection.name}</p>
+                    <p className="mt-1 truncate text-sm text-muted-foreground">{activeSelection.name}</p>
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <div className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight break-words">
-                    {formatCurrency(activeSelection)}{formatPrice(regularPrice)}
-                  </div>
-                  <div className="flex items-center justify-end gap-1.5 mt-1.5">
-                    {isPositive ? <ChevronUp className="size-4 text-emerald-600" /> : <ChevronDown className="size-4 text-red-500" />}
-                    {liveQuote?.change != null && (
-                      <span className={`font-semibold ${isPositive ? "text-emerald-600" : "text-red-500"}`}>{liveQuote.change > 0 ? "+" : ""}{liveQuote.change.toFixed(2)}</span>
-                    )}
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      isPositive ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                    }`}>
-                      {displayChange > 0 ? "+" : ""}{displayChange.toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-muted-foreground mt-1">
-                    {sessionLabel}: {formatSessionTime(liveQuote?.currentTradingPeriod?.regular?.end)}
-                  </div>
-                  {altPrice != null && altSessionLabel && (
-                    <div className="mt-2 pt-2 border-t border-border">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <span className="text-[11px] text-muted-foreground">{altSessionLabel}:</span>
-                        <span className={`text-sm font-semibold ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                          {formatCurrency(activeSelection)}{formatPrice(altPrice)}
-                        </span>
-                        <span className={`text-[11px] font-medium ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                          ({altChangePct != null ? `${altChangePct > 0 ? "+" : ""}${altChangePct.toFixed(2)}%` : ""})
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">
-                        {formatAltTime(altTime)}
-                      </div>
+                {/* Price + sparkline */}
+                <div className="flex items-end gap-4">
+                  {chartData.length > 1 && (
+                    <div className="hidden h-14 w-28 sm:block">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={chartData.slice(-30)} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={isPositive ? "#059669" : "#dc2626"} stopOpacity={0.35} />
+                              <stop offset="100%" stopColor={isPositive ? "#059669" : "#dc2626"} stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <Area type="monotone" dataKey="price" stroke={isPositive ? "#059669" : "#dc2626"} strokeWidth={2} fill="url(#sparkGrad)" dot={false} />
+                        </AreaChart>
+                      </ResponsiveContainer>
                     </div>
                   )}
+                  <div className="text-left lg:text-right">
+                    <div className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl tabular-nums">
+                      {formatCurrency(activeSelection)}{formatPrice(regularPrice)}
+                    </div>
+                    <div className="flex items-center justify-start gap-1.5 mt-1.5 lg:justify-end">
+                      {isPositive ? <ChevronUp className="size-4 text-emerald-600" /> : <ChevronDown className="size-4 text-red-500" />}
+                      {liveQuote?.change != null && (
+                        <span className={`font-semibold ${isPositive ? "text-emerald-600" : "text-red-500"}`}>{liveQuote.change > 0 ? "+" : ""}{liveQuote.change.toFixed(2)}</span>
+                      )}
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        isPositive ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                      }`}>
+                        {displayChange > 0 ? "+" : ""}{displayChange.toFixed(2)}%
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {sessionLabel}: {formatSessionTime(liveQuote?.currentTradingPeriod?.regular?.end)}
+                    </div>
+                    {altPrice != null && altSessionLabel && (
+                      <div className="mt-2 border-t border-border pt-2">
+                        <div className="flex items-center justify-start gap-1.5 lg:justify-end">
+                          <span className="text-[11px] text-muted-foreground">{altSessionLabel}:</span>
+                          <span className={`text-sm font-semibold ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                            {formatCurrency(activeSelection)}{formatPrice(altPrice)}
+                          </span>
+                          <span className={`text-[11px] font-medium ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                            ({altChangePct != null ? `${altChangePct > 0 ? "+" : ""}${altChangePct.toFixed(2)}%` : ""})
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-[10px] text-muted-foreground">{formatAltTime(altTime)}</div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* Metadata Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
+              <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
                   { icon: Building2, label: "Sector", value: activeSelection.sector, color: "text-foreground" },
                   { icon: Activity, label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : activeSelection.volume, color: "text-foreground" },
                   { icon: Wallet, label: "Market Cap", value: companyProfile?.marketCap ? `$${(companyProfile.marketCap / 1e9).toFixed(1)}B` : activeSelection.marketCap, color: "text-foreground" },
                   { icon: BarChart3, label: "P/E Ratio", value: companyProfile?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A"), color: "text-foreground" },
                 ].map((m) => (
-                  <div key={m.label} className="rounded-xl bg-card/70 p-3 border border-white shadow-sm backdrop-blur">
+                  <div key={m.label} className="rounded-xl bg-card/60 p-3 border border-border shadow-sm backdrop-blur">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <m.icon className="size-3.5 text-[#0D7490]" />
                       <span className="text-[11px] font-medium text-muted-foreground">{m.label}</span>
@@ -917,11 +983,12 @@ export function StockAnalysisPage() {
           </Card>
 
           {/* ── Price Chart ── */}
-          <Card className="border-0 shadow-lg overflow-hidden">
+              <Card className="border border-border shadow-sm overflow-hidden">
+            <div className="h-1 w-full bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
             <div className="p-5">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                 <div>
-                  <h3 className="text-base font-semibold text-foreground">Price Trend</h3>
+                  <h3 className="flex items-center gap-2 text-base font-semibold text-foreground"><LineChart className="size-4 text-[#0D7490]" />Price Trend</h3>
                   <p className="text-xs text-muted-foreground">
                     {chartPeriod} price movement
                     {historySource === 'none' ? ' (no historical data)' : ''}
@@ -1150,7 +1217,8 @@ export function StockAnalysisPage() {
 
           {/* ── NSE Insights ── */}
           {activeSelection.market === "nse" && (
-              <Card className="border-0 shadow-lg overflow-hidden">
+              <Card className="border border-border shadow-sm overflow-hidden">
+              <div className="h-1 w-full bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
               <div className="p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <Shield className="size-4 text-muted-foreground" />
@@ -1262,47 +1330,86 @@ export function StockAnalysisPage() {
           )}
 
           {/* ── Analytics Grid ── */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-stretch">
+            {/* Narrow column: Trading Signal + Key Indicators */}
+            <div className="xl:col-span-1 flex flex-col gap-5">
             {/* Trading Signal */}
-            <Card className="border-0 shadow-lg">
+            <Card className="relative overflow-hidden border border-border shadow-sm flex-1 min-h-0">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
               <div className="p-5">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4">
-  <Target className="size-4 text-[#0D7490]" /> Trading Signal
-</h3>
+                  <span className="flex size-6 items-center justify-center rounded-md bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white"><Target className="size-3.5" /></span>
+                  Trading Signal
+                </h3>
                 {loadingData ? (
                   <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
                 ) : (
                   <div className="space-y-3">
-                    {/* Signal Badge + Confidence */}
-                    <div className={`rounded-lg border-2 p-4 ${
+                    {/* Signal + Confidence Gauge */}
+                    <div className={`rounded-xl border-2 p-4 flex items-center gap-4 ${
                       signalIsBullish
                         ? "border-emerald-200 bg-emerald-50/50"
                         : signalIsBearish
                         ? "border-red-200 bg-red-50/50"
                         : "border-amber-200 bg-amber-50/50"
                     }`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`text-xl font-bold ${
-                          signalIsBullish ? "text-emerald-700" :
-                          signalIsBearish ? "text-red-700" : "text-amber-700"
-                        }`}>
-                          {displaySignal}
-                        </span>
-                        {stockSignal?.type && (
-                          <Badge variant="outline" className="text-[10px] rounded-full">{stockSignal.type}</Badge>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className={`text-2xl font-extrabold ${
+                            signalIsBullish ? "text-emerald-700" :
+                            signalIsBearish ? "text-red-700" : "text-amber-700"
+                          }`}>
+                            {displaySignal}
+                          </span>
+                          {stockSignal?.type && (
+                            <Badge variant="outline" className="text-[10px] rounded-full shrink-0">{stockSignal.type}</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full transition-all ${
+                              displayConfidence >= 70 ? "bg-emerald-500" : displayConfidence >= 50 ? "bg-amber-500" : "bg-red-500"
+                            }`} style={{ width: `${displayConfidence}%` }} />
+                          </div>
+                          <span className="text-xs font-semibold text-muted-foreground shrink-0">{displayConfidence}% confidence</span>
+                        </div>
+                        {stockSignal?.reason && (
+                          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{stockSignal.reason}</p>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full transition-all ${
-                            displayConfidence >= 70 ? "bg-emerald-500" : displayConfidence >= 50 ? "bg-amber-500" : "bg-red-500"
-                          }`} style={{ width: `${displayConfidence}%` }} />
+                      <div className="relative flex size-20 shrink-0 items-center justify-center">
+                        <svg className="size-20 -rotate-90" viewBox="0 0 36 36" aria-hidden="true">
+                          <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="3" className="stroke-border" />
+                          <circle
+                            cx="18" cy="18" r="15.5" fill="none" strokeWidth="3" strokeLinecap="round"
+                            stroke={displayConfidence >= 70 ? "#059669" : displayConfidence >= 50 ? "#d97706" : "#dc2626"}
+                            strokeDasharray={`${(displayConfidence / 100) * 97.39} 97.39`}
+                          />
+                        </svg>
+                        <div className="absolute flex flex-col items-center">
+                          <span className="text-base font-bold text-foreground tabular-nums">{displayConfidence}%</span>
                         </div>
-                        <span className="text-xs font-semibold text-muted-foreground">{displayConfidence}% confidence</span>
                       </div>
-                      {stockSignal?.reason && (
-                        <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{stockSignal.reason}</p>
-                      )}
+                    </div>
+
+                    {/* What's driving this signal */}
+                    <div className="rounded-xl border border-border bg-muted/30 p-3">
+                      <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">What&apos;s driving this</div>
+                      <div className="space-y-2">
+                        {[
+                          { label: "RSI (14)", value: rsi > 70 ? "Overbought" : rsi < 30 ? "Oversold" : "Neutral", tone: rsi > 70 ? "text-red-500" : rsi < 30 ? "text-emerald-600" : "text-amber-600", dot: rsi > 70 ? "bg-red-500" : rsi < 30 ? "bg-emerald-500" : "bg-amber-500" },
+                          { label: "MACD", value: macdSignal, tone: macdSignal === "Bullish" ? "text-emerald-600" : "text-red-500", dot: macdSignal === "Bullish" ? "bg-emerald-500" : "bg-red-500" },
+                          { label: "Trend (MA)", value: sma20 > sma50 ? "Golden Cross" : "Death Cross", tone: sma20 > sma50 ? "text-emerald-600" : "text-red-500", dot: sma20 > sma50 ? "bg-emerald-500" : "bg-red-500" },
+                        ].map((d) => (
+                          <div key={d.label} className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={`size-2 rounded-full ${d.dot}`} />
+                              <span className="text-xs font-medium text-foreground">{d.label}</span>
+                            </div>
+                            <span className={`text-xs font-semibold ${d.tone}`}>{d.value}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Entry / Targets Grid */}
@@ -1387,11 +1494,13 @@ export function StockAnalysisPage() {
             </Card>
 
             {/* Key Indicators */}
-            <Card className="border-0 shadow-lg">
+            <Card className="relative overflow-hidden border border-border shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
               <div className="p-5">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4">
-  <LineChart className="size-4 text-[#0D7490]" /> Key Indicators
-</h3>
+                  <span className="flex size-6 items-center justify-center rounded-md bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white"><LineChart className="size-3.5" /></span>
+                  Key Indicators
+                </h3>
                 <div className="space-y-4">
 
                   {/* RSI */}
@@ -1534,7 +1643,7 @@ export function StockAnalysisPage() {
                   <div className="border-t border-border pt-3">
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-medium text-muted-foreground">Volatility (ATR)</span>
-                      <div className="text-right">
+                      <div className="text-left sm:text-right">
                         <span className="text-xs font-semibold text-foreground">{formatPrice(atr)}</span>
                         <span className="text-[11px] text-muted-foreground ml-1">({atrPct}%)</span>
                       </div>
@@ -1556,15 +1665,20 @@ export function StockAnalysisPage() {
             </Card>
 
             {/* Financial Health */}
-            <FinancialMetrics symbol={activeSelection.ticker} sector={activeSelection.sector} />
+            </div>
+            {/* Wide column: Financial Health */}
+            <div className="xl:col-span-2">
+              <FinancialMetrics symbol={activeSelection.ticker} sector={activeSelection.sector} />
+            </div>
           </div>
 
           {/* ── Top Holders ── */}
           {holders.length > 0 && (
-            <Card className="border shadow-sm">
+            <Card className="relative overflow-hidden border border-border shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
               <div className="p-5">
                 <div className="flex items-center gap-2 mb-4">
-                  <Building2 className="size-4 text-muted-foreground" />
+                  <span className="flex size-6 items-center justify-center rounded-md bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white"><Building2 className="size-3.5" /></span>
                   <h3 className="font-semibold text-sm text-foreground">Top Holders</h3>
                   <Badge variant="secondary" className="rounded-full text-[10px] ml-auto">{holders.length} holders</Badge>
                 </div>

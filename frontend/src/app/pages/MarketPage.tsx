@@ -514,27 +514,27 @@ const MarketPage: React.FC = () => {
         <Card className="p-4 border shadow-sm">
           <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Total Turnover</div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">NSE (KES)</div>
-              <div className="text-lg font-bold text-foreground">{nseStats.turnover}</div>
+              <div className="text-lg font-bold text-foreground tabular-nums truncate">{nseStats.turnover}</div>
             </div>
-            <div className="border-l border-border pl-3">
+            <div className="border-l border-border pl-3 min-w-0">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Global (USD)</div>
-              <div className="text-lg font-bold text-foreground">{globalStats.turnover}</div>
+              <div className="text-lg font-bold text-foreground tabular-nums truncate">{globalStats.turnover}</div>
             </div>
           </div>
         </Card>
         <Card className="p-4 border shadow-sm">
           <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Volume</div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">NSE</div>
-              <div className="text-lg font-bold text-foreground">{nseStats.volume}</div>
+              <div className="text-lg font-bold text-foreground tabular-nums truncate">{nseStats.volume}</div>
               <div className="text-[10px] text-muted-foreground">shares</div>
             </div>
-            <div className="border-l border-border pl-3">
+            <div className="border-l border-border pl-3 min-w-0">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Global</div>
-              <div className="text-lg font-bold text-foreground">{globalStats.volume}</div>
+              <div className="text-lg font-bold text-foreground tabular-nums truncate">{globalStats.volume}</div>
               <div className="text-[10px] text-muted-foreground">shares</div>
             </div>
           </div>
@@ -542,14 +542,14 @@ const MarketPage: React.FC = () => {
         <Card className="p-4 border shadow-sm">
           <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Share Index</div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5 truncate">{nseShareIdx?.name?.replace(' Index', '') || 'NSE'}</div>
-              <div className="text-lg font-bold text-foreground">{nseShareIdx?.value ?? '--'}</div>
+              <div className="text-base sm:text-lg font-bold text-foreground tabular-nums truncate">{nseShareIdx?.value ?? '--'}</div>
               <div className={`text-[10px] font-semibold ${nseShareIdx?.change ? (String(nseShareIdx.change).startsWith('+') ? 'text-emerald-600' : 'text-red-500') : 'text-muted-foreground'}`}>{nseShareIdx?.change ?? '--'}</div>
             </div>
-            <div className="border-l border-border pl-3">
+            <div className="border-l border-border pl-3 min-w-0">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5 truncate">{globalShareIdx?.name?.replace(' Index', '') || 'Global'}</div>
-              <div className="text-lg font-bold text-foreground">{globalShareIdx?.value ?? '--'}</div>
+              <div className="text-base sm:text-lg font-bold text-foreground tabular-nums truncate">{globalShareIdx?.value ?? '--'}</div>
               <div className={`text-[10px] font-semibold ${globalShareIdx?.change ? (String(globalShareIdx.change).startsWith('+') ? 'text-emerald-600' : 'text-red-500') : 'text-muted-foreground'}`}>{globalShareIdx?.change ?? '--'}</div>
             </div>
           </div>
@@ -561,12 +561,12 @@ const MarketPage: React.FC = () => {
         {indicesToDisplay.map(idx => (
           <Card key={idx.symbol} className="bg-card border shadow-sm p-3">
             <div className="text-[10px] font-medium text-muted-foreground truncate mb-1">{idx.name}</div>
-            <div className="text-base font-bold text-foreground mb-0.5">{idx.value}</div>
-            <div className="flex items-center justify-between">
-              <span className={`text-xs font-semibold ${idx.change?.startsWith('+') ? 'text-emerald-600' : 'text-red-500'}`}>
+            <div className="text-base font-bold text-foreground mb-0.5 tabular-nums truncate">{idx.value}</div>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-xs font-semibold truncate ${idx.change?.startsWith('+') ? 'text-emerald-600' : 'text-red-500'}`}>
                 {idx.change}
               </span>
-              <span className="text-[10px] text-muted-foreground">Vol: {idx.volume}</span>
+              <span className="text-[10px] text-muted-foreground shrink-0">Vol: {idx.volume}</span>
             </div>
           </Card>
         ))}
@@ -857,7 +857,7 @@ const MarketWindow = ({
     </div>
 
     {/* Table */}
-    <div className="flex-1 overflow-auto">
+    <div className="flex-1 min-w-0 overflow-auto">
       {isShowingYahoo && (
         <div className="px-4 py-2 bg-[#0D7490]/5 border-b border-[#0D7490]/20 flex items-center gap-2">
           <ExternalLink size={12} className="text-[#0D7490]" />
@@ -896,9 +896,9 @@ const MarketWindow = ({
                 <td className="px-2 sm:px-3 py-2.5 hidden sm:table-cell">
                   <span className="text-xs text-muted-foreground truncate block max-w-[160px]">{stock.company_name}</span>
                 </td>
-                <td className="px-2 sm:px-3 py-2.5 text-right">
-                  <div className="flex items-center justify-end gap-0.5">
-                    <span className="text-sm font-semibold text-foreground font-mono">{isPending ? '--' : stock.price}</span>
+                <td className="px-2 sm:px-3 py-2.5 text-right min-w-0">
+                  <div className="flex items-center justify-end gap-0.5 min-w-0">
+                    <span className="text-sm font-semibold text-foreground font-mono tabular-nums truncate max-w-[88px]">{isPending ? '--' : stock.price}</span>
                     {stock.isPreMarket && (
                       <span className="text-[8px] sm:text-[9px] px-0.5 sm:px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">PRE</span>
                     )}
@@ -907,21 +907,19 @@ const MarketWindow = ({
                     )}
                   </div>
                 </td>
-                <td className="px-2 sm:px-3 py-2.5 text-right">
+                <td className="px-2 sm:px-3 py-2.5 text-right min-w-0">
                   {isPending ? (
                     <span className="text-xs text-muted-foreground font-mono">--</span>
                   ) : (
-                  <span className={`inline-flex items-center gap-0.5 sm:gap-1 px-1 sm:px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold ${
-                    isPositive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-                  }`}>
+                  <span className={`inline-flex items-center gap-0.5 sm:gap-1 px-1 sm:px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold max-w-full truncate ${isPositive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
                     {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                     {isPositive ? '+' : ''}{(stock.changePercent ?? 0).toFixed(2)}%
                     {stock.isPreMarket && <span className="hidden sm:inline text-[9px] opacity-70">pre</span>}
                   </span>
                   )}
                 </td>
-                <td className="px-3 py-2.5 text-right hidden md:table-cell">
-                  <span className="text-xs text-muted-foreground">{isPending ? '--' : formatCompactNumber(typeof stock.volume === 'number' ? stock.volume : parseFloat(String(stock.volume).replace(/[^0-9.]/g, '')) || 0)}</span>
+                <td className="px-3 py-2.5 text-right hidden md:table-cell min-w-0">
+                  <span className="text-xs text-muted-foreground tabular-nums truncate block max-w-[80px] ml-auto">{isPending ? '--' : formatCompactNumber(typeof stock.volume === 'number' ? stock.volume : parseFloat(String(stock.volume).replace(/[^0-9.]/g, '')) || 0)}</span>
                 </td>
               </tr>
             );
@@ -1006,12 +1004,12 @@ const MoverWindow = ({ title, nse, global, pos }: any) => {
 const TinyCard = ({ s, p, c, v, pos }: any) => {
   const isPending = p === null || p === undefined || p === '--';
   return (
-    <div className="flex justify-between items-center py-2.5 border-b border-border/50 last:border-0">
-      <div className="flex flex-col">
-        <span className="text-sm font-semibold text-foreground">{s}</span>
-        <span className="text-[10px] text-muted-foreground font-medium">Vol: {isPending ? '--' : formatCompactNumber(typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0)}</span>
+    <div className="flex justify-between items-center gap-2 py-2.5 border-b border-border/50 last:border-0 min-w-0">
+      <div className="flex flex-col min-w-0">
+        <span className="text-sm font-semibold text-foreground truncate">{s}</span>
+        <span className="text-[10px] text-muted-foreground font-medium truncate">Vol: {isPending ? '--' : formatCompactNumber(typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0)}</span>
       </div>
-      <div className="text-right flex flex-col">
+      <div className="text-right flex flex-col shrink-0 tabular-nums">
         <span className="text-sm font-semibold text-foreground">{isPending ? '--' : p}</span>
         <span className={`text-xs font-semibold ${isPending ? 'text-muted-foreground' : (pos ? 'text-emerald-600' : 'text-red-500')}`}>{isPending ? '--' : (pos ? '+' : '') + (c ?? 0).toFixed(2) + '%'}</span>
       </div>

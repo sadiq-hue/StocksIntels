@@ -9,7 +9,7 @@ interface TradingViewChartProps {
 }
 
 function buildTvSymbol(symbol: string, market: "nse" | "global"): string {
-  if (market === "nse") return `NSE:${symbol}`;
+  if (market === "nse") return `XNSE:${symbol}`;
   // TradingView uses EXCHANGE:SYMBOL format; pass through if already prefixed
   return symbol.includes(":") ? symbol : symbol;
 }
@@ -67,6 +67,11 @@ export function TradingViewChart({ symbol, market, theme = "light", onError }: T
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [scriptFailed, setScriptFailed] = useState(false);
 
+  // Keep the latest onError in a ref so changing its identity (e.g. an inline
+  // arrow passed by the parent) does not tear down and recreate the widget.
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+
   const tvSymbol = buildTvSymbol(symbol, market);
   const containerId = `tv-chart-${symbol}-${market}`;
 
@@ -81,12 +86,12 @@ export function TradingViewChart({ symbol, market, theme = "light", onError }: T
     script.src = "https://s3.tradingview.com/tv.js";
     script.async = true;
     script.onload = () => { if (!cancelled) setScriptLoaded(true); };
-    script.onerror = () => { if (!cancelled) { setScriptFailed(true); onError?.(); } };
+    script.onerror = () => { if (!cancelled) { setScriptFailed(true); onErrorRef.current?.(); } };
     document.head.appendChild(script);
     return () => { cancelled = true; };
-  }, [onError]);
+  }, []);
 
-  // Create / recreate widget when symbol, theme, or library changes
+  // Create / recreate widget only when symbol, theme, or library readiness changes
   useEffect(() => {
     if (!scriptLoaded || scriptFailed) return;
 
@@ -100,7 +105,7 @@ export function TradingViewChart({ symbol, market, theme = "light", onError }: T
 
     // Small delay to ensure DOM is ready
     const id = setTimeout(() => {
-      widgetRef.current = createWidget(containerId, tvSymbol, theme, onError);
+      widgetRef.current = createWidget(containerId, tvSymbol, theme, onErrorRef.current);
     }, 50);
 
     return () => {
@@ -108,7 +113,7 @@ export function TradingViewChart({ symbol, market, theme = "light", onError }: T
       destroyWidget(widgetRef.current);
       widgetRef.current = null;
     };
-  }, [tvSymbol, theme, scriptLoaded, scriptFailed, containerId, onError]);
+  }, [tvSymbol, theme, scriptLoaded, scriptFailed, containerId]);
 
   return (
     <div className="relative w-full">

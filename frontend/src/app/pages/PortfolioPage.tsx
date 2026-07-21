@@ -829,9 +829,20 @@ export function PortfolioPage() {
           <p className="text-muted-foreground text-sm md:text-base">{paperMode ? "Simulate trades with virtual cash" : "Track NSE & global investments, AI insights, and broker integrations"}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant={paperMode ? "default" : "outline"} onClick={() => { setPaperMode(!paperMode); if (!paperMode) refreshPaper(); }} className={`gap-2 flex-1 sm:flex-none justify-center ${paperMode ? "bg-[#0D7490] text-white" : "border-border"}`}>
-            <SwitchCamera className="w-4 h-4" /> {paperMode ? "Real Portfolio" : "Paper Trading"}
-          </Button>
+          <div className="flex items-center rounded-lg border border-border p-0.5 bg-muted flex-1 sm:flex-none">
+            <button
+              onClick={() => { if (paperMode) { setPaperMode(false); } }}
+              className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-2 ${!paperMode ? "bg-[#0D7490] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <Wallet className="w-4 h-4" /> Real Portfolio
+            </button>
+            <button
+              onClick={() => { if (!paperMode) { setPaperMode(true); refreshPaper(); } }}
+              className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-2 ${paperMode ? "bg-[#0D7490] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <SwitchCamera className="w-4 h-4" /> Paper Trading
+            </button>
+          </div>
           <Button variant="outline" onClick={() => navigate('/app/stocks')} className="border-border gap-2 flex-1 sm:flex-none justify-center">
             <BarChart3 className="w-4 h-4" /> Screener
           </Button>
