@@ -395,6 +395,7 @@ async function getNseBaseQuote(symbol) {
 
   // If mystocksAfrica returned previousClose === price (API sometimes caches this),
   // try AFX to get the real previousClose and recompute change.
+  // If AFX has a completely different previousClose, use AFX's full price+previousClose pair.
   if (msaQuote && msaQuote.previousClose === msaQuote.price && msaQuote.change === 0 && (msaQuote.dayHigh || 0) !== (msaQuote.dayLow || 0)) {
     try {
       const nseAfxMod = require('./nseAfxScraper');
@@ -408,8 +409,15 @@ async function getNseBaseQuote(symbol) {
         msaQuote.change = derivedChange;
         msaQuote.changePercent = derivedPct;
         msaQuote.changesPercentage = derivedPct;
+        msaQuote.provider = 'mystocksAfrica+afx';
       }
     } catch (e) { /* AFX enrichment is best-effort */ }
+  }
+
+  // If MSA still has no useful change data after enrichment, fall through to AFX
+  // which scrapes the NSE website directly and has reliable change data
+  if (msaQuote && msaQuote.previousClose === msaQuote.price && msaQuote.change === 0 && (msaQuote.dayHigh || 0) !== (msaQuote.dayLow || 0)) {
+    msaQuote = null; // skip MSA, let sources below provide better data
   }
 
   if (msaQuote) {
