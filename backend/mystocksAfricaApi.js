@@ -113,4 +113,42 @@ async function getBatchQuotes(tickers) {
   }
 }
 
-module.exports = { getQuoteForSymbol, getBatchQuotes, toApiSymbol };
+// ── Historical OHLCV ──────────────────────────────────────────────────────────
+// Fetches end-of-day candle data for NSE Kenya stocks from MyStocks Africa.
+// Returns bars in the same shape used by the rest of the backend
+//   { date, open, high, low, close, volume }
+// The `range` param mirrors Yahoo's conventions (1d, 1mo, 3mo, 6mo, 1y, 2y, 5y).
+
+const RANGE_TO_PERIOD = { '1d': '1W', '5d': '1W', '1mo': '1MO', '3mo': '3MO', '6mo': '6MO', '1y': '1Y', '2y': '2Y', '5y': '5Y', 'max': '5Y' };
+
+async function fetchHistorical(rawSymbol, range = '6mo') {
+  if (!API_KEY) return null;
+  const ticker = String(rawSymbol || '').replace(/^NSE:/i, '').replace(/\.NSE$/i, '').toUpperCase();
+  if (!ticker) return null;
+
+  const apiSymbol = ticker.includes('.') ? ticker : ticker + EXCHANGE_SUFFIX;
+  const period = RANGE_TO_PERIOD[range.toLowerCase()] || '6MO';
+
+  try {
+    const resp = await axios.get(`${API_BASE}/stocks/${encodeURIComponent(apiSymbol)}/history`, {
+      timeout: 12000,
+      headers: { Authorization: `Bearer ${API_KEY}`, Accept: 'application/json' },
+      params: { period },
+    });
+    const candles = resp.data && (resp.data.candles || resp.data.data);
+    if (!Array.isArray(candles) || candles.length === 0) return null;
+    return candles.map(c => ({
+      date: (c.date || '').slice(0, 10),   // normalise ISO → YYYY-MM-DD
+      open:   Number(c.open)   || 0,
+      high:   Number(c.high)   || 0,
+      low:    Number(c.low)    || 0,
+      close:  Number(c.close ?? c.price) || 0,
+      volume: Number(c.volume) || 0,
+    }));
+  } catch (e) {
+    console.warn(`[myStocksAfrica] historical failed for ${apiSymbol}: ${e.message}`);
+    return null;
+  }
+}
+
+module.exports = { getQuoteForSymbol, getBatchQuotes, toApiSymbol, fetchHistorical };

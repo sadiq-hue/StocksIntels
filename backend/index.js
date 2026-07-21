@@ -5721,21 +5721,31 @@ app.get('/api/stock/:symbol/history', async (req, res) => {
     const { range, interval } = req.query;
     const upper = symbol.toUpperCase();
 
+    // Detect NSE Kenya symbols (various suffixes the frontend may send).
+    const isNse = upper.startsWith('NSE:') || upper.endsWith('.NSE') || upper.endsWith('.KE');
+
     // Normalize NSE tickers to Yahoo's Nairobi suffix (.NR) so we fetch the
     // correct exchange instead of a non-existent US ticker.
     let yahooSymbol = upper;
     if (upper.startsWith('NSE:')) yahooSymbol = upper.replace('NSE:', '') + '.NR';
     else if (upper.endsWith('.NSE')) yahooSymbol = upper.replace(/\.NSE$/, '.NR');
 
+    // 1. Try Yahoo Finance (works for global/US stocks; NSE often has no data).
     const { fetchHistoricalQuotes } = require('./globalScraper');
-    const bars = await Promise.race([
+    let bars = await Promise.race([
       fetchHistoricalQuotes(yahooSymbol, range || '6mo', interval || '1d'),
       new Promise(resolve => setTimeout(() => resolve(null), 15000)),
     ]);
+
+    // 2. For NSE symbols, fall back to MyStocks Africa if Yahoo returned nothing.
+    if ((!bars || bars.length === 0) && isNse) {
+      try {
+        const msa = require('./mystocksAfricaApi');
+        bars = await msa.fetchHistorical(upper, range || '6mo');
+      } catch (e) { /* optional module – fall through */ }
+    }
+
     if (!bars || bars.length === 0) {
-      // No historical data available (e.g. NSE symbol without Yahoo coverage).
-      // Return an empty 200 instead of 404 so the chart degrades gracefully
-      // without throwing in the client's fetch helper.
       return res.json({ symbol: upper, bars: [], count: 0 });
     }
     res.json({ symbol: upper, bars, count: bars.length });

@@ -1046,8 +1046,10 @@ export function StockAnalysisPage() {
                 </div>
               </div>
 
-              {/* Chart Area */}
-              {(activeSelection.market === "global" || activeSelection.market === "nse") && !tvFailed ? (
+              {/* Chart Area — TradingView only for global (US) markets; NSE Kenya uses
+                  our own Recharts chart backed by Yahoo Finance (TradingView free widget
+                  does not resolve XNSE symbols). */}
+              {activeSelection.market === "global" && !tvFailed ? (
                 <TradingViewChart symbol={activeSelection.ticker} market={activeSelection.market} onError={() => setTvFailed(true)} />
               ) : chartLoading && chartHistory.length === 0 ? (
                 <div className="flex items-center justify-center h-[340px] text-sm text-muted-foreground">
