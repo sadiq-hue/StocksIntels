@@ -393,7 +393,7 @@ async function fetchQuote(symbol) {
       dayHigh: google.dayHigh || google.price,
       dayLow: google.dayLow || google.price,
       previousClose: google.previousClose || google.price,
-      marketCap: 0,
+      marketCap: google.marketCap || 0,
       timestamp: Math.floor(Date.now() / 1000),
       lastUpdated: new Date().toISOString(),
       exchange: 'Global',
