@@ -23,7 +23,7 @@ import {
   Info, Shield, Wallet, Target, LineChart,
   ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react";
-import { globalStocks, kenyanStocks, type StockListItem, type StockMarket } from "../data/stockUniverses";
+import { globalStocks, kenyanStocks, getTickerLogoUrl, formatMarketCap, type StockListItem, type StockMarket } from "../data/stockUniverses";
 
 // NSE trading hours: Mon–Fri 09:30–15:30 EAT (UTC+3). Provider marketState is
 // unreliable for NSE, so derive open/closed from exchange time on the client.
@@ -272,6 +272,7 @@ export function StockAnalysisPage() {
     const ticker = activeSelection.ticker;
     const market = activeSelection.market === "nse" ? "nse" : "us";
     let active = true;
+    setLiveQuote(null);
     const pollLive = async () => {
       try {
         const res = await fetch(`${API_URL}/stock/${encodeURIComponent(ticker)}?market=${market}`);
@@ -421,6 +422,8 @@ export function StockAnalysisPage() {
   useEffect(() => {
     const ticker = activeSelection.ticker;
     let cancelled = false;
+    setFinancialReport(null);
+    setStockSignal(null);
     const fetchData = async () => {
       setLoadingData(true);
       const [signalRes, finRes] = await Promise.allSettled([
@@ -863,10 +866,9 @@ export function StockAnalysisPage() {
                 <div className="flex items-center gap-4">
                   <div className="relative flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-lg overflow-hidden">
                     {(() => {
-                      let logoUrl = financialReport?.data?.profile?.image || '';
-                      if (!logoUrl && financialReport?.data?.profile?.website) {
-                        try { const h = new URL(financialReport.data.profile.website).hostname.replace(/^www\./, ''); logoUrl = `https://www.google.com/s2/favicons?domain=${h}&sz=128`; } catch {}
-                      }
+                      const logoUrl = financialReport?.data?.profile?.image
+                        || getTickerLogoUrl(activeSelection.ticker)
+                        || (financialReport?.data?.profile?.website ? (() => { try { return `https://www.google.com/s2/favicons?domain=${new URL(financialReport.data.profile.website).hostname.replace(/^www\./, '')}&sz=128`; } catch { return ''; } })() : '');
                       return logoUrl ? (
                         <img src={logoUrl} alt={activeSelection.ticker} className="size-full object-contain bg-white p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       ) : (
@@ -967,8 +969,8 @@ export function StockAnalysisPage() {
                 {[
                   { icon: Building2, label: "Sector", value: activeSelection.sector, color: "text-foreground" },
                   { icon: Activity, label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : activeSelection.volume, color: "text-foreground" },
-                  { icon: Wallet, label: "Market Cap", value: financialReport?.data?.keyMetrics?.marketCap ? `$${(financialReport.data.keyMetrics.marketCap / 1e9).toFixed(1)}B` : (liveQuote?.marketCap ? `$${(liveQuote.marketCap / 1e9).toFixed(1)}B` : activeSelection.marketCap), color: "text-foreground" },
-                  { icon: BarChart3, label: "P/E Ratio", value: financialReport?.data?.keyMetrics?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A"), color: "text-foreground" },
+                  { icon: Wallet, label: "Market Cap", value: financialReport?.data?.quote?.marketCap ? formatMarketCap(financialReport.data.quote.marketCap) : (financialReport?.data?.keyMetrics?.marketCap ? formatMarketCap(financialReport.data.keyMetrics.marketCap) : (liveQuote?.marketCap ? formatMarketCap(liveQuote.marketCap) : activeSelection.marketCap)), color: "text-foreground" },
+                  { icon: BarChart3, label: "P/E Ratio", value: financialReport?.data?.quote?.pe?.toFixed(1) || financialReport?.data?.keyMetrics?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A"), color: "text-foreground" },
                 ].map((m) => (
                   <div key={m.label} className="rounded-xl bg-card/60 p-3 border border-border shadow-sm backdrop-blur">
                     <div className="flex items-center gap-1.5 mb-1.5">
