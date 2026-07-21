@@ -23,24 +23,30 @@ function normalize(summary, rawSymbol) {
   if (!summary || summary.price == null) return null;
   const price = Number(summary.price);
   if (!price || isNaN(price)) return null;
-  const change = Number(summary.change) || 0;
-  // API returns changePct as a FRACTION (e.g. 0.00565 = 0.565%); the rest of the
-  // app and the UI expect a PERCENTAGE, so convert. Derive from change if absent.
+  const previousClose = Number(summary.previousClose) || price;
+  // Derive change from price and previousClose (the API `change` field is unreliable
+  // for some tickers like UMME). If changePct is provided as a percentage, use it;
+  // otherwise compute from the derived change.
+  const derivedChange = price - previousClose;
   let changePct = Number(summary.changePct);
-  if (changePct && !isNaN(changePct)) changePct = changePct * 100;
-  else if (change && price) changePct = (change / (price - change)) * 100;
-  else changePct = 0;
+  if (changePct && !isNaN(changePct) && changePct !== 0) {
+    changePct = changePct * 100; // API returns fraction, convert to percentage
+  } else if (previousClose > 0) {
+    changePct = (derivedChange / previousClose) * 100;
+  } else {
+    changePct = 0;
+  }
   return {
     price,
-    change,
+    change: derivedChange,
     changesPercentage: changePct,
     changePercent: changePct,
     volume: Number(summary.volume) || 0,
-    marketCap: Number(summary.marketCap) || 0, // not in quote payload; buildLocalNseReport computes price*shares
+    marketCap: Number(summary.marketCap) || 0,
     open: Number(summary.open) || price,
     dayHigh: Number(summary.dayHigh) || price,
     dayLow: Number(summary.dayLow) || price,
-    previousClose: Number(summary.previousClose) || price,
+    previousClose,
     company_name: summary.name || summary.symbol || rawSymbol,
     currency: 'KES',
     market: 'NSE',

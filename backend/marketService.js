@@ -395,7 +395,7 @@ async function getNseBaseQuote(symbol) {
   // 1) mystocks.co.ke — fallback (has marketCap, change, volume)
   let msq = null;
   try {
-    const mysticks = require('./mysticksScraper');
+    const mysticks = require('./mystocksScraper');
     msq = await mysticks.getQuoteForSymbol(symbol);
   } catch (e) { /* mystocks optional / may be absent */ }
 
