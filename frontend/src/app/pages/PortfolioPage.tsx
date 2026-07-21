@@ -955,11 +955,13 @@ export function PortfolioPage() {
                 <Card className="bg-card border-border p-4">
                   <div className="text-muted-foreground text-xs mb-1">NSE Balance</div>
                   <div className="text-foreground text-xl font-bold">{dcFmt(paperAccount.cashBalance)}</div>
+                  {dc !== "KES" && <div className="text-muted-foreground text-[10px] mt-0.5">KES {paperAccount.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
                   <div className="text-muted-foreground text-xs mt-1 flex items-center gap-1">Initial: {dcFmt(paperAccount.initialCapital)} <button onClick={() => setShowPaperReset(true)} className="text-[#0D7490] hover:underline font-medium ml-1">Change</button></div>
                 </Card>
                 <Card className="bg-card border-border p-4">
                   <div className="text-muted-foreground text-xs mb-1">Global Balance</div>
                   <div className="text-foreground text-xl font-bold">{dcFmtUsd(paperAccount.cashBalanceUsd)}</div>
+                  {dc !== "USD" && <div className="text-muted-foreground text-[10px] mt-0.5">${paperAccount.cashBalanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
                   <div className="text-muted-foreground text-xs mt-1 flex items-center gap-1">Initial: {dcFmtUsd(paperAccount.initialCapitalUsd)} <button onClick={() => setShowPaperReset(true)} className="text-[#0D7490] hover:underline font-medium ml-1">Change</button></div>
                 </Card>
                 <Card className="bg-card border-border p-4">
@@ -1601,6 +1603,7 @@ export function PortfolioPage() {
         <Card className="bg-card border-border p-4">
           <div className="text-muted-foreground text-xs mb-1">NSE Portfolio</div>
           <div className="text-foreground text-xl font-bold">{dcFmt(totals.nseValue)}</div>
+          {dc !== "KES" && <div className="text-muted-foreground text-[10px] mt-0.5">KES {totals.nseValue.toLocaleString()}</div>}
           <div className={`text-xs mt-1 flex items-center gap-1 ${totals.nsePnLPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {totals.nsePnLPercent >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
             {totals.nsePnLPercent >= 0 ? '+' : ''}{totals.nsePnLPercent}% ({totals.nseCount} holdings)
@@ -1609,6 +1612,7 @@ export function PortfolioPage() {
         <Card className="bg-card border-border p-4">
           <div className="text-muted-foreground text-xs mb-1">Global Portfolio</div>
           <div className="text-foreground text-xl font-bold">{dcFmtUsd(enhancedTotals.globalValue)}</div>
+          {dc !== "USD" && <div className="text-muted-foreground text-[10px] mt-0.5">${enhancedTotals.globalValue.toFixed(2)}</div>}
           <div className={`text-xs mt-1 flex items-center gap-1 ${enhancedTotals.globalPnLPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {enhancedTotals.globalPnLPercent >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
             {enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}{enhancedTotals.globalPnLPercent}% ({brokerTotals.posCount} pos)
