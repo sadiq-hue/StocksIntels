@@ -5721,28 +5721,28 @@ app.get('/api/stock/:symbol/history', async (req, res) => {
     const { range, interval } = req.query;
     const upper = symbol.toUpperCase();
 
-    // Detect NSE Kenya symbols (various suffixes the frontend may send).
     const isNse = upper.startsWith('NSE:') || upper.endsWith('.NSE') || upper.endsWith('.KE');
 
-    // Normalize NSE tickers to Yahoo's Nairobi suffix (.NR) so we fetch the
-    // correct exchange instead of a non-existent US ticker.
-    let yahooSymbol = upper;
-    if (upper.startsWith('NSE:')) yahooSymbol = upper.replace('NSE:', '') + '.NR';
-    else if (upper.endsWith('.NSE')) yahooSymbol = upper.replace(/\.NSE$/, '.NR');
+    let bars = null;
 
-    // 1. Try Yahoo Finance (works for global/US stocks; NSE often has no data).
-    const { fetchHistoricalQuotes } = require('./globalScraper');
-    let bars = await Promise.race([
-      fetchHistoricalQuotes(yahooSymbol, range || '6mo', interval || '1d'),
-      new Promise(resolve => setTimeout(() => resolve(null), 15000)),
-    ]);
-
-    // 2. For NSE symbols, fall back to MyStocks Africa if Yahoo returned nothing.
-    if ((!bars || bars.length === 0) && isNse) {
+    // NSE Kenya: use MyStocks Africa directly (Yahoo has no NSE historical data).
+    if (isNse) {
       try {
         const msa = require('./mystocksAfricaApi');
         bars = await msa.fetchHistorical(upper, range || '6mo');
-      } catch (e) { /* optional module – fall through */ }
+      } catch (e) { /* optional module – fall through to Yahoo */ }
+    }
+
+    // Global / Yahoo fallback
+    if (!bars || bars.length === 0) {
+      let yahooSymbol = upper;
+      if (upper.startsWith('NSE:')) yahooSymbol = upper.replace('NSE:', '') + '.NR';
+      else if (upper.endsWith('.NSE')) yahooSymbol = upper.replace(/\.NSE$/, '.NR');
+      const { fetchHistoricalQuotes } = require('./globalScraper');
+      bars = await Promise.race([
+        fetchHistoricalQuotes(yahooSymbol, range || '6mo', interval || '1d'),
+        new Promise(resolve => setTimeout(() => resolve(null), 15000)),
+      ]);
     }
 
     if (!bars || bars.length === 0) {
