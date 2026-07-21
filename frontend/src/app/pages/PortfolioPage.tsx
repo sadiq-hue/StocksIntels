@@ -17,6 +17,7 @@ import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area
 import { useAuth } from "../auth/AuthContext";
 import { usePortfolioData } from "../contexts/PortfolioDataContext";
 import { usePaperTrading, type PaperPosition, type PaperTrade } from "../contexts/PaperTradingContext";
+import { CURRENCIES, toDisplayCurrency, formatCurrencyValue, formatCompactCurrency, PORTFOLIO_CURRENCY_KEY } from "../utils/currency";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -153,6 +154,7 @@ export function PortfolioPage() {
   const [statementLastRefreshed, setStatementLastRefreshed] = useState<Date | null>(null);
   const [statementError, setStatementError] = useState<string | null>(null);
   const [currentFxRate, setCurrentFxRate] = useState(130);
+  const [displayCurrency, setDisplayCurrency] = useState<string>(() => localStorage.getItem(PORTFOLIO_CURRENCY_KEY) || "KES");
   const [parseMode, setParseMode] = useState<'manual' | 'email'>('manual');
   const [emailText, setEmailText] = useState('');
   const [isParsing, setIsParsing] = useState(false);
@@ -177,6 +179,17 @@ export function PortfolioPage() {
   const [paperSearchingYahoo, setPaperSearchingYahoo] = useState(false);
   const paperSearchRef = useRef<HTMLDivElement>(null);
   const paperYahooSearchRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const dc = displayCurrency;
+  const dcFmt = (kesAmount: number) => formatCurrencyValue(toDisplayCurrency(kesAmount, "KES", dc, currentFxRate), dc);
+  const dcFmtUsd = (usdAmount: number) => formatCurrencyValue(toDisplayCurrency(usdAmount, "USD", dc, currentFxRate), dc);
+  const dcCompact = (kesAmount: number) => formatCompactCurrency(toDisplayCurrency(kesAmount, "KES", dc, currentFxRate), dc);
+  const dcCompactUsd = (usdAmount: number) => formatCompactCurrency(toDisplayCurrency(usdAmount, "USD", dc, currentFxRate), dc);
+
+  const handleCurrencyChange = (code: string) => {
+    setDisplayCurrency(code);
+    localStorage.setItem(PORTFOLIO_CURRENCY_KEY, code);
+  };
 
   const { account: paperAccount, positions: paperPositions, trades: paperTrades, loading: paperLoading, placingOrder: paperPlacingOrder, marketStatus, refresh: refreshPaper, refreshSilent, placeOrder, initAccount, resetAccount, fetchStatement } = usePaperTrading();
 
@@ -843,6 +856,18 @@ export function PortfolioPage() {
               <SwitchCamera className="w-4 h-4" /> Paper Trading
             </button>
           </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Select value={displayCurrency} onValueChange={handleCurrencyChange}>
+              <SelectTrigger className="w-[120px] bg-card border-border h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map(c => (
+                  <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Button variant="outline" onClick={() => navigate('/app/stocks')} className="border-border gap-2 flex-1 sm:flex-none justify-center">
             <BarChart3 className="w-4 h-4" /> Screener
           </Button>
@@ -928,25 +953,25 @@ export function PortfolioPage() {
               {/* Dashboard Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card className="bg-card border-border p-4">
-                  <div className="text-muted-foreground text-xs mb-1">KES Balance (NSE)</div>
-                  <div className="text-foreground text-xl font-bold">KES {paperAccount.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  <div className="text-muted-foreground text-xs mt-1 flex items-center gap-1">Initial: KES {paperAccount.initialCapital.toLocaleString()} <button onClick={() => setShowPaperReset(true)} className="text-[#0D7490] hover:underline font-medium ml-1">Change</button></div>
+                  <div className="text-muted-foreground text-xs mb-1">NSE Balance</div>
+                  <div className="text-foreground text-xl font-bold">{dcFmt(paperAccount.cashBalance)}</div>
+                  <div className="text-muted-foreground text-xs mt-1 flex items-center gap-1">Initial: {dcFmt(paperAccount.initialCapital)} <button onClick={() => setShowPaperReset(true)} className="text-[#0D7490] hover:underline font-medium ml-1">Change</button></div>
                 </Card>
                 <Card className="bg-card border-border p-4">
-                  <div className="text-muted-foreground text-xs mb-1">USD Balance (Global)</div>
-                  <div className="text-foreground text-xl font-bold">${paperAccount.cashBalanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  <div className="text-muted-foreground text-xs mt-1 flex items-center gap-1">Initial: ${paperAccount.initialCapitalUsd.toLocaleString()} <button onClick={() => setShowPaperReset(true)} className="text-[#0D7490] hover:underline font-medium ml-1">Change</button></div>
+                  <div className="text-muted-foreground text-xs mb-1">Global Balance</div>
+                  <div className="text-foreground text-xl font-bold">{dcFmtUsd(paperAccount.cashBalanceUsd)}</div>
+                  <div className="text-muted-foreground text-xs mt-1 flex items-center gap-1">Initial: {dcFmtUsd(paperAccount.initialCapitalUsd)} <button onClick={() => setShowPaperReset(true)} className="text-[#0D7490] hover:underline font-medium ml-1">Change</button></div>
                 </Card>
                 <Card className="bg-card border-border p-4">
-                  <div className="text-muted-foreground text-xs mb-1">Portfolio Value (KES)</div>
-                  <div className="text-foreground text-xl font-bold">KES {paperAccount.portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  <div className="text-muted-foreground text-xs mt-1">Combined (USD at ~{currentFxRate} KES)</div>
+                  <div className="text-muted-foreground text-xs mb-1">Portfolio Value</div>
+                  <div className="text-foreground text-xl font-bold">{dcFmt(paperAccount.portfolioValue)}</div>
+                  <div className="text-muted-foreground text-xs mt-1">NSE + Global combined</div>
                 </Card>
                 <Card className="bg-card border-border p-4">
                   <div className="text-muted-foreground text-xs mb-1">Total Return</div>
                   <div className={`text-xl font-bold flex items-center gap-1 ${paperAccount.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {paperAccount.totalReturn >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                    KES {Math.abs(paperAccount.totalReturn).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {dcFmt(Math.abs(paperAccount.totalReturn))}
                   </div>
                   <div className={`text-xs mt-1 ${paperAccount.totalReturnPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {paperAccount.totalReturnPercent >= 0 ? '+' : ''}{paperAccount.totalReturnPercent}% ({paperPositions.length} positions)
@@ -969,7 +994,7 @@ export function PortfolioPage() {
                 </div>
                 {paperAccount.totalFeesPaid > 0 && (
                   <div className="text-xs text-muted-foreground">
-                    Total fees paid: KES {paperAccount.totalFeesPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    Total fees paid: {dcFmt(paperAccount.totalFeesPaid)}
                   </div>
                 )}
               </div>
@@ -1009,13 +1034,13 @@ export function PortfolioPage() {
                               <Badge variant="outline" className={`text-[10px] ${p.market === "NSE" ? "border-[#0D7490] text-[#0D7490]" : "border-purple-300 text-purple-600"}`}>{p.market}</Badge>
                             </td>
                             <td className="text-right text-foreground py-3 px-2">{p.shares}</td>
-                            <td className="text-right text-foreground py-3 px-2">{p.market === "NSE" ? "KES " : "$"}{p.avgCost}</td>
-                            <td className="text-right text-foreground py-3 px-2">{p.market === "NSE" ? "KES " : "$"}{p.currentPrice}</td>
-                            <td className="text-right text-foreground py-3 px-2 font-medium">{p.market === "NSE" ? "KES " : "$"}{p.value}</td>
+                            <td className="text-right text-foreground py-3 px-2">{p.market === "NSE" ? dcFmt(parseFloat(p.avgCost)) : dcFmtUsd(parseFloat(p.avgCost))}</td>
+                            <td className="text-right text-foreground py-3 px-2">{p.market === "NSE" ? dcFmt(parseFloat(p.currentPrice)) : dcFmtUsd(parseFloat(p.currentPrice))}</td>
+                            <td className="text-right text-foreground py-3 px-2 font-medium">{p.market === "NSE" ? dcFmt(parseFloat(p.value.replace(",", ""))) : dcFmtUsd(parseFloat(p.value.replace(",", "")))}</td>
                             <td className="text-right py-3 px-2">
                               <span className={`flex items-center gap-1 justify-end font-medium ${parseFloat(p.pnl) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {parseFloat(p.pnl) >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                                {p.market === "NSE" ? "KES " : "$"}{p.pnl} ({p.pnlPercent}%)
+                                {p.market === "NSE" ? dcFmt(parseFloat(p.pnl)) : dcFmtUsd(parseFloat(p.pnl))} ({p.pnlPercent}%)
                               </span>
                             </td>
                             <td className="text-center py-3 px-2">
@@ -1067,9 +1092,9 @@ export function PortfolioPage() {
                               </Badge>
                             </td>
                             <td className="text-right text-foreground py-2 px-2">{t.shares}</td>
-                            <td className="text-right text-foreground py-2 px-2">{t.currency === "USD" ? "$" : "KES "}{parseFloat(t.price).toFixed(2)}</td>
-                            <td className="text-right text-foreground py-2 px-2 font-medium">{t.currency === "USD" ? "$" : "KES "}{parseFloat(t.total_value).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td className="text-right text-muted-foreground py-2 px-2 text-xs">{t.currency === "USD" ? "$" : "KES "}{(parseFloat(t.commission || "0") + parseFloat(t.fees || "0")).toFixed(2)}</td>
+                            <td className="text-right text-foreground py-2 px-2">{t.currency === "USD" ? dcFmtUsd(parseFloat(t.price)) : dcFmt(parseFloat(t.price))}</td>
+                            <td className="text-right text-foreground py-2 px-2 font-medium">{t.currency === "USD" ? dcFmtUsd(parseFloat(t.total_value)) : dcFmt(parseFloat(t.total_value))}</td>
+                            <td className="text-right text-muted-foreground py-2 px-2 text-xs">{t.currency === "USD" ? dcFmtUsd(parseFloat(t.commission || "0") + parseFloat(t.fees || "0")) : dcFmt(parseFloat(t.commission || "0") + parseFloat(t.fees || "0"))}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1185,7 +1210,7 @@ export function PortfolioPage() {
                 </div>
                 {paperOrder.currentPrice && (
                   <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-sm flex items-center justify-between">
-                    <span className="text-green-700 font-medium">Current price: {paperOrder.market === "NSE" ? "KES " : "$"}{parseFloat(paperOrder.currentPrice).toFixed(2)}</span>
+                    <span className="text-green-700 font-medium">Current price: {paperOrder.market === "NSE" ? dcFmt(parseFloat(paperOrder.currentPrice)) : dcFmtUsd(parseFloat(paperOrder.currentPrice))}</span>
                     <span className="text-green-600 text-xs">Live market data</span>
                   </div>
                 )}
@@ -1197,7 +1222,7 @@ export function PortfolioPage() {
                     <div className="p-3 rounded-lg bg-muted border text-sm space-y-1">
                       <div className="flex justify-between text-muted-foreground">
                         <span>Available {currencyLabel}</span>
-                        <span className="font-medium text-foreground">{currencyLabel === "KES" ? "KES " : "$"}{available.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="font-medium text-foreground">{currencyLabel === "KES" ? dcFmt(available) : dcFmtUsd(available)}</span>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
                         <span>Est. commission & fees</span>
@@ -1257,11 +1282,11 @@ export function PortfolioPage() {
                     <div className="p-3 rounded-lg bg-muted border text-sm space-y-1">
                       <div className="flex justify-between text-muted-foreground">
                         <span>Position value</span>
-                        <span className="font-medium text-foreground">{showPaperSell.market === "NSE" ? "KES " : "$"}{showPaperSell.value}</span>
+                        <span className="font-medium text-foreground">{showPaperSell.market === "NSE" ? dcFmt(parseFloat(showPaperSell.value.replace(",", ""))) : dcFmtUsd(parseFloat(showPaperSell.value.replace(",", "")))}</span>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
                         <span>Avg cost</span>
-                        <span className="text-foreground">{showPaperSell.market === "NSE" ? "KES " : "$"}{showPaperSell.avgCost}</span>
+                        <span className="text-foreground">{showPaperSell.market === "NSE" ? dcFmt(parseFloat(showPaperSell.avgCost)) : dcFmtUsd(parseFloat(showPaperSell.avgCost))}</span>
                       </div>
                       <div className="flex justify-between text-muted-foreground">
                         <span>Est. fees deducted</span>
@@ -1569,13 +1594,13 @@ export function PortfolioPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <Card className="bg-card border-border p-4">
-          <div className="text-muted-foreground text-xs mb-1">Total Value (KES)</div>
-          <div className="text-foreground text-xl font-bold">KES {enhancedTotals.combinedKesValue.toLocaleString()}</div>
-          <div className="text-muted-foreground text-xs mt-1">NSE: KES {totals.nseValue.toLocaleString()} &middot; Global: ${enhancedTotals.globalValue.toFixed(2)} @ {totals.fxRate.toFixed(2)}</div>
+          <div className="text-muted-foreground text-xs mb-1">Total Value</div>
+          <div className="text-foreground text-xl font-bold">{dcFmt(enhancedTotals.combinedKesValue)}</div>
+          <div className="text-muted-foreground text-xs mt-1">NSE: {dcFmt(totals.nseValue)} &middot; Global: {dcFmtUsd(enhancedTotals.globalValue)}</div>
         </Card>
         <Card className="bg-card border-border p-4">
           <div className="text-muted-foreground text-xs mb-1">NSE Portfolio</div>
-          <div className="text-foreground text-xl font-bold">KES {totals.nseValue.toLocaleString()}</div>
+          <div className="text-foreground text-xl font-bold">{dcFmt(totals.nseValue)}</div>
           <div className={`text-xs mt-1 flex items-center gap-1 ${totals.nsePnLPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {totals.nsePnLPercent >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
             {totals.nsePnLPercent >= 0 ? '+' : ''}{totals.nsePnLPercent}% ({totals.nseCount} holdings)
@@ -1583,7 +1608,7 @@ export function PortfolioPage() {
         </Card>
         <Card className="bg-card border-border p-4">
           <div className="text-muted-foreground text-xs mb-1">Global Portfolio</div>
-          <div className="text-foreground text-xl font-bold">${enhancedTotals.globalValue.toFixed(2)}</div>
+          <div className="text-foreground text-xl font-bold">{dcFmtUsd(enhancedTotals.globalValue)}</div>
           <div className={`text-xs mt-1 flex items-center gap-1 ${enhancedTotals.globalPnLPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {enhancedTotals.globalPnLPercent >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
             {enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}{enhancedTotals.globalPnLPercent}% ({brokerTotals.posCount} pos)
@@ -1593,7 +1618,7 @@ export function PortfolioPage() {
           <div className="text-muted-foreground text-xs mb-1">Total Return</div>
           <div className={`text-xl font-bold flex items-center gap-1 ${enhancedTotals.totalPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {enhancedTotals.totalPnL >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-            {enhancedTotals.totalPnL >= 0 ? '+' : ''}KES {Math.abs(enhancedTotals.totalPnL).toLocaleString()}
+            {enhancedTotals.totalPnL >= 0 ? '+' : ''}{dcFmt(Math.abs(enhancedTotals.totalPnL))}
           </div>
           <div className={`text-xs mt-1 ${enhancedTotals.pnlPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {enhancedTotals.pnlPercent >= 0 ? '+' : ''}{enhancedTotals.pnlPercent}% overall return
@@ -1676,9 +1701,9 @@ export function PortfolioPage() {
                       </Badge>
                     </td>
                     <td className="text-right text-foreground py-3 px-2">{h.shares}</td>
-                    <td className="text-right text-foreground py-3 px-2">{h.market === "NSE" ? "KES " : "$"}{h.avgCost}</td>
-                    <td className="text-right text-foreground py-3 px-2">{h.market === "NSE" ? "KES " : "$"}{h.currentPrice || h.avgCost}</td>
-                    <td className="text-right text-foreground py-3 px-2 font-medium">{h.market === "NSE" ? "KES " : "$"}{h.value}</td>
+                    <td className="text-right text-foreground py-3 px-2">{h.market === "NSE" ? dcFmt(parseFloat(h.avgCost)) : dcFmtUsd(parseFloat(h.avgCost))}</td>
+                    <td className="text-right text-foreground py-3 px-2">{h.market === "NSE" ? dcFmt(parseFloat(h.currentPrice || h.avgCost)) : dcFmtUsd(parseFloat(h.currentPrice || h.avgCost))}</td>
+                    <td className="text-right text-foreground py-3 px-2 font-medium">{h.market === "NSE" ? dcFmt(parseFloat(h.value.replace(",", ""))) : dcFmtUsd(parseFloat(h.value.replace(",", "")))}</td>
                     <td className="text-right py-3 px-2">
                       <span className={`flex items-center gap-1 justify-end font-medium ${h.isPositive ? 'text-green-600' : 'text-red-600'}`}>
                         {h.isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
@@ -1687,7 +1712,7 @@ export function PortfolioPage() {
                     </td>
                     <td className="text-right py-3 px-2">
                       <span className={`font-medium ${h.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                        {h.isPositive ? '+' : '-'}{h.market === "NSE" ? "KES " : "$"}{h.pnlAmount !== undefined ? h.pnlAmount : '0.00'}
+                        {h.isPositive ? '+' : '-'}{h.market === "NSE" ? dcFmt(parseFloat(h.pnlAmount !== undefined ? h.pnlAmount as string : '0')) : dcFmtUsd(parseFloat(h.pnlAmount !== undefined ? h.pnlAmount as string : '0'))}
                       </span>
                     </td>
                     <td className="text-center py-3 px-2">
