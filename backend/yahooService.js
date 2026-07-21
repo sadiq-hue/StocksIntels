@@ -270,15 +270,8 @@ async function fetchGoogleFinanceQuote(symbol) {
           const suffix = mcMatch[2].toUpperCase();
           const mult = suffix === 'T' ? 1e12 : suffix === 'B' ? 1e9 : suffix === 'M' ? 1e6 : suffix === 'K' ? 1e3 : 1;
           result.marketCap = Math.round(num * mult);
-        } else {
-          // Debug: log nearby text around any "cap" mentions
-          const capIdx = html.indexOf('cap');
-          if (capIdx > -1) {
-            const snippet = html.substring(Math.max(0, capIdx - 30), capIdx + 60);
-            console.log(`[Google MC DEBUG] No match. Snippet around 'cap': ${snippet.replace(/\n/g, ' ')}`);
-          }
         }
-      } catch (e) { console.log('[Google MC ERROR]', e.message); }
+      } catch {}
       return result;
     } catch {}
   }
