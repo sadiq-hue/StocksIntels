@@ -11648,6 +11648,18 @@ server.listen(port, '0.0.0.0', async () => {
         getQuotesBatch(warmSymbols).catch((e) => console.error('[warm] quote cache warm failed:', e.message));
       }, 8000);
 
+      // Warm hero symbols (landing page) immediately, including NSE
+      setTimeout(() => {
+        const heroSymbols = ['NSE:SCOM', 'NSE:EQTY', 'NSE:KCB', 'NSE:EABL', 'AAPL', 'TSLA', 'MSFT', 'GOOGL', 'NVDA'];
+        getQuotesBatch(heroSymbols).catch((e) => console.error('[warm] hero quote cache warm failed:', e.message));
+      }, 3000);
+
+      // Periodically re-warm hero symbols every 2 minutes so landing page is always fast
+      setInterval(() => {
+        const heroSymbols = ['NSE:SCOM', 'NSE:EQTY', 'NSE:KCB', 'NSE:EABL', 'AAPL', 'TSLA', 'MSFT', 'GOOGL', 'NVDA'];
+        getQuotesBatch(heroSymbols).catch(() => {});
+      }, 120000);
+
       // Seed NSE stock fundamentals from static data into DB (background)
       const nseFundamentals = require('./nseFundamentalsSeeder');
       nseFundamentals.startAutoSeed();

@@ -518,11 +518,11 @@ export function LandingPage() {
             {(() => {
               const tickerSymbols = [
                 { sym: "SCOM", fallback: "17.50", fallbackChange: "+0.0%", up: true, isNse: true },
-                { sym: "EQTY", fallback: "79.25", fallbackChange: "+0.0%", up: true, isNse: true },
-                { sym: "KCB", fallback: "76.75", fallbackChange: "+0.0%", up: true, isNse: true },
-                { sym: "EABL", fallback: "263.50", fallbackChange: "+0.0%", up: true, isNse: true },
-                { sym: "AAPL", fallback: "283.72", fallbackChange: "-4.5%", up: false, isNse: false },
-                { sym: "TSLA", fallback: "391.59", fallbackChange: "-3.3%", up: false, isNse: false },
+                { sym: "EQTY", fallback: "87.00", fallbackChange: "+0.3%", up: true, isNse: true },
+                { sym: "KCB", fallback: "82.00", fallbackChange: "+0.4%", up: true, isNse: true },
+                { sym: "EABL", fallback: "269.00", fallbackChange: "-0.1%", up: false, isNse: true },
+                { sym: "AAPL", fallback: "327.74", fallbackChange: "+0.4%", up: true, isNse: false },
+                { sym: "TSLA", fallback: "378.93", fallbackChange: "+2.5%", up: true, isNse: false },
                 { sym: "MSFT", fallback: "377.86", fallbackChange: "+2.9%", up: true, isNse: false },
                 { sym: "GOOGL", fallback: "347.11", fallbackChange: "-0.7%", up: false, isNse: false },
                 { sym: "NVDA", fallback: "192.87", fallbackChange: "+0.0%", up: true, isNse: false },
