@@ -6,7 +6,7 @@ import {
   ChevronRight, Clock, TrendingUp,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { ThemeToggle } from "../components/ThemeToggle";
+
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from "../services/marketDataService";
 import { useSEO } from "../hooks/useSEO";
@@ -451,7 +451,6 @@ export function LandingPage() {
             </nav>
 
             <div className="hidden md:flex items-center gap-3">
-              <ThemeToggle />
               <Link to="/login">
                 <Button variant="ghost" className="text-muted-foreground hover:text-[#0D7490] font-medium">Sign In</Button>
               </Link>

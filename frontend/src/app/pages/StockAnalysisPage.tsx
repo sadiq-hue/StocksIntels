@@ -11,18 +11,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { Progress } from "../components/ui/progress";
 import {
   AreaChart, Area, Line, ReferenceLine, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts";
 import { Link, useParams, useNavigate } from "react-router";
 import {
-  TrendingUp, TrendingDown, Search, Star, BarChart3, Building2,
+  TrendingUp, Search, Star, BarChart3, Building2,
   DollarSign, Activity, ArrowUpDown, Sparkles, TrendingUpIcon,
   ChevronLeft, ChevronRight, Loader2, ExternalLink, X, Zap,
-  Info, Shield, Clock, Wallet, Gauge, Target, LineChart,
-  CandlestickChart, ChevronDown, ChevronUp, AlertTriangle,
+  Info, Shield, Wallet, Target, LineChart,
+  ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react";
 import { globalStocks, kenyanStocks, type StockListItem, type StockMarket } from "../data/stockUniverses";
 
@@ -47,6 +46,7 @@ import type { Signal as SharedSignal } from "../types/signals";
 import { FinancialMetrics } from "../components/FinancialMetrics";
 import { TradingViewChart } from "../components/TradingViewChart";
 import { useAuth } from "../auth/AuthContext";
+import { fetchFinancialReport, type FinancialReport } from "../services/financialsService";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -208,7 +208,7 @@ export function StockAnalysisPage() {
   const [liveQuote, setLiveQuote] = useState<LiveQuote | null>(null);
   const [stockSignal, setStockSignal] = useState<StockSignal | null>(null);
   const [loadingData, setLoadingData] = useState(false);
-  const [companyProfile, setCompanyProfile] = useState<any>(null);
+  const [financialReport, setFinancialReport] = useState<FinancialReport | null>(null);
   const [yahooPremarket, setYahooPremarket] = useState<Record<string, any> | null>(null);
 
   // Holders data
@@ -427,10 +427,9 @@ export function StockAnalysisPage() {
         if (!cancelled && signalRes) setStockSignal(signalRes);
       } catch { /* silent */ }
       try {
-        const res = await fetch(`${API_URL}/company/${ticker}/profile`);
-        if (res.ok && !cancelled) {
-          const data = await res.json();
-          setCompanyProfile(data);
+        const res = await fetchFinancialReport(ticker, "annual", 2);
+        if (!cancelled) {
+          setFinancialReport(res);
         }
       } catch { /* silent */ }
       if (!cancelled) setLoadingData(false);
@@ -528,7 +527,7 @@ export function StockAnalysisPage() {
   }, [chartData, displayPrice]);
 
   const displaySignal = stockSignal?.signal || (displayChange > 2 ? "Buy" : displayChange < -2 ? "Sell" : "Hold");
-  const displayConfidence = stockSignal?.confidence ?? Math.min(95, 70 + Math.abs(displayChange) * 5);
+  const displayConfidence = Math.round(stockSignal?.confidence ?? Math.min(95, 70 + Math.abs(displayChange) * 5));
 
   const toggleFavorite = (ticker: string) => {
     setFavorites((prev) =>
@@ -712,6 +711,9 @@ export function StockAnalysisPage() {
                           >
                             <Star className={`size-3 ${favorites.includes(stock.ticker) ? "fill-current" : ""}`} />
                           </span>
+                          <div className={`size-7 shrink-0 rounded-lg flex items-center justify-center text-[9px] font-bold ${isActive ? "bg-white/20 text-white" : "bg-[#0D7490]/10 text-[#0D7490]"}`}>
+                            {stock.ticker.slice(0, 2)}
+                          </div>
                           <div className="min-w-0">
                             <div className={`text-sm font-semibold truncate ${isActive ? "text-white" : "text-foreground"}`}>
                               {stock.ticker}
@@ -826,7 +828,9 @@ export function StockAnalysisPage() {
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-[10px] font-semibold text-muted-foreground w-4 text-right tabular-nums">{i + 1}</span>
-                        <span className={`size-1.5 rounded-full shrink-0 ${m.chg >= 0 ? "bg-emerald-500" : "bg-red-500"}`} />
+                        <div className={`size-6 shrink-0 rounded-md flex items-center justify-center text-[8px] font-bold ${m.chg >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
+                          {m.ticker.slice(0, 2)}
+                        </div>
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-foreground truncate">{m.ticker}</div>
                           <div className="text-[11px] text-muted-foreground truncate">{m.name}</div>
@@ -858,8 +862,12 @@ export function StockAnalysisPage() {
               <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                 {/* Identity */}
                 <div className="flex items-center gap-4">
-                  <div className="relative flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-lg">
-                    <TrendingUp className="size-8 text-white" />
+                  <div className="relative flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-lg overflow-hidden">
+                    {financialReport?.data?.profile?.image ? (
+                      <img src={financialReport.data.profile.image} alt={activeSelection.ticker} className="size-full object-contain bg-white p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    ) : (
+                      <span className="text-2xl font-extrabold text-white">{activeSelection.ticker.slice(0, 2)}</span>
+                    )}
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -954,8 +962,8 @@ export function StockAnalysisPage() {
                 {[
                   { icon: Building2, label: "Sector", value: activeSelection.sector, color: "text-foreground" },
                   { icon: Activity, label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : activeSelection.volume, color: "text-foreground" },
-                  { icon: Wallet, label: "Market Cap", value: companyProfile?.marketCap ? `$${(companyProfile.marketCap / 1e9).toFixed(1)}B` : activeSelection.marketCap, color: "text-foreground" },
-                  { icon: BarChart3, label: "P/E Ratio", value: companyProfile?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A"), color: "text-foreground" },
+                  { icon: Wallet, label: "Market Cap", value: financialReport?.data?.keyMetrics?.marketCap ? `$${(financialReport.data.keyMetrics.marketCap / 1e9).toFixed(1)}B` : activeSelection.marketCap, color: "text-foreground" },
+                  { icon: BarChart3, label: "P/E Ratio", value: financialReport?.data?.keyMetrics?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A"), color: "text-foreground" },
                 ].map((m) => (
                   <div key={m.label} className="rounded-xl bg-card/60 p-3 border border-border shadow-sm backdrop-blur">
                     <div className="flex items-center gap-1.5 mb-1.5">
@@ -1464,11 +1472,7 @@ export function StockAnalysisPage() {
                       stockSignal?.positionSize && { label: `Size: ${stockSignal.positionSize}`, cls: "bg-purple-50 text-purple-700 border-purple-100" },
                       stockSignal?.var95 && { label: `VaR: ${stockSignal.var95}`, cls: "bg-orange-50 text-orange-700 border-orange-100" },
                       stockSignal?.cvar95 && { label: `CVaR: ${stockSignal.cvar95}`, cls: "bg-orange-50 text-orange-700 border-orange-100" },
-                    ].filter(Boolean).map((tag: any, i) => (
-                      <span key={i} className={`inline-flex px-2 py-0.5 rounded text-[10px] font-medium border ${tag.cls}`}>
-                        {tag.label}
-                      </span>
-                    )).length > 0 && (
+                    ].filter(Boolean).length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
                         {[
                           stockSignal?.mlWinProb && { label: `ML: ${stockSignal.mlWinProb}`, cls: "bg-blue-50 text-blue-700 border-blue-200" },

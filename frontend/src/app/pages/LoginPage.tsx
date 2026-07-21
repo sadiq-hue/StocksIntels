@@ -181,18 +181,6 @@ export function LoginPage() {
 
   const clear = () => { setError(null); setSuccess(null); };
 
-  const getPwStrength = (pw: string) => {
-    let score = 0;
-    if (pw.length >= 8) score++;
-    if (/[a-z]/.test(pw)) score++;
-    if (/[A-Z]/.test(pw)) score++;
-    if (/\d/.test(pw)) score++;
-    if (/[^a-zA-Z0-9]/.test(pw)) score++;
-    return Math.min(score, 4);
-  };
-  const pwStrength = getPwStrength(password);
-  const pwLabel = ["Weak", "Fair", "Good", "Strong", "Very Strong"];
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); clear();
     if (mode === "login") {
@@ -229,7 +217,6 @@ export function LoginPage() {
         if (!fullName.trim()) { setError("Full name is required"); return; }
         if (password.length < 8) { setError("Password must be at least 8 characters"); return; }
         if (password !== confirmPassword) { setError("Passwords do not match"); return; }
-        if (pwStrength < 3) { setError("Password is too weak â€” include uppercase, lowercase, number or symbol"); return; }
         setIsLoading(true);
         // Try browser geolocation for accurate location
         const coords = await getBrowserCoords();
@@ -413,7 +400,7 @@ export function LoginPage() {
                           </div>
                           <div className="relative">
                             <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
-                            <Input type={showPassword ? "text" : "password"} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" value={password} onChange={(e) => setPassword(e.target.value)}
+                            <Input type={showPassword ? "text" : "password"} placeholder="********" value={password} onChange={(e) => setPassword(e.target.value)}
                               onFocus={() => setFocusedField("password")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("password"), "pr-8 h-10")} required autoComplete="current-password" />
                             <button type="button" onClick={() => setShowPassword(!showPassword)}
@@ -565,7 +552,7 @@ export function LoginPage() {
                           <label className="text-muted-foreground text-sm font-semibold block ml-1">Password</label>
                           <div className="relative">
                             <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
-                            <Input type={showPassword ? "text" : "password"} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" value={password} onChange={(e) => setPassword(e.target.value)}
+                            <Input type={showPassword ? "text" : "password"} placeholder="********" value={password} onChange={(e) => setPassword(e.target.value)}
                               onFocus={() => setFocusedField("password")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("password"), "pr-8 h-10")} required minLength={8} autoComplete="new-password" />
                             <button type="button" onClick={() => setShowPassword(!showPassword)}
@@ -573,24 +560,12 @@ export function LoginPage() {
                               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                           </div>
-                          {password && (
-                            <div className="mt-1.5">
-                              <div className="flex gap-1">
-                                {[0, 1, 2, 3, 4].map((i) => (
-                                  <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${
-                                    i <= pwStrength ? ["bg-red-400", "bg-orange-400", "bg-yellow-400", "bg-lime-500", "bg-emerald-500"][pwStrength] : "bg-muted"
-                                  }`} />
-                                ))}
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-0.5 text-right">{pwLabel[pwStrength]}</p>
-                            </div>
-                          )}
                         </div>
                         <div className="space-y-1.5">
                           <label className="text-muted-foreground text-sm font-semibold block ml-1">Confirm Password</label>
                           <div className="relative">
                             <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "cpw" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
-                            <Input type={showConfirmPw ? "text" : "password"} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                            <Input type={showConfirmPw ? "text" : "password"} placeholder="********" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
                               onFocus={() => setFocusedField("cpw")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("cpw"), "pr-8 h-10")} required minLength={8} autoComplete="new-password" />
                             <button type="button" onClick={() => setShowConfirmPw(!showConfirmPw)}
@@ -607,7 +582,7 @@ export function LoginPage() {
                             className="w-full sm:w-1/3 h-10 text-sm text-muted-foreground hover:text-[#0D7490] font-semibold border border-border rounded-xl hover:bg-muted transition-all">
                             Back
                           </button>
-                          <Button type="submit" disabled={isLoading || verifyCode.length < 6 || !fullName.trim() || password.length < 8 || password !== confirmPassword || pwStrength < 3}
+                          <Button type="submit" disabled={isLoading || verifyCode.length < 6 || !fullName.trim() || password.length < 8 || password !== confirmPassword}
                             className="flex-1 h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                             {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Creating account...</span>
                               : <span className="flex items-center gap-2">Create Account <ArrowRight className="w-4 h-4" /></span>}
@@ -654,7 +629,7 @@ export function LoginPage() {
                       <label className="text-muted-foreground text-sm font-semibold block ml-1">New Password</label>
                       <div className="relative">
                         <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "pw" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
-                          <Input type={showPassword ? "text" : "password"} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                          <Input type={showPassword ? "text" : "password"} placeholder="********" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
                             onFocus={() => setFocusedField("pw")} onBlur={() => setFocusedField(null)}
                             className={cn(inputClasses("pw"), "pr-8 h-10")} required minLength={6} />
                         <button type="button" onClick={() => setShowPassword(!showPassword)}
