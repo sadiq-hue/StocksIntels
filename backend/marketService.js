@@ -394,12 +394,13 @@ async function getNseBaseQuote(symbol) {
   }
 
   // If mystocksAfrica returned previousClose === price (API sometimes caches this),
-  // try AFX to get the real previousClose and recompute change.
+  // try AFX, then MSA historical, to get the real previousClose and recompute change.
   if (msaQuote && msaQuote.previousClose === msaQuote.price && msaQuote.change === 0 && (msaQuote.dayHigh || 0) !== (msaQuote.dayLow || 0)) {
+    // Attempt 1: AFX scraper (works locally, may fail on Railway)
     try {
       const nseAfxMod = require('./nseAfxScraper');
       const enrichPromise = nseAfxMod.fetchNseQuotes().then(() => nseAfxMod.getQuoteForSymbol(symbol));
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AFX enrich timeout')), 10000));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AFX enrich timeout')), 8000));
       const afxEnrich = await Promise.race([enrichPromise, timeoutPromise]);
       if (afxEnrich && Number(afxEnrich.price) > 0 && afxEnrich.previousClose && afxEnrich.previousClose !== afxEnrich.price) {
         const realPrev = afxEnrich.previousClose;
@@ -412,6 +413,30 @@ async function getNseBaseQuote(symbol) {
         msaQuote.provider = 'mystocksAfrica+afx';
       }
     } catch (e) { /* AFX enrichment is best-effort */ }
+
+    // Attempt 2: MSA historical API — if AFX failed, use MSA's own historical data
+    if (msaQuote.previousClose === msaQuote.price && msaQuote.change === 0) {
+      try {
+        const msaHist = require('./mystocksAfricaApi');
+        const histPromise = msaHist.fetchHistorical(symbol, '5d');
+        const histTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('hist timeout')), 10000));
+        const candles = await Promise.race([histPromise, histTimeout]);
+        if (Array.isArray(candles) && candles.length >= 2) {
+          const prevCandle = candles[candles.length - 2];
+          const lastCandle = candles[candles.length - 1];
+          const histPrevClose = Number(prevCandle.close);
+          if (histPrevClose > 0 && histPrevClose !== msaQuote.price) {
+            const derivedChange = msaQuote.price - histPrevClose;
+            const derivedPct = histPrevClose > 0 ? (derivedChange / histPrevClose) * 100 : 0;
+            msaQuote.previousClose = histPrevClose;
+            msaQuote.change = derivedChange;
+            msaQuote.changePercent = derivedPct;
+            msaQuote.changesPercentage = derivedPct;
+            msaQuote.provider = 'mystocksAfrica+hist';
+          }
+        }
+      } catch (e) { /* hist enrichment is best-effort */ }
+    }
   }
 
   if (msaQuote) {
