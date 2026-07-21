@@ -863,11 +863,17 @@ export function StockAnalysisPage() {
                 {/* Identity */}
                 <div className="flex items-center gap-4">
                   <div className="relative flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-lg overflow-hidden">
-                    {financialReport?.data?.profile?.image ? (
-                      <img src={financialReport.data.profile.image} alt={activeSelection.ticker} className="size-full object-contain bg-white p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                    ) : (
-                      <span className="text-2xl font-extrabold text-white">{activeSelection.ticker.slice(0, 2)}</span>
-                    )}
+                    {(() => {
+                      let logoUrl = financialReport?.data?.profile?.image || '';
+                      if (!logoUrl && financialReport?.data?.profile?.website) {
+                        try { const h = new URL(financialReport.data.profile.website).hostname.replace(/^www\./, ''); logoUrl = `https://www.google.com/s2/favicons?domain=${h}&sz=128`; } catch {}
+                      }
+                      return logoUrl ? (
+                        <img src={logoUrl} alt={activeSelection.ticker} className="size-full object-contain bg-white p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      ) : (
+                        <span className="text-2xl font-extrabold text-white">{activeSelection.ticker.slice(0, 2)}</span>
+                      );
+                    })()}
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
