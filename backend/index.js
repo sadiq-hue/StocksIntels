@@ -168,11 +168,7 @@ app.use((req, res, next) => {
   const host = (req.headers.host || '').replace(/:\d+$/, '');
   const fwdHost = (req.headers['x-forwarded-host'] || '').replace(/:\d+$/, '');
   const isAdmin = host === 'admin.stocksintels.com' || fwdHost === 'admin.stocksintels.com';
-  if (req.path === '/__admin-debug') {
-    return res.json({ host, fwdHost, allHeaders: Object.keys(req.headers).sort() });
-  }
   if (isAdmin && !req.path.startsWith('/api/')) {
-    console.log(`[ADMIN] Serving admin.html for host=${host} fwdHost=${fwdHost} path=${req.path}`);
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     return res.sendFile(path.join(__dirname, 'admin.html'));
   }
@@ -11562,14 +11558,7 @@ if (serveFrontend) {
   });
 } else {
   // API-only fallback for separate frontend deployments
-  app.get('/', (req, res) => {
-    const host = (req.headers.host || '').replace(/:\d+$/, '');
-    if (host === 'admin.stocksintels.com') {
-      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-      return res.sendFile(path.join(__dirname, 'admin.html'));
-    }
-    res.json({ status: 'StocksIntels API', time: new Date().toISOString() });
-  });
+  app.get('/', (_req, res) => res.json({ status: 'StocksIntels API', time: new Date().toISOString() }));
 }
 
 // ===================== START SERVER =====================
