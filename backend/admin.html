@@ -93,8 +93,8 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
 
   /* Side detail panels - static stacking on mobile */
   #userDetailPanel,#ticketDetailPanel,#signalDetailPanel{position:static!important;left:auto!important;right:auto!important;border-top:1px solid #e5e7eb;max-height:50vh;padding:12px!important;border-left:none!important;overflow-y:auto!important}
-  #usersLeftPanel,#ticketsLeftPanel,#signalsLeftPanel{width:100%!important}
-  #usersLayout,#ticketsLayout,#tab-signals>.flex-1.min-h-0.relative{flex-direction:column!important}
+  #usersLeftPanel,#ticketsLeftPanel,#signalsLeftPanel{position:static!important;width:100%!important;max-height:60vh}
+  #usersLayout,#ticketsLayout{display:flex!important;flex-direction:column!important}
   #usersLeftPanel,#ticketsLeftPanel{border-right:none!important}
 
   /* Affiliate tab buttons - allow wrapping */
@@ -495,8 +495,8 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
           <input id="userSearchInput" class="input-field" placeholder="Search users..." oninput="debounceSearch()" style="padding-left:36px;border-radius:10px;background:#f9fafb;border-color:#e5e7eb">
         </div>
       </div>
-      <div id="usersLayout" class="flex flex-1 min-h-0 relative overflow-hidden" style="background:#f9fafb">
-        <div id="usersLeftPanel" class="w-full flex-1 min-h-0" style="overflow-y:auto;-webkit-overflow-scrolling:touch">
+      <div id="usersLayout" class="relative" style="background:#f9fafb;flex:1;min-height:0;overflow:hidden">
+        <div id="usersLeftPanel" style="position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch">
           <div style="background:#fff;margin:16px 20px;border:1px solid #e5e7eb;border-radius:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;box-shadow:0 1px 4px rgba(0,0,0,.04)">
             <table class="w-full" style="min-width:600px">
               <thead><tr><th style="padding:12px 16px">User</th><th style="padding:12px 16px">Email</th><th style="padding:12px 16px">Role</th><th style="padding:12px 16px">Trader Type</th><th style="padding:12px 16px">Status</th><th style="padding:12px 16px">Subscription</th></tr></thead>
@@ -573,8 +573,8 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <div class="stat-card text-center"><div class="stat-value text-emerald-600" id="ticketStatResolved">-</div><div class="stat-label">Resolved/Closed</div></div>
       </div>
       <!-- Tickets Table -->
-          <div id="ticketsLayout" class="flex flex-1 min-h-0 relative overflow-hidden">
-        <div id="ticketsLeftPanel" class="w-full flex-1 min-h-0" style="overflow-y:auto;-webkit-overflow-scrolling:touch">
+          <div id="ticketsLayout" class="relative" style="flex:1;min-height:0;overflow:hidden">
+        <div id="ticketsLeftPanel" style="position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch">
           <table class="w-full" style="min-width:600px">
             <thead><tr><th>Email</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Messages</th><th>Created</th></tr></thead>
             <tbody id="ticketsTableBody"></tbody>
@@ -655,8 +655,8 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <input id="sigDateTo" type="date" class="input-field" onchange="debounceSigFilter()" style="font-size:13px;border-radius:8px;background:#f9fafb;border-color:#e5e7eb;height:36px;width:140px">
       </div>
       <!-- Table + Detail -->
-      <div class="flex flex-1 min-h-0 relative overflow-hidden">
-        <div id="signalsLeftPanel" class="w-full min-w-0 min-h-0" style="background:#f9fafb;overflow-y:auto;height:100%">
+      <div class="relative" style="flex:1;min-height:0;overflow:hidden">
+        <div id="signalsLeftPanel" style="position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#f9fafb">
           <div style="margin:0 20px 16px 20px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)">
             <div style="overflow-x:auto">
               <table class="w-full" style="min-width:900px">
