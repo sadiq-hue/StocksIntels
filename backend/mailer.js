@@ -14,18 +14,24 @@ if (process.env.ENSEND_PROJECT_SECRET) {
 // Embed logo as base64 for email clients that support images
 let LOGO_BASE64 = '';
 try {
-  // Try backend/public first (always exists on Railway), then fallbacks
-  const logoPaths = [
-    path.join(__dirname, 'public', 'logo1.jpg'),
-    path.join(__dirname, '..', 'frontend', 'dist', 'logo-thumb.jpg'),
-    path.join(__dirname, '..', 'frontend', 'dist', 'logo1.jpg'),
-    path.join(__dirname, '..', 'frontend', 'public', 'logo1.jpg'),
-  ];
-  for (const p of logoPaths) {
-    if (fs.existsSync(p)) {
-      LOGO_BASE64 = 'data:image/jpeg;base64,' + fs.readFileSync(p).toString('base64');
-      console.log('[MAILER] Logo loaded from', p, '- base64 size:', LOGO_BASE64.length, 'chars');
-      break;
+  // 1) Embedded module (always works — no filesystem dependency)
+  try {
+    LOGO_BASE64 = require('./logo-embedded.js');
+    console.log('[MAILER] Logo loaded from embedded module, base64 size:', LOGO_BASE64.length, 'chars');
+  } catch (_) {
+    // 2) Filesystem fallback
+    const logoPaths = [
+      path.join(__dirname, 'public', 'logo1.jpg'),
+      path.join(__dirname, '..', 'frontend', 'dist', 'logo-thumb.jpg'),
+      path.join(__dirname, '..', 'frontend', 'dist', 'logo1.jpg'),
+      path.join(__dirname, '..', 'frontend', 'public', 'logo1.jpg'),
+    ];
+    for (const p of logoPaths) {
+      if (fs.existsSync(p)) {
+        LOGO_BASE64 = 'data:image/jpeg;base64,' + fs.readFileSync(p).toString('base64');
+        console.log('[MAILER] Logo loaded from', p, '- base64 size:', LOGO_BASE64.length, 'chars');
+        break;
+      }
     }
   }
 } catch (e) {
