@@ -1944,8 +1944,8 @@ function renderUsersPagination(total, page, limit) {
 
 function closeUserDetail() {
   selectedUserId = null;
-  document.getElementById('usersLeftPanel').className = 'w-full';
-  document.getElementById('usersLeftPanel').style.overflowY = 'auto';
+  var p = document.getElementById('usersLeftPanel');
+  p.style.width = ''; p.style.flex = '1 1 0%'; p.style.minHeight = '0'; p.style.borderRight = '';
   document.getElementById('userDetailPanel').classList.add('hidden');
   document.querySelectorAll('.user-row').forEach(r => r.classList.remove('selected'));
 }
@@ -1959,8 +1959,8 @@ function scrollToPanel(el) {
 async function selectUser(id) {
   if (selectedUserId === id) { closeUserDetail(); return; }
   selectedUserId = id;
-  document.getElementById('usersLeftPanel').className = 'w-1/2 border-r border-gray-200';
-  document.getElementById('usersLeftPanel').style.overflowY = 'auto';
+  var p = document.getElementById('usersLeftPanel');
+  p.style.width = '50%'; p.style.flex = 'none'; p.style.borderRight = '1px solid #e5e7eb';
   document.getElementById('userDetailPanel').classList.remove('hidden');
   scrollToPanel(document.getElementById('userDetailPanel'));
   document.getElementById('userDetailContent').innerHTML = '<div class="flex items-center justify-center py-12"><div class="size-5 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin"></div></div>';
@@ -2289,8 +2289,8 @@ let editingSignalId = null;
 
 function closeSignalDetail() {
   selectedSignalId = null;
-  document.getElementById('signalsLeftPanel').className = 'w-full min-w-0 min-h-0';
-  document.getElementById('signalsLeftPanel').style.overflowY = 'auto';
+  var p = document.getElementById('signalsLeftPanel');
+  p.style.width = ''; p.style.flex = '1 1 0%'; p.style.minHeight = '0'; p.style.borderRight = '';
   document.getElementById('signalDetailPanel').classList.add('hidden');
   document.querySelectorAll('.signal-row').forEach(r => r.classList.remove('selected'));
 }
@@ -2390,8 +2390,8 @@ async function fetchSignals() {
 async function selectSignal(id) {
   if (selectedSignalId === id) { closeSignalDetail(); return; }
   selectedSignalId = id;
-  document.getElementById('signalsLeftPanel').className = 'w-1/2 min-w-0 min-h-0';
-  document.getElementById('signalsLeftPanel').style.overflowY = 'auto';
+  var p = document.getElementById('signalsLeftPanel');
+  p.style.width = '50%'; p.style.flex = 'none';
   document.getElementById('signalDetailPanel').classList.remove('hidden');
   scrollToPanel(document.getElementById('signalDetailPanel'));
   document.getElementById('signalDetailContent').innerHTML = '<div class="flex items-center justify-center py-12"><div class="size-5 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin"></div></div>';
@@ -2754,8 +2754,8 @@ let selectedTicketId = null;
 
 function closeTicketDetail() {
   selectedTicketId = null;
-  document.getElementById('ticketsLeftPanel').className = 'w-full';
-  document.getElementById('ticketsLeftPanel').style.overflowY = 'auto';
+  var p = document.getElementById('ticketsLeftPanel');
+  p.style.width = ''; p.style.flex = '1 1 0%'; p.style.minHeight = '0'; p.style.borderRight = '';
   document.getElementById('ticketDetailPanel').classList.add('hidden');
   document.querySelectorAll('.ticket-row').forEach(r => r.classList.remove('selected'));
 }
@@ -2849,8 +2849,8 @@ async function changeTicketPriority(id, priority) {
 async function selectTicket(id) {
   if (selectedTicketId === id) { closeTicketDetail(); return; }
   selectedTicketId = id;
-  document.getElementById('ticketsLeftPanel').className = 'w-1/2';
-  document.getElementById('ticketsLeftPanel').style.overflowY = 'auto';
+  var p = document.getElementById('ticketsLeftPanel');
+  p.style.width = '50%'; p.style.flex = 'none';
   document.getElementById('ticketDetailPanel').classList.remove('hidden');
   scrollToPanel(document.getElementById('ticketDetailPanel'));
   document.getElementById('ticketDetailContent').innerHTML = '<div class="flex items-center justify-center py-12"><div class="size-5 border-2 border-gray-200 border-t-[#0D7490] rounded-full animate-spin"></div></div>';
