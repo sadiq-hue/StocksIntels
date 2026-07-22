@@ -66,8 +66,8 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
 .ticket-row:hover{background:#f9fafb}
 .ticket-row.selected{background:#eff6ff}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
-#usersLeftPanel,#ticketsLeftPanel,#signalsLeftPanel{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden}
-#usersLayout,#ticketsLayout{overflow:hidden}
+#usersLeftPanel,#ticketsLeftPanel,#signalsLeftPanel{min-height:0;overflow-y:auto;overflow-x:hidden}
+#usersLayout,#ticketsLayout,#tab-signals>.flex-1{overflow:hidden}
 .signal-row{cursor:pointer;transition:background .1s}
 .signal-row:hover{background:#f9fafb}
 .signal-row.selected{background:#eff6ff}
@@ -1788,6 +1788,25 @@ function closeMobileSidebar() {
 }
 
 // ── Tab Switching ──
+function resizeScrollPanels() {
+  var panelIds = ['usersLeftPanel','ticketsLeftPanel','signalsLeftPanel'];
+  panelIds.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var tab = el.closest('[id^="tab-"]');
+    if (!tab || tab.classList.contains('hidden')) return;
+    var header = tab.querySelector('.admin-header');
+    var tabRect = tab.getBoundingClientRect();
+    var headerH = header ? header.offsetHeight : 0;
+    var avail = tabRect.height - headerH - 8;
+    if (avail > 50) {
+      el.style.height = avail + 'px';
+      el.style.flex = 'none';
+      el.style.overflowY = 'auto';
+    }
+  });
+}
+window.addEventListener('resize', resizeScrollPanels);
 function switchTab(tab) {
   closeMobileSidebar();
   currentTab = tab;
@@ -1795,19 +1814,17 @@ function switchTab(tab) {
   document.getElementById('tab-' + tab).classList.remove('hidden');
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.querySelector(`.nav-item[data-tab="${tab}"]`).classList.add('active');
-  // Update URL without reloading
-  const url = tab === 'dashboard' ? '/admin' : '/admin/' + tab;
+  var url = tab === 'dashboard' ? '/admin' : '/admin/' + tab;
   history.replaceState({ tab }, '', url);
   showTabLoading();
-  // Auto-hide loading bar after 2.5s fallback
   if (window._tabLoadingTimer) clearTimeout(window._tabLoadingTimer);
   window._tabLoadingTimer = setTimeout(hideTabLoading, 2500);
-  // Clear audit auto-refresh when leaving audit tab
   if (tab !== 'audit' && _auditTimer) {
     clearInterval(_auditTimer);
     _auditTimer = null;
     document.getElementById('auditAutoRefresh').checked = false;
   }
+  requestAnimationFrame(function() { resizeScrollPanels(); setTimeout(resizeScrollPanels, 100); });
   if (tab === 'dashboard') fetchDashboard();
   if (tab === 'users') fetchUsers();
   if (tab === 'subscribers') { fetchSubscriptionPlans(); fetchSubscribers(); }
@@ -1829,7 +1846,7 @@ function switchTab(tab) {
   if (tab === 'audit') { onAuditPeriodChange(); }
   if (tab === 'settings') {
     fetchSettings();
-    const section = document.getElementById('adminManagementSection');
+    var section = document.getElementById('adminManagementSection');
     if (_isSuperAdmin) {
       section.classList.remove('hidden');
       fetchAdmins();
