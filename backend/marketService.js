@@ -394,48 +394,55 @@ async function getNseBaseQuote(symbol) {
   }
 
   // If mystocksAfrica returned previousClose === price (API sometimes caches this),
-  // try AFX, then MSA historical, to get the real previousClose and recompute change.
+  // try multiple sources in PARALLEL to fix previousClose (must complete within ~10s).
   if (msaQuote && msaQuote.previousClose === msaQuote.price && msaQuote.change === 0 && (msaQuote.dayHigh || 0) !== (msaQuote.dayLow || 0)) {
-    // Attempt 1: AFX scraper (works locally, may fail on Railway)
-    try {
-      const nseAfxMod = require('./nseAfxScraper');
-      const enrichPromise = nseAfxMod.fetchNseQuotes().then(() => nseAfxMod.getQuoteForSymbol(symbol));
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AFX enrich timeout')), 8000));
-      const afxEnrich = await Promise.race([enrichPromise, timeoutPromise]);
-      if (afxEnrich && Number(afxEnrich.price) > 0 && afxEnrich.previousClose && afxEnrich.previousClose !== afxEnrich.price) {
-        const realPrev = afxEnrich.previousClose;
-        const derivedChange = msaQuote.price - realPrev;
-        const derivedPct = realPrev > 0 ? (derivedChange / realPrev) * 100 : 0;
-        msaQuote.previousClose = realPrev;
-        msaQuote.change = derivedChange;
-        msaQuote.changePercent = derivedPct;
-        msaQuote.changesPercentage = derivedPct;
-        msaQuote.provider = 'mystocksAfrica+afx';
-      }
-    } catch (e) { /* AFX enrichment is best-effort */ }
+    const enrichTimeout = 10000;
+    const cleanTicker = symbol.replace('NSE:', '');
 
-    // Attempt 2: MSA historical API — if AFX failed, use MSA's own historical data
-    if (msaQuote.previousClose === msaQuote.price && msaQuote.change === 0) {
+    const afxResult = (async () => {
+      try {
+        const nseAfxMod = require('./nseAfxScraper');
+        await Promise.race([nseAfxMod.fetchNseQuotes(), new Promise((_, r) => setTimeout(() => r(new Error('timeout')), enrichTimeout))]);
+        const afxQ = nseAfxMod.getQuoteForSymbol(symbol);
+        if (afxQ && Number(afxQ.price) > 0 && afxQ.previousClose && afxQ.previousClose !== afxQ.price) return { source: 'afx', prev: afxQ.previousClose };
+      } catch (e) { /* best-effort */ }
+      return null;
+    })();
+
+    const histResult = (async () => {
       try {
         const msaHist = require('./mystocksAfricaApi');
-        const histPromise = msaHist.fetchHistorical(symbol, '5d');
-        const histTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('hist timeout')), 10000));
-        const candles = await Promise.race([histPromise, histTimeout]);
+        const candles = await Promise.race([msaHist.fetchHistorical(symbol, '5d'), new Promise((_, r) => setTimeout(() => r(new Error('timeout')), enrichTimeout))]);
         if (Array.isArray(candles) && candles.length >= 2) {
-          const prevCandle = candles[candles.length - 2];
-          const lastCandle = candles[candles.length - 1];
-          const histPrevClose = Number(prevCandle.close);
-          if (histPrevClose > 0 && histPrevClose !== msaQuote.price) {
-            const derivedChange = msaQuote.price - histPrevClose;
-            const derivedPct = histPrevClose > 0 ? (derivedChange / histPrevClose) * 100 : 0;
-            msaQuote.previousClose = histPrevClose;
-            msaQuote.change = derivedChange;
-            msaQuote.changePercent = derivedPct;
-            msaQuote.changesPercentage = derivedPct;
-            msaQuote.provider = 'mystocksAfrica+hist';
-          }
+          const prevClose = Number(candles[candles.length - 2].close);
+          if (prevClose > 0 && prevClose !== msaQuote.price) return { source: 'hist', prev: prevClose };
         }
-      } catch (e) { /* hist enrichment is best-effort */ }
+      } catch (e) { /* best-effort */ }
+      return null;
+    })();
+
+    const msResult = (async () => {
+      try {
+        const ms = require('./mystocksScraper');
+        const msData = await Promise.race([ms.scrapeStockPage(cleanTicker), new Promise((_, r) => setTimeout(() => r(new Error('timeout')), enrichTimeout))]);
+        if (msData && Number(msData.price) > 0 && msData.change !== 0) return { source: 'mystocks', prev: msData.previousClose || (msaQuote.price - msData.change) };
+      } catch (e) { /* best-effort */ }
+      return null;
+    })();
+
+    const winner = await Promise.any([afxResult, histResult, msResult].map(p => p.then(r => r ? Promise.resolve(r) : Promise.reject('no data')))).catch(() => null);
+    if (winner) {
+      const realPrev = winner.prev;
+      const derivedChange = msaQuote.price - realPrev;
+      const derivedPct = realPrev > 0 ? (derivedChange / realPrev) * 100 : 0;
+      msaQuote.previousClose = realPrev;
+      msaQuote.change = derivedChange;
+      msaQuote.changePercent = derivedPct;
+      msaQuote.changesPercentage = derivedPct;
+      msaQuote.provider = `mystocksAfrica+${winner.source}`;
+      console.log(`[NSE enrich] ${symbol}: enriched via ${winner.source}, prevClose=${realPrev}, change=${derivedChange.toFixed(2)}, pct=${derivedPct.toFixed(2)}%`);
+    } else {
+      console.warn(`[NSE enrich] ${symbol}: all 3 enrichment sources failed`);
     }
   }
 

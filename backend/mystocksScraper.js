@@ -219,4 +219,4 @@ function startAutoRefresh() {
   console.log('[myStocks] Auto-refresh started every 5 min');
 }
 
-module.exports = { fetchAllQuotes, getQuoteForSymbol, startAutoRefresh, clearCache, getCacheSize };
+module.exports = { fetchAllQuotes, getQuoteForSymbol, scrapeStockPage, startAutoRefresh, clearCache, getCacheSize };
