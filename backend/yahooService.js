@@ -257,10 +257,14 @@ async function fetchGoogleFinanceQuote(symbol) {
       const priceArr = inner[5];
       if (!priceArr || priceArr[0] == null) continue;
       const result = { price: priceArr[0], change: priceArr[1] || 0, changePercent: priceArr[2] || 0, currency: inner[4] || 'USD', companyName: inner[2] || '' };
+      // Derive previousClose from price and change (consistent with ds:2 data).
+      // ds:8 previousClose is frequently stale/wrong (from a different trading day),
+      // so we compute it ourselves. Verified against Yahoo Finance.
+      result.previousClose = result.price - result.change;
       const ds8 = extractDataArray(resp.data, 'ds:8');
       if (ds8) {
         const row = ds8[0]?.[0];
-        if (row && row.length >= 7) { result.previousClose = row[2]; result.dayLow = row[4]; result.dayHigh = row[5]; }
+        if (row && row.length >= 7) { result.dayLow = row[4]; result.dayHigh = row[5]; }
       }
       try {
         const html = typeof resp.data === 'string' ? resp.data : '';
