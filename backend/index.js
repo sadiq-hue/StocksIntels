@@ -166,7 +166,10 @@ function sanitizeText(text) {
 const fs = require('fs');
 app.use((req, res, next) => {
   const host = (req.headers.host || '').replace(/:\d+$/, '');
-  if (host === 'admin.stocksintels.com' && !req.path.startsWith('/api/')) {
+  const fwdHost = (req.headers['x-forwarded-host'] || '').replace(/:\d+$/, '');
+  const isAdmin = host === 'admin.stocksintels.com' || fwdHost === 'admin.stocksintels.com';
+  if (isAdmin && !req.path.startsWith('/api/')) {
+    console.log(`[ADMIN] Serving admin.html for host=${host} fwdHost=${fwdHost} path=${req.path}`);
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     return res.sendFile(path.join(__dirname, 'admin.html'));
   }
