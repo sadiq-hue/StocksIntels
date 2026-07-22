@@ -101,10 +101,12 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
   #tab-affiliates>.flex.items-center.gap-3{flex-wrap:wrap;gap:6px}
 
   /* Stats grids - reduce columns on mobile */
-  #tab-tickets .grid-cols-4{gap:4px}
+  #tab-tickets .grid-cols-4{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:4px}
   #tab-tickets .stat-card{padding:8px}
   #tab-tickets .stat-value{font-size:16px}
   #tab-signals .grid-cols-5,#tab-payments .grid-cols-4,#tab-affiliates .grid-cols-4,#tab-signal-outcomes .grid-cols-4,#tab-portfolio-history .grid-cols-3{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #tab-subscribers .grid-cols-2{grid-template-columns:1fr!important}
+  #tab-community .grid-cols-2{grid-template-columns:1fr!important}
 
   /* Inline 5-col grids (signals stats, audit sections) - 2 cols on mobile */
   [style*="grid-template-columns:repeat(5,1fr)"]{grid-template-columns:repeat(2,1fr)!important}
@@ -141,6 +143,17 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
 
   /* Stock edit modal - full width on mobile */
   #stockEditModal>div{width:auto!important;padding:16px!important}
+  #stockEditModal .grid-cols-2{grid-template-columns:1fr!important}
+  #stockEditModal .grid-cols-3{grid-template-columns:1fr!important}
+
+  /* Engine portfolio config grid */
+  [style*="grid-template-columns:1fr 1fr 1fr"]{grid-template-columns:1fr!important}
+
+  /* Upload JSON textarea - shorter on mobile */
+  #tab-upload-json textarea[rows]{height:200px!important;min-height:120px}
+
+  /* Flex-wrap safety for headers */
+  .admin-header{flex-wrap:wrap}
 }
 .sidebar-overlay{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.4);display:none}
 .sidebar-overlay.show{display:block}
@@ -319,12 +332,12 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
     <div id="tab-dashboard" class="flex-1 min-h-0 scroll p-6" style="background:linear-gradient(180deg,#f0f9ff 0%,#f9fafb 100%)">
       <!-- Welcome Header -->
       <div class="dash-welcome">
-        <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
           <div>
             <h1 id="greetingText">👋 Loading...</h1>
             <p>Here's what's happening with your platform today.</p>
           </div>
-          <span id="lastUpdated" class="time" style="text-align:right;white-space:nowrap"></span>
+          <span id="lastUpdated" class="time" style="text-align:right"></span>
         </div>
       </div>
 
@@ -484,7 +497,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       </div>
       <div id="usersLayout" class="flex flex-1 min-h-0 relative" style="background:#f9fafb">
         <div id="usersLeftPanel" class="w-full flex-1 min-h-0" style="overflow-y:auto;-webkit-overflow-scrolling:touch">
-          <div style="background:#fff;margin:16px 20px;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)">
+          <div style="background:#fff;margin:16px 20px;border:1px solid #e5e7eb;border-radius:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;box-shadow:0 1px 4px rgba(0,0,0,.04)">
             <table class="w-full" style="min-width:600px">
               <thead><tr><th style="padding:12px 16px">User</th><th style="padding:12px 16px">Email</th><th style="padding:12px 16px">Role</th><th style="padding:12px 16px">Trader Type</th><th style="padding:12px 16px">Status</th><th style="padding:12px 16px">Subscription</th></tr></thead>
               <tbody id="usersTableBody"></tbody>
