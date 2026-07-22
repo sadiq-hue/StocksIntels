@@ -11,32 +11,8 @@ if (process.env.ENSEND_PROJECT_SECRET) {
   console.log('[MAILER] Using Ensend API');
 }
 
-// Embed logo as base64 for email clients that support images
-let LOGO_BASE64 = '';
-try {
-  // 1) Embedded module (always works — no filesystem dependency)
-  try {
-    LOGO_BASE64 = require('./logo-embedded.js');
-    console.log('[MAILER] Logo loaded from embedded module, base64 size:', LOGO_BASE64.length, 'chars');
-  } catch (_) {
-    // 2) Filesystem fallback
-    const logoPaths = [
-      path.join(__dirname, 'public', 'logo1.jpg'),
-      path.join(__dirname, '..', 'frontend', 'dist', 'logo-thumb.jpg'),
-      path.join(__dirname, '..', 'frontend', 'dist', 'logo1.jpg'),
-      path.join(__dirname, '..', 'frontend', 'public', 'logo1.jpg'),
-    ];
-    for (const p of logoPaths) {
-      if (fs.existsSync(p)) {
-        LOGO_BASE64 = 'data:image/jpeg;base64,' + fs.readFileSync(p).toString('base64');
-        console.log('[MAILER] Logo loaded from', p, '- base64 size:', LOGO_BASE64.length, 'chars');
-        break;
-      }
-    }
-  }
-} catch (e) {
-  console.warn('[MAILER] Could not load logo:', e.message);
-}
+// Logo is served via public URL (email clients block data:image base64 URIs)
+const LOGO_URL = 'https://stocksintels.com/logo1.jpg';
 
 async function getTransporter() {
   if (transporter) return transporter;
@@ -140,10 +116,7 @@ function baseWrapper(innerHtml, extraHead = '', unsubscribeUrl = '') {
         <table role="presentation" width="100%" style="max-width:560px;background:${CARD_WHITE};border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04)">
           <tr>
             <td style="background:linear-gradient(135deg,${BRAND_COLOR} 0%,#0a5f8a 100%);padding:20px 32px;text-align:center">
-              ${LOGO_BASE64
-                ? `<img src="${LOGO_BASE64}" alt="StocksIntels" style="max-width:180px;max-height:40px;height:auto;display:inline-block;border:0" />`
-                : `<div style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px">StocksIntels</div>`
-              }
+              <img src="https://stocksintels.com/logo1.jpg" alt="StocksIntels" style="max-width:180px;max-height:40px;height:auto;display:inline-block;border:0" />
               <div style="font-size:11px;color:rgba(255,255,255,0.7);margin-top:4px">Market Intelligence Platform</div>
             </td>
           </tr>
@@ -521,10 +494,7 @@ async function sendDailySentimentEmail(email, data) {
   <div style="background:${BRAND_COLOR};padding:24px 32px">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div>
-        ${LOGO_BASE64
-          ? `<img src="${LOGO_BASE64}" alt="StocksIntels" style="max-width:180px;max-height:32px;height:auto;display:block;border:0" />`
-          : `<div style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:1px">STOCKSINTELS</div>`
-        }
+        <img src="https://stocksintels.com/logo1.jpg" alt="StocksIntels" style="max-width:180px;max-height:32px;height:auto;display:block;border:0" />
         <div style="color:#ffffff;font-size:11px;font-weight:400;margin-top:2px;letter-spacing:0.5px;opacity:0.9">MARKET INTELLIGENCE PLATFORM</div>
       </div>
       <div style="background:rgba(255,255,255,0.2);color:#ffffff;font-size:11px;font-weight:600;padding:4px 10px;border-radius:4px;letter-spacing:0.5px">MARKET SENTIMENT</div>
