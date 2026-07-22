@@ -66,6 +66,8 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
 .ticket-row:hover{background:#f9fafb}
 .ticket-row.selected{background:#eff6ff}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+#usersLeftPanel,#ticketsLeftPanel,#signalsLeftPanel{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden}
+#usersLayout,#ticketsLayout{overflow:hidden}
 .signal-row{cursor:pointer;transition:background .1s}
 .signal-row:hover{background:#f9fafb}
 .signal-row.selected{background:#eff6ff}
@@ -495,7 +497,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
           <input id="userSearchInput" class="input-field" placeholder="Search users..." oninput="debounceSearch()" style="padding-left:36px;border-radius:10px;background:#f9fafb;border-color:#e5e7eb">
         </div>
       </div>
-      <div id="usersLayout" class="flex flex-1 min-h-0 relative" style="background:#f9fafb">
+      <div id="usersLayout" class="flex flex-col flex-1 min-h-0 relative" style="background:#f9fafb">
         <div id="usersLeftPanel" class="w-full flex-1 min-h-0" style="overflow-y:auto;-webkit-overflow-scrolling:touch">
           <div style="background:#fff;margin:16px 20px;border:1px solid #e5e7eb;border-radius:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;box-shadow:0 1px 4px rgba(0,0,0,.04)">
             <table class="w-full" style="min-width:600px">
@@ -573,7 +575,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <div class="stat-card text-center"><div class="stat-value text-emerald-600" id="ticketStatResolved">-</div><div class="stat-label">Resolved/Closed</div></div>
       </div>
       <!-- Tickets Table -->
-          <div id="ticketsLayout" class="flex flex-1 min-h-0 relative">
+          <div id="ticketsLayout" class="flex flex-col flex-1 min-h-0 relative">
         <div id="ticketsLeftPanel" class="w-full flex-1 min-h-0" style="overflow-y:auto;-webkit-overflow-scrolling:touch">
           <table class="w-full" style="min-width:600px">
             <thead><tr><th>Email</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Messages</th><th>Created</th></tr></thead>
