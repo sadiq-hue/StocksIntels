@@ -23,7 +23,7 @@ import {
   Info, Shield, Wallet, Target, LineChart,
   ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react";
-import { globalStocks, kenyanStocks, getTickerLogoUrl, formatMarketCap, type StockListItem, type StockMarket } from "../data/stockUniverses";
+import { globalStocks, kenyanStocks, formatMarketCap, type StockListItem, type StockMarket } from "../data/stockUniverses";
 
 // NSE trading hours: Mon–Fri 09:30–15:30 EAT (UTC+3). Provider marketState is
 // unreliable for NSE, so derive open/closed from exchange time on the client.
@@ -864,17 +864,9 @@ export function StockAnalysisPage() {
               <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
                 {/* Identity */}
                 <div className="flex items-center gap-4">
-                  <div className="relative flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-lg overflow-hidden">
-                    {(() => {
-                      const logoUrl = financialReport?.data?.profile?.image
-                        || getTickerLogoUrl(activeSelection.ticker)
-                        || (financialReport?.data?.profile?.website ? (() => { try { return `https://www.google.com/s2/favicons?domain=${new URL(financialReport.data.profile.website).hostname.replace(/^www\./, '')}&sz=128`; } catch { return ''; } })() : '');
-                      return logoUrl ? (
-                        <img src={logoUrl} alt={activeSelection.ticker} className="size-full object-contain bg-white p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      ) : (
-                        <span className="text-2xl font-extrabold text-white">{activeSelection.ticker.slice(0, 2)}</span>
-                      );
-                    })()}
+                  <div className="relative flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0D7490] via-[#0EA5E9] to-[#1e3a5f] shadow-lg shadow-[#0D7490]/20 ring-2 ring-[#0EA5E9]/30 ring-offset-2 ring-offset-card">
+                    <span className="text-sm font-black text-white/90 tracking-tight select-none">[{activeSelection.ticker}]</span>
+                    <div className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-emerald-400 border-2 border-card" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
