@@ -174,6 +174,16 @@ if (serveFrontend) {
 // Serve backend/public assets (logo, etc.) for admin panel
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Admin subdomain: serve admin.html for all non-API routes
+app.use((req, res, next) => {
+  const host = (req.headers.host || '').replace(/:\d+$/, '');
+  if (host === 'admin.stocksintels.com' && !req.path.startsWith('/api/')) {
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    return res.sendFile(path.join(__dirname, 'admin.html'));
+  }
+  next();
+});
+
 // ── Admin API Routes ─────────────────────────────────────────────
 // Extra security headers for admin endpoints
 app.use('/api/admin', (req, res, next) => {
