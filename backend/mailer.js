@@ -14,14 +14,19 @@ if (process.env.ENSEND_PROJECT_SECRET) {
 // Embed logo as base64 for email clients that support images
 let LOGO_BASE64 = '';
 try {
-  // Try thumbnail first (smaller), fall back to full logo
-  let logoPath = path.join(__dirname, '..', 'frontend', 'dist', 'logo-thumb.jpg');
-  if (!fs.existsSync(logoPath)) {
-    logoPath = path.join(__dirname, '..', 'frontend', 'dist', 'logo1.jpg');
-  }
-  if (fs.existsSync(logoPath)) {
-    LOGO_BASE64 = 'data:image/jpeg;base64,' + fs.readFileSync(logoPath).toString('base64');
-    console.log('[MAILER] Logo loaded, base64 size:', LOGO_BASE64.length, 'chars');
+  // Try backend/public first (always exists on Railway), then fallbacks
+  const logoPaths = [
+    path.join(__dirname, 'public', 'logo1.jpg'),
+    path.join(__dirname, '..', 'frontend', 'dist', 'logo-thumb.jpg'),
+    path.join(__dirname, '..', 'frontend', 'dist', 'logo1.jpg'),
+    path.join(__dirname, '..', 'frontend', 'public', 'logo1.jpg'),
+  ];
+  for (const p of logoPaths) {
+    if (fs.existsSync(p)) {
+      LOGO_BASE64 = 'data:image/jpeg;base64,' + fs.readFileSync(p).toString('base64');
+      console.log('[MAILER] Logo loaded from', p, '- base64 size:', LOGO_BASE64.length, 'chars');
+      break;
+    }
   }
 } catch (e) {
   console.warn('[MAILER] Could not load logo:', e.message);
@@ -112,7 +117,7 @@ const GREEN = '#059669';
 const RED = '#dc2626';
 const AMBER = '#d97706';
 
-function baseWrapper(innerHtml, extraHead = '') {
+function baseWrapper(innerHtml, extraHead = '', unsubscribeUrl = '') {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -146,6 +151,7 @@ function baseWrapper(innerHtml, extraHead = '') {
               <div style="font-size:11px;color:${TEXT_LIGHT};line-height:1.6">
                 <div style="font-weight:600;color:${TEXT_MED};margin-bottom:4px">StocksIntels</div>
                 <div>This is an automated message from StocksIntels.</div>
+                ${unsubscribeUrl ? `<div style="margin-top:8px"><a href="${unsubscribeUrl}" style="color:${BRAND_COLOR};font-size:11px;text-decoration:underline">Unsubscribe from Hot Market News</a></div>` : ''}
                 <div style="margin-top:4px">&copy; ${new Date().getFullYear()} StocksIntels. All rights reserved.</div>
               </div>
             </td>
@@ -797,6 +803,10 @@ async function sendHotNewsEmail(email, data) {
     </tr>`;
   }).join('');
 
+  const unsubscribeToken = Buffer.from(email, 'utf8').toString('base64url');
+  const appUrl = process.env.APP_URL || 'https://stocksintels.com';
+  const unsubscribeUrl = `${appUrl}/api/unsubscribe?token=${unsubscribeToken}`;
+
   const html = baseWrapper(`
     <div style="text-align:center;margin-bottom:24px">
       <div style="font-size:20px;font-weight:700;color:${TEXT_DARK}">Hot Market News</div>
@@ -816,7 +826,7 @@ async function sendHotNewsEmail(email, data) {
     <div style="text-align:center;margin-bottom:16px">
       <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/news" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">View All News</a>
     </div>
-  `);
+  `, '', unsubscribeUrl);
 
   return sendViaTransport({ to: email, subject, html, label: 'Hot news' });
 }

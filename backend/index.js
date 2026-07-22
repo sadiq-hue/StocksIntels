@@ -5250,6 +5250,36 @@ app.post('/api/user/weekly-digest-preference', async (req, res) => {
   }
 });
 
+// --- Unsubscribe from Hot News Emails ---
+app.get('/api/unsubscribe', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).send('<html><body style="font-family:sans-serif;text-align:center;padding:60px 20px"><h2>Invalid unsubscribe link</h2><p>Please check the link and try again.</p></body></html>');
+    let email;
+    try {
+      email = Buffer.from(token, 'base64url').toString('utf8');
+    } catch {
+      return res.status(400).send('<html><body style="font-family:sans-serif;text-align:center;padding:60px 20px"><h2>Invalid unsubscribe link</h2><p>The link appears to be malformed.</p></body></html>');
+    }
+    if (!email || !email.includes('@')) {
+      return res.status(400).send('<html><body style="font-family:sans-serif;text-align:center;padding:60px 20px"><h2>Invalid email in link</h2><p>Please contact support.</p></body></html>');
+    }
+    await pool.query('UPDATE users SET sentiment_opt_in = false WHERE email = $1', [email]);
+    console.log(`[UNSUBSCRIBE] ${email} unsubscribed from hot news emails`);
+    res.send(`<html><body style="font-family:sans-serif;text-align:center;padding:60px 20px;background:#f4f6f8">
+      <div style="max-width:480px;margin:0 auto;background:#fff;padding:40px;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
+        <div style="font-size:32px;margin-bottom:16px">&#10003;</div>
+        <h2 style="color:#1e293b;margin-bottom:8px">You've been unsubscribed</h2>
+        <p style="color:#64748b;font-size:14px;line-height:1.6">You will no longer receive Hot Market News emails from StocksIntels.</p>
+        <p style="color:#94a3b8;font-size:12px;margin-top:24px">Changed your mind? Log in to your account and re-enable email notifications in Settings.</p>
+      </div>
+    </body></html>`);
+  } catch (error) {
+    console.error('[UNSUBSCRIBE] Error:', error.message);
+    res.status(500).send('<html><body style="font-family:sans-serif;text-align:center;padding:60px 20px"><h2>Something went wrong</h2><p>Please try again later.</p></body></html>');
+  }
+});
+
 // --- Daily Brief Preference ---
 app.get('/api/user/daily-brief-preference', async (req, res) => {
   try {
@@ -11693,11 +11723,12 @@ server.listen(port, '0.0.0.0', async () => {
     console.log('[CRON] Daily paper trading portfolio report scheduled Mon-Fri at midnight EAT (00:00 EAT)');
 
     // Schedule daily sentiment email at midnight EAT (00:00 EAT)
-    cron.schedule('0 0 * * 1-5', () => {
-      console.log('[SENTIMENT CRON] Running daily sentiment report...');
-      sendDailySentimentReports();
-    });
-    console.log('[SENTIMENT CRON] Daily sentiment email scheduled Mon-Fri at midnight EAT (00:00 EAT)');
+    // DISABLED: Daily sentiment emails contain mostly zero/placeholder data (all gainers/losers show 0%, signals 0)
+    // cron.schedule('0 0 * * 1-5', () => {
+    //   console.log('[SENTIMENT CRON] Running daily sentiment report...');
+    //   sendDailySentimentReports();
+    // });
+    // console.log('[SENTIMENT CRON] Daily sentiment email scheduled Mon-Fri at midnight EAT (00:00 EAT)');
 
     // Schedule ML model retraining check every 2 hours
     // The actual retrain frequency is controlled by engineConfig.training.retrain_frequency_hours (default 24)
