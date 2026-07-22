@@ -106,6 +106,17 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
   #tab-tickets .stat-value{font-size:16px}
   #tab-signals .grid-cols-5,#tab-payments .grid-cols-4,#tab-affiliates .grid-cols-4,#tab-signal-outcomes .grid-cols-4,#tab-portfolio-history .grid-cols-3{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 
+  /* Inline 5-col grids (signals stats, audit sections) - 2 cols on mobile */
+  [style*="grid-template-columns:repeat(5,1fr)"]{grid-template-columns:repeat(2,1fr)!important}
+  [style*="grid-template-columns:repeat(3,1fr)"]{grid-template-columns:1fr!important}
+  [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}
+
+  /* Dashboard welcome - stack on mobile */
+  .dash-welcome{padding:16px!important}
+  .dash-welcome h1{font-size:16px!important}
+  .dash-welcome p{font-size:13px!important}
+  .dash-welcome .time{display:block;text-align:left!important;margin-top:6px}
+
   /* Signals filter row - stack inputs */
   #tab-signals .flex-wrap.gap-3{gap:4px}
   #tab-signals .input-field{width:100%!important;margin-bottom:4px}
@@ -120,6 +131,16 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
   /* Audit header - compact */
   #tab-audit .flex-wrap.gap-3{gap:6px}
   #tab-audit select.input-field{width:100%!important;margin-bottom:4px}
+
+  /* Login form - smaller on mobile */
+  #loginScreen>div{padding:24px!important;width:auto!important}
+
+  /* Stocks header - stack search */
+  #tab-stocks .admin-header{flex-direction:column;align-items:flex-start!important}
+  #tab-stocks .input-field{width:100%!important}
+
+  /* Stock edit modal - full width on mobile */
+  #stockEditModal>div{width:auto!important;padding:16px!important}
 }
 .sidebar-overlay{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.4);display:none}
 .sidebar-overlay.show{display:block}

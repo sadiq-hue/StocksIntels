@@ -168,7 +168,7 @@ app.use((req, res, next) => {
   const host = (req.headers.host || '').replace(/:\d+$/, '');
   const fwdHost = (req.headers['x-forwarded-host'] || '').replace(/:\d+$/, '');
   const isAdmin = host === 'admin.stocksintels.com' || fwdHost === 'admin.stocksintels.com';
-  if (isAdmin && !req.path.startsWith('/api/')) {
+  if (isAdmin && !req.path.startsWith('/api/') && !req.path.includes('.')) {
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     return res.sendFile(path.join(__dirname, 'admin.html'));
   }
