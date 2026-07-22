@@ -162,19 +162,8 @@ function sanitizeText(text) {
   return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
 }
 
-// ── Frontend Static Serving ───────────────────────────────────────
-// When the frontend is deployed separately (e.g. Vercel), the backend
-// runs in API-only mode and does not try to serve a local dist folder.
+// ── Admin subdomain: serve admin.html BEFORE static/SPA fallback ──
 const fs = require('fs');
-const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
-const serveFrontend = fs.existsSync(frontendDist);
-if (serveFrontend) {
-  app.use(express.static(frontendDist));
-}
-// Serve backend/public assets (logo, etc.) for admin panel
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Admin subdomain: serve admin.html for all non-API routes
 app.use((req, res, next) => {
   const host = (req.headers.host || '').replace(/:\d+$/, '');
   if (host === 'admin.stocksintels.com' && !req.path.startsWith('/api/')) {
@@ -183,6 +172,15 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// ── Frontend Static Serving ───────────────────────────────────────
+const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
+const serveFrontend = fs.existsSync(frontendDist);
+if (serveFrontend) {
+  app.use(express.static(frontendDist));
+}
+// Serve backend/public assets (logo, etc.) for admin panel
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Admin API Routes ─────────────────────────────────────────────
 // Extra security headers for admin endpoints
