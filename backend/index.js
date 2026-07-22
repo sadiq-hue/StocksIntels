@@ -11548,7 +11548,14 @@ if (serveFrontend) {
   });
 } else {
   // API-only fallback for separate frontend deployments
-  app.get('/', (_req, res) => res.json({ status: 'StocksIntels API', time: new Date().toISOString() }));
+  app.get('/', (req, res) => {
+    const host = (req.headers.host || '').replace(/:\d+$/, '');
+    if (host === 'admin.stocksintels.com') {
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return res.sendFile(path.join(__dirname, 'admin.html'));
+    }
+    res.json({ status: 'StocksIntels API', time: new Date().toISOString() });
+  });
 }
 
 // ===================== START SERVER =====================
