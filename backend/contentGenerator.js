@@ -153,23 +153,29 @@ function buildGlobalTheme(indices, gainers, sentiment, topSector, sectors) {
 function buildWhatToWatch(summary, nse20, sectors) {
   const totalSignals = summary?.signals?.total || 0;
   const strongBuys = summary?.signals?.strongBuys || 0;
+  const buys = summary?.signals?.buys || 0;
   const sells = summary?.signals?.sells || 0;
-  let text = 'This week, monitor ';
-  if (strongBuys > 0) {
-    text += `${strongBuys} strong buy signal${strongBuys > 1 ? 's' : ''} for potential breakout opportunities. `;
+  const parts = [];
+  if (totalSignals > 0) {
+    parts.push(`StocksIntels AI is tracking ${totalSignals} active signals across NSE and NYSE.`);
+  }
+  if (strongBuys > 0 || buys > 0) {
+    const buyTotal = (strongBuys || 0) + (buys || 0);
+    parts.push(`${buyTotal} stock${buyTotal > 1 ? 's' : ''} showing buy-side momentum — potential breakout candidates.`);
   }
   if (sells > 0) {
-    text += `${sells} sell signal${sells > 1 ? 's' : ''} suggest caution on overextended positions. `;
-  }
-  if (totalSignals > 0) {
-    text += `StocksIntels AI tracks ${totalSignals} active signals. `;
+    parts.push(`${sells} sell signal${sells > 1 ? 's' : ''} suggest${sells === 1 ? 's' : ''} caution on overextended positions.`);
   }
   if (nse20?.value) {
-    text += `Watch the NSE 20 ${nse20.value} level as a key support/resistance zone.`;
-  } else {
-    text += 'Watch for key support and resistance levels as the new trading week opens.';
+    parts.push(`Watch the NSE 20 at ${nse20.value} (${nse20.change || '--'}) as a key support/resistance zone for the week ahead.`);
   }
-  return text;
+  if (sectors && sectors.length > 0) {
+    const top = sectors[0];
+    const bottom = sectors[sectors.length - 1];
+    if (top) parts.push(`${top.sector} leads sector performance at ${top.avgChange}% — keep on your radar.`);
+    if (bottom && bottom.avgChange < 0) parts.push(`${bottom.sector} is lagging at ${bottom.avgChange}% — watch for further weakness.`);
+  }
+  return parts.length > 0 ? parts.join(' ') : 'Watch for key support and resistance levels as the new trading week opens.';
 }
 
 function buildMacroBackdrop(sectors, summary, sp500, fxRate) {
