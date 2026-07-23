@@ -11457,7 +11457,7 @@ async function sendDailyBriefToUser(userId, email, fullName) {
       { label: 'USD/KES', value: '--', change: '--', signal: '--' },
     ];
 
-    const combinedMovers = moversRes?.combined?.gainers || (Array.isArray(moversRes?.combined) ? moversRes.combined : []);
+    const combinedMovers = [...(moversRes?.combined?.gainers || []), ...(moversRes?.combined?.losers || [])];
     const yesterdayTopMovers = editorial?.yesterdayTopMovers?.length ? editorial.yesterdayTopMovers : (Array.isArray(combinedMovers) ? combinedMovers.slice(0, 6).map(m => ({
       symbol: m.symbol || '--',
       company: m.company || m.company_name || m.name || '',
