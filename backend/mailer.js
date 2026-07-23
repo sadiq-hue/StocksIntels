@@ -412,10 +412,10 @@ async function sendDailySentimentEmail(email, data) {
   const nseGainerRows = (nseGainers || []).slice(0, 8).map(s => {
     const signal = s.signal || s.aiSignal || '';
     return `<tr>
-      <td style="padding:9px 10px;border-bottom:1px solid ${BORDER};font-weight:700;color:${BRAND_COLOR}">${s.symbol || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid ${BORDER};font-weight:700;color:${BRAND_COLOR}">${cleanTicker(s)}</td>
       <td style="padding:9px 10px;border-bottom:1px solid ${BORDER};color:${TEXT_DARK}">${s.company_name || s.name || ''}</td>
       <td style="padding:9px 10px;border-bottom:1px solid ${BORDER};color:${TEXT_LIGHT};font-size:12px">${s.sector || ''}</td>
-      <td style="padding:9px 10px;border-bottom:1px solid ${BORDER};text-align:right;font-weight:600;color:${GREEN}">+${s.changePercent?.toFixed(2) || '0.00'}%</td>
+      <td style="padding:9px 10px;border-bottom:1px solid ${BORDER};text-align:right;font-weight:600;color:${GREEN}">${s.change || (s.changePercent ? '+' + s.changePercent.toFixed(2) + '%' : '0.00%')}</td>
       ${signal ? `<td style="padding:9px 10px;border-bottom:1px solid ${BORDER};text-align:right"><span style="${badgeStyle(signal)};display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${signal}</span></td>` : ''}
     </tr>`;
   }).join('');
@@ -423,10 +423,10 @@ async function sendDailySentimentEmail(email, data) {
   const nseLoserRows = (nseLosers || []).slice(0, 8).map(s => {
     const signal = s.signal || s.aiSignal || '';
     return `<tr>
-      <td style="padding:9px 10px;border-bottom:1px solid ${BORDER};font-weight:700;color:${BRAND_COLOR}">${s.symbol || ''}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid ${BORDER};font-weight:700;color:${BRAND_COLOR}">${cleanTicker(s)}</td>
       <td style="padding:9px 10px;border-bottom:1px solid ${BORDER};color:${TEXT_DARK}">${s.company_name || s.name || ''}</td>
       <td style="padding:9px 10px;border-bottom:1px solid ${BORDER};color:${TEXT_LIGHT};font-size:12px">${s.sector || ''}</td>
-      <td style="padding:9px 10px;border-bottom:1px solid ${BORDER};text-align:right;font-weight:600;color:${RED}">${s.changePercent?.toFixed(2) || '0.00'}%</td>
+      <td style="padding:9px 10px;border-bottom:1px solid ${BORDER};text-align:right;font-weight:600;color:${RED}">${s.change || (s.changePercent ? s.changePercent.toFixed(2) + '%' : '0.00%')}</td>
       ${signal ? `<td style="padding:9px 10px;border-bottom:1px solid ${BORDER};text-align:right"><span style="${badgeStyle(signal)};display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${signal}</span></td>` : ''}
     </tr>`;
   }).join('');
@@ -904,13 +904,19 @@ function section(title, bodyHtml) {
     </div>`;
 }
 
+function cleanTicker(s) {
+  let t = s.symbol || s.ticker || '';
+  if (t.startsWith('NSE:')) t = t.slice(4);
+  return t;
+}
+
 function gainerTable(title, rows) {
-  const r = (rows || []).slice(0, 6).map(s => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${s.symbol}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${GREEN}">+${s.changePercent?.toFixed(2) || '0.00'}%</td></tr>`).join('');
+  const r = (rows || []).slice(0, 6).map(s => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${cleanTicker(s)}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || s.name || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${GREEN}">${s.change || (s.changePercent ? '+' + s.changePercent.toFixed(2) + '%' : '0.00%')}</td></tr>`).join('');
   return `<div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden"><div style="background:${GREEN};color:#ffffff;padding:8px 12px;font-size:12px;font-weight:600">${title}</div><table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px"><thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Name</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Chg</th></tr></thead><tbody>${r || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No data</td></tr>'}</tbody></table></div>`;
 }
 
 function loserTable(title, rows) {
-  const r = (rows || []).slice(0, 6).map(s => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${s.symbol}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${RED}">${s.changePercent?.toFixed(2) || '0.00'}%</td></tr>`).join('');
+  const r = (rows || []).slice(0, 6).map(s => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${cleanTicker(s)}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || s.name || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${RED}">${s.change || (s.changePercent ? s.changePercent.toFixed(2) + '%' : '0.00%')}</td></tr>`).join('');
   return `<div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden"><div style="background:${RED};color:#ffffff;padding:8px 12px;font-size:12px;font-weight:600">${title}</div><table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px"><thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Name</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Chg</th></tr></thead><tbody>${r || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No data</td></tr>'}</tbody></table></div>`;
 }
 

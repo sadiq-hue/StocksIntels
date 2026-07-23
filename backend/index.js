@@ -11146,10 +11146,13 @@ async function sendPortfolioReportToUser(userId, email, fullName) {
       if (hasValidSnapshot) {
         const tv = totalEquity * fxRate, tc = totalBalance * fxRate;
         const sp = [...holdings].sort((a, b) => b.pnlPercent - a.pnlPercent);
+        const sectorMap = {};
+        for (const h of holdings) { const vk = h.market === 'NSE' ? h.value : h.value * fxRate; sectorMap[h.sector] = (sectorMap[h.sector] || 0) + vk; }
+        const sa = Object.entries(sectorMap).map(([s, v]) => ({ sector: s, value: v, pct: tv > 0 ? Math.round((v / tv) * 100) : 0 })).sort((a, b) => b.value - a.value);
         await sendPortfolioReportEmail(email, {
           userName: fullName, generatedAt: new Date().toISOString(),
           summary: { totalValue: Math.round(tv * 100) / 100, totalCost: Math.round(tc * 100) / 100, totalPnL: Math.round((tv - tc) * 100) / 100, pnlPercent: tc > 0 ? Math.round(((tv - tc) / tc) * 1000) / 10 : 0 },
-          holdings, sectorAllocation: [], bestPerformers: sp.filter(h => h.pnlPercent > 0).slice(0, 5), worstPerformers: sp.filter(h => h.pnlPercent < 0).slice(-5).reverse(), fxRate,
+          holdings, sectorAllocation: sa, bestPerformers: sp.filter(h => h.pnlPercent > 0).slice(0, 5), worstPerformers: sp.filter(h => h.pnlPercent < 0).slice(-5).reverse(), fxRate,
         });
         console.log(`[SINGLE REPORT] Broker portfolio report sent to ${email}`);
         return true;
@@ -11454,12 +11457,12 @@ async function sendDailyBriefToUser(userId, email, fullName) {
       { label: 'USD/KES', value: '--', change: '--', signal: '--' },
     ];
 
-    const combinedMovers = moversRes?.combined?.gainers || moversRes?.combined || [];
+    const combinedMovers = moversRes?.combined?.gainers || (Array.isArray(moversRes?.combined) ? moversRes.combined : []);
     const yesterdayTopMovers = editorial?.yesterdayTopMovers?.length ? editorial.yesterdayTopMovers : (Array.isArray(combinedMovers) ? combinedMovers.slice(0, 6).map(m => ({
       symbol: m.symbol || '--',
-      company: m.company_name || '',
-      change: m.changePercent ? (m.isPositive ? '+' : '') + m.changePercent.toFixed(2) + '%' : '--',
-      volume: m.volume?.toLocaleString() || '--',
+      company: m.company || m.company_name || m.name || '',
+      change: m.change || (m.changePercent ? (m.isPositive ? '+' : '') + m.changePercent.toFixed(2) + '%' : '--'),
+      volume: m.volume && m.volume !== '0' && m.volume !== '--' ? m.volume : '--',
     })) : []);
 
     await sendDailyBriefEmail(email, {

@@ -402,7 +402,8 @@ function buildEarningsResults(signals) {
     const rev = m.revenue || m.Revenue || '--';
     const np = m.netProfit || m['Net Profit'] || m['Net Income'] || m.netIncome || '--';
     const eps = m.eps || m.EPS || '--';
-    const est = m.estimatedEarnings || m.estimates?.eps || '--';
+    const est = m.estimatedEarnings || m.estimates?.eps || null;
+    const fundGrade = s.analysis?.fundamental?.grade || '';
     const isBeat = s.signal === 'Strong Buy' || s.signal === 'Buy';
     const isMiss = s.signal === 'Strong Sell' || s.signal === 'Sell';
     return {
@@ -411,11 +412,11 @@ function buildEarningsResults(signals) {
       exchange: s.market === 'NSE' ? 'NSE' : 'NYSE',
       period: 'FY',
       verdict: isBeat ? 'BEAT' : isMiss ? 'MISS' : 'IN-LINE',
-      revenue: typeof rev === 'number' ? rev.toLocaleString() : rev,
-      netProfit: typeof np === 'number' ? np.toLocaleString() : np,
-      eps: typeof eps === 'number' ? eps.toFixed(2) : eps,
-      vsEstimate: est && typeof eps === 'number' ? (eps > est ? '+' : '') + (eps - (est || 0)).toFixed(2) : '--',
-      aiAnalysis: s.reason || `AI analysis: ${s.name} shows ${s.signal} signal with ${s.confidence}% confidence. ${s.analysis?.fundamental?.grade ? `Fundamental grade: ${s.analysis.fundamental.grade}.` : ''} ${s.analysis?.technical?.grade ? `Technical grade: ${s.analysis.technical.grade}.` : ''}`,
+      revenue: typeof rev === 'number' ? '$' + rev.toLocaleString() : rev,
+      netProfit: typeof np === 'number' ? '$' + np.toLocaleString() : np,
+      eps: typeof eps === 'number' ? '$' + eps.toFixed(2) : eps,
+      vsEstimate: est && typeof eps === 'number' ? (eps > est ? '+' : '') + (eps - est).toFixed(2) : '--',
+      aiAnalysis: s.reason || `Fundamental grade: ${fundGrade || 'N/A'}. ${s.name} shows ${s.signal} signal with ${s.confidence}% confidence. ${s.analysis?.technical?.grade ? `Technical: ${s.analysis.technical.grade}.` : ''}`,
       shortTermSignal: s.signal === 'Strong Buy' ? 'BULLISH' : s.signal === 'Strong Sell' ? 'BEARISH' : 'NEUTRAL',
       dividend: m.dividendYield ? `${m.dividendYield}%` : undefined,
       watchPrice: s.target1 || undefined,
