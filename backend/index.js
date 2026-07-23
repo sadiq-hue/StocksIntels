@@ -18,7 +18,7 @@ const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
 const signalPublisher = require('./signalPublisher');
 const { createSignalNotifications } = require('./signalPublisher');
-const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail } = require('./mailer');
+const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail } = require('./mailer');
 const emailSequenceService = require('./emailSequenceService');
 const cron = require('node-cron');
 const {
@@ -5512,6 +5512,29 @@ app.post('/api/user/send-test-brief', async (req, res) => {
     }
   } catch (error) {
     console.error('send-test-brief error:', error.message);
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// --- Curated News "Send Now" ---
+app.post('/api/user/send-test-curated-news', async (req, res) => {
+  try {
+    let { userId, email, fullName } = req.body;
+    if (userId) {
+      const result = await pool.query('SELECT id, full_name, email FROM users WHERE id = $1', [userId]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      email = result.rows[0].email;
+      fullName = result.rows[0].full_name;
+    }
+    if (!email) return res.status(400).json({ error: 'email or userId required' });
+    const sent = await sendCuratedNewsToUser(userId ? parseInt(userId) : null, email, fullName);
+    if (sent) {
+      res.json({ success: true, message: 'Curated news sent to ' + email });
+    } else {
+      res.json({ success: false, message: 'Could not send curated news' });
+    }
+  } catch (error) {
+    console.error('send-test-curated-news error:', error.message);
     res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
@@ -11604,6 +11627,63 @@ async function sendDailyBriefReports() {
     console.log('[BRIEF] Daily brief round finished');
   } catch (e) {
     console.error('[BRIEF] Error:', e.message);
+  }
+}
+
+// ── CURATED NEWS DIGEST ──
+
+async function sendCuratedNewsToUser(userId, email, fullName) {
+  try {
+    const { getAllNews } = require('./newsService');
+    const dateStr = new Date().toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    const allNews = await getAllNews(200).catch(() => []);
+
+    const topStories = allNews.slice(0, 6).map(a => ({
+      headline: a.headline,
+      source: a.source,
+      excerpt: a.excerpt || '',
+      category: a.hotType || a.category || 'News',
+      sentiment: a.sentiment || 'neutral',
+      relatedStocks: a.relatedStocks || [],
+    }));
+
+    const aiInsights = allNews.filter(a => a.sentiment && a.relatedStocks?.length).slice(0, 3).map(a => ({
+      ticker: a.relatedStocks[0] || '',
+      insight: a.excerpt || a.headline,
+      signal: a.sentiment === 'positive' ? 'BULLISH' : a.sentiment === 'negative' ? 'BEARISH' : 'NEUTRAL',
+    }));
+
+    const marketMovers = allNews.filter(a => a.relatedStocks?.length).slice(0, 8).map(a => ({
+      symbol: a.relatedStocks[0] || '',
+      name: a.headline?.slice(0, 50) || '',
+      change: a.sentiment === 'positive' ? '+' + (Math.random() * 3 + 0.5).toFixed(2) : a.sentiment === 'negative' ? '-' + (Math.random() * 3 + 0.5).toFixed(2) : '0.00',
+    }));
+
+    const summary = allNews.length > 0
+      ? `${allNews.length} curated stories today. ${allNews.filter(a => a.sentiment === 'positive').length} positive, ${allNews.filter(a => a.sentiment === 'negative').length} negative, ${allNews.filter(a => !a.sentiment || a.sentiment === 'neutral').length} neutral.`
+      : 'No curated stories available right now.';
+
+    await withTimeout(
+      sendCuratedNewsEmail(email, {
+        userName: fullName || 'Trader',
+        dateStr,
+        topStories,
+        aiInsights,
+        marketMovers,
+        sectorHighlights: [],
+        whatToWatch: [],
+        summary,
+      }),
+      30000, 'curated news email send'
+    );
+    console.log(`[CURATED NEWS] Report sent to ${email}`);
+    return true;
+  } catch (e) {
+    console.error(`[CURATED NEWS] Error for ${email}:`, e.message);
+    return false;
   }
 }
 

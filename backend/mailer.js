@@ -1342,4 +1342,173 @@ async function sendSubscriptionActivationEmail(email, data) {
   return sendViaTransport({ to: email, subject, html, label: 'Subscription activation' });
 }
 
-module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendViaTransport };
+// ── CURATED NEWS DIGEST ──
+async function sendCuratedNewsEmail(email, data) {
+  const {
+    userName, dateStr,
+    topStories = [],
+    aiInsights = [],
+    marketMovers = [],
+    sectorHighlights = [],
+    whatToWatch = [],
+    summary,
+  } = data;
+
+  const displayDate = dateStr || new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const subject = `Your Curated Market News — ${displayDate}`;
+  const unsubUrl = buildUnsubUrl(email, 'curated-news');
+
+  const sentimentColorMap = { positive: GREEN, negative: RED, neutral: AMBER };
+  const categoryColorMap = {
+    'Economy': '#0D7490', 'Markets': '#059669', 'Earnings': '#6366f1',
+    'Energy': '#d97706', 'Tech': '#8b5cf6', 'Healthcare': '#10b981',
+    'Africa': '#f59e0b', 'Global': '#3b82f6', 'IPO': '#d946ef',
+    'Regulatory': '#ef4444', 'Commodities': '#b45309', 'Forex': '#0ea5e9',
+  };
+
+  const storyCards = topStories.slice(0, 6).map((s, i) => {
+    const catColor = categoryColorMap[s.category] || BRAND_COLOR;
+    const sentColor = sentimentColorMap[s.sentiment] || TEXT_LIGHT;
+    const relatedTags = (s.relatedStocks || []).slice(0, 3).map(t =>
+      `<span style="display:inline-block;background:${BG_LIGHT};color:${TEXT_MED};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;margin-right:4px;border:1px solid ${BORDER}">${t}</span>`
+    ).join('');
+    const isFeature = i === 0;
+
+    return `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:${isFeature ? '20' : '12'}px;${isFeature ? 'border-left:4px solid ' + catColor : ''}">
+      <div style="padding:${isFeature ? '20px' : '14px'}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="background:${catColor}18;color:${catColor};padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px">${s.category || 'News'}</span>
+          <span style="color:${sentColor};font-size:11px;font-weight:600;text-transform:capitalize">${s.sentiment || ''}</span>
+          ${s.source ? `<span style="color:${TEXT_LIGHT};font-size:10px;margin-left:auto">${s.source}</span>` : ''}
+        </div>
+        <div style="font-size:${isFeature ? '16' : '14'}px;font-weight:700;color:${TEXT_DARK};margin-bottom:6px;line-height:1.4">${s.headline}</div>
+        ${s.excerpt ? `<div style="font-size:12px;color:${TEXT_MED};line-height:1.6;margin-bottom:8px">${s.excerpt}</div>` : ''}
+        ${relatedTags ? `<div style="margin-top:6px">${relatedTags}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const insightCards = aiInsights.slice(0, 3).map(ins => `
+    <div style="background:${BRAND_COLOR}08;border:1px solid ${BRAND_COLOR}20;border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <span style="background:${BRAND_COLOR};color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700">AI INSIGHT</span>
+        ${ins.ticker ? `<span style="font-size:12px;font-weight:700;color:${BRAND_COLOR}">${ins.ticker}</span>` : ''}
+      </div>
+      <div style="font-size:13px;color:${TEXT_DARK};line-height:1.6">${ins.insight || ins.text || ''}</div>
+      ${ins.signal ? `<div style="margin-top:8px"><span style="background:${ins.signal === 'BULLISH' ? GREEN : ins.signal === 'BEARISH' ? RED : AMBER}20;color:${ins.signal === 'BULLISH' ? GREEN : ins.signal === 'BEARISH' ? RED : AMBER};padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700">${ins.signal}</span></div>` : ''}
+    </div>
+  `).join('');
+
+  const moverRows = marketMovers.slice(0, 8).map(m => {
+    const chgNum = parseFloat(String(m.change || m.changePercent || '0').replace(/[^0-9.\-]/g, ''));
+    const isUp = chgNum >= 0;
+    return `<tr>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};font-weight:700;color:${BRAND_COLOR}">${m.symbol || m.ticker || ''}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};color:${TEXT_MED};font-size:12px">${m.name || m.company_name || ''}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};text-align:right;font-weight:600;color:${isUp ? GREEN : RED}">${isUp ? '+' : ''}${chgNum.toFixed(2)}%</td>
+      ${m.volume ? `<td style="padding:8px 10px;border-bottom:1px solid ${BORDER};text-align:right;color:${TEXT_LIGHT};font-size:11px">${m.volume}</td>` : ''}
+    </tr>`;
+  }).join('');
+
+  const sectorRows = sectorHighlights.slice(0, 6).map(s => {
+    const chgNum = parseFloat(String(s.change || '0').replace(/[^0-9.\-]/g, ''));
+    const isUp = chgNum >= 0;
+    const barWidth = Math.min(Math.abs(chgNum) * 8, 100);
+    return `<tr>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};font-weight:600;color:${TEXT_DARK}">${s.sector || s.name || ''}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};width:40%">
+        <div style="background:${BG_LIGHT};border-radius:4px;height:8px;overflow:hidden">
+          <div style="background:${isUp ? GREEN : RED};width:${barWidth}%;height:100%;border-radius:4px"></div>
+        </div>
+      </td>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};text-align:right;font-weight:600;color:${isUp ? GREEN : RED}">${isUp ? '+' : ''}${chgNum.toFixed(2)}%</td>
+    </tr>`;
+  }).join('');
+
+  const watchRows = whatToWatch.slice(0, 5).map(w => {
+    const impactColor = (w.impact || '').toUpperCase() === 'HIGH' ? RED : (w.impact || '').toUpperCase() === 'MEDIUM' ? AMBER : TEXT_MED;
+    return `<tr>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};color:${TEXT_LIGHT};font-size:12px;white-space:nowrap">${w.date || ''}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};color:${TEXT_DARK};font-size:13px">${w.event || w.title || ''}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};text-align:center">
+        <span style="background:${impactColor}18;color:${impactColor};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700">${w.impact || 'INFO'}</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const html = baseWrapper(`
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:20px;font-weight:700;color:${TEXT_DARK}">Curated Market News</div>
+      <div style="font-size:13px;color:${TEXT_MED}">${displayDate}</div>
+      ${userName ? `<div style="font-size:14px;color:${TEXT_MED};margin-top:8px">Hello ${userName}</div>` : ''}
+    </div>
+
+    ${summary ? `
+    <div style="background:linear-gradient(135deg,${BRAND_COLOR}12,${BRAND_COLOR}06);border:1px solid ${BRAND_COLOR}25;border-radius:10px;padding:16px;margin-bottom:20px;font-size:13px;color:${TEXT_DARK};line-height:1.7">
+      ${summary}
+    </div>` : ''}
+
+    ${topStories.length ? `
+    <div style="font-size:15px;font-weight:700;color:${TEXT_DARK};margin-bottom:12px;display:flex;align-items:center;gap:6px">
+      <span style="color:${BRAND_COLOR}">&#9679;</span> Top Stories
+    </div>
+    ${storyCards}
+    ` : ''}
+
+    ${aiInsights.length ? `
+    <div style="font-size:15px;font-weight:700;color:${TEXT_DARK};margin:20px 0 12px;display:flex;align-items:center;gap:6px">
+      <span style="color:${BRAND_COLOR}">&#9679;</span> AI Insights
+    </div>
+    ${insightCards}
+    ` : ''}
+
+    ${marketMovers.length ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
+      <div style="background:${BRAND_COLOR};color:#ffffff;padding:10px 14px;font-size:13px;font-weight:600">Market Movers</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:${BG_LIGHT}">
+          <th style="padding:6px 10px;text-align:left;color:${TEXT_MED};font-weight:600">Symbol</th>
+          <th style="padding:6px 10px;text-align:left;color:${TEXT_MED};font-weight:600">Company</th>
+          <th style="padding:6px 10px;text-align:right;color:${TEXT_MED};font-weight:600">Change</th>
+          ${marketMovers[0]?.volume ? `<th style="padding:6px 10px;text-align:right;color:${TEXT_MED};font-weight:600">Volume</th>` : ''}
+        </tr></thead>
+        <tbody>${moverRows}</tbody>
+      </table>
+    </div>` : ''}
+
+    ${sectorHighlights.length ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
+      <div style="background:${GREEN};color:#ffffff;padding:10px 14px;font-size:13px;font-weight:600">Sector Performance</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:${BG_LIGHT}">
+          <th style="padding:6px 10px;text-align:left;color:${TEXT_MED};font-weight:600">Sector</th>
+          <th style="padding:6px 10px;text-align:left;color:${TEXT_MED};font-weight:600">Performance</th>
+          <th style="padding:6px 10px;text-align:right;color:${TEXT_MED};font-weight:600">Change</th>
+        </tr></thead>
+        <tbody>${sectorRows}</tbody>
+      </table>
+    </div>` : ''}
+
+    ${whatToWatch.length ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
+      <div style="background:${AMBER};color:#ffffff;padding:10px 14px;font-size:13px;font-weight:600">What to Watch</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:${BG_LIGHT}">
+          <th style="padding:6px 10px;text-align:left;color:${TEXT_MED};font-weight:600">Date</th>
+          <th style="padding:6px 10px;text-align:left;color:${TEXT_MED};font-weight:600">Event</th>
+          <th style="padding:6px 10px;text-align:center;color:${TEXT_MED};font-weight:600">Impact</th>
+        </tr></thead>
+        <tbody>${watchRows}</tbody>
+      </table>
+    </div>` : ''}
+
+    <div style="text-align:center;margin-top:20px">
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/news" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">View Full Coverage &rarr;</a>
+    </div>
+  `, '<meta name="referrer" content="no-referrer" />', unsubUrl);
+
+  return sendViaTransport({ to: email, subject, html, label: 'Curated news' });
+}
+
+module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendViaTransport };
