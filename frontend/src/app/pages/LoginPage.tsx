@@ -458,37 +458,6 @@ export function LoginPage() {
                         </button>
                       </>
                     )}
-                    {mode === "otp-login" && (
-                      <>
-                        <div className="space-y-1.5">
-                          <label className="text-muted-foreground text-sm font-semibold block ml-1">Email Address</label>
-                          <div className="relative">
-                            <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
-                            <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
-                              onFocus={() => setFocusedField("email")} onBlur={() => setFocusedField(null)}
-                              className={inputClasses("email")} required autoComplete="email" disabled={otpStage === "verify"} />
-                          </div>
-                        </div>
-                        {otpStage === "verify" && (
-                          <div className="space-y-1.5">
-                            <label className="text-muted-foreground text-sm font-semibold block ml-1">One-Time Password</label>
-                            <div className="relative">
-                              <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
-                              <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                                onFocus={() => setFocusedField("otpCode")} onBlur={() => setFocusedField(null)}
-                                className={cn(inputClasses("otpCode"), "text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
-                            </div>
-                            {countdown > 0 && <p className="text-xs text-muted-foreground text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
-                          </div>
-                        )}
-                        <Button type="submit" disabled={isLoading || (otpStage === "send" ? !email : otpCode.length < 6)}
-                          className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
-                          {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
-                            : otpStage === "send" ? <span className="flex items-center gap-2">Send OTP <ArrowRight className="w-4 h-4" /></span>
-                            : <span className="flex items-center gap-2">Verify & Sign In <ArrowRight className="w-4 h-4" /></span>}
-                        </Button>
-                      </>
-                    )}
                     {mode === "register" && regStage === "form" && (
                       <Button type="submit" disabled={isLoading || !email}
                         className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
@@ -595,6 +564,38 @@ export function LoginPage() {
                         </div>
                       </>
                     )}
+                  </>
+                )}
+
+                {mode === "otp-login" && (
+                  <>
+                    <div className="space-y-1.5">
+                      <label className="text-muted-foreground text-sm font-semibold block ml-1">Email Address</label>
+                      <div className="relative">
+                        <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
+                        <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
+                          onFocus={() => setFocusedField("email")} onBlur={() => setFocusedField(null)}
+                          className={inputClasses("email")} required autoComplete="email" disabled={otpStage === "verify"} />
+                      </div>
+                    </div>
+                    {otpStage === "verify" && (
+                      <div className="space-y-1.5">
+                        <label className="text-muted-foreground text-sm font-semibold block ml-1">One-Time Password</label>
+                        <div className="relative">
+                          <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
+                          <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                            onFocus={() => setFocusedField("otpCode")} onBlur={() => setFocusedField(null)}
+                            className={cn(inputClasses("otpCode"), "text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
+                        </div>
+                        {countdown > 0 && <p className="text-xs text-muted-foreground text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
+                      </div>
+                    )}
+                    <Button type="submit" disabled={isLoading || (otpStage === "send" ? !email : otpCode.length < 6)}
+                      className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
+                      {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
+                        : otpStage === "send" ? <span className="flex items-center gap-2">Send OTP <ArrowRight className="w-4 h-4" /></span>
+                        : <span className="flex items-center gap-2">Verify & Sign In <ArrowRight className="w-4 h-4" /></span>}
+                    </Button>
                   </>
                 )}
 
