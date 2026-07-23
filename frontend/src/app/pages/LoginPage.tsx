@@ -14,6 +14,7 @@ import { ThemeToggle } from "../components/ThemeToggle";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { useSEO } from "../hooks/useSEO";
+import { useTurnstile } from "../hooks/useTurnstile";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -132,6 +133,7 @@ export function LoginPage() {
   const [countries, setCountries] = useState<{ code: string; name: string; flag: string }[]>([]);
   const [countryOpen, setCountryOpen] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
+  const { containerRef: turnstileRef, token: turnstileToken, reset: resetTurnstile, enabled: turnstileEnabled } = useTurnstile();
 
   useEffect(() => {
     fetch("/api/countries")
@@ -188,10 +190,11 @@ export function LoginPage() {
         if (!email || !password) { setError("Email and password are required"); return; }
         setIsLoading(true);
         try {
-          const res = await requestLoginOtp(email, password);
+          const res = await requestLoginOtp(email, password, turnstileToken);
           setCountdown(res.expiresIn);
           setSuccess("OTP sent to your email");
           setLoginStage("otp");
+          resetTurnstile();
         } catch (err) { setError(err instanceof Error ? err.message : "Failed to send login OTP"); }
         finally { setIsLoading(false); }
       } else {
@@ -206,10 +209,11 @@ export function LoginPage() {
         if (!email) { setError("Email is required"); return; }
         setIsLoading(true);
         try {
-          const res = await sendVerificationCode(email);
+          const res = await sendVerificationCode(email, turnstileToken);
           setCountdown(res.expiresIn);
           setSuccess("Verification code sent to your email");
           setRegStage("verify");
+          resetTurnstile();
         } catch (err) { setError(err instanceof Error ? err.message : "Failed to send verification code"); }
         finally { setIsLoading(false); }
       } else {
@@ -221,7 +225,7 @@ export function LoginPage() {
         // Try browser geolocation for accurate location
         const coords = await getBrowserCoords();
         try {
-          await verifyEmailAndRegister(fullName.trim(), email, password, verifyCode, refParam, coords?.lat, coords?.lng, country || undefined);
+          await verifyEmailAndRegister(fullName.trim(), email, password, verifyCode, refParam, coords?.lat, coords?.lng, country || undefined, turnstileToken);
           navigate(redirectTo);
         } catch (err) { setError(err instanceof Error ? err.message : "Verification or registration failed"); }
         finally { setIsLoading(false); }
@@ -231,10 +235,11 @@ export function LoginPage() {
         if (!email) { setError("Email is required"); return; }
         setIsLoading(true);
         try {
-          const res = await sendOtp(email);
+          const res = await sendOtp(email, turnstileToken);
           setCountdown(res.expiresIn);
           setSuccess("OTP sent to your email");
           setOtpStage("verify");
+          resetTurnstile();
         } catch (err) { setError(err instanceof Error ? err.message : "Failed to send OTP"); }
         finally { setIsLoading(false); }
       } else {
@@ -250,10 +255,11 @@ export function LoginPage() {
       if (!email) { setError("Email is required"); return; }
       setIsLoading(true);
       try {
-        const res = await forgotPassword(email);
+        const res = await forgotPassword(email, turnstileToken);
         setCountdown(res.expiresIn);
         setSuccess("Check your email for the reset code");
         setMode("reset");
+        resetTurnstile();
       } catch (err) { setError(err instanceof Error ? err.message : "Failed to send reset code"); }
       finally { setIsLoading(false); }
     } else if (mode === "reset") {
@@ -273,9 +279,10 @@ export function LoginPage() {
     if (!email || !password) return;
     clear(); setIsLoading(true);
     try {
-      const res = await requestLoginOtp(email, password);
+      const res = await requestLoginOtp(email, password, turnstileToken);
       setCountdown(res.expiresIn);
       setSuccess("A new OTP has been sent to your email");
+      resetTurnstile();
     } catch (err) { setError(err instanceof Error ? err.message : "Failed to resend OTP"); }
     finally { setIsLoading(false); }
   };
@@ -390,6 +397,11 @@ export function LoginPage() {
               </AnimatePresence>
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                {turnstileEnabled && (
+                  <div className="flex justify-center">
+                    <div ref={turnstileRef} />
+                  </div>
+                )}
                 {(mode === "login" || mode === "register") && (
                   <>
                     <div className="space-y-1.5">
@@ -422,7 +434,7 @@ export function LoginPage() {
                             </button>
                           </div>
                         </div>
-                        <Button type="submit" disabled={isLoading || !email || !password}
+                        <Button type="submit" disabled={isLoading || !email || !password || (turnstileEnabled && !turnstileToken)}
                           className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                           {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending OTP...</span>
                             : <span className="flex items-center gap-2">Sign In <ArrowRight className="w-4 h-4" /></span>}
@@ -459,7 +471,7 @@ export function LoginPage() {
                       </>
                     )}
                     {mode === "register" && regStage === "form" && (
-                      <Button type="submit" disabled={isLoading || !email}
+                      <Button type="submit" disabled={isLoading || !email || (turnstileEnabled && !turnstileToken)}
                         className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                         {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
                           : <span className="flex items-center gap-2">Send Verification Code <ArrowRight className="w-4 h-4" /></span>}
@@ -590,7 +602,7 @@ export function LoginPage() {
                         {countdown > 0 && <p className="text-xs text-muted-foreground text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                       </div>
                     )}
-                    <Button type="submit" disabled={isLoading || (otpStage === "send" ? !email : otpCode.length < 6)}
+                    <Button type="submit" disabled={isLoading || (otpStage === "send" ? !email || (turnstileEnabled && !turnstileToken) : otpCode.length < 6)}
                       className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                       {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
                         : otpStage === "send" ? <span className="flex items-center gap-2">Send OTP <ArrowRight className="w-4 h-4" /></span>
@@ -657,6 +669,8 @@ export function LoginPage() {
                   </>
                 )}
               </form>
+
+
 
               {((mode === "login" && loginStage === "password") || mode === "register") && (
                 <>

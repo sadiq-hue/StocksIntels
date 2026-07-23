@@ -102,12 +102,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com", "https://s3.tradingview.com", "https://*.tradingview.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com", "https://s3.tradingview.com", "https://*.tradingview.com", "https://challenges.cloudflare.com"],
       scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://s3.tradingview.com"],
       imgSrc: ["'self'", "data:", "https:", "https://*.tradingview.com"],
-      connectSrc: ["'self'", "https:", "wss://*.tradingview.com", "https://*.tradingview.com"],
-      frameSrc: ["'self'", "https://*.tradingview.com"],
+      connectSrc: ["'self'", "https:", "wss://*.tradingview.com", "https://*.tradingview.com", "https://challenges.cloudflare.com"],
+      frameSrc: ["'self'", "https://*.tradingview.com", "https://challenges.cloudflare.com"],
       workerSrc: ["'self'", "https://*.tradingview.com", "blob:"],
       mediaSrc: ["'self'", "https://*.tradingview.com"],
       fontSrc: ["'self'", "https:", "data:"],
@@ -162,6 +162,33 @@ function sanitizeText(text) {
   return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
 }
 
+// ── Cloudflare Turnstile verification ──────────────────────────────
+const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET_KEY;
+async function verifyTurnstile(req, res, next) {
+  if (!TURNSTILE_SECRET) return next();
+  const token = req.body?.['cf-turnstile-response'];
+  if (!token) return res.status(403).json({ error: 'Turnstile challenge required' });
+  try {
+    const params = new URLSearchParams();
+    params.append('secret', TURNSTILE_SECRET);
+    params.append('response', token);
+    const remoteip = getClientIp(req);
+    if (remoteip) params.append('remoteip', remoteip);
+    const { data } = await axios.post('https://challenges.cloudflare.com/turnstile/v0/siteverify', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      timeout: 10000,
+    });
+    if (!data.success) {
+      console.error('[TURNSTILE] Verification failed:', JSON.stringify(data['error-codes'] || data));
+      return res.status(403).json({ error: 'Turnstile verification failed' });
+    }
+    next();
+  } catch (err) {
+    console.error('[TURNSTILE] Verification error:', err.message);
+    return res.status(403).json({ error: 'Turnstile verification unavailable' });
+  }
+}
+
 // ── Admin subdomain: serve admin.html BEFORE static/SPA fallback ──
 const fs = require('fs');
 app.use((req, res, next) => {
@@ -185,6 +212,23 @@ if (serveFrontend) {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Admin API Routes ─────────────────────────────────────────────
+// ── DEBUG: Test email endpoint (remove after debugging) ───────────
+app.get('/api/_test-email/:to', async (req, res) => {
+  try {
+    const { sendViaTransport } = require('./mailer');
+    const to = req.params.to;
+    const result = await sendViaTransport({
+      to,
+      subject: 'StocksIntels Test Email',
+      html: '<div style="font-family:sans-serif;padding:20px"><h2 style="color:#0D7490">Test Email</h2><p>If you received this, email delivery is working from Railway.</p><p style="color:#999;font-size:12px">Sent at: ' + new Date().toISOString() + '</p></div>',
+      label: 'Debug test',
+    });
+    res.json({ success: true, result });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 // Extra security headers for admin endpoints
 app.use('/api/admin', (req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -196,7 +240,7 @@ app.use('/api/admin', (req, res, next) => {
   next();
 });
 // Admin OTP login routes (no auth required)
-app.post('/api/admin/send-otp', async (req, res) => {
+app.post('/api/admin/send-otp', verifyTurnstile, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email required' });
@@ -1979,7 +2023,7 @@ function isMarketOpen(market) {
 
 // --- Auth Routes ---
 
-app.post('/api/auth/send-verification-code', async (req, res) => {
+app.post('/api/auth/send-verification-code', verifyTurnstile, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email required' });
@@ -1997,7 +2041,7 @@ app.post('/api/auth/send-verification-code', async (req, res) => {
   }
 });
 
-app.post('/api/auth/verify-email-and-register', async (req, res) => {
+app.post('/api/auth/verify-email-and-register', verifyTurnstile, async (req, res) => {
   try {
     const { fullName, email, password, code, ref, lat, lng, country } = req.body;
     if (!fullName || !email || !password || !code) return res.status(400).json({ error: 'All fields required' });
@@ -2064,7 +2108,7 @@ app.post('/api/auth/verify-email-and-register', async (req, res) => {
   }
 });
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', verifyTurnstile, async (req, res) => {
   try {
     const { fullName, email, password, ref, lat, lng, country } = req.body;
     if (!fullName || !email || !password) return res.status(400).json({ error: 'All fields required' });
@@ -2301,7 +2345,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 });
 
 // Password-verified OTP login (frontend default): verify credentials, then email OTP
-app.post('/api/auth/login-request-otp', async (req, res) => {
+app.post('/api/auth/login-request-otp', verifyTurnstile, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
@@ -2368,7 +2412,7 @@ app.post('/api/auth/login-verify-otp', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', verifyTurnstile, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
@@ -2467,7 +2511,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 });
 
 // --- OTP & Password Reset ---
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', verifyTurnstile, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email required' });

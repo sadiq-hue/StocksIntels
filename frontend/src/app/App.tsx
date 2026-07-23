@@ -37,6 +37,18 @@ import { IpoPage } from "./pages/IpoPage";
 import { DerivativesPage } from "./pages/DerivativesPage";
 
 
+function InactivityBanner() {
+  const { inactivityWarning, logout, refreshUser } = useAuth();
+  if (!inactivityWarning) return null;
+  return (
+    <div className="fixed inset-x-0 top-0 z-[9999] flex items-center justify-center gap-3 bg-amber-500 text-white px-4 py-3 text-sm font-medium shadow-lg">
+      <span>Your session will expire in 5 minutes due to inactivity.</span>
+      <button onClick={refreshUser} className="underline font-bold hover:text-amber-100">Stay Logged In</button>
+      <button onClick={logout} className="underline font-bold hover:text-amber-100">Log Out Now</button>
+    </div>
+  );
+}
+
 function ProtectedRoute() {
   const { user, isLoading } = useAuth();
 
@@ -59,7 +71,12 @@ function ProtectedRoute() {
     return <Navigate to="/pricing" replace />;
   }
 
-  return <Outlet />;
+  return (
+    <>
+      <InactivityBanner />
+      <Outlet />
+    </>
+  );
 }
 
 function NotFoundPage() {

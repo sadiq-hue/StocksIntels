@@ -27,19 +27,25 @@ export function getTrialInfo(user: UserInfo | null): { isWithinTrial: boolean; d
   return { isWithinTrial: diffDays < 7, daysRemaining: Math.max(0, 7 - diffDays), canStartTrial: false };
 }
 
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+const INACTIVITY_WARNING_MS = 25 * 60 * 1000; // warn at 25 minutes
+
+const AUTH_ACTIVITY_EVENTS = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+
 interface AuthContextType {
   user: UserInfo | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (fullName: string, email: string, password: string, ref?: string, lat?: number, lng?: number, country?: string) => Promise<void>;
-  sendOtp: (email: string) => Promise<{ expiresIn: number }>;
+  inactivityWarning: boolean;
+  login: (email: string, password: string, turnstileToken?: string) => Promise<void>;
+  register: (fullName: string, email: string, password: string, ref?: string, lat?: number, lng?: number, country?: string, turnstileToken?: string) => Promise<void>;
+  sendOtp: (email: string, turnstileToken?: string) => Promise<{ expiresIn: number }>;
   verifyOtp: (email: string, code: string) => Promise<void>;
-  requestLoginOtp: (email: string, password: string) => Promise<{ expiresIn: number }>;
+  requestLoginOtp: (email: string, password: string, turnstileToken?: string) => Promise<{ expiresIn: number }>;
   verifyLoginOtp: (email: string, code: string) => Promise<void>;
-  sendVerificationCode: (email: string) => Promise<{ expiresIn: number }>;
-  verifyEmailAndRegister: (fullName: string, email: string, password: string, code: string, ref?: string, lat?: number, lng?: number, country?: string) => Promise<void>;
-  forgotPassword: (email: string) => Promise<{ expiresIn: number }>;
+  sendVerificationCode: (email: string, turnstileToken?: string) => Promise<{ expiresIn: number }>;
+  verifyEmailAndRegister: (fullName: string, email: string, password: string, code: string, ref?: string, lat?: number, lng?: number, country?: string, turnstileToken?: string) => Promise<void>;
+  forgotPassword: (email: string, turnstileToken?: string) => Promise<{ expiresIn: number }>;
   resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -57,6 +63,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
   const tokenRef = useRef<string | null>(null);
   const refreshPromise = useRef<Promise<string | null> | null>(null);
+  const [inactivityWarning, setInactivityWarning] = useState(false);
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const logoutRef = useRef<(() => Promise<void>) | null>(null);
+
+  const clearInactivityTimers = useCallback(() => {
+    if (inactivityTimerRef.current) { clearTimeout(inactivityTimerRef.current); inactivityTimerRef.current = null; }
+    if (warningTimerRef.current) { clearTimeout(warningTimerRef.current); warningTimerRef.current = null; }
+    setInactivityWarning(false);
+  }, []);
+
+  const resetInactivityTimer = useCallback(() => {
+    clearInactivityTimers();
+    if (!tokenRef.current) return;
+    warningTimerRef.current = setTimeout(() => {
+      setInactivityWarning(true);
+      inactivityTimerRef.current = setTimeout(() => {
+        if (logoutRef.current) logoutRef.current();
+      }, INACTIVITY_TIMEOUT_MS - INACTIVITY_WARNING_MS);
+    }, INACTIVITY_WARNING_MS);
+  }, [clearInactivityTimers]);
 
   const doRefresh = useCallback(async (): Promise<string | null> => {
     try {
@@ -74,13 +101,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setUser(data.user);
           localStorage.setItem("stockintel_user", JSON.stringify(data.user));
         }
+        resetInactivityTimer();
         return data.token;
       }
       return null;
     } catch {
       return null;
     }
-  }, []);
+  }, [resetInactivityTimer]);
 
   useEffect(() => {
     let cancelled = false;
@@ -178,23 +206,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return res;
   }, [doRefresh]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, turnstileToken?: string) => {
+    const body: Record<string, string> = { email, password };
+    if (turnstileToken) body['cf-turnstile-response'] = turnstileToken;
     const res = await fetch(`${API_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: 'include',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Login failed");
     setUserAndStore(data.user, data.token);
   };
 
-  const register = async (fullName: string, email: string, password: string, ref?: string, lat?: number, lng?: number, country?: string) => {
+  const register = async (fullName: string, email: string, password: string, ref?: string, lat?: number, lng?: number, country?: string, turnstileToken?: string) => {
     const body: Record<string, string | number> = { fullName, email, password };
     if (ref) body.ref = ref;
     if (lat != null && lng != null) { body.lat = lat; body.lng = lng; }
     if (country) body.country = country;
+    if (turnstileToken) body['cf-turnstile-response'] = turnstileToken;
     const res = await fetch(`${API_URL}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -206,10 +237,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserAndStore(data.user, data.token);
   };
 
-  const sendOtp = async (email: string) => {
+  const sendOtp = async (email: string, turnstileToken?: string) => {
+    const body: Record<string, string> = { email };
+    if (turnstileToken) body['cf-turnstile-response'] = turnstileToken;
     const res = await fetch(`${API_URL}/auth/send-otp`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to send OTP");
@@ -227,10 +260,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserAndStore(data.user, data.token);
   };
 
-  const requestLoginOtp = async (email: string, password: string) => {
+  const requestLoginOtp = async (email: string, password: string, turnstileToken?: string) => {
+    const body: Record<string, string> = { email, password };
+    if (turnstileToken) body['cf-turnstile-response'] = turnstileToken;
     const res = await fetch(`${API_URL}/auth/login-request-otp`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to send login OTP");
@@ -248,21 +283,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserAndStore(data.user, data.token);
   };
 
-  const sendVerificationCode = async (email: string) => {
+  const sendVerificationCode = async (email: string, turnstileToken?: string) => {
+    const body: Record<string, string> = { email };
+    if (turnstileToken) body['cf-turnstile-response'] = turnstileToken;
     const res = await fetch(`${API_URL}/auth/send-verification-code`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to send verification code");
     return { expiresIn: data.expiresIn };
   };
 
-  const verifyEmailAndRegister = async (fullName: string, email: string, password: string, code: string, ref?: string, lat?: number, lng?: number, country?: string) => {
+  const verifyEmailAndRegister = async (fullName: string, email: string, password: string, code: string, ref?: string, lat?: number, lng?: number, country?: string, turnstileToken?: string) => {
     const body: Record<string, string | number> = { fullName, email, password, code };
     if (ref) body.ref = ref;
     if (lat != null && lng != null) { body.lat = lat; body.lng = lng; }
     if (country) body.country = country;
+    if (turnstileToken) body['cf-turnstile-response'] = turnstileToken;
     const res = await fetch(`${API_URL}/auth/verify-email-and-register`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       credentials: 'include',
@@ -273,10 +311,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserAndStore(data.user, data.token);
   };
 
-  const forgotPassword = async (email: string) => {
+  const forgotPassword = async (email: string, turnstileToken?: string) => {
+    const body: Record<string, string> = { email };
+    if (turnstileToken) body['cf-turnstile-response'] = turnstileToken;
     const res = await fetch(`${API_URL}/auth/forgot-password`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to send reset code");
@@ -293,6 +333,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
+    clearInactivityTimers();
     try {
       await fetch(`${API_URL}/auth/logout`, {
         method: 'POST',
@@ -308,6 +349,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Clear dismissed trial banner flags so it reappears on next login
     Object.keys(localStorage).filter(k => k.startsWith('trial_banner_dismissed_')).forEach(k => localStorage.removeItem(k));
   };
+
+  useEffect(() => { logoutRef.current = logout; }, [logout]);
+
+  useEffect(() => {
+    if (!user || !token) { clearInactivityTimers(); return; }
+
+    const handleActivity = () => resetInactivityTimer();
+    AUTH_ACTIVITY_EVENTS.forEach(e => document.addEventListener(e, handleActivity, { passive: true }));
+    resetInactivityTimer();
+
+    return () => {
+      AUTH_ACTIVITY_EVENTS.forEach(e => document.removeEventListener(e, handleActivity));
+      clearInactivityTimers();
+    };
+  }, [user, token, resetInactivityTimer, clearInactivityTimers]);
 
   const refreshUser = async () => {
     const currentToken = tokenRef.current;
@@ -330,7 +386,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, sendOtp, verifyOtp, requestLoginOtp, verifyLoginOtp, sendVerificationCode, verifyEmailAndRegister, forgotPassword, resetPassword, logout, refreshUser, apiFetch, updateUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, inactivityWarning, login, register, sendOtp, verifyOtp, requestLoginOtp, verifyLoginOtp, sendVerificationCode, verifyEmailAndRegister, forgotPassword, resetPassword, logout, refreshUser, apiFetch, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

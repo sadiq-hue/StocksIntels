@@ -60,17 +60,19 @@ async function sendViaEnsend({ to, subject, html, text }) {
 
   const recipients = Array.isArray(to)
     ? to.map(addr => ({ address: addr }))
-    : { address: to };
+    : [{ address: to }];
 
   try {
+    const payload = {
+      sender: { name: senderName, address: senderAddress },
+      recipients,
+      subject,
+      message: html || text,
+    };
+    console.log('[MAILER] Ensend payload:', JSON.stringify({ to: payload.recipients, subject: payload.subject }));
     const { data } = await axios.post(
       `${baseUrl}/send/mail`,
-      {
-        sender: { name: senderName, address: senderAddress },
-        recipients,
-        subject,
-        message: html || text,
-      },
+      payload,
       {
         headers: {
           Authorization: `Bearer ${secret}`,
@@ -79,7 +81,7 @@ async function sendViaEnsend({ to, subject, html, text }) {
       }
     );
 
-    console.log('[MAILER] Sent via Ensend, ref:', data?.data?.ref);
+    console.log('[MAILER] Sent via Ensend, ref:', data?.data?.ref, 'status:', data?.statusCode);
     return data;
   } catch (err) {
     const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
@@ -238,7 +240,7 @@ async function sendWelcomeEmail(email, name) {
     <div style="text-align:center">
       <div style="font-size:20px;font-weight:700;color:${TEXT_DARK};margin-bottom:4px">Welcome to StocksIntels</div>
       <div style="font-size:13px;color:${TEXT_MED};margin-bottom:24px">Hi ${name || 'there'}, your account is ready. Start tracking stocks and building your portfolio.</div>
-      <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/markets" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Explore Markets</a>
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/markets" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Explore Markets</a>
     </div>
   `);
   return sendViaTransport({ to: email, subject, html, label: 'Welcome' });
@@ -806,7 +808,7 @@ async function sendHotNewsEmail(email, data) {
     </table>
 
     <div style="text-align:center;margin-bottom:16px">
-      <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/news" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">View All News</a>
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/news" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">View All News</a>
     </div>
   `, '', unsubUrl);
 
@@ -845,7 +847,7 @@ async function sendPaymentReceiptEmail(email, data) {
     </div>
 
     <div style="text-align:center;margin-bottom:16px">
-      <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/subscription" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Manage Subscription</a>
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/subscription" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Manage Subscription</a>
     </div>
   `);
   return sendViaTransport({ to: email, subject, html, label: 'Payment receipt' });
@@ -867,7 +869,7 @@ async function sendSubscriptionExpiryReminder(email, data) {
     </div>
 
     <div style="text-align:center;margin-bottom:16px">
-      <a href="${process.env.APP_URL || 'http://localhost:5173'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Renew Subscription</a>
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Renew Subscription</a>
     </div>
   `);
   return sendViaTransport({ to: email, subject, html, label: 'Expiry reminder' });
@@ -888,7 +890,7 @@ async function sendSubscriptionExpiredEmail(email, data) {
     </div>
 
     <div style="text-align:center;margin-bottom:16px">
-      <a href="${process.env.APP_URL || 'http://localhost:5173'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Renew Subscription</a>
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Renew Subscription</a>
     </div>
 
     <div style="font-size:12px;color:${TEXT_LIGHT};text-align:center;padding-top:16px;border-top:1px solid ${BORDER}">
@@ -989,7 +991,7 @@ async function sendWeeklyDigestEmail(email, data) {
     </div>
 
     <div style="text-align:center;margin-top:8px">
-      <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:700">EXPLORE FULL PLATFORM \u2192</a>
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:700">EXPLORE FULL PLATFORM \u2192</a>
     </div>
   `, `<meta name="referrer" content="no-referrer" />`, buildUnsubUrl(email, 'weekly-digest'));
 
@@ -1074,7 +1076,7 @@ async function sendDailyBriefEmail(email, data) {
 
     <div style="text-align:center;margin-top:8px;border-top:1px solid ${BORDER};padding-top:16px">
       <div style="font-size:12px;color:${TEXT_LIGHT};margin-bottom:12px">Explore full signals and analysis on the StocksIntels platform.</div>
-      <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">VISIT PLATFORM \u2192</a>
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">VISIT PLATFORM \u2192</a>
     </div>
   `, `<meta name="referrer" content="no-referrer" />`, buildUnsubUrl(email, 'daily-brief'));
 
@@ -1173,7 +1175,7 @@ async function sendEarningsReportEmail(email, data) {
 
     <div style="text-align:center;margin-top:8px;border-top:1px solid ${BORDER};padding-top:16px">
       <div style="font-size:12px;color:${TEXT_LIGHT};margin-bottom:12px">Full earnings data, AI verdicts, and corporate action calendar on the StocksIntels platform.</div>
-      <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/stocks" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">VIEW EARNINGS \u2192</a>
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/stocks" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">VIEW EARNINGS \u2192</a>
     </div>
   `, `<meta name="referrer" content="no-referrer" />`, buildUnsubUrl(email, 'earnings-report'));
 
@@ -1212,7 +1214,7 @@ async function sendSubscriptionExpiryEmail1(email, data) {
     </div>
 
     <div style="text-align:center;margin-bottom:24px">
-      <a href="${process.env.APP_URL || 'http://localhost:5173'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700">RENEW MY SUBSCRIPTION</a>
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700">RENEW MY SUBSCRIPTION</a>
     </div>
 
     <div style="font-size:13px;color:${TEXT_DARK};font-weight:600">StocksIntels Team.</div>
@@ -1262,7 +1264,7 @@ async function sendSubscriptionExpiryEmail2(email, data) {
     </div>
 
     <div style="text-align:center;margin-bottom:24px">
-      <a href="${process.env.APP_URL || 'http://localhost:5173'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700">RENEW NOW — 40% OFF</a>
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700">RENEW NOW — 40% OFF</a>
     </div>
 
     <div style="font-size:13px;color:${RED};line-height:1.5;margin-bottom:16px;text-align:center;font-weight:600">
@@ -1324,7 +1326,7 @@ async function sendSubscriptionActivationEmail(email, data) {
     </div>
 
     <div style="text-align:center;margin-bottom:20px">
-      <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700">GO TO DASHBOARD</a>
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 40px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700">GO TO DASHBOARD</a>
     </div>
 
     <div style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin-bottom:8px">

@@ -32,9 +32,8 @@ services:
       - key: LOG_LEVEL
         value: info
       - key: CORS_ORIGIN
-        # TODO: Replace with your Vercel frontend URL after deploying (e.g., https://stockintels.vercel.app).
-        # To allow multiple origins, use a comma-separated list.
-        value: https://stockintels.vercel.app
+        # Production domain behind Cloudflare. Comma-separated for multiple origins.
+        value: https://stocksintels.com,https://admin.stocksintels.com
       - key: SIGNAL_INTERVAL_MS
         value: "30000"
       - key: MARKET_DATA_PROVIDER
@@ -92,6 +91,14 @@ services:
       - key: JWT_SECRET
         sync: false
       - key: BROKER_ENCRYPTION_KEY
+        sync: false
+
+      # Cloudflare Turnstile (free CAPTCHA alternative)
+      # Get keys from: https://dash.cloudflare.com → Turnstile → Create site
+      # Action: Managed" or "Non-interactive" recommended
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: TURNSTILE_SITE_KEY
         sync: false
 
 databases:
