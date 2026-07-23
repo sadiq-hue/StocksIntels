@@ -5253,7 +5253,7 @@ app.post('/api/user/weekly-digest-preference', async (req, res) => {
 // --- Unsubscribe from Hot News Emails ---
 app.get('/api/unsubscribe', async (req, res) => {
   try {
-    const { token } = req.query;
+    const { token, type } = req.query;
     if (!token) return res.status(400).send('<html><body style="font-family:sans-serif;text-align:center;padding:60px 20px"><h2>Invalid unsubscribe link</h2><p>Please check the link and try again.</p></body></html>');
     let email;
     try {
@@ -5264,13 +5264,21 @@ app.get('/api/unsubscribe', async (req, res) => {
     if (!email || !email.includes('@')) {
       return res.status(400).send('<html><body style="font-family:sans-serif;text-align:center;padding:60px 20px"><h2>Invalid email in link</h2><p>Please contact support.</p></body></html>');
     }
-    await pool.query('UPDATE users SET sentiment_opt_in = false WHERE email = $1', [email]);
-    console.log(`[UNSUBSCRIBE] ${email} unsubscribed from hot news emails`);
+    const typeMap = {
+      'hot-news': { column: 'sentiment_opt_in', label: 'Hot Market News' },
+      'daily-brief': { column: 'daily_brief_opt_in', label: 'Daily Market Brief' },
+      'weekly-digest': { column: 'weekly_digest_opt_in', label: 'Weekly Market Digest' },
+      'earnings-report': { column: 'earnings_report_opt_in', label: 'Earnings & Corporate Actions' },
+      'daily-sentiment': { column: 'sentiment_opt_in', label: 'Daily Market Sentiment' },
+    };
+    const mapping = typeMap[type] || typeMap['hot-news'];
+    await pool.query(`UPDATE users SET ${mapping.column} = false WHERE email = $1`, [email]);
+    console.log(`[UNSUBSCRIBE] ${email} unsubscribed from ${mapping.label} emails`);
     res.send(`<html><body style="font-family:sans-serif;text-align:center;padding:60px 20px;background:#f4f6f8">
       <div style="max-width:480px;margin:0 auto;background:#fff;padding:40px;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
         <div style="font-size:32px;margin-bottom:16px">&#10003;</div>
         <h2 style="color:#1e293b;margin-bottom:8px">You've been unsubscribed</h2>
-        <p style="color:#64748b;font-size:14px;line-height:1.6">You will no longer receive Hot Market News emails from StocksIntels.</p>
+        <p style="color:#64748b;font-size:14px;line-height:1.6">You will no longer receive ${mapping.label} emails from StocksIntels.</p>
         <p style="color:#94a3b8;font-size:12px;margin-top:24px">Changed your mind? Log in to your account and re-enable email notifications in Settings.</p>
       </div>
     </body></html>`);

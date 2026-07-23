@@ -99,6 +99,13 @@ const GREEN = '#059669';
 const RED = '#dc2626';
 const AMBER = '#d97706';
 
+function buildUnsubUrl(email, type) {
+  if (!email) return '';
+  const token = Buffer.from(email, 'utf8').toString('base64url');
+  const appUrl = process.env.APP_URL || 'https://stocksintels.com';
+  return `${appUrl}/api/unsubscribe?token=${token}&type=${type}`;
+}
+
 function baseWrapper(innerHtml, extraHead = '', unsubscribeUrl = '') {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -130,7 +137,7 @@ function baseWrapper(innerHtml, extraHead = '', unsubscribeUrl = '') {
               <div style="font-size:11px;color:${TEXT_LIGHT};line-height:1.6">
                 <div style="font-weight:600;color:${TEXT_MED};margin-bottom:4px">StocksIntels</div>
                 <div>This is an automated message from StocksIntels.</div>
-                ${unsubscribeUrl ? `<div style="margin-top:8px"><a href="${unsubscribeUrl}" style="color:${BRAND_COLOR};font-size:11px;text-decoration:underline">Unsubscribe from Hot Market News</a></div>` : ''}
+                ${unsubscribeUrl ? `<div style="margin-top:8px"><a href="${unsubscribeUrl}" style="color:${BRAND_COLOR};font-size:11px;text-decoration:underline">Unsubscribe from these emails</a></div>` : ''}
                 <div style="margin-top:4px">&copy; ${new Date().getFullYear()} StocksIntels. All rights reserved.</div>
               </div>
             </td>
@@ -728,7 +735,8 @@ async function sendDailySentimentEmail(email, data) {
     <div style="font-size:13px;font-weight:700;color:${BRAND_COLOR};margin-bottom:4px">StocksIntels</div>
     <div style="font-size:11px;color:${TEXT_LIGHT};line-height:1.7">
       This is an automated market sentiment report from StocksIntels.<br>
-      Market data is for informational purposes only and does not constitute financial advice.<br><br>
+      Market data is for informational purposes only and does not constitute financial advice.<br>
+      <a href="${buildUnsubUrl(email, 'daily-sentiment')}" style="color:${BRAND_COLOR};font-size:11px;text-decoration:underline">Unsubscribe from these emails</a><br><br>
       &copy; ${new Date().getFullYear()} StocksIntels. All rights reserved.
     </div>
   </div>
@@ -779,9 +787,7 @@ async function sendHotNewsEmail(email, data) {
     </tr>`;
   }).join('');
 
-  const unsubscribeToken = Buffer.from(email, 'utf8').toString('base64url');
-  const appUrl = process.env.APP_URL || 'https://stocksintels.com';
-  const unsubscribeUrl = `${appUrl}/api/unsubscribe?token=${unsubscribeToken}`;
+  const unsubUrl = buildUnsubUrl(email, 'hot-news');
 
   const html = baseWrapper(`
     <div style="text-align:center;margin-bottom:24px">
@@ -802,7 +808,7 @@ async function sendHotNewsEmail(email, data) {
     <div style="text-align:center;margin-bottom:16px">
       <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/news" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">View All News</a>
     </div>
-  `, '', unsubscribeUrl);
+  `, '', unsubUrl);
 
   return sendViaTransport({ to: email, subject, html, label: 'Hot news' });
 }
@@ -985,7 +991,7 @@ async function sendWeeklyDigestEmail(email, data) {
     <div style="text-align:center;margin-top:8px">
       <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:700">EXPLORE FULL PLATFORM \u2192</a>
     </div>
-  `, `<meta name="referrer" content="no-referrer" />`);
+  `, `<meta name="referrer" content="no-referrer" />`, buildUnsubUrl(email, 'weekly-digest'));
 
   return sendViaTransport({ to: email, subject, html, label: 'Weekly digest' });
 }
@@ -1070,7 +1076,7 @@ async function sendDailyBriefEmail(email, data) {
       <div style="font-size:12px;color:${TEXT_LIGHT};margin-bottom:12px">Explore full signals and analysis on the StocksIntels platform.</div>
       <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">VISIT PLATFORM \u2192</a>
     </div>
-  `, `<meta name="referrer" content="no-referrer" />`);
+  `, `<meta name="referrer" content="no-referrer" />`, buildUnsubUrl(email, 'daily-brief'));
 
   return sendViaTransport({ to: email, subject, html, label: 'Daily brief' });
 }
@@ -1169,7 +1175,7 @@ async function sendEarningsReportEmail(email, data) {
       <div style="font-size:12px;color:${TEXT_LIGHT};margin-bottom:12px">Full earnings data, AI verdicts, and corporate action calendar on the StocksIntels platform.</div>
       <a href="${process.env.APP_URL || 'http://localhost:5173'}/app/stocks" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">VIEW EARNINGS \u2192</a>
     </div>
-  `, `<meta name="referrer" content="no-referrer" />`);
+  `, `<meta name="referrer" content="no-referrer" />`, buildUnsubUrl(email, 'earnings-report'));
 
   return sendViaTransport({ to: email, subject, html, label: 'Earnings report' });
 }
