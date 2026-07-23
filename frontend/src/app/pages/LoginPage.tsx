@@ -359,6 +359,19 @@ export function LoginPage() {
                 </p>
               </div>
 
+              {(mode === "login" || mode === "otp-login") && loginStage === "password" && otpStage === "send" && (
+                <div className="flex bg-muted/50 rounded-xl p-1 mb-5">
+                  <button type="button" onClick={() => { setMode("login"); setLoginStage("password"); clear(); }}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-200 ${mode === "login" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                    <Lock className="inline w-3.5 h-3.5 mr-1.5 -mt-0.5" />Password + OTP
+                  </button>
+                  <button type="button" onClick={() => { setMode("otp-login"); setOtpStage("send"); clear(); }}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-200 ${mode === "otp-login" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                    <KeyRound className="inline w-3.5 h-3.5 mr-1.5 -mt-0.5" />OTP Only
+                  </button>
+                </div>
+              )}
+
               <AnimatePresence mode="wait">
                 {error && (
                   <motion.div key="err" initial={{ opacity: 0, y: -10, height: 0 }} animate={{ opacity: 1, y: 0, height: "auto" }} exit={{ opacity: 0, y: -10, height: 0 }}
@@ -414,10 +427,6 @@ export function LoginPage() {
                           {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending OTP...</span>
                             : <span className="flex items-center gap-2">Sign In <ArrowRight className="w-4 h-4" /></span>}
                         </Button>
-                        <button type="button" onClick={() => { setMode("otp-login"); setOtpStage("send"); setOtpCode(""); clear(); }}
-                          className="w-full text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold text-center">
-                          Sign in with OTP only
-                        </button>
                       </>
                     )}
                     {mode === "login" && loginStage === "otp" && (
@@ -478,10 +487,6 @@ export function LoginPage() {
                             : otpStage === "send" ? <span className="flex items-center gap-2">Send OTP <ArrowRight className="w-4 h-4" /></span>
                             : <span className="flex items-center gap-2">Verify & Sign In <ArrowRight className="w-4 h-4" /></span>}
                         </Button>
-                        <button type="button" onClick={() => { setMode("login"); setLoginStage("password"); setOtpStage("send"); setOtpCode(""); clear(); }}
-                          className="w-full text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold text-center">
-                          Sign in with password instead
-                        </button>
                       </>
                     )}
                     {mode === "register" && regStage === "form" && (
