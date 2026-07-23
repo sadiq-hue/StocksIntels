@@ -11399,7 +11399,8 @@ async function sendWeeklyDigestToUser(userId, email, fullName) {
     const dateStr = new Date().toLocaleDateString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
-    const newsHeadlines = (newsRes.news || newsRes.articles || []).slice(0, 8).map(a => ({
+    const newsArr = Array.isArray(newsRes) ? newsRes : (newsRes?.news || newsRes?.articles || []);
+    const newsHeadlines = newsArr.slice(0, 8).map(a => ({
       headline: a.headline || a.title || '',
       source: a.source || a.sourceName || '',
     }));
@@ -11412,7 +11413,7 @@ async function sendWeeklyDigestToUser(userId, email, fullName) {
         globalGainers: moversRes?.global?.gainers?.slice(0, 6) || [],
         globalLosers: moversRes?.global?.losers?.slice(0, 6) || [],
         newsHeadlines,
-        totalSignals: summaryRes?.signals?.total || 0,
+        totalSignals: editorial.totalSignals || summaryRes?.signals?.total || 0,
         nseSummary: editorial.nseSummary || '',
         storyOfWeek: editorial.storyOfWeek || '',
         milestone: editorial.milestone || '',

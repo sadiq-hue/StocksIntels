@@ -15,13 +15,25 @@ async function fetchJson(url, fallback = null) {
 }
 
 async function generateWeeklyDigestContent() {
-  const [movers, summary, allIndices, sectors, news] = await Promise.all([
+  const [movers, summary, allIndices, sectors, news, signals, fxRate] = await Promise.all([
     fetchJson(`${BASE}/api/market/movers`, { nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] }, combined: { gainers: [], losers: [] }, active: [] }),
     fetchJson(`${BASE}/api/ai/market-summary`, { sentiment: 'Neutral', signals: { total: 0, strongBuys: 0, buys: 0, sells: 0 } }),
     fetchJson(`${BASE}/api/indices/all`, {}),
     getSectorPerformance().catch(() => []),
     getNewsSummary().catch(() => ({ hotNews: [], trending: [] })),
+    generateSignals(null, true).catch(() => []),
+    fxService.getRate('USDKES').catch(() => null),
   ]);
+
+  const signalArr = Array.isArray(signals) ? signals : [];
+  const totalSignals = signalArr.length;
+  const strongBuys = signalArr.filter(s => s.signal === 'Strong Buy').length;
+  const buys = signalArr.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
+  const sells = signalArr.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
+  const effectiveSentiment = totalSignals > 0
+    ? (buys / totalSignals >= 0.65 ? 'Bullish' : buys / totalSignals >= 0.5 ? 'Slightly Bullish' : sells / totalSignals >= 0.35 ? 'Bearish' : 'Neutral')
+    : (summary?.sentiment || 'Neutral');
+  const effectiveSummary = { ...summary, sentiment: effectiveSentiment, signals: { total: totalSignals, strongBuys, buys, sells } };
 
   // allIndices comes back as an object keyed by symbol — normalize to array
   const indicesArr = allIndices && typeof allIndices === 'object' && !Array.isArray(allIndices)
@@ -51,7 +63,7 @@ async function generateWeeklyDigestContent() {
 
   let nseSummary, storyOfWeek, milestone, globalTheme, macroBackdrop, whatToWatch, nseGlobalConnection;
   if (USE_LLM) {
-    const combined = await llm.generateAllWeeklySections({ nse20, nasi, nseGainers, nseLosers, globalGainers, topSector, worstSector, sp500, summary, topStory }).catch(() => null);
+    const combined = await llm.generateAllWeeklySections({ nse20, nasi, nseGainers, nseLosers, globalGainers, topSector, worstSector, sp500, summary: effectiveSummary, topStory }).catch(() => null);
     if (combined) {
       nseSummary = combined.nseSummary; storyOfWeek = combined.storyOfWeek; milestone = combined.milestone;
       globalTheme = combined.globalTheme; macroBackdrop = combined.macroBackdrop;
@@ -62,11 +74,11 @@ async function generateWeeklyDigestContent() {
   storyOfWeek = storyOfWeek || buildStoryOfWeek(topStory, nseGainers, nseLosers);
   milestone = milestone || buildMilestone(nse20, sp500, nseGainers, movers);
   globalTheme = globalTheme || buildGlobalTheme(globalIdx, globalGainers, globalSentiment, topSector, sectors);
-  macroBackdrop = macroBackdrop || '(Data refresh pending live macro feed.)';
-  whatToWatch = whatToWatch || buildWhatToWatch(summary, nse20, sectors);
+  macroBackdrop = macroBackdrop || buildMacroBackdrop(sectors, effectiveSummary, sp500, fxRate);
+  whatToWatch = whatToWatch || buildWhatToWatch(effectiveSummary, nse20, sectors);
   nseGlobalConnection = nseGlobalConnection || buildNseGlobalConnection(nse20, sp500, nseSentiment, globalSentiment);
 
-  return { nseSummary, storyOfWeek, milestone, globalTheme, macroBackdrop, whatToWatch, nseGlobalConnection };
+  return { nseSummary, storyOfWeek, milestone, globalTheme, macroBackdrop, whatToWatch, nseGlobalConnection, totalSignals };
 }
 
 function buildNseSummary(nse20, gainers, losers, active, sentiment, topSector, worstSector) {
@@ -158,6 +170,30 @@ function buildWhatToWatch(summary, nse20, sectors) {
     text += 'Watch for key support and resistance levels as the new trading week opens.';
   }
   return text;
+}
+
+function buildMacroBackdrop(sectors, summary, sp500, fxRate) {
+  const parts = [];
+  const totalSignals = summary?.signals?.total || 0;
+  const sentiment = summary?.sentiment || 'Neutral';
+  parts.push(`AI market sentiment is ${sentiment} with ${totalSignals} active signals across NSE and NYSE.`);
+  if (sectors && sectors.length > 0) {
+    const upSectors = sectors.filter(s => parseFloat(s.avgChange) > 0);
+    const downSectors = sectors.filter(s => parseFloat(s.avgChange) < 0);
+    if (upSectors.length > 0) {
+      parts.push(`${upSectors.length} sector${upSectors.length > 1 ? 's' : ''} positive (${upSectors.slice(0, 2).map(s => `${s.sector} ${s.avgChange}%`).join(', ')}).`);
+    }
+    if (downSectors.length > 0) {
+      parts.push(`${downSectors.length} sector${downSectors.length > 1 ? 's' : ''} negative (${downSectors.slice(-2).map(s => `${s.sector} ${s.avgChange}%`).join(', ')}).`);
+    }
+  }
+  if (sp500) {
+    parts.push(`S&P 500 at ${sp500.value || '--'} (${sp500.change || '--'}).`);
+  }
+  if (fxRate) {
+    parts.push(`USD/KES at ${typeof fxRate === 'number' ? fxRate.toFixed(2) : fxRate}.`);
+  }
+  return parts.join(' ');
 }
 
 function buildNseGlobalConnection(nse20, sp500, nseSent, globalSent) {
