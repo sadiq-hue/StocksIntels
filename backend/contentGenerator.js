@@ -404,16 +404,15 @@ async function generateEarningsContent() {
   const nextMonth = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
   const toDate = nextMonth.toISOString().slice(0, 10);
 
-  const [signals, calendarData, recentSurprises] = await Promise.all([
+  const [signals, calendarData] = await Promise.all([
     generateSignals(null, true).catch(() => []),
     fetchFinnhubEarningsCalendar(fromDate, toDate).catch(() => []),
-    fetchFinnhubEarningsSurprises('AAPL').catch(() => []),
   ]);
 
   const signalArr = Array.isArray(signals) ? signals : [];
 
   const earningsCalendar = buildEarningsCalendar(calendarData, signalArr);
-  const earningsResults = buildEarningsResults(recentSurprises, calendarData, signalArr);
+  const earningsResults = await buildEarningsResults(calendarData, signalArr);
   const corporateActions = buildCorporateActions(signalArr);
   const globalEarnings = await buildGlobalEarnings(calendarData, signalArr);
 
