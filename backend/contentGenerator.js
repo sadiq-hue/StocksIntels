@@ -2,6 +2,7 @@ const axios = require('axios');
 const { getNewsSummary } = require('./newsService');
 const { getSectorPerformance } = require('./indicesService');
 const { generateSignals } = require('./signalService');
+const { fetchFinnhubEarningsCalendar, fetchFinnhubEarningsSurprises } = require('./earningsService');
 const fxService = require('./fxService');
 const llm = require('./llmService');
 
@@ -377,122 +378,262 @@ function buildAnalystTake(topSignals, sectors, summary) {
 
 // ── Earnings Report Content ──
 
+const AFRICA_IMPACT = {
+  'AAPL': 'Apple supply chain affects tech imports and assembly operations across East and West Africa.',
+  'JPM': 'JPMorgan results inform emerging-market capital flows — directly relevant for Kenyan bond and equity markets.',
+  'XOM': 'Exxon Mobil outlook impacts oil-dependent African economies (Nigeria, Angola, Ghana).',
+  'META': 'Meta investments drive African digital connectivity and content creation economies.',
+  'MSFT': 'Microsoft cloud expansion underpins fintech and enterprise growth across African markets.',
+  'GOOGL': 'Google/Alphabet advertising and Android ecosystem reach hundreds of millions of African mobile users.',
+  'AMZN': 'AWS cloud services power growing African startup and enterprise infrastructure.',
+  'TSLA': 'Tesla EV strategy influences energy transition sentiment in resource-rich African nations.',
+  'NVDA': 'Nvidia AI demand signals global tech spending that trickles into African tech ecosystem.',
+  'V': 'Visa transaction volumes in Africa reflect consumer spending and financial inclusion trends.',
+  'BRK.B': 'Berkshire portfolio signals institutional confidence in global markets including African exposure.',
+  'UNH': 'UnitedHealth results inform global healthcare spending trends relevant to African health insurers.',
+  'JNJ': 'Johnson & Johnson pharmaceutical pipeline impacts African healthcare delivery.',
+  'WMT': 'Walmart supply chain and retail trends reflect global consumer health relevant to African trade.',
+  'PG': 'Procter & Gamble Africa operations directly affected by consumer demand shifts.',
+};
+
+const MAJOR_GLOBAL_TICKERS = ['AAPL','MSFT','GOOGL','AMZN','NVDA','META','JPM','V','JNJ','UNH','XOM','TSLA','BRK.B','WMT','PG'];
+
 async function generateEarningsContent() {
-  const [signals, news] = await Promise.all([
+  const today = new Date();
+  const fromDate = today.toISOString().slice(0, 10);
+  const nextMonth = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const toDate = nextMonth.toISOString().slice(0, 10);
+
+  const [signals, calendarData, recentSurprises] = await Promise.all([
     generateSignals(null, true).catch(() => []),
-    getNewsSummary().catch(() => ({ hotNews: [], trending: [] })),
+    fetchFinnhubEarningsCalendar(fromDate, toDate).catch(() => []),
+    fetchFinnhubEarningsSurprises('AAPL').catch(() => []),
   ]);
 
-  const trending = news?.trending || [];
-  const hotNews = news?.hotNews || [];
+  const signalArr = Array.isArray(signals) ? signals : [];
 
-  const earningsCalendar = buildEarningsCalendar(hotNews, trending, signals);
-  const corporateActions = buildCorporateActions(hotNews, trending, signals);
-  const earningsResults = buildEarningsResults(signals);
-  const globalEarnings = buildGlobalEarnings(signals);
+  const earningsCalendar = buildEarningsCalendar(calendarData, signalArr);
+  const earningsResults = buildEarningsResults(recentSurprises, calendarData, signalArr);
+  const corporateActions = buildCorporateActions(signalArr);
+  const globalEarnings = await buildGlobalEarnings(calendarData, signalArr);
 
   return { earningsCalendar, earningsResults, corporateActions, globalEarnings };
 }
 
-function buildEarningsCalendar(hotNews, trending, signals) {
+function buildEarningsCalendar(calendarData, signals) {
   const entries = [];
-  if (hotNews.length > 0) {
-    hotNews.slice(0, 4).forEach(article => {
-      if (article.hotType === 'Earnings') {
-        entries.push({
-          date: 'This period',
-          company: article.relatedStocks?.join(', ') || 'Company',
-          exchange: 'NSE',
-          period: article.headline?.includes('Q') ? article.headline.match(/Q[1-4]/)?.[0] || 'FY' : 'FY',
-          aiExpectation: article.sentiment === 'positive' ? 'BEAT' : article.sentiment === 'negative' ? 'MISS' : 'IN-LINE',
-        });
-      }
+  const seen = new Set();
+
+  const upcoming = (calendarData || []).filter(e => e.epsEstimate != null || e.revenueEstimate != null);
+  for (const e of upcoming.slice(0, 10)) {
+    if (seen.has(e.ticker)) continue;
+    seen.add(e.ticker);
+    const fund = getSignalFundamentals(e.ticker, signals);
+    const quarterLabel = e.quarter ? `Q${e.quarter}` : 'FY';
+    const yearLabel = e.year || new Date(e.date).getFullYear();
+    const dateObj = new Date(e.date + 'T12:00:00Z');
+    const dateStr = `${dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${yearLabel}`;
+    const hourLabel = e.hour === 'amc' ? ' (After Close)' : e.hour === 'bmo' ? ' (Before Open)' : '';
+    entries.push({
+      date: dateStr + hourLabel,
+      company: fund?.name || e.ticker,
+      ticker: e.ticker,
+      exchange: isNseTicker(e.ticker) ? 'NSE' : 'NASDAQ/NYSE',
+      period: `${quarterLabel} ${yearLabel}`,
+      epsEstimate: e.epsEstimate != null ? `$${e.epsEstimate.toFixed(2)}` : '--',
+      revenueEstimate: e.revenueEstimate != null ? formatRevenue(e.revenueEstimate) : '--',
     });
   }
-  const tkrEntries = Array.isArray(signals) ? signals.filter(s => s.sector === 'Banking' || s.sector === 'Insurance').slice(0, 4).map(s => ({
-    date: 'Next 30 days',
-    company: s.name || s.ticker,
-    exchange: s.market === 'NSE' ? 'NSE' : 'NYSE',
-    period: 'FY',
-    aiExpectation: s.signal === 'Strong Buy' ? 'BEAT' : s.signal === 'Strong Sell' ? 'MISS' : 'IN-LINE',
-  })) : [];
-  return [...entries, ...tkrEntries].slice(0, 8);
+
+  const nseSignals = signals.filter(s => isNseTicker(s.ticker) && !seen.has(s.ticker));
+  for (const s of nseSignals.slice(0, 3)) {
+    seen.add(s.ticker);
+    entries.push({
+      date: 'Upcoming',
+      company: s.name || s.ticker,
+      ticker: s.ticker,
+      exchange: 'NSE',
+      period: 'Quarterly',
+      epsEstimate: '--',
+      revenueEstimate: '--',
+    });
+  }
+
+  return entries.slice(0, 12);
 }
 
-function buildCorporateActions(hotNews, trending, signals) {
-  const entries = [];
-  [...(hotNews || []), ...(trending || [])].slice(0, 6).forEach(article => {
-    if (article.hotType === 'IPO' || article.hotType === 'Merger' || article.hotType === 'Partnership' || article.hotType === 'Regulatory') {
-      entries.push({
-        date: article.timestamp || 'Recent',
-        company: article.relatedStocks?.join(', ') || '--',
-        exchange: 'NSE',
-        actionType: article.hotType.toUpperCase(),
-        details: article.headline || '',
+async function buildEarningsResults(calendarData, signals) {
+  const results = [];
+  const seen = new Set();
+
+  const reported = (calendarData || []).filter(e => e.epsActual != null);
+  for (const e of reported.slice(0, 5)) {
+    if (seen.has(e.ticker)) continue;
+    seen.add(e.ticker);
+    const surprises = await fetchFinnhubEarningsSurprises(e.ticker).catch(() => []);
+    const latest = surprises.length > 0 ? surprises[0] : null;
+    const fund = getSignalFundamentals(e.ticker, signals);
+    const quarterLabel = e.quarter ? `Q${e.quarter}` : 'FY';
+    const yearLabel = e.year || new Date(e.date).getFullYear();
+    const surprisePct = latest?.surprisePercent || 0;
+    const isBeat = surprisePct > 0;
+    const isMiss = surprisePct < -2;
+    results.push({
+      ticker: e.ticker,
+      company: fund?.name || e.ticker,
+      exchange: isNseTicker(e.ticker) ? 'NSE' : 'NASDAQ/NYSE',
+      period: `${quarterLabel} ${yearLabel}`,
+      verdict: isBeat ? 'BEAT' : isMiss ? 'MISS' : 'IN-LINE',
+      revenue: e.revenueActual != null ? formatRevenue(e.revenueActual) : (e.revenueEstimate != null ? `Est. ${formatRevenue(e.revenueEstimate)}` : '--'),
+      eps: e.epsActual != null ? `$${e.epsActual.toFixed(2)}` : '--',
+      epsEstimate: e.epsEstimate != null ? `$${e.epsEstimate.toFixed(2)}` : '--',
+      vsEstimate: latest ? (latest.surprisePercent > 0 ? '+' : '') + latest.surprisePercent.toFixed(1) + '%' : '--',
+      aiAnalysis: buildEarningsAnalysis(e.ticker, e, latest, fund),
+      shortTermSignal: isBeat ? 'BULLISH' : isMiss ? 'BEARISH' : 'NEUTRAL',
+      dividend: fund?.dividendYield ? `${fund.dividendYield}%` : undefined,
+      watchPrice: fund?.targetPrice || undefined,
+    });
+  }
+
+  if (results.length < 5) {
+    const sigsWithFinancials = signals.filter(s => s.analysis?.financial?.metrics && !seen.has(s.ticker));
+    for (const s of sigsWithFinancials.slice(0, 5 - results.length)) {
+      seen.add(s.ticker);
+      const m = s.analysis.financial.metrics || {};
+      const rev = m.revenue || m.Revenue || null;
+      const eps = m.eps || m.EPS || null;
+      const est = m.estimatedEarnings || m.estimates?.eps || null;
+      results.push({
+        ticker: s.ticker,
+        company: s.name,
+        exchange: isNseTicker(s.ticker) ? 'NSE' : 'NASDAQ/NYSE',
+        period: 'Latest FY',
+        verdict: s.signal === 'Strong Buy' || s.signal === 'Buy' ? 'BEAT' : s.signal === 'Sell' || s.signal === 'Strong Sell' ? 'MISS' : 'IN-LINE',
+        revenue: rev != null ? (typeof rev === 'number' ? '$' + rev.toLocaleString() : rev) : '--',
+        eps: eps != null ? (typeof eps === 'number' ? '$' + eps.toFixed(2) : eps) : '--',
+        epsEstimate: est != null ? `$${est.toFixed(2)}` : '--',
+        vsEstimate: est && typeof eps === 'number' ? (eps > est ? '+' : '') + ((eps - est) / est * 100).toFixed(1) + '%' : '--',
+        aiAnalysis: s.reason || `${s.name} carries a ${s.signal} signal with ${s.confidence}% confidence based on fundamental and technical analysis.`,
+        shortTermSignal: s.signal === 'Strong Buy' ? 'BULLISH' : s.signal === 'Strong Sell' ? 'BEARISH' : 'NEUTRAL',
+        dividend: m.dividendYield ? `${m.dividendYield}%` : undefined,
+        watchPrice: s.target1 || undefined,
       });
     }
-  });
-  if (entries.length === 0 && Array.isArray(signals)) {
-    signals.filter(s => s.type === 'Long Term Value').slice(0, 3).forEach(s => {
-      entries.push({
-        date: 'Ongoing',
-        company: s.name || s.ticker,
-        exchange: s.market === 'NSE' ? 'NSE' : 'NYSE',
-        actionType: 'VALUE_OPPORTUNITY',
-        details: `Undervalued: ${s.analysis?.fundamental?.grade || 'N/A'} fundamental grade. Entry at ${s.entry || '--'}`,
+  }
+
+  return results.slice(0, 5);
+}
+
+async function buildGlobalEarnings(calendarData, signals) {
+  const results = [];
+  const seen = new Set();
+
+  const majorReported = (calendarData || []).filter(e => MAJOR_GLOBAL_TICKERS.includes(e.ticker) && e.epsActual != null);
+  for (const e of majorReported.slice(0, 5)) {
+    if (seen.has(e.ticker)) continue;
+    seen.add(e.ticker);
+    const surprises = await fetchFinnhubEarningsSurprises(e.ticker).catch(() => []);
+    const latest = surprises.length > 0 ? surprises[0] : null;
+    const surprisePct = latest?.surprisePercent || 0;
+    const isBeat = surprisePct > 0;
+    const isMiss = surprisePct < -2;
+    results.push({
+      ticker: e.ticker,
+      company: getSignalFundamentals(e.ticker, signals)?.name || e.ticker,
+      result: isBeat ? 'BEAT' : isMiss ? 'MISS' : 'IN-LINE',
+      epsActual: e.epsActual != null ? `$${e.epsActual.toFixed(2)}` : '--',
+      epsEstimate: e.epsEstimate != null ? `$${e.epsEstimate.toFixed(2)}` : '--',
+      surprise: latest ? (latest.surprisePercent > 0 ? '+' : '') + latest.surprisePercent.toFixed(1) + '%' : '--',
+      africaImpact: AFRICA_IMPACT[e.ticker] || `${e.ticker} performance provides macro read-through for African markets.`,
+    });
+  }
+
+  if (results.length < 3) {
+    const majorUpcoming = (calendarData || []).filter(e => MAJOR_GLOBAL_TICKERS.includes(e.ticker) && !seen.has(e.ticker));
+    for (const e of majorUpcoming.slice(0, 3 - results.length)) {
+      seen.add(e.ticker);
+      results.push({
+        ticker: e.ticker,
+        company: getSignalFundamentals(e.ticker, signals)?.name || e.ticker,
+        result: 'UPCOMING',
+        epsActual: '--',
+        epsEstimate: e.epsEstimate != null ? `$${e.epsEstimate.toFixed(2)}` : '--',
+        surprise: '--',
+        africaImpact: AFRICA_IMPACT[e.ticker] || `${e.ticker} results will provide macro read-through for African markets.`,
       });
+    }
+  }
+
+  return results.slice(0, 5);
+}
+
+function buildCorporateActions(signals) {
+  const entries = [];
+  const valueSignals = signals.filter(s => s.type === 'Long Term Value' || s.type === 'Dividend');
+  for (const s of valueSignals.slice(0, 6)) {
+    const m = s.analysis?.financial?.metrics || {};
+    entries.push({
+      date: 'Ongoing',
+      company: s.name || s.ticker,
+      ticker: s.ticker,
+      exchange: isNseTicker(s.ticker) ? 'NSE' : 'NASDAQ/NYSE',
+      actionType: s.type === 'Dividend' ? 'DIVIDEND' : 'VALUE OPPORTUNITY',
+      details: s.type === 'Dividend'
+        ? `Yield: ${m.dividendYield || '--'}%. ${s.reason || ''}`
+        : `Undervalued: ${s.analysis?.fundamental?.grade || 'N/A'} grade. Entry: ${s.entry || '--'}. Target: ${s.target1 || '--'}.`,
     });
   }
   return entries.slice(0, 8);
 }
 
-function buildEarningsResults(signals) {
-  if (!Array.isArray(signals)) return [];
-  return signals.filter(s => s.analysis?.financial?.metrics).slice(0, 5).map(s => {
-    const m = s.analysis.financial.metrics || {};
-    const rev = m.revenue || m.Revenue || '--';
-    const np = m.netProfit || m['Net Profit'] || m['Net Income'] || m.netIncome || '--';
-    const eps = m.eps || m.EPS || '--';
-    const est = m.estimatedEarnings || m.estimates?.eps || null;
-    const fundGrade = s.analysis?.fundamental?.grade || '';
-    const isBeat = s.signal === 'Strong Buy' || s.signal === 'Buy';
-    const isMiss = s.signal === 'Strong Sell' || s.signal === 'Sell';
-    return {
-      ticker: s.ticker,
-      company: s.name,
-      exchange: s.market === 'NSE' ? 'NSE' : 'NYSE',
-      period: 'FY',
-      verdict: isBeat ? 'BEAT' : isMiss ? 'MISS' : 'IN-LINE',
-      revenue: typeof rev === 'number' ? '$' + rev.toLocaleString() : rev,
-      netProfit: typeof np === 'number' ? '$' + np.toLocaleString() : np,
-      eps: typeof eps === 'number' ? '$' + eps.toFixed(2) : eps,
-      vsEstimate: est && typeof eps === 'number' ? (eps > est ? '+' : '') + (eps - est).toFixed(2) : '--',
-      aiAnalysis: s.reason || `Fundamental grade: ${fundGrade || 'N/A'}. ${s.name} shows ${s.signal} signal with ${s.confidence}% confidence. ${s.analysis?.technical?.grade ? `Technical: ${s.analysis.technical.grade}.` : ''}`,
-      shortTermSignal: s.signal === 'Strong Buy' ? 'BULLISH' : s.signal === 'Strong Sell' ? 'BEARISH' : 'NEUTRAL',
-      dividend: m.dividendYield ? `${m.dividendYield}%` : undefined,
-      watchPrice: s.target1 || undefined,
-    };
-  });
+function buildEarningsAnalysis(ticker, earningsEvent, latest, fund) {
+  const parts = [];
+  if (latest) {
+    if (latest.surprisePercent > 0) {
+      parts.push(`${ticker} beat estimates by ${latest.surprisePercent.toFixed(1)}%`);
+    } else if (latest.surprisePercent < -2) {
+      parts.push(`${ticker} missed estimates by ${Math.abs(latest.surprisePercent).toFixed(1)}%`);
+    } else {
+      parts.push(`${ticker} reported in-line with expectations`);
+    }
+  }
+  if (fund?.sector) parts.push(`Sector: ${fund.sector}.`);
+  if (fund?.marketCap) parts.push(`Market cap: ${formatMarketCap(fund.marketCap)}.`);
+  return parts.length > 0 ? parts.join(' ') : `${ticker} reported earnings for the period.`;
 }
 
-function buildGlobalEarnings(signals) {
-  if (!Array.isArray(signals)) return [];
-  return signals.filter(s => s.market !== 'NSE').slice(0, 5).map(s => {
-    const isBeat = s.signal === 'Strong Buy' || s.signal === 'Buy';
-    const isMiss = s.signal === 'Strong Sell' || s.signal === 'Sell';
-    let africaImpact = '';
-    if (s.ticker === 'AAPL') africaImpact = 'Apple supply chain affects tech imports into Kenya and Nigeria.';
-    else if (s.ticker === 'JPM') africaImpact = 'JPM results inform EM capital flows — relevant for Kenyan bond market.';
-    else if (s.ticker === 'XOM') africaImpact = 'Exxon outlook impacts oil-dependent African markets (Nigeria, Angola).';
-    else if (s.ticker === 'META') africaImpact = 'Meta investments in African content creation and connectivity.';
-    else africaImpact = `${s.name || s.ticker} performance provides macro read-through for African markets.`;
-    return {
-      ticker: s.ticker,
-      company: s.name,
-      result: isBeat ? 'BEAT' : isMiss ? 'MISS' : 'IN-LINE',
-      africaImpact,
-    };
-  });
+function getSignalFundamentals(ticker, signals) {
+  const sig = (signals || []).find(s => s.ticker === ticker);
+  if (!sig) return null;
+  return {
+    name: sig.name,
+    sector: sig.sector,
+    marketCap: sig.marketCap || sig.analysis?.fundamental?.marketCap,
+    dividendYield: sig.analysis?.financial?.metrics?.dividendYield,
+    targetPrice: sig.target1,
+  };
+}
+
+function isNseTicker(ticker) {
+  try {
+    return signalService.NSE_SYMBOLS && signalService.NSE_SYMBOLS.includes(ticker);
+  } catch { return false; }
+}
+
+function formatRevenue(val) {
+  if (typeof val !== 'number') return '--';
+  if (val >= 1e12) return '$' + (val / 1e12).toFixed(1) + 'T';
+  if (val >= 1e9) return '$' + (val / 1e9).toFixed(1) + 'B';
+  if (val >= 1e6) return '$' + (val / 1e6).toFixed(0) + 'M';
+  return '$' + val.toLocaleString();
+}
+
+function formatMarketCap(val) {
+  if (!val) return '--';
+  if (val >= 1e12) return '$' + (val / 1e12).toFixed(1) + 'T';
+  if (val >= 1e9) return '$' + (val / 1e9).toFixed(1) + 'B';
+  if (val >= 1e6) return '$' + (val / 1e6).toFixed(0) + 'M';
+  return '$' + val.toLocaleString();
 }
 
 module.exports = { generateWeeklyDigestContent, generateDailyBriefContent, generateEarningsContent };

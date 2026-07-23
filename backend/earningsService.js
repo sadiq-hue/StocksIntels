@@ -2,6 +2,16 @@ const axios = require('axios');
 const signalService = require('./signalService');
 const nseAfxScraper = require('./nseAfxScraper');
 
+const FINNHUB_KEY = process.env.FINNHUB_API_KEY || process.env.VITE_FINNHUB_KEY || 'd7ji2ihr01qhf13euuvgd7ji2ihr01qhf13euv00';
+const FINNHUB_BASE = 'https://finnhub.io/api/v1';
+
+let finnhubCalendarCache = [];
+let finnhubCalendarTime = 0;
+const FINNHUB_CAL_TTL = 1000 * 60 * 60 * 4;
+
+const finnhubSurpriseCache = {};
+const FINNHUB_SURPRISE_TTL = 1000 * 60 * 60 * 24;
+
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 let earningsCache = [];
@@ -49,6 +59,66 @@ async function loadHistoricalCache() {
       console.log(`[Earnings] Restored ${loaded} tickers with historical data from DB`);
     }
   } catch {}
+}
+
+// ── Finnhub Earnings Calendar ──
+
+async function fetchFinnhubEarningsCalendar(fromDate, toDate) {
+  if (finnhubCalendarCache.length > 0 && (Date.now() - finnhubCalendarTime) < FINNHUB_CAL_TTL) {
+    return finnhubCalendarCache.filter(e => {
+      const d = e.date;
+      return d >= fromDate && d <= toDate;
+    });
+  }
+  try {
+    const url = `${FINNHUB_BASE}/calendar/earnings?from=${fromDate}&to=${toDate}&token=${FINNHUB_KEY}`;
+    const res = await axios.get(url, { timeout: 15000 });
+    const cal = res.data?.earningsCalendar || [];
+    finnhubCalendarCache = cal.map(e => ({
+      ticker: e.symbol,
+      date: e.date,
+      quarter: e.quarter,
+      year: e.year,
+      epsEstimate: e.epsEstimate,
+      epsActual: e.epsActual,
+      revenueEstimate: e.revenueEstimate,
+      revenueActual: e.revenueActual,
+      hour: e.hour,
+    }));
+    finnhubCalendarTime = Date.now();
+    console.log(`[Earnings] Finnhub calendar loaded: ${finnhubCalendarCache.length} events`);
+    return finnhubCalendarCache.filter(e => e.date >= fromDate && e.date <= toDate);
+  } catch (e) {
+    console.error('[Earnings] Finnhub calendar failed:', e.message);
+    return [];
+  }
+}
+
+async function fetchFinnhubEarningsSurprises(symbol) {
+  if (finnhubSurpriseCache[symbol] && (Date.now() - finnhubSurpriseCache[symbol]._ts) < FINNHUB_SURPRISE_TTL) {
+    return finnhubSurpriseCache[symbol].data;
+  }
+  try {
+    const url = `${FINNHUB_BASE}/stock/earnings?symbol=${encodeURIComponent(symbol)}&token=${FINNHUB_KEY}`;
+    const res = await axios.get(url, { timeout: 10000 });
+    const data = Array.isArray(res.data) ? res.data : [];
+    finnhubSurpriseCache[symbol] = { data, _ts: Date.now() };
+    return data;
+  } catch {
+    return [];
+  }
+}
+
+async function fetchFinnhubEarningsBatch(symbols) {
+  const results = {};
+  const toFetch = symbols.slice(0, 20);
+  for (const sym of toFetch) {
+    results[sym] = await fetchFinnhubEarningsSurprises(sym);
+    if (toFetch.indexOf(sym) < toFetch.length - 1) {
+      await new Promise(r => setTimeout(r, 1100));
+    }
+  }
+  return results;
 }
 
 function getQuarter(date) {
@@ -345,4 +415,4 @@ async function getEarningsCriteria() {
 loadHistoricalCache();
 setTimeout(syncEarnings, 2000);
 
-module.exports = { getUpcomingEarnings, getEarningsCriteria };
+module.exports = { getUpcomingEarnings, getEarningsCriteria, fetchFinnhubEarningsCalendar, fetchFinnhubEarningsSurprises, fetchFinnhubEarningsBatch };

@@ -1092,7 +1092,7 @@ async function sendEarningsReportEmail(email, data) {
   const subject = `Earnings & Corporate Actions — ${dateStr}`;
 
   const calRows = ((earningsCalendar || []).slice(0, 12)).map(e =>
-    `<tr><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${e.date || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${e.company || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_LIGHT}">${e.exchange || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${e.period || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;text-align:center"><span style="background:${e.aiExpectation === 'BEAT' ? GREEN + '20' : e.aiExpectation === 'MISS' ? RED + '20' : AMBER + '20'};color:${e.aiExpectation === 'BEAT' ? GREEN : e.aiExpectation === 'MISS' ? RED : AMBER};padding:2px 8px;border-radius:3px;font-weight:700;font-size:10px">${e.aiExpectation || '--'}</span></td></tr>`
+    `<tr><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${e.date || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${e.company || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_LIGHT}">${e.exchange || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${e.period || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;text-align:right;color:${TEXT_DARK}">${e.epsEstimate || '--'}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;text-align:right;color:${TEXT_MED}">${e.revenueEstimate || '--'}</td></tr>`
   ).join('');
 
   function earningsBlock(r) {
@@ -1107,10 +1107,10 @@ async function sendEarningsReportEmail(email, data) {
         <div style="padding:12px 14px;border-bottom:1px solid ${BORDER}">
           <div style="text-align:center;margin-bottom:10px"><span style="background:${verdictColor};color:#ffffff;padding:4px 16px;border-radius:4px;font-size:13px;font-weight:700">AI VERDICT: ${r.verdict || '--'}</span></div>
           <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:12px">
+            <tr><td style="padding:4px 0;color:${TEXT_MED}">EPS (Actual)</td><td style="padding:4px 0;text-align:right;font-weight:600;color:${TEXT_DARK}">${r.eps || '--'}</td></tr>
+            <tr><td style="padding:4px 0;color:${TEXT_MED}">EPS (Estimate)</td><td style="padding:4px 0;text-align:right;font-weight:600;color:${TEXT_DARK}">${r.epsEstimate || '--'}</td></tr>
             <tr><td style="padding:4px 0;color:${TEXT_MED}">Revenue</td><td style="padding:4px 0;text-align:right;font-weight:600;color:${TEXT_DARK}">${r.revenue || '--'}</td></tr>
-            <tr><td style="padding:4px 0;color:${TEXT_MED}">Net Profit</td><td style="padding:4px 0;text-align:right;font-weight:600;color:${TEXT_DARK}">${r.netProfit || '--'}</td></tr>
-            <tr><td style="padding:4px 0;color:${TEXT_MED}">EPS</td><td style="padding:4px 0;text-align:right;font-weight:600;color:${TEXT_DARK}">${r.eps || '--'}</td></tr>
-            <tr><td style="padding:4px 0;color:${TEXT_MED}">vs Estimate</td><td style="padding:4px 0;text-align:right;font-weight:600;color:${(r.vsEstimate || '').startsWith('+') ? GREEN : RED}">${r.vsEstimate || '--'}</td></tr>
+            <tr><td style="padding:4px 0;color:${TEXT_MED}">Surprise</td><td style="padding:4px 0;text-align:right;font-weight:600;color:${(r.vsEstimate || '').startsWith('+') ? GREEN : (r.vsEstimate || '').startsWith('-') ? RED : TEXT_DARK}">${r.vsEstimate || '--'}</td></tr>
           </table>
         </div>
         <div style="padding:12px 14px;border-bottom:1px solid ${BORDER}">
@@ -1129,7 +1129,7 @@ async function sendEarningsReportEmail(email, data) {
   ).join('');
 
   const geRows = ((globalEarnings || []).slice(0, 5)).map(g =>
-    `<tr><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${g.ticker || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${g.company || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;text-align:center"><span style="background:${g.result === 'BEAT' ? GREEN + '20' : g.result === 'MISS' ? RED + '20' : AMBER + '20'};color:${g.result === 'BEAT' ? GREEN : g.result === 'MISS' ? RED : AMBER};padding:2px 8px;border-radius:3px;font-weight:700;font-size:10px">${g.result || '--'}</span></td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED};line-height:1.4">${g.africaImpact || ''}</td></tr>`
+    `<tr><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${g.ticker || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${g.company || ''}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;text-align:center"><span style="background:${g.result === 'BEAT' ? GREEN + '20' : g.result === 'MISS' ? RED + '20' : g.result === 'UPCOMING' ? BRAND_COLOR + '20' : AMBER + '20'};color:${g.result === 'BEAT' ? GREEN : g.result === 'MISS' ? RED : g.result === 'UPCOMING' ? BRAND_COLOR : AMBER};padding:2px 8px;border-radius:3px;font-weight:700;font-size:10px">${g.result || '--'}</span></td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${g.surprise || '--'}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED};line-height:1.4">${g.africaImpact || ''}</td></tr>`
   ).join('');
 
   const html = baseWrapper(`
@@ -1141,16 +1141,16 @@ async function sendEarningsReportEmail(email, data) {
     </div>
 
     <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Earnings Calendar</div>
-    <div style="font-size:11px;color:${TEXT_LIGHT};margin-bottom:10px">Companies reporting results this period across covered exchanges:</div>
+      <div style="font-size:11px;color:${TEXT_LIGHT};margin-bottom:10px">Upcoming earnings reports with analyst estimates across covered exchanges:</div>
     <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
       <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
-        <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Date</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Company</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Exch</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Period</th><th style="padding:4px 8px;text-align:center;color:${TEXT_MED}">AI Expectation</th></tr></thead>
+        <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Date</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Company</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Exch</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Period</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">EPS Est.</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Rev. Est.</th></tr></thead>
         <tbody>${calRows || '<tr><td colspan="5" style="padding:12px;text-align:center;color:#94a3b8">No upcoming earnings</td></tr>'}</tbody>
       </table>
     </div>
 
     <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Results Summaries</div>
-    <div style="font-size:11px;color:${TEXT_LIGHT};margin-bottom:10px">AI-generated summaries of key results reported this period:</div>
+      <div style="font-size:11px;color:${TEXT_LIGHT};margin-bottom:10px">Latest reported earnings with actual vs. analyst estimates:</div>
     ${(earningsResults || []).slice(0, 5).map(r => earningsBlock(r)).join('') || '<div style="background:${BG_LIGHT};border-radius:10px;padding:18px;margin-bottom:20px;text-align:center;font-size:13px;color:${TEXT_MED}">No results yet this period.</div>'}
 
     ${corporateActions && corporateActions.length ? `
@@ -1166,7 +1166,7 @@ async function sendEarningsReportEmail(email, data) {
     <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Global Earnings — Africa Impact Watch</div>
     <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
       <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
-        <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Ticker</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Company</th><th style="padding:4px 8px;text-align:center;color:${TEXT_MED}">Result</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Africa Impact</th></tr></thead>
+        <thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Ticker</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Company</th><th style="padding:4px 8px;text-align:center;color:${TEXT_MED}">Result</th><th style="padding:4px 8px;text-align:center;color:${TEXT_MED}">Surprise</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Africa Impact</th></tr></thead>
         <tbody>${geRows}</tbody>
       </table>
     </div>` : ''}
