@@ -11298,11 +11298,14 @@ async function sendHotNewsReportToUser(userId, email, fullName) {
       timestamp: a.timestamp,
       url: a.url,
     }));
-    await sendHotNewsEmail(email, {
-      userName: fullName || 'Trader',
-      dateStr,
-      hotNews: hotNewsData,
-    });
+    await withTimeout(
+      sendHotNewsEmail(email, {
+        userName: fullName || 'Trader',
+        dateStr,
+        hotNews: hotNewsData,
+      }),
+      30000, 'hot news email send'
+    );
     console.log(`[HOT NEWS] Report sent to ${email}`);
     return true;
   } catch (e) {
@@ -11388,10 +11391,10 @@ async function sendDailySentimentReports() {
 async function sendWeeklyDigestToUser(userId, email, fullName) {
   try {
     const [summaryRes, moversRes, newsRes, editorial] = await Promise.all([
-      axios.get(`http://localhost:${port}/api/ai/market-summary`).then(r => r.data).catch(() => null),
-      axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({})),
-      axios.get(`http://localhost:${port}/api/news?limit=15`).then(r => r.data).catch(() => ({})),
-      generateWeeklyDigestContent().catch(() => ({})),
+      withTimeout(axios.get(`http://localhost:${port}/api/ai/market-summary`).then(r => r.data).catch(() => null), 15000, 'digest summary').catch(() => null),
+      withTimeout(axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({})), 15000, 'digest movers').catch(() => ({})),
+      withTimeout(axios.get(`http://localhost:${port}/api/news?limit=15`).then(r => r.data).catch(() => ({})), 15000, 'digest news').catch(() => ({})),
+      withTimeout(generateWeeklyDigestContent().catch(() => ({})), 45000, 'digest content').catch(() => ({})),
     ]);
     const dateStr = new Date().toLocaleDateString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -11400,23 +11403,26 @@ async function sendWeeklyDigestToUser(userId, email, fullName) {
       headline: a.headline || a.title || '',
       source: a.source || a.sourceName || '',
     }));
-    await sendWeeklyDigestEmail(email, {
-      userName: fullName || 'Trader',
-      dateStr,
-      nseGainers: moversRes?.nse?.gainers?.slice(0, 6) || [],
-      nseLosers: moversRes?.nse?.losers?.slice(0, 6) || [],
-      globalGainers: moversRes?.global?.gainers?.slice(0, 6) || [],
-      globalLosers: moversRes?.global?.losers?.slice(0, 6) || [],
-      newsHeadlines,
-      totalSignals: summaryRes?.signals?.total || 0,
-      nseSummary: editorial.nseSummary || '',
-      storyOfWeek: editorial.storyOfWeek || '',
-      milestone: editorial.milestone || '',
-      globalTheme: editorial.globalTheme || '',
-      macroBackdrop: editorial.macroBackdrop || '',
-      whatToWatch: editorial.whatToWatch || '',
-      nseGlobalConnection: editorial.nseGlobalConnection || '',
-    });
+    await withTimeout(
+      sendWeeklyDigestEmail(email, {
+        userName: fullName || 'Trader',
+        dateStr,
+        nseGainers: moversRes?.nse?.gainers?.slice(0, 6) || [],
+        nseLosers: moversRes?.nse?.losers?.slice(0, 6) || [],
+        globalGainers: moversRes?.global?.gainers?.slice(0, 6) || [],
+        globalLosers: moversRes?.global?.losers?.slice(0, 6) || [],
+        newsHeadlines,
+        totalSignals: summaryRes?.signals?.total || 0,
+        nseSummary: editorial.nseSummary || '',
+        storyOfWeek: editorial.storyOfWeek || '',
+        milestone: editorial.milestone || '',
+        globalTheme: editorial.globalTheme || '',
+        macroBackdrop: editorial.macroBackdrop || '',
+        whatToWatch: editorial.whatToWatch || '',
+        nseGlobalConnection: editorial.nseGlobalConnection || '',
+      }),
+      30000, 'digest email send'
+    );
     console.log(`[DIGEST] Weekly digest sent to ${email}`);
     return true;
   } catch (e) {
@@ -11447,11 +11453,24 @@ async function sendWeeklyDigestReports() {
 
 // ── 2. DAILY MARKET BRIEF ──
 
+function withTimeout(promise, ms, label = 'operation') {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)),
+  ]);
+}
+
 async function sendDailyBriefToUser(userId, email, fullName) {
   try {
     const [moversRes, editorial] = await Promise.all([
-      axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({})),
-      generateDailyBriefContent().catch(() => ({})),
+      withTimeout(
+        axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({})),
+        15000, 'movers'
+      ).catch(() => ({})),
+      withTimeout(
+        generateDailyBriefContent().catch(() => ({})),
+        45000, 'brief content'
+      ).catch(() => ({})),
     ]);
     const dateStr = new Date().toLocaleDateString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -11473,23 +11492,27 @@ async function sendDailyBriefToUser(userId, email, fullName) {
       volume: m.volume && m.volume !== '0' && m.volume !== '--' ? m.volume : '--',
     })) : []);
 
-    await sendDailyBriefEmail(email, {
-      userName: fullName || 'Trader',
-      dateStr,
-      indices,
-      yesterdayTopMovers,
-      aiSignal: editorial.aiSignal || null,
-      aiSignalContext: editorial.aiSignalContext || '',
-      globalIndices: editorial?.globalIndices?.length ? editorial.globalIndices : [
-        { label: 'S&P 500', value: '--', change: '--', keyDriver: 'Overnight data pending' },
-        { label: 'Nasdaq 100', value: '--', change: '--', keyDriver: 'Overnight data pending' },
-        { label: 'Dow Jones', value: '--', change: '--', keyDriver: 'Overnight data pending' },
-        { label: 'Russell 2000', value: '--', change: '--', keyDriver: 'Overnight data pending' },
-      ],
-      globalToNseConnection: editorial.globalToNseConnection || 'Global market movements overnight can set the tone for NSE open. Watch for any significant gap-ups or gap-downs in the first 30 minutes of trading.',
-      calendar: editorial.calendar || [],
-      analystTake: editorial.analystTake || '',
-    });
+    console.log(`[BRIEF] Data gathered for ${email}, sending email...`);
+    await withTimeout(
+      sendDailyBriefEmail(email, {
+        userName: fullName || 'Trader',
+        dateStr,
+        indices,
+        yesterdayTopMovers,
+        aiSignal: editorial.aiSignal || null,
+        aiSignalContext: editorial.aiSignalContext || '',
+        globalIndices: editorial?.globalIndices?.length ? editorial.globalIndices : [
+          { label: 'S&P 500', value: '--', change: '--', keyDriver: 'Overnight data pending' },
+          { label: 'Nasdaq 100', value: '--', change: '--', keyDriver: 'Overnight data pending' },
+          { label: 'Dow Jones', value: '--', change: '--', keyDriver: 'Overnight data pending' },
+          { label: 'Russell 2000', value: '--', change: '--', keyDriver: 'Overnight data pending' },
+        ],
+        globalToNseConnection: editorial.globalToNseConnection || 'Global market movements overnight can set the tone for NSE open. Watch for any significant gap-ups or gap-downs in the first 30 minutes of trading.',
+        calendar: editorial.calendar || [],
+        analystTake: editorial.analystTake || '',
+      }),
+      30000, 'email send'
+    );
     console.log(`[BRIEF] Daily brief sent to ${email}`);
     return true;
   } catch (e) {
@@ -11522,16 +11545,19 @@ async function sendEarningsReportToUser(userId, email, fullName) {
     const dateStr = new Date().toLocaleDateString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
-    const editorial = await generateEarningsContent().catch(() => ({}));
+    const editorial = await withTimeout(generateEarningsContent().catch(() => ({})), 45000, 'earnings content');
 
-    await sendEarningsReportEmail(email, {
-      userName: fullName || 'Trader',
-      dateStr,
-      earningsCalendar: editorial.earningsCalendar || [],
-      earningsResults: editorial.earningsResults || [],
-      corporateActions: editorial.corporateActions || [],
-      globalEarnings: editorial.globalEarnings || [],
-    });
+    await withTimeout(
+      sendEarningsReportEmail(email, {
+        userName: fullName || 'Trader',
+        dateStr,
+        earningsCalendar: editorial.earningsCalendar || [],
+        earningsResults: editorial.earningsResults || [],
+        corporateActions: editorial.corporateActions || [],
+        globalEarnings: editorial.globalEarnings || [],
+      }),
+      30000, 'earnings email send'
+    );
     console.log(`[EARNINGS] Earnings report sent to ${email}`);
     return true;
   } catch (e) {
