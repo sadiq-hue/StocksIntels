@@ -240,7 +240,7 @@ app.use('/api/admin', (req, res, next) => {
   next();
 });
 // Admin OTP login routes (no auth required)
-app.post('/api/admin/send-otp', verifyTurnstile, async (req, res) => {
+app.post('/api/admin/send-otp', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email required' });
