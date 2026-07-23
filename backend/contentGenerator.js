@@ -18,13 +18,18 @@ async function generateWeeklyDigestContent() {
   const [movers, summary, allIndices, sectors, news] = await Promise.all([
     fetchJson(`${BASE}/api/market/movers`, { nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] }, combined: { gainers: [], losers: [] }, active: [] }),
     fetchJson(`${BASE}/api/ai/market-summary`, { sentiment: 'Neutral', signals: { total: 0, strongBuys: 0, buys: 0, sells: 0 } }),
-    fetchJson(`${BASE}/api/indices/all`, []),
+    fetchJson(`${BASE}/api/indices/all`, {}),
     getSectorPerformance().catch(() => []),
     getNewsSummary().catch(() => ({ hotNews: [], trending: [] })),
   ]);
 
-  const nseIndices = (Array.isArray(allIndices) ? allIndices : []).filter(i => i.market === 'NSE' || i.currency === 'KES');
-  const globalIdx = (Array.isArray(allIndices) ? allIndices : []).filter(i => i.market === 'Global' || i.currency === 'USD');
+  // allIndices comes back as an object keyed by symbol — normalize to array
+  const indicesArr = allIndices && typeof allIndices === 'object' && !Array.isArray(allIndices)
+    ? Object.values(allIndices)
+    : (Array.isArray(allIndices) ? allIndices : []);
+
+  const nseIndices = indicesArr.filter(i => i.market === 'NSE' || i.currency === 'KES');
+  const globalIdx = indicesArr.filter(i => i.market === 'Global' || i.currency === 'USD');
   const nse20 = nseIndices.find(i => i.symbol?.includes('NSE20'));
   const nasi = nseIndices.find(i => i.symbol?.includes('NSEASI'));
   const sp500 = globalIdx.find(i => i.symbol?.includes('GSPC'));
@@ -166,16 +171,21 @@ function buildNseGlobalConnection(nse20, sp500, nseSent, globalSent) {
 // ── Daily Brief Content ──
 
 async function generateDailyBriefContent() {
-  const [movers, summary, allIndices, sectors, signals] = await Promise.all([
+  const [moversRes, summary, allIndices, sectors, signals] = await Promise.all([
     fetchJson(`${BASE}/api/market/movers`, { nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] }, combined: { gainers: [], losers: [] }, active: [] }),
     fetchJson(`${BASE}/api/ai/market-summary`, { sentiment: 'Neutral', signals: { total: 0, strongBuys: 0, buys: 0, sells: 0 } }),
-    fetchJson(`${BASE}/api/indices/all`, []),
+    fetchJson(`${BASE}/api/indices/all`, {}),
     getSectorPerformance().catch(() => []),
     generateSignals(null, true).catch(() => []),
   ]);
 
-  const nseIndices = (Array.isArray(allIndices) ? allIndices : []).filter(i => i.market === 'NSE' || i.currency === 'KES');
-  const globalIdx = (Array.isArray(allIndices) ? allIndices : []).filter(i => i.market === 'Global' || i.currency === 'USD');
+  // allIndices comes back as an object keyed by symbol — normalize to array
+  const indicesArr = allIndices && typeof allIndices === 'object' && !Array.isArray(allIndices)
+    ? Object.values(allIndices)
+    : (Array.isArray(allIndices) ? allIndices : []);
+
+  const nseIndices = indicesArr.filter(i => i.market === 'NSE' || i.currency === 'KES');
+  const globalIdx = indicesArr.filter(i => i.market === 'Global' || i.currency === 'USD');
 
   const usdToKes = await fxService.getRate('USDKES').catch(() => '--');
 
@@ -186,20 +196,22 @@ async function generateDailyBriefContent() {
   const ndx = globalIdx.find(i => i.symbol?.includes('IXIC'));
   const dji = globalIdx.find(i => i.symbol?.includes('DJI'));
 
+  const usdKesStr = typeof usdToKes === 'number' ? usdToKes.toFixed(2) : (usdToKes || '--');
+
   const indices = [
     { label: 'NSE 20', value: nse20?.value || '--', change: nse20?.change || '--', signal: summary?.sentiment === 'Bullish' ? 'BULLISH' : summary?.sentiment === 'Bearish' ? 'BEARISH' : 'NEUTRAL' },
     { label: 'NASI', value: nasi?.value || '--', change: nasi?.change || '--', signal: '--' },
     { label: 'NGX ASI', value: ngx?.value || '--', change: ngx?.change || '--', signal: '--' },
     { label: 'S&P 500', value: sp500?.value || '--', change: sp500?.change || '--', signal: '--' },
-    { label: 'USD/KES', value: usdToKes || '--', change: '--', signal: '--' },
+    { label: 'USD/KES', value: usdKesStr, change: '--', signal: '--' },
   ];
 
-  const combinedMovers = [...(movers?.combined?.gainers || []), ...(movers?.combined?.losers || [])].slice(0, 6);
-  const yesterdayTopMovers = combinedMovers.map(m => ({
+  const combinedMovers = [...(moversRes?.combined?.gainers || []), ...(moversRes?.combined?.losers || [])];
+  const yesterdayTopMovers = combinedMovers.slice(0, 6).map(m => ({
     symbol: m.symbol || '--',
-    company: m.company_name || m.name || '',
-    change: m.changePercent ? (m.isPositive ? '+' : '') + m.changePercent.toFixed(2) + '%' : (m.change || '--'),
-    volume: m.volume?.toLocaleString() || '--',
+    company: m.company || m.company_name || m.name || '',
+    change: m.change || (m.changePercent ? (m.isPositive ? '+' : '') + m.changePercent.toFixed(2) + '%' : '--'),
+    volume: m.volume && m.volume !== '0' && m.volume !== '--' ? m.volume : '--',
   }));
 
   const signalOfDay = Array.isArray(signals) ? signals.sort((a, b) => (b.confidence || 0) - (a.confidence || 0)).slice(0, 3) : [];
@@ -219,10 +231,18 @@ async function generateDailyBriefContent() {
   globalToNseConnection = globalToNseConnection || buildDailyGlobalConnection(sp500, ndx, nse20, summary);
   analystTake = analystTake || buildAnalystTake(signalOfDay, sectors, summary);
 
+  const spChgRaw = sp500?.changeRaw || 0;
+  const ndxChgRaw = ndx?.changeRaw || 0;
+  const djiChgRaw = dji?.changeRaw || 0;
+
+  const spDriver = sp500 ? (spChgRaw > 0.5 ? 'Risk-on sentiment' : spChgRaw < -0.5 ? 'Risk-off pressure' : 'Flat close') : 'Overnight data pending';
+  const ndxDriver = ndx ? (ndxChgRaw > 0.8 ? 'Tech rally' : ndxChgRaw < -0.8 ? 'Tech selloff' : 'Mixed tech session') : 'Overnight data pending';
+  const djiDriver = dji ? (djiChgRaw > 0.3 ? 'Industrial strength' : djiChgRaw < -0.3 ? 'Industrial weakness' : 'Sideways trade') : 'Overnight data pending';
+
   const globalIndices = [
-    { label: 'S&P 500', value: sp500?.value || '--', change: sp500?.change || '--', keyDriver: sp500 ? `Prev close ${sp500.previousClose}` : 'Overnight data pending' },
-    { label: 'Nasdaq', value: ndx?.value || '--', change: ndx?.change || '--', keyDriver: ndx ? `Prev close ${ndx.previousClose}` : 'Overnight data pending' },
-    { label: 'Dow Jones', value: dji?.value || '--', change: dji?.change || '--', keyDriver: dji ? `Prev close ${dji.previousClose}` : 'Overnight data pending' },
+    { label: 'S&P 500', value: sp500?.value || '--', change: sp500?.change || '--', keyDriver: spDriver },
+    { label: 'Nasdaq', value: ndx?.value || '--', change: ndx?.change || '--', keyDriver: ndxDriver },
+    { label: 'Dow Jones', value: dji?.value || '--', change: dji?.change || '--', keyDriver: djiDriver },
     { label: 'Russell 2000', value: '--', change: '--', keyDriver: 'Overnight data pending' },
   ];
 
