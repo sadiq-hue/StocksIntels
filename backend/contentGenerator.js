@@ -216,20 +216,29 @@ async function generateDailyBriefContent() {
 
   const signalOfDay = Array.isArray(signals) ? signals.sort((a, b) => (b.confidence || 0) - (a.confidence || 0)).slice(0, 3) : [];
 
-  const aiSignal = `StocksIntels AI indicates ${summary?.sentiment || 'neutral'} market conditions — ${summary?.signals?.total || 0} active signals across exchanges.`;
+  const totalSignals = Array.isArray(signals) ? signals.length : 0;
+  const strongBuys = Array.isArray(signals) ? signals.filter(s => s.signal === 'Strong Buy').length : 0;
+  const buys = Array.isArray(signals) ? signals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length : 0;
+  const sells = Array.isArray(signals) ? signals.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length : 0;
+  const effectiveSentiment = totalSignals > 0
+    ? (buys / totalSignals >= 0.65 ? 'Bullish' : buys / totalSignals >= 0.5 ? 'Slightly Bullish' : sells / totalSignals >= 0.35 ? 'Bearish' : sells / totalSignals >= 0.5 ? 'Slightly Bearish' : 'Neutral')
+    : (summary?.sentiment || 'neutral');
+
+  const aiSignal = `StocksIntels AI indicates ${effectiveSentiment} market conditions — ${totalSignals} active signals across exchanges.`;
 
   let aiSignalContext, globalToNseConnection, analystTake;
   if (USE_LLM) {
-    const combined = await llm.generateAllBriefSections({ sentiment: summary?.sentiment, signals: summary?.signals, topSignals: signalOfDay, sp500, ndx, nse20, sectors }).catch(() => null);
+    const combined = await llm.generateAllBriefSections({ sentiment: effectiveSentiment, signals: { total: totalSignals, strongBuys, buys, sells }, topSignals: signalOfDay, sp500, ndx, nse20, sectors }).catch(() => null);
     if (combined) {
       aiSignalContext = combined.aiSignalContext;
       globalToNseConnection = combined.globalToNseConnection;
       analystTake = combined.analystTake;
     }
   }
-  aiSignalContext = aiSignalContext || buildAiSignalContext(summary, signalOfDay, sp500);
-  globalToNseConnection = globalToNseConnection || buildDailyGlobalConnection(sp500, ndx, nse20, summary);
-  analystTake = analystTake || buildAnalystTake(signalOfDay, sectors, summary);
+  const effectiveSummary = { ...summary, sentiment: effectiveSentiment, signals: { total: totalSignals, strongBuys, buys, sells } };
+  aiSignalContext = aiSignalContext || buildAiSignalContext(effectiveSummary, signalOfDay, sp500);
+  globalToNseConnection = globalToNseConnection || buildDailyGlobalConnection(sp500, ndx, nse20, effectiveSummary);
+  analystTake = analystTake || buildAnalystTake(signalOfDay, sectors, effectiveSummary);
 
   const spChgRaw = sp500?.changeRaw || 0;
   const ndxChgRaw = ndx?.changeRaw || 0;
