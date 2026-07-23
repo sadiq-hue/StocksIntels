@@ -140,7 +140,7 @@ export function SettingsPage() {
     setSaving(true);
     try {
       if (user?.id) {
-        const res = await fetch(`${API_BASE_URL}/users/${user.id}`, {
+        const res = await fetch(`${API_BASE_URL}/users/${user.id}/profile`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(profile),
@@ -898,7 +898,7 @@ export function SettingsPage() {
                         setProfile(p => ({ ...p, visible_in_directory: checked }));
                         if (user?.id) {
                           try {
-                            const res = await fetch(`${API_BASE_URL}/users/${user.id}`, {
+                            const res = await fetch(`${API_BASE_URL}/users/${user.id}/profile`, {
                               method: "PUT",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({ visible_in_directory: checked }),

@@ -3528,6 +3528,30 @@ app.get('/api/signals/engine/diagnostics', authenticateToken, async (req, res) =
   }
 });
 
+// --- Profile Update (auth-only, no subscription required) ---
+app.put('/api/users/:id/profile', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { full_name, email, phone, bio, location, trader_type, experience, avatar, visible_in_directory } = req.body;
+    const fields = []; const params = []; let idx = 1;
+    if (full_name !== undefined) { fields.push(`full_name = $${idx++}`); params.push(full_name); }
+    if (email !== undefined) { fields.push(`email = $${idx++}`); params.push(email); }
+    if (trader_type !== undefined) { fields.push(`trader_type = $${idx++}`); params.push(trader_type); }
+    if (visible_in_directory !== undefined) { fields.push(`visible_in_directory = $${idx++}`); params.push(visible_in_directory); }
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    params.push(id);
+    const result = await pool.query(
+      `UPDATE users SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${idx} RETURNING id, full_name, email, trader_type, visible_in_directory, created_at, updated_at`,
+      params
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating profile:', error.message);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
 // --- Authentication & Subscription Enforcement Middleware ---
 // Apply to all app feature routes. Public/market data routes are defined before this.
 const authSubs = [authenticateToken, requireActiveSubscription];
