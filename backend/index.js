@@ -116,6 +116,13 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
+app.use((req, res, next) => {
+  res.removeHeader('x-railway-edge');
+  res.removeHeader('x-railway-request-id');
+  res.removeHeader('x-hikari-trace');
+  next();
+});
+
 app.use(cors({
   origin: corsOrigin,
   credentials: true,
