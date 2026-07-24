@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ScrollArea } from "../components/ui/scroll-area";
 import {
   Building2, CalendarDays, BarChart3, Star, Trophy,
-  LineChart, Search, Menu, X,
+  LineChart, Search, Menu, X, SlidersHorizontal,
 } from "lucide-react";
 import { StockScreener } from "./stocks/StockScreener";
 import { StockExchanges } from "./stocks/StockExchanges";
