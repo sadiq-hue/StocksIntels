@@ -1788,10 +1788,30 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       } else {
         const marketSymbol = NSE_SYMBOLS.includes(symbol) ? `NSE:${symbol}` : symbol;
         const quote = await getStockQuote(marketSymbol);
-        if (!quote) return null;
-        currentPrice = quote.price;
-        priceChange = quote.changePercent;
-        volume = quote.volume;
+        if (quote) {
+          currentPrice = quote.price;
+          priceChange = quote.changePercent;
+          volume = quote.volume;
+        } else if (NSE_SYMBOLS.includes(symbol)) {
+          // Fallback: use KenyanStocks API data directly
+          try {
+            const ksMod = require('./kenyanStocksScraper');
+            const ksStocks = await ksMod.getStocksData();
+            const ks = Array.isArray(ksStocks) ? ksStocks.find(s => s.symbol === symbol) : null;
+            if (ks && Number(ks.close) > 0) {
+              currentPrice = Number(ks.close);
+              const prev = Number(ks.previous_price) || currentPrice;
+              priceChange = prev > 0 ? ((currentPrice - prev) / prev) * 100 : 0;
+              volume = Number(ks.volume) || 0;
+            } else {
+              return null;
+            }
+          } catch (e) {
+            return null;
+          }
+        } else {
+          return null;
+        }
       }
     }
     

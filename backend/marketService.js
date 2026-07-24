@@ -367,7 +367,37 @@ async function enrichVolumeFromAfx(quote, symbol) {
 //   -> AFX (afx.kwayisi.org, free) -> Apify (needs key)
 // Lazy-requires each module so a missing/optional scraper never crashes boot.
 async function getNseBaseQuote(symbol) {
-  // 0) mystocks.africa Partner API — primary, authoritative live (delayed) quotes
+  // 0a) KenyanStocks.com API — fast, reliable, covers all NSE stocks
+  try {
+    const ksMod = require('./kenyanStocksScraper');
+    const ksStocks = await ksMod.getStocksData();
+    const cleanTicker = symbol.replace('NSE:', '');
+    const ks = Array.isArray(ksStocks) ? ksStocks.find(s => s.symbol === cleanTicker) : null;
+    if (ks && Number(ks.close) > 0) {
+      const prevClose = Number(ks.previous_price) || Number(ks.close);
+      const change = Number(ks.close) - prevClose;
+      const pct = prevClose > 0 ? (change / prevClose) * 100 : 0;
+      const vol = Number(ks.volume) || 0;
+      const mcap = Number(ks.market_cap) || (Number(ks.close) * Number(ks.shares_issued)) || 0;
+      return {
+        price: Number(ks.close),
+        change,
+        changesPercentage: pct,
+        changePercent: pct,
+        volume: vol,
+        marketCap: mcap,
+        dayHigh: Number(ks.high) || Number(ks.close),
+        dayLow: Number(ks.low) || Number(ks.close),
+        previousClose: prevClose,
+        company_name: ks.company_name || cleanTicker,
+        timestamp: Math.floor(Date.now() / 1000),
+        lastUpdated: new Date().toISOString(),
+        provider: 'kenyanstocks',
+      };
+    }
+  } catch (e) { /* fall through to other sources */ }
+
+  // 0b) mystocks.africa Partner API — primary, authoritative live (delayed) quotes
   let msaQuote = null;
   if (process.env.MYSTOCKS_AFRICA_API_KEY) {
     try {
@@ -563,7 +593,7 @@ async function getStockQuote(symbol) {
 }
 
 const CONCURRENCY = 40;
-const BATCH_TIMEOUT_MS = 25000;
+const BATCH_TIMEOUT_MS = 60000;
 
 function withTimeout(promise, ms, label) {
   let timer;
