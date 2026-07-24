@@ -285,12 +285,21 @@ async function syncEarnings() {
 
     // 3. NSE events from KenyanStocks.com (real data)
     try {
-      const ksEvents = await kenyanStocksScraper.scrapeEvents();
+      const [ksEvents, ksStocks] = await Promise.all([
+        kenyanStocksScraper.scrapeEvents(),
+        kenyanStocksScraper.getStocksData(),
+      ]);
+      const stocksMap = {};
+      if (ksStocks) ksStocks.forEach(s => { stocksMap[s.symbol] = s; });
       const existingIds = new Set(allEvents.map(e => e.id));
       for (const ev of ksEvents) {
         const isNse = signalService.NSE_SYMBOLS.includes(ev.symbol);
         if (!isNse) continue;
         const fund = signalService.getFundamentals(ev.symbol);
+        const ksStock = stocksMap[ev.symbol];
+        const price = ksStock?.close || 0;
+        const shares = ksStock?.shares_issued || 0;
+        const liveMcap = price > 0 && shares > 0 ? Math.round(price * shares) : 0;
         const id = `ks-${ev.symbol}-${ev.date}`;
         if (existingIds.has(id)) continue;
         const reportDate = new Date(ev.date);
@@ -309,9 +318,9 @@ async function syncEarnings() {
           surprise: 0,
           isBeat: true,
           market: 'nse',
-          sector: fund?.sector || 'Other',
+          sector: ksStock?.sector?.name || fund?.sector || 'Other',
           currency: 'KES',
-          marketCap: fund?.marketCap || 0,
+          marketCap: liveMcap || fund?.marketCap || 0,
           revenue: 0,
           eventType: ev.eventType,
           eventMessage: ev.message,
