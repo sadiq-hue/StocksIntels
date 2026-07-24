@@ -275,6 +275,13 @@ async function fetchGoogleFinanceQuote(symbol) {
           const mult = suffix === 'T' ? 1e12 : suffix === 'B' ? 1e9 : suffix === 'M' ? 1e6 : suffix === 'K' ? 1e3 : 1;
           result.marketCap = Math.round(num * mult);
         }
+        const volMatch = html.match(/(?:Volume|Avg volume|Vol)[\s\S]{0,40}?([\d,.]+)\s*([KMBT]?)/i);
+        if (volMatch) {
+          const vNum = parseFloat(volMatch[1].replace(/,/g, ''));
+          const vSuffix = volMatch[2].toUpperCase();
+          const vMult = vSuffix === 'T' ? 1e12 : vSuffix === 'B' ? 1e9 : vSuffix === 'M' ? 1e6 : vSuffix === 'K' ? 1e3 : 1;
+          if (vNum > 0) result.volume = Math.round(vNum * vMult);
+        }
       } catch {}
       return result;
     } catch {}
@@ -366,7 +373,7 @@ function parseChartBars(data) {
     high: quote.high?.[i] ?? null,
     low: quote.low?.[i] ?? null,
     close: quote.close?.[i] ?? null,
-    volume: quote.volume?.[i] ?? 0,
+    volume: quote.volume?.[i] ?? null,
     adjclose: adjclose[i] ?? quote.close?.[i] ?? null,
   })).filter(d => d.close != null);
   return bars.length > 0 ? bars : null;
@@ -385,24 +392,24 @@ async function fetchQuote(symbol) {
   // 1. Google Finance scrape — fastest and most reliable free option (no IP blocks)
   const google = await fetchGoogleFinanceQuote(yahooSymbol);
   if (google?.price) {
-    return cacheSet(quoteCache, cacheKey, {
-      symbol: symbol.toUpperCase(),
-      company_name: google.companyName || symbol.toUpperCase(),
-      price: google.price,
-      currency: google.currency || 'USD',
-      change: google.change || 0,
-      changePercent: google.changePercent || 0,
-      changesPercentage: google.changePercent || 0,
-      volume: 0,
-      dayHigh: google.dayHigh || google.price,
-      dayLow: google.dayLow || google.price,
-      previousClose: google.previousClose || google.price,
-      marketCap: google.marketCap || 0,
-      timestamp: Math.floor(Date.now() / 1000),
-      lastUpdated: new Date().toISOString(),
-      exchange: 'Global',
-      provider: 'google',
-    }, CACHE_TTL.quote, redisKey);
+      return cacheSet(quoteCache, cacheKey, {
+        symbol: symbol.toUpperCase(),
+        company_name: google.companyName || symbol.toUpperCase(),
+        price: google.price,
+        currency: google.currency || 'USD',
+        change: google.change || 0,
+        changePercent: google.changePercent || 0,
+        changesPercentage: google.changePercent || 0,
+        volume: google.volume || 0,
+        dayHigh: google.dayHigh || google.price,
+        dayLow: google.dayLow || google.price,
+        previousClose: google.previousClose || google.price,
+        marketCap: google.marketCap || 0,
+        timestamp: Math.floor(Date.now() / 1000),
+        lastUpdated: new Date().toISOString(),
+        exchange: 'Global',
+        provider: 'google',
+      }, CACHE_TTL.quote, redisKey);
   }
 
   // 2. Proxy fallback — Yahoo v8 via free proxy pool or CORS relay
@@ -418,9 +425,9 @@ async function fetchQuote(symbol) {
           change: proxyResult.price - (proxyResult.previousClose || proxyResult.price),
           changePercent: (proxyResult.previousClose && proxyResult.previousClose > 0) ? ((proxyResult.price - proxyResult.previousClose) / proxyResult.previousClose) * 100 : 0,
           changesPercentage: (proxyResult.previousClose && proxyResult.previousClose > 0) ? ((proxyResult.price - proxyResult.previousClose) / proxyResult.previousClose) * 100 : 0,
-          volume: 0,
-          dayHigh: proxyResult.price,
-          dayLow: proxyResult.price,
+          volume: proxyResult.volume || 0,
+          dayHigh: proxyResult.dayHigh || proxyResult.price,
+          dayLow: proxyResult.dayLow || proxyResult.price,
           previousClose: proxyResult.previousClose || proxyResult.price,
           marketCap: proxyResult.marketCap || 0,
           timestamp: Math.floor(Date.now() / 1000),
@@ -545,6 +552,14 @@ function parsePriceProxyResult(data, symbol) {
   const result = data?.chart?.result?.[0];
   const meta = result?.meta;
   if (!meta?.regularMarketPrice) return null;
+  let volume = 0;
+  try {
+    const quoteIndicators = result?.indicators?.quote?.[0];
+    if (quoteIndicators?.volume) {
+      const vols = quoteIndicators.volume.filter(v => v != null && v > 0);
+      if (vols.length > 0) volume = vols[vols.length - 1];
+    }
+  } catch {}
   return {
     price: meta.regularMarketPrice,
     previousClose: meta.chartPreviousClose || meta.regularMarketPrice,
@@ -565,6 +580,7 @@ function parsePriceProxyResult(data, symbol) {
     postMarketTime: meta.postMarketTime ?? null,
     currentTradingPeriod: result?.meta?.currentTradingPeriod || null,
     marketState: meta.marketState || 'REGULAR',
+    volume,
   };
 }
 

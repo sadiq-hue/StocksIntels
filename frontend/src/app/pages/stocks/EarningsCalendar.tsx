@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import {
@@ -127,7 +127,7 @@ function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () =
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">Revenue</p>
-                <p className="text-sm font-bold text-foreground">{event.currency === "KES" ? `KES ${event.revenue.toFixed(1)}B` : formatRevenue(event.revenue)}</p>
+                <p className="text-sm font-bold text-foreground">{event.currency === "KES" ? `KES ${(event.revenue / 1e9).toFixed(1)}B` : formatRevenue(event.revenue)}</p>
               </div>
               <div className="text-right">
                 <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">Currency</p>
@@ -171,6 +171,7 @@ export function EarningsCalendar() {
         search: search || undefined,
         market: marketFilter || undefined,
         sector: sectorFilter || undefined,
+        from: new Date().toISOString(),
         limit: 2000,
       })
         .then(r => {
@@ -190,7 +191,8 @@ export function EarningsCalendar() {
 
   const allEarnings = result?.earnings || [];
 
-  const today = new Date();
+  const todayRef = useRef(new Date());
+  const today = todayRef.current;
   const [weekOffset, setWeekOffset] = useState(0);
   const [autoJumped, setAutoJumped] = useState(false);
 
@@ -239,10 +241,6 @@ export function EarningsCalendar() {
       {selectedEvent && <EarningDetail event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
 
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="text-lg font-bold text-foreground">Earnings Calendar</h2>
-          <p className="text-sm text-muted-foreground truncate">Upcoming earnings reports and estimates</p>
-        </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />

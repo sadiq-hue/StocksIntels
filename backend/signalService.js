@@ -203,7 +203,7 @@ async function getPriceHistory(symbol) {
   const bars = await fetchHistoricalQuotes(yahooSymbol, '3mo', '1d');
   if (bars && bars.length >= 2) {
     const prices = bars.map(b => b.close).filter(p => p != null);
-    prices.volumes = bars.map(b => b.volume).filter(v => v != null);
+    prices.volumes = bars.map(b => b.volume).filter(v => v != null && v > 0);
     _priceHistoryCache.set(symbol, { data: prices, ts: Date.now() });
     return prices;
   }
@@ -1729,10 +1729,10 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   const signals = [];
   // When marketData is provided (e.g. from publisher), only process those symbols
   const rawSymbols = marketData ? Object.keys(marketData) : ALL_SYMBOLS;
-  // Skip NSE symbols and US stocks without SEC EDGAR CIK mapping (no reliable financial data)
-  const symbols = rawSymbols.filter(s => !NSE_SYMBOLS.includes(s) && edgarService.cikLookup(s));
+  // Include NSE symbols (they have their own quote sources) + US stocks with SEC EDGAR CIK mapping
+  const symbols = rawSymbols.filter(s => NSE_SYMBOLS.includes(s) || edgarService.cikLookup(s));
   const cfg = engineConfig.getConfig();
-  const maxSymbols = cfg.maxSymbols || 200;
+  const maxSymbols = cfg.maxSymbols || 500;
   if (!marketData && symbols.length > maxSymbols) {
     symbols.length = maxSymbols;
   }
@@ -1795,6 +1795,12 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     
     const fundamental = analyzeFundamentals(stock, currentPrice, newsSentiment[symbol] || null, _dynamicSectorPE);
     const priceHistory = await getPriceHistory(symbol);
+    // Enrich volume from price history if quote cache returned 0
+    if ((!volume || volume === 0) && priceHistory?.volumes?.length > 0) {
+      for (let i = priceHistory.volumes.length - 1; i >= 0; i--) {
+        if (priceHistory.volumes[i] > 0) { volume = priceHistory.volumes[i]; break; }
+      }
+    }
     const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume, engineConfig.getConfig().indicator_params);
     const financial = analyzeFinancials(stock, fundamental);
     const country = getCountryForSymbol(symbol);
@@ -2164,7 +2170,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     type: tradeType, signal: sig.signal, entry: tradeLevels.entry,
     stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2,
     riskReward: tradeLevels.riskReward, confidence, positionSize: positionSize + '%',
-    timeframe: timeframes[tradeType], sector: stock.sector, volume: formattedVolume,
+    timeframe: timeframes[tradeType], sector: stock.sector, volume: formattedVolume, rawVolume: volume || 0,
     weeklyTrend: weeklyTrend.trend, regime: regime.regime,
     var95: riskMetrics.var95 + '%',
     var99: riskMetrics.var99 ? riskMetrics.var99 + '%' : null,
@@ -2296,4 +2302,5 @@ module.exports = {
   updatePositions: require('./orderRouter').updatePositions,
   triggerAlert: require('./monitorService').triggerAlert,
   getQualityScore,
+  getSignalsCacheTime: () => _signalsCacheTime,
 };

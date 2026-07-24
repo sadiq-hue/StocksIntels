@@ -4,30 +4,14 @@ import { useState, useEffect, useMemo } from "react";
 import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import {
-  Search, TrendingUp, TrendingDown,
+  Search, TrendingUp, TrendingDown, Clock,
   Trophy, Flame, Zap, Star, Award,
   DollarSign, BarChart3,
 } from "lucide-react";
 import { useNavigate } from "react-router";
+import { parseVolume, formatVolume } from "../../utils/format";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
-
-function parseVolume(vol: string | number): number {
-  if (typeof vol === "number") return vol;
-  const num = parseFloat(vol.replace("M", "").replace("K", "").replace("B", ""));
-  if (vol.includes("B")) return num * 1e9;
-  if (vol.includes("M")) return num * 1e6;
-  if (vol.includes("K")) return num * 1e3;
-  return num || 0;
-}
-
-function formatVolume(vol: number | string): string {
-  const n = typeof vol === "string" ? parseVolume(vol) : vol;
-  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
-  return n?.toLocaleString() || "0";
-}
 
 const signalColors: Record<string, string> = {
   "Strong Buy": "bg-emerald-100 text-emerald-800 border-emerald-200",
@@ -44,6 +28,7 @@ export function TopStocks() {
   const [search, setSearch] = useState("");
   const [marketFilter, setMarketFilter] = useState<string>("all");
   const [category, setCategory] = useState<string>("gainers");
+  const [lastUpdated, setLastUpdated] = useState<string>("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -51,7 +36,10 @@ export function TopStocks() {
     const params = new URLSearchParams({ category, market: marketFilter, limit: "50" });
     fetch(`${API_BASE}/top-stocks?${params}`)
       .then(r => r.json())
-      .then(data => setStocks(data.stocks || []))
+      .then(data => {
+        setStocks(data.stocks || []);
+        if (data.lastUpdated) setLastUpdated(data.lastUpdated);
+      })
       .catch(() => setStocks([]))
       .finally(() => setLoading(false));
   }, [category, marketFilter]);
@@ -79,10 +67,6 @@ export function TopStocks() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="text-lg font-bold text-foreground">Top Stocks</h2>
-          <p className="text-sm text-muted-foreground truncate">Top performing stocks across all categories</p>
-        </div>
       <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <div className="relative flex-1 sm:flex-none min-w-[140px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -230,6 +214,9 @@ export function TopStocks() {
       {!loading && filtered.length > 0 && (
         <div className="text-xs text-muted-foreground text-center">
           Showing {filtered.length} stocks &middot; {category === "gainers" ? "sorted by highest gain" : category === "losers" ? "sorted by biggest loss" : category === "active" ? "sorted by volume" : category === "mcap" ? "sorted by market cap" : category === "rated" ? "sorted by overall score" : category === "confident" ? "sorted by confidence" : category === "value" ? "sorted by fundamental value" : "sorted by growth score"}
+          {lastUpdated && (
+            <> &middot; <Clock className="size-3 inline" /> Updated {new Date(lastUpdated).toLocaleTimeString()}</>
+          )}
         </div>
       )}
     </div>

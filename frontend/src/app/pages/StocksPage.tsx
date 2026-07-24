@@ -1,13 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Collapsible, CollapsibleContent, CollapsibleTrigger,
-} from "../components/ui/collapsible";
 import { ScrollArea } from "../components/ui/scroll-area";
 import {
   Building2, CalendarDays, BarChart3, Star, Trophy,
-  ChevronDown, LineChart, Search, SlidersHorizontal, Menu, X,
+  LineChart, Search, Menu, X,
 } from "lucide-react";
 import { StockScreener } from "./stocks/StockScreener";
 import { StockExchanges } from "./stocks/StockExchanges";
@@ -36,19 +33,11 @@ const sections: TabSection[] = [
 
 export function StocksPage() {
   const [activeTab, setActiveTab] = useState<TabId>("screener");
-  const [collapsedSections, setCollapsedSections] = useState<string[]>([]);
-
-  const toggleSection = (id: string) => {
-    setCollapsedSections(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    );
-  };
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const ActiveIcon = sections.find(s => s.id === activeTab)?.icon || LineChart;
   const activeLabel = sections.find(s => s.id === activeTab)?.label || "";
   const activeDescription = sections.find(s => s.id === activeTab)?.description || "";
-
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="h-full flex flex-col md:flex-row">
@@ -69,7 +58,7 @@ export function StocksPage() {
       </div>
 
       {/* Sidebar / mobile menu */}
-      <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} md:flex w-full md:w-56 shrink-0 border-r bg-card flex-col absolute md:relative z-20 h-[calc(100vh-7rem)] md:h-auto top-[3.5rem] md:top-0 left-0`}>
+      <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} md:flex w-full md:w-56 shrink-0 border-r bg-card flex-col absolute md:relative z-20 max-h-[calc(100vh-7rem)] md:max-h-none md:h-auto overflow-y-auto top-[3.5rem] md:top-0 left-0`}>
         <div className="p-4 border-b hidden md:block">
           <div className="flex items-center gap-2.5">
             <div className="size-8 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] flex items-center justify-center shadow-sm">
@@ -87,40 +76,20 @@ export function StocksPage() {
             {sections.map((section) => {
               const Icon = section.icon;
               const isActive = activeTab === section.id;
-              const isCollapsed = collapsedSections.includes(section.id);
 
               return (
-                <Collapsible
+                <button
                   key={section.id}
-                  open={!isCollapsed}
-                  onOpenChange={() => toggleSection(section.id)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                    isActive
+                      ? "bg-[#0D7490] text-white shadow-sm"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
+                  onClick={() => { setActiveTab(section.id); setMobileMenuOpen(false); }}
                 >
-                  <CollapsibleTrigger asChild>
-                    <button
-                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                        isActive
-                          ? "bg-[#0D7490] text-white shadow-sm"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                      }`}
-                      onClick={() => { setActiveTab(section.id); setMobileMenuOpen(false); }}
-                    >
-                      <Icon className="size-4 shrink-0" />
-                      <span className="font-medium truncate">{section.label}</span>
-                      <ChevronDown
-                        className={`size-3.5 ml-auto shrink-0 transition-transform ${
-                          isCollapsed ? "" : "rotate-180"
-                        } ${isActive ? "text-white/70" : "text-muted-foreground/50"}`}
-                      />
-                    </button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="ml-8 mt-0.5 space-y-0.5">
-                      <p className={`text-[10px] px-2 py-1 rounded ${isActive ? "text-white/60" : "text-muted-foreground/60"}`}>
-                        {section.description}
-                      </p>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
+                  <Icon className="size-4 shrink-0" />
+                  <span className="font-medium truncate">{section.label}</span>
+                </button>
               );
             })}
           </nav>

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import {
-  Search, TrendingUp, TrendingDown, Star,
+  Search, TrendingUp, TrendingDown, Star, Clock,
   BarChart3, Target, Award, ChevronDown, ChevronUp, ThumbsUp,
   RefreshCw, Building2,
 } from "lucide-react";
@@ -37,6 +37,8 @@ interface AnalystResponse {
   total: number;
   totalRatings: number;
   timestamp: string;
+  source?: string;
+  cachedAt?: string;
 }
 
 const ratingColors: Record<string, string> = {
@@ -97,10 +99,6 @@ export function TopAnalysts() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="text-lg font-bold text-foreground">Top Analysts</h2>
-          <p className="text-sm text-muted-foreground truncate">Real Wall Street analyst ratings & recommendations tracked via FMP</p>
-        </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={fetchData} className="p-2 hover:bg-muted rounded-lg transition-colors" title="Refresh">
             <RefreshCw className={`size-4 text-muted-foreground ${loading ? "animate-spin" : ""}`} />
@@ -148,7 +146,7 @@ export function TopAnalysts() {
       {loading && !data ? (
         <div className="text-center py-12 text-muted-foreground text-sm">Loading analyst data from FMP (may take 30-60s)...</div>
       ) : data?.firms.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground text-sm">No analyst data available. FMP API may be rate-limited.</div>
+        <div className="text-center py-12 text-muted-foreground text-sm">No analyst data available. FMP API is rate-limited and no cached data exists yet.</div>
       ) : (
       <div className="grid grid-cols-1 gap-4">
         {filtered.map((firm) => {
@@ -247,6 +245,12 @@ export function TopAnalysts() {
           );
         })}
       </div>
+      )}
+      {data?.timestamp && (
+        <div className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1">
+          <Clock className="size-3" />
+          {data.source === "fmp_cached" ? `FMP data (cached ${new Date(data.cachedAt || data.timestamp).toLocaleString()})` : data.source === "none" ? "No live data available" : `FMP live ${new Date(data.timestamp).toLocaleString()}`}
+        </div>
       )}
     </div>
   );

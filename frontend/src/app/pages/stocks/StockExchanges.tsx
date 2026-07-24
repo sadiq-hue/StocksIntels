@@ -9,6 +9,7 @@ import {
 import { useNavigate } from "react-router";
 import { useRealtimeQuotes } from "../../contexts/RealtimeQuotesContext";
 import { kenyanStocks } from "../../data/stockUniverses";
+import { parseVolume, formatCompactNumber } from "../../utils/format";
 
 interface DisplayStock {
   ticker: string;
@@ -42,7 +43,7 @@ const exchanges: Exchange[] = [
   { id: "jse", name: "Johannesburg Stock Exchange", shortName: "JSE", country: "South Africa", currency: "ZAR", region: "Africa", timezone: "Africa/Johannesburg", timezoneOffset: 2, openHour: 9, closeHour: 17, listedCompanies: 320, marketCap: "1.2T", description: "The largest stock exchange in Africa. Home to many of Africa's largest companies.", flag: "🇿🇦" },
   { id: "dse", name: "Dar es Salaam Stock Exchange", shortName: "DSE", country: "Tanzania", currency: "TZS", region: "Africa", timezone: "Africa/Nairobi", timezoneOffset: 3, openHour: 9, closeHour: 15, listedCompanies: 28, marketCap: "0.5T", description: "The stock exchange of Tanzania, located in Dar es Salaam.", flag: "🇹🇿" },
   { id: "use", name: "Uganda Securities Exchange", shortName: "USE", country: "Uganda", currency: "UGX", region: "Africa", timezone: "Africa/Nairobi", timezoneOffset: 3, openHour: 9, closeHour: 15, listedCompanies: 17, marketCap: "0.3T", description: "The stock exchange of Uganda, based in Kampala.", flag: "🇺🇬" },
-  { id: "rse", name: "Rwanda Stock Exchange", shortName: "RSE", country: "Rwanda", currency: "RWF", region: "Africa", timezone: "Africa/Maputo", timezoneOffset: 2, openHour: 9, closeHour: 15, listedCompanies: 11, marketCap: "0.2T", description: "The stock exchange of Rwanda, based in Kigali.", flag: "🇷🇼" },
+  { id: "rse", name: "Rwanda Stock Exchange", shortName: "RSE", country: "Rwanda", currency: "RWF", region: "Africa", timezone: "Africa/Kigali", timezoneOffset: 2, openHour: 9, closeHour: 15, listedCompanies: 11, marketCap: "0.2T", description: "The stock exchange of Rwanda, based in Kigali.", flag: "🇷🇼" },
   { id: "nyse", name: "New York Stock Exchange", shortName: "NYSE", country: "United States", currency: "USD", region: "North America", timezone: "America/New_York", timezoneOffset: -5, openHour: 9.5, closeHour: 16, listedCompanies: 2400, marketCap: "28.5T", description: "The world's largest stock exchange by market capitalization. Located on Wall Street in New York City.", flag: "🇺🇸" },
   { id: "nasdaq", name: "NASDAQ", shortName: "NASDAQ", country: "United States", currency: "USD", region: "North America", timezone: "America/New_York", timezoneOffset: -5, openHour: 9.5, closeHour: 16, listedCompanies: 3300, marketCap: "19.6T", description: "The second-largest stock exchange. Known for high concentration of technology companies.", flag: "🇺🇸" },
   { id: "tsx", name: "Toronto Stock Exchange", shortName: "TSX", country: "Canada", currency: "CAD", region: "North America", timezone: "America/Toronto", timezoneOffset: -5, openHour: 9.5, closeHour: 16, listedCompanies: 1500, marketCap: "2.3T", description: "Canada's primary stock exchange. Home to major financial and resource companies.", flag: "🇨🇦" },
@@ -79,22 +80,6 @@ function formatTime(hours: number): string {
   const period = h >= 12 ? "PM" : "AM";
   const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
   return `${h12}:${m.toString().padStart(2, "0")} ${period}`;
-}
-
-function parseVolume(vol: string): number {
-  const num = parseFloat(vol.replace("M", "").replace("K", "").replace("B", ""));
-  if (vol.includes("B")) return num * 1000000000;
-  if (vol.includes("M")) return num * 1000000;
-  if (vol.includes("K")) return num * 1000;
-  return num;
-}
-
-function formatCompactNumber(value: number) {
-  if (!Number.isFinite(value) || value === 0) return "0";
-  return new Intl.NumberFormat("en-KE", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
 }
 
 function toApiFormat(stocks: typeof kenyanStocks, prefixNse = false) {
@@ -196,10 +181,6 @@ export function StockExchanges() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">Stock Exchanges</h2>
-          <p className="text-sm text-muted-foreground">Major stock exchanges around the world</p>
-        </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[140px] max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -317,7 +298,7 @@ export function StockExchanges() {
               <TrendingUp className="size-4 text-emerald-600" />
               NSE Top Gainers
             </h3>
-            <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate("/app/stocks")}>
+            <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate("/app/stocks/top-stocks")}>
               View All <ExternalLink className="size-3 ml-1" />
             </Button>
           </div>
@@ -331,7 +312,7 @@ export function StockExchanges() {
               <TrendingDown className="size-4 text-red-600" />
               NSE Top Losers
             </h3>
-            <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate("/app/stocks")}>
+            <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate("/app/stocks/top-stocks")}>
               View All <ExternalLink className="size-3 ml-1" />
             </Button>
           </div>
@@ -348,7 +329,7 @@ export function StockExchanges() {
             <Database className="size-4 text-[#0D7490]" />
             NSE Listed Stocks · <span className="text-xs text-muted-foreground font-normal">{nseLiveStocks.length} companies</span>
           </h3>
-          <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate("/app/stocks")}>
+          <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate("/app/stocks/screener")}>
             Full Screener <ExternalLink className="size-3 ml-1" />
           </Button>
         </div>

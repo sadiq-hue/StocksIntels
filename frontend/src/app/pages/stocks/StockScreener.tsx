@@ -10,16 +10,9 @@ import {
   fetchScreenerResults, fetchScreenerCriteria,
   type ScreenerFilters, type ScreenerStock, type ScreenerResult, type ScreenerCriteria,
 } from "../../services/screenerService";
+import { formatVolume } from "../../utils/format";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
-
-function formatVolume(vol: string | number): string {
-  const v = typeof vol === "string" ? parseFloat(vol.replace(/[^0-9.]/g, "")) : vol;
-  if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
-  if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`;
-  if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
-  return String(vol);
-}
 
 function formatMarketCap(mcap: number): string {
   if (mcap >= 1e12) return `${(mcap / 1e12).toFixed(2)}T`;
@@ -85,7 +78,7 @@ export function StockScreener() {
   const [sortDir, setSortDir] = useState("desc");
   const [page, setPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
-  const [yahooResults, setYahooResults] = useState<{ ticker: string; name: string }[]>([]);
+  const [yahooResults, setYahooResults] = useState<{ ticker: string; name: string; exchange?: string }[]>([]);
   const [yahooSearching, setYahooSearching] = useState(false);
   const yahooTimer = useRef<ReturnType<typeof setTimeout>>();
 
@@ -101,7 +94,7 @@ export function StockScreener() {
         const data = await res.json();
         setYahooResults((data || []).filter((q: any) =>
           q.quoteType === "EQUITY" || q.quoteType === "ETF"
-        ).map((q: any) => ({ ticker: q.symbol, name: q.longName || q.shortName || q.symbol })));
+        ).map((q: any) => ({ ticker: q.symbol, name: q.longName || q.shortName || q.symbol, exchange: q.exchange })));
       } catch { setYahooResults([]); }
       finally { setYahooSearching(false); }
     }, 400);
@@ -172,12 +165,6 @@ export function StockScreener() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">Stock Screener</h2>
-          <p className="text-sm text-muted-foreground">
-            {result ? `${result.total} stocks match your criteria` : "Loading..."}
-          </p>
-        </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[140px] max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -232,6 +219,10 @@ export function StockScreener() {
           )}
         </div>
       </div>
+
+      {result && (
+        <p className="text-xs text-muted-foreground font-medium">{result.total} stocks match your criteria</p>
+      )}
 
       {showFilters && (
         <Card className="p-4 border-[#0D7490]/20 bg-[#0D7490]/5">
@@ -431,7 +422,7 @@ export function StockScreener() {
                     <div
                       key={r.ticker}
                       className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
-                      onClick={() => navigate(`/app/stock/${r.ticker}?market=us`)}
+                      onClick={() => navigate(`/app/stock/${r.ticker}?market=${r.exchange?.toLowerCase() === "nse" ? "nse" : "us"}`)}
                     >
                       <div className="flex items-center gap-3">
                         <span className="font-bold text-sm text-foreground">{r.ticker}</span>
@@ -536,7 +527,7 @@ export function StockScreener() {
                   <div
                     key={r.ticker}
                     className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/app/stock/${r.ticker}?market=us`)}
+                    onClick={() => navigate(`/app/stock/${r.ticker}?market=${r.exchange?.toLowerCase() === "nse" ? "nse" : "us"}`)}
                   >
                     <div className="flex items-center gap-3">
                       <span className="font-bold text-sm text-foreground">{r.ticker}</span>

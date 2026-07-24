@@ -59,11 +59,12 @@ export function StockSearchBar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const selectStock = (symbol: string) => {
+  const selectStock = (symbol: string, exchange?: string) => {
     setOpen(false);
     setQuery("");
     inputRef.current?.blur();
-    navigate(`/app/stock/${symbol}`);
+    const market = exchange?.toLowerCase() === "nse" ? "nse" : "us";
+    navigate(`/app/stock/${symbol}?market=${market}`);
   };
 
   return (
@@ -77,7 +78,7 @@ export function StockSearchBar() {
         onFocus={() => { if (results.length > 0) setOpen(true); }}
         onKeyDown={(e) => {
           if (e.key === "Escape") setOpen(false);
-          if (e.key === "Enter" && results.length > 0) selectStock(results[0].symbol);
+          if (e.key === "Enter" && results.length > 0) selectStock(results[0].symbol, results[0].exchange);
         }}
         className="pl-10 bg-muted border-border text-foreground placeholder:text-muted-foreground h-9"
       />
@@ -92,7 +93,7 @@ export function StockSearchBar() {
                 {results.map((result) => (
                   <CommandItem
                     key={result.symbol}
-                    onSelect={() => selectStock(result.symbol)}
+                    onSelect={() => selectStock(result.symbol, result.exchange)}
                   >
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-2 min-w-0">

@@ -1,12 +1,15 @@
 // Analyst Service - real Wall Street analyst tracking via FMP API
-// Falls back to signal-based data when FMP is rate-limited
+// No fake/fallback data — returns real FMP data only, persisted to DB for cache
 
 const { fmp } = require('./apiClient');
+const { pool } = require('./db');
 
 const FMP_API_KEY = process.env.FMP_API_KEY || '';
 const FMP_BASE_URL = 'https://financialmodelingprep.com/stable';
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour in-memory cache
 let fmpRateLimited = false;
+let fmpRateLimitedAt = 0;
+const RATE_LIMIT_COOLDOWN = 30 * 60 * 1000; // retry after 30 min
 
 let _cache = null;
 let _cacheTime = 0;
@@ -43,6 +46,46 @@ const TOP_COVERED_STOCKS = [
   'ORCL', 'CSCO', 'QCOM', 'AMGN', 'TXN', 'IBM', 'HON', 'LOW', 'UPS', 'SPCX', 'NOK', 'SMCI', 'RKLB', 'MRVL', 'ARM', 'MSTR', 'HPE', 'CCL', 'NU', 'TTD', 'ITUB', 'VALE', 'NIO', 'STLA',
 ];
 
+async function ensureTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS analyst_cache (
+        id SERIAL PRIMARY KEY,
+        data JSONB NOT NULL,
+        source TEXT NOT NULL DEFAULT 'fmp',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+  } catch (e) {
+    console.error('[AnalystService] Failed to ensure analyst_cache table:', e.message);
+  }
+}
+
+async function loadFromDb() {
+  try {
+    const { rows } = await pool.query(
+      'SELECT data, created_at FROM analyst_cache ORDER BY id DESC LIMIT 1'
+    );
+    if (rows.length > 0) {
+      return { ...rows[0].data, source: 'fmp_cached', cachedAt: rows[0].created_at.toISOString() };
+    }
+  } catch (e) {
+    console.error('[AnalystService] DB read error:', e.message);
+  }
+  return null;
+}
+
+async function saveToDb(result) {
+  try {
+    await pool.query(
+      'INSERT INTO analyst_cache (data, source) VALUES ($1, $2)',
+      [JSON.stringify(result), result.source || 'fmp']
+    );
+  } catch (e) {
+    console.error('[AnalystService] DB write error:', e.message);
+  }
+}
+
 async function fetchFromFmp() {
   const allRecs = [];
   for (let i = 0; i < TOP_COVERED_STOCKS.length; i++) {
@@ -66,7 +109,9 @@ async function fetchFromFmp() {
       }
     } catch (e) {
       if (e.response?.status === 429) {
+        console.warn(`[AnalystService] FMP rate limited at symbol ${symbol}, ${i + 1}/${TOP_COVERED_STOCKS.length} done`);
         fmpRateLimited = true;
+        fmpRateLimitedAt = Date.now();
         break;
       }
     }
@@ -77,93 +122,8 @@ async function fetchFromFmp() {
   return allRecs;
 }
 
-function generateFallbackData() {
-  const { getFundamentals, ALL_SYMBOLS, NSE_SYMBOLS } = require('./signalService');
-  const signals = require('./signalService').generateSignals ? null : null;
-
-  // Use screener signals to create analyst-like recommendations
-  const symbols = ALL_SYMBOLS.filter(s => !NSE_SYMBOLS.includes(s)).slice(0, 60);
-
-  const firms = ANALYST_FIRMS.map((firm, idx) => {
-    // Each analyst covers a different subset of stocks
-    const coverageSize = 8 + Math.floor(Math.random() * 10);
-    const seed = idx * 7;
-    const covered = [];
-    for (let i = 0; i < coverageSize && i < symbols.length; i++) {
-      covered.push(symbols[(seed + i * 13) % symbols.length]);
-    }
-
-    const ratings = { 'Strong Buy': 0, 'Buy': 0, 'Neutral': 0, 'Sell': 0, 'Strong Sell': 0 };
-    const picks = [];
-    const sectorCounts = {};
-
-    for (const sym of covered) {
-      const fund = getFundamentals(sym);
-      const sec = fund?.sector || 'Other';
-      sectorCounts[sec] = (sectorCounts[sec] || 0) + 1;
-
-      // Weight ratings based on analyst focus/firm index
-      const buyBias = 0.4 + (idx % 3) * 0.1; // varies by analyst
-      const r = Math.random();
-      let rating;
-      if (r < buyBias) rating = 'Strong Buy';
-      else if (r < buyBias + 0.25) rating = 'Buy';
-      else if (r < buyBias + 0.45) rating = 'Neutral';
-      else if (r < buyBias + 0.55) rating = 'Sell';
-      else rating = 'Strong Sell';
-      ratings[rating]++;
-
-      const price = fund?.marketCap > 0 ? Math.sqrt(fund.marketCap / 1000000) * (0.5 + Math.random() * 0.5) : 50 + Math.random() * 200;
-      const targetMult = rating === 'Strong Buy' ? 1.2 : rating === 'Buy' ? 1.1 : rating === 'Neutral' ? 1.0 : 0.9;
-      picks.push({
-        symbol: sym,
-        rating,
-        targetPrice: Math.round(price * targetMult * 100) / 100,
-        priceAtRecommendation: Math.round(price * 100) / 100,
-        publishedDate: new Date(Date.now() - Math.floor(Math.random() * 90 * 86400000)).toISOString(),
-      });
-    }
-
-    // Top sector
-    let topSector = 'Other', maxSec = 0;
-    for (const [s, c] of Object.entries(sectorCounts)) {
-      if (c > maxSec) { maxSec = c; topSector = s; }
-    }
-
-    // Most common rating
-    let topRating = 'Neutral', topCount = 0;
-    for (const [r, c] of Object.entries(ratings)) {
-      if (c > topCount) { topCount = c; topRating = r; }
-    }
-
-    // Top 3 picks by rating strength
-    const ratingOrder = ['Strong Buy', 'Buy', 'Neutral', 'Sell', 'Strong Sell'];
-    picks.sort((a, b) => ratingOrder.indexOf(a.rating) - ratingOrder.indexOf(b.rating));
-
-    const avgTarget = picks.length > 0 ? picks.reduce((s, p) => s + p.targetPrice, 0) / picks.length : 0;
-
-    return {
-      id: firm.id,
-      name: firm.name,
-      rating: topRating,
-      totalRatings: covered.length,
-      topSector,
-      picks: picks.slice(0, 3),
-      avgTargetPrice: Math.round(avgTarget * 100) / 100,
-      ratings,
-    };
-  });
-
-  return {
-    firms,
-    total: firms.length,
-    totalRatings: firms.reduce((s, f) => s + f.totalRatings, 0),
-    timestamp: new Date().toISOString(),
-    source: 'signals',
-  };
-}
-
 async function fetchAnalystData() {
+  // Return in-memory cache if fresh
   if (_cache && Date.now() - _cacheTime < CACHE_TTL) return _cache;
   if (_inProgress) return _cache || { firms: [], total: 0, totalRatings: 0, timestamp: new Date().toISOString(), source: 'pending' };
   _inProgress = true;
@@ -171,17 +131,25 @@ async function fetchAnalystData() {
   try {
     let result = null;
 
-    // Try FMP if not rate-limited
-    if (FMP_API_KEY && !fmpRateLimited) {
+    // Try FMP if API key exists and not rate-limited (or cooldown expired)
+    const canTryFmp = FMP_API_KEY && (!fmpRateLimited || (Date.now() - fmpRateLimitedAt > RATE_LIMIT_COOLDOWN));
+    if (canTryFmp) {
       const recs = await fetchFromFmp();
       if (recs.length > 0) {
         result = aggregateByFirm(recs);
+        // Persist real data to DB
+        await saveToDb(result);
       }
     }
 
-    // Fall back to signal-generated data
+    // If no fresh FMP data, try DB cache
     if (!result) {
-      result = generateFallbackData();
+      result = await loadFromDb();
+    }
+
+    // If still nothing — return empty, never fake data
+    if (!result) {
+      result = { firms: [], total: 0, totalRatings: 0, timestamp: new Date().toISOString(), source: 'none' };
     }
 
     _cache = result;
@@ -189,10 +157,14 @@ async function fetchAnalystData() {
     return result;
   } catch (error) {
     console.error('[AnalystService] Error:', error.message);
-    const fallback = generateFallbackData();
-    _cache = fallback;
-    _cacheTime = Date.now();
-    return fallback;
+    // Try DB cache on error
+    const dbResult = await loadFromDb();
+    if (dbResult) {
+      _cache = dbResult;
+      _cacheTime = Date.now();
+      return dbResult;
+    }
+    return { firms: [], total: 0, totalRatings: 0, timestamp: new Date().toISOString(), source: 'none' };
   } finally {
     _inProgress = false;
   }
@@ -277,5 +249,8 @@ function aggregateByFirm(allRecs) {
     source: 'fmp',
   };
 }
+
+// Initialize table on load
+ensureTable();
 
 module.exports = { fetchAnalystData, ANALYST_FIRMS };

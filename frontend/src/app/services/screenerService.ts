@@ -35,6 +35,7 @@ export interface ScreenerStock {
   confidence: number;
   sector: string;
   volume: string;
+  rawVolume: number;
   score: number;
   grade: string;
   fundamentalScore: number;

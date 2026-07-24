@@ -12,7 +12,7 @@ const { getAllNews, getNewsSummary, getAggregatedSentiment, KENYAN_STOCKS, STOCK
 const { generateWeeklyDigestContent, generateDailyBriefContent, generateEarningsContent } = require('./contentGenerator');
 const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
-const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions, getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats, getForwardTestPredictions, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig } = require('./signalService');
+const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions, getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats, getForwardTestPredictions, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
 const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
@@ -6486,7 +6486,7 @@ app.get('/api/screener', async (req, res) => {
     if (maxPrice) filtered = filtered.filter(s => s.price <= parseFloat(maxPrice));
     if (minChange) filtered = filtered.filter(s => s.change >= parseFloat(minChange));
     if (maxChange) filtered = filtered.filter(s => s.change <= parseFloat(maxChange));
-    if (minVolume) filtered = filtered.filter(s => parseFloat(s.volume) >= parseFloat(minVolume));
+    if (minVolume) filtered = filtered.filter(s => (s.rawVolume || 0) >= parseFloat(minVolume));
     if (minPE) filtered = filtered.filter(s => {
       const metrics = s.analysis?.fundamental?.metrics;
       const pe = metrics ? parseFloat(metrics['P/E'] || metrics['PE']) : NaN;
@@ -6524,7 +6524,7 @@ app.get('/api/screener', async (req, res) => {
       else if (sb === 'price') cmp = (a.price || 0) - (b.price || 0);
       else if (sb === 'change') cmp = (a.change || 0) - (b.change || 0);
       else if (sb === 'confidence') cmp = (a.confidence || 0) - (b.confidence || 0);
-      else if (sb === 'volume') cmp = parseFloat(a.volume || '0') - parseFloat(b.volume || '0');
+      else if (sb === 'volume') cmp = (a.rawVolume || 0) - (b.rawVolume || 0);
       else if (sb === 'score') cmp = (a.analysis?.overall?.score || 0) - (b.analysis?.overall?.score || 0);
       else if (sb === 'sector') cmp = (a.sector || '').localeCompare(b.sector || '');
       return cmp * sd;
@@ -6548,6 +6548,7 @@ app.get('/api/screener', async (req, res) => {
       confidence: s.confidence,
       sector: s.sector,
       volume: s.volume,
+      rawVolume: s.rawVolume || 0,
       score: s.analysis?.overall?.score || 0,
       grade: s.analysis?.overall?.grade || 'N/A',
       fundamentalScore: s.analysis?.fundamental?.score || 0,
@@ -6592,13 +6593,13 @@ app.get('/api/top-stocks', async (req, res) => {
     });
     if (category === 'gainers') filtered.sort((a, b) => (b.change || 0) - (a.change || 0));
     else if (category === 'losers') filtered.sort((a, b) => (a.change || 0) - (b.change || 0));
-    else if (category === 'volume' || category === 'active') { const pv = v => { if (!v) return 0; const n = parseFloat(v); if (typeof v === 'string') { if (v.includes('B')) return n * 1e9; if (v.includes('M')) return n * 1e6; if (v.includes('K')) return n * 1e3; } return n || 0; }; filtered.sort((a, b) => pv(b.volume) - pv(a.volume)); }
+    else if (category === 'volume' || category === 'active') { filtered.sort((a, b) => (b.rawVolume || 0) - (a.rawVolume || 0)); }
     else if (category === 'rated') filtered.sort((a, b) => (b.overallScore || 0) - (a.overallScore || 0));
     else if (category === 'confident') filtered.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
     else if (category === 'mcap') filtered.sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0));
     else if (category === 'value') filtered.sort((a, b) => (b.fundamentalScore || 0) - (a.fundamentalScore || 0));
     else if (category === 'growth') filtered.sort((a, b) => (b.financialScore || 0) - (a.financialScore || 0));
-    res.json({ success: true, category, market, total: filtered.length, stocks: filtered.slice(0, limit) });
+    res.json({ success: true, category, market, total: filtered.length, stocks: filtered.slice(0, limit), lastUpdated: new Date(getSignalsCacheTime()).toISOString() });
   } catch (error) {
     console.error('Error fetching top stocks:', error);
     res.status(500).json({ error: 'Failed to fetch top stocks' });
@@ -6738,6 +6739,7 @@ app.get('/api/earnings/upcoming', async (req, res) => {
       market: req.query.market,
       sector: req.query.sector,
       search: req.query.search,
+      eventType: req.query.eventType,
       fromDate: req.query.from,
       toDate: req.query.to,
       limit: parseInt(req.query.limit, 10) || 100,

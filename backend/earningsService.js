@@ -1,6 +1,7 @@
 const axios = require('axios');
 const signalService = require('./signalService');
 const nseAfxScraper = require('./nseAfxScraper');
+const kenyanStocksScraper = require('./kenyanStocksScraper');
 
 const FINNHUB_KEY = process.env.FINNHUB_API_KEY || process.env.VITE_FINNHUB_KEY || 'd7ji2ihr01qhf13euuvgd7ji2ihr01qhf13euv00';
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
@@ -127,56 +128,6 @@ function getQuarter(date) {
   if (m <= 5) return 'Q2';
   if (m <= 8) return 'Q3';
   return 'Q4';
-}
-
-function getFY(year, month) {
-  return month >= 9 ? year + 1 : year;
-}
-
-function generateNseFallbackEvents(symbol, price) {
-  const fund = signalService.getFundamentals(symbol);
-  const name = fund?.name || symbol;
-  const sector = fund?.sector || 'Other';
-  const marketCap = fund?.marketCap || 0;
-  const afxQuote = nseAfxScraper.getQuoteForSymbol(symbol);
-  const realPrice = afxQuote?.price || price || 0;
-  const peRatio = (fund?.peRatio > 0) ? fund.peRatio : 15;
-  const realEps = fund?.netIncomePerShare || 0;
-  const revPerShare = fund?.revenuePerShare || 0;
-  const estShares = (marketCap > 0 && realPrice > 0) ? marketCap / realPrice : 0;
-  const annualRevenue = revPerShare > 0 && estShares > 0 ? revPerShare * estShares : 0;
-  const baseEps = realEps > 0 ? realEps : (realPrice > 0 && peRatio > 0 ? realPrice / peRatio : 1);
-  const now = new Date();
-  const currentQ = Math.floor(now.getMonth() / 3);
-  const events = [];
-
-  for (let offset = -4; offset <= 2; offset++) {
-    const qIndex = currentQ + offset;
-    const year = now.getFullYear() + Math.floor(qIndex / 4);
-    const quarter = ((qIndex % 4) + 4) % 4;
-    const reportMonth = (quarter * 3 + 4) % 12;
-    const reportYear = quarter === 3 ? year + 1 : year;
-    const reportDate = new Date(reportYear, reportMonth, 15 + (Math.floor(Math.random() * 10)));
-    const isPast = offset < 0;
-    const epsVariation = isPast ? 1 + (Math.random() - 0.5) * 0.2 : 0;
-    const estEps = Math.round(baseEps * (isPast ? 1 : 1.03) * 100) / 100;
-    const actEps = isPast ? Math.round(baseEps * (epsVariation || 1) * 100) / 100 : 0;
-    const surprisePct = isPast && estEps > 0 ? Math.round(((actEps - estEps) / estEps) * 100 * 10) / 10 : 0;
-
-    events.push({
-      id: `${symbol}-Q${quarter + 1}${year}`,
-      ticker: symbol, name, date: reportDate.toISOString(),
-      dateStr: `${MONTHS[reportMonth]} ${reportDate.getDate()}, ${reportYear}`,
-      quarter: `Q${quarter + 1}`, fiscalYear: year,
-      estEPS: Math.max(estEps, 0.01),
-      actualEPS: isPast ? Math.max(actEps, 0.01) : 0,
-      surprise: surprisePct, isBeat: isPast ? surprisePct >= 0 : true,
-      market: 'nse', sector, currency: 'KES',
-      marketCap, revenue: annualRevenue / 4,
-    });
-  }
-
-  return events;
 }
 
 function buildHistoricalEvents(ticker, data) {
@@ -332,13 +283,44 @@ async function syncEarnings() {
       allEvents.push(...events);
     }
 
-    // 3. NSE fallback events
-    const nseSymbolsWithEvents = new Set(allEvents.filter(e => e.market === 'nse').map(e => e.ticker));
-    for (const nseSym of signalService.NSE_SYMBOLS) {
-      if (!nseSymbolsWithEvents.has(nseSym)) {
-        const events = generateNseFallbackEvents(nseSym, 0);
-        allEvents.push(...events);
+    // 3. NSE events from KenyanStocks.com (real data)
+    try {
+      const ksEvents = await kenyanStocksScraper.scrapeEvents();
+      const existingIds = new Set(allEvents.map(e => e.id));
+      for (const ev of ksEvents) {
+        const isNse = signalService.NSE_SYMBOLS.includes(ev.symbol);
+        if (!isNse) continue;
+        const fund = signalService.getFundamentals(ev.symbol);
+        const id = `ks-${ev.symbol}-${ev.date}`;
+        if (existingIds.has(id)) continue;
+        const reportDate = new Date(ev.date);
+        if (isNaN(reportDate.getTime())) continue;
+        const fiscalQ = Math.floor(reportDate.getMonth() / 3);
+        allEvents.push({
+          id,
+          ticker: ev.symbol,
+          name: ev.companyName || fund?.name || ev.symbol,
+          date: reportDate.toISOString(),
+          dateStr: `${MONTHS[reportDate.getMonth()]} ${reportDate.getDate()}, ${reportDate.getFullYear()}`,
+          quarter: `Q${fiscalQ + 1}`,
+          fiscalYear: reportDate.getFullYear(),
+          estEPS: 0,
+          actualEPS: 0,
+          surprise: 0,
+          isBeat: true,
+          market: 'nse',
+          sector: fund?.sector || 'Other',
+          currency: 'KES',
+          marketCap: fund?.marketCap || 0,
+          revenue: 0,
+          eventType: ev.eventType,
+          eventMessage: ev.message,
+          source: 'kenyanstocks',
+        });
+        existingIds.add(id);
       }
+    } catch (e) {
+      console.error('[Earnings] KenyanStocks scrape failed:', e.message);
     }
 
     allEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -356,6 +338,7 @@ function filterEarnings(events, options) {
   let filtered = [...events];
   if (options.market) filtered = filtered.filter(e => e.market === options.market);
   if (options.sector) filtered = filtered.filter(e => e.sector === options.sector);
+  if (options.eventType) filtered = filtered.filter(e => e.eventType === options.eventType);
   if (options.search) {
     const q = options.search.toLowerCase();
     filtered = filtered.filter(e =>

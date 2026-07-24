@@ -52,6 +52,8 @@ export function fetchUpcomingEarnings(params: {
   search?: string;
   from?: string;
   to?: string;
+  fromDate?: string;
+  toDate?: string;
   limit?: number;
   offset?: number;
 }): Promise<EarningsResult> {

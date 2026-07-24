@@ -5,23 +5,11 @@ import { Card } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import {
   Search, TrendingUp, TrendingDown, Building2,
-  BarChart3, RefreshCw,
+  BarChart3, RefreshCw, Clock,
 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { fetchScreenerResults, type ScreenerStock } from "../../services/screenerService";
-
-function formatCompactNumber(value: number): string {
-  if (!Number.isFinite(value) || value === 0) return "0";
-  return new Intl.NumberFormat("en-KE", { notation: "compact", maximumFractionDigits: 1 }).format(value);
-}
-
-function parseVolume(vol: string): number {
-  const num = parseFloat(vol.replace("M", "").replace("K", "").replace("B", ""));
-  if (vol.includes("B")) return num * 1e9;
-  if (vol.includes("M")) return num * 1e6;
-  if (vol.includes("K")) return num * 1e3;
-  return num;
-}
+import { formatCompactNumber } from "../../utils/format";
 
 interface IndustryGroup {
   name: string;
@@ -39,12 +27,13 @@ export function Industries() {
   const [sortBy, setSortBy] = useState<"change" | "name" | "companies" | "score">("change");
   const [allStocks, setAllStocks] = useState<ScreenerStock[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const navigate = useNavigate();
 
   const fetchData = () => {
     setLoading(true);
     fetchScreenerResults({ limit: 200 })
-      .then(r => { setAllStocks(r.stocks); setLoading(false); })
+      .then(r => { setAllStocks(r.stocks); setLastUpdated(new Date()); setLoading(false); })
       .catch(() => { setLoading(false); });
   };
 
@@ -59,7 +48,7 @@ export function Industries() {
         groups[sector] = { name: sector, stocks: [], totalVolume: 0, avgChange: 0, avgVolume: 0, avgScore: 0, count: 0 };
       }
       groups[sector].stocks.push(stock);
-      groups[sector].totalVolume += parseVolume(stock.volume);
+      groups[sector].totalVolume += stock.rawVolume || 0;
       groups[sector].count++;
     });
 
@@ -96,10 +85,6 @@ export function Industries() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="text-lg font-bold text-foreground">Industries & Sectors</h2>
-          <p className="text-sm text-muted-foreground truncate">Real-time performance across all industries and sectors</p>
-        </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={fetchData} className="p-2 hover:bg-muted rounded-lg transition-colors" title="Refresh">
             <RefreshCw className={`size-4 text-muted-foreground ${loading ? "animate-spin" : ""}`} />
@@ -161,7 +146,7 @@ export function Industries() {
           const isPositive = industry.avgChange >= 0;
 
           return (
-            <Card key={industry.name} className="p-5 hover:shadow-md transition-all cursor-pointer" onClick={() => navigate(`/app/sectors`)}>
+            <Card key={industry.name} className="p-5 hover:shadow-md transition-all cursor-pointer" onClick={() => navigate(`/app/stocks/screener?sector=${encodeURIComponent(industry.name)}`)}>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
@@ -192,7 +177,7 @@ export function Industries() {
                   <BarChart3 className="size-3" /> Score: {industry.avgScore}
                 </span>
                 <span className="flex items-center gap-1 ml-auto">
-                  <BarChart3 className="size-3" /> Vol: {formatCompactNumber(industry.avgVolume)}
+                  <BarChart3 className="size-3" /> Avg Vol: {industry.avgVolume > 0 ? formatCompactNumber(industry.avgVolume) : '—'}
                 </span>
               </div>
               {industry.stocks.length > 0 && (
@@ -214,6 +199,11 @@ export function Industries() {
           );
         })}
       </div>
+      )}
+      {lastUpdated && (
+        <div className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1">
+          <Clock className="size-3" /> Data updated {lastUpdated.toLocaleTimeString()}
+        </div>
       )}
     </div>
   );
