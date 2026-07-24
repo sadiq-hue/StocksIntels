@@ -14,10 +14,11 @@ import {
 
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function formatMarketCap(mcap: number): string {
-  if (mcap >= 1e12) return `$${(mcap / 1e12).toFixed(2)}T`;
-  if (mcap >= 1e9) return `$${(mcap / 1e9).toFixed(1)}B`;
-  if (mcap >= 1e6) return `$${(mcap / 1e6).toFixed(1)}M`;
+function formatMarketCap(mcap: number, currency?: string): string {
+  const sym = currency === "KES" ? "KES " : "$";
+  if (mcap >= 1e12) return `${sym}${(mcap / 1e12).toFixed(2)}T`;
+  if (mcap >= 1e9) return `${sym}${(mcap / 1e9).toFixed(1)}B`;
+  if (mcap >= 1e6) return `${sym}${(mcap / 1e6).toFixed(1)}M`;
   return "";
 }
 
@@ -77,7 +78,7 @@ function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () =
             <div className="rounded-lg bg-muted/50 p-3 border">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">Sector</p>
               <p className="text-sm font-bold text-foreground">{event.sector}</p>
-              {event.marketCap > 0 && <p className="text-xs text-muted-foreground">{formatMarketCap(event.marketCap)}</p>}
+              {event.marketCap > 0 && <p className="text-xs text-muted-foreground">{formatMarketCap(event.marketCap, event.currency)}</p>}
             </div>
           </div>
 
