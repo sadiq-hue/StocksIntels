@@ -1706,6 +1706,10 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     return _signalsCache;
   }
   if (!marketData && quick && _signalsCache) {
+    // Kick off background full regeneration if cache is stale (>30 min old)
+    if (!_signalsInProgress && Date.now() - _signalsCacheTime > 30 * 60 * 1000) {
+      generateSignals(null, false, true).catch(() => {});
+    }
     return _signalsCache;
   }
   if (!marketData && !quick && _signalsInProgress) {
