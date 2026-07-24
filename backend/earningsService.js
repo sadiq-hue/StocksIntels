@@ -345,8 +345,16 @@ function filterEarnings(events, options) {
       e.ticker.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)
     );
   }
-  if (options.fromDate) filtered = filtered.filter(e => new Date(e.date) >= new Date(options.fromDate));
-  if (options.toDate) filtered = filtered.filter(e => new Date(e.date) <= new Date(options.toDate));
+  if (options.fromDate) {
+    const fd = new Date(options.fromDate);
+    fd.setHours(0, 0, 0, 0);
+    filtered = filtered.filter(e => new Date(e.date) >= fd);
+  }
+  if (options.toDate) {
+    const td = new Date(options.toDate);
+    td.setHours(23, 59, 59, 999);
+    filtered = filtered.filter(e => new Date(e.date) <= td);
+  }
   filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
   return filtered;
 }
