@@ -46,15 +46,9 @@ async function _loadSignalCacheFromDb() {
       `SELECT cache_value FROM app_cache WHERE cache_key = 'signals_cache'`
     );
     if (result.rows.length && result.rows[0].cache_value) {
-      const cached = result.rows[0].cache_value;
-      const nseCount = cached.filter(s => (s.market || '').toLowerCase() === 'nse').length;
-      if (nseCount >= 30) {
-        _signalsCache = cached;
-        _signalsCacheTime = Date.now();
-        console.log(`[SignalService] Loaded ${cached.length} signals (${nseCount} NSE) from cache DB`);
-      } else {
-        console.log(`[SignalService] Cache DB has only ${nseCount} NSE stocks, skipping load (will regenerate on first request)`);
-      }
+      _signalsCache = result.rows[0].cache_value;
+      _signalsCacheTime = 0;
+      console.log(`[SignalService] Loaded ${_signalsCache.length} signals from cache DB (will regenerate in background)`);
       return;
     }
   } catch { /* table may not exist */ }
