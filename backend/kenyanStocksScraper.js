@@ -1,18 +1,14 @@
 const axios = require('axios');
-const cheerio = require('cheerio');
 
-const BASE_URL = 'https://kenyanstocks.com/events';
+const API_URL = 'https://kenyanstocks.com/data/events/v1/all';
+const STOCKS_API_URL = 'https://kenyanstocks.com/data/stocks/v1/all';
 const SCRAPE_TIMEOUT = 20000;
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-
-const MONTHS = {
-  'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-  'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11,
-};
 
 let eventsCache = [];
 let eventsCacheTime = 0;
+let stocksCache = null;
+let stocksCacheTime = 0;
 
 async function scrapeEvents() {
   const now = Date.now();
@@ -21,109 +17,65 @@ async function scrapeEvents() {
   }
 
   try {
-    const response = await axios.get(BASE_URL, {
+    const response = await axios.get(API_URL, {
       timeout: SCRAPE_TIMEOUT,
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; StocksIntelsBot/1.0)' },
     });
 
-    const $ = cheerio.load(response.data);
-    const events = [];
-
-    // Extract year from the period header (e.g., "July 2026")
-    let currentYear = new Date().getFullYear();
-    const periodText = $('.current-period span').first().text().trim();
-    const yearMatch = periodText.match(/\d{4}/);
-    if (yearMatch) {
-      currentYear = parseInt(yearMatch[0], 10);
+    const data = response.data;
+    if (!data || !Array.isArray(data.data)) {
+      console.log('[KenyanStocks] API returned no events array');
+      return eventsCache;
     }
 
-    // Parse each date group
-    $('.date-group').each((_, dateGroup) => {
-      const $group = $(dateGroup);
-      const dayText = $group.find('.date-header .day').text().trim();
-      // dayText is like "Jul 23"
-      const dayParts = dayText.split(' ');
-      if (dayParts.length < 2) return;
-      const monthName = dayParts[0];
-      const dayNum = parseInt(dayParts[1], 10);
-      const monthIndex = MONTHS[monthName];
-      if (monthIndex === undefined || isNaN(dayNum)) return;
-
-      const eventDate = new Date(currentYear, monthIndex, dayNum);
-      const dateStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-
-      // Parse each event card in this date group
-      $group.find('.event-card').each((_, card) => {
-        const $card = $(card);
-        const symbol = $card.find('.symbol').text().trim().toUpperCase();
-        const companyName = $card.find('.company-name').text().trim();
-        const message = $card.find('.event-message').text().trim();
-        const typeBadge = $card.find('.event-type-badge').text().trim().toLowerCase();
-        const exchange = $card.find('.exchange').text().trim().toUpperCase();
-
-        if (!symbol || !dateStr) return;
-
-        // Map event type
-        let eventType = 'other';
-        if (typeBadge === 'earnings') eventType = 'earnings';
-        else if (typeBadge === 'dividend') eventType = 'dividend';
-        else if (typeBadge === 'filings') eventType = 'filings';
-
-        events.push({
-          symbol,
-          companyName,
-          date: dateStr,
-          eventType,
-          message,
-          exchange,
-          source: 'kenyanstocks',
-        });
-      });
-    });
-
-    // Also try to parse the sidebar "Today's Events" widget for additional data
-    $('.overlay.events-widget .event-item').each((_, item) => {
-      const $item = $(item);
-      const symbol = $item.find('.event-symbol').text().trim().toUpperCase();
-      const message = $item.find('.event-message').text().trim();
-      const typeBadge = $item.find('.event-type-badge').text().trim().toLowerCase();
-      if (!symbol) return;
-
-      const today = new Date().toISOString().slice(0, 10);
-      const exists = events.some(e => e.symbol === symbol && e.date === today && e.message === message);
-      if (!exists) {
-        let eventType = 'other';
-        if (typeBadge === 'earnings') eventType = 'earnings';
-        else if (typeBadge === 'dividend') eventType = 'dividend';
-
-        events.push({
-          symbol,
-          companyName: '',
-          date: today,
-          eventType,
-          message,
-          exchange: 'NSE',
-          source: 'kenyanstocks',
-        });
-      }
-    });
+    const events = data.data.map(ev => ({
+      symbol: (ev.symbol || '').toUpperCase(),
+      companyName: (ev.company_name || '').trim(),
+      date: ev.date || '',
+      eventType: ev.event_type || 'other',
+      message: ev.message || '',
+      exchange: (ev.exchange || 'nse').toUpperCase(),
+      companyLogo: ev.company_logo || '',
+      source: 'kenyanstocks',
+    })).filter(ev => ev.symbol && ev.date);
 
     if (events.length > 0) {
       eventsCache = events;
       eventsCacheTime = now;
-      console.log(`[KenyanStocks] Scraped ${events.length} events from kenyanstocks.com`);
+      console.log(`[KenyanStocks] Fetched ${events.length} events from API`);
     } else {
-      console.log('[KenyanStocks] No events found in HTML, keeping previous cache');
+      console.log('[KenyanStocks] API returned 0 events, keeping previous cache');
     }
 
     return eventsCache;
   } catch (e) {
-    console.error('[KenyanStocks] Scrape failed:', e.message);
+    console.error('[KenyanStocks] API fetch failed:', e.message);
     return eventsCache;
+  }
+}
+
+async function getStocksData() {
+  const now = Date.now();
+  if (stocksCache && (now - stocksCacheTime) < CACHE_TTL) {
+    return stocksCache;
+  }
+
+  try {
+    const response = await axios.get(STOCKS_API_URL, {
+      timeout: SCRAPE_TIMEOUT,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; StocksIntelsBot/1.0)' },
+    });
+
+    const data = response.data;
+    if (data && Array.isArray(data.data)) {
+      stocksCache = data.data;
+      stocksCacheTime = now;
+      console.log(`[KenyanStocks] Fetched ${data.data.length} stocks from API`);
+    }
+    return stocksCache;
+  } catch (e) {
+    console.error('[KenyanStocks] Stocks API failed:', e.message);
+    return stocksCache;
   }
 }
 
@@ -131,4 +83,4 @@ function getEvents() {
   return eventsCache;
 }
 
-module.exports = { scrapeEvents, getEvents };
+module.exports = { scrapeEvents, getEvents, getStocksData };

@@ -49,7 +49,13 @@ function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () =
                     {event.market === "nse" ? "NSE" : "Global"}
                   </Badge>
                   {event.eventType && event.eventType !== "earnings" && (
-                    <Badge className="text-[10px] bg-purple-100 text-purple-700 border-purple-200 capitalize">{event.eventType}</Badge>
+                    <Badge className={`text-[10px] border capitalize ${
+                      event.eventType === "dividend" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                      event.eventType === "agm" ? "bg-blue-100 text-blue-700 border-blue-200" :
+                      event.eventType === "book_closure" ? "bg-amber-100 text-amber-700 border-amber-200" :
+                      event.eventType === "filings" ? "bg-orange-100 text-orange-700 border-orange-200" :
+                      "bg-purple-100 text-purple-700 border-purple-200"
+                    }`}>{event.eventType === "agm" ? "AGM" : event.eventType}</Badge>
                   )}
                   {isUpcoming && <Badge className="text-[9px] bg-amber-100 text-amber-800 border-amber-200">Upcoming</Badge>}
                 </div>
@@ -338,7 +344,13 @@ export function EarningsCalendar() {
                             {e.market === "nse" ? "NSE" : "Global"}
                           </Badge>
                           {e.eventType && e.eventType !== "earnings" && (
-                            <Badge className="text-[9px] bg-purple-100 text-purple-700 border-purple-200 capitalize">{e.eventType}</Badge>
+                            <Badge className={`text-[9px] border capitalize ${
+                              e.eventType === "dividend" ? "bg-emerald-100 text-emerald-700 border-emerald-200" :
+                              e.eventType === "agm" ? "bg-blue-100 text-blue-700 border-blue-200" :
+                              e.eventType === "book_closure" ? "bg-amber-100 text-amber-700 border-amber-200" :
+                              e.eventType === "filings" ? "bg-orange-100 text-orange-700 border-orange-200" :
+                              "bg-purple-100 text-purple-700 border-purple-200"
+                            }`}>{e.eventType === "agm" ? "AGM" : e.eventType}</Badge>
                           )}
                           {e.actualEPS === 0 && !e.eventType && <span className="text-[9px] text-amber-600 font-medium">Upcoming</span>}
                         </div>
