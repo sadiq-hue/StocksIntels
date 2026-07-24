@@ -48,6 +48,9 @@ function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () =
                   <Badge variant="outline" className={`text-[10px] ${event.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
                     {event.market === "nse" ? "NSE" : "Global"}
                   </Badge>
+                  {event.eventType && event.eventType !== "earnings" && (
+                    <Badge className="text-[10px] bg-purple-100 text-purple-700 border-purple-200 capitalize">{event.eventType}</Badge>
+                  )}
                   {isUpcoming && <Badge className="text-[9px] bg-amber-100 text-amber-800 border-amber-200">Upcoming</Badge>}
                 </div>
                 <p className="text-sm text-muted-foreground">{event.name}</p>
@@ -63,6 +66,7 @@ function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () =
               <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">Period</p>
               <p className="text-sm font-bold text-foreground">{event.quarter} FY{event.fiscalYear}</p>
               <p className="text-xs text-muted-foreground">{event.dateStr}</p>
+              {event.eventMessage && <p className="text-xs text-muted-foreground/70 mt-1">{event.eventMessage}</p>}
             </div>
             <div className="rounded-lg bg-muted/50 p-3 border">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">Sector</p>
@@ -165,6 +169,7 @@ export function EarningsCalendar() {
   useEffect(() => {
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout>;
+    let retries = 0;
     const doFetch = () => {
       setLoading(true);
       fetchUpcomingEarnings({
@@ -177,13 +182,13 @@ export function EarningsCalendar() {
         .then(r => {
           if (cancelled) return;
           setResult(r);
-          if (r.earnings.length > 0 || r.total > 0) {
-            setLoading(false);
-          } else {
+          setLoading(false);
+          if (r.earnings.length === 0 && r.total === 0 && retries < 3) {
+            retries++;
             retryTimer = setTimeout(doFetch, 5000);
           }
         })
-        .catch(() => { if (!cancelled) { setResult(null); retryTimer = setTimeout(doFetch, 5000); } })
+        .catch(() => { if (!cancelled) { setResult(null); setLoading(false); if (retries < 3) { retries++; retryTimer = setTimeout(doFetch, 5000); } } })
     };
     doFetch();
     return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
@@ -332,9 +337,13 @@ export function EarningsCalendar() {
                           <Badge variant="outline" className={`text-[9px] ${e.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
                             {e.market === "nse" ? "NSE" : "Global"}
                           </Badge>
-                          {e.actualEPS === 0 && <span className="text-[9px] text-amber-600 font-medium">Upcoming</span>}
+                          {e.eventType && e.eventType !== "earnings" && (
+                            <Badge className="text-[9px] bg-purple-100 text-purple-700 border-purple-200 capitalize">{e.eventType}</Badge>
+                          )}
+                          {e.actualEPS === 0 && !e.eventType && <span className="text-[9px] text-amber-600 font-medium">Upcoming</span>}
                         </div>
                         <p className="text-xs text-muted-foreground truncate">{e.name}</p>
+                        {e.eventMessage && <p className="text-[10px] text-muted-foreground/70 truncate max-w-xs">{e.eventMessage}</p>}
                       </div>
                     </div>
                     <div className="flex items-center gap-4 flex-wrap">

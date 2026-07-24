@@ -132,7 +132,6 @@ function getQuarter(date) {
 
 function buildHistoricalEvents(ticker, data) {
   const fund = signalService.getFundamentals(ticker);
-  const isNse = signalService.NSE_SYMBOLS.includes(ticker);
   const name = fund?.name || ticker;
   const sector = fund?.sector || 'Other';
   const events = [];
@@ -153,10 +152,11 @@ function buildHistoricalEvents(ticker, data) {
       actualEPS: Math.max(act, 0.01),
       surprise: +surprisePct.toFixed(2),
       isBeat: surprisePct >= 0,
-      market: isNse ? 'nse' : 'global', sector,
-      currency: isNse ? 'KES' : 'USD',
+      market: 'global', sector,
+      currency: 'USD',
       marketCap: fund?.marketCap || 0,
       revenue: 0,
+      source: 'alpha_vantage',
     });
   }
   return events;
@@ -243,7 +243,6 @@ async function syncEarnings() {
             const cols = lines[i].split(',');
             const ticker = cols[0] || '';
             if (!ticker) continue;
-            const isNse = signalService.NSE_SYMBOLS.includes(ticker);
             const fund = signalService.getFundamentals(ticker);
             const name = cols[1] || fund?.name || ticker;
             const sector = fund?.sector || 'Other';
@@ -262,10 +261,11 @@ async function syncEarnings() {
               estEPS: Math.max(estEps, 0.01),
               actualEPS: 0,
               surprise: 0, isBeat: true,
-              market: isNse ? 'nse' : 'global', sector,
-              currency: cols[5] || (isNse ? 'KES' : 'USD'),
+              market: 'global', sector,
+              currency: cols[5] || 'USD',
               marketCap: fund?.marketCap || 0,
               revenue: 0,
+              source: 'alpha_vantage',
             });
           }
           console.log(`[Earnings] Alpha Vantage returned ${allEvents.length} upcoming earnings events`);

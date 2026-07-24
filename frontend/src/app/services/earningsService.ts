@@ -17,6 +17,8 @@ export interface EarningsEvent {
   currency: string;
   marketCap: number;
   revenue: number;
+  eventType?: string;
+  eventMessage?: string;
 }
 
 export interface EarningsResult {
