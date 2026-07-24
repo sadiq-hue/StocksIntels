@@ -711,12 +711,13 @@ export function getTickerLogoUrl(ticker: string): string {
   return '';
 }
 
-export function formatMarketCap(value: string | number): string {
+export function formatMarketCap(value: string | number, currency: string = "USD"): string {
   if (typeof value === 'string') return value;
-  if (value >= 1e12) return `$${(value / 1e12).toFixed(1)}T`;
-  if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
-  if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
-  return `$${value.toLocaleString()}`;
+  const prefix = currency === "KES" ? "KES " : "$";
+  if (value >= 1e12) return `${prefix}${(value / 1e12).toFixed(1)}T`;
+  if (value >= 1e9) return `${prefix}${(value / 1e9).toFixed(1)}B`;
+  if (value >= 1e6) return `${prefix}${(value / 1e6).toFixed(1)}M`;
+  return `${prefix}${value.toLocaleString()}`;
 }
 
 export const watchlistStocks: WatchlistStockItem[] = [

@@ -15,7 +15,7 @@ import {
   AreaChart, Area, Line, ReferenceLine, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Link, useParams, useNavigate } from "react-router";
+import { Link, useParams, useNavigate, useSearchParams } from "react-router";
 import {
   TrendingUp, Search, Star, BarChart3, Building2,
   DollarSign, Activity, ArrowUpDown, Sparkles, TrendingUpIcon,
@@ -50,7 +50,10 @@ import { fetchFinancialReport, type FinancialReport } from "../services/financia
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
-const formatCurrency = (stock: StockListItem) => stock.currency === "USD" ? "$" : "KES ";
+const formatCurrency = (stock: StockListItem, liveCurrency?: string) => {
+  const cur = liveCurrency || stock.currency;
+  return cur === "USD" ? "$" : cur === "KES" ? "KES " : `${cur} `;
+};
 
 function formatPrice(value: number) {
   if (!Number.isFinite(value) || value === 0) return "0.00";
@@ -99,6 +102,8 @@ interface StockSignal extends Partial<SharedSignal> {
 
 export function StockAnalysisPage() {
   const { ticker: urlTicker } = useParams<{ ticker: string }>();
+  const [searchParams] = useSearchParams();
+  const urlMarket = searchParams.get("market")?.toLowerCase() || "";
   const navigate = useNavigate();
 
   // Resolve ticker from URL — find in universe or create placeholder entry
@@ -108,16 +113,17 @@ export function StockAnalysisPage() {
       const inGlobal = globalStocks.find(s => s.ticker.toUpperCase() === urlTicker.toUpperCase());
       if (inNse) return { stock: inNse, market: "nse" as StockMarket };
       if (inGlobal) return { stock: inGlobal, market: "global" as StockMarket };
-      // Unknown ticker — create a placeholder entry
+      const isNseFromUrl = urlMarket === "nse";
       return {
         stock: {
           ticker: urlTicker.toUpperCase(),
           name: urlTicker.toUpperCase(),
           price: 0, change: 0, volume: "—", marketCap: "—",
-          sector: "Other", pe: 0, dividend: 0, market: "global" as StockMarket,
-          currency: "USD",
+          sector: "Other", pe: 0, dividend: 0,
+          market: isNseFromUrl ? "nse" as StockMarket : "global" as StockMarket,
+          currency: isNseFromUrl ? "KES" : "USD",
         },
-        market: "global" as StockMarket,
+        market: isNseFromUrl ? "nse" as StockMarket : "global" as StockMarket,
       };
     }
     return null;
@@ -195,11 +201,13 @@ export function StockAnalysisPage() {
       if (inNse) { setActiveMarket("nse"); setSelectedStock(inNse); }
       else if (inGlobal) { setActiveMarket("global"); setSelectedStock(inGlobal); }
       else {
-        setActiveMarket("global");
+        const isNse = urlMarket === "nse";
+        setActiveMarket(isNse ? "nse" : "global");
         setSelectedStock({
           ticker: urlTicker.toUpperCase(), name: urlTicker.toUpperCase(),
           price: 0, change: 0, volume: "—", marketCap: "—",
-          sector: "Other", pe: 0, dividend: 0, market: "global", currency: "USD",
+          sector: "Other", pe: 0, dividend: 0,
+          market: isNse ? "nse" : "global", currency: isNse ? "KES" : "USD",
         });
       }
     }
@@ -922,7 +930,7 @@ export function StockAnalysisPage() {
                   )}
                   <div className="text-left lg:text-right">
                     <div className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl tabular-nums">
-                      {formatCurrency(activeSelection)}{formatPrice(regularPrice)}
+                      {formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(regularPrice)}
                     </div>
                     <div className="flex items-center justify-start gap-1.5 mt-1.5 lg:justify-end">
                       {isPositive ? <ChevronUp className="size-4 text-emerald-600" /> : <ChevronDown className="size-4 text-red-500" />}
@@ -943,7 +951,7 @@ export function StockAnalysisPage() {
                         <div className="flex items-center justify-start gap-1.5 lg:justify-end">
                           <span className="text-[11px] text-muted-foreground">{altSessionLabel}:</span>
                           <span className={`text-sm font-semibold ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                            {formatCurrency(activeSelection)}{formatPrice(altPrice)}
+                            {formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(altPrice)}
                           </span>
                           <span className={`text-[11px] font-medium ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
                             ({altChangePct != null ? `${altChangePct > 0 ? "+" : ""}${altChangePct.toFixed(2)}%` : ""})
@@ -961,7 +969,7 @@ export function StockAnalysisPage() {
                 {[
                   { icon: Building2, label: "Sector", value: activeSelection.sector, color: "text-foreground" },
                   { icon: Activity, label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : activeSelection.volume, color: "text-foreground" },
-                  { icon: Wallet, label: "Market Cap", value: financialReport?.data?.quote?.marketCap ? formatMarketCap(financialReport.data.quote.marketCap) : (financialReport?.data?.keyMetrics?.marketCap ? formatMarketCap(financialReport.data.keyMetrics.marketCap) : (liveQuote?.marketCap ? formatMarketCap(liveQuote.marketCap) : activeSelection.marketCap)), color: "text-foreground" },
+                  { icon: Wallet, label: "Market Cap", value: (() => { const cur = liveQuote?.currency || activeSelection.currency; const cap = financialReport?.data?.quote?.marketCap || financialReport?.data?.keyMetrics?.marketCap || liveQuote?.marketCap || 0; return cap > 0 ? formatMarketCap(cap, cur) : activeSelection.marketCap; })(), color: "text-foreground" },
                   { icon: BarChart3, label: "P/E Ratio", value: financialReport?.data?.quote?.pe?.toFixed(1) || financialReport?.data?.keyMetrics?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A"), color: "text-foreground" },
                 ].map((m) => (
                   <div key={m.label} className="rounded-xl bg-card/60 p-3 border border-border shadow-sm backdrop-blur">
@@ -1024,7 +1032,7 @@ export function StockAnalysisPage() {
                 <div className="rounded-lg bg-muted/40 p-3 border border-border/50 sm:col-span-1">
                   <div className="text-[11px] font-medium text-muted-foreground mb-0.5">Price</div>
                   <div className={`text-lg md:text-xl font-bold ${isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {formatCurrency(activeSelection)}{formatPrice(currentPrice)}
+                    {formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(currentPrice)}
                   </div>
                   <div className={`text-xs font-semibold mt-0.5 ${isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
                     {isPositive ? <ChevronUp className="size-3 inline-block" /> : <ChevronDown className="size-3 inline-block" />}
@@ -1034,22 +1042,22 @@ export function StockAnalysisPage() {
                 <div className="rounded-lg bg-muted/40 p-3 border border-border/50">
                   <div className="text-[11px] font-medium text-muted-foreground mb-0.5">Prev Close</div>
                   <div className="text-sm font-semibold text-foreground">
-                    {formatCurrency(activeSelection)}{formatPrice(liveQuote?.previousClose ?? (chartData.length > 1 ? chartData[chartData.length - 2]?.price : displayPrice))}
+                    {formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(liveQuote?.previousClose ?? (chartData.length > 1 ? chartData[chartData.length - 2]?.price : displayPrice))}
                   </div>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3 border border-border/50">
                   <div className="text-[11px] font-medium text-muted-foreground mb-0.5">Open</div>
                   <div className="text-sm font-semibold text-foreground">
-                    {formatCurrency(activeSelection)}{formatPrice(chartData.length > 0 ? chartData[chartData.length - 1]?.open : displayPrice)}
+                    {formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(chartData.length > 0 ? chartData[chartData.length - 1]?.open : displayPrice)}
                   </div>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3 border border-border/50">
                   <div className="text-[11px] font-medium text-muted-foreground mb-0.5">High</div>
-                  <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection)}{formatPrice(highPrice)}</div>
+                  <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(highPrice)}</div>
                 </div>
                 <div className="rounded-lg bg-muted/40 p-3 border border-border/50">
                   <div className="text-[11px] font-medium text-muted-foreground mb-0.5">Low</div>
-                  <div className="text-sm font-semibold text-red-500">{formatCurrency(activeSelection)}{formatPrice(lowPrice)}</div>
+                  <div className="text-sm font-semibold text-red-500">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(lowPrice)}</div>
                 </div>
               </div>
 
@@ -1427,25 +1435,25 @@ export function StockAnalysisPage() {
                         {stockSignal?.entry && (
                           <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
                             <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target Entry</div>
-                            <div className="text-sm font-semibold text-foreground">{formatCurrency(activeSelection)}{formatPrice(stockSignal.entry)}</div>
+                            <div className="text-sm font-semibold text-foreground">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.entry)}</div>
                           </div>
                         )}
                         {stockSignal?.stopLoss && (
                           <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
                             <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Stop Loss</div>
-                            <div className="text-sm font-semibold text-red-500">{formatCurrency(activeSelection)}{formatPrice(stockSignal.stopLoss)}</div>
+                            <div className="text-sm font-semibold text-red-500">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.stopLoss)}</div>
                           </div>
                         )}
                         {stockSignal?.target1 && (
                           <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
                             <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target 1</div>
-                            <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection)}{formatPrice(stockSignal.target1)}</div>
+                            <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target1)}</div>
                           </div>
                         )}
                         {stockSignal?.target2 && (
                           <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
                             <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target 2</div>
-                            <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection)}{formatPrice(stockSignal.target2)}</div>
+                            <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target2)}</div>
                           </div>
                         )}
                         {stockSignal?.riskReward && (
