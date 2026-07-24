@@ -1511,4 +1511,23 @@ async function sendCuratedNewsEmail(email, data) {
   return sendViaTransport({ to: email, subject, html, label: 'Curated news' });
 }
 
-module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendViaTransport };
+function sendAnnouncementEmail(email, announcement, name) {
+  const subject = `StocksIntels Announcement`;
+  const html = baseWrapper(`
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="display:inline-block;background:#fef3c7;border-radius:50%;width:48px;height:48px;line-height:48px;font-size:24px">&#128227;</div>
+    </div>
+    <div style="font-size:20px;font-weight:700;color:${TEXT_DARK};margin-bottom:8px;text-align:center">Platform Announcement</div>
+    <div style="font-size:13px;color:${TEXT_MED};margin-bottom:20px;text-align:center">Hi ${name || 'there'}, here is an important update from the StocksIntels team.</div>
+    <div style="background:${BG_LIGHT};border:1px solid ${BORDER};border-radius:10px;padding:20px;font-size:14px;color:${TEXT_DARK};line-height:1.7;white-space:pre-wrap">${esc(announcement)}</div>
+    <div style="text-align:center;margin-top:24px">
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Go to Dashboard</a>
+    </div>
+  `, '<meta name="referrer" content="no-referrer" />');
+
+  return sendViaTransport({ to: email, subject, html, label: 'Announcement' });
+}
+
+function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendViaTransport };

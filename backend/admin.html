@@ -66,6 +66,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
 .ticket-row:hover{background:#f9fafb}
 .ticket-row.selected{background:#eff6ff}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 #usersLeftPanel,#ticketsLeftPanel,#signalsLeftPanel{min-height:0;overflow-y:auto;overflow-x:hidden}
 #usersLayout,#ticketsLayout,#tab-signals>.flex-1{overflow:hidden}
 .signal-row{cursor:pointer;transition:background .1s}
@@ -1544,6 +1545,42 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
 
       <div id="settingsActionBar" class="hidden" style="display:flex;justify-content:flex-end;gap:8px;padding-top:8px;border-top:1px solid #e5e7eb">
         <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
+      </div>
+
+      <!-- Announcement Email Modal -->
+      <div id="announcementModal" class="hidden" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.4);backdrop-filter:blur(2px)">
+        <div style="background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.2);width:520px;max-width:95vw;max-height:90vh;overflow-y:auto">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #e5e7eb">
+            <div>
+              <div style="font-size:16px;font-weight:700;color:#111827">Send Announcement Email</div>
+              <div id="announcementModalSubtitle" style="font-size:12px;color:#6b7280;margin-top:2px">Send to all users</div>
+            </div>
+            <button onclick="closeAnnouncementModal()" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:20px;padding:4px">&times;</button>
+          </div>
+          <div style="padding:20px 24px">
+            <div style="margin-bottom:16px">
+              <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Email Preview</label>
+              <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;font-size:13px;color:#374151;max-height:120px;overflow-y:auto;white-space:pre-wrap;line-height:1.6" id="announcementPreview"></div>
+            </div>
+            <div id="recipientSelectSection" class="hidden" style="margin-bottom:16px">
+              <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Select Recipients</label>
+              <div style="display:flex;gap:8px;margin-bottom:8px">
+                <button onclick="toggleSelectAll()" id="selectAllBtn" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;color:#374151">Select All</button>
+                <input id="recipientSearch" type="text" placeholder="Search users..." oninput="filterRecipients()" style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;outline:none">
+              </div>
+              <div id="recipientList" style="border:1px solid #e5e7eb;border-radius:8px;max-height:200px;overflow-y:auto"></div>
+              <div id="selectedCount" style="font-size:11px;color:#6b7280;margin-top:6px"></div>
+            </div>
+            <div id="announcementStatus" class="hidden" style="margin-bottom:16px"></div>
+          </div>
+          <div style="padding:16px 24px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px">
+            <button onclick="closeAnnouncementModal()" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+            <button id="sendAnnouncementBtn" onclick="sendAnnouncement()" style="background:#4f46e5;color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              Send Email
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Admin Management (super_admin only) -->
@@ -4365,7 +4402,17 @@ async function fetchSettings() {
           <span style="font-size:13px;color:#374151">${s.value === 'true' ? 'Enabled' : 'Disabled'}</span>
         </label>`;
       } else if (key === 'system_announcement') {
-        inputHtml = `<textarea class="input-field settings-input" data-key="${key}" ${isSuper ? '' : 'readonly'} style="min-height:64px;resize:vertical;font-size:13px">${esc(s.value)}</textarea>`;
+        inputHtml = `<textarea class="input-field settings-input" data-key="${key}" ${isSuper ? '' : 'readonly'} style="min-height:64px;resize:vertical;font-size:13px">${esc(s.value)}</textarea>
+          ${isSuper ? `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="openAnnouncementModal('all')" style="background:#4f46e5;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              Send to All Users
+            </button>
+            <button onclick="openAnnouncementModal('select')" style="background:#fff;color:#4f46e5;border:1px solid #4f46e5;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"/></svg>
+              Send to Selected
+            </button>
+          </div>` : ''}`;
       } else {
         inputHtml = `<input class="input-field settings-input" data-key="${key}" value="${esc(s.value)}" ${isSuper ? '' : 'readonly'} style="font-size:13px">`;
       }
@@ -4426,6 +4473,110 @@ async function saveSettings() {
     setTimeout(() => toastEl.classList.add('hidden'), 3000);
     await fetchSettings();
   } catch { toast('Error saving settings', 'error'); }
+}
+
+// ── Announcement Email Modal ──
+let _announcementMode = 'all';
+let _allUsers = [];
+let _selectedUserIds = new Set();
+
+function getAnnouncementText() {
+  const ta = document.querySelector('.settings-input[data-key="system_announcement"]');
+  return ta ? ta.value.trim() : '';
+}
+
+function openAnnouncementModal(mode) {
+  const text = getAnnouncementText();
+  if (!text) { toast('Please enter an announcement text first', 'error'); return; }
+  _announcementMode = mode;
+  _selectedUserIds = new Set();
+  document.getElementById('announcementPreview').textContent = text;
+  document.getElementById('announcementStatus').classList.add('hidden');
+  document.getElementById('announcementStatus').innerHTML = '';
+  const selSection = document.getElementById('recipientSelectSection');
+  selSection.classList.toggle('hidden', mode !== 'select');
+  if (mode === 'select') {
+    document.getElementById('announcementModalSubtitle').textContent = 'Send to selected users';
+    loadRecipients();
+  } else {
+    document.getElementById('announcementModalSubtitle').textContent = 'Send to all users';
+  }
+  document.getElementById('announcementModal').classList.remove('hidden');
+}
+
+function closeAnnouncementModal() {
+  document.getElementById('announcementModal').classList.add('hidden');
+}
+
+async function loadRecipients() {
+  try {
+    const res = await fetch('/api/admin/users?limit=500');
+    if (!res.ok) return;
+    const d = await res.json();
+    _allUsers = d.users || [];
+    renderRecipients();
+  } catch {}
+}
+
+function renderRecipients() {
+  const search = (document.getElementById('recipientSearch').value || '').toLowerCase();
+  const filtered = _allUsers.filter(u => {
+    if (search && !u.full_name?.toLowerCase().includes(search) && !u.email?.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  const list = document.getElementById('recipientList');
+  list.innerHTML = filtered.map(u => `
+    <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;border-bottom:1px solid #f3f4f6;font-size:12px;${_selectedUserIds.has(u.id) ? 'background:#eef2ff' : ''}">
+      <input type="checkbox" ${_selectedUserIds.has(u.id) ? 'checked' : ''} onchange="toggleUser(${u.id})" style="accent-color:#4f46e5;width:14px;height:14px">
+      <div>
+        <div style="font-weight:600;color:#111827">${esc(u.full_name || 'Unnamed')}</div>
+        <div style="color:#6b7280;font-size:11px">${esc(u.email || '')} &middot; ${u.role || 'trader'}</div>
+      </div>
+    </label>
+  `).join('');
+  document.getElementById('selectedCount').textContent = _selectedUserIds.size > 0 ? `${_selectedUserIds.size} user(s) selected` : '';
+}
+
+function toggleUser(id) {
+  if (_selectedUserIds.has(id)) _selectedUserIds.delete(id); else _selectedUserIds.add(id);
+  renderRecipients();
+}
+
+function toggleSelectAll() {
+  if (_selectedUserIds.size === _allUsers.length) { _selectedUserIds = new Set(); }
+  else { _allUsers.forEach(u => _selectedUserIds.add(u.id)); }
+  renderRecipients();
+}
+
+function filterRecipients() { renderRecipients(); }
+
+async function sendAnnouncement() {
+  const text = getAnnouncementText();
+  if (!text) { toast('Announcement text is empty', 'error'); return; }
+  const btn = document.getElementById('sendAnnouncementBtn');
+  const statusEl = document.getElementById('announcementStatus');
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="30 60"/></svg> Sending...';
+  statusEl.classList.remove('hidden');
+  statusEl.innerHTML = '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af">Sending emails, please wait...</div>';
+  try {
+    const body = { announcement: text };
+    if (_announcementMode === 'select' && _selectedUserIds.size > 0) {
+      body.recipientIds = [..._selectedUserIds];
+    }
+    const res = await fetch('/api/admin/send-announcement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await res.json();
+    if (!res.ok) { statusEl.innerHTML = `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:12px;color:#991b1b">${esc(d.error || 'Failed to send')}</div>`; }
+    else { statusEl.innerHTML = `<div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;font-size:12px;color:#065f46">Sent to ${d.sent} user(s)${d.failed > 0 ? `, ${d.failed} failed` : ''}</div>`; }
+  } catch (e) {
+    statusEl.innerHTML = `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:12px;color:#991b1b">Error: ${esc(e.message)}</div>`;
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg> Send Email';
 }
 
 // ── Admin Management ──

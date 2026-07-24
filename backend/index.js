@@ -18,7 +18,7 @@ const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
 const signalPublisher = require('./signalPublisher');
 const { createSignalNotifications } = require('./signalPublisher');
-const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail } = require('./mailer');
+const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail } = require('./mailer');
 const emailSequenceService = require('./emailSequenceService');
 const cron = require('node-cron');
 const {
@@ -483,6 +483,33 @@ app.put('/api/admin/users/:id/toggle-verify', async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     res.json(result.rows[0]);
   } catch (err) { console.error('Admin toggle verify error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+// ── Admin Send Announcement Email ──
+app.post('/api/admin/send-announcement', requireSuperAdmin, async (req, res) => {
+  try {
+    const { announcement, recipientIds } = req.body;
+    if (!announcement || !announcement.trim()) return res.status(400).json({ error: 'Announcement text is required' });
+    let users = [];
+    if (recipientIds && Array.isArray(recipientIds) && recipientIds.length > 0) {
+      const result = await pool.query('SELECT id, email, full_name FROM users WHERE id = ANY($1) AND email IS NOT NULL', [recipientIds]);
+      users = result.rows;
+    } else {
+      const result = await pool.query('SELECT id, email, full_name FROM users WHERE email IS NOT NULL');
+      users = result.rows;
+    }
+    let sent = 0, failed = 0;
+    for (const u of users) {
+      try {
+        await sendAnnouncementEmail(u.email, announcement.trim(), u.full_name);
+        sent++;
+      } catch (e) {
+        console.error(`[Announcement] Failed to send to ${u.email}: ${e.message}`);
+        failed++;
+      }
+    }
+    res.json({ sent, failed, total: users.length });
+  } catch (err) { console.error('Admin send announcement error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Signals API ──

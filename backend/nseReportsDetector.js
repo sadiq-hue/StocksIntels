@@ -3,7 +3,7 @@
 // Scrapes the official NSE "Financial Results" page (nse.co.ke), discovers newly
 // published PDF reports, matches them to tracked NSE tickers, downloads + parses
 // the PDF via the shared jsParser pipeline, stores the result in financial_statements,
-// and alerts all users both in-app and by email.
+// and alerts admin users both in-app and by email.
 //
 // NOTE: nse.co.ke returns malformed HTTP headers that Node's strict parser rejects,
 // so every request MUST use `insecureHTTPParser: true`.
@@ -527,9 +527,9 @@ async function recordFiling({ key, company, ticker, url, filename, periodEnd, au
 }
 
 async function notifyAllUsers(title, body, link) {
-  let users = [];
-  try { const { rows } = await pool.query('SELECT id, email FROM users'); users = rows; } catch { users = []; }
-  for (const u of users) {
+  let admins = [];
+  try { const { rows } = await pool.query("SELECT id, email FROM users WHERE role IN ('admin', 'super_admin')"); admins = rows; } catch { admins = []; }
+  for (const u of admins) {
     try {
       await pool.query('INSERT INTO notifications (user_id, title, body, type, link) VALUES ($1,$2,$3,$4,$5)', [u.id, title, body, 'nse_report', link || '/app/dashboard']);
     } catch {}
