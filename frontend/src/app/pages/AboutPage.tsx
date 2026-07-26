@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { Target, Eye, Heart, Users, ArrowRight } from "lucide-react";
+import { useSEO } from "../hooks/useSEO";
 
 const values = [
   {
@@ -28,6 +29,13 @@ const team = [
 ];
 
 export function AboutPage() {
+  useSEO({
+    title: "About Us",
+    description: "Learn about StocksIntels, the AI-powered market intelligence platform covering African and global stock exchanges for retail and institutional investors.",
+    canonical: "/about",
+    keywords: "about StocksIntels, African stock market, fintech Kenya, AI market intelligence",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">

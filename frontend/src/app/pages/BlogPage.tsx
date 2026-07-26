@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { ArrowRight, Calendar, User } from "lucide-react";
+import { useSEO } from "../hooks/useSEO";
 
 const posts = [
   {
@@ -35,6 +36,13 @@ const posts = [
 ];
 
 export function BlogPage() {
+  useSEO({
+    title: "Blog",
+    description: "Latest insights, analysis, and updates from the African and global stock markets. Read expert commentary on NSE, JSE, NGX, and more.",
+    canonical: "/blog",
+    keywords: "stock market blog, African markets news, NSE Kenya analysis, stock trading insights",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">

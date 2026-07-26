@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { useSEO } from "../hooks/useSEO";
 
 const sections = [
   {
@@ -38,6 +39,13 @@ const sections = [
 ];
 
 export function TermsPage() {
+  useSEO({
+    title: "Terms of Service",
+    description: "StocksIntels terms of service. Review the conditions governing your use of our AI-powered market intelligence platform.",
+    canonical: "/terms",
+    keywords: "terms of service, user agreement, platform terms",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">

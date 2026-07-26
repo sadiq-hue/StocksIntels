@@ -20,9 +20,13 @@
     <meta property="og:image:alt" content="StocksIntels – AI Stock Market Intelligence" />
     <meta property="og:site_name" content="StocksIntels" />
     <meta property="og:locale" content="en_US" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@stocksintels" />
+    <meta name="twitter:creator" content="@josephbathuru" />
     <meta name="twitter:title" content="StocksIntels – AI Stock Market Intelligence" />
     <meta name="twitter:description" content="AI-powered stock market intelligence for NSE Kenya, JSE, NGX, NYSE, and NASDAQ. Real-time prices, buy/sell signals, and portfolio tracking." />
     <meta name="twitter:image" content="https://stocksintels.com/logo1.jpg" />
@@ -30,7 +34,8 @@
     <!-- Favicon -->
     <link rel="icon" type="image/jpeg" href="/logo1.jpg" />
     <link rel="alternate icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" href="/logo1.jpg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0D7490" />
 
     <!-- Preconnect -->
@@ -137,6 +142,13 @@
 
   <body>
     <div id="root"></div>
+    <noscript>
+      <div style="padding:2rem;text-align:center;font-family:sans-serif">
+        <h1>StocksIntels - AI Stock Market Intelligence</h1>
+        <p>JavaScript is required to use StocksIntels. Please enable JavaScript in your browser and reload the page.</p>
+        <a href="https://stocksintels.com">Go to StocksIntels</a>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

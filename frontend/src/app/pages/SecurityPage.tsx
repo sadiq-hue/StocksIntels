@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { Shield, Lock, Server, Bell, Search } from "lucide-react";
+import { useSEO } from "../hooks/useSEO";
 
 const sections = [
   {
@@ -32,6 +33,13 @@ const sections = [
 ];
 
 export function SecurityPage() {
+  useSEO({
+    title: "Security",
+    description: "StocksIntels security practices. Enterprise-grade security with encryption, Cloudflare protection, and secure authentication.",
+    canonical: "/security",
+    keywords: "security, data encryption, Cloudflare protection, secure platform",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">

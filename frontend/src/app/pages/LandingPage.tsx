@@ -423,7 +423,7 @@ export function LandingPage() {
           <div className="flex flex-wrap justify-between items-center gap-4 h-16 md:h-20">
             <Link to="/" className="flex items-center gap-2.5 group">
               <div className="size-9 md:size-10 overflow-hidden">
-                <img src="/logo1.jpg" alt="" className="size-full object-cover" />
+                <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
               </div>
               <span className="text-xl md:text-2xl font-bold text-foreground tracking-tight">StocksIntels</span>
             </Link>

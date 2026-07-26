@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { useSEO } from "../hooks/useSEO";
 
 const sections = [
   {
@@ -34,6 +35,13 @@ const sections = [
 ];
 
 export function PrivacyPage() {
+  useSEO({
+    title: "Privacy Policy",
+    description: "StocksIntels privacy policy. Learn how we collect, use, and protect your personal and financial data.",
+    canonical: "/privacy",
+    keywords: "privacy policy, data protection, GDPR compliance",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">

@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { MapPin, Briefcase, ArrowRight } from "lucide-react";
+import { useSEO } from "../hooks/useSEO";
 
 const roles = [
   {
@@ -31,6 +32,13 @@ const roles = [
 ];
 
 export function CareersPage() {
+  useSEO({
+    title: "Careers",
+    description: "Join the StocksIntels team and help build the future of AI-powered financial intelligence for African markets.",
+    canonical: "/careers",
+    keywords: "fintech careers, AI finance jobs, StocksIntels hiring",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">

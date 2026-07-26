@@ -2,8 +2,16 @@ import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { AlertTriangle } from "lucide-react";
+import { useSEO } from "../hooks/useSEO";
 
 export function DisclaimerPage() {
+  useSEO({
+    title: "Disclaimer",
+    description: "StocksIntels disclaimer. Important legal disclosures about AI-generated investment insights and financial data accuracy.",
+    canonical: "/disclaimer",
+    keywords: "disclaimer, financial disclaimer, investment warning",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">

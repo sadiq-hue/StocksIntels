@@ -1,0 +1,23 @@
+{
+  "name": "StocksIntels - AI Stock Market Intelligence",
+  "short_name": "StocksIntels",
+  "description": "AI-powered stock market intelligence for NSE Kenya, JSE, NGX, NYSE, and NASDAQ.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0D7490",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/logo1.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "/logo1.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ],
+  "categories": ["finance", "business"]
+}
