@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router";
 import { 
   Check, 
@@ -113,6 +113,38 @@ export function PricingPage() {
     canonical: "/pricing",
     keywords: "stock market intelligence pricing, African stock trading plans, NSE stock analysis pricing, AI stock signals subscription",
   });
+
+  useEffect(() => {
+    const productSchemas = plans.map(plan => ({
+      "@context": "https://schema.org",
+      "@type": "Product",
+      name: `StocksIntels ${plan.name}`,
+      description: `AI-powered stock market intelligence plan for ${plan.description.toLowerCase()}. ${plan.features.filter(f => f.included).map(f => f.text).join(', ')}.`,
+      brand: { "@type": "Brand", name: "StocksIntels" },
+      offers: {
+        "@type": "AggregateOffer",
+        lowPrice: plan.monthlyPrice,
+        highPrice: plan.yearlyPrice,
+        priceCurrency: "USD",
+        availability: "https://schema.org/InStock",
+        url: "https://stocksintels.com/pricing",
+      },
+    }));
+    const faqSchema = {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: faqs.map(f => ({
+        "@type": "Question",
+        name: f.question,
+        acceptedAnswer: { "@type": "Answer", text: f.answer },
+      })),
+    };
+    const els = [...productSchemas.map((s, i) => {
+      const el = document.createElement("script"); el.type = "application/ld+json"; el.id = `ld-product-${i}`; el.text = JSON.stringify(s);
+      document.head.appendChild(el); return el;
+    }), (() => { const el = document.createElement("script"); el.type = "application/ld+json"; el.id = "ld-faq-pricing"; el.text = JSON.stringify(faqSchema); document.head.appendChild(el); return el; })()];
+    return () => els.forEach(el => el.remove());
+  }, []);
 
   const navigate = useNavigate();
   const { user, apiFetch, updateUser, isLoading } = useAuth();

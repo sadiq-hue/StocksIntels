@@ -336,6 +336,43 @@ export function LandingPage() {
     keywords: "Nairobi Securities Exchange, NSE Kenya, Safaricom stock, Equity Group, KCB, African stock market, AI stock signals, stock trading Kenya, JSE stocks, NYSE, portfolio tracker",
   });
 
+  // JSON-LD structured data for search engines
+  useEffect(() => {
+    const orgSchema = {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "StocksIntels",
+      url: "https://stocksintels.com",
+      logo: "https://stocksintels.com/logo1.jpg",
+      description: "AI-powered stock market intelligence for African and global equities.",
+      foundingDate: "2024",
+      contactPoint: { "@type": "ContactPoint", telephone: "+254-792-754-435", contactType: "customer service", email: "support@stocksintels.com", availableLanguage: ["English"] },
+      sameAs: ["https://twitter.com/stocksintels"],
+      address: { "@type": "PostalAddress", addressLocality: "Nairobi", addressCountry: "KE" },
+    };
+    const webSiteSchema = {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "StocksIntels",
+      url: "https://stocksintels.com",
+      potentialAction: { "@type": "SearchAction", target: "https://stocksintels.com/app/stocks?q={search_term_string}", "query-input": "required name=search_term_string" },
+    };
+    const faqSchema = {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: faqs.map(f => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
+    };
+    const el1 = document.createElement("script"); el1.type = "application/ld+json"; el1.id = "ld-org"; el1.text = JSON.stringify(orgSchema);
+    const el2 = document.createElement("script"); el2.type = "application/ld+json"; el2.id = "ld-website"; el2.text = JSON.stringify(webSiteSchema);
+    const el3 = document.createElement("script"); el3.type = "application/ld+json"; el3.id = "ld-faq"; el3.text = JSON.stringify(faqSchema);
+    document.head.appendChild(el1); document.head.appendChild(el2); document.head.appendChild(el3);
+    return () => { el1.remove(); el2.remove(); el3.remove(); };
+  }, []);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
