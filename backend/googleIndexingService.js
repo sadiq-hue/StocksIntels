@@ -1,33 +1,46 @@
-const jwt = require('jsonwebtoken');
 const https = require('https');
 
 const INDEXING_API = 'https://indexing.googleapis.com/v3/urlNotifications:publish';
-const TOKEN_URI = 'https://oauth2.googleapis.com/serviceaccount';
 
 let _cachedToken = null;
 let _tokenExpiry = 0;
 
+function getRefreshToken() {
+  return process.env.GOOGLE_REFRESH_TOKEN || null;
+}
+
+function getClientId() {
+  return process.env.GOOGLE_OAUTH_CLIENT_ID || '';
+}
+
+function getClientSecret() {
+  return process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
+}
+
+function isConfigured() {
+  return !!(getRefreshToken() && getClientId() && getClientSecret());
+}
+
 async function getAccessToken() {
   if (_cachedToken && Date.now() < _tokenExpiry) return _cachedToken;
 
-  const creds = getCredentials();
-  if (!creds) return null;
+  const refreshToken = getRefreshToken();
+  const clientId = getClientId();
+  const clientSecret = getClientSecret();
+  if (!refreshToken || !clientId || !clientSecret) return null;
 
-  const now = Math.floor(Date.now() / 1000);
-  const payload = {
-    iss: creds.client_email,
-    scope: 'https://www.googleapis.com/auth/indexing',
-    aud: TOKEN_URI,
-    exp: now + 3600,
-    iat: now,
-  };
-
-  const token = jwt.sign(payload, creds.private_key, { algorithm: 'RS256' });
-
-  const body = JSON.stringify({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: token });
+  const body = JSON.stringify({
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: refreshToken,
+    grant_type: 'refresh_token',
+  });
 
   const accessToken = await new Promise((resolve, reject) => {
-    const req = https.request(TOKEN_URI, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) } }, (res) => {
+    const req = https.request('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    }, (res) => {
       let data = '';
       res.on('data', (c) => data += c);
       res.on('end', () => {
@@ -52,30 +65,11 @@ async function getAccessToken() {
   return accessToken;
 }
 
-function getCredentials() {
-  if (process.env.GOOGLE_INDEXING_CREDENTIALS) {
-    try {
-      return JSON.parse(process.env.GOOGLE_INDEXING_CREDENTIALS);
-    } catch (e) {
-      console.error('[GoogleIndexing] Failed to parse GOOGLE_INDEXING_CREDENTIALS:', e.message);
-    }
-  }
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const credPath = path.join(__dirname, 'google-service-account.json');
-    if (fs.existsSync(credPath)) {
-      return JSON.parse(fs.readFileSync(credPath, 'utf8'));
-    }
-  } catch (e) {}
-  return null;
-}
-
 async function publishUrl(url, type = 'URL_UPDATED') {
   const accessToken = await getAccessToken();
   if (!accessToken) {
-    console.warn('[GoogleIndexing] No credentials configured. Set GOOGLE_INDEXING_CREDENTIALS env var or add google-service-account.json');
-    return { success: false, error: 'No credentials configured' };
+    console.warn('[GoogleIndexing] Not configured. Set GOOGLE_REFRESH_TOKEN, GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET on Railway.');
+    return { success: false, error: 'Not configured' };
   }
 
   const body = JSON.stringify({ url, type });
@@ -120,4 +114,4 @@ async function batchPublish(urls, type = 'URL_UPDATED') {
   return results;
 }
 
-module.exports = { publishUrl, batchPublish, getAccessToken, getCredentials };
+module.exports = { publishUrl, batchPublish, getAccessToken, getCredentials: isConfigured };

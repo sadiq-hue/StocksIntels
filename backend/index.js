@@ -11802,7 +11802,7 @@ app.use((err, _req, res, _next) => {
 });
 
 // ── Google Indexing API ──────────────────────────────────────────
-const { publishUrl: gPublishUrl, batchPublish: gBatchPublish, getCredentials: gGetCredentials } = require('./googleIndexingService');
+const { publishUrl: gPublishUrl, batchPublish: gBatchPublish, getCredentials: gIsConfigured } = require('./googleIndexingService');
 
 // IndexNow key verification
 app.get('/fd858012a7b71d179dbf5cca330bfc1e.txt', (_req, res) => {
@@ -11824,12 +11824,12 @@ app.post('/api/admin/index-now', async (req, res) => {
 });
 
 app.get('/api/admin/indexing-status', (req, res) => {
-  const hasCredentials = !!gGetCredentials();
+  const configured = gIsConfigured();
   res.json({
-    googleIndexingApi: hasCredentials ? 'configured' : 'not configured',
-    help: hasCredentials
+    googleIndexingApi: configured ? 'configured' : 'not configured',
+    help: configured
       ? 'POST /api/admin/index-now with { urls: [...], type: "URL_UPDATED" }'
-      : 'Set GOOGLE_INDEXING_CREDENTIALS env var or add google-service-account.json to backend/',
+      : 'Set GOOGLE_REFRESH_TOKEN env var on Railway',
   });
 });
 

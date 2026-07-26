@@ -70,3 +70,5 @@ backend/verify_tmp/
 backend/_*.py
 backend/_*.js
 backend/cov_check.js
+backend/google-auth.js
+backend/google-service-account.json
