@@ -11801,6 +11801,38 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'An unexpected error occurred', code: 'INTERNAL_ERROR' });
 });
 
+// ── Google Indexing API ──────────────────────────────────────────
+const { publishUrl: gPublishUrl, batchPublish: gBatchPublish, getCredentials: gGetCredentials } = require('./googleIndexingService');
+
+// IndexNow key verification
+app.get('/fd858012a7b71d179dbf5cca330bfc1e.txt', (_req, res) => {
+  res.type('text/plain').send('fd858012a7b71d179dbf5cca330bfc1e');
+});
+
+app.post('/api/admin/index-now', async (req, res) => {
+  try {
+    const { urls, type } = req.body;
+    if (!urls || !Array.isArray(urls)) {
+      return res.status(400).json({ error: 'urls array required' });
+    }
+    const results = await gBatchPublish(urls, type || 'URL_UPDATED');
+    res.json({ results, count: results.length });
+  } catch (err) {
+    console.error('[IndexNow] Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/indexing-status', (req, res) => {
+  const hasCredentials = !!gGetCredentials();
+  res.json({
+    googleIndexingApi: hasCredentials ? 'configured' : 'not configured',
+    help: hasCredentials
+      ? 'POST /api/admin/index-now with { urls: [...], type: "URL_UPDATED" }'
+      : 'Set GOOGLE_INDEXING_CREDENTIALS env var or add google-service-account.json to backend/',
+  });
+});
+
 // ── SPA fallback: serve index.html for all non-API routes ────────
 // Only enabled when the backend is co-located with a built frontend.
 if (serveFrontend) {
