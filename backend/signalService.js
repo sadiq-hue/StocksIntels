@@ -294,7 +294,10 @@ async function fetchRealFinancialMetrics(symbol) {
 
     // Try fundamentalsTimeSeries for Altman Z + detailed income/balance sheet data
     try {
-      const fts = await yf.fundamentalsTimeSeries(symbol, { period1: Math.floor(Date.now() / 1000) - 3 * 365 * 86400, module: 'all' });
+      const fts = await Promise.race([
+        yf.fundamentalsTimeSeries(symbol, { period1: Math.floor(Date.now() / 1000) - 3 * 365 * 86400, module: 'all' }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('fundamentalsTimeSeries signal timeout')), 15000)),
+      ]);
       if (Array.isArray(fts) && fts.length > 0) {
         // Income statement: find latest FY with revenue
         const annuals = fts.filter(i => i.periodType === 'FY' && i.totalRevenue != null).sort((a, b) => (b.date || '').localeCompare(a.date || ''));

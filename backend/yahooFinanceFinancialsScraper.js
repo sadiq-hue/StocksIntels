@@ -273,7 +273,10 @@ async function fetchAllFundamentalsInternal(symbol) {
           const yf = await createYf();
           const periodEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
           const periodStart = new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          const fts = await yf.fundamentalsTimeSeries(symbol, { period1: periodStart, period2: periodEnd, module: 'balance-sheet' });
+          const fts = await Promise.race([
+            yf.fundamentalsTimeSeries(symbol, { period1: periodStart, period2: periodEnd, module: 'balance-sheet' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('fundamentalsTimeSeries treasury timeout')), 10000)),
+          ]);
           if (fts && fts.length > 0) {
             for (const item of items) {
               const match = fts.find(f => f.date && item.date && getDateStr(f.date) === item.date);
@@ -294,11 +297,14 @@ async function fetchAllFundamentalsInternal(symbol) {
     const yf = await createYf();
     const periodEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const periodStart = new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const fts = await yf.fundamentalsTimeSeries(symbol, {
-      period1: periodStart,
-      period2: periodEnd,
-      module: 'financials',
-    });
+    const fts = await Promise.race([
+      yf.fundamentalsTimeSeries(symbol, {
+        period1: periodStart,
+        period2: periodEnd,
+        module: 'financials',
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('fundamentalsTimeSeries fallback timeout')), 15000)),
+    ]);
     if (!fts || fts.length === 0) return null;
 
     const items = fts
@@ -476,11 +482,14 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
         const yf = await createYf();
         const periodEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         const periodStart = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        const fts = await yf.fundamentalsTimeSeries(symbol, {
-          period1: periodStart,
-          period2: periodEnd,
-          module: 'financials',
-        });
+        const fts = await Promise.race([
+          yf.fundamentalsTimeSeries(symbol, {
+            period1: periodStart,
+            period2: periodEnd,
+            module: 'financials',
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('fundamentalsTimeSeries income timeout')), 15000)),
+        ]);
         return fts || null;
       } catch { return null; }
     })(),
