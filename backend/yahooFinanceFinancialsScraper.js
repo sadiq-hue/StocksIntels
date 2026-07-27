@@ -107,7 +107,7 @@ async function fetchPreMarketBatch(symbols) {
 }
 
 // Bump CACHE_VERSION when response shape changes to invalidate stale DB cache entries
-const QUOTE_SUMMARY_CACHE_VERSION = 2;
+const QUOTE_SUMMARY_CACHE_VERSION = 3;
 async function fetchQuoteSummary(symbol, modules) {
   const cacheKey = `yh_qs_v${QUOTE_SUMMARY_CACHE_VERSION}_${symbol}_${modules.join(',')}`;
   const cached = cacheGet(cacheKey);
@@ -165,7 +165,6 @@ function twelveDataToQuoteSummary(tds, symbol) {
       forwardPE: tds.forwardPE,
       sharesOutstanding: tds.sharesOutstanding,
       floatShares: tds.floatShares || 0,
-      sharesShortPriorMonth: 0,
       enterpriseValue: tds.enterpriseValue,
       bookValue: tds.bookValuePerShare,
     },
@@ -181,7 +180,7 @@ function twelveDataToQuoteSummary(tds, symbol) {
 
 // Get fundamentals data from SEC EDGAR (income, balance, cash flow history)
 async function fetchAllFundamentals(symbol) {
-  const cacheKey = `yh_fundamentals_${symbol}`;
+  const cacheKey = `yh_fundamentals_v2_${symbol}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
@@ -309,6 +308,12 @@ async function fetchAllFundamentals(symbol) {
         capitalExpenditure: f.capitalExpenditure || f.purchaseOfPPE || 0,
         freeCashFlow: f.freeCashFlow || 0,
         cashDividendsPaid: f.cashDividendsPaid || f.commonStockDividendPaid || 0,
+        treasuryStock: f.treasuryStock || 0,
+        additionalPaidInCapital: f.additionalPaidInCapital || 0,
+        repurchaseOfCapitalStock: f.repurchaseOfCapitalStock || f.commonStockPayments || 0,
+        shareIssued: f.shareIssued || 0,
+        netCommonStockIssuance: f.netCommonStockIssuance || 0,
+        stockBasedCompensation: f.stockBasedCompensation || 0,
         marketCap: f.marketCap || 0,
       }));
     if (items.length > 0) return cacheSet(cacheKey, items);
@@ -473,6 +478,8 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
   }
 
   // 2. Trailing TTM (most recent 4 quarters)
+  // NOTE: basicAverageShares/dilutedAverageShares are per-period metrics (NOT additive);
+  // summing them across 4 quarters produces ~4× the real share count.
   const ttmKeys = [
     'totalRevenue', 'reconciledCostOfRevenue', 'costOfRevenue',
     'grossProfit', 'operatingExpense', 'operatingIncome',
@@ -480,7 +487,6 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
     'netIncomeFromContinuingAndDiscontinuedOperation',
     'EBITDA', 'EBIT', 'pretaxIncome', 'taxProvision',
     'researchAndDevelopment', 'sellingGeneralAndAdministration',
-    'basicEPS', 'dilutedEPS', 'basicAverageShares', 'dilutedAverageShares',
     'totalExpenses', 'operatingRevenue', 'otherIncomeExpense',
     'interestExpense', 'reconciledDepreciation',
     'netIncomeContinuousOperations',
@@ -511,7 +517,11 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
     if (quarterly.length >= 4) {
       const windows = computeTTM(quarterly, ttmKeys);
       if (windows.length > 0) {
-        items.unshift(formatIncomeItem(windows[0], 'ttm'));
+        const ttmItem = { ...windows[0] };
+        const mostRecent = quarterly[quarterly.length - 1];
+        ttmItem.basicAverageShares = mostRecent.basicAverageShares || mostRecent.dilutedAverageShares || 0;
+        ttmItem.dilutedAverageShares = mostRecent.dilutedAverageShares || mostRecent.basicAverageShares || 0;
+        items.unshift(formatIncomeItem(ttmItem, 'ttm'));
         ttmAdded = true;
       }
     }
@@ -524,7 +534,11 @@ async function getIncomeStatement(symbol, period = 'annual', limit = 4) {
     if (quarterly.length >= 4) {
       const windows = computeTTM(quarterly, ttmKeys);
       if (windows.length > 0) {
-        items.unshift(formatIncomeItem(windows[0], 'ttm'));
+        const ttmItem = { ...windows[0] };
+        const mostRecent = quarterly[quarterly.length - 1];
+        ttmItem.basicAverageShares = mostRecent.basicAverageShares || mostRecent.dilutedAverageShares || 0;
+        ttmItem.dilutedAverageShares = mostRecent.dilutedAverageShares || mostRecent.basicAverageShares || 0;
+        items.unshift(formatIncomeItem(ttmItem, 'ttm'));
       }
     }
   }
@@ -724,7 +738,7 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
   let trailingPE = fd.trailingPE || dk.trailingPE || 0;
   const floatShares = dk.floatShares || 0;
   const sharesOutstanding = dk.sharesOutstanding || 0;
-  const sharesShortPriorMonth = dk.sharesShortPriorMonth || 0;
+  const sharesShortPriorMonth = dk.sharesShortPriorMonth || dk.sharesShort || 0;
 
   // Fallback: scan fundamentals data for marketCap/price fields
   if (!currentMarketCap && allData) {
@@ -758,6 +772,7 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
     const ocf = cfItem.operatingCashFlow || incItem.ebitda || 0;
     const eps = incItem.eps || 0;
     const freeCashFlow = cfItem.freeCashFlow || 0;
+    const ebitda = incItem.ebitda || 0;
 
     // Use real marketCap when available; don't estimate
     const cap = currentMarketCap;
@@ -778,7 +793,7 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
       dividendYield: divYieldDecimal,
       dividendYieldPercentage: divYieldPct,
       payoutRatio: fd.payoutRatio || 0,
-      netDebtToEBITDA: ocf > 0 ? netDebt / ocf : 0,
+      netDebtToEBITDA: ebitda > 0 ? netDebt / ebitda : 0,
       earningsYield: (netIncome > 0 && cap > 0) ? netIncome / cap : 0,
       freeCashFlowYield: cap > 0 ? freeCashFlow / cap : 0,
       revenuePerShare: eps > 0 && netIncome > 0 ? revenue / (netIncome / eps) : 0,
@@ -836,7 +851,7 @@ async function getOwnershipData(symbol) {
       startDate: t.startDatetOfInterval || t.startDate || '',
     }));
 
-    const shortInterest = dk.sharesShortPriorMonth || 0;
+    const shortInterest = dk.sharesShortPriorMonth || dk.sharesShort || 0;
     const shortRatio = dk.shortRatio || 0;
     const floatShares = dk.floatShares || 0;
     const yahooSharesOutstanding = dk.sharesOutstanding || 0;

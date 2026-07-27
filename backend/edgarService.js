@@ -112,6 +112,7 @@ const US_GAAP_TAGS = {
   shareIssued: ['us-gaap:IssuanceOfCommonStock', 'us-gaap:ProceedsFromIssuanceOfCommonStock'],
   netCommonStockIssuance: ['us-gaap:ProceedsFromStockOptionsExercised', 'us-gaap:ProceedsFromIssuanceOfCommonStock'],
   sharesOutstanding: ['us-gaap:EntityCommonStockSharesOutstanding'],
+  stockBasedCompensation: ['us-gaap:StockBasedCompensation', 'us-gaap:ShareBasedCompensation', 'us-gaap:AllocatedShareBasedCompensationExpense'],
   marketCap: [],  // calculated
 };
 
@@ -376,6 +377,7 @@ async function getCashFlowFromEdgar(symbol, period = 'annual', limit = 4) {
     const shareRepurchases = getLatestValueByFy(facts, US_GAAP_TAGS.shareRepurchases, fy) || 0;
     const shareIssued = getLatestValueByFy(facts, US_GAAP_TAGS.shareIssued, fy) || 0;
     const netCommonStockIssuance = getLatestValueByFy(facts, US_GAAP_TAGS.netCommonStockIssuance, fy) || 0;
+    const stockBasedCompensation = getLatestValueByFy(facts, US_GAAP_TAGS.stockBasedCompensation, fy) || 0;
 
     statements.push({
       date,
@@ -394,7 +396,7 @@ async function getCashFlowFromEdgar(symbol, period = 'annual', limit = 4) {
       repurchaseOfCapitalStock: Math.abs(shareRepurchases),
       shareIssued: shareIssued,
       netCommonStockIssuance: netCommonStockIssuance,
-      stockBasedCompensation: 0,
+      stockBasedCompensation,
     });
   }
 
