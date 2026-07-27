@@ -179,10 +179,24 @@ function twelveDataToQuoteSummary(tds, symbol) {
 }
 
 // Get fundamentals data from SEC EDGAR (income, balance, cash flow history)
+const inflightFundamentals = new Map();
 async function fetchAllFundamentals(symbol) {
   const cacheKey = `yh_fundamentals_v2_${symbol}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
+
+  if (inflightFundamentals.has(symbol)) return inflightFundamentals.get(symbol);
+
+  const promise = fetchAllFundamentalsInternal(symbol);
+  inflightFundamentals.set(symbol, promise);
+  try {
+    return await promise;
+  } finally {
+    inflightFundamentals.delete(symbol);
+  }
+}
+
+async function fetchAllFundamentalsInternal(symbol) {
 
   // 1) SEC EDGAR (authoritative for US-domiciled stocks)
   try {
@@ -817,19 +831,24 @@ async function getOwnershipData(symbol) {
   try {
     // Bypass fetchQuoteSummary (Twelve Data doesn't have institutional/insider data)
     let qs = null;
-    try {
-      const yf = await createYf();
-      const raw = await yf.quoteSummary(symbol.replace(/\./g, '-'), {
-        modules: ['institutionOwnership', 'insiderTransactions', 'defaultKeyStatistics'],
-      });
-      qs = raw ? flattenYahooObject(raw) : null;
-    } catch {}
+    for (let attempt = 0; attempt < 2 && !qs; attempt++) {
+      try {
+        const yf = await createYf();
+        const raw = await yf.quoteSummary(symbol.replace(/\./g, '-'), {
+          modules: ['institutionOwnership', 'insiderTransactions', 'defaultKeyStatistics'],
+        });
+        qs = raw ? flattenYahooObject(raw) : null;
+      } catch (err) {
+        console.warn(`[Ownership] Attempt ${attempt + 1}/2 for ${symbol}: ${err.message || err.code}`);
+        if (!qs && attempt < 1) await new Promise(r => setTimeout(r, 1500));
+      }
+    }
     if (!qs) {
       try {
         qs = await yahooService.fetchQuoteSummary(symbol, ['institutionOwnership', 'insiderTransactions', 'defaultKeyStatistics']);
       } catch {}
     }
-    if (!qs) return null;
+    if (!qs) { console.warn(`[Ownership] No data for ${symbol}`); return null; }
 
     const instRaw = qs.institutionOwnership?.institutionOwnership || [];
     const insidersRaw = qs.insiderTransactions?.insiderTransactions || [];

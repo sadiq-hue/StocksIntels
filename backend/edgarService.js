@@ -159,42 +159,54 @@ function pickAnnualEntries(entries) {
   return entries.sort((a, b) => b.fy - a.fy);
 }
 
+const inflightFacts = new Map();
 async function fetchCompanyFacts(cik) {
   const cacheKey = `edgar_facts_${cik}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
-  const url = `${SEC_BASE_URL}/api/xbrl/companyfacts/CIK${padCik(cik)}.json`;
-  console.log(`[EDGAR] Fetching company facts for CIK ${cik}...`);
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const res = await edgarClient.get(url, {
-        headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' },
-      });
-      const usGaap = res.data?.facts?.['us-gaap'] || {};
-      const dei = res.data?.facts?.['dei'] || {};
-      // Merge dei facts into us-gaap so EntityCommonStockSharesOutstanding etc. are accessible
-      for (const key of Object.keys(dei)) {
-        if (!usGaap[key]) usGaap[key] = dei[key];
-      }
-      const tagCount = Object.keys(usGaap).length;
-      const revenueTag = 'RevenueFromContractWithCustomerExcludingAssessedTax';
-      console.log(`[EDGAR] Company facts for CIK ${cik}: ${tagCount} tags (incl ${Object.keys(dei).length} dei), revenue=${!!usGaap[revenueTag]}`);
-      if (tagCount > 0) console.log(`[EDGAR] Sample tags: ${Object.keys(usGaap).slice(0, 3).join(', ')}...`);
-      return cacheSet(cacheKey, res.data);
-    } catch (err) {
-      const status = err?.response?.status;
-      const statusText = status ? `HTTP ${status}` : err.code;
-      console.warn(`[EDGAR] Attempt ${attempt + 1}/3 for CIK ${cik}: ${statusText}`);
-      if (attempt < 2) {
-        const delay = 2000 * Math.pow(2, attempt) + Math.random() * 1000;
-        await new Promise(r => setTimeout(r, delay));
-      } else {
-        console.error(`[EDGAR] Failed to fetch company facts for CIK ${cik} after 3 attempts`);
+  if (inflightFacts.has(cik)) return inflightFacts.get(cik);
+
+  const promise = (async () => {
+    const url = `${SEC_BASE_URL}/api/xbrl/companyfacts/CIK${padCik(cik)}.json`;
+    console.log(`[EDGAR] Fetching company facts for CIK ${cik}...`);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await edgarClient.get(url, {
+          headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' },
+        });
+        const usGaap = res.data?.facts?.['us-gaap'] || {};
+        const dei = res.data?.facts?.['dei'] || {};
+        // Merge dei facts into us-gaap so EntityCommonStockSharesOutstanding etc. are accessible
+        for (const key of Object.keys(dei)) {
+          if (!usGaap[key]) usGaap[key] = dei[key];
+        }
+        const tagCount = Object.keys(usGaap).length;
+        const revenueTag = 'RevenueFromContractWithCustomerExcludingAssessedTax';
+        console.log(`[EDGAR] Company facts for CIK ${cik}: ${tagCount} tags (incl ${Object.keys(dei).length} dei), revenue=${!!usGaap[revenueTag]}`);
+        if (tagCount > 0) console.log(`[EDGAR] Sample tags: ${Object.keys(usGaap).slice(0, 3).join(', ')}...`);
+        return cacheSet(cacheKey, res.data);
+      } catch (err) {
+        const status = err?.response?.status;
+        const statusText = status ? `HTTP ${status}` : err.code;
+        console.warn(`[EDGAR] Attempt ${attempt + 1}/3 for CIK ${cik}: ${statusText}`);
+        if (attempt < 2) {
+          const delay = 2000 * Math.pow(2, attempt) + Math.random() * 1000;
+          await new Promise(r => setTimeout(r, delay));
+        } else {
+          console.error(`[EDGAR] Failed to fetch company facts for CIK ${cik} after 3 attempts`);
+        }
       }
     }
+    return null;
+  })();
+
+  inflightFacts.set(cik, promise);
+  try {
+    return await promise;
+  } finally {
+    inflightFacts.delete(cik);
   }
-  return null;
 }
 
 async function fetchSubmissions(cik) {
