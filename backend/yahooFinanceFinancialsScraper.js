@@ -181,7 +181,7 @@ function twelveDataToQuoteSummary(tds, symbol) {
 // Get fundamentals data from SEC EDGAR (income, balance, cash flow history)
 const inflightFundamentals = new Map();
 async function fetchAllFundamentals(symbol) {
-  const cacheKey = `yh_fundamentals_v2_${symbol}`;
+  const cacheKey = `yh_fundamentals_v3_${symbol}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
