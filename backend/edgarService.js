@@ -852,7 +852,7 @@ async function getQuarterlyShareCountHistory(symbol) {
 
   const facts = data.facts?.['us-gaap'] || data.facts?.['dei'] || {};
   const tagKeys = US_GAAP_TAGS.sharesOutstanding;
-  const entries = factLookup(facts, tagKeys[0]) || factLookup(facts, tagKeys[1]) || null;
+  const entries = factLookup(facts, tagKeys[0]) || (tagKeys[1] ? factLookup(facts, tagKeys[1]) : null) || null;
   if (!entries) return null;
 
   const units = entries.units;

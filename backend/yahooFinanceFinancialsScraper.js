@@ -265,7 +265,28 @@ async function fetchAllFundamentalsInternal(symbol) {
         marketCap: km.marketCap || 0,
       });
     }
-    if (items.length > 0) return cacheSet(cacheKey, items);
+    if (items.length > 0) {
+      // Supplement EDGAR data with Yahoo balance-sheet fields when EDGAR has zeros
+      const needsSupplement = items.some(it => !it.treasuryStock);
+      if (needsSupplement) {
+        try {
+          const yf = await createYf();
+          const periodEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          const periodStart = new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          const fts = await yf.fundamentalsTimeSeries(symbol, { period1: periodStart, period2: periodEnd, module: 'balance-sheet' });
+          if (fts && fts.length > 0) {
+            for (const item of items) {
+              const match = fts.find(f => f.date && item.date && getDateStr(f.date) === item.date);
+              if (match) {
+                if (!item.treasuryStock && match.treasuryStock) item.treasuryStock = match.treasuryStock;
+                if (!item.additionalPaidInCapital && match.additionalPaidInCapital) item.additionalPaidInCapital = match.additionalPaidInCapital;
+              }
+            }
+          }
+        } catch {}
+      }
+      return cacheSet(cacheKey, items);
+    }
   } catch {}
 
   // 2) yahoo-finance2 fundamentalsTimeSeries (works for non-US stocks like GRAB, NIO, etc.)
@@ -750,9 +771,9 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
   let currentMarketCap = fd.marketCap || dk.marketCap || 0;
   let forwardPE = fd.forwardPE || dk.forwardPE || 0;
   let trailingPE = fd.trailingPE || dk.trailingPE || 0;
-  const floatShares = dk.floatShares || 0;
-  const sharesOutstanding = dk.sharesOutstanding || 0;
-  const sharesShortPriorMonth = dk.sharesShortPriorMonth || dk.sharesShort || 0;
+  const floatShares = typeof dk.floatShares === 'number' ? dk.floatShares : 0;
+  const sharesOutstanding = typeof dk.sharesOutstanding === 'number' ? dk.sharesOutstanding : 0;
+  const sharesShortPriorMonth = (typeof dk.sharesShortPriorMonth === 'number' && dk.sharesShortPriorMonth > 0) ? dk.sharesShortPriorMonth : (typeof dk.sharesShort === 'number' && dk.sharesShort > 0 ? dk.sharesShort : 0);
 
   // Fallback: scan fundamentals data for marketCap/price fields
   if (!currentMarketCap && allData) {
@@ -824,7 +845,7 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
 }
 
 async function getOwnershipData(symbol) {
-  const cacheKey = `yh_ownership_v3_${symbol}`;
+  const cacheKey = `yh_ownership_v5_${symbol}`;
   const cached = cacheGet(cacheKey);
   if (cached) {
     console.log(`[Ownership] Cache hit for ${symbol}: inst=${cached.institutionalHolders?.length || 0}, insiders=${cached.insiderTransactions?.length || 0}, short=${cached.shortInterest || 0}`);
@@ -865,30 +886,30 @@ async function getOwnershipData(symbol) {
     }
     if (!qs) { console.warn(`[Ownership] No data available for ${symbol} from any source`); return null; }
 
-    const instRaw = qs.institutionOwnership?.institutionOwnership || [];
-    const insidersRaw = qs.insiderTransactions?.insiderTransactions || [];
+    const instRaw = qs.institutionOwnership?.ownershipList || qs.institutionOwnership?.institutionOwnership || [];
+    const insidersRaw = qs.insiderTransactions?.transactions || qs.insiderTransactions?.insiderTransactions || [];
     const dk = qs.defaultKeyStatistics || {};
 
     const institutionalHolders = instRaw.slice(0, 10).map(h => ({
-      name: h.organization || '',
-      pctHeld: h.pctHeld?.raw ?? h.pctHeld ?? 0,
-      shares: h.position?.raw ?? h.position ?? 0,
-      value: h.value?.raw ?? h.value ?? 0,
+      name: h.organization || h.filerName || '',
+      pctHeld: typeof h.pctHeld === 'number' ? h.pctHeld : (h.pctHeld?.raw ?? 0),
+      shares: typeof h.position === 'number' ? h.position : (h.position?.raw ?? 0),
+      value: typeof h.value === 'number' ? h.value : (h.value?.raw ?? 0),
       dateReported: h.reportDate || '',
     }));
 
     const insiderTransactions = insidersRaw.slice(0, 15).map(t => ({
-      name: t.insiderName || '',
-      shares: t.shares ?? 0,
-      value: t.value ?? 0,
-      text: t.text || '',
-      startDate: t.startDatetOfInterval || t.startDate || '',
+      name: t.filerName || t.insiderName || '',
+      shares: typeof t.shares === 'number' ? t.shares : (t.shares?.raw ?? 0),
+      value: typeof t.value === 'number' ? t.value : (t.value?.raw ?? 0),
+      text: t.transactionText || t.text || '',
+      startDate: t.startDate || t.startDatetOfInterval || '',
     }));
 
-    const shortInterest = dk.sharesShortPriorMonth || dk.sharesShort || 0;
-    const shortRatio = dk.shortRatio || 0;
-    const floatShares = dk.floatShares || 0;
-    const yahooSharesOutstanding = dk.sharesOutstanding || 0;
+    const shortInterest = (typeof dk.sharesShortPriorMonth === 'number' && dk.sharesShortPriorMonth > 0) ? dk.sharesShortPriorMonth : (typeof dk.sharesShort === 'number' && dk.sharesShort > 0 ? dk.sharesShort : 0);
+    const shortRatio = typeof dk.shortRatio === 'number' ? dk.shortRatio : 0;
+    const floatShares = typeof dk.floatShares === 'number' ? dk.floatShares : 0;
+    const yahooSharesOutstanding = typeof dk.sharesOutstanding === 'number' ? dk.sharesOutstanding : 0;
     const shortFloatPct = shortInterest && floatShares
       ? (shortInterest / floatShares) * 100 : 0;
 
