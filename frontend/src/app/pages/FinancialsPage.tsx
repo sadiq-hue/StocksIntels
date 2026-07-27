@@ -5,7 +5,7 @@ import {
 import {
   Activity, Banknote, BarChart3, Building2, ChartBar, ChartNoAxesCombined,
   Database, ExternalLink, FileText, Globe, HandCoins, Loader2, RefreshCw, Scale, Search,
-  TrendingUp, Wallet,
+  Shield, TrendingUp, Users, Wallet, AlertTriangle,
 } from "lucide-react";
 import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -17,6 +17,8 @@ import {
   type BalanceSheet, type CashFlowStatement, type CompanyProfile, type CompanyQuote,
   type DataProvider, type DividendEvent, type EdgarFiling, type FinancialReport,
   type FinancialsStatus, type IncomeStatement, type KeyMetric,
+  type OwnershipData, type InstitutionalHolder, type InsiderTransaction,
+  type ValidationWarning, type ShareCountEntry,
 } from "../services/financialsService";
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 
@@ -480,8 +482,11 @@ export function FinancialsPage() {
   const balHistory = report?.data.balanceSheetHistory || [];
   const cfHistory = report?.data.cashFlowStatementHistory || [];
   const metHistory = (report?.data.keyMetricsHistory || []).map(m => ({ ...m, dividendYieldPercentage: m.dividendYieldPercentage || toPercent(m.dividendYield) }));
+  const ownership = (report as any)?.data?.ownership as OwnershipData | null | undefined;
+  const validationWarnings = ((report as any)?.data?.validationWarnings || []) as ValidationWarning[];
+  const quarterlyShareCountHistory = ((report as any)?.data?.quarterlyShareCountHistory || []) as ShareCountEntry[];
 
-  const tabs = ["summary", "income", "balance", "cashflow", "metrics", "filings"];
+  const tabs = ["summary", "income", "balance", "cashflow", "metrics", "supply", "filings"];
 
   const performanceData = useMemo(() =>
     incHistory.slice().reverse().map(i => ({ period: formatDate(i.date), revenue: i.revenue / 1_000_000_000, netIncome: i.netIncome / 1_000_000_000, ebitda: i.ebitda / 1_000_000_000 })),
@@ -688,7 +693,7 @@ export function FinancialsPage() {
               {tabs.map((tab) => (
                 <TabsTrigger key={tab} value={tab}
                   className="flex-1 min-w-0 px-3 py-3.5 capitalize rounded-none border-b-2 border-transparent data-[state=active]:border-[#0D7490] data-[state=active]:bg-[#0D7490]/5 data-[state=active]:text-[#0D7490] text-muted-foreground font-bold text-xs md:text-sm hover:text-foreground transition-all">
-                  {tab === "summary" ? <><ChartNoAxesCombined className="w-3.5 h-3.5 mr-1.5 hidden md:inline-block" /> Summary</> : tab === "income" ? "Income" : tab === "balance" ? "Balance" : tab === "cashflow" ? "Cash Flow" : tab === "metrics" ? "Ratios" : "Filings"}
+                  {tab === "summary" ? <><ChartNoAxesCombined className="w-3.5 h-3.5 mr-1.5 hidden md:inline-block" /> Summary</> : tab === "income" ? "Income" : tab === "balance" ? "Balance" : tab === "cashflow" ? "Cash Flow" : tab === "metrics" ? "Ratios" : tab === "supply" ? "Supply" : "Filings"}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -830,11 +835,14 @@ export function FinancialsPage() {
                 { label: "Total Assets", key: "totalAssets", kind: "currency", calcGrowth: true },
                 { label: "Current Assets", key: "totalCurrentAssets", kind: "currency" },
                 { label: "Cash & Equivalents", key: "cashAndCashEquivalents", kind: "currency" },
+                { label: "Inventory", key: "inventory", kind: "currency" },
                 { label: "Total Liabilities", key: "totalLiabilities", kind: "currency" },
                 { label: "Current Liabilities", key: "totalCurrentLiabilities", kind: "currency" },
                 { label: "Long-Term Debt", key: "totalDebt", kind: "currency" },
                 { label: "Total Equity", key: "totalEquity", kind: "currency", calcGrowth: true },
                 { label: "Retained Earnings", key: "retainedEarnings", kind: "currency" },
+                { label: "Treasury Stock", key: "treasuryStock", kind: "currency" },
+                { label: "Additional Paid-In Capital", key: "additionalPaidInCapital", kind: "currency" },
               ]}
               data={balHistory} />
           </TabsContent>
@@ -847,6 +855,9 @@ export function FinancialsPage() {
                 { label: "Capital Expenditure", key: "capitalExpenditure", kind: "currency" },
                 { label: "Free Cash Flow", key: "freeCashFlow", kind: "currency", calcGrowth: true },
                 { label: "Dividends Paid", key: "dividendsPaid", kind: "currency" },
+                { label: "Share Buybacks", key: "repurchaseOfCapitalStock", kind: "currency" },
+                { label: "Share Issuance", key: "shareIssued", kind: "currency" },
+                { label: "Stock-Based Comp", key: "stockBasedCompensation", kind: "currency" },
                 { label: "Net Change in Cash", key: "netChangeInCash", kind: "currency" },
               ]}
               data={cfHistory} />
@@ -866,6 +877,234 @@ export function FinancialsPage() {
                 { label: "Net Income / Share", key: "netIncomePerShare", kind: "number" },
               ]}
               data={metHistory} />
+          </TabsContent>
+
+          {/* ═══ SHARE SUPPLY ═══ */}
+          <TabsContent value="supply" className="mt-0 outline-none space-y-5">
+            {(() => {
+              const latestBal = balHistory[0] || null;
+              const latestInc = incHistory[0] || null;
+              const latestCf = cfHistory[0] || null;
+              const latestKm = metHistory[0] || null;
+              const sharesOut = latestKm?.sharesOutstanding || latestInc?.basicAverageShares || 0;
+              const floatShares = latestKm?.floatShares || 0;
+              const shortInterest = latestKm?.sharesShortPriorMonth || 0;
+              const shortRatio = ownership?.shortRatio || 0;
+              const shortFloatPct = floatShares > 0 && shortInterest > 0 ? (shortInterest / floatShares) * 100 : 0;
+              const shortFloatPctKm = sharesOut > 0 && shortInterest > 0 ? (shortInterest / sharesOut) * 100 : 0;
+              const instCount = ownership?.institutionalHolders?.length || 0;
+              const instTotalPct = ownership?.institutionalHolders?.reduce((s, h) => s + (h.pctHeld || 0), 0) || 0;
+              const treasuryStock = latestBal?.treasuryStock || 0;
+              const additionalPaidInCapital = latestBal?.additionalPaidInCapital || 0;
+              const repurchaseSpend = latestCf?.repurchaseOfCapitalStock || 0;
+              const shareIssued = latestCf?.shareIssued || 0;
+              const sbc = latestCf?.stockBasedCompensation || 0;
+              const freeFloatPct = sharesOut > 0 && floatShares > 0 ? (floatShares / sharesOut) * 100 : 0;
+              const buybackYield = sharesOut > 0 && repurchaseSpend > 0 && quote?.price ? (repurchaseSpend / (sharesOut * quote.price)) * 100 : 0;
+              const dilutionFromSbc = sharesOut > 0 && sbc > 0 && quote?.price ? (sbc / (sharesOut * quote.price)) * 100 : 0;
+              const netShareChange = shareIssued - repurchaseSpend;
+
+              return (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+                    <KpiCard label="Shares Outstanding" value={formatCompactNumber(sharesOut)} sub={latestInc?.date ? `FY ${new Date(latestInc.date).getFullYear()}` : ''} icon={<BarChart3 className="w-4 h-4" />} />
+                    <KpiCard label="Float Shares" value={floatShares > 0 ? formatCompactNumber(floatShares) : 'N/A'} sub={freeFloatPct > 0 ? `${freeFloatPct.toFixed(1)}% of total` : ''} icon={<Globe className="w-4 h-4" />} />
+                    <KpiCard label="Short Interest" value={shortInterest > 0 ? formatCompactNumber(shortInterest) : 'N/A'} sub={shortFloatPctKm > 0 ? `${shortFloatPctKm.toFixed(1)}% of float` : ''} icon={<Shield className="w-4 h-4" />} />
+                    <KpiCard label="Institutional" value={ownership?.institutionalHolders?.length ? `${ownership.institutionalHolders.length} holders` : 'N/A'} sub={ownership?.institutionalHolders?.[0]?.name ? `Top: ${ownership.institutionalHolders[0].name}` : ''} icon={<Building2 className="w-4 h-4" />} />
+                    <KpiCard label="Buyback Spend" value={repurchaseSpend > 0 ? formatCurrency(repurchaseSpend, profile?.currency || 'USD') : 'N/A'} sub={buybackYield > 0 ? `Yield: ${formatPercent(buybackYield)}` : ''} icon={<TrendingUp className="w-4 h-4" />} />
+                    <KpiCard label="SBC Expense" value={sbc > 0 ? formatCurrency(sbc, profile?.currency || 'USD') : 'N/A'} sub={dilutionFromSbc > 0 ? `Dilution: ${formatPercent(dilutionFromSbc)}` : ''} icon={<HandCoins className="w-4 h-4" />} />
+                    <KpiCard label="Treasury Stock" value={treasuryStock !== 0 ? formatCurrency(Math.abs(treasuryStock), profile?.currency || 'USD') : 'N/A'} sub={additionalPaidInCapital > 0 ? `APIC: ${formatCompactNumber(additionalPaidInCapital)}` : ''} icon={<Database className="w-4 h-4" />} />
+                  </div>
+
+                  <div className="grid gap-5 lg:grid-cols-2">
+                    <Card className="border-border bg-card p-5 shadow-sm rounded-xl">
+                      <div className="flex items-center gap-2 mb-4">
+                        <BarChart3 className="w-4 h-4 text-[#0D7490]" />
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Share Count History</h3>
+                      </div>
+                      {incHistory.some(i => i.basicAverageShares > 0) || sharesOut > 0 ? (
+                        <ResponsiveContainer width="100%" height={280}>
+                          <BarChart data={incHistory.slice().reverse().map(i => ({
+                            period: i.date ? formatDate(i.date) : '',
+                            shares: ((i.basicAverageShares || 0) || (i.dilutedAverageShares || 0)) / 1_000_000,
+                          }))}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
+                            <XAxis dataKey="period" stroke="#9CA3AF" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                            <YAxis stroke="#9CA3AF" tickFormatter={(v) => `${v}M`} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                            <Tooltip formatter={(v: number) => [`${v.toFixed(1)}M`, 'Shares']} />
+                            <Bar dataKey="shares" fill="#0D7490" radius={[4, 4, 0, 0]} name="Avg Shares Outstanding" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-12">No share count data available</p>
+                      )}
+                    </Card>
+
+                    <Card className="border-border bg-card p-5 shadow-sm rounded-xl">
+                      <div className="flex items-center gap-2 mb-4">
+                        <TrendingUp className="w-4 h-4 text-[#0D7490]" />
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Buyback & Issuance</h3>
+                      </div>
+                      {cfHistory.length > 0 && cfHistory.some(c => (c.repurchaseOfCapitalStock || 0) > 0 || (c.shareIssued || 0) > 0) ? (
+                        <ResponsiveContainer width="100%" height={280}>
+                          <BarChart data={cfHistory.slice().reverse().map(c => ({
+                            period: c.date ? formatDate(c.date) : '',
+                            buyback: (c.repurchaseOfCapitalStock || 0) / 1_000_000_000,
+                            issuance: (c.shareIssued || 0) / 1_000_000_000,
+                          }))}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
+                            <XAxis dataKey="period" stroke="#9CA3AF" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                            <YAxis stroke="#9CA3AF" tickFormatter={(v) => `${v}B`} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                            <Tooltip formatter={(v: number) => [`${v.toFixed(1)}B`, '']} />
+                            <Bar dataKey="buyback" fill="#EF4444" radius={[4, 4, 0, 0]} name="Buybacks" />
+                            <Bar dataKey="issuance" fill="#16A34A" radius={[4, 4, 0, 0]} name="Issuance" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-12">No buyback or issuance data available</p>
+                      )}
+                    </Card>
+                  </div>
+
+                  <Card className="border-border bg-card p-5 shadow-sm rounded-xl">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Database className="w-4 h-4 text-[#0D7490]" />
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Share Structure Details</h3>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {[
+                        ["Shares Outstanding", sharesOut > 0 ? formatCompactNumber(sharesOut) : 'N/A'],
+                        ["Float Shares", floatShares > 0 ? formatCompactNumber(floatShares) : 'N/A'],
+                        ["Free Float %", freeFloatPct > 0 ? formatPercent(freeFloatPct) : 'N/A'],
+                        ["Short Interest", shortInterest > 0 ? formatCompactNumber(shortInterest) : 'N/A'],
+                        ["Short % of Float", shortFloatPct > 0 ? formatPercent(shortFloatPct) : 'N/A'],
+                        ["Days to Cover", shortRatio > 0 ? `${shortRatio.toFixed(1)} days` : 'N/A'],
+                        ["Institutional Holders", instCount > 0 ? `${instCount} holders` : 'N/A'],
+                        ["Institutional %", instTotalPct > 0 ? formatPercent(instTotalPct) : 'N/A'],
+                        ["Treasury Stock", treasuryStock !== 0 ? formatCurrency(Math.abs(treasuryStock), profile?.currency || 'USD') : 'N/A'],
+                        ["Additional Paid-In Capital", additionalPaidInCapital > 0 ? formatCurrency(additionalPaidInCapital, profile?.currency || 'USD') : 'N/A'],
+                        ["Basic Avg Shares", latestInc?.basicAverageShares ? formatCompactNumber(latestInc.basicAverageShares) : 'N/A'],
+                        ["Diluted Avg Shares", latestInc?.dilutedAverageShares ? formatCompactNumber(latestInc.dilutedAverageShares) : 'N/A'],
+                        ["Dilution Ratio", latestInc?.basicAverageShares && latestInc?.dilutedAverageShares && latestInc.basicAverageShares > 0 ? formatRatio(latestInc.dilutedAverageShares / latestInc.basicAverageShares, 3) : 'N/A'],
+                        ["Buyback Spend (Latest)", repurchaseSpend > 0 ? formatCurrency(repurchaseSpend, profile?.currency || 'USD') : 'N/A'],
+                        ["Share Issuance (Latest)", shareIssued > 0 ? formatCurrency(shareIssued, profile?.currency || 'USD') : 'N/A'],
+                        ["Net Share Change", netShareChange !== 0 ? formatCurrency(netShareChange, profile?.currency || 'USD') : 'N/A'],
+                        ["SBC Expense (Latest)", sbc > 0 ? formatCurrency(sbc, profile?.currency || 'USD') : 'N/A'],
+                      ].map(([label, value]) => (
+                        <div key={label} className="bg-muted rounded-xl p-3.5 border border-border">
+                          <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">{label}</p>
+                          <p className="text-sm font-bold text-foreground mt-0.5 truncate">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+
+                  {validationWarnings.length > 0 && (
+                    <Card className="border-border bg-card p-5 shadow-sm rounded-xl">
+                      <div className="flex items-center gap-2 mb-4">
+                        <AlertTriangle className="w-4 h-4 text-amber-500" />
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Data Validation Warnings</h3>
+                      </div>
+                      <div className="space-y-2">
+                        {validationWarnings.map((w, i) => (
+                          <div key={i} className={`flex items-start gap-2 p-2.5 rounded-lg text-xs ${w.severity === 'warning' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-blue-50 text-blue-800 border border-blue-200'}`}>
+                            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                            <span><strong>{w.field}:</strong> {w.message}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  )}
+
+                  {ownership && (ownership.institutionalHolders.length > 0 || ownership.insiderTransactions.length > 0) && (
+                    <div className="grid gap-5 lg:grid-cols-2">
+                      {ownership.institutionalHolders.length > 0 && (
+                        <Card className="border-border bg-card p-5 shadow-sm rounded-xl">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Building2 className="w-4 h-4 text-[#0D7490]" />
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Institutional Ownership</h3>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b border-border">
+                                  <th className="text-left p-2 font-bold text-muted-foreground">Holder</th>
+                                  <th className="text-right p-2 font-bold text-muted-foreground">% Held</th>
+                                  <th className="text-right p-2 font-bold text-muted-foreground">Shares</th>
+                                  <th className="text-right p-2 font-bold text-muted-foreground">Value</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ownership.institutionalHolders.slice(0, 8).map((h, i) => (
+                                  <tr key={i} className="border-b border-border/50 hover:bg-muted/50">
+                                    <td className="p-2 font-medium text-foreground truncate max-w-[180px]">{h.name}</td>
+                                    <td className="p-2 text-right text-foreground">{h.pctHeld > 0 ? formatPercent(h.pctHeld) : 'N/A'}</td>
+                                    <td className="p-2 text-right text-foreground">{h.shares > 0 ? formatCompactNumber(h.shares) : 'N/A'}</td>
+                                    <td className="p-2 text-right text-foreground">{h.value > 0 ? formatCurrency(h.value, profile?.currency || 'USD') : 'N/A'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </Card>
+                      )}
+
+                      {ownership.insiderTransactions.length > 0 && (
+                        <Card className="border-border bg-card p-5 shadow-sm rounded-xl">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Users className="w-4 h-4 text-[#0D7490]" />
+                            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Recent Insider Transactions</h3>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="border-b border-border">
+                                  <th className="text-left p-2 font-bold text-muted-foreground">Insider</th>
+                                  <th className="text-right p-2 font-bold text-muted-foreground">Shares</th>
+                                  <th className="text-right p-2 font-bold text-muted-foreground">Value</th>
+                                  <th className="text-left p-2 font-bold text-muted-foreground">Details</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {ownership.insiderTransactions.slice(0, 10).map((t, i) => (
+                                  <tr key={i} className="border-b border-border/50 hover:bg-muted/50">
+                                    <td className="p-2 font-medium text-foreground truncate max-w-[140px]">{t.name}</td>
+                                    <td className="p-2 text-right text-foreground">{t.shares > 0 ? formatCompactNumber(t.shares) : 'N/A'}</td>
+                                    <td className="p-2 text-right text-foreground">{t.value > 0 ? formatCurrency(t.value, profile?.currency || 'USD') : 'N/A'}</td>
+                                    <td className="p-2 text-left text-muted-foreground truncate max-w-[200px]">{t.text || 'N/A'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </Card>
+                      )}
+                    </div>
+                  )}
+
+                  {quarterlyShareCountHistory.length > 0 && (
+                    <Card className="border-border bg-card p-5 shadow-sm rounded-xl">
+                      <div className="flex items-center gap-2 mb-4">
+                        <BarChart3 className="w-4 h-4 text-[#0D7490]" />
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Quarterly Share Count History (SEC EDGAR)</h3>
+                      </div>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={quarterlyShareCountHistory.slice(0, 16).reverse().map(s => ({
+                          period: s.date ? formatDate(s.date) : s.frame || '',
+                          shares: (s.sharesOutstanding || 0) / 1_000_000,
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
+                          <XAxis dataKey="period" stroke="#9CA3AF" tickLine={false} axisLine={false} tick={{ fontSize: 9 }} />
+                          <YAxis stroke="#9CA3AF" tickFormatter={(v) => `${v}M`} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                          <Tooltip formatter={(v: number) => [`${v.toFixed(1)}M`, 'Shares']} />
+                          <Bar dataKey="shares" fill="#0D7490" radius={[4, 4, 0, 0]} name="Shares Outstanding" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Card>
+                  )}
+                </>
+              );
+            })()}
           </TabsContent>
 
           {/* ═══ SEC FILINGS ═══ */}

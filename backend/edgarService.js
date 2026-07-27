@@ -103,9 +103,14 @@ const US_GAAP_TAGS = {
   stockholdersEquity: ['us-gaap:StockholdersEquity', 'us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'],
   totalEquity: ['us-gaap:Equity', 'us-gaap:EquityAttributableToParent'],
   longTermDebt: ['us-gaap:LongTermDebt', 'us-gaap:LongTermDebtAndCapitalLeaseObligations', 'us-gaap:DebtLongtermAndShorttermCombinedAmount'],
+  treasuryStock: ['us-gaap:TreasuryStockValue', 'us-gaap:TreasuryStock', 'us-gaap:TreasuryStockCommonValue'],
+  additionalPaidInCapital: ['us-gaap:AdditionalPaidInCapitalCommonStock', 'us-gaap:AdditionalPaidInCapital', 'us-gaap:PaidInCapital'],
   operatingCashFlow: ['us-gaap:NetCashProvidedByUsedInOperatingActivities', 'us-gaap:NetCashProvidedByUsedInOperatingActivitiesContinuingOperations'],
   capex: ['us-gaap:PaymentsToAcquireProductiveAssets', 'us-gaap:PaymentsToAcquirePropertyPlantAndEquipment'],
   dividendsPaid: ['us-gaap:DividendsPaid', 'us-gaap:PaymentsOfDividends'],
+  shareRepurchases: ['us-gaap:PaymentsForRepurchaseOfCommonStock', 'us-gaap:RepurchaseOfCommonStock', 'us-gaap:StockRepurchased'],
+  shareIssued: ['us-gaap:IssuanceOfCommonStock', 'us-gaap:ProceedsFromIssuanceOfCommonStock'],
+  netCommonStockIssuance: ['us-gaap:ProceedsFromStockOptionsExercised', 'us-gaap:ProceedsFromIssuanceOfCommonStock'],
   sharesOutstanding: ['us-gaap:EntityCommonStockSharesOutstanding'],
   marketCap: [],  // calculated
 };
@@ -319,6 +324,8 @@ async function getBalanceSheetFromEdgar(symbol, period = 'annual', limit = 4) {
     const equity = getLatestValueByFy(facts, US_GAAP_TAGS.stockholdersEquity, fy) || getLatestValueByFy(facts, US_GAAP_TAGS.totalEquity, fy) || (totalAssets - totalLiabilities);
     const retainedEarnings = getLatestValueByFy(facts, US_GAAP_TAGS.retainedEarnings, fy) || 0;
     const longTermDebt = getLatestValueByFy(facts, US_GAAP_TAGS.longTermDebt, fy) || 0;
+    const treasuryStock = getLatestValueByFy(facts, US_GAAP_TAGS.treasuryStock, fy) || 0;
+    const additionalPaidInCapital = getLatestValueByFy(facts, US_GAAP_TAGS.additionalPaidInCapital, fy) || 0;
 
     statements.push({
       date,
@@ -336,6 +343,8 @@ async function getBalanceSheetFromEdgar(symbol, period = 'annual', limit = 4) {
       totalEquity: equity,
       totalDebt: longTermDebt,
       netDebt: longTermDebt - cash,
+      treasuryStock,
+      additionalPaidInCapital,
     });
   }
 
@@ -364,6 +373,9 @@ async function getCashFlowFromEdgar(symbol, period = 'annual', limit = 4) {
     const netIncome = getLatestValueByFy(facts, US_GAAP_TAGS.netIncome, fy) || 0;
     const capex = getLatestValueByFy(facts, US_GAAP_TAGS.capex, fy) || 0;
     const dividends = getLatestValueByFy(facts, US_GAAP_TAGS.dividendsPaid, fy) || 0;
+    const shareRepurchases = getLatestValueByFy(facts, US_GAAP_TAGS.shareRepurchases, fy) || 0;
+    const shareIssued = getLatestValueByFy(facts, US_GAAP_TAGS.shareIssued, fy) || 0;
+    const netCommonStockIssuance = getLatestValueByFy(facts, US_GAAP_TAGS.netCommonStockIssuance, fy) || 0;
 
     statements.push({
       date,
@@ -379,6 +391,10 @@ async function getCashFlowFromEdgar(symbol, period = 'annual', limit = 4) {
       cashAtEndOfPeriod: 0,
       cashAtBeginningOfPeriod: 0,
       dividendsPaid: Math.abs(dividends) * -1,
+      repurchaseOfCapitalStock: Math.abs(shareRepurchases),
+      shareIssued: shareIssued,
+      netCommonStockIssuance: netCommonStockIssuance,
+      stockBasedCompensation: 0,
     });
   }
 
@@ -525,22 +541,29 @@ async function getKeyMetricsFromEdgar(symbol, period = 'annual', limit = 4) {
     const currentAssets = getLatestValueByFy(facts, US_GAAP_TAGS.currentAssets, fy) || 0;
     const currentLiabilities = getLatestValueByFy(facts, US_GAAP_TAGS.currentLiabilities, fy) || 0;
     const ocf = getLatestValueByFy(facts, US_GAAP_TAGS.operatingCashFlow, fy) || 0;
+    const capex = Math.abs(getLatestValueByFy(facts, US_GAAP_TAGS.capex, fy) || 0);
+    const fcf = ocf - capex;
+    const longTermDebt = getLatestValueByFy(facts, US_GAAP_TAGS.longTermDebt, fy) || 0;
+    const cash = getLatestValueByFy(facts, US_GAAP_TAGS.cash, fy) || 0;
+    const netDebt = Math.max(0, longTermDebt - cash);
     const dividends = Math.abs(getLatestValueByFy(facts, US_GAAP_TAGS.dividendsPaid, fy) || 0);
     const shares = getLatestValueByFy(facts, US_GAAP_TAGS.sharesOutstanding, fy) || 0;
 
     const peRatio = 0;
-    const priceToSales = revenue !== 0 ? 0 : 0;
+    const priceToSales = 0;
     const pbRatio = 0;
     const debtToEquity = equity !== 0 ? (totalLiabilities / equity) : 0;
     const currentRatio = currentLiabilities !== 0 ? (currentAssets / currentLiabilities) : 0;
     const dividendYieldPct = 0;
     const payoutRatio = netIncome !== 0 ? (dividends / netIncome) : 0;
+    const ebitda = getLatestValueByFy(facts, US_GAAP_TAGS.ebitda, fy) || 0;
 
     metrics.push({
       date,
       period,
       marketCap: 0,
       sharesOutstanding: shares,
+      floatShares: 0,
       peRatio,
       priceToSalesRatio: priceToSales,
       pbRatio,
@@ -549,13 +572,13 @@ async function getKeyMetricsFromEdgar(symbol, period = 'annual', limit = 4) {
       dividendYield: dividendYieldPct / 100,
       dividendYieldPercentage: dividendYieldPct,
       payoutRatio,
-      netDebtToEBITDA: 0,
+      netDebtToEBITDA: ebitda > 0 ? netDebt / ebitda : 0,
       earningsYield: 0,
       freeCashFlowYield: 0,
       revenuePerShare: shares > 0 ? revenue / shares : 0,
       netIncomePerShare: shares > 0 ? netIncome / shares : 0,
       operatingCashFlowPerShare: shares > 0 ? ocf / shares : 0,
-      freeCashFlowPerShare: shares > 0 ? (ocf / shares) : 0,
+      freeCashFlowPerShare: shares > 0 ? fcf / shares : 0,
     });
   }
 
@@ -802,6 +825,42 @@ async function getTTMFromEdgar(symbol) {
   };
 }
 
+async function getQuarterlyShareCountHistory(symbol) {
+  const cik = cikLookup(symbol);
+  if (!cik) return null;
+
+  const cacheKey = `edgar_qshares_${symbol}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
+  const data = await fetchCompanyFacts(cik);
+  if (!data) return null;
+
+  const facts = data.facts?.['us-gaap'] || data.facts?.['dei'] || {};
+  const tagKeys = US_GAAP_TAGS.sharesOutstanding;
+  const entries = factLookup(facts, tagKeys[0]) || factLookup(facts, tagKeys[1]) || null;
+  if (!entries) return null;
+
+  const units = entries.units;
+  const shares = units?.shares || units?.['USD/shares'] || null;
+  if (!shares || shares.length === 0) return null;
+
+  const result = shares
+    .filter(e => e.val && e.filed)
+    .sort((a, b) => (b.filed || '').localeCompare(a.filed || ''))
+    .slice(0, 20)
+    .map(e => ({
+      date: e.filed || '',
+      sharesOutstanding: e.val,
+      frame: e.frame || '',
+      fy: e.fy || 0,
+      fp: e.fp || '',
+    }));
+
+  if (result.length === 0) return null;
+  return cacheSet(cacheKey, result);
+}
+
 function clearCache() {
   cache.clear();
 }
@@ -823,5 +882,6 @@ module.exports = {
   getFinancialReportFromEdgar,
   getProviderStatus,
   getTTMFromEdgar,
+  getQuarterlyShareCountHistory,
   clearCache,
 };

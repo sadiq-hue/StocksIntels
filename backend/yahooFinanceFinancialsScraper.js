@@ -164,6 +164,8 @@ function twelveDataToQuoteSummary(tds, symbol) {
       marketCap: tds.marketCap,
       forwardPE: tds.forwardPE,
       sharesOutstanding: tds.sharesOutstanding,
+      floatShares: tds.floatShares || 0,
+      sharesShortPriorMonth: 0,
       enterpriseValue: tds.enterpriseValue,
       bookValue: tds.bookValuePerShare,
     },
@@ -237,10 +239,16 @@ async function fetchAllFundamentals(symbol) {
         longTermDebt: bal.longTermDebt || 0,
         totalDebt: bal.totalDebt || 0,
         cashAndCashEquivalents: bal.cashAndCashEquivalents || bal.cash || 0,
+        treasuryStock: bal.treasuryStock || 0,
+        additionalPaidInCapital: bal.additionalPaidInCapital || 0,
         operatingCashFlow: cf.operatingCashFlow || 0,
         capitalExpenditure: cf.capitalExpenditure || 0,
         freeCashFlow: cf.freeCashFlow || 0,
         cashDividendsPaid: cf.dividendsPaid || 0,
+        repurchaseOfCapitalStock: cf.repurchaseOfCapitalStock || 0,
+        shareIssued: cf.shareIssued || 0,
+        netCommonStockIssuance: cf.netCommonStockIssuance || 0,
+        stockBasedCompensation: cf.stockBasedCompensation || 0,
         marketCap: km.marketCap || 0,
       });
     }
@@ -557,6 +565,8 @@ function formatIncomeItem(item, period) {
     interestExpense: item.interestExpense || 0,
     eps: item.basicEPS || 0,
     epsdiluted: item.dilutedEPS || item.basicEPS || 0,
+    basicAverageShares: item.basicAverageShares || 0,
+    dilutedAverageShares: item.dilutedAverageShares || item.basicAverageShares || 0,
   };
 }
 
@@ -589,6 +599,8 @@ function formatBalanceSheet(item, period) {
   const cash = item.cashAndCashEquivalents || item.cashCashEquivalentsAndShortTermInvestments || 0;
   const inventory = item.inventory || 0;
   const retainedEarnings = item.retainedEarnings || 0;
+  const treasuryStock = item.treasuryStock || item.treasuryShares || 0;
+  const additionalPaidInCapital = item.additionalPaidInCapital || item.otherPaidInCapital || 0;
 
   return {
     date: getDateStr(item.date),
@@ -606,6 +618,8 @@ function formatBalanceSheet(item, period) {
     totalEquity: equity,
     totalDebt: longTermDebt,
     netDebt: longTermDebt - cash,
+    treasuryStock,
+    additionalPaidInCapital,
   };
 }
 
@@ -684,6 +698,10 @@ function formatCashFlow(item, period) {
     cashAtEndOfPeriod: item.endCashPosition || 0,
     cashAtBeginningOfPeriod: item.beginningCashPosition || 0,
     dividendsPaid: Math.abs(dividendsPaid) * -1,
+    repurchaseOfCapitalStock: Math.abs(item.repurchaseOfCapitalStock || 0),
+    shareIssued: item.shareIssued || 0,
+    netCommonStockIssuance: item.netCommonStockIssuance || 0,
+    stockBasedCompensation: item.stockBasedCompensation || 0,
   };
 }
 
@@ -704,6 +722,9 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
   let currentMarketCap = fd.marketCap || dk.marketCap || 0;
   let forwardPE = fd.forwardPE || dk.forwardPE || 0;
   let trailingPE = fd.trailingPE || dk.trailingPE || 0;
+  const floatShares = dk.floatShares || 0;
+  const sharesOutstanding = dk.sharesOutstanding || 0;
+  const sharesShortPriorMonth = dk.sharesShortPriorMonth || 0;
 
   // Fallback: scan fundamentals data for marketCap/price fields
   if (!currentMarketCap && allData) {
@@ -731,7 +752,10 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
     const equity = balItem.totalEquity || 0;
     const currentAssets = balItem.totalCurrentAssets || 0;
     const currentLiabilities = balItem.totalCurrentLiabilities || 0;
-    const ocf = incItem.ebitda || 0;
+    const longTermDebt = balItem.longTermDebt || balItem.totalDebt || 0;
+    const cash = balItem.cashAndCashEquivalents || 0;
+    const netDebt = Math.max(0, longTermDebt - cash);
+    const ocf = cfItem.operatingCashFlow || incItem.ebitda || 0;
     const eps = incItem.eps || 0;
     const freeCashFlow = cfItem.freeCashFlow || 0;
 
@@ -754,17 +778,84 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
       dividendYield: divYieldDecimal,
       dividendYieldPercentage: divYieldPct,
       payoutRatio: fd.payoutRatio || 0,
-      netDebtToEBITDA: ocf > 0 ? totalLiabilities / ocf : 0,
+      netDebtToEBITDA: ocf > 0 ? netDebt / ocf : 0,
       earningsYield: (netIncome > 0 && cap > 0) ? netIncome / cap : 0,
       freeCashFlowYield: cap > 0 ? freeCashFlow / cap : 0,
       revenuePerShare: eps > 0 && netIncome > 0 ? revenue / (netIncome / eps) : 0,
       netIncomePerShare: eps || 0,
-      operatingCashFlowPerShare: 0,
-      freeCashFlowPerShare: 0,
+      operatingCashFlowPerShare: isCurrent && ocf > 0 && sharesOutstanding > 0 ? ocf / sharesOutstanding : 0,
+      freeCashFlowPerShare: isCurrent && freeCashFlow > 0 && sharesOutstanding > 0 ? freeCashFlow / sharesOutstanding : 0,
+      sharesOutstanding: isCurrent ? sharesOutstanding : 0,
+      floatShares: isCurrent ? floatShares : 0,
+      sharesShortPriorMonth: isCurrent ? sharesShortPriorMonth : 0,
     });
   }
 
   return metricsArray;
+}
+
+async function getOwnershipData(symbol) {
+  const cacheKey = `yh_ownership_v2_${symbol}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
+  try {
+    // Bypass fetchQuoteSummary (Twelve Data doesn't have institutional/insider data)
+    let qs = null;
+    try {
+      const yf = await createYf();
+      const raw = await yf.quoteSummary(symbol.replace(/\./g, '-'), {
+        modules: ['institutionOwnership', 'insiderTransactions', 'defaultKeyStatistics'],
+      });
+      qs = raw ? flattenYahooObject(raw) : null;
+    } catch {}
+    if (!qs) {
+      try {
+        qs = await yahooService.fetchQuoteSummary(symbol, ['institutionOwnership', 'insiderTransactions', 'defaultKeyStatistics']);
+      } catch {}
+    }
+    if (!qs) return null;
+
+    const instRaw = qs.institutionOwnership?.institutionOwnership || [];
+    const insidersRaw = qs.insiderTransactions?.insiderTransactions || [];
+    const dk = qs.defaultKeyStatistics || {};
+
+    const institutionalHolders = instRaw.slice(0, 10).map(h => ({
+      name: h.organization || '',
+      pctHeld: h.pctHeld?.raw ?? h.pctHeld ?? 0,
+      shares: h.position?.raw ?? h.position ?? 0,
+      value: h.value?.raw ?? h.value ?? 0,
+      dateReported: h.reportDate || '',
+    }));
+
+    const insiderTransactions = insidersRaw.slice(0, 15).map(t => ({
+      name: t.insiderName || '',
+      shares: t.shares ?? 0,
+      value: t.value ?? 0,
+      text: t.text || '',
+      startDate: t.startDatetOfInterval || t.startDate || '',
+    }));
+
+    const shortInterest = dk.sharesShortPriorMonth || 0;
+    const shortRatio = dk.shortRatio || 0;
+    const floatShares = dk.floatShares || 0;
+    const yahooSharesOutstanding = dk.sharesOutstanding || 0;
+    const shortFloatPct = shortInterest && floatShares
+      ? (shortInterest / floatShares) * 100 : 0;
+
+    const result = {
+      institutionalHolders,
+      insiderTransactions,
+      shortInterest,
+      shortRatio,
+      shortFloatPct,
+      floatShares,
+      yahooSharesOutstanding,
+    };
+    return cacheSet(cacheKey, result);
+  } catch {
+    return null;
+  }
 }
 
 async function getDividendHistory(symbol, limit = 8) {
@@ -866,6 +957,7 @@ module.exports = {
   getKeyMetrics,
   getDividendHistory,
   getFinancialReport,
+  getOwnershipData,
   fetchPriceViaProxy,
   fetchPreMarketBatch,
   fetchQuoteSummary,

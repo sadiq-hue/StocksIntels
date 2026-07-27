@@ -87,6 +87,8 @@ export interface IncomeStatement {
   interestExpense: number;
   eps: number;
   epsdiluted: number;
+  basicAverageShares: number;
+  dilutedAverageShares: number;
 }
 
 export interface BalanceSheet {
@@ -105,6 +107,8 @@ export interface BalanceSheet {
   totalEquity: number;
   totalDebt: number;
   netDebt: number;
+  treasuryStock: number;
+  additionalPaidInCapital: number;
 }
 
 export interface CashFlowStatement {
@@ -121,6 +125,10 @@ export interface CashFlowStatement {
   cashAtEndOfPeriod: number;
   cashAtBeginningOfPeriod: number;
   dividendsPaid: number;
+  repurchaseOfCapitalStock: number;
+  shareIssued: number;
+  netCommonStockIssuance: number;
+  stockBasedCompensation: number;
 }
 
 export interface KeyMetric {
@@ -142,6 +150,49 @@ export interface KeyMetric {
   netIncomePerShare: number;
   operatingCashFlowPerShare: number;
   freeCashFlowPerShare: number;
+  sharesOutstanding: number;
+  floatShares: number;
+  sharesShortPriorMonth: number;
+}
+
+export interface InstitutionalHolder {
+  name: string;
+  pctHeld: number;
+  shares: number;
+  value: number;
+  dateReported: string;
+}
+
+export interface InsiderTransaction {
+  name: string;
+  shares: number;
+  value: number;
+  text: string;
+  startDate: string;
+}
+
+export interface OwnershipData {
+  institutionalHolders: InstitutionalHolder[];
+  insiderTransactions: InsiderTransaction[];
+  shortInterest: number;
+  shortRatio: number;
+  shortFloatPct: number;
+  floatShares: number;
+  yahooSharesOutstanding: number;
+}
+
+export interface ValidationWarning {
+  field: string;
+  message: string;
+  severity: 'info' | 'warning' | 'error';
+}
+
+export interface ShareCountEntry {
+  date: string;
+  sharesOutstanding: number;
+  frame: string;
+  fy: number;
+  fp: string;
 }
 
 export interface DividendEvent {
@@ -172,6 +223,9 @@ export interface FinancialReport {
     keyMetricsHistory: KeyMetric[];
     dividendHistory: DividendEvent[];
     filings?: EdgarFiling[];
+    ownership?: OwnershipData | null;
+    quarterlyShareCountHistory?: ShareCountEntry[];
+    validationWarnings?: ValidationWarning[];
   };
   error?: string;
 }

@@ -556,6 +556,31 @@ function computeMarketCap(price, netIncome, eps, sharesOutstanding) {
   return 0;
 }
 
+function enrichReportData(result, ownership, quarterlyShares, validationWarnings) {
+  if (!result?.success || !result?.data) return result;
+  const data = { ...result.data };
+  data.ownership = ownership || null;
+  data.quarterlyShareCountHistory = quarterlyShares || [];
+  data.validationWarnings = validationWarnings || [];
+  // Propagate Yahoo-sourced supply data into keyMetrics (Twelve Data doesn't have
+  // sharesShortPriorMonth, floatShares, or reliable sharesOutstanding).
+  if (data.keyMetrics && ownership) {
+    const patch = {};
+    if (ownership.shortInterest > 0) patch.sharesShortPriorMonth = ownership.shortInterest;
+    if (ownership.floatShares > 0) patch.floatShares = ownership.floatShares;
+    if (ownership.yahooSharesOutstanding > 0) patch.sharesOutstanding = ownership.yahooSharesOutstanding;
+    if (Object.keys(patch).length > 0) {
+      data.keyMetrics = { ...data.keyMetrics, ...patch };
+      if (data.keyMetricsHistory?.length > 0) {
+        data.keyMetricsHistory = data.keyMetricsHistory.map((km, i) =>
+          i === 0 ? { ...km, ...patch } : km
+        );
+      }
+    }
+  }
+  return { ...result, data };
+}
+
 async function buildLocalNseReport(symbol) {
   let ticker = symbol;
   if (ticker.startsWith('NSE:')) ticker = ticker.slice(4);
@@ -851,7 +876,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
         } : null;
         const ttmIncHist = ttmIncome ? [ttmIncome, ...incHist.slice(1)] : incHist;
 
-          return {
+        const yahooResult = {
           ...yahooReport,
           symbol,
           source: 'yahoo-finance',
@@ -875,6 +900,14 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
               : [],
           }
         };
+
+        const [ownership, quarterlyShares] = await Promise.allSettled([
+          getOwnershipData(symbol),
+          getQuarterlyShareCountHistory(symbol),
+        ]);
+        const ownershipVal = ownership.status === 'fulfilled' ? ownership.value : null;
+        const quarterlyVal = quarterlyShares.status === 'fulfilled' ? quarterlyShares.value : null;
+        return enrichReportData(yahooResult, ownershipVal, quarterlyVal, validateFinancialData(yahooResult));
       }
       // Alpha Vantage fallback when Yahoo Finance has no data (1 quick OVERVIEW call)
       console.log(`[FinancialReports] Yahoo Finance empty for ${symbol}; trying Alpha Vantage fallback`);
@@ -964,19 +997,33 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
             }).catch(() => {});
         }
 
-        return result;
+        const [avOwnership, avQshares] = await Promise.allSettled([
+          getOwnershipData(symbol),
+          getQuarterlyShareCountHistory(symbol),
+        ]);
+        return enrichReportData(result, avOwnership.status === 'fulfilled' ? avOwnership.value : null, avQshares.status === 'fulfilled' ? avQshares.value : null, validateFinancialData(result));
       }
       // Fallback to SEC EDGAR for US stocks when Yahoo / AlphaVantage has no data
       if (isUs) {
         console.log(`[FinancialReports] Yahoo/AlphaVantage empty for ${symbol}; trying SEC EDGAR fallback`);
-        return buildEdgarReport(symbol, period, limit, availableProviders);
+        const edgarResult = await buildEdgarReport(symbol, period, limit, availableProviders);
+        const [edOwnership, edQshares] = await Promise.allSettled([
+          getOwnershipData(symbol),
+          getQuarterlyShareCountHistory(symbol),
+        ]);
+        return enrichReportData(edgarResult, edOwnership.status === 'fulfilled' ? edOwnership.value : null, edQshares.status === 'fulfilled' ? edQshares.value : null, validateFinancialData(edgarResult));
       }
       return { success: false, symbol, source: 'yahoo-finance', error: `No data for ${symbol} from Yahoo, Alpha Vantage, or EDGAR` };
     }
 
     // SEC EDGAR — US stocks only
     if (activeProvider === 'sec-edgar' && isUs) {
-      return buildEdgarReport(symbol, period, limit, availableProviders);
+      const edgarResult = await buildEdgarReport(symbol, period, limit, availableProviders);
+      const [edOwnership2, edQshares2] = await Promise.allSettled([
+        getOwnershipData(symbol),
+        getQuarterlyShareCountHistory(symbol),
+      ]);
+      return enrichReportData(edgarResult, edOwnership2.status === 'fulfilled' ? edOwnership2.value : null, edQshares2.status === 'fulfilled' ? edQshares2.value : null, validateFinancialData(edgarResult));
     }
 
     return { success: false, symbol, error: `No provider available for ${symbol}` };
@@ -989,6 +1036,68 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
       lastUpdated: new Date().toISOString()
     };
   }
+}
+
+function validateFinancialData(report) {
+  if (!report?.success || !report?.data) return [];
+
+  const warnings = [];
+  const km = report.data.keyMetrics;
+  const inc = report.data.incomeStatement;
+  const bal = report.data.balanceSheet;
+  const cf = report.data.cashFlowStatement;
+
+  if (km) {
+    if (km.sharesOutstanding > 0 && km.floatShares > 0 && km.floatShares > km.sharesOutstanding) {
+      warnings.push({ field: 'floatShares', message: 'Float shares exceed shares outstanding', severity: 'warning' });
+    }
+    if (km.sharesShortPriorMonth > 0 && km.sharesOutstanding > 0 && km.sharesShortPriorMonth > km.sharesOutstanding * 0.5) {
+      warnings.push({ field: 'shortInterest', message: 'Short interest exceeds 50% of shares outstanding — data may be stale or incorrect', severity: 'warning' });
+    }
+    if (km.peRatio < 0 && km.earningsYield > 0) {
+      warnings.push({ field: 'peRatio', message: 'Negative P/E ratio — company may be unprofitable', severity: 'info' });
+    }
+    if (km.marketCap > 0 && km.marketCap < 1e8) {
+      warnings.push({ field: 'marketCap', message: 'Micro-cap stock — financial data may be less reliable', severity: 'info' });
+    }
+  }
+
+  if (inc) {
+    if (inc.revenue > 0 && inc.netIncome < 0 && Math.abs(inc.netIncome) > inc.revenue) {
+      warnings.push({ field: 'netIncome', message: 'Net loss exceeds revenue — unusual loss magnitude', severity: 'warning' });
+    }
+    if (inc.revenue > 0 && inc.grossProfit < 0) {
+      warnings.push({ field: 'grossProfit', message: 'Negative gross profit — may indicate data error', severity: 'warning' });
+    }
+  }
+
+  if (bal) {
+    if (bal.totalAssets > 0 && bal.totalLiabilities > bal.totalAssets) {
+      warnings.push({ field: 'balanceSheet', message: 'Total liabilities exceed total assets — potential solvency concern', severity: 'warning' });
+    }
+  }
+
+  if (cf) {
+    if (cf.operatingCashFlow < 0 && inc && inc.netIncome > 0) {
+      warnings.push({ field: 'cashFlow', message: 'Positive net income but negative operating cash flow', severity: 'info' });
+    }
+  }
+
+  return warnings;
+}
+
+async function getOwnershipData(symbol) {
+  if (symbol.startsWith('NSE:')) return null;
+  try {
+    return await yahooFinanceScraper.getOwnershipData(symbol);
+  } catch { return null; }
+}
+
+async function getQuarterlyShareCountHistory(symbol) {
+  if (symbol.startsWith('NSE:')) return null;
+  try {
+    return await edgarService.getQuarterlyShareCountHistory(symbol);
+  } catch { return null; }
 }
 
 function clearCache() {
@@ -1009,6 +1118,9 @@ module.exports = {
   getKeyMetrics,
   getDividendHistory,
   getFinancialReport,
+  getOwnershipData,
+  getQuarterlyShareCountHistory,
+  validateFinancialData,
   yahooFinanceScraper,
   ensureTTMValues,
   clearCache,

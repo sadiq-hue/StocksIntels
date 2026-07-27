@@ -169,6 +169,8 @@ function normalizeIncomeItem(r) {
     interestExpense: toNum(r.interestExpense),
     eps: toNum(r.eps) || undefined,
     epsdiluted: toNum(r.epsdiluted) || undefined,
+    basicAverageShares: 0,
+    dilutedAverageShares: 0,
     currency: r.reportedCurrency || 'USD',
   };
 }
@@ -215,6 +217,8 @@ function normalizeBalanceItem(r) {
     netDebt: (toNum(r.longTermDebt) > 0 || toNum(r.shortTermDebt) > 0)
       ? (toNum(r.longTermDebt) + toNum(r.shortTermDebt) - toNum(r.cashAndCashEquivalentsAtCarryingValue) || 0)
       : undefined,
+    treasuryStock: 0,
+    additionalPaidInCapital: 0,
     shortTermDebt: toNum(r.shortTermDebt) || undefined,
     longTermDebt: toNum(r.longTermDebt) || undefined,
     currentRatio: toNum(r.totalCurrentLiabilities) > 0
@@ -261,6 +265,10 @@ function normalizeCashFlowItem(r) {
     netChangeInCash: toNum(r.changeInCashAndCashEquivalents) || undefined,
     cashFromFinancing: toNum(r.cashflowFromFinancing) || undefined,
     cashFromInvesting: toNum(r.cashflowFromInvestment) || undefined,
+    repurchaseOfCapitalStock: toNum(r.commonStockRepurchased) || toNum(r.repurchaseOfCapitalStock) || 0,
+    shareIssued: toNum(r.commonStockIssued) || toNum(r.shareIssued) || 0,
+    netCommonStockIssuance: 0,
+    stockBasedCompensation: toNum(r.stockBasedCompensation) || 0,
     currency: r.reportedCurrency || 'USD',
   };
 }
