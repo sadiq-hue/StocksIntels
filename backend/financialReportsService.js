@@ -562,22 +562,34 @@ function enrichReportData(result, ownership, quarterlyShares, validationWarnings
   data.ownership = ownership || null;
   data.quarterlyShareCountHistory = quarterlyShares || [];
   data.validationWarnings = validationWarnings || [];
-  // Propagate Yahoo-sourced supply data into keyMetrics (Twelve Data doesn't have
-  // sharesShortPriorMonth, floatShares, or reliable sharesOutstanding).
-  if (data.keyMetrics && ownership) {
-    const patch = {};
+
+  // Build patch from ownership — always apply regardless of keyMetrics state
+  const patch = {};
+  if (ownership) {
     if (ownership.shortInterest > 0) patch.sharesShortPriorMonth = ownership.shortInterest;
     if (ownership.floatShares > 0) patch.floatShares = ownership.floatShares;
     if (ownership.yahooSharesOutstanding > 0) patch.sharesOutstanding = ownership.yahooSharesOutstanding;
-    if (Object.keys(patch).length > 0) {
+  }
+
+  if (Object.keys(patch).length > 0) {
+    console.log(`[Enrich] ${result.symbol}: patching keyMetrics with short=${patch.sharesShortPriorMonth || 0}, float=${patch.floatShares || 0}, sharesOut=${patch.sharesOutstanding || 0}`);
+    // Patch existing keyMetrics or create a minimal one so the Supply tab has data
+    if (data.keyMetrics) {
       data.keyMetrics = { ...data.keyMetrics, ...patch };
-      if (data.keyMetricsHistory?.length > 0) {
-        data.keyMetricsHistory = data.keyMetricsHistory.map((km, i) =>
-          i === 0 ? { ...km, ...patch } : km
-        );
-      }
+    } else if (data.keyMetricsHistory?.length > 0) {
+      data.keyMetrics = { ...data.keyMetricsHistory[0], ...patch };
+    } else {
+      data.keyMetrics = { ...patch };
+    }
+    if (data.keyMetricsHistory?.length > 0) {
+      data.keyMetricsHistory = data.keyMetricsHistory.map((km, i) =>
+        i === 0 ? { ...km, ...patch } : km
+      );
+    } else {
+      data.keyMetricsHistory = [{ ...patch }];
     }
   }
+
   return { ...result, data };
 }
 

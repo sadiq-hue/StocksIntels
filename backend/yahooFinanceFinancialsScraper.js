@@ -181,7 +181,7 @@ function twelveDataToQuoteSummary(tds, symbol) {
 // Get fundamentals data from SEC EDGAR (income, balance, cash flow history)
 const inflightFundamentals = new Map();
 async function fetchAllFundamentals(symbol) {
-  const cacheKey = `yh_fundamentals_v3_${symbol}`;
+  const cacheKey = `yh_fundamentals_v4_${symbol}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
 
@@ -266,6 +266,8 @@ async function fetchAllFundamentalsInternal(symbol) {
       });
     }
     if (items.length > 0) {
+      const sample = items[0] || {};
+      console.log(`[Fundamentals] ${symbol}: EDGAR items=${items.length}, ocf=${sample.operatingCashFlow || 0}, buyback=${sample.repurchaseOfCapitalStock || 0}, sbc=${sample.stockBasedCompensation || 0}, treasury=${sample.treasuryStock || 0}, apic=${sample.additionalPaidInCapital || 0}`);
       // Supplement EDGAR data with Yahoo balance-sheet fields when EDGAR has zeros
       const needsSupplement = items.some(it => !it.treasuryStock);
       if (needsSupplement) {
@@ -290,7 +292,8 @@ async function fetchAllFundamentalsInternal(symbol) {
       }
       return cacheSet(cacheKey, items);
     }
-  } catch {}
+    console.log(`[Fundamentals] ${symbol}: EDGAR returned 0 items, falling through to Yahoo`);
+  } catch (err) { console.warn(`[Fundamentals] ${symbol}: EDGAR error: ${err.message}`); }
 
   // 2) yahoo-finance2 fundamentalsTimeSeries (works for non-US stocks like GRAB, NIO, etc.)
   try {
@@ -919,6 +922,7 @@ async function getOwnershipData(symbol) {
     const shortRatio = typeof dk.shortRatio === 'number' ? dk.shortRatio : 0;
     const floatShares = typeof dk.floatShares === 'number' ? dk.floatShares : 0;
     const yahooSharesOutstanding = typeof dk.sharesOutstanding === 'number' ? dk.sharesOutstanding : 0;
+    console.log(`[Ownership] ${symbol} dk keys: ${Object.keys(dk).join(', ')} | shortInterest=${shortInterest} (sSPM_type=${typeof dk.sharesShortPriorMonth}, sS_type=${typeof dk.sharesShort}), float=${floatShares}, shortRatio=${shortRatio}`);
     const shortFloatPct = shortInterest && floatShares
       ? (shortInterest / floatShares) * 100 : 0;
 

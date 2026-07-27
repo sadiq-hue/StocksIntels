@@ -887,8 +887,8 @@ export function FinancialsPage() {
               const latestCf = cfHistory[0] || null;
               const latestKm = metHistory[0] || null;
               const sharesOut = latestKm?.sharesOutstanding || latestInc?.basicAverageShares || 0;
-              const floatShares = latestKm?.floatShares || 0;
-              const shortInterest = latestKm?.sharesShortPriorMonth || 0;
+              const floatShares = latestKm?.floatShares || ownership?.floatShares || 0;
+              const shortInterest = latestKm?.sharesShortPriorMonth || ownership?.shortInterest || 0;
               const shortRatio = ownership?.shortRatio || 0;
               const shortFloatPct = floatShares > 0 && shortInterest > 0 ? (shortInterest / floatShares) * 100 : 0;
               const shortFloatPctKm = sharesOut > 0 && shortInterest > 0 ? (shortInterest / sharesOut) * 100 : 0;
