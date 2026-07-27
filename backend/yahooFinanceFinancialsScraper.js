@@ -824,20 +824,31 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
 }
 
 async function getOwnershipData(symbol) {
-  const cacheKey = `yh_ownership_v2_${symbol}`;
+  const cacheKey = `yh_ownership_v3_${symbol}`;
   const cached = cacheGet(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    console.log(`[Ownership] Cache hit for ${symbol}: inst=${cached.institutionalHolders?.length || 0}, insiders=${cached.insiderTransactions?.length || 0}, short=${cached.shortInterest || 0}`);
+    return cached;
+  }
 
   try {
     // Bypass fetchQuoteSummary (Twelve Data doesn't have institutional/insider data)
     let qs = null;
     for (let attempt = 0; attempt < 2 && !qs; attempt++) {
       try {
+        console.log(`[Ownership] Attempt ${attempt + 1}/2 calling yahoo-finance2 for ${symbol}...`);
         const yf = await createYf();
         const raw = await yf.quoteSummary(symbol.replace(/\./g, '-'), {
           modules: ['institutionOwnership', 'insiderTransactions', 'defaultKeyStatistics'],
         });
         qs = raw ? flattenYahooObject(raw) : null;
+        if (qs) {
+          const instCount = qs.institutionOwnership?.institutionOwnership?.length || 0;
+          const dkKeys = Object.keys(qs.defaultKeyStatistics || {});
+          console.log(`[Ownership] ${symbol} yahoo-finance2 success: inst=${instCount}, dk_keys=${dkKeys.length}`);
+        } else {
+          console.warn(`[Ownership] ${symbol} yahoo-finance2 returned null/empty`);
+        }
       } catch (err) {
         console.warn(`[Ownership] Attempt ${attempt + 1}/2 for ${symbol}: ${err.message || err.code}`);
         if (!qs && attempt < 1) await new Promise(r => setTimeout(r, 1500));
@@ -845,10 +856,14 @@ async function getOwnershipData(symbol) {
     }
     if (!qs) {
       try {
+        console.log(`[Ownership] Trying yahooService fallback for ${symbol}...`);
         qs = await yahooService.fetchQuoteSummary(symbol, ['institutionOwnership', 'insiderTransactions', 'defaultKeyStatistics']);
-      } catch {}
+        if (!qs) console.warn(`[Ownership] yahooService fallback returned null for ${symbol}`);
+      } catch (err) {
+        console.warn(`[Ownership] yahooService fallback error for ${symbol}: ${err.message || err.code}`);
+      }
     }
-    if (!qs) { console.warn(`[Ownership] No data for ${symbol}`); return null; }
+    if (!qs) { console.warn(`[Ownership] No data available for ${symbol} from any source`); return null; }
 
     const instRaw = qs.institutionOwnership?.institutionOwnership || [];
     const insidersRaw = qs.insiderTransactions?.insiderTransactions || [];
@@ -886,6 +901,7 @@ async function getOwnershipData(symbol) {
       floatShares,
       yahooSharesOutstanding,
     };
+    console.log(`[Ownership] ${symbol}: inst=${institutionalHolders.length}, insiders=${insiderTransactions.length}, short=${shortInterest}, float=${floatShares}`);
     return cacheSet(cacheKey, result);
   } catch {
     return null;
