@@ -197,6 +197,7 @@ async function fetchAllFundamentals(symbol) {
 }
 
 async function fetchAllFundamentalsInternal(symbol) {
+  const cacheKey = `yh_fundamentals_v4_${symbol}`;
 
   // 1) SEC EDGAR (authoritative for US-domiciled stocks)
   try {
