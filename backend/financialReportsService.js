@@ -633,6 +633,12 @@ async function buildLocalNseReport(symbol) {
     const parsed = latest.parsed || null;
     const periodDate = latest.periodDate || now;
 
+    // When latest period is non-annual, prefer annual data for summary KPI cards
+    const latestPeriodType = (latest.periodType || '').toLowerCase();
+    const summaryParsed = (latestPeriodType && latestPeriodType !== 'annual')
+      ? (validParsed.find(v => (v.periodType || '').toLowerCase() === 'annual')?.parsed || parsed)
+      : parsed;
+
     // Supplementary: stock_fundamentals (may have different schema on Railway; errors are non-fatal)
     let fundamentals = null;
     try {
@@ -653,7 +659,7 @@ async function buildLocalNseReport(symbol) {
     if (!fundamentals && !parsed) return null;
 
     // Build history arrays from all uploaded periods
-    function buildIncItem(p, d, pt) { return p ? { date: d, periodType: pt, revenue: p.total_revenue, netIncome: p.net_income, netIncomeRatio: p.net_income > 0 && p.total_revenue > 0 ? p.net_income / p.total_revenue : 0, grossProfit: p.total_revenue != null && p.cost_of_revenue != null ? p.total_revenue - p.cost_of_revenue : null, ebitda: null, eps: p.eps, costOfRevenue: p.cost_of_revenue, operatingExpenses: null, operatingIncome: p.operating_income } : null; }
+    function buildIncItem(p, d, pt) { return p ? { date: d, periodType: pt, revenue: p.revenue || p.total_revenue, netIncome: p.net_income, netIncomeRatio: p.net_income > 0 && p.total_revenue > 0 ? p.net_income / p.total_revenue : 0, grossProfit: p.total_revenue != null && p.cost_of_revenue != null ? p.total_revenue - p.cost_of_revenue : null, ebitda: null, eps: p.eps, costOfRevenue: p.cost_of_revenue, operatingExpenses: null, operatingIncome: p.operating_income } : null; }
     function buildBalItem(p, d, pt) { return p ? { date: d, periodType: pt, totalAssets: p.total_assets, totalLiabilities: p.total_liabilities, totalEquity: p.shareholders_equity, cashAndCashEquivalents: p.cash_and_equivalents, longTermDebt: null, totalDebt: p.total_debt, totalCurrentAssets: p.current_assets, totalCurrentLiabilities: p.current_liabilities, totalStockholdersEquity: p.shareholders_equity, retainedEarnings: p.retained_earnings } : null; }
     function buildCfItem(p, d, pt) { return p?.cash_from_operations != null ? { date: d, periodType: pt, operatingCashFlow: p.cash_from_operations, freeCashFlow: null, capitalExpenditure: null, dividendsPaid: null, netChangeInCash: null } : null; }
 
@@ -662,8 +668,12 @@ async function buildLocalNseReport(symbol) {
     const cfHistory = validParsed.map(v => buildCfItem(v.parsed, v.periodDate, v.periodType)).filter(Boolean);
 
     // Latest single items for backward compatibility (KPI cards, summary)
-    const incItem = incHistory[0] || null;
-    const balItem = balHistory[0] || null;
+    // When latest period is non-annual (e.g. half_year, quarterly), use the latest
+    // annual period for summary KPI so interim 6-month data isn't shown as "Trailing 12M".
+    const latestIncType = (validParsed[0]?.periodType || '').toLowerCase();
+    const isLatestAnnual = latestIncType === 'annual' || latestIncType === '';
+    const incItem = isLatestAnnual ? (incHistory[0] || null) : (incHistory.find(h => (h.periodType || '').toLowerCase() === 'annual') || incHistory[0] || null);
+    const balItem = isLatestAnnual ? (balHistory[0] || null) : (balHistory.find(h => (h.periodType || '').toLowerCase() === 'annual') || balHistory[0] || null);
     const cfItem = cfHistory[0] || null;
 
     const f = fundamentals ? { market_cap: toNum(fundamentals.market_cap), pe_ratio: toNum(fundamentals.pe_ratio), pb_ratio: toNum(fundamentals.pb_ratio), dividend_yield: toNum(fundamentals.dividend_yield), roe: toNum(fundamentals.roe), revenue_growth: toNum(fundamentals.revenue_growth), eps_growth: toNum(fundamentals.eps_growth) } : null;
@@ -701,12 +711,12 @@ async function buildLocalNseReport(symbol) {
       quote.changesPercentage = pc > 0 ? ((price - pc) / pc) * 100 : 0;
       quote.changePercent = quote.changesPercentage;
     }
-    const totalDebt = parsed?.total_debt || 0;
-    const equity = parsed?.shareholders_equity || 0;
-    const curAssets = parsed?.current_assets || 0;
-    const curLiabs = parsed?.current_liabilities || 0;
+    const totalDebt = summaryParsed?.total_debt || 0;
+    const equity = summaryParsed?.shareholders_equity || 0;
+    const curAssets = summaryParsed?.current_assets || 0;
+    const curLiabs = summaryParsed?.current_liabilities || 0;
 
-    const bvps = parsed?.book_value_per_share || (equity > 0 && sharesOut > 0 ? equity / sharesOut : 0);
+    const bvps = summaryParsed?.book_value_per_share || (equity > 0 && sharesOut > 0 ? equity / sharesOut : 0);
 
     function buildKmItem(p, d, pt) {
       if (!p) return null;
@@ -750,7 +760,7 @@ async function buildLocalNseReport(symbol) {
           dayLow: 0, dayHigh: 0, yearLow: 0, yearHigh: 0, avgVolume: 0, open: 0,
           volume: 0, previousClose: 0, sharesOutstanding: 0,
           eps: 0, pe: 0, lastUpdated: now }), marketCap: mc,
-          sharesOutstanding: sharesOut, eps: parsed?.eps || 0, pe: peRatio },
+          sharesOutstanding: sharesOut, eps: summaryParsed?.eps || 0, pe: peRatio },
         incomeStatement: incItem, incomeStatementHistory: incHistory,
         balanceSheet: balItem, balanceSheetHistory: balHistory,
         cashFlowStatement: cfItem, cashFlowStatementHistory: cfHistory,
