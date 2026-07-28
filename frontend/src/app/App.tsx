@@ -1,40 +1,43 @@
+import React, { Suspense } from "react";
 import { createBrowserRouter, RouterProvider, Link, Navigate, Outlet } from "react-router";
-import { MainLayout } from "./layouts/MainLayout";
-import { LandingPage } from "./pages/LandingPage";
-import { LoginPage } from "./pages/LoginPage";
 import { useAuth, getTrialInfo } from "./auth/AuthContext";
-import { DashboardPage } from "./pages/DashboardPage";
-import MarketPage from "./pages/MarketPage";
-import { WatchlistPage } from "./pages/WatchlistPage";
-import { SignalsPage } from "./pages/SignalsPage";
-import { AIInsightsPage } from "./pages/AIInsightsPage";
-import { PeoplePage } from "./pages/PeoplePage";
-import { GroupPage } from "./pages/GroupPage";
-import { NewsPage } from "./pages/NewsPage";
-import { FinancialsPage } from "./pages/FinancialsPage";
-import { PortfolioPage } from "./pages/PortfolioPage";
-import { PricingPage } from "./pages/PricingPage";
-import { SubscriptionPage } from "./pages/SubscriptionPage";
-import { StockAnalysisPage } from "./pages/StockAnalysisPage";
-import { StocksPage } from "./pages/StocksPage";
-import { SettingsPage } from "./pages/SettingsPage";
-import { SectorsPage } from "./pages/SectorsPage";
-import { ChatPage } from "./pages/ChatPage";
-import { NotificationsPage } from "./pages/NotificationsPage";
-import { BondsPage } from "./pages/BondsPage";
-import { ETFsPage } from "./pages/ETFsPage";
-import { ProfilePage } from "./pages/ProfilePage";
-import { SupportCenterPage } from "./pages/SupportCenterPage";
-import { AboutPage } from "./pages/AboutPage";
-import { BlogPage } from "./pages/BlogPage";
-import { CareersPage } from "./pages/CareersPage";
-import { PrivacyPage } from "./pages/PrivacyPage";
-import { TermsPage } from "./pages/TermsPage";
-import { SecurityPage } from "./pages/SecurityPage";
-import { DisclaimerPage } from "./pages/DisclaimerPage";
-import { AffiliatesPage } from "./pages/AffiliatesPage";
-import { IpoPage } from "./pages/IpoPage";
-import { DerivativesPage } from "./pages/DerivativesPage";
+
+const MainLayout = React.lazy(() => import("./layouts/MainLayout").then(m => ({ default: m.MainLayout })));
+
+const LandingPage = React.lazy(() => import("./pages/LandingPage").then(m => ({ default: m.LandingPage })));
+const LoginPage = React.lazy(() => import("./pages/LoginPage").then(m => ({ default: m.LoginPage })));
+const DashboardPage = React.lazy(() => import("./pages/DashboardPage").then(m => ({ default: m.DashboardPage })));
+const MarketPage = React.lazy(() => import("./pages/MarketPage"));
+const WatchlistPage = React.lazy(() => import("./pages/WatchlistPage").then(m => ({ default: m.WatchlistPage })));
+const SignalsPage = React.lazy(() => import("./pages/SignalsPage").then(m => ({ default: m.SignalsPage })));
+const AIInsightsPage = React.lazy(() => import("./pages/AIInsightsPage").then(m => ({ default: m.AIInsightsPage })));
+const PeoplePage = React.lazy(() => import("./pages/PeoplePage").then(m => ({ default: m.PeoplePage })));
+const GroupPage = React.lazy(() => import("./pages/GroupPage").then(m => ({ default: m.GroupPage })));
+const NewsPage = React.lazy(() => import("./pages/NewsPage").then(m => ({ default: m.NewsPage })));
+const FinancialsPage = React.lazy(() => import("./pages/FinancialsPage").then(m => ({ default: m.FinancialsPage })));
+const PortfolioPage = React.lazy(() => import("./pages/PortfolioPage").then(m => ({ default: m.PortfolioPage })));
+const PricingPage = React.lazy(() => import("./pages/PricingPage").then(m => ({ default: m.PricingPage })));
+const SubscriptionPage = React.lazy(() => import("./pages/SubscriptionPage").then(m => ({ default: m.SubscriptionPage })));
+const StockAnalysisPage = React.lazy(() => import("./pages/StockAnalysisPage").then(m => ({ default: m.StockAnalysisPage })));
+const StocksPage = React.lazy(() => import("./pages/StocksPage").then(m => ({ default: m.StocksPage })));
+const SettingsPage = React.lazy(() => import("./pages/SettingsPage").then(m => ({ default: m.SettingsPage })));
+const SectorsPage = React.lazy(() => import("./pages/SectorsPage").then(m => ({ default: m.SectorsPage })));
+const ChatPage = React.lazy(() => import("./pages/ChatPage").then(m => ({ default: m.ChatPage })));
+const NotificationsPage = React.lazy(() => import("./pages/NotificationsPage").then(m => ({ default: m.NotificationsPage })));
+const BondsPage = React.lazy(() => import("./pages/BondsPage").then(m => ({ default: m.BondsPage })));
+const ETFsPage = React.lazy(() => import("./pages/ETFsPage").then(m => ({ default: m.ETFsPage })));
+const ProfilePage = React.lazy(() => import("./pages/ProfilePage").then(m => ({ default: m.ProfilePage })));
+const SupportCenterPage = React.lazy(() => import("./pages/SupportCenterPage").then(m => ({ default: m.SupportCenterPage })));
+const AboutPage = React.lazy(() => import("./pages/AboutPage").then(m => ({ default: m.AboutPage })));
+const BlogPage = React.lazy(() => import("./pages/BlogPage").then(m => ({ default: m.BlogPage })));
+const CareersPage = React.lazy(() => import("./pages/CareersPage").then(m => ({ default: m.CareersPage })));
+const PrivacyPage = React.lazy(() => import("./pages/PrivacyPage").then(m => ({ default: m.PrivacyPage })));
+const TermsPage = React.lazy(() => import("./pages/TermsPage").then(m => ({ default: m.TermsPage })));
+const SecurityPage = React.lazy(() => import("./pages/SecurityPage").then(m => ({ default: m.SecurityPage })));
+const DisclaimerPage = React.lazy(() => import("./pages/DisclaimerPage").then(m => ({ default: m.DisclaimerPage })));
+const AffiliatesPage = React.lazy(() => import("./pages/AffiliatesPage").then(m => ({ default: m.AffiliatesPage })));
+const IpoPage = React.lazy(() => import("./pages/IpoPage").then(m => ({ default: m.IpoPage })));
+const DerivativesPage = React.lazy(() => import("./pages/DerivativesPage").then(m => ({ default: m.DerivativesPage })));
 
 
 function InactivityBanner() {
@@ -167,5 +170,9 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0D7490]" /></div>}>
+      <RouterProvider router={router} />
+    </Suspense>
+  );
 }
