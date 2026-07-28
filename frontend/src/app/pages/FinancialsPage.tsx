@@ -120,8 +120,22 @@ function HorizontalStatementTable({ data, metrics, currency }: { data: any[]; me
                 const yr = d.getFullYear();
                 const pt = item.periodType;
                 const isQuarterly = pt === 'quarterly' || pt === '3M';
+                const isHalfYear = pt === 'half_year' || pt === 'semi_annual' || pt === '6M';
                 const isTtm = pt === 'TTM';
-                const label = isTtm ? `TTM ${yr}` : isQuarterly ? `Q${Math.floor(d.getMonth() / 3) + 1} ${yr}` : `FY ${yr}`;
+                let label: string;
+                if (isTtm) {
+                  label = `TTM ${yr}`;
+                } else if (isHalfYear) {
+                  const annualMonths = data.filter(d => (d.periodType || '').toLowerCase() === 'annual').map(d => new Date(d.date).getMonth());
+                  const fyEndMonth = annualMonths.length > 0 ? annualMonths[0] : 11;
+                  const monthsSinceFYStart = ((d.getMonth() - (fyEndMonth + 1) + 12) % 12);
+                  const hy = monthsSinceFYStart < 6 ? 1 : 2;
+                  label = `H${hy} ${yr}`;
+                } else if (isQuarterly) {
+                  label = `Q${Math.floor(d.getMonth() / 3) + 1} ${yr}`;
+                } else {
+                  label = `FY ${yr}`;
+                }
                 return <th key={i} className="p-3.5 font-bold text-foreground whitespace-nowrap text-xs">{label}</th>;
               })}
           </tr>
