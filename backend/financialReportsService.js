@@ -627,7 +627,7 @@ async function buildLocalNseReport(symbol) {
       }
       return p;
     }
-    function normalizeDate(d) { if (!d) return d; const s = String(d); const m = s.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : s.slice(0, 10); }
+    function normalizeDate(d) { if (!d) return d; if (d instanceof Date) return d.toISOString().split('T')[0]; const s = String(d); const m = s.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : s.slice(0, 10); }
     const allParsed = statements.map(s => ({ parsed: normalizeParsed(s.parsed_data), periodDate: normalizeDate(s.period_end_date), periodType: s.period_type }));
     const validParsed = allParsed.filter(p => p.parsed);
     const latest = validParsed[0] || {};
