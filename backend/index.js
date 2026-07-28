@@ -162,11 +162,20 @@ if (process.env.NODE_ENV !== 'production' || process.env.LOG_REQUESTS) {
 }
 
 // DOMPurify setup for server-side sanitization
-const window = new JSDOM('').window;
-const DOMPurify = createDOMPurify(window);
-function sanitizeText(text) {
-  if (!text || typeof text !== 'string') return '';
-  return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+let sanitizeText;
+try {
+  const { window } = new JSDOM('');
+  const DOMPurify = createDOMPurify(window);
+  sanitizeText = (text) => {
+    if (!text || typeof text !== 'string') return '';
+    return DOMPurify.sanitize(text, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+  };
+} catch (e) {
+  logger.warn('JSDOM/DOMPurify init failed, using basic sanitizer:', e.message);
+  sanitizeText = (text) => {
+    if (!text || typeof text !== 'string') return '';
+    return text.replace(/<[^>]*>/g, '');
+  };
 }
 
 // ── Cloudflare Turnstile verification ──────────────────────────────
