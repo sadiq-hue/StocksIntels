@@ -444,6 +444,28 @@ export function FinancialsPage() {
   const activeSource = report?.source || "unknown";
   const availableProviders = (report?.availableProviders || ["yahoo-finance"]) as DataProvider[];
 
+  const incHistory = report?.data.incomeStatementHistory || [];
+  const balHistory = report?.data.balanceSheetHistory || [];
+  const cfHistory = report?.data.cashFlowStatementHistory || [];
+  const metHistory = (report?.data.keyMetricsHistory || []).map(m => ({ ...m, dividendYieldPercentage: m.dividendYieldPercentage || toPercent(m.dividendYield) }));
+  const ownership = (report as any)?.data?.ownership as OwnershipData | null | undefined;
+  const validationWarnings = ((report as any)?.data?.validationWarnings || []) as ValidationWarning[];
+  const quarterlyShareCountHistory = ((report as any)?.data?.quarterlyShareCountHistory || []) as ShareCountEntry[];
+
+  const tabs = ["summary", "income", "balance", "cashflow", "metrics", "supply", "filings"];
+
+  const performanceData = useMemo(() =>
+    incHistory.slice().reverse().map(i => ({ period: formatDate(i.date), revenue: i.revenue / 1_000_000_000, netIncome: i.netIncome / 1_000_000_000, ebitda: i.ebitda / 1_000_000_000 })),
+  [incHistory]);
+
+  const capitalData = useMemo(() =>
+    balHistory.slice().reverse().map(i => ({ period: formatDate(i.date), assets: i.totalAssets / 1_000_000_000, liabilities: i.totalLiabilities / 1_000_000_000, equity: i.totalEquity / 1_000_000_000 })),
+  [balHistory]);
+
+  const cfChartData = useMemo(() =>
+    cfHistory.slice().reverse().map(i => ({ period: formatDate(i.date), ocf: i.operatingCashFlow / 1_000_000_000, fcf: i.freeCashFlow / 1_000_000_000, capex: Math.abs(i.capitalExpenditure) / 1_000_000_000 })),
+  [cfHistory]);
+
   // NSE banks/financials report under banking terminology. Relabel the
   // income-statement rows so "Cost of Revenue" → "Interest & Operating Expenses"
   // and "Gross Profit" → "Net Interest Income" for those issuers (applies to all
@@ -493,28 +515,6 @@ export function FinancialsPage() {
       setProvider(availableProviders[0]);
     }
   }, [report, availableProviders, provider]);
-
-  const incHistory = report?.data.incomeStatementHistory || [];
-  const balHistory = report?.data.balanceSheetHistory || [];
-  const cfHistory = report?.data.cashFlowStatementHistory || [];
-  const metHistory = (report?.data.keyMetricsHistory || []).map(m => ({ ...m, dividendYieldPercentage: m.dividendYieldPercentage || toPercent(m.dividendYield) }));
-  const ownership = (report as any)?.data?.ownership as OwnershipData | null | undefined;
-  const validationWarnings = ((report as any)?.data?.validationWarnings || []) as ValidationWarning[];
-  const quarterlyShareCountHistory = ((report as any)?.data?.quarterlyShareCountHistory || []) as ShareCountEntry[];
-
-  const tabs = ["summary", "income", "balance", "cashflow", "metrics", "supply", "filings"];
-
-  const performanceData = useMemo(() =>
-    incHistory.slice().reverse().map(i => ({ period: formatDate(i.date), revenue: i.revenue / 1_000_000_000, netIncome: i.netIncome / 1_000_000_000, ebitda: i.ebitda / 1_000_000_000 })),
-  [incHistory]);
-
-  const capitalData = useMemo(() =>
-    balHistory.slice().reverse().map(i => ({ period: formatDate(i.date), assets: i.totalAssets / 1_000_000_000, liabilities: i.totalLiabilities / 1_000_000_000, equity: i.totalEquity / 1_000_000_000 })),
-  [balHistory]);
-
-  const cfChartData = useMemo(() =>
-    cfHistory.slice().reverse().map(i => ({ period: formatDate(i.date), ocf: i.operatingCashFlow / 1_000_000_000, fcf: i.freeCashFlow / 1_000_000_000, capex: Math.abs(i.capitalExpenditure) / 1_000_000_000 })),
-  [cfHistory]);
 
   const handleSubmit = () => {
     const next = symbolInput.trim().toUpperCase();
