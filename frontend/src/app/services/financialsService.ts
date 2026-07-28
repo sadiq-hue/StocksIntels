@@ -74,6 +74,7 @@ export interface IncomeStatement {
   date: string;
   period: string;
   revenue: number;
+  totalRevenue?: number | null;
   costOfRevenue: number;
   grossProfit: number;
   grossProfitRatio: number;

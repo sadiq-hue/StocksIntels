@@ -417,14 +417,14 @@ function buildPrompt(text, meta) {
     ? `- total_revenue: "Gross written premium" or "Gross earned premium" or "Net earned premium" or "Insurance revenue" or "Total premium income" or "Premium income" for insurers (NOT claims)
 - cost_of_revenue: "Net claims incurred" or "Claims incurred" or "Net claims" for insurers`
     : sector === 'banking/financial'
-    ? `- total_revenue: "Total interest income" (gross interest income from loans, government securities, deposits and placements) for banks
-- cost_of_revenue: "Total interest expense" or "Interest expense" for banks (gross_profit = revenue - cost_of_revenue = Net Interest Income)
+    ? `- total_revenue: "Total Income" or "Total Operating Income" (Net Interest Income + Non-funded income such as fees, commissions, foreign exchange income) for banks — NOT just "Total interest income"
+- cost_of_revenue: "Total interest expense" or "Interest expense" for banks (gross_profit = total_revenue - cost_of_revenue)
 - operating_income: "Profit before tax" for banks`
     : `- total_revenue: Total revenue or sales
 - cost_of_revenue: Cost of revenue, cost of sales, or direct costs`;
   return `Extract ALL 14 financial metrics from this Nairobi Stock Exchange financial statement. Sector: ${sector}.${interimNote}
 The text may be reported in thousands (KShs'000) or millions (KShs M) — you MUST convert every value to ABSOLUTE KENYA SHILLINGS (multiply by the reported scale factor).
-For banks, total_revenue MUST be "Total interest income" for the reporting period ONLY (do not include non-interest income, and for interim reports do not use the cumulative column).
+For banks, total_revenue MUST be "Total Income" (Net Interest Income + Non-funded income including fees, commissions, FX income). Do NOT use "Total interest income" alone — that is only NII and understates the true revenue.
 
 Return ONLY a JSON object with these exact keys. Use null ONLY if the value truly cannot be found:
 ${incomeNote}

@@ -627,7 +627,8 @@ async function buildLocalNseReport(symbol) {
       }
       return p;
     }
-    const allParsed = statements.map(s => ({ parsed: normalizeParsed(s.parsed_data), periodDate: s.period_end_date, periodType: s.period_type }));
+    function normalizeDate(d) { if (!d) return d; const s = String(d); const m = s.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : s.slice(0, 10); }
+    const allParsed = statements.map(s => ({ parsed: normalizeParsed(s.parsed_data), periodDate: normalizeDate(s.period_end_date), periodType: s.period_type }));
     const validParsed = allParsed.filter(p => p.parsed);
     const latest = validParsed[0] || {};
     const parsed = latest.parsed || null;
@@ -658,14 +659,21 @@ async function buildLocalNseReport(symbol) {
 
     if (!fundamentals && !parsed) return null;
 
-    // Build history arrays from all uploaded periods
-    function buildIncItem(p, d, pt) { return p ? { date: d, periodType: pt, revenue: p.revenue || p.total_revenue, netIncome: p.net_income, netIncomeRatio: p.net_income > 0 && p.total_revenue > 0 ? p.net_income / p.total_revenue : 0, grossProfit: p.total_revenue != null && p.cost_of_revenue != null ? p.total_revenue - p.cost_of_revenue : null, ebitda: null, eps: p.eps, costOfRevenue: p.cost_of_revenue, operatingExpenses: null, operatingIncome: p.operating_income } : null; }
+    // When annual records exist, use only annual for the main history grids to
+    // prevent mixed quarterly/annual columns from corrupting YoY comparisons.
+    const hasAnnual = validParsed.some(v => (v.periodType || '').toLowerCase() === 'annual');
+    const gridParsed = hasAnnual
+      ? validParsed.filter(v => (v.periodType || '').toLowerCase() === 'annual')
+      : validParsed;
+
+    // Build history arrays from filtered periods
+    function buildIncItem(p, d, pt) { return p ? { date: d, periodType: pt, revenue: p.revenue || p.total_revenue, totalRevenue: p.total_revenue || null, netIncome: p.net_income, netIncomeRatio: p.net_income > 0 && p.total_revenue > 0 ? p.net_income / p.total_revenue : 0, grossProfit: p.total_revenue != null && p.cost_of_revenue != null ? p.total_revenue - p.cost_of_revenue : null, ebitda: null, eps: p.eps, costOfRevenue: p.cost_of_revenue, operatingExpenses: null, operatingIncome: p.operating_income, netInterestIncome: p.net_interest_income || null } : null; }
     function buildBalItem(p, d, pt) { return p ? { date: d, periodType: pt, totalAssets: p.total_assets, totalLiabilities: p.total_liabilities, totalEquity: p.shareholders_equity, cashAndCashEquivalents: p.cash_and_equivalents, longTermDebt: null, totalDebt: p.total_debt, totalCurrentAssets: p.current_assets, totalCurrentLiabilities: p.current_liabilities, totalStockholdersEquity: p.shareholders_equity, retainedEarnings: p.retained_earnings } : null; }
     function buildCfItem(p, d, pt) { return p?.cash_from_operations != null ? { date: d, periodType: pt, operatingCashFlow: p.cash_from_operations, freeCashFlow: null, capitalExpenditure: null, dividendsPaid: null, netChangeInCash: null } : null; }
 
-    const incHistory = validParsed.map(v => buildIncItem(v.parsed, v.periodDate, v.periodType)).filter(Boolean);
-    const balHistory = validParsed.map(v => buildBalItem(v.parsed, v.periodDate, v.periodType)).filter(Boolean);
-    const cfHistory = validParsed.map(v => buildCfItem(v.parsed, v.periodDate, v.periodType)).filter(Boolean);
+    const incHistory = gridParsed.map(v => buildIncItem(v.parsed, v.periodDate, v.periodType)).filter(Boolean);
+    const balHistory = gridParsed.map(v => buildBalItem(v.parsed, v.periodDate, v.periodType)).filter(Boolean);
+    const cfHistory = gridParsed.map(v => buildCfItem(v.parsed, v.periodDate, v.periodType)).filter(Boolean);
 
     // Latest single items for backward compatibility (KPI cards, summary)
     // When latest period is non-annual (e.g. half_year, quarterly), use the latest
@@ -745,7 +753,7 @@ async function buildLocalNseReport(symbol) {
       };
     }
 
-    const metHistory = validParsed.map(v => buildKmItem(v.parsed, v.periodDate, v.periodType)).filter(Boolean);
+    const metHistory = gridParsed.map(v => buildKmItem(v.parsed, v.periodDate, v.periodType)).filter(Boolean);
     const kmItem = metHistory[0] || null;
 
     return {

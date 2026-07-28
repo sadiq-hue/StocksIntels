@@ -463,11 +463,12 @@ export function FinancialsPage() {
   const isBank = !isExchange && !isNonBankTicker && profile?.exchange === 'NSE' && /bank|financial|sacco|microfin|building society/i.test(
     `${profile?.sector || ''} ${profile?.industry || ''} ${profile?.companyName || ''}`
   );
+  const hasTotalRevenue = incHistory.some((i: any) => i.totalRevenue != null && i.totalRevenue !== i.revenue);
   const incomeMetrics = isBank
     ? [
         { label: "Revenue", key: "revenue", kind: "currency", calcGrowth: true },
         { label: "Interest & Operating Expenses", key: "costOfRevenue", kind: "currency" },
-        { label: "Net Interest Income", key: "grossProfit", kind: "currency", calcGrowth: true },
+        { label: "Net Interest Income", key: "netInterestIncome", kind: "currency", calcGrowth: true },
         { label: "Operating Expenses", key: "operatingExpenses", kind: "currency" },
         { label: "Operating Income", key: "operatingIncome", kind: "currency", calcGrowth: true },
         { label: "Net Income", key: "netIncome", kind: "currency", calcGrowth: true },
@@ -475,14 +476,15 @@ export function FinancialsPage() {
         { label: "EBITDA", key: "ebitda", kind: "currency" },
       ]
     : [
-        { label: "Revenue", key: "revenue", kind: "currency", calcGrowth: true },
-        { label: "Cost of Revenue", key: "costOfRevenue", kind: "currency" },
-        { label: "Gross Profit", key: "grossProfit", kind: "currency", calcGrowth: true },
-        { label: "Operating Expenses", key: "operatingExpenses", kind: "currency" },
-        { label: "Operating Income", key: "operatingIncome", kind: "currency", calcGrowth: true },
-        { label: "Net Income", key: "netIncome", kind: "currency", calcGrowth: true },
-        { label: "EPS (Diluted)", key: "eps", kind: "number" },
-        { label: "EBITDA", key: "ebitda", kind: "currency" },
+        ...(hasTotalRevenue ? [{ label: "Total Revenue", key: "totalRevenue", kind: "currency" as const, calcGrowth: true }] : []),
+        { label: "Revenue", key: "revenue", kind: "currency" as const, calcGrowth: true },
+        { label: "Cost of Revenue", key: "costOfRevenue", kind: "currency" as const },
+        { label: "Gross Profit", key: "grossProfit", kind: "currency" as const, calcGrowth: true },
+        { label: "Operating Expenses", key: "operatingExpenses", kind: "currency" as const },
+        { label: "Operating Income", key: "operatingIncome", kind: "currency" as const, calcGrowth: true },
+        { label: "Net Income", key: "netIncome", kind: "currency" as const, calcGrowth: true },
+        { label: "EPS (Diluted)", key: "eps", kind: "number" as const },
+        { label: "EBITDA", key: "ebitda", kind: "currency" as const },
       ];
 
   // Auto-sync provider only after data loads (e.g. switching to a stock that doesn't support sec-edgar)
