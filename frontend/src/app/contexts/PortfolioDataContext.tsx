@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, useMemo, useCallback, u
 import { useAuth } from "../auth/AuthContext";
 import { useStockData } from "./StockDataContext";
 import { authFetch } from "../auth/tokenStore";
+import { getSocket, connectSocket } from "../services/socketService";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -221,12 +222,10 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
     let socket: any;
-    import("../services/socketService").then(({ getSocket, connectSocket }) => {
-      socket = connectSocket(user.id, user.full_name || "");
-      socket.on("broker:sync", () => {
-        fetchBrokers();
-        fetchHoldings();
-      });
+    socket = connectSocket(user.id, user.full_name || "");
+    socket.on("broker:sync", () => {
+      fetchBrokers();
+      fetchHoldings();
     });
     return () => {
       if (socket) socket.off("broker:sync");

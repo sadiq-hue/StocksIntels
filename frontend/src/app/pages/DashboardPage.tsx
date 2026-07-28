@@ -17,6 +17,7 @@ import { usePortfolioData } from "../contexts/PortfolioDataContext";
 import { useBeginnerMode } from "../contexts/BeginnerModeContext";
 import { kenyanStocks, globalStocks } from "../data/stockUniverses";
 import { fetchAllNews, type NewsArticle } from "../services/newsService";
+import { connectSocket } from "../services/socketService";
 import type { Signal } from "../types/signals";
 import { authFetch } from "../auth/tokenStore";
 
@@ -369,18 +370,16 @@ export function DashboardPage() {
   useEffect(() => {
     if (!user?.id) return;
     let socket: any;
-    import("../services/socketService").then(({ getSocket, connectSocket }) => {
-      socket = connectSocket(user.id, user.full_name || "");
-      socket.on("market:update", (quote: any) => { /* triggers re-render via context refresh */ });
-      socket.on("indices:update", (indices: any) => {
-        setPulse(prev => prev ? { ...prev, indices } : prev);
-      });
-      socket.on("signal:batch_update", (batch: any) => {
-        if (batch?.signals) setSignals(batch.signals);
-      });
-      socket.on("signal:updates", (updates: any) => {
-        if (Array.isArray(updates)) setSignals(updates);
-      });
+    socket = connectSocket(user.id, user.full_name || "");
+    socket.on("market:update", (quote: any) => { /* triggers re-render via context refresh */ });
+    socket.on("indices:update", (indices: any) => {
+      setPulse(prev => prev ? { ...prev, indices } : prev);
+    });
+    socket.on("signal:batch_update", (batch: any) => {
+      if (batch?.signals) setSignals(batch.signals);
+    });
+    socket.on("signal:updates", (updates: any) => {
+      if (Array.isArray(updates)) setSignals(updates);
     });
     return () => {
       if (socket) {
