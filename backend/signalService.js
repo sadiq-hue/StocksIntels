@@ -138,6 +138,7 @@ let _signalHistoryCount = 0;
 // Live test store — ring buffer of resolved signal outcomes with resolvedAt timestamps
 const _liveTestStore = new Map(); // symbol -> { outcomes: [{ result, entryPrice, exitPrice, signal, generatedAt, resolvedAt }] }
 const LIVE_TEST_MAX_PER_SYMBOL = 200;
+const SIGNAL_WINDOW_DAYS = 1;
 const _performanceStats = { total: 0, wins: 0, losses: 0, winRate: 0 };
 const _histBacktestCache = new Map(); // symbol -> { bars, ts }
 const HIST_BACKTEST_CACHE_TTL = 60 * 60 * 1000; // 1 hour
@@ -549,7 +550,8 @@ async function restoreStateFromDb() {
   try {
     // Load all historical outcomes into memory so health/trade tracking works across restarts
     const outcomes = await pool.query(
-      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at FROM signal_outcomes ORDER BY recorded_at DESC`
+      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at FROM signal_outcomes WHERE recorded_at > NOW() - $1::interval ORDER BY recorded_at DESC`,
+      [`${SIGNAL_WINDOW_DAYS} days`]
     );
     _signalOutcomes.clear();
     for (const row of outcomes.rows) {
@@ -1365,10 +1367,13 @@ function getSignalProgress(symbol, currentPrice) {
 }
 
 function getLiveTestSnapshot() {
+  const now = Date.now();
+  const maxAge = SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
   let total = 0, wins = 0, losses = 0, totalHours = 0, hourlyCount = 0;
   const buckets = { '1d': { total: 0, wins: 0, losses: 0 }, '15d': { total: 0, wins: 0, losses: 0 }, '30d': { total: 0, wins: 0, losses: 0 }, '60d': { total: 0, wins: 0, losses: 0 } };
   for (const [, store] of _liveTestStore) {
     for (const o of store.outcomes) {
+      if (o.generatedAt && (now - o.generatedAt) > maxAge) continue;
       total++;
       if (o.result === 'win') wins++;
       else if (o.result === 'loss') losses++;
