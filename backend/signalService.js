@@ -603,7 +603,7 @@ async function restoreStateFromDb() {
 
     // If no outcomes exist yet, approximate them from recent signal_history using current prices
     if (_signalOutcomes.size === 0 && _signalHistoryCount > 0) {
-      await backfillOutcomesFromHistory(30, 500);
+      await backfillOutcomesFromHistory(1, 50);
     }
   } catch (e) { /* table may not exist — start fresh */ console.warn('[SignalService] restoreStateFromDb outcomes error:', e.message); }
   try {
@@ -619,7 +619,7 @@ async function restoreStateFromDb() {
 // ─── Backfill signal_outcomes from recent signal_history ─────────────────────
 // When signal_outcomes is empty but signal_history has rows (fresh deploy / schema fix),
 // approximate outcomes using current live prices so health/backtest show real numbers immediately.
-async function backfillOutcomesFromHistory(days = 30, maxRows = 500) {
+async function backfillOutcomesFromHistory(days = 1, maxRows = 50) {
   try {
     const outcomeCount = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_outcomes').catch(() => ({ rows: [{ cnt: 0 }] }));
     if ((outcomeCount.rows[0]?.cnt || 0) > 0) return; // only backfill when empty
