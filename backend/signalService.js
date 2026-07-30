@@ -550,7 +550,7 @@ async function restoreStateFromDb() {
   try {
     // Load all historical outcomes into memory so health/trade tracking works across restarts
     const outcomes = await pool.query(
-      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at FROM signal_outcomes WHERE signal_generated_at > NOW() - $1::interval AND result IS NOT NULL ORDER BY recorded_at DESC`,
+      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at FROM signal_outcomes WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - $1::interval AND result IS NOT NULL ORDER BY recorded_at DESC`,
       [`${SIGNAL_WINDOW_DAYS} days`]
     );
     _signalOutcomes.clear();
@@ -581,7 +581,7 @@ async function restoreStateFromDb() {
     // Compute performance stats from signals generated in the last 30 days
     const result = await pool.query(
       `SELECT result, COUNT(*) as cnt FROM signal_outcomes
-       WHERE signal_generated_at > NOW() - INTERVAL '30 days' AND result IS NOT NULL
+       WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - INTERVAL '30 days' AND result IS NOT NULL
        GROUP BY result`
     );
     let wins = 0, losses = 0;
@@ -651,14 +651,14 @@ const isSell = row.signal === 'Sell' || row.signal === 'Strong Sell';
       if (!isBuy && !isSell) continue;
       const won = isBuy ? returnPct > 0.5 : returnPct < -0.5;
       const resultStr = won ? 'win' : 'loss';
-      try {
-        const now = new Date().toISOString();
-        await pool.query(
-          `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
-           ON CONFLICT DO NOTHING`,
-          [row.ticker, row.entry_price, row.signal, currentPrice, resultStr, row.generated_at, now]
-        );
+       try {
+         const now = new Date().toISOString();
+         await pool.query(
+           `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT DO NOTHING`,
+           [row.ticker, row.entry_price, row.signal, currentPrice, resultStr, row.generated_at, now, row.generated_at]
+         );
         inserted++;
         if (won) wins++; else losses++;
         _signalOutcomes.set(row.ticker, { entryPrice: row.entry_price, signal: row.signal, exitPrice: currentPrice, result: resultStr, recordedAt: row.generated_at });
@@ -796,10 +796,10 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
 
           const resolvedTs = exitDay > 0 ? new Date(new Date(sig.generated_at).getTime() + exitDay * 86400000).toISOString() : new Date().toISOString();
           await pool.query(
-            `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT DO NOTHING`,
-            [sig.ticker, entry, sig.signal, exitPrice, resultStr, sig.generated_at, resolvedTs]
+            [sig.ticker, entry, sig.signal, exitPrice, resultStr, sig.generated_at, resolvedTs, sig.generated_at]
           );
           totalInserted++;
           if (resultStr === 'win') totalWins++; else totalLosses++;
