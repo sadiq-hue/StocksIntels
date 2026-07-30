@@ -1895,14 +1895,15 @@ async function persistPortfolioState() {
 
 // ─── Health Check ───────────────────────────────────────────────────────────
 function getEngineHealth() {
+  const perf = _performanceStats;
   return {
     status: Object.values(_sourceHealth).every(h => h.ok) ? 'healthy' : 'degraded',
     uptime: process.uptime(),
     sources: { ..._sourceHealth },
-    performance: { ..._performanceStats },
+    performance: { ...perf },
     portfolio: {
       consecutiveLosses: _portfolioState.consecutiveLosses,
-      totalTrades: _portfolioState.totalTrades,
+      totalTrades: perf.total,
       maxDrawdown: Math.round(_portfolioState.maxDrawdown * 1000) / 10,
     },
     regime: _marketRegime.regime,
