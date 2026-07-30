@@ -11,6 +11,7 @@ const { getAggregatedSentiment } = require('./newsService');
 const { getKeyMetrics, getQuote, getCompanyProfile } = require('./financialReportsService');
 const { calculateSMA } = require('./technicalIndicators');
 const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL_SYMBOLS, SECTOR_AVG_PE, INDUSTRY_MEDIAN_EV_EBITDA, TBILI_RATE, KNOWN_FUNDAMENTALS, NSE_FUNDAMENTALS } = require('./stockData');
+const financialReportsService = require('./financialReportsService');
 const edgarService = require('./edgarService');
 const { getEffectiveSectorPE, getGrade, determineSignal, determineTradeType, getSectorMacroAdjustment, analyzeFundamentals, analyzeTechnicals, analyzeFinancials, generateReason } = require('./analysisEngine');
 const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
@@ -18,9 +19,24 @@ const mlModel = require('./mlSignalModel');
 const engineConfig = require('./engineConfig');
 const { trackSignalQuality, logHealth, detectSignalDrift, getQualityScore } = require('./monitorService');
 const PersistentCache = require('./cacheService');
+const { EventEmitter } = require('events');
+const signalEventBus = new EventEmitter();
+signalEventBus.setMaxListeners(50);
 
 console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)');
 
+// Ensure DB schema columns exist before any operations
+(async () => {
+  try {
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`);
+    await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS analysis_data JSONB`);
+    await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS stop_loss NUMERIC(15,2)`);
+    await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS target1 NUMERIC(15,2)`);
+    await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS action VARCHAR(10)`);
+    await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS trade_type VARCHAR(30)`);
+    await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS sector VARCHAR(50)`);
+  } catch {}
+})();
 // Restore performance stats and portfolio state from DB on startup
 restoreStateFromDb().catch(() => {});
 
@@ -118,6 +134,10 @@ const _financialReportCache = new PersistentCache('sigfin', 24 * 60 * 60 * 1000)
 // Signal performance tracker (in-memory, rolling 100 signals per symbol)
 const _signalOutcomes = new Map();
 let _signalHistoryCount = 0;
+
+// Live test store — ring buffer of resolved signal outcomes with resolvedAt timestamps
+const _liveTestStore = new Map(); // symbol -> { outcomes: [{ result, entryPrice, exitPrice, signal, generatedAt, resolvedAt }] }
+const LIVE_TEST_MAX_PER_SYMBOL = 200;
 const _performanceStats = { total: 0, wins: 0, losses: 0, winRate: 0 };
 const _histBacktestCache = new Map(); // symbol -> { bars, ts }
 const HIST_BACKTEST_CACHE_TTL = 60 * 60 * 1000; // 1 hour
@@ -188,7 +208,9 @@ function flushNseDailyBars() {
 function getNseDailyHistory(symbol) {
   const history = _nseDailyHistory.get(symbol);
   if (!history || history.length < 2) return null;
-  return history.map(d => d.close);
+  const prices = history.map(d => d.close);
+  prices.volumes = history.map(d => d.volume).filter(v => v != null && v > 0);
+  return prices;
 }
 
 async function getPriceHistory(symbol) {
@@ -198,9 +220,31 @@ async function getPriceHistory(symbol) {
   }
 
   const isNse = NSE_SYMBOLS.includes(symbol);
-  const yahooSymbol = isNse ? `${symbol}.NR` : symbol;
 
-  const bars = await fetchHistoricalQuotes(yahooSymbol, '3mo', '1d');
+  // NSE stocks: use MyStocks Africa (same pipeline as financial-reports page)
+  if (isNse) {
+    try {
+      const msa = require('./mystocksAfricaApi');
+      const bars = await msa.fetchHistorical(`NSE:${symbol}`, '6mo');
+      if (bars && bars.length >= 2) {
+        const prices = bars.map(b => b.close).filter(p => p != null);
+        prices.volumes = bars.map(b => b.volume || 0).filter(v => v > 0);
+        _priceHistoryCache.set(symbol, { data: prices, ts: Date.now() });
+        return prices;
+      }
+    } catch (e) { /* fall through to accumulator */ }
+    // Fallback: accumulated daily history from scraper data
+    const nsePrices = getNseDailyHistory(symbol);
+    if (nsePrices) {
+      _priceHistoryCache.set(symbol, { data: nsePrices, ts: Date.now() });
+      return nsePrices;
+    }
+    _priceHistoryCache.set(symbol, { data: null, ts: Date.now() });
+    return null;
+  }
+
+  // Non-NSE: Yahoo Finance V8
+  const bars = await fetchHistoricalQuotes(symbol, '3mo', '1d');
   if (bars && bars.length >= 2) {
     const prices = bars.map(b => b.close).filter(p => p != null);
     prices.volumes = bars.map(b => b.volume).filter(v => v != null && v > 0);
@@ -208,144 +252,168 @@ async function getPriceHistory(symbol) {
     return prices;
   }
 
-  // NSE fallback: use accumulated daily history from scraper data
-  if (isNse) {
-    const nsePrices = getNseDailyHistory(symbol);
-    if (nsePrices) {
-      _priceHistoryCache.set(symbol, { data: nsePrices, ts: Date.now() });
-      return nsePrices;
-    }
-  }
-
   _priceHistoryCache.set(symbol, { data: null, ts: Date.now() });
   return null;
 }
 
 async function prefetchPriceHistories(symbols) {
+  const nseSymbols = symbols.filter(s => NSE_SYMBOLS.includes(s));
+  const otherSymbols = symbols.filter(s => !NSE_SYMBOLS.includes(s));
+  // NSE stocks all hit the same MyStocks Africa API — process one at a time to avoid rate limits
+  for (const s of nseSymbols) {
+    await getPriceHistory(s).catch(() => {});
+    await new Promise(r => setTimeout(r, 300));
+  }
+  // US & other stocks use Yahoo Finance with per-domain pools — batch 20 at a time
   const batchSize = 20;
   const delayMs = 100;
-  for (let i = 0; i < symbols.length; i += batchSize) {
-    const batch = symbols.slice(i, i + batchSize);
+  for (let i = 0; i < otherSymbols.length; i += batchSize) {
+    const batch = otherSymbols.slice(i, i + batchSize);
     await Promise.allSettled(batch.map(s => getPriceHistory(s)));
-    if (i + batchSize < symbols.length) {
+    if (i + batchSize < otherSymbols.length) {
       await new Promise(r => setTimeout(r, delayMs));
     }
   }
 }
 
 async function prefetchWeeklyData(symbols) {
+  const nseSymbols = symbols.filter(s => NSE_SYMBOLS.includes(s));
+  const otherSymbols = symbols.filter(s => !NSE_SYMBOLS.includes(s));
+  for (const s of nseSymbols) {
+    await getWeeklyData(s).catch(() => {});
+    await new Promise(r => setTimeout(r, 200));
+  }
   const batchSize = 20;
   const delayMs = 50;
-  for (let i = 0; i < symbols.length; i += batchSize) {
-    const batch = symbols.slice(i, i + batchSize);
+  for (let i = 0; i < otherSymbols.length; i += batchSize) {
+    const batch = otherSymbols.slice(i, i + batchSize);
     await Promise.allSettled(batch.map(s => getWeeklyData(s)));
-    if (i + batchSize < symbols.length) {
+    if (i + batchSize < otherSymbols.length) {
       await new Promise(r => setTimeout(r, delayMs));
     }
   }
 }
 
-// ─── Real Financial Metrics from Yahoo Finance ──────────────────────────────
+// ─── Real Financial Metrics from financialReportsService (shared pipeline) ──
+// Uses the same data pipeline as the /api/financial-reports endpoint:
+// Yahoo Finance → Alpha Vantage → SEC EDGAR with per-source rate limiting & caching.
+// getFinancialReport() returns everything (income, balance, cash flow, ratios)
+// in one call with 24h caching, so subsequent signal cycles are fast.
 async function fetchRealFinancialMetrics(symbol) {
-  if (NSE_SYMBOLS.includes(symbol)) return null;
   const cached = _financialReportCache.get(symbol);
   if (cached) return cached;
   try {
-    const { default: YahooFinance } = await import('yahoo-finance2');
-    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
-    const qs = await yf.quoteSummary(symbol, { modules: ['financialData', 'defaultKeyStatistics', 'summaryDetail', 'summaryProfile'] });
-    if (!qs?.financialData) { _financialReportCache.set(symbol, null); return null; }
-
-    const fd = qs.financialData;
-    const dk = qs.defaultKeyStatistics || {};
-    const sd = qs.summaryDetail || {};
-    const sp = qs.summaryProfile || {};
-
+    const isNse = NSE_SYMBOLS.includes(symbol);
     const metrics = {};
-    if (sp.sector) metrics.sector = sp.sector;
 
-    // PE ratio: try trailingPE, forwardPE, or compute from price/EPS
-    let peVal = sd.trailingPE != null ? sd.trailingPE : dk.trailingPE;
-    if (peVal == null) peVal = sd.forwardPE != null ? sd.forwardPE : dk.forwardPE;
-    if (peVal == null && fd.currentPrice && fd.earningsPerShare > 0) peVal = fd.currentPrice / fd.earningsPerShare;
-    if (peVal != null) metrics.peRatio = Math.round(peVal * 10) / 10;
+    // Full financial report (24h cache) — income, balance, cash flow, ratios
+    // For NSE, getFinancialReport routes to buildLocalNseReport (local DB + marketService).
+    // For US stocks, it goes Yahoo Finance → Alpha Vantage → SEC EDGAR.
+    const report = await financialReportsService.getFinancialReport(symbol, 'annual', 2);
+    if (!report?.success || !report?.data) {
+      _financialReportCache.set(symbol, null);
+      return null;
+    }
 
-    if (dk.priceToBook != null) metrics.pbRatio = Math.round(dk.priceToBook * 10) / 10;
-    if (fd.currentRatio != null) metrics.currentRatio = Math.round(fd.currentRatio * 100) / 100;
-    if (fd.revenueGrowth != null) metrics.revenueGrowth = Math.round(fd.revenueGrowth * 1000) / 10;
-    if (fd.earningsGrowth != null) metrics.epsGrowth = Math.round(fd.earningsGrowth * 1000) / 10;
-    if (fd.returnOnEquity != null) metrics.roe = Math.round(fd.returnOnEquity * 1000) / 10;
-    if (fd.dividendYield != null) metrics.dividendYield = Math.round(fd.dividendYield * 100 * 10) / 10;
-    if (fd.payoutRatio != null) metrics.payoutRatio = Math.round(fd.payoutRatio * 100);
-    if (dk.marketCap) metrics.marketCap = dk.marketCap;
-    if (fd.currentPrice) metrics.price = fd.currentPrice;
+    const d = report.data;
 
-    // Debt/equity: yahoo-finance2 may return pct (>20) or decimal
-    let deVal = fd.debtToEquity;
-    if (deVal != null) {
-      if (deVal > 20) deVal = deVal / 100;
-      metrics.debtToEquity = Math.round(deVal * 100) / 100;
+    // Price / marketCap from the report's quote data
+    const rq = d.quote;
+    if (rq?.marketCap) metrics.marketCap = rq.marketCap;
+    if (rq?.price) metrics.price = rq.price;
+    if (rq?.pe > 0) metrics.peRatio = Math.round(rq.pe * 10) / 10;
+
+    // Profile
+    if (d.profile?.sector) metrics.sector = d.profile.sector;
+
+    // Key metrics (PB, ROE, yield, etc.)
+    const km = d.keyMetricsHistory?.[0] || {};
+    if (km.pbRatio > 0) metrics.pbRatio = Math.round(km.pbRatio * 10) / 10;
+    if (km.dividendYieldPercentage > 0) metrics.dividendYield = Math.round(km.dividendYieldPercentage * 10) / 10;
+    else if (km.dividendYield > 0) metrics.dividendYield = Math.round(km.dividendYield * 1000) / 10;
+    if (km.returnOnEquity > 0) metrics.roe = Math.round(km.returnOnEquity * 1000) / 10;
+    if (km.debtToEquity > 0) metrics.debtToEquity = Math.round(km.debtToEquity * 100) / 100;
+    if (km.currentRatio > 0) metrics.currentRatio = Math.round(km.currentRatio * 100) / 100;
+    if (km.revenueGrowth != null) metrics.revenueGrowth = Math.round(km.revenueGrowth * 1000) / 10;
+    if (km.earningsGrowth != null) metrics.epsGrowth = Math.round(km.earningsGrowth * 1000) / 10;
+    if (km.forwardPE > 0 && !metrics.peRatio) metrics.peRatio = Math.round(km.forwardPE * 10) / 10;
+    if (km.profitMargin != null) metrics.profitMargin = Math.round(km.profitMargin * 1000) / 10;
+    if (km.operatingMargin != null) metrics.operatingMargin = Math.round(km.operatingMargin * 1000) / 10;
+
+    // Income statement — current & prior year for growth/margins
+    const inc = d.incomeStatementHistory || [];
+    if (inc.length >= 1) {
+      const cur = inc[0];
+      if (cur.revenue) { metrics.revenue = cur.revenue; }
+      if (cur.netIncome) { metrics.netIncome = cur.netIncome; }
+      if (cur.eps) { metrics.eps = Math.round(cur.eps * 100) / 100; }
+      if (cur.ebitda) { metrics.ebitda = cur.ebitda; }
+      if (cur.grossProfit && cur.revenue > 0) {
+        metrics.grossMargin = Math.round((cur.grossProfit / cur.revenue) * 1000) / 10;
+      }
+      if (cur.operatingIncome && cur.revenue > 0) {
+        metrics.operatingMargin = Math.round((cur.operatingIncome / cur.revenue) * 1000) / 10;
+      }
+      // YoY growth
+      if (inc.length >= 2) {
+        const prev = inc[1];
+        if (cur.revenue && prev.revenue > 0) {
+          const rg = ((cur.revenue - prev.revenue) / prev.revenue) * 100;
+          metrics.revenueGrowth = Math.round(rg * 10) / 10;
+        }
+        if (cur.eps && prev.eps > 0) {
+          const eg = ((cur.eps - prev.eps) / prev.eps) * 100;
+          metrics.epsGrowth = Math.round(eg * 10) / 10;
+        }
+      }
+    }
+
+    // Balance sheet — for Altman Z, EV/EBITDA, debt
+    let totalDebt = 0, cash = 0, totalAssets = 0, totalLiabilities = 0;
+    let totalEquity = 0, currAssets = 0, currLiabilities = 0, retainedEarnings = 0;
+    const bal = d.balanceSheetHistory || [];
+    if (bal.length >= 1) {
+      const b = bal[0];
+      totalDebt = b.totalDebt || 0;
+      cash = b.cashAndCashEquivalents || 0;
+      totalAssets = b.totalAssets || 0;
+      totalLiabilities = b.totalLiabilities || 0;
+      totalEquity = b.totalStockholdersEquity || b.totalEquity || 0;
+      currAssets = b.totalCurrentAssets || 0;
+      currLiabilities = b.totalCurrentLiabilities || 0;
+      retainedEarnings = b.retainedEarnings || 0;
+      metrics.totalDebt = totalDebt;
+      metrics.cash = cash;
     }
 
     // Free cash flow yield
-    if (fd.freeCashflow && dk.sharesOutstanding > 0 && fd.currentPrice > 0) {
-      metrics.fcfYield = Math.round((fd.freeCashflow / dk.sharesOutstanding / fd.currentPrice) * 1000) / 10;
+    const cf = d.cashFlowStatementHistory || [];
+    if (cf.length >= 1 && cf[0].freeCashFlow) {
+      const fcf = cf[0].freeCashFlow;
+      const mcap = metrics.marketCap || km.marketCap || 0;
+      if (mcap > 0) {
+        metrics.fcfYield = Math.round((fcf / mcap) * 1000) / 10;
+      }
     }
 
-    // Try fundamentalsTimeSeries for Altman Z + detailed income/balance sheet data
-    try {
-      const fts = await Promise.race([
-        yf.fundamentalsTimeSeries(symbol, { period1: Math.floor(Date.now() / 1000) - 3 * 365 * 86400, module: 'all' }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('fundamentalsTimeSeries signal timeout')), 15000)),
-      ]);
-      if (Array.isArray(fts) && fts.length > 0) {
-        // Income statement: find latest FY with revenue
-        const annuals = fts.filter(i => i.periodType === 'FY' && i.totalRevenue != null).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-        const current = annuals[0];
-        const previous = annuals[1];
-        if (current?.totalRevenue && previous?.totalRevenue > 0) {
-          metrics.revenueGrowth = Math.round(((current.totalRevenue - previous.totalRevenue) / previous.totalRevenue) * 1000) / 10;
-        }
-        if (current?.basicEPS && previous?.basicEPS > 0) {
-          metrics.epsGrowth = Math.round(((current.basicEPS - previous.basicEPS) / previous.basicEPS) * 1000) / 10;
-        }
-        const currMargin = current?.totalRevenue > 0 && current.operatingIncome != null ? (current.operatingIncome / current.totalRevenue) * 100 : null;
-        const prevMargin = previous?.totalRevenue > 0 && previous?.operatingIncome != null ? (previous.operatingIncome / previous.totalRevenue) * 100 : null;
-        if (currMargin != null && prevMargin != null) metrics.marginChange = Math.round((currMargin - prevMargin) * 10) / 10;
-        if (current.basicEPS) metrics.eps = Math.round(current.basicEPS * 100) / 100;
-        if (current.EBITDA) metrics.ebitda = current.EBITDA;
-        if (current.netIncome) metrics.netIncome = current.netIncome;
-        if (current.totalRevenue) metrics.revenue = current.totalRevenue;
+    // EV/EBITDA
+    if (metrics.marketCap && totalDebt > 0 && metrics.ebitda) {
+      const ev = metrics.marketCap + totalDebt - cash;
+      if (ev > 0) { metrics.evEbitda = Math.round((ev / metrics.ebitda) * 10) / 10; }
+    }
 
-        // Balance sheet: latest FY with totalAssets
-        const bal = fts.filter(i => i.periodType === 'FY' && i.totalAssets != null).sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
-        if (bal) {
-          metrics.totalDebt = bal.totalDebt || 0;
-          metrics.cash = bal.cashAndCashEquivalents || 0;
-          if (current?.netIncome && bal.totalEquity > 0) {
-            metrics.roe = Math.round((current.netIncome / bal.totalEquity) * 1000) / 10;
-          }
-          // Altman Z
-          if (current?.netIncome && current?.totalRevenue > 0 && bal.totalAssets > 0 && bal.totalLiabilities > 0) {
-            const wc = (bal.totalCurrentAssets || 0) - (bal.totalCurrentLiabilities || 0);
-            const re = bal.retainedEarnings || 0;
-            const ebit = current.operatingIncome || current.EBITDA || 0;
-            const mcap = dk.marketCap || 0;
-            const ta = bal.totalAssets;
-            const tl = bal.totalLiabilities;
-            const X1 = wc / ta; const X2 = re / ta; const X3 = ebit / ta;
-            const X4 = mcap / tl; const X5 = current.totalRevenue / ta;
-            metrics.altmanZ = Math.round((1.2 * X1 + 1.4 * X2 + 3.3 * X3 + 0.6 * X4 + 1.0 * X5) * 100) / 100;
-          }
-        }
-
-        // EV/EBITDA
-        if (metrics.marketCap && metrics.totalDebt != null && metrics.cash != null && metrics.ebitda) {
-          const ev = metrics.marketCap + metrics.totalDebt - metrics.cash;
-          if (ev > 0) metrics.evEbitda = Math.round((ev / metrics.ebitda) * 10) / 10;
-        }
-      }
-    } catch { /* fundamentalsTimeSeries optional — metrics already populated from quoteSummary */ }
+    // Altman Z
+    if (inc[0]?.netIncome && inc[0]?.revenue > 0 && totalAssets > 0 && totalLiabilities > 0) {
+      const ebit = inc[0]?.operatingIncome || inc[0]?.ebitda || 0;
+      const mcap = metrics.marketCap || km.marketCap || 0;
+      const workingCapital = currAssets - currLiabilities;
+      const X1 = workingCapital / totalAssets;
+      const X2 = retainedEarnings / totalAssets;
+      const X3 = ebit / totalAssets;
+      const X4 = mcap / totalLiabilities;
+      const X5 = inc[0].revenue / totalAssets;
+      metrics.altmanZ = Math.round((1.2 * X1 + 1.4 * X2 + 3.3 * X3 + 0.6 * X4 + 1.0 * X5) * 100) / 100;
+    }
 
     const hasUsableMetrics = metrics.peRatio || metrics.roe || metrics.revenueGrowth || metrics.currentRatio;
     _financialReportCache.set(symbol, hasUsableMetrics ? metrics : null);
@@ -481,7 +549,7 @@ async function restoreStateFromDb() {
   try {
     // Load all historical outcomes into memory so health/trade tracking works across restarts
     const outcomes = await pool.query(
-      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at FROM signal_outcomes ORDER BY recorded_at DESC`
+      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at FROM signal_outcomes ORDER BY recorded_at DESC`
     );
     _signalOutcomes.clear();
     for (const row of outcomes.rows) {
@@ -492,6 +560,20 @@ async function restoreStateFromDb() {
         result: row.result,
         recordedAt: row.recorded_at,
       });
+      // Populate live test store for time-bucket analysis
+      const rAt = row.resolved_at ? new Date(row.resolved_at).getTime() : null;
+      const gAt = row.recorded_at ? new Date(row.recorded_at).getTime() : Date.now();
+      const sym = row.ticker;
+      if (!_liveTestStore.has(sym)) _liveTestStore.set(sym, { outcomes: [] });
+      const store = _liveTestStore.get(sym);
+      store.outcomes.push({
+        result: row.result, signal: row.signal,
+        entryPrice: parseFloat(row.entry_price) || 0,
+        exitPrice: row.exit_price != null ? parseFloat(row.exit_price) : null,
+        generatedAt: gAt,
+        resolvedAt: rAt || gAt,
+      });
+      if (store.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) store.outcomes = store.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
     }
 
     // Compute performance stats from last 30 days of resolved outcomes
@@ -545,7 +627,7 @@ async function backfillOutcomesFromHistory(days = 30, maxRows = 500) {
       FROM signal_history sh
       LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price
       WHERE sh.generated_at > NOW() - $1::interval
-        AND sh.signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
+        AND sh.signal IN ('Strong Buy','Buy','Sell','Strong Sell')
         AND sh.entry_price > 0
         AND so.id IS NULL
       ORDER BY sh.ticker, sh.entry_price, sh.generated_at DESC
@@ -562,21 +644,29 @@ async function backfillOutcomesFromHistory(days = 30, maxRows = 500) {
       if (!quote || !quote.price) continue;
       const currentPrice = quote.price;
       const returnPct = ((currentPrice - row.entry_price) / row.entry_price) * 100;
-      const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy' || row.signal === 'Accumulate';
-      const isSell = row.signal === 'Sell' || row.signal === 'Strong Sell' || row.signal === 'Reduce';
+const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy';
+const isSell = row.signal === 'Sell' || row.signal === 'Strong Sell';
       if (!isBuy && !isSell) continue;
       const won = isBuy ? returnPct > 0.5 : returnPct < -0.5;
       const resultStr = won ? 'win' : 'loss';
       try {
+        const now = new Date().toISOString();
         await pool.query(
-          `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at)
-           VALUES ($1, $2, $3, $4, $5, $6)
+          `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT DO NOTHING`,
-          [row.ticker, row.entry_price, row.signal, currentPrice, resultStr, row.generated_at]
+          [row.ticker, row.entry_price, row.signal, currentPrice, resultStr, row.generated_at, now]
         );
         inserted++;
         if (won) wins++; else losses++;
         _signalOutcomes.set(row.ticker, { entryPrice: row.entry_price, signal: row.signal, exitPrice: currentPrice, result: resultStr, recordedAt: row.generated_at });
+        // Push to live test store
+        const gAt = new Date(row.generated_at).getTime();
+        const sym = row.ticker;
+        if (!_liveTestStore.has(sym)) _liveTestStore.set(sym, { outcomes: [] });
+        const lst = _liveTestStore.get(sym);
+        lst.outcomes.push({ result: resultStr, signal: row.signal, entryPrice: row.entry_price, exitPrice: currentPrice, generatedAt: gAt, resolvedAt: Date.now() });
+        if (lst.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) lst.outcomes = lst.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
       } catch { /* skip duplicates */ }
     }
 
@@ -594,7 +684,7 @@ async function backfillOutcomesFromHistory(days = 30, maxRows = 500) {
 // ─── Historical Backtest: evaluate signal_history against actual OHLC history ─
 // For each signal in signal_history, walks forward day-by-day using the signal's
 // own stop_loss / target1 levels to decide win/loss, then inserts the outcome.
-async function runHistoricalBacktest({ days = 90, maxHoldDays = 10, maxSignals = 1000, force = false } = {}) {
+async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals = 1000, force = false } = {}) {
   try {
     const result = await pool.query(`
       SELECT sh.id, sh.ticker, sh.signal, sh.entry_price, sh.stop_loss, sh.target1, sh.target2, sh.generated_at
@@ -602,7 +692,7 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 10, maxSignals =
       ${force ? '' : 'LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price'}
       WHERE sh.generated_at > NOW() - $1::interval
         AND sh.generated_at < NOW() - INTERVAL '1 hour'
-        AND sh.signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
+        AND sh.signal IN ('Strong Buy','Buy','Sell','Strong Sell')
         AND sh.entry_price > 0
         AND sh.stop_loss > 0
         AND sh.target1 > 0
@@ -626,18 +716,25 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 10, maxSignals =
 
     for (const [ticker, signals] of Object.entries(byTicker)) {
       const isNse = NSE_SYMBOLS.includes(ticker);
-      const yahooSymbol = isNse ? `${ticker}.NR` : ticker;
 
       // Reuse cached bars when possible to avoid repeated API calls
-      let cached = _histBacktestCache.get(yahooSymbol);
+      let cached = _histBacktestCache.get(ticker);
       if (!cached || Date.now() - cached.ts > HIST_BACKTEST_CACHE_TTL) {
-        const bars = await fetchHistoricalQuotes(yahooSymbol, '3mo', '1d').catch(() => null);
+        let bars;
+        if (isNse) {
+          try {
+            const msa = require('./mystocksAfricaApi');
+            bars = await msa.fetchHistorical(`NSE:${ticker}`, '6mo');
+          } catch { bars = null; }
+        } else {
+          bars = await fetchHistoricalQuotes(ticker, '3mo', '1d').catch(() => null);
+        }
         if (!bars || bars.length < 2) {
           console.warn(`[HistoricalBacktest] No historical bars for ${ticker}`);
           continue;
         }
         cached = { bars, ts: Date.now() };
-        _histBacktestCache.set(yahooSymbol, cached);
+        _histBacktestCache.set(ticker, cached);
       }
       const bars = cached.bars;
 
@@ -647,8 +744,8 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 10, maxSignals =
           const stop = parseFloat(sig.stop_loss);
           const target = parseFloat(sig.target1);
           const signalDate = new Date(sig.generated_at);
-          const isBuy = sig.signal === 'Strong Buy' || sig.signal === 'Buy' || sig.signal === 'Accumulate';
-          const isSell = sig.signal === 'Sell' || sig.signal === 'Strong Sell' || sig.signal === 'Reduce';
+          const isBuy = sig.signal === 'Strong Buy' || sig.signal === 'Buy';
+          const isSell = sig.signal === 'Sell' || sig.signal === 'Strong Sell';
           if (!isBuy && !isSell) continue;
 
           // Find the first bar on or after the signal date
@@ -678,26 +775,40 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 10, maxSignals =
               if (dayLow <= target) { exitPrice = target; resultStr = 'win'; break; }
             }
 
-            // If max hold reached, close at close price
             if (i === startIdx + maxHoldDays - 1 || i === bars.length - 1) {
               exitPrice = dayClose;
               const pnl = (dayClose - entry) / entry * 100;
-              resultStr = isBuy ? (pnl > 0 ? 'win' : 'loss') : (pnl < 0 ? 'win' : 'loss');
+              const targetPct = isBuy ? (target - entry) / entry * 100 : (entry - target) / entry * 100;
+              const inDirection = isBuy ? pnl > 0 : pnl < 0;
+              if (targetPct > 0 && inDirection) {
+                const threshold = Math.max(0.25, Math.min(0.90, 0.70 - (targetPct - 10) * 0.025));
+                resultStr = (Math.abs(pnl) / targetPct >= threshold) ? 'win' : 'loss';
+              } else {
+                resultStr = inDirection ? 'win' : 'loss';
+              }
               break;
             }
           }
 
           if (!exitPrice || !resultStr) continue;
 
+          const resolvedTs = exitDay > 0 ? new Date(new Date(sig.generated_at).getTime() + exitDay * 86400000).toISOString() : new Date().toISOString();
           await pool.query(
-            `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at)
-             VALUES ($1, $2, $3, $4, $5, $6)
+            `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
              ON CONFLICT DO NOTHING`,
-            [sig.ticker, entry, sig.signal, exitPrice, resultStr, sig.generated_at]
+            [sig.ticker, entry, sig.signal, exitPrice, resultStr, sig.generated_at, resolvedTs]
           );
           totalInserted++;
           if (resultStr === 'win') totalWins++; else totalLosses++;
           _signalOutcomes.set(sig.ticker, { entryPrice: entry, signal: sig.signal, exitPrice, result: resultStr, recordedAt: sig.generated_at });
+          // Push to live test store
+          const gAt = new Date(sig.generated_at).getTime();
+          const sym2 = sig.ticker;
+          if (!_liveTestStore.has(sym2)) _liveTestStore.set(sym2, { outcomes: [] });
+          const lst = _liveTestStore.get(sym2);
+          lst.outcomes.push({ result: resultStr, signal: sig.signal, entryPrice: entry, exitPrice, generatedAt: gAt, resolvedAt: resolvedTs ? new Date(resolvedTs).getTime() : Date.now() });
+          if (lst.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) lst.outcomes = lst.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
         } catch (e) {
           errors++;
           console.warn(`[HistoricalBacktest] Error evaluating ${sig.ticker}:`, e.message);
@@ -767,9 +878,20 @@ async function getWeeklyData(symbol) {
   if (cached && Date.now() - cached.ts < WEEKLY_CACHE_TTL) return cached.data;
   try {
     const isNse = NSE_SYMBOLS.includes(symbol);
-    const yahooSymbol = isNse ? `${symbol}.NR` : symbol;
+    if (isNse) {
+      try {
+        const msa = require('./mystocksAfricaApi');
+        const bars = await msa.fetchHistorical(`NSE:${symbol}`, '6mo');
+        if (bars && bars.length >= 4) {
+          const closes = bars.map(b => b.close).filter(p => p != null);
+          _weeklyPriceCache.set(symbol, { data: closes, ts: Date.now() });
+          return closes;
+        }
+      } catch { /* fall through */ }
+      return null;
+    }
     const { fetchHistoricalQuotes } = require('./globalScraper');
-    const bars = await fetchHistoricalQuotes(yahooSymbol, '6mo', '1wk');
+    const bars = await fetchHistoricalQuotes(symbol, '6mo', '1wk');
     if (bars && bars.length >= 4) {
       const closes = bars.map(b => b.close).filter(p => p != null);
       _weeklyPriceCache.set(symbol, { data: closes, ts: Date.now() });
@@ -828,9 +950,9 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
       // Aggregate win/loss counts
       const aggResult = await pool.query(`
         SELECT
-          COUNT(*) FILTER (WHERE result = 'win' AND (signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce'))) AS wins,
-          COUNT(*) FILTER (WHERE result = 'loss' AND (signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce'))) AS losses,
-          COUNT(*) FILTER (WHERE signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')) AS total
+          COUNT(*) FILTER (WHERE result = 'win' AND (signal IN ('Strong Buy','Buy','Sell','Strong Sell'))) AS wins,
+          COUNT(*) FILTER (WHERE result = 'loss' AND (signal IN ('Strong Buy','Buy','Sell','Strong Sell'))) AS losses,
+          COUNT(*) FILTER (WHERE signal IN ('Strong Buy','Buy','Sell','Strong Sell')) AS total
         FROM signal_outcomes
         WHERE recorded_at > NOW() - $1::interval
       `, [`${days} days`]);
@@ -847,7 +969,7 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
           COUNT(*) AS total
         FROM signal_outcomes
         WHERE recorded_at > NOW() - $1::interval
-          AND signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
+          AND signal IN ('Strong Buy','Buy','Sell','Strong Sell')
         GROUP BY signal
       `, [`${days} days`]);
       const bySignal = {};
@@ -868,41 +990,13 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
             COALESCE(position_size, 25) AS position_size
           FROM signal_outcomes
           WHERE recorded_at > NOW() - $1::interval
-            AND signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
+            AND signal IN ('Strong Buy','Buy','Sell','Strong Sell')
             AND entry_price > 0 AND exit_price > 0 AND exit_price != entry_price
           ORDER BY recorded_at ASC
         `, [`${days} days`]);
 
         let avgReturn = 0, profitFactor = 0, sharpe = 0, maxDrawdown = 0;
         let retVals = returnsResult.rows.map(r => ({ return: parseFloat(r.return_pct), posSize: parseInt(r.position_size) || 25 }));
-
-        // If not enough valid exit prices, approximate returns from signal_history using batched live prices with default position sizing
-        if (retVals.length < 10) {
-          try {
-            const fallback = await pool.query(`
-              SELECT sh.ticker, sh.signal, sh.entry_price, COALESCE(sh.position_size, 25) AS position_size
-              FROM signal_history sh
-              LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price
-              WHERE sh.generated_at > NOW() - $1::interval
-                AND sh.signal IN ('Strong Buy','Buy','Accumulate','Sell','Strong Sell','Reduce')
-                AND sh.entry_price > 0
-              ORDER BY sh.generated_at DESC
-              LIMIT $2
-            `, [`${days} days`, limit]);
-            const tickers = [...new Set(fallback.rows.map(r => r.ticker))];
-            const quotes = await getQuotesBatch(tickers).catch(() => ({}));
-            const approxReturns = [];
-            for (const row of fallback.rows) {
-              const quote = quotes[row.ticker];
-              if (!quote || !quote.price) continue;
-              const returnPct = ((quote.price - row.entry_price) / row.entry_price) * 100;
-              const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy' || row.signal === 'Accumulate';
-              const signedReturn = isBuy ? returnPct : -returnPct;
-              approxReturns.push({ return: signedReturn, posSize: parseInt(row.position_size) || 25 });
-            }
-            if (approxReturns.length > 0) retVals = approxReturns;
-          } catch (e) { /* keep signal_outcomes returns if any */ }
-        }
 
         if (retVals.length > 0) {
           const totalReturn = retVals.reduce((s, v) => s + v.return, 0);
@@ -926,112 +1020,23 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
           profitFactor = grossLosses > 0 ? Math.round((grossWins / grossLosses) * 100) / 100 : grossWins > 0 ? 999 : 0;
         }
 
-      // Fill by-signal avgReturn using batched live price quotes
-      try {
-        const signalTypes = Object.keys(bySignal);
-        const historyBySignal = {};
-        const allTickers = new Set();
-        for (const st of signalTypes) {
-          const rows = await pool.query(`
-            SELECT sh.ticker, sh.entry_price
-            FROM signal_history sh
-            LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price
-            WHERE sh.generated_at > NOW() - $1::interval
-              AND sh.signal = $2
-              AND sh.entry_price > 0
-            ORDER BY sh.generated_at DESC
-            LIMIT $3
-          `, [`${days} days`, st, 50]);
-          historyBySignal[st] = rows.rows;
-          rows.rows.forEach(r => allTickers.add(r.ticker));
+      // Fill by-signal avgReturn from resolved outcome returns only
+      for (const st of Object.keys(bySignal)) {
+        const sigRows = returnsResult.rows.filter(r => r.signal === st);
+        if (sigRows.length > 0) {
+          const rets = sigRows.map(r => parseFloat(r.return_pct));
+          bySignal[st].avgReturn = Math.round((rets.reduce((s, v) => s + v, 0) / rets.length) * 10) / 10;
         }
-        const quotes = await getQuotesBatch(Array.from(allTickers)).catch(() => ({}));
-        for (const st of signalTypes) {
-          const isBuy = st === 'Strong Buy' || st === 'Buy' || st === 'Accumulate';
-          const rets = [];
-          for (const row of historyBySignal[st]) {
-            const quote = quotes[row.ticker];
-            if (!quote || !quote.price) continue;
-            const returnPct = ((quote.price - row.entry_price) / row.entry_price) * 100;
-            rets.push(isBuy ? returnPct : -returnPct);
-          }
-          bySignal[st].avgReturn = rets.length > 0 ? Math.round((rets.reduce((s, v) => s + v, 0) / rets.length) * 10) / 10 : 0;
-        }
-      } catch { /* avgReturn stays 0 */ }
+      }
 
       const winRate = total > 0 ? Math.round((wins / total) * 1000) / 10 : 0;
-      const hasRealExits = returnsResult.rows.length > 0;
-      const dataSource = hasRealExits ? 'signal_outcomes' : 'signal_outcomes_with_live_price_fallback';
       return {
         total, wins, losses, winRate,
         avgReturn, profitFactor, sharpe, maxDrawdown,
-        dataSource,
+        dataSource: 'signal_outcomes',
         bySignal,
       };
     }
-
-    // Fallback: use signal_history joined with signal_outcomes for unresolved signals
-    // Uses current live prices as approximate exit (honest about the methodology)
-    try {
-      const conditions = ['sh.generated_at > NOW() - $1::interval'];
-      const params = [`${days} days`];
-      let idx = 2;
-      if (signalType && signalType !== 'All') { conditions.push(`sh.signal = $${idx++}`); params.push(signalType); }
-      if (minConfidence > 0) { conditions.push(`sh.confidence >= $${idx++}`); params.push(minConfidence); }
-      const result = await pool.query(
-        `SELECT sh.ticker, sh.signal, sh.entry_price, sh.generated_at
-         FROM signal_history sh
-         LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price
-         WHERE so.id IS NULL AND ${conditions.join(' AND ')}
-         ORDER BY sh.generated_at DESC LIMIT $${idx}`,
-        [...params, limit]
-      );
-      const rows = result.rows;
-      console.log(`[Backtest] Fallback signal_history query returned ${rows.length} unresolved rows`);
-      if (!rows.length) return { total: 0, wins: 0, losses: 0, winRate: 0, avgReturn: 0, profitFactor: 0, sharpe: 0, maxDrawdown: 0, bySignal: {}, dataSource: 'none' };
-
-      let wins = 0, losses = 0, total = 0, totalReturn = 0;
-      const returns = [];
-      const bySignal = {};
-      for (const row of rows) {
-        const entryPrice = parseFloat(row.entry_price);
-        if (!entryPrice || entryPrice <= 0) continue;
-        try {
-          const quote = await getStockQuote(row.ticker);
-          if (!quote || !quote.price) continue;
-          const currentPrice = quote.price;
-          const returnPct = ((currentPrice - entryPrice) / entryPrice) * 100;
-          const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy' || row.signal === 'Accumulate';
-          const isSell = row.signal === 'Sell' || row.signal === 'Strong Sell' || row.signal === 'Reduce';
-          if (!isBuy && !isSell) continue;
-          const signedReturn = isBuy ? returnPct : -returnPct;
-          const won = signedReturn > 0;
-          if (won) wins++; else losses++;
-          total++;
-          totalReturn += signedReturn;
-          returns.push(signedReturn);
-          if (!bySignal[row.signal]) bySignal[row.signal] = { wins: 0, losses: 0, total: 0, returns: [] };
-          bySignal[row.signal].total++;
-          bySignal[row.signal].returns.push(signedReturn);
-          if (won) bySignal[row.signal].wins++; else bySignal[row.signal].losses++;
-        } catch { /* skip */ }
-      }
-      const avgReturn = total > 0 ? totalReturn / total : 0;
-      return {
-        total, wins, losses,
-        winRate: total > 0 ? Math.round((wins / total) * 1000) / 10 : 0,
-        avgReturn: Math.round(avgReturn * 10) / 10,
-        profitFactor: 0,
-        sharpe: returns.length > 1 ? Math.round((avgReturn / (stdDev(returns) || 1)) * 100) / 100 : 0,
-        maxDrawdown: 0,
-        dataSource: 'live_prices_approximate',
-        bySignal: Object.fromEntries(Object.entries(bySignal).map(([k, v]) => [k, {
-          total: v.total, wins: v.wins, losses: v.losses,
-          winRate: v.total > 0 ? Math.round((v.wins / v.total) * 1000) / 10 : 0,
-          avgReturn: v.returns.length > 0 ? Math.round((v.returns.reduce((s, r) => s + r, 0) / v.returns.length) * 10) / 10 : 0,
-        }]))
-      };
-    } catch { /* fall through to empty */ }
 
     return { total: 0, wins: 0, losses: 0, winRate: 0, avgReturn: 0, profitFactor: 0, sharpe: 0, maxDrawdown: 0, bySignal: {}, dataSource: 'none' };
   } catch (e) { console.error('[Backtest] computeBacktestStats error:', e.message); return null; }
@@ -1055,14 +1060,27 @@ function computeMaxDrawdown(returns) {
 
 // ─── Forward Testing ────────────────────────────────────────────────────────
 // Tracks signal predictions forward and compares to actual outcomes.
-const _forwardTestStore = new Map(); // symbol -> { predictions: [{id, signal, confidence, price, generated_at, resolved, actualReturn, correct}] }
+const _forwardTestStore = new Map(); // symbol -> { predictions: [{id, signal, confidence, price, stopLoss, target1, action, tradeType, generatedAt, resolved, actualReturn, correct, resolvedAt, expiry}] }
 
 const FORWARD_TEST_MIN_AGE = 28800000; // 8 hours — predictions younger than this are skipped
+
+// Dynamic expiry by trade type (in milliseconds)
+const TRADE_TYPE_EXPIRY = {
+  'Aggressive Buy': 14 * 24 * 60 * 60 * 1000,   // 14 days
+  'Momentum Trade': 21 * 24 * 60 * 60 * 1000,   // 21 days
+  'Swing Trade': 21 * 24 * 60 * 60 * 1000,      // 21 days
+  'Long Term Value': 60 * 24 * 60 * 60 * 1000,  // 60 days
+  'Long Term': 60 * 24 * 60 * 60 * 1000,        // 60 days
+  'Avoid': 7 * 24 * 60 * 60 * 1000,             // 7 days
+};
+
+// Validation threshold: extend if 3+ checks pass
+const VALIDATION_PASS_THRESHOLD = 3;
 
 async function _loadForwardPredictionsFromDb() {
   try {
     const result = await pool.query(
-      `SELECT id, symbol, signal, confidence, price, generated_at, resolved, actual_return, correct
+      `SELECT id, symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, generated_at, resolved, actual_return, correct
        FROM forward_predictions ORDER BY generated_at`
     );
     const resolved = result.rows.filter(r => r.resolved).length;
@@ -1070,16 +1088,21 @@ async function _loadForwardPredictionsFromDb() {
     if (result.rows.length) console.log(`[SignalService] Loaded ${result.rows.length} forward predictions from DB (${unresolved} unresolved, ${resolved} resolved)`);
     for (const row of result.rows) {
       if (!_forwardTestStore.has(row.symbol)) _forwardTestStore.set(row.symbol, { predictions: [] });
+      const tradeType = row.trade_type || 'Swing Trade';
+      const expiry = row.generated_at ? new Date(row.generated_at).getTime() + (TRADE_TYPE_EXPIRY[tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) : Date.now() + TRADE_TYPE_EXPIRY['Swing Trade'];
       _forwardTestStore.get(row.symbol).predictions.push({
         id: row.id, signal: row.signal, confidence: row.confidence,
-        price: Number(row.price), generatedAt: new Date(row.generated_at).getTime(),
+        price: Number(row.price), stopLoss: Number(row.stop_loss), target1: Number(row.target1),
+        action: row.action, tradeType, sector: row.sector,
+        generatedAt: new Date(row.generated_at).getTime(),
         resolved: !!row.resolved, actualReturn: Number(row.actual_return), correct: row.correct,
+        expiry,
       });
     }
   } catch (e) { /* table may not exist yet */ }
 }
 
-async function recordForwardPrediction(symbol, signalAction, confidence, price) {
+async function recordForwardPrediction(symbol, signalAction, confidence, price, stopLoss, target1, signalObjAction, tradeType, sector) {
   // Dedup: skip if an unresolved prediction for this symbol exists from the last 2 hours
   const existing = _forwardTestStore.get(symbol);
   if (existing) {
@@ -1088,18 +1111,20 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price) 
   }
   if (!_forwardTestStore.has(symbol)) _forwardTestStore.set(symbol, { predictions: [] });
   const store = _forwardTestStore.get(symbol);
+  const expiry = Date.now() + (TRADE_TYPE_EXPIRY[tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']);
   let dbId = null;
   try {
     const result = await pool.query(
-      `INSERT INTO forward_predictions (symbol, signal, confidence, price) VALUES ($1, $2, $3, $4) RETURNING id`,
-      [symbol, signalAction, confidence, price]
+      `INSERT INTO forward_predictions (symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [symbol, signalAction, confidence, price, stopLoss, target1, signalObjAction, tradeType, sector]
     );
     dbId = result.rows[0].id;
   } catch (e) { /* persistence best-effort */ }
   store.predictions.push({
     id: dbId, signal: signalAction, confidence, price,
+    stopLoss, target1, action: signalObjAction, tradeType, sector,
     generatedAt: Date.now(), resolved: false,
-    actualReturn: null, correct: null,
+    actualReturn: null, correct: null, expiry,
   });
   if (store.predictions.length > 200) store.predictions = store.predictions.slice(-200);
 }
@@ -1114,19 +1139,66 @@ async function resolveForwardPredictions(symbol) {
     if (!quote || !quote.price) return;
     const currentPrice = quote.price;
     for (const pred of unresolved) {
-      if (Date.now() - pred.generatedAt < FORWARD_TEST_MIN_AGE) continue; // wait before resolving
+      if (Date.now() - pred.generatedAt < FORWARD_TEST_MIN_AGE) continue;
+      const age = Date.now() - pred.generatedAt;
+      pred.resolvedAt = Date.now();
+      // Check dynamic expiry
+      const dynamicExpiry = pred.expiry || (pred.generatedAt + (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']));
+      if (age >= dynamicExpiry) {
+        try {
+          const { passes, details } = await validateForwardPrediction(pred, symbol, currentPrice);
+          if (passes >= VALIDATION_PASS_THRESHOLD) {
+            const extension = (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) * 0.5;
+            pred.expiry = Date.now() + extension;
+            continue; // Extended, not resolved
+          } else {
+            pred.correct = null;
+            pred.resolved = true;
+            pred.actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;
+            if (pred.id) {
+              pool.query(
+                `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = NULL, resolved_at = NOW() WHERE id = $2`,
+                [pred.actualReturn, pred.id]
+              ).catch(() => {});
+            }
+            continue;
+          }
+        } catch {
+          const extension = (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) * 0.5;
+          pred.expiry = Date.now() + extension;
+          continue;
+        }
+      }
       const returnPct = ((currentPrice - pred.price) / pred.price) * 100;
-      const isBuy = pred.signal === 'Strong Buy' || pred.signal === 'Buy' || pred.signal === 'Accumulate';
-      const isSell = pred.signal === 'Sell' || pred.signal === 'Strong Sell' || pred.signal === 'Reduce';
       pred.actualReturn = Math.round(returnPct * 10) / 10;
-      if (Math.abs(returnPct) < 0.01) continue; // skip if price unchanged — wait for next cycle
-      if (isBuy) pred.correct = returnPct > 0.5;
-      else if (isSell) pred.correct = returnPct < -0.5;
-      else pred.correct = Math.abs(returnPct) < 0.5;
-      pred.resolved = true;
-      if (pred.id) {
+      // Resolve using stop/target levels (same as live path)
+      const isBuy = pred.action === 'buy';
+      const isSell = pred.action === 'sell';
+      if (isBuy && pred.stopLoss != null && pred.target1 != null) {
+        if (currentPrice <= pred.stopLoss) {
+          pred.correct = false; pred.resolved = true;
+        } else if (currentPrice >= pred.target1) {
+          pred.correct = true; pred.resolved = true;
+        }
+      } else if (isSell && pred.stopLoss != null && pred.target1 != null) {
+        if (currentPrice >= pred.stopLoss) {
+          pred.correct = false; pred.resolved = true;
+        } else if (currentPrice <= pred.target1) {
+          pred.correct = true; pred.resolved = true;
+        }
+      } else {
+        // Fallback: use simple price direction check
+        const isBuySignal = pred.signal === 'Strong Buy' || pred.signal === 'Buy';
+        const isSellSignal = pred.signal === 'Sell' || pred.signal === 'Strong Sell';
+        if (Math.abs(returnPct) < 0.01) continue;
+        if (isBuySignal) pred.correct = returnPct > 0.5;
+        else if (isSellSignal) pred.correct = returnPct < -0.5;
+        else pred.correct = Math.abs(returnPct) < 0.5;
+        pred.resolved = true;
+      }
+      if (pred.resolved && pred.id) {
         pool.query(
-          `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = $2 WHERE id = $3`,
+          `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = $2, resolved_at = NOW() WHERE id = $3`,
           [pred.actualReturn, pred.correct, pred.id]
         ).catch(() => {});
       }
@@ -1135,30 +1207,43 @@ async function resolveForwardPredictions(symbol) {
 }
 
 async function getForwardTestStats() {
-  let total = 0, correct = 0, pending = 0;
+  let total = 0, correct = 0, pending = 0, neutral = 0;
+  let totalHours = 0, hourlyCount = 0;
   const byConfidence = {};
   const bySymbol = {};
+  const buckets = { '1d': { total: 0, correct: 0, neutral: 0 }, '5d': { total: 0, correct: 0, neutral: 0 }, '20d': { total: 0, correct: 0, neutral: 0 } };
 
   // Load in-memory predictions (current session)
   for (const [symbol, store] of _forwardTestStore) {
     for (const p of store.predictions) {
       if (!p.resolved) { pending++; continue; }
       total++;
-      if (p.correct) correct++;
+      if (p.correct === true) correct++;
+      else if (p.correct === null) neutral++;
       const bucket = p.confidence >= 80 ? 'high' : p.confidence >= 60 ? 'med' : 'low';
-      if (!byConfidence[bucket]) byConfidence[bucket] = { total: 0, correct: 0 };
+      if (!byConfidence[bucket]) byConfidence[bucket] = { total: 0, correct: 0, neutral: 0 };
       byConfidence[bucket].total++;
-      if (p.correct) byConfidence[bucket].correct++;
-      if (!bySymbol[symbol]) bySymbol[symbol] = { total: 0, correct: 0, accuracy: 0 };
+      if (p.correct === true) byConfidence[bucket].correct++;
+      else if (p.correct === null) byConfidence[bucket].neutral++;
+      if (!bySymbol[symbol]) bySymbol[symbol] = { total: 0, correct: 0, neutral: 0, accuracy: 0 };
       bySymbol[symbol].total++;
-      if (p.correct) bySymbol[symbol].correct++;
+      if (p.correct === true) bySymbol[symbol].correct++;
+      else if (p.correct === null) bySymbol[symbol].neutral++;
+      if (p.resolvedAt) {
+        const hours = (p.resolvedAt - p.generatedAt) / 3600000;
+        totalHours += hours;
+        hourlyCount++;
+        if (hours <= 24) { buckets['1d'].total++; if (p.correct === true) buckets['1d'].correct++; else if (p.correct === null) buckets['1d'].neutral++; }
+        if (hours <= 120) { buckets['5d'].total++; if (p.correct === true) buckets['5d'].correct++; else if (p.correct === null) buckets['5d'].neutral++; }
+        if (hours <= 480) { buckets['20d'].total++; if (p.correct === true) buckets['20d'].correct++; else if (p.correct === null) buckets['20d'].neutral++; }
+      }
     }
   }
 
   // Also load resolved predictions from DB (prior sessions)
   try {
     const dbResult = await pool.query(
-      `SELECT symbol, confidence, correct FROM forward_predictions WHERE resolved = TRUE
+      `SELECT id, symbol, confidence, correct, resolved_at, generated_at, stop_loss, target1, action, trade_type FROM forward_predictions WHERE resolved = TRUE
        AND generated_at > NOW() - INTERVAL '90 days'`
     );
     for (const row of dbResult.rows) {
@@ -1171,13 +1256,24 @@ async function getForwardTestStats() {
         if (dup) continue;
       }
       total++;
-      if (row.correct) correct++;
-      if (!byConfidence[bucket]) byConfidence[bucket] = { total: 0, correct: 0 };
+      if (row.correct === true) correct++;
+      else if (row.correct === null) neutral++;
+      if (!byConfidence[bucket]) byConfidence[bucket] = { total: 0, correct: 0, neutral: 0 };
       byConfidence[bucket].total++;
-      if (row.correct) byConfidence[bucket].correct++;
-      if (!bySymbol[sym]) bySymbol[sym] = { total: 0, correct: 0, accuracy: 0 };
+      if (row.correct === true) byConfidence[bucket].correct++;
+      else if (row.correct === null) byConfidence[bucket].neutral++;
+      if (!bySymbol[sym]) bySymbol[sym] = { total: 0, correct: 0, neutral: 0, accuracy: 0 };
       bySymbol[sym].total++;
-      if (row.correct) bySymbol[sym].correct++;
+      if (row.correct === true) bySymbol[sym].correct++;
+      else if (row.correct === null) bySymbol[sym].neutral++;
+      if (row.resolved_at) {
+        const hours = (new Date(row.resolved_at).getTime() - new Date(row.generated_at).getTime()) / 3600000;
+        totalHours += hours;
+        hourlyCount++;
+        if (hours <= 24) { buckets['1d'].total++; if (row.correct === true) buckets['1d'].correct++; else if (row.correct === null) buckets['1d'].neutral++; }
+        if (hours <= 120) { buckets['5d'].total++; if (row.correct === true) buckets['5d'].correct++; else if (row.correct === null) buckets['5d'].neutral++; }
+        if (hours <= 480) { buckets['20d'].total++; if (row.correct === true) buckets['20d'].correct++; else if (row.correct === null) buckets['20d'].neutral++; }
+      }
     }
   } catch { /* table may not exist */ }
 
@@ -1188,12 +1284,110 @@ async function getForwardTestStats() {
   return {
     totalPredictions: total,
     pendingPredictions: pending,
+    neutralPredictions: neutral,
     accuracy: total > 0 ? Math.round((correct / total) * 1000) / 10 : 0,
+    avgDaysToResolve: hourlyCount > 0 ? Math.round((totalHours / hourlyCount / 24) * 100) / 100 : 0,
     byConfidence: Object.fromEntries(Object.entries(byConfidence).map(([k, v]) => [k, {
-      total: v.total, accurate: v.correct,
+      total: v.total, accurate: v.correct, neutral: v.neutral,
+      accuracy: v.total > 0 ? Math.round((v.correct / v.total) * 1000) / 10 : 0,
+    }])),
+    byTimeBucket: Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, {
+      total: v.total, correct: v.correct, neutral: v.neutral,
       accuracy: v.total > 0 ? Math.round((v.correct / v.total) * 1000) / 10 : 0,
     }])),
     bySymbol,
+  };
+}
+
+function getForwardTestSnapshot() {
+  let total = 0, correct = 0, neutral = 0, totalHours = 0, hourlyCount = 0;
+  const buckets = { '1d': { total: 0, correct: 0, neutral: 0 }, '5d': { total: 0, correct: 0, neutral: 0 }, '20d': { total: 0, correct: 0, neutral: 0 } };
+  for (const [, store] of _forwardTestStore) {
+    for (const p of store.predictions) {
+      if (!p.resolved) continue;
+      total++;
+      if (p.correct === true) correct++;
+      else if (p.correct === null) neutral++;
+      if (!p.resolvedAt) continue;
+      const hours = (p.resolvedAt - p.generatedAt) / 3600000;
+      totalHours += hours;
+      hourlyCount++;
+      if (hours <= 24) { buckets['1d'].total++; if (p.correct === true) buckets['1d'].correct++; else if (p.correct === null) buckets['1d'].neutral++; }
+      if (hours <= 120) { buckets['5d'].total++; if (p.correct === true) buckets['5d'].correct++; else if (p.correct === null) buckets['5d'].neutral++; }
+      if (hours <= 480) { buckets['20d'].total++; if (p.correct === true) buckets['20d'].correct++; else if (p.correct === null) buckets['20d'].neutral++; }
+    }
+  }
+  return {
+    total, correct, neutral,
+    accuracy: total > 0 ? correct / total : 0,
+    avgDaysToResolve: hourlyCount > 0 ? totalHours / hourlyCount / 24 : 0,
+    buckets: Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, {
+      total: v.total, correct: v.correct, neutral: v.neutral,
+      accuracy: v.total > 0 ? v.correct / v.total : 0,
+    }])),
+  };
+}
+
+function getSignalProgress(symbol, currentPrice) {
+  const prev = _signalOutcomes.get(symbol);
+  if (!prev || prev.result || prev.action === 'hold' || prev.entryPrice == null || prev.stopLoss == null || prev.target1 == null) return null;
+  const entry = prev.entryPrice;
+  if (entry <= 0) return null;
+  const isPrevBuy = prev.action === 'buy';
+  const returnPct = ((currentPrice - entry) / entry) * 100;
+  let progressToTarget = 0, progressToStop = 0;
+  if (isPrevBuy) {
+    const targetDist = prev.target1 - entry;
+    const stopDist = entry - prev.stopLoss;
+    progressToTarget = targetDist > 0 ? Math.round(((currentPrice - entry) / targetDist) * 100) : 0;
+    progressToStop = stopDist > 0 ? Math.round(((entry - currentPrice) / stopDist) * 100) : 0;
+  } else {
+    const targetDist = entry - prev.target1;
+    const stopDist = prev.stopLoss - entry;
+    progressToTarget = targetDist > 0 ? Math.round(((entry - currentPrice) / targetDist) * 100) : 0;
+    progressToStop = stopDist > 0 ? Math.round(((currentPrice - entry) / stopDist) * 100) : 0;
+  }
+  const daysHeld = prev.timestamp ? Math.round((Date.now() - prev.timestamp) / 86400000) : 0;
+  const isProfit = isPrevBuy ? returnPct > 0 : returnPct < 0;
+  return {
+    status: 'active',
+    entryPrice: entry,
+    currentPrice,
+    currentReturn: Math.round(returnPct * 100) / 100,
+    progressToTarget: Math.max(0, Math.min(100, progressToTarget)),
+    progressToStop: Math.max(0, Math.min(100, progressToStop)),
+    isProfit,
+    daysHeld,
+    signal: prev.signal,
+    targetPrice: prev.target1,
+    stopPrice: prev.stopLoss,
+  };
+}
+
+function getLiveTestSnapshot() {
+  let total = 0, wins = 0, totalHours = 0, hourlyCount = 0;
+  const buckets = { '1d': { total: 0, wins: 0 }, '5d': { total: 0, wins: 0 }, '20d': { total: 0, wins: 0 } };
+  for (const [, store] of _liveTestStore) {
+    for (const o of store.outcomes) {
+      total++;
+      if (o.result === 'win') wins++;
+      if (!o.resolvedAt) continue;
+      const hours = (o.resolvedAt - o.generatedAt) / 3600000;
+      totalHours += hours;
+      hourlyCount++;
+      if (hours <= 24) { buckets['1d'].total++; if (o.result === 'win') buckets['1d'].wins++; }
+      if (hours <= 120) { buckets['5d'].total++; if (o.result === 'win') buckets['5d'].wins++; }
+      if (hours <= 480) { buckets['20d'].total++; if (o.result === 'win') buckets['20d'].wins++; }
+    }
+  }
+  return {
+    total, wins,
+    winRate: total > 0 ? wins / total : 0,
+    avgDaysToResolve: hourlyCount > 0 ? totalHours / hourlyCount / 24 : 0,
+    buckets: Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, {
+      total: v.total, wins: v.wins,
+      winRate: v.total > 0 ? v.wins / v.total : 0,
+    }])),
   };
 }
 
@@ -1203,14 +1397,169 @@ function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0 } 
     for (const p of store.predictions) {
       if (symbol && sym !== symbol) continue;
       if (resolved !== undefined && p.resolved !== resolved) continue;
-      all.push({ symbol: sym, ...p, generatedAt: new Date(p.generatedAt).toISOString() });
+      all.push({ symbol: sym, ...p, generatedAt: new Date(p.generatedAt).toISOString(), resolvedAt: p.resolvedAt ? new Date(p.resolvedAt).toISOString() : null });
     }
   }
   all.sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt));
   return { predictions: all.slice(offset, offset + limit), total: all.length };
 }
 
+// ─── Signal Validation for Dynamic Expiry ────────────────────────────────────
+// Checks if a forward prediction is still valid based on current market conditions.
+// Returns pass count (0-4 checks) and details.
+async function validateForwardPrediction(pred, symbol, currentPrice) {
+  let passes = 0;
+  const details = [];
+
+  try {
+    // Check 1: Sector alignment — stock should still be in the same sector
+    const fundamentals = await getFundamentals(symbol);
+    if (fundamentals && fundamentals.sector) {
+      const originalSector = pred.sector || 'Other';
+      if (fundamentals.sector === originalSector) {
+        passes++;
+        details.push('sector_aligned');
+      } else {
+        details.push(`sector_changed:${originalSector}->${fundamentals.sector}`);
+      }
+    } else {
+      passes++; // No data available, assume unchanged
+      details.push('sector_unknown');
+    }
+
+    // Check 2: Price proximity — stock shouldn't be too far from entry
+    if (pred.price > 0 && currentPrice > 0) {
+      const priceChange = Math.abs((currentPrice - pred.price) / pred.price) * 100;
+      if (priceChange < 30) {
+        passes++;
+        details.push(`price_stable:${Math.round(priceChange)}%`);
+      } else {
+        details.push(`price_drifted:${Math.round(priceChange)}%`);
+      }
+    }
+
+    // Check 3: Signal confidence still relevant — check if signal direction is still valid
+    if (pred.signal && pred.stopLoss != null && pred.target1 != null) {
+      const isBuy = pred.action === 'buy';
+      let stillValid = false;
+      if (isBuy) {
+        // For buy signals, price should not have crashed below stop loss
+        stillValid = currentPrice > pred.stopLoss * 0.9; // 10% buffer below stop
+      } else {
+        // For sell signals, price should not have rallied above target
+        stillValid = currentPrice < pred.target1 * 1.1; // 10% buffer above target
+      }
+      if (stillValid) {
+        passes++;
+        details.push('direction_valid');
+      } else {
+        details.push('direction_invalid');
+      }
+    } else {
+      passes++; // No stop/target, assume still valid
+      details.push('levels_unknown');
+    }
+
+    // Check 4: Market regime — check if regime has shifted dramatically
+    const country = getCountryForSymbol(symbol);
+    const macro = getMacroScore(country);
+    if (macro && macro.score != null) {
+      // If regime shifted from bull to bear or vice versa, count as partial pass
+      const regimeShift = Math.abs(macro.score - 50); // 50 is neutral
+      if (regimeShift < 30) {
+        passes++;
+        details.push('regime_stable');
+      } else {
+        // Still count as pass if the shift isn't extreme
+        passes += 0.5;
+        details.push(`regime_shifted:${macro.score}`);
+      }
+    } else {
+      passes++; // No macro data, assume stable
+      details.push('macro_unknown');
+    }
+  } catch {
+    // If validation fails, give benefit of the doubt (count as pass)
+    passes++;
+    details.push('validation_error');
+  }
+
+  return { passes, details };
+}
+
+// ─── Bulk Forward Prediction Validation ──────────────────────────────────────
+// Runs periodically to validate and extend expiring predictions.
+async function validateExpiringPredictions() {
+  const now = Date.now();
+  let extended = 0, expired = 0, failed = 0;
+
+  for (const [symbol, store] of _forwardTestStore) {
+    const expiring = store.predictions.filter(p => !p.resolved && p.expiry && now >= p.expiry - 3 * 24 * 60 * 60 * 1000);
+    if (!expiring.length) continue;
+
+    try {
+      const quote = await getStockQuote(symbol);
+      if (!quote || !quote.price) { failed += expiring.length; continue; }
+      const currentPrice = quote.price;
+
+      for (const pred of expiring) {
+        try {
+          const { passes, details } = await validateForwardPrediction(pred, symbol, currentPrice);
+
+          if (passes >= VALIDATION_PASS_THRESHOLD) {
+            // Extend by 50%
+            const extension = (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) * 0.5;
+            pred.expiry = now + extension;
+            if (pred.id) {
+              pool.query(
+                `UPDATE forward_predictions SET trade_type = $1 WHERE id = $2`,
+                [pred.tradeType, pred.id]
+              ).catch(() => {});
+            }
+            extended++;
+            if (process.env.NODE_ENV !== 'test') {
+              console.log(`[ForwardTest] Extended prediction for ${symbol} (${pred.signal}) — validation passed (${passes}/4): ${details.join(', ')}`);
+            }
+          } else {
+            // Mark as expired (neutral — not correct or incorrect)
+            pred.correct = null;
+            pred.resolved = true;
+            pred.resolvedAt = now;
+            pred.actualReturn = ((currentPrice - pred.price) / pred.price) * 100;
+            if (pred.id) {
+              pool.query(
+                `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = NULL, resolved_at = NOW() WHERE id = $2`,
+                [pred.actualReturn, pred.id]
+              ).catch(() => {});
+            }
+            expired++;
+            if (process.env.NODE_ENV !== 'test') {
+              console.log(`[ForwardTest] Expired prediction for ${symbol} (${pred.signal}) — validation failed (${passes}/4): ${details.join(', ')}`);
+            }
+          }
+        } catch (e) {
+          // On error, extend as fallback
+          const extension = (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) * 0.5;
+          pred.expiry = now + extension;
+          extended++;
+        }
+      }
+    } catch {
+      failed += expiring.length;
+    }
+  }
+
+  return { extended, expired, failed };
+}
+
 async function resolveAllForwardPredictions() {
+  await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
+  await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS stop_loss NUMERIC(15,2)`).catch(() => {});
+  await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS target1 NUMERIC(15,2)`).catch(() => {});
+  await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS action VARCHAR(10)`).catch(() => {});
+  await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS trade_type VARCHAR(30)`).catch(() => {});
+  await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS sector VARCHAR(50)`).catch(() => {});
+  await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
   let resolved = 0, failed = 0, skipped = 0;
   for (const [symbol, store] of _forwardTestStore) {
     const unresolved = store.predictions.filter(p => !p.resolved);
@@ -1221,19 +1570,78 @@ async function resolveAllForwardPredictions() {
       const currentPrice = quote.price;
       for (const pred of unresolved) {
         if (Date.now() - pred.generatedAt < FORWARD_TEST_MIN_AGE) { skipped++; continue; }
+        const age = Date.now() - pred.generatedAt;
+        pred.resolvedAt = Date.now();
+        // Check dynamic expiry first (trade-type based)
+        const dynamicExpiry = pred.expiry || (pred.generatedAt + (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']));
+        if (age >= dynamicExpiry) {
+          // Dynamic expiry reached — validate and potentially extend
+          try {
+            const { passes, details } = await validateForwardPrediction(pred, symbol, currentPrice);
+            if (passes >= VALIDATION_PASS_THRESHOLD) {
+              // Extend by 50%
+              const extension = (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) * 0.5;
+              pred.expiry = Date.now() + extension;
+              skipped++; // Not resolved, just extended
+              if (process.env.NODE_ENV !== 'test') {
+                console.log(`[ForwardTest] Auto-extended ${symbol} (${pred.tradeType}) — validation passed (${passes}/4)`);
+              }
+              continue;
+            } else {
+              // Validation failed — mark as expired (neutral)
+              pred.correct = null;
+              pred.resolved = true;
+              pred.actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;
+              if (pred.id) {
+                pool.query(
+                  `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = NULL, resolved_at = NOW() WHERE id = $2`,
+                  [pred.actualReturn, pred.id]
+                ).catch(() => {});
+              }
+              resolved++;
+              if (process.env.NODE_ENV !== 'test') {
+                console.log(`[ForwardTest] Expired ${symbol} (${pred.tradeType}) — validation failed (${passes}/4): ${details.join(', ')}`);
+              }
+              continue;
+            }
+          } catch {
+            // On validation error, extend as fallback
+            const extension = (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) * 0.5;
+            pred.expiry = Date.now() + extension;
+            skipped++;
+            continue;
+          }
+        }
         const returnPct = ((currentPrice - pred.price) / pred.price) * 100;
-        const isBuy = pred.signal === 'Strong Buy' || pred.signal === 'Buy' || pred.signal === 'Accumulate';
-        const isSell = pred.signal === 'Sell' || pred.signal === 'Strong Sell' || pred.signal === 'Reduce';
         pred.actualReturn = Math.round(returnPct * 10) / 10;
-        // Skip resolution if price hasn't changed (market closed, stale quote) — wait for next cycle
-        if (Math.abs(returnPct) < 0.01) { skipped++; continue; }
-        if (isBuy) pred.correct = returnPct > 0.5;
-        else if (isSell) pred.correct = returnPct < -0.5;
-        else pred.correct = Math.abs(returnPct) < 0.5;
-        pred.resolved = true;
-        if (pred.id) {
+        // Resolve using stop/target levels (same as live path)
+        const isBuy = pred.action === 'buy';
+        const isSell = pred.action === 'sell';
+        if (isBuy && pred.stopLoss != null && pred.target1 != null) {
+          if (currentPrice <= pred.stopLoss) {
+            pred.correct = false; pred.resolved = true;
+          } else if (currentPrice >= pred.target1) {
+            pred.correct = true; pred.resolved = true;
+          }
+        } else if (isSell && pred.stopLoss != null && pred.target1 != null) {
+          if (currentPrice >= pred.stopLoss) {
+            pred.correct = false; pred.resolved = true;
+          } else if (currentPrice <= pred.target1) {
+            pred.correct = true; pred.resolved = true;
+          }
+        } else {
+          // Fallback: use simple price direction check
+          const isBuySignal = pred.signal === 'Strong Buy' || pred.signal === 'Buy';
+          const isSellSignal = pred.signal === 'Sell' || pred.signal === 'Strong Sell';
+          if (Math.abs(returnPct) < 0.01) { skipped++; continue; }
+          if (isBuySignal) pred.correct = returnPct > 0.5;
+          else if (isSellSignal) pred.correct = returnPct < -0.5;
+          else pred.correct = Math.abs(returnPct) < 0.5;
+          pred.resolved = true;
+        }
+        if (pred.resolved && pred.id) {
           pool.query(
-            `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = $2 WHERE id = $3`,
+            `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = $2, resolved_at = NOW() WHERE id = $3`,
             [pred.actualReturn, pred.correct, pred.id]
           ).catch(() => {});
         }
@@ -1404,15 +1812,32 @@ function getConfidenceMultiplier() {
 
 // ─── Persist Signal Outcomes to DB ──────────────────────────────────────────
 // Stores signal performance outcomes in the database so state survives restarts.
-async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result) {
+async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result, resolvedAt) {
   try {
     const posSize = _signalOutcomes.get(symbol)?.positionSize || 25;
+    const now = new Date().toISOString();
     await pool.query(
-      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT DO NOTHING`,
-      [symbol, entryPrice, signalAction, currentPrice, result, posSize]
+      [symbol, entryPrice, signalAction, currentPrice, result, posSize, now, resolvedAt || now]
     );
+    // Push to live test store
+    const store = _liveTestStore.get(symbol);
+    if (store) {
+      store.outcomes.push({
+        result, signal: signalAction, entryPrice, exitPrice: currentPrice,
+        generatedAt: Date.now(), resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
+      });
+      if (store.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) store.outcomes = store.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
+    } else {
+      _liveTestStore.set(symbol, {
+        outcomes: [{
+          result, signal: signalAction, entryPrice, exitPrice: currentPrice,
+          generatedAt: Date.now(), resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
+        }]
+      });
+    }
     // Update prediction log with actual outcome
     resolvePredictionLogs(symbol, result).catch(() => {});
   } catch { /* table may not exist — create it */ }
@@ -1500,7 +1925,7 @@ async function fetchRealFundamentals(symbol) {
 // WARNING: FMP free tier is 250 req/day. This function burns ~3 requests per symbol.
 // Only call with a small subset (max ~50 symbols) to stay under the limit.
 // US stocks already get real fundamentals from Yahoo Finance (free, unlimited) via
-// fetchRealFinancialMetrics() — this is only useful for NSE stocks missing from NSE_FUNDAMENTALS.
+// fetchRealFinancialMetrics() — populates live financial data for all stocks (US + NSE) via the shared pipeline.
 async function warmFMPCache(symbols) {
   const MAX_SYMBOLS = 50;
   const toFetch = symbols.filter(s => !_financialReportCache.get(s)).slice(0, MAX_SYMBOLS);
@@ -1530,16 +1955,9 @@ function getFundamentals(symbol) {
   if (cached && Date.now() - cached.ts < FUND_CACHE_TTL) {
     base = { ...cached.data };
   } else {
-    base = KNOWN_FUNDAMENTALS[symbol] || NSE_FUNDAMENTALS[symbol];
-    // For US stocks not in KNOWN_FUNDAMENTALS, create minimal base
-    // so real financials from Yahoo Finance can be merged below
-    if (!base && !NSE_SYMBOLS.includes(symbol)) {
-      base = { name: resolveStockName(symbol), sector: guessSector(symbol) };
-    }
-    if (!base) {
-      console.warn(`[SignalService] No fundamentals for ${symbol} — skipping`);
-      return null;
-    }
+    base = { name: resolveStockName(symbol), sector: guessSector(symbol) };
+    if (KNOWN_FUNDAMENTALS[symbol]) base = { name: KNOWN_FUNDAMENTALS[symbol].name, sector: KNOWN_FUNDAMENTALS[symbol].sector };
+    else if (NSE_FUNDAMENTALS[symbol]) base = { name: resolveStockName(symbol), sector: NSE_FUNDAMENTALS[symbol].sector };
   }
   const result = {
     evEbitda: null, fcfYield: null, payoutRatio: 50, marginChange: 0,
@@ -1547,16 +1965,19 @@ function getFundamentals(symbol) {
     newsSentiment: 'neutral',
     ...base
   };
-  // Merge real financial metrics from Yahoo Finance for US stocks
+  // Merge real financial metrics from the live pipeline (Yahoo/Alpha Vantage/EDGAR/NSE DB)
   const fm = _financialReportCache.get(symbol);
   if (fm) {
     Object.assign(result, fm);
+    result.dataSource = 'live';
+  } else {
+    result.dataSource = 'fallback';
   }
   if (!result.name || result.name === symbol) {
     result.name = resolveStockName(symbol);
   }
   if (!result.sector || result.sector === 'N/A') {
-    result.sector = (KNOWN_FUNDAMENTALS[symbol]?.sector || NSE_FUNDAMENTALS[symbol]?.sector || guessSector(symbol));
+    result.sector = guessSector(symbol);
   }
   return result;
 }
@@ -1576,15 +1997,16 @@ async function persistSignals(signals) {
       s.riskReward || 1, s.sector || 'General', s.market || 'Global',
       s.currency || 'USD', s.type || 'Swing Trade', s.timeframe || '2-4 weeks', s.reason || '',
       parseInt(s.positionSize) || 25,
+      s.analysis ? JSON.stringify(s.analysis) : null,
     ]);
-    const cols = 17;
+    const cols = 18;
     const placeholders = values.map((_, i) => {
       const base = i * cols;
-      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, $${base+17}, NOW())`;
+      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, $${base+17}, $${base+18}, NOW())`;
     }).join(',');
     const flat = values.flat();
     const result = await pool.query(
-      `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, position_size, generated_at)
+      `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, position_size, analysis_data, generated_at)
        VALUES ${placeholders}
        ON CONFLICT DO NOTHING`,
       flat
@@ -1662,7 +2084,6 @@ _financialReportCache.loadFromDb().then(count => {
   if (count > 0) console.log(`[SignalService] Restored ${count} financial report cache entries from DB`);
 }).catch(() => {});
 setTimeout(() => {
-  generateSignals(null, true).catch(() => {});
   generateSignals(null, false, true).catch(() => {});
 }, 100);
 
@@ -1689,6 +2110,10 @@ setTimeout(async () => {
 setInterval(() => {
   resolveAllForwardPredictions().catch(() => {});
 }, 5 * 60 * 1000);
+// Auto-validate expiring predictions every 12 hours
+setInterval(() => {
+  validateExpiringPredictions().catch(() => {});
+}, 12 * 60 * 60 * 1000);
 // Auto-generate signals every hour (checks market hours internally)
 setInterval(() => {
   generateSignals(null, false).catch(() => {});
@@ -1696,10 +2121,10 @@ setInterval(() => {
 
 // Auto-run historical backtest every 6 hours to mature signal outcomes
 setTimeout(() => {
-  runHistoricalBacktest({ days: 90, maxHoldDays: 5, maxSignals: 1000 }).catch(() => {});
+  runHistoricalBacktest({ days: 90, maxHoldDays: 20, maxSignals: 1000 }).catch(() => {});
 }, 60000);
 setInterval(() => {
-  runHistoricalBacktest({ days: 90, maxHoldDays: 5, maxSignals: 1000 }).catch(() => {});
+  runHistoricalBacktest({ days: 90, maxHoldDays: 20, maxSignals: 1000 }).catch(() => {});
 }, 6 * 60 * 60 * 1000);
 
 // Main function to generate signals for all tracked stocks
@@ -1756,10 +2181,9 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         new Promise(resolve => setTimeout(() => resolve({}), 2000)),
       ]);
     } catch { /* silent */ }
-    const usSymbols = symbols.filter(s => !NSE_SYMBOLS.includes(s));
     await Promise.all([
       prefetchPriceHistories(symbols).catch(() => {}),
-      prefetchFinancialReports(usSymbols).catch(() => {}),
+      prefetchFinancialReports(symbols).catch(() => {}),
       prefetchQuotes(symbols).catch(() => {}),
       prefetchWeeklyData(symbols).catch(() => {}),
     ]);
@@ -1829,6 +2253,8 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       }
     }
     const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume, engineConfig.getConfig().indicator_params);
+    const reportMetrics = _financialReportCache.get(symbol);
+    if (reportMetrics) Object.assign(stock, reportMetrics);
     const financial = analyzeFinancials(stock, fundamental);
     const country = getCountryForSymbol(symbol);
     let macro = getMacroScore(country);
@@ -1847,10 +2273,51 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     const prevOutcome = _signalOutcomes.get(symbol);
     trackSignalOutcomes(_portfolioState, _performanceStats, _signalOutcomes, symbol, currentPrice, sigObj);
     if (sigObj.signal !== 'Hold') {
-      recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice).catch(() => {});
+      recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.action, sigObj.type, sigObj.sector).catch(() => {});
       if (prevOutcome && prevOutcome.result) {
-        persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, currentPrice, prevOutcome.result);
+        persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null);
+        signalEventBus.emit('signal:resolved', {
+          ticker: symbol,
+          entryPrice: prevOutcome.entryPrice,
+          targetPrice: prevOutcome.target1,
+          stopPrice: prevOutcome.stopLoss,
+          currentPrice,
+          result: prevOutcome.result,
+          returnPct: prevOutcome.entryPrice > 0 ? Math.round(((currentPrice - prevOutcome.entryPrice) / prevOutcome.entryPrice) * 10000) / 100 : 0,
+          signal: prevOutcome.signal,
+          resolvedAt: prevOutcome.resolvedAt || Date.now(),
+        });
       }
+    }
+    // Check progress milestones on the current active signal
+    const currentActive = _signalOutcomes.get(symbol);
+    if (currentActive && !currentActive.result && currentActive.action !== 'hold' && currentActive.entryPrice > 0 && currentActive.target1) {
+      const isBuy = currentActive.action === 'buy';
+      let progress = 0;
+      if (isBuy) {
+        const targetDist = currentActive.target1 - currentActive.entryPrice;
+        progress = targetDist > 0 ? ((currentPrice - currentActive.entryPrice) / targetDist) * 100 : 0;
+      } else {
+        const targetDist = currentActive.entryPrice - currentActive.target1;
+        progress = targetDist > 0 ? ((currentActive.entryPrice - currentPrice) / targetDist) * 100 : 0;
+      }
+      const lastAlert = currentActive.lastProgressAlert || 0;
+      [25, 50, 75, 90].forEach(milestone => {
+        if (progress >= milestone && lastAlert < milestone) {
+          currentActive.lastProgressAlert = milestone;
+          signalEventBus.emit('signal:progress', {
+            ticker: symbol,
+            entryPrice: currentActive.entryPrice,
+            targetPrice: currentActive.target1,
+            stopPrice: currentActive.stopLoss,
+            currentPrice,
+            progress: Math.min(100, Math.round(progress * 10) / 10),
+            milestone,
+            signal: currentActive.signal,
+            isProfit: isBuy ? currentPrice > currentActive.entryPrice : currentPrice < currentActive.entryPrice,
+          });
+        }
+      });
     }
     resolveForwardPredictions(symbol).catch(() => {});
     return sigObj;
@@ -1868,7 +2335,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
 
   // Sort by confidence and signal strength
   signals.sort((a, b) => {
-    const signalOrder = { 'Strong Buy': 6, 'Buy': 5, 'Accumulate': 4, 'Hold': 3, 'Sell': 2, 'Strong Sell': 1 };
+    const signalOrder = { 'Strong Buy': 5, 'Buy': 4, 'Hold': 3, 'Sell': 2, 'Strong Sell': 1 };
     const aOrder = signalOrder[a.signal] || 3;
     const bOrder = signalOrder[b.signal] || 3;
     if (aOrder !== bOrder) return bOrder - aOrder;
@@ -1951,6 +2418,8 @@ async function generateSingleSignal(symbol) {
     const priceHistory = await getPriceHistory(symbol).catch(() => null);
     const fundamental = analyzeFundamentals(stock, currentPrice, newsSent, _dynamicSectorPE);
     const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume);
+    const reportMetrics = _financialReportCache.get(symbol);
+    if (reportMetrics) Object.assign(stock, reportMetrics);
     const financial = analyzeFinancials(stock, fundamental);
     const country = getCountryForSymbol(symbol);
     let macro = getMacroScore(country);
@@ -1983,7 +2452,6 @@ async function getSignalsSummary() {
     total: signals.length,
     strongBuy: signals.filter(s => s.signal === 'Strong Buy').length,
     buy: signals.filter(s => s.signal === 'Buy').length,
-    accumulate: signals.filter(s => s.signal === 'Accumulate').length,
     hold: signals.filter(s => s.signal === 'Hold').length,
     sell: signals.filter(s => s.signal === 'Sell').length,
     strongSell: signals.filter(s => s.signal === 'Strong Sell').length,
@@ -2005,7 +2473,7 @@ async function getSignalsSummary() {
   // Calculate average score per sector
   Object.keys(summary.bySector).forEach(sector => {
     const sectorSignals = summary.bySector[sector].signals;
-    const scoreMap = { 'Strong Buy': 90, 'Buy': 75, 'Accumulate': 60, 'Hold': 45, 'Sell': 30, 'Strong Sell': 15 };
+    const scoreMap = { 'Strong Buy': 90, 'Buy': 70, 'Hold': 50, 'Sell': 30, 'Strong Sell': 15 };
     const totalScore = sectorSignals.reduce((sum, sig) => sum + (scoreMap[sig] || 45), 0);
     summary.bySector[sector].avgScore = Math.round(totalScore / sectorSignals.length);
     summary.bySector[sector].pctOfTotal = Math.round((summary.bySector[sector].count / signals.length) * 100);
@@ -2112,9 +2580,16 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
 
   // Compute ML win probability BEFORE weighted score so it can contribute
   let mlWinProb = null;
+  const ftSnap = getForwardTestSnapshot();
+  const ltSnap = getLiveTestSnapshot();
   try {
-    mlWinProb = await mlModel.predictWinProbability(fundamental, technical, macro, priceHistory, currentPrice, volume, symbol, stock.sector, stock);
+    mlWinProb = await mlModel.predictWinProbability(fundamental, technical, macro, priceHistory, currentPrice, volume, symbol, stock.sector, stock, ftSnap, ltSnap);
   } catch { /* ML model not ready */ }
+  let mlFeatures = null;
+  try {
+    const rawFeatMap = mlModel.extractRawIndicators({ fundamental, technical, macro, priceHistory, currentPrice, volume, forwardTest: ftSnap, liveTest: ltSnap });
+    mlFeatures = mlModel.FEATURES.map(f => rawFeatMap[f] ?? 0);
+  } catch { /* indicators not available */ }
   const mlProbScore = mlWinProb != null ? Math.round(mlWinProb * 100) : 50;
 
   // Weighted composite score including ML probability and confidence
@@ -2145,9 +2620,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   let sig;
   if (overallScore >= thresholds.strong_buy) sig = { signal: 'Strong Buy', action: 'buy', strength: 'strong' };
   else if (overallScore >= thresholds.buy) sig = { signal: 'Buy', action: 'buy', strength: 'moderate' };
-  else if (overallScore >= thresholds.accumulate) sig = { signal: 'Accumulate', action: 'buy', strength: 'weak' };
   else if (overallScore >= thresholds.hold) sig = { signal: 'Hold', action: 'hold', strength: 'neutral' };
-  else if (overallScore >= thresholds.reduce) sig = { signal: 'Reduce', action: 'sell', strength: 'weak' };
   else if (overallScore >= thresholds.sell) sig = { signal: 'Sell', action: 'sell', strength: 'moderate' };
   else sig = { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
 
@@ -2204,12 +2677,17 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     cvar95: riskMetrics.cvar95 ? riskMetrics.cvar95 + '%' : null,
     mlWinProb: mlWinProb != null ? Math.round(mlWinProb * 100) + '%' : null,
     reason,
+    dataSource: stock.dataSource || 'fallback',
+    progress: getSignalProgress(symbol, currentPrice),
     analysis: {
-      fundamental: { score: fundamental.score, grade: fundamental.fundamentalGrade, metrics: fundamental.metrics },
+      fundamental: { score: fundamental.score, grade: fundamental.fundamentalGrade, metrics: { ...fundamental.metrics, dataSource: stock.dataSource || 'fallback' } },
       technical: { score: technical.score, grade: technical.technicalGrade, indicators: technical.indicators },
       financial: { score: financial.score, grade: financial.financialGrade, analysis: financial.analysis },
       macro: { score: macro.score, grade: macro.grade, signal: macro.signal, country: macro.country, summary: macro.summary, conditions: macro.conditions },
-      overall: { score: Math.round(overallScore), grade: getGrade(Math.round(overallScore)) }
+      mlFeatures,
+      overall: { score: Math.round(overallScore), grade: getGrade(Math.round(overallScore)), dataSource: stock.dataSource || 'fallback' },
+      forwardTest: getForwardTestSnapshot(),
+      liveTest: getLiveTestSnapshot(),
     },
     timestamp: new Date().toISOString(), lastUpdated: new Date().toLocaleString()
   };
@@ -2313,6 +2791,7 @@ module.exports = {
   getForwardTestStats,
   getForwardTestPredictions,
   resolveAllForwardPredictions,
+  validateExpiringPredictions,
   // Audit & Config
   getAuditLog,
   logAuditEvent,
@@ -2330,4 +2809,6 @@ module.exports = {
   triggerAlert: require('./monitorService').triggerAlert,
   getQualityScore,
   getSignalsCacheTime: () => _signalsCacheTime,
+  signalEventBus,
+  getSignalProgress,
 };

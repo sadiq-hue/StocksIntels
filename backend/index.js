@@ -12,7 +12,7 @@ const { getAllNews, getNewsSummary, getAggregatedSentiment, KENYAN_STOCKS, STOCK
 const { generateWeeklyDigestContent, generateDailyBriefContent, generateEarningsContent } = require('./contentGenerator');
 const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
-const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions, getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats, getForwardTestPredictions, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime } = require('./signalService');
+const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions, getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats, getForwardTestPredictions, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
 const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
@@ -33,6 +33,7 @@ const payheroService = require('./payheroService');
 const paypalService = require('./paypalService');
 const tripleAService = require('./tripleAService');
 const indicesService = require('./indicesService');
+const { kellyFraction, computeCovarianceMatrix, monteCarloVaR, meanVarianceOptimize } = require('./portfolioOptimizer');
 const { generalLimiter, authLimiter, marketDataLimiter, aiLimiter } = require('./rateLimiter');
 const path = require('path');
 const helmet = require('helmet');
@@ -7756,20 +7757,44 @@ app.post('/api/ai/portfolio-advice', async (req, res) => {
       if (pct > maxSectorPct) { maxSectorPct = pct; maxSectorName = name; }
     });
 
-    // ── Diversification score (market-aware) ──
+    // ── Mean-variance optimization (if 2+ holdings) ──
+    let optWeights = null;
+    const tradableHoldings = holdings.filter(h => h.sector !== 'Broker');
+    if (tradableHoldings.length >= 2) {
+      const covMatrix = await computeCovarianceMatrix(tradableHoldings.map(h => h.ticker)).catch(() => null);
+      if (covMatrix && covMatrix.covariance) {
+        const expectedReturns = tradableHoldings.map(h => {
+          const sig = signalMap[h.ticker];
+          return sig ? (sig.confidence / 100) * 0.2 - 0.02 : 0.06;
+        });
+        const opt = meanVarianceOptimize(expectedReturns, covMatrix.covariance, 0.05);
+        if (opt) optWeights = new Map(tradableHoldings.map((h, i) => [h.ticker, opt.weights[i]]));
+      }
+    }
+
+    // ── Portfolio VaR ──
+    let portfolioVar = null;
+    const returnSeries = tradableHoldings.map(h => {
+      const sig = signalMap[h.ticker];
+      return sig ? (sig.confidence / 100) * 0.2 - 0.02 : 0.06;
+    });
+    if (returnSeries.length >= 5) {
+      portfolioVar = monteCarloVaR(returnSeries, totalValue, 5000, 0.95, 0.99);
+    }
+
+    // ── Diversification score ──
     let divScore = 100, divMessage = 'Well diversified across sectors';
     if (sectorCount < 2) { divScore = 30; divMessage = 'Heavily concentrated — consider adding positions in other sectors to reduce risk'; }
     else if (maxSectorPct > 60) { divScore = 45; divMessage = `Overconcentrated in ${maxSectorName} (${Math.round(maxSectorPct)}%) — consider rebalancing`; }
     else if (sectorCount < 3) { divScore = 60; divMessage = 'Moderate diversification — adding 1-2 more sectors would reduce risk'; }
 
-    // Market volatility adjustment to diversification
     const nseVolatility = nseIndices.reduce((max, i) => Math.max(max, Math.abs(parseFloat(i.changeRaw) || 0)), 0);
     if (nseVolatility > 2 && divScore > 50) {
       divScore -= 10;
       divMessage += '. High market volatility increases concentration risk.';
     }
 
-    // ── Per-holding recommendations (market-aware) ──
+    // ── Per-holding recommendations ──
     const recommendations = holdings.map((h) => {
       const isBroker = h.sector === 'Broker';
       const sig = isBroker ? null : signalMap[h.ticker];
@@ -7782,6 +7807,11 @@ app.post('/api/ai/portfolio-advice', async (req, res) => {
       let action = 'Hold', reason = 'In-line with portfolio targets';
       const sectorInfo = topSectors.find((s) => s.sector === h.sector) || bottomSectors.find((s) => s.sector === h.sector);
 
+      // Optimal target allocation from optimizer (or estimate)
+      const optTarget = optWeights ? optWeights.get(h.ticker) : null;
+      const targetPct = optTarget != null ? optTarget : (sig && sig.confidence > 60 ? 15 : 10);
+      const allocDelta = targetPct - valuePct;
+
       if (isBroker) {
         reason = `Broker account — overall ${pnlPct >= 0 ? 'profit' : 'loss'} of ${Math.abs(pnlPct).toFixed(1)}%. ${nseDirection === 'bearish' ? 'Elevated market volatility may affect forex/CFD positions.' : 'Manage positions within the broker platform.'}`;
       } else {
@@ -7792,7 +7822,9 @@ app.post('/api/ai/portfolio-advice', async (req, res) => {
             reason = `Despite ${sig.signal} rating (${sig.confidence}% confidence), NSE is in a bearish trend. Wait for market stabilization before accumulating.`;
           } else {
             action = 'Accumulate';
-            reason = `${sig.signal} rating with ${sig.confidence}% confidence. ${sig.reason || 'Consider adding to position'}`;
+            const kelly = sig.mlWinProb ? kellyFraction(parseInt(sig.mlWinProb) / 100, 1.5) : 0.1;
+            const suggestedShares = Math.max(1, Math.floor((kelly * totalValue) / currentPrice));
+            reason = `${sig.signal} rating with ${sig.confidence}% confidence. Kelly-optimal position: ~${Math.round(kelly * 100)}% of portfolio (${suggestedShares} shares). ${sig.reason || ''}`;
           }
         } else if (sig && (sig.signal === 'Sell' || sig.signal === 'Strong Sell')) {
           if (nseDirection === 'bullish' && h.market === 'NSE') {
@@ -7804,25 +7836,38 @@ app.post('/api/ai/portfolio-advice', async (req, res) => {
           }
         }
 
+        // Mean-variance rebalancing: underweight vs overweight
+        if (action === 'Hold' && allocDelta > 10) {
+          action = 'Accumulate';
+          reason = `Underweight vs optimal allocation (${Math.round(valuePct)}% vs ${Math.round(targetPct)}% target). Consider adding ${Math.round(allocDelta)}% to align with efficient frontier.`;
+        } else if (action === 'Hold' && allocDelta < -10) {
+          action = 'Trim';
+          reason = `Overweight vs optimal allocation (${Math.round(valuePct)}% vs ${Math.round(targetPct)}% target). Trim ${Math.round(Math.abs(allocDelta))}% to reduce concentration risk.`;
+        }
+
         // Sector momentum override
         if (action === 'Hold' && sectorInfo) {
           const isTop = topSectors.includes(sectorInfo);
-          if (isTop && parseFloat(pnlPct) < 0) {
+          if (isTop && pnlPct < 0) {
             action = 'Accumulate';
             reason = `${sectorInfo.sector} sector is up ${sectorInfo.avgChange}% today. Your position is underwater — consider averaging down with sector momentum.`;
-          } else if (!isTop && bottomSectors.includes(sectorInfo) && parseFloat(pnlPct) > 15) {
+          } else if (!isTop && bottomSectors.includes(sectorInfo) && pnlPct > 15) {
             action = 'Take Partial Profits';
             reason = `${sectorInfo.sector} sector is down ${Math.abs(sectorInfo.avgChange)}% today. Lock in gains before sector weakness spreads.`;
           }
         }
 
-        // Position sizing
-        if (action === 'Hold' && valuePct > 25) {
-          action = 'Trim';
-          reason = `Position is ${Math.round(valuePct)}% of portfolio — high concentration risk. Consider trimming to 15-20% target allocation.`;
-        } else if (action === 'Hold' && valuePct < 3 && pnlPct >= 0 && nseDirection === 'bullish') {
-          action = 'Accumulate';
-          reason = `Small position (${Math.round(valuePct)}% of portfolio) with positive returns in a bullish market. Consider increasing allocation.`;
+        // Kelly-based position sizing
+        if (action === 'Hold' && sig) {
+          const kellyFull = sig.mlWinProb ? kellyFraction(parseInt(sig.mlWinProb) / 100, 1.5) : 0;
+          if (kellyFull > 0.15 && valuePct < kellyFull * 100 * 0.5) {
+            action = 'Accumulate';
+            const suggestedShares = Math.max(1, Math.floor((kellyFull * totalValue) / currentPrice));
+            reason = `Kelly criterion suggests ${Math.round(kellyFull * 100)}% allocation but you hold ${Math.round(valuePct)}%. Consider adding ~${suggestedShares} shares.`;
+          } else if (kellyFull < 0.05 && valuePct > 10) {
+            action = 'Reduce';
+            reason = `Kelly criterion suggests <5% allocation but you hold ${Math.round(valuePct)}%. Consider reducing to limit downside.`;
+          }
         }
 
         // Profit taking
@@ -7839,25 +7884,31 @@ app.post('/api/ai/portfolio-advice', async (req, res) => {
         }
 
         // Bear market defense
-        if (nseDirection === 'bearish' && h.market === 'NSE' && action === 'Hold' && parseFloat(pnlPct) < -15) {
+        if (nseDirection === 'bearish' && h.market === 'NSE' && action === 'Hold' && pnlPct < -15) {
           action = 'Reduce';
           reason = `NSE is bearish and this position is down ${pnlPct.toFixed(1)}%. Consider reducing exposure to preserve capital until market recovers.`;
         }
       }
-      return { ticker: h.ticker, name: h.name || h.ticker, action, reason, pnlPct: `${pnlPct.toFixed(1)}%`, allocation: `${Math.round(valuePct)}%`, targetAllocation: valuePct > 25 ? '15-20%' : valuePct < 5 ? '5-15%' : 'Adequate' };
+      return {
+        ticker: h.ticker, name: h.name || h.ticker, action, reason,
+        pnlPct: `${pnlPct.toFixed(1)}%`, allocation: `${Math.round(valuePct)}%`,
+        targetAllocation: optTarget != null ? `${Math.round(optTarget)}%` : (valuePct > 25 ? '15-20%' : valuePct < 5 ? '5-15%' : 'Adequate'),
+      };
     });
 
-    // ── Risk assessment (market-aware) ──
+    // ── Risk assessment ──
     const sellRecs = recommendations.filter((r) => r.action === 'Reduce' || r.action === 'Trim' || r.action === 'Take Partial Profits').length;
     const buyRecs = recommendations.filter((r) => r.action === 'Accumulate').length;
     let riskAssessment = 'Low — portfolio is well-positioned for current market conditions';
+    if (portfolioVar) {
+      riskAssessment = `VaR 95%: ${portfolioVar.var95}% | VaR 99%: ${portfolioVar.var99}% | CVaR: ${portfolioVar.cvar95}%. `;
+      riskAssessment += portfolioVar.var95 > 8 ? 'High downside risk — consider defensive positioning.' : portfolioVar.var95 > 4 ? 'Moderate downside risk — maintain diversified holdings.' : 'Low downside risk — portfolio is resilient.';
+    }
     if (nseDirection === 'bearish' || globalDirection === 'bearish') {
-      riskAssessment = `Moderate-High — bearish market conditions. ${sellRecs} positions flagged for review. Consider defensive positioning.`;
+      riskAssessment += ` Bearish market conditions — ${sellRecs} positions flagged for review.`;
     }
     if (sellRecs > holdings.length / 2) {
-      riskAssessment = `High — ${sellRecs} of ${holdings.length} positions need action. Combine with ${nseDirection === 'bearish' ? 'broad market weakness' : 'mixed market signals'}.`;
-    } else if (sellRecs > 0 && nseDirection === 'bullish') {
-      riskAssessment = `Moderate — ${sellRecs} positions flagged, but overall market trend is positive. Focus on selective rebalancing.`;
+      riskAssessment += ` High — ${sellRecs} of ${holdings.length} positions need action.`;
     }
 
     // ── Build market context summary ──
@@ -7879,6 +7930,8 @@ app.post('/api/ai/portfolio-advice', async (req, res) => {
         diversification: { score: divScore, message: divMessage },
         riskAssessment,
         marketContext,
+        portfolioVar,
+        efficientFrontier: optWeights ? Object.fromEntries(optWeights) : null,
       },
       timestamp: new Date().toISOString(),
     });
@@ -10609,6 +10662,7 @@ async function initDatabase() {
     );`);
     // Migration: add position_size column if missing (safe for existing tables)
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS position_size INTEGER DEFAULT 25`).catch(() => {});
+    await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS analysis_data JSONB`).catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_history_ticker ON signal_history(ticker)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_history_generated_at ON signal_history(generated_at)');
 
@@ -10624,6 +10678,7 @@ async function initDatabase() {
       position_size INTEGER DEFAULT 25
     );`);
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS position_size INTEGER DEFAULT 25`).catch(() => {});
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_outcomes_ticker ON signal_outcomes(ticker)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_outcomes_result ON signal_outcomes(result)');
 
@@ -10633,6 +10688,11 @@ async function initDatabase() {
       signal VARCHAR(20) NOT NULL,
       confidence INTEGER,
       price NUMERIC(15,2),
+      stop_loss NUMERIC(15,2),
+      target1 NUMERIC(15,2),
+      action VARCHAR(10),
+      trade_type VARCHAR(30),
+      sector VARCHAR(50),
       generated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
       resolved BOOLEAN DEFAULT false,
       actual_return NUMERIC(10,4),
@@ -11909,6 +11969,14 @@ server.listen(port, '0.0.0.0', async () => {
             io.to(`user:${n.user_id}`).emit('notification', n);
           });
         }
+      });
+      signalEventBus.on('signal:resolved', (payload) => {
+        io.emit('signal:resolved', payload);
+        io.emit(`signal:resolved:${payload.ticker}`, payload);
+      });
+      signalEventBus.on('signal:progress', (payload) => {
+        io.emit('signal:progress', payload);
+        io.emit(`signal:progress:${payload.ticker}`, payload);
       });
       signalPublisher.start();
 
