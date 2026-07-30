@@ -1366,7 +1366,7 @@ function getSignalProgress(symbol, currentPrice) {
 
 function getLiveTestSnapshot() {
   let total = 0, wins = 0, losses = 0, totalHours = 0, hourlyCount = 0;
-  const buckets = { '1d': { total: 0, wins: 0, losses: 0 }, '5d': { total: 0, wins: 0, losses: 0 }, '20d': { total: 0, wins: 0, losses: 0 } };
+  const buckets = { '1d': { total: 0, wins: 0, losses: 0 }, '15d': { total: 0, wins: 0, losses: 0 }, '30d': { total: 0, wins: 0, losses: 0 }, '60d': { total: 0, wins: 0, losses: 0 } };
   for (const [, store] of _liveTestStore) {
     for (const o of store.outcomes) {
       total++;
@@ -1377,8 +1377,9 @@ function getLiveTestSnapshot() {
       totalHours += hours;
       hourlyCount++;
       if (hours <= 24) { buckets['1d'].total++; if (o.result === 'win') buckets['1d'].wins++; else if (o.result === 'loss') buckets['1d'].losses++; }
-      if (hours <= 120) { buckets['5d'].total++; if (o.result === 'win') buckets['5d'].wins++; else if (o.result === 'loss') buckets['5d'].losses++; }
-      if (hours <= 480) { buckets['20d'].total++; if (o.result === 'win') buckets['20d'].wins++; else if (o.result === 'loss') buckets['20d'].losses++; }
+      if (hours <= 360) { buckets['15d'].total++; if (o.result === 'win') buckets['15d'].wins++; else if (o.result === 'loss') buckets['15d'].losses++; }
+      if (hours <= 720) { buckets['30d'].total++; if (o.result === 'win') buckets['30d'].wins++; else if (o.result === 'loss') buckets['30d'].losses++; }
+      if (hours <= 1440) { buckets['60d'].total++; if (o.result === 'win') buckets['60d'].wins++; else if (o.result === 'loss') buckets['60d'].losses++; }
     }
   }
   return {

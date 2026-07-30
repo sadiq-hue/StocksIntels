@@ -5513,10 +5513,11 @@ async function resolveForwardTest() {
        ${s && s.buckets ? `
          <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
            <p style="font-size:13px;font-weight:600;margin-bottom:8px">Resolution Time Buckets</p>
-           <div class="grid grid-cols-3 gap-4">
+           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
              <div style="text-align:center"><div class="stat-value" style="color:#111827">${s.buckets['1d'] ? s.buckets['1d'].total : 0}</div><div class="stat-label">1d (Win ${s.buckets['1d'] ? fmtPct(s.buckets['1d'].winRate) : '—'})</div></div>
-             <div style="text-align:center"><div class="stat-value" style="color:#111827">${s.buckets['5d'] ? s.buckets['5d'].total : 0}</div><div class="stat-label">5d (Win ${s.buckets['5d'] ? fmtPct(s.buckets['5d'].winRate) : '—'})</div></div>
-             <div style="text-align:center"><div class="stat-value" style="color:#111827">${s.buckets['20d'] ? s.buckets['20d'].total : 0}</div><div class="stat-label">20d (Win ${s.buckets['20d'] ? fmtPct(s.buckets['20d'].winRate) : '—'})</div></div>
+             <div style="text-align:center"><div class="stat-value" style="color:#111827">${s.buckets['15d'] ? s.buckets['15d'].total : 0}</div><div class="stat-label">15d (Win ${s.buckets['15d'] ? fmtPct(s.buckets['15d'].winRate) : '—'})</div></div>
+             <div style="text-align:center"><div class="stat-value" style="color:#111827">${s.buckets['30d'] ? s.buckets['30d'].total : 0}</div><div class="stat-label">30d (Win ${s.buckets['30d'] ? fmtPct(s.buckets['30d'].winRate) : '—'})</div></div>
+             <div style="text-align:center"><div class="stat-value" style="color:#111827">${s.buckets['60d'] ? s.buckets['60d'].total : 0}</div><div class="stat-label">60d (Win ${s.buckets['60d'] ? fmtPct(s.buckets['60d'].winRate) : '—'})</div></div>
            </div>
          </div>
        ` : ''}
