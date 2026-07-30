@@ -1365,27 +1365,28 @@ function getSignalProgress(symbol, currentPrice) {
 }
 
 function getLiveTestSnapshot() {
-  let total = 0, wins = 0, totalHours = 0, hourlyCount = 0;
-  const buckets = { '1d': { total: 0, wins: 0 }, '5d': { total: 0, wins: 0 }, '20d': { total: 0, wins: 0 } };
+  let total = 0, wins = 0, losses = 0, totalHours = 0, hourlyCount = 0;
+  const buckets = { '1d': { total: 0, wins: 0, losses: 0 }, '5d': { total: 0, wins: 0, losses: 0 }, '20d': { total: 0, wins: 0, losses: 0 } };
   for (const [, store] of _liveTestStore) {
     for (const o of store.outcomes) {
       total++;
       if (o.result === 'win') wins++;
+      else if (o.result === 'loss') losses++;
       if (!o.resolvedAt) continue;
       const hours = (o.resolvedAt - o.generatedAt) / 3600000;
       totalHours += hours;
       hourlyCount++;
-      if (hours <= 24) { buckets['1d'].total++; if (o.result === 'win') buckets['1d'].wins++; }
-      if (hours <= 120) { buckets['5d'].total++; if (o.result === 'win') buckets['5d'].wins++; }
-      if (hours <= 480) { buckets['20d'].total++; if (o.result === 'win') buckets['20d'].wins++; }
+      if (hours <= 24) { buckets['1d'].total++; if (o.result === 'win') buckets['1d'].wins++; else if (o.result === 'loss') buckets['1d'].losses++; }
+      if (hours <= 120) { buckets['5d'].total++; if (o.result === 'win') buckets['5d'].wins++; else if (o.result === 'loss') buckets['5d'].losses++; }
+      if (hours <= 480) { buckets['20d'].total++; if (o.result === 'win') buckets['20d'].wins++; else if (o.result === 'loss') buckets['20d'].losses++; }
     }
   }
   return {
-    total, wins,
+    total, wins, losses,
     winRate: total > 0 ? wins / total : 0,
     avgDaysToResolve: hourlyCount > 0 ? totalHours / hourlyCount / 24 : 0,
     buckets: Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, {
-      total: v.total, wins: v.wins,
+      total: v.total, wins: v.wins, losses: v.losses,
       winRate: v.total > 0 ? v.wins / v.total : 0,
     }])),
   };
