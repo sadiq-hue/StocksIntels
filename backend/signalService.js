@@ -550,7 +550,7 @@ async function restoreStateFromDb() {
   try {
     // Load all historical outcomes into memory so health/trade tracking works across restarts
     const outcomes = await pool.query(
-      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at FROM signal_outcomes WHERE recorded_at > NOW() - $1::interval ORDER BY recorded_at DESC`,
+      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at FROM signal_outcomes WHERE recorded_at > NOW() - $1::interval AND result IS NOT NULL ORDER BY recorded_at DESC`,
       [`${SIGNAL_WINDOW_DAYS} days`]
     );
     _signalOutcomes.clear();
