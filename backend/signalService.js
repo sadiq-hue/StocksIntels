@@ -1384,11 +1384,11 @@ function getLiveTestSnapshot() {
   }
   return {
     total, wins, losses,
-    winRate: total > 0 ? wins / total : 0,
-    avgDaysToResolve: hourlyCount > 0 ? totalHours / hourlyCount / 24 : 0,
+    winRate: total > 0 ? Math.round((wins / total) * 1000) / 10 : 0,
+    avgDaysToResolve: hourlyCount > 0 ? Math.round((totalHours / hourlyCount / 24) * 100) / 100 : 0,
     buckets: Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, {
       total: v.total, wins: v.wins, losses: v.losses,
-      winRate: v.total > 0 ? v.wins / v.total : 0,
+      winRate: v.total > 0 ? Math.round((v.wins / v.total) * 1000) / 10 : 0,
     }])),
   };
 }
