@@ -9,4 +9,4 @@ ALTER TABLE IF EXISTS forward_predictions ADD COLUMN IF NOT EXISTS target1 NUMER
 ALTER TABLE IF EXISTS forward_predictions ADD COLUMN IF NOT EXISTS action VARCHAR(10);
 ALTER TABLE IF EXISTS forward_predictions ADD COLUMN IF NOT EXISTS trade_type VARCHAR(30);
 CREATE INDEX IF NOT EXISTS idx_signal_history_analysis ON signal_history USING gin (analysis_data);
-CREATE INDEX IF NOT EXISTS idx_signal_outcomes_resolved_at ON signal_outcomes(resolved_at);
+ALTER TABLE IF EXISTS signal_outcomes ADD COLUMN IF NOT EXISTS signal_generated_at TIMESTAMP WITH TIME ZONE;

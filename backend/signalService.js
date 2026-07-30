@@ -550,7 +550,7 @@ async function restoreStateFromDb() {
   try {
     // Load all historical outcomes into memory so health/trade tracking works across restarts
     const outcomes = await pool.query(
-      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at FROM signal_outcomes WHERE recorded_at > NOW() - $1::interval AND result IS NOT NULL ORDER BY recorded_at DESC`,
+      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at FROM signal_outcomes WHERE signal_generated_at > NOW() - $1::interval AND result IS NOT NULL ORDER BY recorded_at DESC`,
       [`${SIGNAL_WINDOW_DAYS} days`]
     );
     _signalOutcomes.clear();
@@ -564,7 +564,7 @@ async function restoreStateFromDb() {
       });
       // Populate live test store for time-bucket analysis
       const rAt = row.resolved_at ? new Date(row.resolved_at).getTime() : null;
-      const gAt = row.recorded_at ? new Date(row.recorded_at).getTime() : Date.now();
+      const gAt = row.signal_generated_at ? new Date(row.signal_generated_at).getTime() : Date.now();
       const sym = row.ticker;
       if (!_liveTestStore.has(sym)) _liveTestStore.set(sym, { outcomes: [] });
       const store = _liveTestStore.get(sym);
@@ -578,10 +578,10 @@ async function restoreStateFromDb() {
       if (store.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) store.outcomes = store.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
     }
 
-    // Compute performance stats from last 30 days of resolved outcomes
+    // Compute performance stats from signals generated in the last 30 days
     const result = await pool.query(
       `SELECT result, COUNT(*) as cnt FROM signal_outcomes
-       WHERE recorded_at > NOW() - INTERVAL '30 days'
+       WHERE signal_generated_at > NOW() - INTERVAL '30 days' AND result IS NOT NULL
        GROUP BY result`
     );
     let wins = 0, losses = 0;
@@ -1832,27 +1832,30 @@ function getConfidenceMultiplier() {
 // Stores signal performance outcomes in the database so state survives restarts.
 async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result, resolvedAt) {
   try {
-    const posSize = _signalOutcomes.get(symbol)?.positionSize || 25;
+    const prevOutcome = _signalOutcomes.get(symbol);
+    const signalGeneratedAt = prevOutcome?.timestamp || Date.now();
+    const posSize = prevOutcome?.positionSize || 25;
     const now = new Date().toISOString();
+    const signalGenAt = new Date(signalGeneratedAt).toISOString();
     await pool.query(
-      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at, signal_generated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT DO NOTHING`,
-      [symbol, entryPrice, signalAction, currentPrice, result, posSize, now, resolvedAt || now]
+      [symbol, entryPrice, signalAction, currentPrice, result, posSize, now, resolvedAt || now, signalGenAt]
     );
     // Push to live test store
     const store = _liveTestStore.get(symbol);
     if (store) {
       store.outcomes.push({
         result, signal: signalAction, entryPrice, exitPrice: currentPrice,
-        generatedAt: Date.now(), resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
+        generatedAt: signalGeneratedAt, resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
       });
       if (store.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) store.outcomes = store.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
     } else {
       _liveTestStore.set(symbol, {
         outcomes: [{
           result, signal: signalAction, entryPrice, exitPrice: currentPrice,
-          generatedAt: Date.now(), resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
+          generatedAt: signalGeneratedAt, resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
         }]
       });
     }
