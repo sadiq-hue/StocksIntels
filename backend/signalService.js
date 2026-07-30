@@ -1210,38 +1210,41 @@ async function resolveForwardPredictions(symbol) {
 }
 
 async function getForwardTestStats() {
-  let total = 0, correct = 0, pending = 0, neutral = 0;
-  let totalHours = 0, hourlyCount = 0;
-  const byConfidence = {};
-  const bySymbol = {};
-  const buckets = { '1d': { total: 0, correct: 0, neutral: 0 }, '5d': { total: 0, correct: 0, neutral: 0 }, '20d': { total: 0, correct: 0, neutral: 0 } };
-
   // Load in-memory predictions (current session)
   const now = Date.now();
   const maxAge = SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  let total = 0, correct = 0, losses = 0, neutral = 0, pending = 0;
+  let totalHours = 0, hourlyCount = 0;
+  const byConfidence = {};
+  const bySymbol = {};
+  const buckets = { '1d': { total: 0, correct: 0, losses: 0, neutral: 0 }, '5d': { total: 0, correct: 0, losses: 0, neutral: 0 }, '20d': { total: 0, correct: 0, losses: 0, neutral: 0 } };
+
   for (const [symbol, store] of _forwardTestStore) {
     for (const p of store.predictions) {
       if (p.generatedAt && (now - p.generatedAt) > maxAge) continue;
       if (!p.resolved) { pending++; continue; }
       total++;
       if (p.correct === true) correct++;
+      else if (p.correct === false) losses++;
       else if (p.correct === null) neutral++;
       const bucket = p.confidence >= 80 ? 'high' : p.confidence >= 60 ? 'med' : 'low';
-      if (!byConfidence[bucket]) byConfidence[bucket] = { total: 0, correct: 0, neutral: 0 };
+      if (!byConfidence[bucket]) byConfidence[bucket] = { total: 0, correct: 0, losses: 0, neutral: 0 };
       byConfidence[bucket].total++;
       if (p.correct === true) byConfidence[bucket].correct++;
+      else if (p.correct === false) byConfidence[bucket].losses++;
       else if (p.correct === null) byConfidence[bucket].neutral++;
-      if (!bySymbol[symbol]) bySymbol[symbol] = { total: 0, correct: 0, neutral: 0, accuracy: 0 };
+      if (!bySymbol[symbol]) bySymbol[symbol] = { total: 0, correct: 0, losses: 0, neutral: 0, accuracy: 0 };
       bySymbol[symbol].total++;
       if (p.correct === true) bySymbol[symbol].correct++;
+      else if (p.correct === false) bySymbol[symbol].losses++;
       else if (p.correct === null) bySymbol[symbol].neutral++;
       if (p.resolvedAt) {
         const hours = (p.resolvedAt - p.generatedAt) / 3600000;
         totalHours += hours;
         hourlyCount++;
-        if (hours <= 24) { buckets['1d'].total++; if (p.correct === true) buckets['1d'].correct++; else if (p.correct === null) buckets['1d'].neutral++; }
-        if (hours <= 120) { buckets['5d'].total++; if (p.correct === true) buckets['5d'].correct++; else if (p.correct === null) buckets['5d'].neutral++; }
-        if (hours <= 480) { buckets['20d'].total++; if (p.correct === true) buckets['20d'].correct++; else if (p.correct === null) buckets['20d'].neutral++; }
+        if (hours <= 24) { buckets['1d'].total++; if (p.correct === true) buckets['1d'].correct++; else if (p.correct === false) buckets['1d'].losses++; else if (p.correct === null) buckets['1d'].neutral++; }
+        if (hours <= 120) { buckets['5d'].total++; if (p.correct === true) buckets['5d'].correct++; else if (p.correct === false) buckets['5d'].losses++; else if (p.correct === null) buckets['5d'].neutral++; }
+        if (hours <= 480) { buckets['20d'].total++; if (p.correct === true) buckets['20d'].correct++; else if (p.correct === false) buckets['20d'].losses++; else if (p.correct === null) buckets['20d'].neutral++; }
       }
     }
   }
@@ -1264,44 +1267,56 @@ async function getForwardTestStats() {
       }
       total++;
       if (row.correct === true) correct++;
+      else if (row.correct === false) losses++;
       else if (row.correct === null) neutral++;
-      if (!byConfidence[bucket]) byConfidence[bucket] = { total: 0, correct: 0, neutral: 0 };
+      if (!byConfidence[bucket]) byConfidence[bucket] = { total: 0, correct: 0, losses: 0, neutral: 0 };
       byConfidence[bucket].total++;
       if (row.correct === true) byConfidence[bucket].correct++;
+      else if (row.correct === false) byConfidence[bucket].losses++;
       else if (row.correct === null) byConfidence[bucket].neutral++;
-      if (!bySymbol[sym]) bySymbol[sym] = { total: 0, correct: 0, neutral: 0, accuracy: 0 };
+      if (!bySymbol[sym]) bySymbol[sym] = { total: 0, correct: 0, losses: 0, neutral: 0, accuracy: 0 };
       bySymbol[sym].total++;
       if (row.correct === true) bySymbol[sym].correct++;
+      else if (row.correct === false) bySymbol[sym].losses++;
       else if (row.correct === null) bySymbol[sym].neutral++;
       if (row.resolved_at) {
         const hours = (new Date(row.resolved_at).getTime() - new Date(row.generated_at).getTime()) / 3600000;
         totalHours += hours;
         hourlyCount++;
-        if (hours <= 24) { buckets['1d'].total++; if (row.correct === true) buckets['1d'].correct++; else if (row.correct === null) buckets['1d'].neutral++; }
-        if (hours <= 120) { buckets['5d'].total++; if (row.correct === true) buckets['5d'].correct++; else if (row.correct === null) buckets['5d'].neutral++; }
-        if (hours <= 480) { buckets['20d'].total++; if (row.correct === true) buckets['20d'].correct++; else if (row.correct === null) buckets['20d'].neutral++; }
+        if (hours <= 24) { buckets['1d'].total++; if (row.correct === true) buckets['1d'].correct++; else if (row.correct === false) buckets['1d'].losses++; else if (row.correct === null) buckets['1d'].neutral++; }
+        if (hours <= 120) { buckets['5d'].total++; if (row.correct === true) buckets['5d'].correct++; else if (row.correct === false) buckets['5d'].losses++; else if (row.correct === null) buckets['5d'].neutral++; }
+        if (hours <= 480) { buckets['20d'].total++; if (row.correct === true) buckets['20d'].correct++; else if (row.correct === false) buckets['20d'].losses++; else if (row.correct === null) buckets['20d'].neutral++; }
       }
     }
   } catch { /* table may not exist */ }
 
   for (const k of Object.keys(bySymbol)) {
-    bySymbol[k].accuracy = bySymbol[k].total > 0
-      ? Math.round((bySymbol[k].correct / bySymbol[k].total) * 1000) / 10 : 0;
+    const symResolved = bySymbol[k].correct + bySymbol[k].losses;
+    bySymbol[k].accuracy = symResolved > 0
+      ? Math.round((bySymbol[k].correct / symResolved) * 1000) / 10 : 0;
   }
+  const resolvedTotal = correct + losses;
   return {
     totalPredictions: total,
     pendingPredictions: pending,
     neutralPredictions: neutral,
-    accuracy: total > 0 ? Math.round((correct / total) * 1000) / 10 : 0,
+    losses,
+    accuracy: resolvedTotal > 0 ? Math.round((correct / resolvedTotal) * 1000) / 10 : 0,
     avgDaysToResolve: hourlyCount > 0 ? Math.round((totalHours / hourlyCount / 24) * 100) / 100 : 0,
-    byConfidence: Object.fromEntries(Object.entries(byConfidence).map(([k, v]) => [k, {
-      total: v.total, accurate: v.correct, neutral: v.neutral,
-      accuracy: v.total > 0 ? Math.round((v.correct / v.total) * 1000) / 10 : 0,
-    }])),
-    byTimeBucket: Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, {
-      total: v.total, correct: v.correct, neutral: v.neutral,
-      accuracy: v.total > 0 ? Math.round((v.correct / v.total) * 1000) / 10 : 0,
-    }])),
+    byConfidence: Object.fromEntries(Object.entries(byConfidence).map(([k, v]) => {
+      const confResolved = v.correct + v.losses;
+      return [k, {
+        total: v.total, accurate: v.correct, losses: v.losses, neutral: v.neutral,
+        accuracy: confResolved > 0 ? Math.round((v.correct / confResolved) * 1000) / 10 : 0,
+      }];
+    })),
+    byTimeBucket: Object.fromEntries(Object.entries(buckets).map(([k, v]) => {
+      const bucketResolved = v.correct + v.losses;
+      return [k, {
+        total: v.total, correct: v.correct, losses: v.losses, neutral: v.neutral,
+        accuracy: bucketResolved > 0 ? Math.round((v.correct / bucketResolved) * 1000) / 10 : 0,
+      }];
+    })),
     bySymbol,
   };
 }
@@ -1309,32 +1324,34 @@ async function getForwardTestStats() {
 function getForwardTestSnapshot() {
   const now = Date.now();
   const maxAge = SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  let total = 0, correct = 0, neutral = 0, totalHours = 0, hourlyCount = 0;
-  const buckets = { '1d': { total: 0, correct: 0, neutral: 0 }, '5d': { total: 0, correct: 0, neutral: 0 }, '20d': { total: 0, correct: 0, neutral: 0 } };
+  let total = 0, correct = 0, losses = 0, neutral = 0, totalHours = 0, hourlyCount = 0;
+  const buckets = { '1d': { total: 0, correct: 0, losses: 0, neutral: 0 }, '5d': { total: 0, correct: 0, losses: 0, neutral: 0 }, '20d': { total: 0, correct: 0, losses: 0, neutral: 0 } };
   for (const [, store] of _forwardTestStore) {
     for (const p of store.predictions) {
       if (p.generatedAt && (now - p.generatedAt) > maxAge) continue;
       if (!p.resolved) continue;
       total++;
       if (p.correct === true) correct++;
+      else if (p.correct === false) losses++;
       else if (p.correct === null) neutral++;
       if (!p.resolvedAt) continue;
       const hours = (p.resolvedAt - p.generatedAt) / 3600000;
       totalHours += hours;
       hourlyCount++;
-      if (hours <= 24) { buckets['1d'].total++; if (p.correct === true) buckets['1d'].correct++; else if (p.correct === null) buckets['1d'].neutral++; }
-      if (hours <= 120) { buckets['5d'].total++; if (p.correct === true) buckets['5d'].correct++; else if (p.correct === null) buckets['5d'].neutral++; }
-      if (hours <= 480) { buckets['20d'].total++; if (p.correct === true) buckets['20d'].correct++; else if (p.correct === null) buckets['20d'].neutral++; }
+      if (hours <= 24) { buckets['1d'].total++; if (p.correct === true) buckets['1d'].correct++; else if (p.correct === false) buckets['1d'].losses++; else if (p.correct === null) buckets['1d'].neutral++; }
+      if (hours <= 120) { buckets['5d'].total++; if (p.correct === true) buckets['5d'].correct++; else if (p.correct === false) buckets['5d'].losses++; else if (p.correct === null) buckets['5d'].neutral++; }
+      if (hours <= 480) { buckets['20d'].total++; if (p.correct === true) buckets['20d'].correct++; else if (p.correct === false) buckets['20d'].losses++; else if (p.correct === null) buckets['20d'].neutral++; }
     }
   }
+  const resolvedTotal = correct + losses;
   return {
-    total, correct, neutral,
-    accuracy: total > 0 ? correct / total : 0,
-    avgDaysToResolve: hourlyCount > 0 ? totalHours / hourlyCount / 24 : 0,
+    total, correct, losses, neutral,
+    accuracy: resolvedTotal > 0 ? Math.round((correct / resolvedTotal) * 1000) / 10 : 0,
+    avgDaysToResolve: hourlyCount > 0 ? Math.round((totalHours / hourlyCount / 24) * 100) / 100 : 0,
     buckets: Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, {
-      total: v.total, correct: v.correct, neutral: v.neutral,
-      accuracy: v.total > 0 ? v.correct / v.total : 0,
-    }])),
+      total: v.total, correct: v.correct, losses: v.losses, neutral: v.neutral,
+      accuracy: (v.correct + v.losses) > 0 ? Math.round((v.correct / (v.correct + v.losses)) * 1000) / 10 : 0,
+}])),
   };
 }
 
