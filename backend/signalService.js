@@ -2792,6 +2792,7 @@ module.exports = {
   getForwardTestPredictions,
   resolveAllForwardPredictions,
   validateExpiringPredictions,
+  getLiveTestSnapshot,
   // Audit & Config
   getAuditLog,
   logAuditEvent,

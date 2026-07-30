@@ -642,7 +642,6 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <select id="sigSignalSelect" class="input-field" onchange="debounceSigFilter()" style="font-size:13px;border-radius:8px;background:#f9fafb;border-color:#e5e7eb;height:36px;width:120px">
           <option value="">All Signals</option>
           <option value="Buy">Buy</option>
-          <option value="Accumulate">Accumulate</option>
           <option value="Hold">Hold</option>
           <option value="Sell">Sell</option>
           <option value="Strong Sell">Strong Sell</option>
@@ -682,7 +681,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <div class="grid grid-cols-2 gap-3 text-sm">
           <div><label class="text-gray-500 text-xs">Signal</label>
             <select id="editSigSignal" class="input-field mt-1">
-              <option value="Buy">Buy</option><option value="Accumulate">Accumulate</option>
+              <option value="Buy">Buy</option>
               <option value="Hold">Hold</option><option value="Sell">Sell</option>
               <option value="Strong Sell">Strong Sell</option>
             </select></div>
@@ -1625,6 +1624,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <button class="tab-btn active" data-engtab="health" onclick="switchEngTab('health')">Health</button>
         <button class="tab-btn" data-engtab="backtest" onclick="switchEngTab('backtest')">Backtest</button>
         <button class="tab-btn" data-engtab="forward" onclick="switchEngTab('forward')">Forward Test</button>
+        <button class="tab-btn" data-engtab="live" onclick="switchEngTab('live')">Live Path</button>
         <button class="tab-btn" data-engtab="config" onclick="switchEngTab('config')">Config</button>
         <button class="tab-btn" data-engtab="audit" onclick="switchEngTab('audit')">Audit</button>
         <button class="tab-btn" data-engtab="diagnostics" onclick="switchEngTab('diagnostics')">Diagnostics</button>
@@ -1650,7 +1650,6 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
               <option value="all">All</option>
               <option value="Strong Buy">Strong Buy</option>
               <option value="Buy">Buy</option>
-              <option value="Accumulate">Accumulate</option>
               <option value="Sell">Sell</option>
               <option value="Strong Sell">Strong Sell</option>
             </select>
@@ -1670,6 +1669,15 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
           </div>
         </div>
         <div id="engineForwardContent"><div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading forward test data...</div></div>
+      </div>
+
+      <!-- Engine: Live Path -->
+      <div id="eng-live" class="hidden space-y-4">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <p style="font-size:12px;color:#6b7280">Real-time live test outcomes — tracks active signals and their progress toward stop/target</p>
+          <button class="btn btn-primary" style="font-size:12px;padding:4px 12px" onclick="fetchLivePath()">Refresh</button>
+        </div>
+        <div id="engineLiveContent"><div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading live path data...</div></div>
       </div>
 
       <!-- Engine: Config -->
@@ -2374,7 +2382,7 @@ async function fetchSignalStats() {
     d.bySignal.forEach(s => bySig[s.signal] = s.cnt);
     document.getElementById('sigBuy').textContent = bySig['Buy'] ? Number(bySig['Buy']).toLocaleString() : '0';
     document.getElementById('sigSell').textContent = (bySig['Sell']||0) + (bySig['Strong Sell']||0);
-    document.getElementById('sigHold').textContent = (bySig['Hold']||0) + (bySig['Accumulate']||0);
+    document.getElementById('sigHold').textContent = (bySig['Hold']||0);
     document.getElementById('signalTotalLabel').textContent = Number(d.totalSignals).toLocaleString() + ' signals';
     document.getElementById('signalBadge').textContent = Number(d.totalSignals).toLocaleString();
     if (d.lastGenerated) document.getElementById('signalLastGen').textContent = 'Last: ' + new Date(d.lastGenerated).toLocaleString();
@@ -2400,7 +2408,7 @@ async function fetchSignals() {
       tbody.innerHTML = '<tr><td colspan="14" class="text-center text-gray-400 py-8">No signals found</td></tr>';
     } else {
       tbody.innerHTML = d.signals.map(s => {
-        const sigClass = s.signal === 'Buy' || s.signal === 'Accumulate' ? 'pill-verified' : s.signal === 'Sell' || s.signal === 'Strong Sell' ? 'pill-unverified' : 'pill-free';
+const sigClass = s.signal === 'Buy' ? 'pill-verified' : s.signal === 'Sell' || s.signal === 'Strong Sell' ? 'pill-unverified' : 'pill-free';
         const sel = selectedSignalId === s.id ? 'selected' : '';
         const tickerInitial = (s.ticker || '?').charAt(0);
         const tickerColors = ['#0D7490','#059669','#d97706','#7c3aed','#dc2626','#0891b2','#db2777','#4f46e5'];
@@ -2456,7 +2464,7 @@ async function selectSignal(id) {
     const res = await fetch('/api/admin/signals/' + id);
     if (!res.ok) return;
     const s = await res.json();
-    const sigClass = s.signal === 'Buy' || s.signal === 'Accumulate' ? 'pill-verified' : s.signal === 'Sell' || s.signal === 'Strong Sell' ? 'pill-unverified' : 'pill-free';
+    const sigClass = s.signal === 'Buy' ? 'pill-verified' : s.signal === 'Sell' || s.signal === 'Strong Sell' ? 'pill-unverified' : 'pill-free';
     const tickerInitial = (s.ticker || '?').charAt(0);
     document.getElementById('signalDetailContent').innerHTML = `
       <div style="display:flex;flex-direction:column;gap:16px">
@@ -5250,6 +5258,7 @@ function switchEngTab(tab) {
   if (tab === 'health') fetchEngineHealth();
   if (tab === 'backtest') fetchBacktest();
   if (tab === 'forward') fetchForwardTest();
+  if (tab === 'live') fetchLivePath();
   if (tab === 'config') fetchEngineConfig();
   if (tab === 'audit') { engAuditPage = 0; fetchEngineAudit(); }
   if (tab === 'diagnostics') fetchDiagnostics();
@@ -5285,6 +5294,14 @@ async function fetchEngineHealth() {
         <div class="stat-card"><div class="stat-value" style="color:#dc2626">${fmtNum(h.performance.losses)}</div><div class="stat-label">Losses</div></div>
         <div class="stat-card"><div class="stat-value" style="color:${h.portfolio.consecutiveLosses >= 3 ? '#dc2626' : '#111827'}">${h.portfolio.consecutiveLosses}</div><div class="stat-label">Consec. Losses</div></div>
       </div>
+      ${h.liveTest ? `
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${h.liveTest.total || 0}</div><div class="stat-label">Live Outcomes</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#059669">${h.liveTest.wins || 0}</div><div class="stat-label">Live Wins</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#dc2626">${h.liveTest.losses || 0}</div><div class="stat-label">Live Losses</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:${h.liveTest.winRate >= 60 ? '#059669' : '#d97706'}">${h.liveTest.winRate != null ? fmtPct(h.liveTest.winRate) : '—'}</div><div class="stat-label">Live Win Rate</div></div>
+      </div>
+      ` : ''}
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
         <p style="font-size:13px;font-weight:600;margin-bottom:12px">Source Health</p>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -5457,25 +5474,100 @@ async function fetchForwardTest() {
 }
 
 async function resolveForwardTest() {
-  const btn = document.querySelector('#eng-forward .btn-primary');
-  const prev = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Resolving...';
-  const resultEl = document.getElementById('fwResolveResult');
-  resultEl.style.display = 'none';
-  try {
-    const res = await fetch('/api/signals/forward-test/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-    const d = await res.json();
-    if (d.success) {
-      resultEl.textContent = 'Resolved ' + d.resolved + ', failed ' + d.failed;
-      resultEl.style.display = 'inline';
-      setTimeout(() => { resultEl.style.display = 'none'; }, 5000);
-    }
-    fetchForwardTest();
-  } catch { toast('Error resolving predictions', 'error'); }
-  btn.disabled = false;
-  btn.textContent = prev;
-}
+   const btn = document.querySelector('#eng-forward .btn-primary');
+   const prev = btn.textContent;
+   btn.disabled = true;
+   btn.textContent = 'Resolving...';
+   const resultEl = document.getElementById('fwResolveResult');
+   resultEl.style.display = 'none';
+   try {
+     const res = await fetch('/api/signals/forward-test/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+     const d = await res.json();
+     if (d.success) {
+       resultEl.textContent = 'Resolved ' + d.resolved + ', failed ' + d.failed;
+       resultEl.style.display = 'inline';
+       setTimeout(() => { resultEl.style.display = 'none'; }, 5000);
+     }
+     fetchForwardTest();
+   } catch { toast('Error resolving predictions', 'error'); }
+   btn.disabled = false;
+   btn.textContent = prev;
+ }
+
+ async function fetchLivePath() {
+   const el = document.getElementById('engineLiveContent');
+   el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading live path data...</div>';
+   try {
+     const res = await fetch('/api/signals/live-path');
+     const d = await res.json();
+     if (!d.success) { el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">No data</div>'; return; }
+     const s = d.snapshot;
+     const accColor = s && s.winRate >= 60 ? '#059669' : s && s.winRate >= 45 ? '#d97706' : '#dc2626';
+     el.innerHTML = `
+       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
+         <div class="stat-card"><div class="stat-value" style="color:#111827">${s ? s.total : 0}</div><div class="stat-label">Total Outcomes</div></div>
+         <div class="stat-card"><div class="stat-value" style="color:#059669">${s ? s.wins : 0}</div><div class="stat-label">Wins</div></div>
+         <div class="stat-card"><div class="stat-value" style="color:#dc2626">${s ? s.losses : 0}</div><div class="stat-label">Losses</div></div>
+         <div class="stat-card"><div class="stat-value" style="color:${accColor}">${s ? fmtPct(s.winRate) : '—'}</div><div class="stat-label">Live Win Rate</div></div>
+       </div>
+       ${s && s.buckets ? `
+         <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
+           <p style="font-size:13px;font-weight:600;margin-bottom:8px">Resolution Time Buckets</p>
+           <div class="grid grid-cols-3 gap-4">
+             <div style="text-align:center"><div class="stat-value" style="color:#111827">${s.buckets['1d'] ? s.buckets['1d'].total : 0}</div><div class="stat-label">1d (Win ${s.buckets['1d'] ? fmtPct(s.buckets['1d'].winRate) : '—'})</div></div>
+             <div style="text-align:center"><div class="stat-value" style="color:#111827">${s.buckets['5d'] ? s.buckets['5d'].total : 0}</div><div class="stat-label">5d (Win ${s.buckets['5d'] ? fmtPct(s.buckets['5d'].winRate) : '—'})</div></div>
+             <div style="text-align:center"><div class="stat-value" style="color:#111827">${s.buckets['20d'] ? s.buckets['20d'].total : 0}</div><div class="stat-label">20d (Win ${s.buckets['20d'] ? fmtPct(s.buckets['20d'].winRate) : '—'})</div></div>
+           </div>
+         </div>
+       ` : ''}
+       ${s && s.avgDaysToResolve != null ? `
+         <div class="stat-card" style="margin-bottom:16px"><div class="stat-label">Avg Days to Resolve</div><div class="stat-value" style="color:#111827">${s.avgDaysToResolve.toFixed(1)} days</div></div>
+       ` : ''}
+       ${s && s.predictions && s.predictions.length > 0 ? `
+         <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+           <p style="font-size:13px;font-weight:600;margin-bottom:8px">Active Live Predictions</p>
+           <div style="overflow-x:auto">
+             <table style="width:100%;font-size:12px">
+               <thead><tr style="border-bottom:1px solid #e5e7eb">
+                 <th style="text-align:left;padding:6px 8px;color:#6b7280">Symbol</th>
+                 <th style="text-align:left;padding:6px 8px;color:#6b7280">Signal</th>
+                 <th style="text-align:right;padding:6px 8px;color:#6b7280">Entry</th>
+                 <th style="text-align:right;padding:6px 8px;color:#6b7280">Current</th>
+                 <th style="text-align:right;padding:6px 8px;color:#6b7280">Stop</th>
+                 <th style="text-align:right;padding:6px 8px;color:#6b7280">Target</th>
+                 <th style="text-align:right;padding:6px 8px;color:#6b7280">Progress</th>
+                 <th style="text-align:center;padding:6px 8px;color:#6b7280">Status</th>
+               </tr></thead>
+               <tbody>${s.predictions.map(p => {
+                 const isBuy = p.signal === 'Strong Buy' || p.signal === 'Buy';
+                 let progress = 0;
+                 if (p.entryPrice > 0 && p.currentPrice > 0) {
+                   if (isBuy) {
+                     const targetDist = p.target1 - p.entryPrice;
+                     progress = targetDist > 0 ? Math.min(100, Math.max(0, ((p.currentPrice - p.entryPrice) / targetDist) * 100)) : 0;
+                   } else {
+                     const targetDist = p.entryPrice - p.target1;
+                     progress = targetDist > 0 ? Math.min(100, Math.max(0, ((p.entryPrice - p.currentPrice) / targetDist) * 100)) : 0;
+                   }
+                 }
+                 const sigColor = { 'Strong Buy': 'bg-emerald-100 text-emerald-700', 'Buy': 'bg-green-100 text-green-700', 'Hold': 'bg-gray-100 text-gray-600', 'Sell': 'bg-red-100 text-red-700', 'Strong Sell': 'bg-rose-100 text-rose-700' }[p.signal] || 'bg-gray-100 text-gray-600';
+                 return `<tr style="border-bottom:1px solid #f3f4f6">
+                   <td style="padding:6px 8px;font-weight:500">${esc(p.symbol)}</td>
+                   <td style="padding:6px 8px"><span class="pill ${sigColor}">${esc(p.signal)}</span></td>
+                   <td style="padding:6px 8px;text-align:right;color:#6b7280">${p.entryPrice ? '$' + Number(p.entryPrice).toFixed(2) : '—'}</td>
+                   <td style="padding:6px 8px;text-align:right;color:#6b7280">${p.currentPrice ? '$' + Number(p.currentPrice).toFixed(2) : '—'}</td>
+                   <td style="padding:6px 8px;text-align:right;color:#dc2626">${p.stopLoss ? '$' + Number(p.stopLoss).toFixed(2) : '—'}</td>
+                   <td style="padding:6px 8px;text-align:right;color:#059669">${p.target1 ? '$' + Number(p.target1).toFixed(2) : '—'}</td>
+                   <td style="padding:6px 8px;text-align:right;font-weight:500;color:${progress >= 80 ? '#059669' : progress >= 50 ? '#d97706' : '#6b7280'}">${Math.round(progress)}%</td>
+                   <td style="padding:6px 8px;text-align:center">${p.resolved ? (p.result === 'win' ? '<span style="color:#059669">Win</span>' : '<span style="color:#dc2626">Loss</span>') : '<span style="color:#d97706">Active</span>'}</td>
+                 </tr>`;
+               }).join('')}</tbody>
+             </table>
+           </div>
+         </div>
+       ` : '<div style="text-align:center;padding:24px;color:#6b7280;font-size:13px">No active live predictions</div>'}`;
+   } catch { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Error loading live path data</div>'; }
+ }
 
 async function fetchEngineConfig() {
   const el = document.getElementById('engineConfigContent');
