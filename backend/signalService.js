@@ -1083,7 +1083,8 @@ async function _loadForwardPredictionsFromDb() {
   try {
     const result = await pool.query(
       `SELECT id, symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, generated_at, resolved, actual_return, correct
-       FROM forward_predictions ORDER BY generated_at`
+       FROM forward_predictions WHERE generated_at > NOW() - $1::interval ORDER BY generated_at`,
+      [`${SIGNAL_WINDOW_DAYS} days`]
     );
     const resolved = result.rows.filter(r => r.resolved).length;
     const unresolved = result.rows.length - resolved;
@@ -1216,8 +1217,11 @@ async function getForwardTestStats() {
   const buckets = { '1d': { total: 0, correct: 0, neutral: 0 }, '5d': { total: 0, correct: 0, neutral: 0 }, '20d': { total: 0, correct: 0, neutral: 0 } };
 
   // Load in-memory predictions (current session)
+  const now = Date.now();
+  const maxAge = SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
   for (const [symbol, store] of _forwardTestStore) {
     for (const p of store.predictions) {
+      if (p.generatedAt && (now - p.generatedAt) > maxAge) continue;
       if (!p.resolved) { pending++; continue; }
       total++;
       if (p.correct === true) correct++;
@@ -1246,7 +1250,8 @@ async function getForwardTestStats() {
   try {
     const dbResult = await pool.query(
       `SELECT id, symbol, confidence, correct, resolved_at, generated_at, stop_loss, target1, action, trade_type FROM forward_predictions WHERE resolved = TRUE
-       AND generated_at > NOW() - INTERVAL '90 days'`
+       AND generated_at > NOW() - $1::interval`,
+      [`${SIGNAL_WINDOW_DAYS} days`]
     );
     for (const row of dbResult.rows) {
       const sym = row.symbol;
@@ -1302,10 +1307,13 @@ async function getForwardTestStats() {
 }
 
 function getForwardTestSnapshot() {
+  const now = Date.now();
+  const maxAge = SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
   let total = 0, correct = 0, neutral = 0, totalHours = 0, hourlyCount = 0;
   const buckets = { '1d': { total: 0, correct: 0, neutral: 0 }, '5d': { total: 0, correct: 0, neutral: 0 }, '20d': { total: 0, correct: 0, neutral: 0 } };
   for (const [, store] of _forwardTestStore) {
     for (const p of store.predictions) {
+      if (p.generatedAt && (now - p.generatedAt) > maxAge) continue;
       if (!p.resolved) continue;
       total++;
       if (p.correct === true) correct++;
@@ -1399,9 +1407,12 @@ function getLiveTestSnapshot() {
 }
 
 function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0 } = {}) {
+  const now = Date.now();
+  const maxAge = SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
   const all = [];
   for (const [sym, store] of _forwardTestStore) {
     for (const p of store.predictions) {
+      if (p.generatedAt && (now - p.generatedAt) > maxAge) continue;
       if (symbol && sym !== symbol) continue;
       if (resolved !== undefined && p.resolved !== resolved) continue;
       all.push({ symbol: sym, ...p, generatedAt: new Date(p.generatedAt).toISOString(), resolvedAt: p.resolvedAt ? new Date(p.resolvedAt).toISOString() : null });
