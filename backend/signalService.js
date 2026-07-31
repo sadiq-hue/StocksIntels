@@ -2028,9 +2028,13 @@ async function persistSignals(signals) {
       console.log('[SignalService] persistSignals called with empty signals');
       return;
     }
-    const actionable = signals.filter(s => s.signal !== 'Hold');
-    console.log(`[SignalService] Persisting ${signals.length} signals (${actionable.length} non-Hold) to signal_history`);
-    const values = signals.map(s => [
+    // Only persist actionable signals (Hold is noise; Accumulate/Reduce are legacy engine types).
+    // signal_bucket dedupes via the unique (ticker, signal_bucket) index so repeated
+    // generateSignals cycles within the same hour don't duplicate rows.
+    const actionable = signals.filter(s => ['Strong Buy', 'Buy', 'Sell', 'Strong Sell'].includes(s.signal));
+    if (actionable.length === 0) return;
+    console.log(`[SignalService] Persisting ${actionable.length} actionable signals to signal_history`);
+    const values = actionable.map(s => [
       s.ticker, s.signal, s.confidence, s.price, s.change || 0,
       s.entry || s.price, s.stopLoss || 0, s.target1 || 0, s.target2 || 0,
       s.riskReward || 1, s.sector || 'General', s.market || 'Global',
@@ -2041,11 +2045,11 @@ async function persistSignals(signals) {
     const cols = 18;
     const placeholders = values.map((_, i) => {
       const base = i * cols;
-      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, $${base+17}, $${base+18}, NOW())`;
+      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, $${base+17}, $${base+18}, NOW(), date_trunc('hour', NOW()))`;
     }).join(',');
     const flat = values.flat();
     const result = await pool.query(
-      `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, position_size, analysis_data, generated_at)
+      `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, position_size, analysis_data, generated_at, signal_bucket)
        VALUES ${placeholders}
        ON CONFLICT DO NOTHING`,
       flat
