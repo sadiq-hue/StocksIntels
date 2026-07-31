@@ -5284,7 +5284,7 @@ async function fetchEngineHealth() {
       </div>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
         <div class="stat-card"><div class="stat-value ${regimeColor}" style="text-transform:capitalize">${h.regime}</div><div class="stat-label">Market Regime</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:#111827">${h.signalCount}</div><div class="stat-label">Signal Count</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${h.openPositions || 0}</div><div class="stat-label">Open Positions</div></div>
         <div class="stat-card"><div class="stat-value" style="color:${h.performance.winRate >= 60 ? '#059669' : '#d97706'}">${h.performance.winRate.toFixed(1)}%</div><div class="stat-label">Win Rate</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#111827">${h.confidenceMultiplier.toFixed(2)}</div><div class="stat-label">Confidence Mult.</div></div>
       </div>

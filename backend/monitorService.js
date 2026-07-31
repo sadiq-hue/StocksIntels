@@ -101,7 +101,7 @@ async function logHealth(engineHealth) {
     totalTrades: engineHealth.performance?.total || 0,
     consecutiveLosses: engineHealth.portfolio?.consecutiveLosses || 0,
     regime: engineHealth.regime,
-    signalCount: engineHealth.signalCount || 0,
+    signalCount: engineHealth.openPositions || 0,
     confidenceMultiplier: engineHealth.confidenceMultiplier || 1,
   };
 
@@ -141,8 +141,8 @@ function getQualityScore(engineHealth) {
   if (cm < 0.7) score -= 15;
   else if (cm < 0.9) score -= 5;
 
-  // Active signals
-  const sc = engineHealth.signalCount || 0;
+  // Active signals (open monitored positions)
+  const sc = engineHealth.openPositions || 0;
   if (sc < 10) score -= 10;
 
   return Math.max(0, Math.min(100, score));
