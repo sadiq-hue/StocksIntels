@@ -136,6 +136,20 @@ const _financialReportCache = new PersistentCache('sigfin', 24 * 60 * 60 * 1000)
 // Signal performance tracker (in-memory, rolling 100 signals per symbol)
 const _signalOutcomes = new Map();
 let _signalHistoryCount = 0;
+// Current live signal set: distinct tickers with a signal in the latest hourly
+// bucket (the "as of now" count), not the cumulative ticker-per-hour history.
+let _signalCount = 0;
+
+// Refresh _signalCount from the latest signal_bucket (distinct tickers now).
+async function refreshSignalCount() {
+  try {
+    const r = await pool.query(
+      `SELECT COUNT(DISTINCT ticker)::int c FROM signal_history
+       WHERE signal_bucket = (SELECT MAX(signal_bucket) FROM signal_history)`
+    );
+    _signalCount = r.rows[0]?.c || 0;
+  } catch { _signalCount = 0; }
+}
 
 // Live test store — ring buffer of resolved signal outcomes with resolvedAt timestamps
 const _liveTestStore = new Map(); // symbol -> { outcomes: [{ result, entryPrice, exitPrice, signal, generatedAt, resolvedAt }] }
@@ -634,6 +648,7 @@ async function restoreStateFromDb() {
     // Track total signal history rows for health display
     const histCount = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_history').catch(() => ({ rows: [{ cnt: 0 }] }));
     _signalHistoryCount = histCount.rows[0]?.cnt || 0;
+    await refreshSignalCount();
 
     console.log(`[SignalService] Restored ${_signalOutcomes.size} outcomes, ${_signalHistoryCount} history rows from DB (${wins} wins, ${losses} losses in last 30d)`);
 
@@ -1968,7 +1983,7 @@ function getEngineHealth() {
       maxDrawdown: Math.round(_portfolioState.maxDrawdown * 1000) / 10,
     },
     regime: _marketRegime.regime,
-    signalCount: _signalHistoryCount,
+    signalCount: _signalCount,
     confidenceMultiplier: getConfidenceMultiplier(),
   };
 }
@@ -2116,6 +2131,7 @@ async function persistSignals(signals) {
       flat
     );
     _signalHistoryCount += result.rowCount || 0;
+    await refreshSignalCount();
     console.log(`[SignalService] Persisted ${result.rowCount} new signal_history rows`);
   } catch (error) {
     if (error.code !== '42P01') {
@@ -2140,6 +2156,7 @@ async function cleanupOldSignals() {
     if (result.rowCount > 0) {
       console.log(`[SignalService] Cleaned ${result.rowCount} old signal records`);
     }
+    await refreshSignalCount();
   } catch (error) {
     if (error.code !== '42P01') {
       console.error('[SignalService] Cleanup error:', error.message);
