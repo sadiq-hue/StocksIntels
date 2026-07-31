@@ -579,6 +579,41 @@ async function restoreStateFromDb() {
       if (store.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) store.outcomes = store.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
     }
 
+    // Restore still-open (unresolved) live positions from signal_history so the
+    // monitor-first gate survives restarts. Without this every boot re-emitted a
+    // fresh signal for every tracked symbol because _signalOutcomes started empty.
+    const openRes = await pool.query(
+      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, trade_type, position_size, generated_at
+       FROM signal_history
+       WHERE generated_at > NOW() - $1::interval
+         AND signal IN ('Strong Buy','Buy','Sell','Strong Sell')
+         AND entry_price > 0 AND stop_loss > 0 AND target1 > 0
+       ORDER BY ticker, generated_at DESC`,
+      [`${SIGNAL_WINDOW_DAYS} days`]
+    );
+    for (const row of openRes.rows) {
+      const sym = row.ticker;
+      const genAt = new Date(row.generated_at).getTime();
+      // Skip if this signal has already produced a resolved outcome
+      const resolved = await pool.query(
+        `SELECT 1 FROM signal_outcomes WHERE ticker = $1 AND signal_generated_at >= $2 AND result IS NOT NULL LIMIT 1`,
+        [sym, row.generated_at]
+      );
+      if (resolved.rows.length > 0) continue;
+      const entry = parseFloat(row.entry_price);
+      const stop = parseFloat(row.stop_loss);
+      const target = parseFloat(row.target1);
+      const action = /buy/i.test(row.signal) ? 'buy' : 'sell';
+      const saneLevels = action === 'buy' ? (stop < entry && target > entry) : (stop > entry && target < entry);
+      if (!saneLevels) continue;
+      _signalOutcomes.set(sym, {
+        entryPrice: entry, signal: row.signal, action, type: row.trade_type || 'Swing Trade',
+        stopLoss: stop, target1: target, positionSize: parseInt(row.position_size) || 25,
+        timestamp: genAt, result: null, lastProgressAlert: 0,
+      });
+    }
+    console.log(`[SignalService] Restored open live positions from signal_history`);
+
     // Compute performance stats from signals generated in the last 30 days
     const result = await pool.query(
       `SELECT result, COUNT(*) as cnt FROM signal_outcomes
