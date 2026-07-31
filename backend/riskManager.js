@@ -126,22 +126,35 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
 
   if (previous && previous.action !== 'hold' && previous.stopLoss != null && previous.target1 != null && !previous.result) {
     const isPrevBuy = previous.action === 'buy';
-    if (isPrevBuy) {
-      if (currentPrice <= previous.stopLoss) {
-        previous.result = 'loss'; performanceStats.losses++; performanceStats.total++;
-        portfolioState.consecutiveLosses++;
-      } else if (currentPrice >= previous.target1) {
-        previous.result = 'win'; performanceStats.wins++; performanceStats.total++;
-        portfolioState.consecutiveLosses = 0;
+    // Defensive guards: never resolve a position whose stop sits on the wrong side of
+    // entry (broken/inverted levels) or when the price hasn't actually moved past the
+    // level (stale/identical cached quote). Otherwise every broken position resolves
+    // as an instant loss with entry == exit on the next cycle.
+    const entry = previous.entryPrice;
+    const saneLevels = entry > 0 && isPrevBuy
+      ? previous.stopLoss < entry && previous.target1 > entry
+      : entry > 0 && previous.stopLoss > entry && previous.target1 < entry;
+    const moved = Math.abs(currentPrice - entry) > Math.max(entry * 0.0005, 0.01);
+    if (saneLevels && moved) {
+      if (isPrevBuy) {
+        if (currentPrice <= previous.stopLoss) {
+          previous.result = 'loss'; performanceStats.losses++; performanceStats.total++;
+          portfolioState.consecutiveLosses++;
+        } else if (currentPrice >= previous.target1) {
+          previous.result = 'win'; performanceStats.wins++; performanceStats.total++;
+          portfolioState.consecutiveLosses = 0;
+        }
+      } else {
+        if (currentPrice >= previous.stopLoss) {
+          previous.result = 'loss'; performanceStats.losses++; performanceStats.total++;
+          portfolioState.consecutiveLosses++;
+        } else if (currentPrice <= previous.target1) {
+          previous.result = 'win'; performanceStats.wins++; performanceStats.total++;
+          portfolioState.consecutiveLosses = 0;
+        }
       }
     } else {
-      if (currentPrice >= previous.stopLoss) {
-        previous.result = 'loss'; performanceStats.losses++; performanceStats.total++;
-        portfolioState.consecutiveLosses++;
-      } else if (currentPrice <= previous.target1) {
-        previous.result = 'win'; performanceStats.wins++; performanceStats.total++;
-        portfolioState.consecutiveLosses = 0;
-      }
+      console.warn(`[RiskManager] Skipping resolution for ${symbol} ${previous.signal} (${previous.action}) entry=${entry} stop=${previous.stopLoss} t1=${previous.target1} price=${currentPrice} saneLevels=${saneLevels} moved=${moved}`);
     }
     if (previous.result) {
       previous.resolvedAt = Date.now();

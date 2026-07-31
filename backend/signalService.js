@@ -2316,7 +2316,11 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     if (sigObj.signal !== 'Hold') {
       recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.action, sigObj.type, sigObj.sector).catch(() => {});
     }
-    if (prevOutcome && prevOutcome.result) {
+    if (prevOutcome && prevOutcome.result && prevOutcome.timestamp) {
+      // Only persist outcomes that trackSignalOutcomes resolved THIS cycle.
+      // Entries restored from DB / backfilled / backtest have result pre-set but no
+      // timestamp — re-persisting them creates duplicate rows and a self-perpetuating
+      // cascade (each re-persist becomes a "resolved prevOutcome" for the next cycle).
       persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null, prevOutcome.timestamp);
       signalEventBus.emit('signal:resolved', {
         ticker: symbol,
