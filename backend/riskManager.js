@@ -160,6 +160,10 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
       console.warn(`[RiskManager] Skipping resolution for ${symbol} ${previous.signal} (${previous.action}) entry=${entry} stop=${previous.stopLoss} t1=${previous.target1} price=${currentPrice} saneLevels=${saneLevels} moved=${moved}`);    }
     if (previous.result) {
       previous.resolvedAt = Date.now();
+      // Record the level that actually resolved the trade (stop for a loss,
+      // target for a win) so the persisted outcome shows the true exit, not
+      // the market price at the check moment.
+      previous.exitPrice = previous.result === 'win' ? previous.target1 : previous.stopLoss;
       portfolioState.totalTrades++;
       performanceStats.winRate = performanceStats.total > 0
         ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;

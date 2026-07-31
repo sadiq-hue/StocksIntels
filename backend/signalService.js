@@ -2402,6 +2402,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           const closedWin = isPrevBuy ? currentPrice >= prevOutcome.entryPrice : currentPrice <= prevOutcome.entryPrice;
           prevOutcome.result = closedWin ? 'win' : 'loss';
           prevOutcome.resolvedAt = Date.now();
+          prevOutcome.exitPrice = currentPrice;
           if (closedWin) { performanceStats.wins++; } else { performanceStats.losses++; }
           performanceStats.total++;
           portfolioState.totalTrades++;
@@ -2420,7 +2421,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       // Entries restored from DB / backfilled / backtest have result pre-set but no
       // timestamp — re-persisting them creates duplicate rows and a self-perpetuating
       // cascade (each re-persist becomes a "resolved prevOutcome" for the next cycle).
-      persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null, prevOutcome.timestamp);
+      persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, prevOutcome.exitPrice != null ? prevOutcome.exitPrice : currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null, prevOutcome.timestamp);
       signalEventBus.emit('signal:resolved', {
         ticker: symbol,
         entryPrice: prevOutcome.entryPrice,
