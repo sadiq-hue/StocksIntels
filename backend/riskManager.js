@@ -29,27 +29,44 @@ function calculatePositionSize(signal, regime, confidence, scoreVariance) {
   return Math.round(Math.min(Math.max(baseSize, 0), 1) * 100);
 }
 
-function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = 0.05) {
+// Stop distance scales with the trade's holding horizon: a momentum trade needs a
+// tight stop (1.5x ATR) while a 3-6 month "Long Term Value" hold needs room to
+// breathe (3x ATR) or it gets stopped out on ordinary noise.
+const TRADE_TYPE_STOP_MULT = {
+  'Momentum Trade': 1.5,
+  'Aggressive Buy': 1.5,
+  'Swing Trade': 2,
+  'Long Term Value': 3,
+  'Long Term': 3,
+};
+// Target multiples keep the same ~1.33 / ~2.33 risk-reward profile at any stop width.
+const TARGET1_MULT = 4 / 3;
+const TARGET2_MULT = 7 / 3;
+
+function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = 0.05, tradeType = 'Swing Trade') {
   const volatility = calculateATR(priceHistory);
   const atr = currentPrice * volatility;
+  const mult = TRADE_TYPE_STOP_MULT[tradeType] || 1.5;
   let entry, stopLoss, target1, target2;
   if (signal.action === 'buy') {
     entry = currentPrice;
-    stopLoss = currentPrice - (atr * 1.5);
-    target1 = currentPrice + (atr * 2);
-    target2 = currentPrice + (atr * 3.5);
+    stopLoss = currentPrice - (atr * mult);
+    target1 = currentPrice + (atr * mult * TARGET1_MULT);
+    target2 = currentPrice + (atr * mult * TARGET2_MULT);
   } else if (signal.action === 'sell') {
     entry = currentPrice;
-    stopLoss = currentPrice + (atr * 1.5);
-    target1 = currentPrice - (atr * 2);
-    target2 = currentPrice - (atr * 3.5);
+    stopLoss = currentPrice + (atr * mult);
+    target1 = currentPrice - (atr * mult * TARGET1_MULT);
+    target2 = currentPrice - (atr * mult * TARGET2_MULT);
   } else {
     entry = currentPrice;
     stopLoss = currentPrice * (1 - stopLossPct);
     target1 = currentPrice * (1 + stopLossPct);
     target2 = currentPrice * (1 + stopLossPct * 2);
   }
-  const maxStopDistance = currentPrice * volatility * 3;
+  // Cap stop distance at 2x the base stop, but never more than 10% of price so a
+  // high-ATR name can't produce an absurd 45% stop.
+  const maxStopDistance = Math.min(currentPrice * volatility * mult * 2, currentPrice * 0.10);
   if (signal.action === 'buy') {
     stopLoss = Math.max(stopLoss, currentPrice - maxStopDistance);
   } else if (signal.action === 'sell') {

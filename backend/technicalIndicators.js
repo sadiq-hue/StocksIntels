@@ -90,10 +90,22 @@ function calculateSMA(prices, period) {
 
 function calculateATR(prices) {
   if (!prices || prices.length < 14) return 0.05;
+  // Use true intraday high-low ranges when OHLC data is available (attached as
+  // prices.highs / prices.lows). Close-to-close ATR understates volatility for
+  // stocks that swing widely intraday but close flat (thin NSE names, etc.), which
+  // produced stops far tighter than the noise they had to survive.
+  const hasRange = Array.isArray(prices.highs) && Array.isArray(prices.lows)
+    && prices.highs.length === prices.length && prices.lows.length === prices.length;
   const periods = Math.min(14, prices.length - 1);
   const ranges = [];
   for (let i = prices.length - periods; i < prices.length; i++) {
-    ranges.push(Math.abs(prices[i] - prices[i - 1]) / prices[i - 1]);
+    if (hasRange && prices.highs[i] != null && prices.lows[i] != null
+        && prices.lows[i] > 0 && prices.highs[i] >= prices.lows[i]) {
+      const prev = i > 0 && prices[i - 1] > 0 ? prices[i - 1] : prices[i];
+      ranges.push((prices.highs[i] - prices.lows[i]) / prev);
+    } else {
+      ranges.push(Math.abs(prices[i] - prices[i - 1]) / prices[i - 1]);
+    }
   }
   const atr = ranges.reduce((a, b) => a + b, 0) / ranges.length;
   return Math.min(Math.max(atr, 0.01), 0.15);

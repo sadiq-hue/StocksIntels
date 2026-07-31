@@ -241,6 +241,8 @@ function getNseDailyHistory(symbol) {
   if (!history || history.length < 2) return null;
   const prices = history.map(d => d.close);
   prices.volumes = history.map(d => d.volume).filter(v => v != null && v > 0);
+  prices.highs = history.map(d => d.high);
+  prices.lows = history.map(d => d.low);
   return prices;
 }
 
@@ -258,8 +260,11 @@ async function getPriceHistory(symbol) {
       const msa = require('./mystocksAfricaApi');
       const bars = await msa.fetchHistorical(`NSE:${symbol}`, '6mo');
       if (bars && bars.length >= 2) {
-        const prices = bars.map(b => b.close).filter(p => p != null);
-        prices.volumes = bars.map(b => b.volume || 0).filter(v => v > 0);
+        const valid = bars.filter(b => b.close != null);
+        const prices = valid.map(b => b.close);
+        prices.volumes = valid.map(b => b.volume || 0).filter(v => v > 0);
+        prices.highs = valid.map(b => b.high);
+        prices.lows = valid.map(b => b.low);
         _priceHistoryCache.set(symbol, { data: prices, ts: Date.now() });
         return prices;
       }
@@ -277,8 +282,11 @@ async function getPriceHistory(symbol) {
   // Non-NSE: Yahoo Finance V8
   const bars = await fetchHistoricalQuotes(symbol, '3mo', '1d');
   if (bars && bars.length >= 2) {
-    const prices = bars.map(b => b.close).filter(p => p != null);
-    prices.volumes = bars.map(b => b.volume).filter(v => v != null && v > 0);
+    const valid = bars.filter(b => b.close != null);
+    const prices = valid.map(b => b.close);
+    prices.volumes = valid.map(b => b.volume).filter(v => v != null && v > 0);
+    prices.highs = valid.map(b => b.high);
+    prices.lows = valid.map(b => b.low);
     _priceHistoryCache.set(symbol, { data: prices, ts: Date.now() });
     return prices;
   }
@@ -2830,7 +2838,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   else sig = { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
 
   const tradeType = determineTradeType(technical.score, fundamental.score);
-  const tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, stopLossPct);
+  const tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, stopLossPct, tradeType);
   const scoreVariance = Math.max(
     Math.abs(fundamental.score - overallScore),
     Math.abs(technical.score - overallScore),
