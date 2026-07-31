@@ -2381,6 +2381,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     if (NSE_SYMBOLS.includes(symbol)) accumulateNseQuote(symbol, currentPrice, volume);
     
     const marketOpen = isExchangeOpen(symbol);
+    const fundamental = analyzeFundamentals(stock, currentPrice, newsSentiment[symbol] || null, _dynamicSectorPE);
     const priceHistory = await getPriceHistory(symbol);
     // Entry sanity check: the quote used to build stop/target levels must be
     // plausible relative to the prior session close. Day-high-as-price or broken
