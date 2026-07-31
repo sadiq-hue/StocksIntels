@@ -97,7 +97,7 @@ function applyPortfolioConstraints(signals) {
   if (!signals || signals.length === 0) return signals;
   const sectorExposure = {};
   for (const s of signals) {
-    if (s.signal === 'Strong Buy' || s.signal === 'Buy' || s.signal === 'Accumulate') {
+    if (s.signal === 'Strong Buy' || s.signal === 'Buy') {
       sectorExposure[s.sector] = (sectorExposure[s.sector] || 0) + 1;
     }
   }
@@ -123,32 +123,49 @@ function applyPortfolioConstraints(signals) {
 function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, symbol, currentPrice, newSignal) {
   let previous = signalOutcomes.get(symbol);
   const posSize = parseInt(newSignal.positionSize) || 25;
-  const outcome = { entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action, timestamp: Date.now(), result: null, positionSize: posSize };
-  if (previous && previous.action !== 'hold') {
-    const priceChange = ((currentPrice - previous.entryPrice) / previous.entryPrice) * 100;
-    let won;
-    if (previous.action === 'buy' && priceChange > 2) won = true;
-    else if (previous.action === 'buy' && priceChange < -3) won = false;
-    else if (previous.action === 'sell' && priceChange < -2) won = true;
-    else if (previous.action === 'sell' && priceChange > 3) won = false;
-    if (won === true) {
-      previous.result = 'win';
-      performanceStats.wins++;
-      performanceStats.total++;
-      portfolioState.consecutiveLosses = 0;
-    } else if (won === false) {
-      previous.result = 'loss';
-      performanceStats.losses++;
-      performanceStats.total++;
-      portfolioState.consecutiveLosses++;
+
+  if (previous && previous.action !== 'hold' && previous.stopLoss != null && previous.target1 != null && !previous.result) {
+    const isPrevBuy = previous.action === 'buy';
+    if (isPrevBuy) {
+      if (currentPrice <= previous.stopLoss) {
+        previous.result = 'loss'; performanceStats.losses++; performanceStats.total++;
+        portfolioState.consecutiveLosses++;
+      } else if (currentPrice >= previous.target1) {
+        previous.result = 'win'; performanceStats.wins++; performanceStats.total++;
+        portfolioState.consecutiveLosses = 0;
+      }
+    } else {
+      if (currentPrice >= previous.stopLoss) {
+        previous.result = 'loss'; performanceStats.losses++; performanceStats.total++;
+        portfolioState.consecutiveLosses++;
+      } else if (currentPrice <= previous.target1) {
+        previous.result = 'win'; performanceStats.wins++; performanceStats.total++;
+        portfolioState.consecutiveLosses = 0;
+      }
     }
-    portfolioState.totalTrades++;
-    if (performanceStats.total > 0) {
-      performanceStats.winRate = Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10;
+    if (previous.result) {
+      previous.resolvedAt = Date.now();
+      portfolioState.totalTrades++;
+      performanceStats.winRate = performanceStats.total > 0
+        ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;
     }
+    // Only overwrite if resolved — unresolved signals persist across cycles
+    if (previous.result) {
+      signalOutcomes.set(symbol, {
+        entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
+        stopLoss: newSignal.stopLoss, target1: newSignal.target1,
+        timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
+      });
+    }
+  } else {
+    signalOutcomes.set(symbol, {
+      entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
+      stopLoss: newSignal.stopLoss, target1: newSignal.target1,
+      timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
+    });
   }
-  signalOutcomes.set(symbol, outcome);
-  if (signalOutcomes.size > 200) {
+
+  if (signalOutcomes.size > 500) {
     const oldest = signalOutcomes.keys().next().value;
     signalOutcomes.delete(oldest);
   }

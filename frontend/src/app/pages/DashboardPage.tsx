@@ -392,7 +392,7 @@ export function DashboardPage() {
   }, [user?.id]);
 
   const signalSummary = useMemo(() => {
-    const counts: Record<string, number> = { "Strong Buy": 0, Buy: 0, Accumulate: 0, Hold: 0, Sell: 0, "Strong Sell": 0 };
+    const counts: Record<string, number> = { "Strong Buy": 0, Buy: 0, Hold: 0, Sell: 0, "Strong Sell": 0 };
     signals.forEach(s => { if (counts[s.signal] !== undefined) counts[s.signal]++; });
     const total = signals.length;
     const avgConf = total ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / total) : 0;
@@ -947,13 +947,12 @@ export function DashboardPage() {
                       <span className="text-white/60">Avg {signalSummary.avgConf}% confidence</span>
                     </div>
                     <div className="flex h-1.5 rounded-full overflow-hidden bg-white/10">
-                      {(["Strong Buy", "Buy", "Accumulate", "Hold", "Sell", "Strong Sell"] as const).map(type => {
+                      {(["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"] as const).map(type => {
                         const count = signalSummary.counts[type];
                         if (!count) return null;
                         const colors: Record<string, string> = {
                           "Strong Buy": "bg-emerald-400",
                           "Buy": "bg-emerald-300",
-                          "Accumulate": "bg-teal-300",
                           "Hold": "bg-yellow-300",
                           "Sell": "bg-red-300",
                           "Strong Sell": "bg-red-400",
@@ -962,7 +961,7 @@ export function DashboardPage() {
                       })}
                     </div>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-white/60">
-                      {(["Strong Buy", "Buy", "Accumulate", "Hold", "Reduce", "Sell", "Strong Sell"] as const).map(type => {
+                      {(["Strong Buy", "Buy", "Hold", "Sell", "Strong Sell"] as const).map(type => {
                         const count = signalSummary.counts[type];
                         if (!count) return null;
                         return <span key={type}>{type}: {count}</span>;
@@ -982,8 +981,6 @@ export function DashboardPage() {
                             <Badge className={
                               signal.signal === "Strong Buy" ? "bg-emerald-400 text-emerald-900 border-0 text-[11px] font-semibold" :
                               signal.signal === "Buy" ? "bg-emerald-300 text-emerald-800 border-0 text-[11px] font-semibold" :
-                              signal.signal === "Accumulate" ? "bg-teal-300 text-teal-800 border-0 text-[11px] font-semibold" :
-                              signal.signal === "Reduce" ? "bg-orange-300 text-orange-800 border-0 text-[11px] font-semibold" :
                               signal.signal === "Sell" ? "bg-red-300 text-red-800 border-0 text-[11px] font-semibold" :
                               signal.signal === "Strong Sell" ? "bg-red-400 text-red-900 border-0 text-[11px] font-semibold" :
                               "bg-blue-300 text-blue-800 border-0 text-[11px] font-semibold"
@@ -1251,7 +1248,6 @@ export function DashboardPage() {
         const signalStyles: Record<string, string> = {
           "Strong Buy": "bg-emerald-400 text-emerald-900",
           "Buy": "bg-emerald-300 text-emerald-800",
-          "Accumulate": "bg-teal-300 text-teal-800",
           "Hold": "bg-yellow-300 text-yellow-800",
           "Sell": "bg-red-300 text-red-800",
           "Strong Sell": "bg-red-400 text-red-900",

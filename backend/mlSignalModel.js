@@ -3,7 +3,17 @@ const engineConfig = require('./engineConfig');
 const modalBridge = require('./modalBridge');
 const EventEmitter = require('events');
 
-const FEATURES = ['fundamental', 'technical', 'financial', 'macro', 'confidence', 'regimeVal'];
+const FEATURES = [
+  'rsi', 'macd_hist', 'bb_pct_b', 'sma_ratio', 'atr_ratio',
+  'volume_ratio', 'momentum_5d', 'pe_ratio', 'revenue_growth',
+  'macro_score', 'technical_score', 'fundamental_score',
+  'forward_test_1d_accuracy', 'forward_test_5d_accuracy',
+  'forward_test_20d_accuracy', 'forward_test_all_accuracy',
+  'forward_test_avg_days_to_resolve', 'forward_test_samples',
+  'live_test_1d_win_rate', 'live_test_5d_win_rate',
+  'live_test_20d_win_rate', 'live_test_all_win_rate',
+  'live_test_avg_days_to_resolve', 'live_test_samples',
+];
 let _weights = null;
 let _bias = 0;
 let _trainingStats = { samples: 0, accuracy: 0, lastTraining: 0 };
@@ -27,17 +37,17 @@ function sigmoid(z) {
 function extractFeatures(signal) {
   const regimeMap = { bull: 1, sideways: 0, bear: -1, crash: -2, unknown: 0 };
   return [
-    (signal.fundamentalScore || 50) / 100,
-    (signal.technicalScore || 50) / 100,
-    (signal.financialScore || 50) / 100,
-    (signal.macroScore || 50) / 100,
     (signal.confidence || 50) / 100,
+    (signal.entryPrice || 50) > 100 ? 0.7 : (signal.entryPrice || 50) > 20 ? 0.5 : 0.3,
+    signal.market === 'NSE' ? 0.3 : 0.7,
+    (signal.sector && ['Technology', 'Financial', 'Healthcare'].includes(signal.sector)) ? 0.7 : 0.5,
+    signal.tradeType === 'Aggressive Buy' ? 0.8 : signal.tradeType === 'Swing Trade' ? 0.5 : 0.3,
     regimeMap[signal.regime] || 0,
   ];
 }
 
 // Extract raw indicator features from analysis objects for the ML model
-function extractRawIndicators({ fundamental, technical, macro, priceHistory, currentPrice, volume }) {
+function extractRawIndicators({ fundamental, technical, macro, priceHistory, currentPrice, volume, forwardTest, liveTest }) {
   const cfg = engineConfig.getConfig().ml_features;
   const featMap = {};
 
@@ -55,9 +65,9 @@ function extractRawIndicators({ fundamental, technical, macro, priceHistory, cur
       featMap.bb_pct_b = 0.5;
     }
 
-    const sma20 = parseFloat(ind.sma20) || currentPrice;
-    const sma50 = parseFloat(ind.sma50) || currentPrice;
-    featMap.sma_ratio = sma50 > 0 ? sma20 / sma50 : 1;
+    const smaFast = parseFloat(ind.smaFast) || currentPrice;
+    const smaSlow = parseFloat(ind.smaSlow) || currentPrice;
+    featMap.sma_ratio = smaSlow > 0 ? smaFast / smaSlow : 1;
 
     if (priceHistory && priceHistory.length >= 14) {
       const ranges = [];
@@ -113,6 +123,40 @@ function extractRawIndicators({ fundamental, technical, macro, priceHistory, cur
     featMap.volume_raw = 0;
   }
 
+  if (forwardTest) {
+    const b = forwardTest.buckets || {};
+    featMap.forward_test_1d_accuracy = b['1d']?.total > 0 ? b['1d'].correct / b['1d'].total : 0.5;
+    featMap.forward_test_5d_accuracy = b['5d']?.total > 0 ? b['5d'].correct / b['5d'].total : 0.5;
+    featMap.forward_test_20d_accuracy = b['20d']?.total > 0 ? b['20d'].correct / b['20d'].total : 0.5;
+    featMap.forward_test_all_accuracy = forwardTest.total > 0 ? forwardTest.correct / forwardTest.total : 0.5;
+    featMap.forward_test_avg_days_to_resolve = (forwardTest.avgDaysToResolve || 0) / 30;
+    featMap.forward_test_samples = Math.log2(forwardTest.total + 1) / 10;
+  } else {
+    featMap.forward_test_1d_accuracy = 0.5;
+    featMap.forward_test_5d_accuracy = 0.5;
+    featMap.forward_test_20d_accuracy = 0.5;
+    featMap.forward_test_all_accuracy = 0.5;
+    featMap.forward_test_avg_days_to_resolve = 0.5;
+    featMap.forward_test_samples = 0;
+  }
+
+  if (liveTest) {
+    const b = liveTest.buckets || {};
+    featMap.live_test_1d_win_rate = b['1d']?.total > 0 ? b['1d'].wins / b['1d'].total : 0.5;
+    featMap.live_test_5d_win_rate = b['5d']?.total > 0 ? b['5d'].wins / b['5d'].total : 0.5;
+    featMap.live_test_20d_win_rate = b['20d']?.total > 0 ? b['20d'].wins / b['20d'].total : 0.5;
+    featMap.live_test_all_win_rate = liveTest.total > 0 ? liveTest.wins / liveTest.total : 0.5;
+    featMap.live_test_avg_days_to_resolve = (liveTest.avgDaysToResolve || 0) / 30;
+    featMap.live_test_samples = Math.log2(liveTest.total + 1) / 10;
+  } else {
+    featMap.live_test_1d_win_rate = 0.5;
+    featMap.live_test_5d_win_rate = 0.5;
+    featMap.live_test_20d_win_rate = 0.5;
+    featMap.live_test_all_win_rate = 0.5;
+    featMap.live_test_avg_days_to_resolve = 0.5;
+    featMap.live_test_samples = 0;
+  }
+
   const cfgFeatures = cfg.feature_list || FEATURES;
   const featureVector = cfgFeatures.map(name => featMap[name] !== undefined ? featMap[name] : 0);
 
@@ -155,7 +199,7 @@ function predictProbability(signal) {
 
 // Predict win probability from analysis results (called by _buildSignal)
 // Uses Python XGBoost when available, falls back to JS logistic regression
-async function predictWinProbability(fundamental, technical, macro, priceHistory, currentPrice, volume, symbol, sector, fundamentalsObj) {
+async function predictWinProbability(fundamental, technical, macro, priceHistory, currentPrice, volume, symbol, sector, fundamentalsObj, forwardTest, liveTest) {
   if (process.env.MODAL_URL) {
     try {
       const result = await modalBridge.predict(
@@ -174,25 +218,13 @@ async function predictWinProbability(fundamental, technical, macro, priceHistory
     }
   }
 
-  // Fallback: JS logistic regression
+  // Fallback: JS logistic regression using indicator features
   if (!_weights) return 0.5;
-  const mlCfg = engineConfig.getConfig().ml_features;
-  if (mlCfg && mlCfg.use_raw_indicators) {
-    const x = extractRawIndicators({ fundamental, technical, macro, priceHistory, currentPrice, volume });
-    if (x.length !== _weights.length) return 0.5;
-    let z = _bias;
-    for (let i = 0; i < _weights.length; i++) z += _weights[i] * x[i];
-    return sigmoid(z);
-  }
-  const signal = {
-    fundamentalScore: fundamental ? fundamental.score : 50,
-    technicalScore: technical ? technical.score : 50,
-    financialScore: 50,
-    macroScore: macro ? macro.score : 50,
-    confidence: 50,
-    regime: 'unknown',
-  };
-  return predictProbability(signal);
+  const x = extractRawIndicators({ fundamental, technical, macro, priceHistory, currentPrice, volume, forwardTest, liveTest });
+  if (x.length !== _weights.length) return 0.5;
+  let z = _bias;
+  for (let i = 0; i < _weights.length; i++) z += _weights[i] * x[i];
+  return sigmoid(z);
 }
 
 // Calibrate confidence based on historical accuracy
@@ -248,9 +280,12 @@ async function _runBackgroundTraining() {
 
   // Train JS logistic regression as fallback
   try {
+    // Ensure analysis_data column exists
+    await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS analysis_data jsonb`).catch(() => {});
     const result = await pool.query(`
       SELECT s.signal, sh.confidence, s.entry_price, s.exit_price, s.result,
-             sh.ticker, sh.market, sh.sector, sh.trade_type, sh.generated_at
+             sh.ticker, sh.market, sh.sector, sh.trade_type, sh.generated_at,
+             sh.analysis_data
       FROM signal_outcomes s
       JOIN signal_history sh ON sh.id = s.signal_history_id
       WHERE s.result IS NOT NULL
@@ -269,32 +304,27 @@ async function _runBackgroundTraining() {
     const calibData = [];
 
     for (const row of result.rows) {
-      const regimeVal = 0;
-      const cfg = engineConfig.getConfig().ml_features;
-
+      const currentPrice = parseFloat(row.entry_price) || 50;
       let feats;
-      if (cfg && cfg.use_raw_indicators) {
-        const confidence = row.confidence || 50;
-        const sector = row.sector || 'Unknown';
-        const market = row.market || 'Global';
-        feats = [
-          confidence / 100,
-          parseFloat(row.entry_price) > 100 ? 0.7 : parseFloat(row.entry_price) > 20 ? 0.5 : 0.3,
-          market === 'NSE' ? 0.3 : 0.7,
-          sector ? (['Technology', 'Financial', 'Healthcare'].includes(sector) ? 0.7 : 0.5) : 0.5,
-          row.trade_type === 'Aggressive Buy' ? 0.8 : row.trade_type === 'Swing Trade' ? 0.5 : 0.3,
-          regimeVal,
-        ];
+      if (row.analysis_data && typeof row.analysis_data === 'object') {
+        feats = extractRawIndicators({
+          ...row.analysis_data,
+          currentPrice,
+          priceHistory: [],
+          volume: 0,
+        });
       } else {
-        feats = [
-          (row.confidence || 50) / 100,
-          parseFloat(row.entry_price) > 100 ? 0.7 : parseFloat(row.entry_price) > 20 ? 0.5 : 0.3,
-          row.market === 'NSE' ? 0.3 : 0.7,
-          row.sector ? (['Technology', 'Financial', 'Healthcare'].includes(row.sector) ? 0.7 : 0.5) : 0.5,
-          row.trade_type === 'Aggressive Buy' ? 0.8 : row.trade_type === 'Swing Trade' ? 0.5 : 0.3,
-          regimeVal,
-        ];
+        // Build a minimal analysis object from DB columns — no hardcoded buckets
+        feats = extractRawIndicators({
+          fundamental: { score: row.confidence || 50, metrics: {} },
+          technical: {},
+          macro: {},
+          priceHistory: [],
+          currentPrice,
+          volume: 0,
+        });
       }
+      if (!feats || feats.length === 0) continue;
       X.push(feats);
       y.push(row.result === 'win' ? 1 : 0);
 
@@ -310,11 +340,11 @@ async function _runBackgroundTraining() {
 
     const trainingCfg = engineConfig.getConfig().training;
     const valSplit = (trainingCfg && trainingCfg.validation_split) || 0.2;
-    const splitIdx = Math.floor(X.length * (1 - valSplit));
-    const XTrain = X.slice(0, splitIdx);
-    const yTrain = y.slice(0, splitIdx);
-    const XVal = X.slice(splitIdx);
-    const yVal = y.slice(splitIdx);
+    const splitIdx = Math.floor(X.length * valSplit);
+    const XTrain = X.slice(splitIdx);
+    const yTrain = y.slice(splitIdx);
+    const XVal = X.slice(0, splitIdx);
+    const yVal = y.slice(0, splitIdx);
 
     const lambda = 0.01;
     const learningRate = 0.1;
@@ -456,4 +486,4 @@ function mlScoreAdjustment(signal) {
   return Math.round((prob - 0.5) * 2 * 20);
 }
 
-module.exports = { predictProbability, predictWinProbability, train, maybeRetrain, getModelInfo, mlScoreAdjustment, extractRawIndicators, calibrateConfidence, get modalBridge() { return modalBridge; }, emitter, get trainingInProgress() { return _trainingInProgress; }, get lastTrainError() { return _lastTrainError; } };
+module.exports = { FEATURES, predictProbability, predictWinProbability, train, maybeRetrain, getModelInfo, mlScoreAdjustment, extractRawIndicators, calibrateConfidence, get modalBridge() { return modalBridge; }, emitter, get trainingInProgress() { return _trainingInProgress; }, get lastTrainError() { return _lastTrainError; } };

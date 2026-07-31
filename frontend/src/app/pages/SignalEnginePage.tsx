@@ -113,7 +113,6 @@ function BacktestPanel() {
               <SelectItem value="all">All</SelectItem>
               <SelectItem value="Strong Buy">Strong Buy</SelectItem>
               <SelectItem value="Buy">Buy</SelectItem>
-              <SelectItem value="Accumulate">Accumulate</SelectItem>
               <SelectItem value="Sell">Sell</SelectItem>
               <SelectItem value="Strong Sell">Strong Sell</SelectItem>
             </SelectContent>
@@ -276,9 +275,7 @@ function ForwardTestPanel() {
   const signalColors: Record<string, string> = {
     "Strong Buy": "text-emerald-600 bg-emerald-50 border-emerald-200",
     Buy: "text-green-600 bg-green-50 border-green-200",
-    Accumulate: "text-teal-600 bg-teal-50 border-teal-200",
     Hold: "text-muted-foreground bg-muted border-border",
-    Reduce: "text-orange-600 bg-orange-50 border-orange-200",
     Sell: "text-red-600 bg-red-50 border-red-200",
     "Strong Sell": "text-rose-600 bg-rose-50 border-rose-200",
   };

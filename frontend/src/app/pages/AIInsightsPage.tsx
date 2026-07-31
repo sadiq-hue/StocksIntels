@@ -15,9 +15,7 @@ type Signal = SharedSignal & { currency?: string };
 const signalConfig: Record<string, { label: string; bg: string; badge: string; bar: string }> = {
   'Strong Buy': { label: 'Strong Buy', bg: 'from-emerald-500 to-green-600', badge: 'bg-emerald-600', bar: 'bg-emerald-500' },
   'Buy': { label: 'Buy', bg: 'from-green-400 to-emerald-500', badge: 'bg-green-500', bar: 'bg-green-400' },
-  'Accumulate': { label: 'Accumulate', bg: 'from-teal-400 to-teal-500', badge: 'bg-teal-500', bar: 'bg-teal-400' },
   'Hold': { label: 'Hold', bg: 'from-yellow-400 to-amber-500', badge: 'bg-yellow-500', bar: 'bg-yellow-400' },
-  'Reduce': { label: 'Reduce', bg: 'from-orange-400 to-orange-500', badge: 'bg-orange-500', bar: 'bg-orange-400' },
   'Sell': { label: 'Sell', bg: 'from-orange-400 to-red-500', badge: 'bg-red-500', bar: 'bg-orange-400' },
   'Strong Sell': { label: 'Strong Sell', bg: 'from-red-500 to-red-700', badge: 'bg-red-700', bar: 'bg-red-500' },
 };
@@ -25,9 +23,7 @@ const signalConfig: Record<string, { label: string; bg: string; badge: string; b
 const sigColors: Record<string, string> = {
   'Strong Buy': 'bg-emerald-100 text-emerald-800 border-emerald-200',
   'Buy': 'bg-green-100 text-green-800 border-green-200',
-  'Accumulate': 'bg-teal-100 text-teal-800 border-teal-200',
   'Hold': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  'Reduce': 'bg-orange-100 text-orange-800 border-orange-200',
   'Sell': 'bg-red-100 text-red-800 border-red-200',
   'Strong Sell': 'bg-red-100 text-red-800 border-red-200',
 };

@@ -166,12 +166,12 @@ function analyzeFundamentals(stock, currentPrice, overrideNewsSentiment = null, 
   }
 
   if (stock.dividendYield > 0) {
-    const tbillThreshold = TBILI_RATE * 100 * 2;
+    const tbillThreshold = TBILI_RATE * 2;
     if (stock.dividendYield > tbillThreshold && (stock.payoutRatio < 80 || stock.payoutRatio === 0)) {
       score += 10;
       metrics.divSignal = 'BUY';
       metrics.divRating = `Income BUY: yield ${stock.dividendYield}% > 2x T-bill rate, payout ${stock.payoutRatio}%`;
-    } else if (stock.dividendYield > TBILI_RATE * 100) {
+    } else if (stock.dividendYield > TBILI_RATE) {
       score += 5;
       metrics.divSignal = 'NEUTRAL';
       metrics.divRating = `Dividend ${stock.dividendYield}% above T-bill rate`;
@@ -727,14 +727,14 @@ function extractIndicatorFeatures(technicalResult) {
   const bbLow = parseFloat(ind.bbLower) || 0;
   const bbHigh = parseFloat(ind.bbUpper) || 1;
   const bbMid = (bbLow + bbHigh) / 2;
-  const bollingerPctB = (bbHigh - bbLow) > 0 ? Math.max(0, Math.min(1, (parseFloat(ind.sma20) - bbLow) / (bbHigh - bbLow))) : 0.5;
-  const sma20 = parseFloat(ind.sma20) || 0;
-  const sma50 = parseFloat(ind.sma50) || 1;
+  const bollingerPctB = (bbHigh - bbLow) > 0 ? Math.max(0, Math.min(1, (parseFloat(ind.smaFast) - bbLow) / (bbHigh - bbLow))) : 0.5;
+  const smaFast = parseFloat(ind.smaFast) || 0;
+  const smaSlow = parseFloat(ind.smaSlow) || 1;
   return {
     rsi: parseFloat(ind.rsi) || 50,
     macdHist: parseFloat(ind.macd) || 0,
     bollingerPctB,
-    smaRatio: sma50 > 0 ? sma20 / sma50 : 1,
+    smaRatio: smaSlow > 0 ? smaFast / smaSlow : 1,
     volRatio: parseFloat(ind.volRatio) || 1,
     momentum: parseFloat(ind.momentum) || 0,
     goldenCross: ind.goldenCross || false,

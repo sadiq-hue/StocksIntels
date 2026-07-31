@@ -233,7 +233,7 @@ async function getQuote(symbol) {
           lastUpdated: new Date().toISOString(),
         });
       }
-    } catch {}
+    } catch (e) { console.warn(`[FinRep] Yahoo proxy fallback failed for ${symbol}: ${e.message}`); }
   }
 
   return null;
@@ -244,7 +244,8 @@ async function getTwelveDataStats(symbol) {
   try {
     const { fetchQuoteWithStats } = require('./twelveDataService');
     return await fetchQuoteWithStats(symbol);
-  } catch {
+  } catch (e) {
+    console.warn(`[FinRep] TwelveData failed for ${symbol}: ${e.message}`);
     return null;
   }
 }
@@ -351,10 +352,10 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4) {
             if (mc > 0 && eps > 0) km.earningsYield = eps * (sharesOut || 1) / mc;
           }
         }
-      } catch {}
+      } catch (e) { console.warn(`[FinRep] KeyMetrics quote enrichment failed for ${symbol}: ${e.message}`); }
       return cacheSet(cacheKey, result);
     }
-  } catch {}
+  } catch (e) { console.warn(`[FinRep] Yahoo scraper key metrics failed for ${symbol}: ${e.message}`); }
 
   // Alpha Vantage fallback (richest single-source for key metrics)
   try {
@@ -395,13 +396,13 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4) {
       };
       return cacheSet(cacheKey, [item]);
     }
-  } catch {}
+  } catch (e) { console.warn(`[FinRep] Alpha Vantage key metrics failed for ${symbol}: ${e.message}`); }
 
   // SEC EDGAR fallback for US stocks
   try {
     const result = await edgarService.getKeyMetricsFromEdgar(symbol, period, limit);
     if (result && result.length > 0) return cacheSet(cacheKey, result.slice(0, limit));
-  } catch {}
+  } catch (e) { console.warn(`[FinRep] EDGAR key metrics failed for ${symbol}: ${e.message}`); }
 
   return cacheSet(cacheKey, []);
 }

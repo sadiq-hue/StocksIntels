@@ -31,11 +31,9 @@ const DEFAULTS = {
 
   thresholds: {
     strong_buy: 68,
-    buy: 60,
-    accumulate: 50,
+    buy: 55,
     hold: 40,
-    reduce: 30,
-    sell: 18,
+    sell: 25,
     strong_sell: 0,
   },
 
@@ -339,9 +337,7 @@ function getThreshold(signalType) {
   const map = {
     'Strong Buy': _config.thresholds.strong_buy,
     'Buy': _config.thresholds.buy,
-    'Accumulate': _config.thresholds.accumulate,
     'Hold': _config.thresholds.hold,
-    'Reduce': _config.thresholds.reduce,
     'Sell': _config.thresholds.sell,
     'Strong Sell': _config.thresholds.strong_sell,
   };

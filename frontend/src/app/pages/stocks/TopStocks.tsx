@@ -16,7 +16,6 @@ const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const signalColors: Record<string, string> = {
   "Strong Buy": "bg-emerald-100 text-emerald-800 border-emerald-200",
   "Buy": "bg-green-100 text-green-800 border-green-200",
-  "Accumulate": "bg-teal-100 text-teal-800 border-teal-200",
   "Hold": "bg-amber-100 text-amber-800 border-amber-200",
   "Sell": "bg-orange-100 text-orange-800 border-orange-200",
   "Strong Sell": "bg-red-100 text-red-800 border-red-200",

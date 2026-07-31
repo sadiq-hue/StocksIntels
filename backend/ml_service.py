@@ -54,6 +54,7 @@ _last_training = 0
 _MIN_SAMPLES = 30
 _MIN_SECTOR_SAMPLES = 15
 _active_feature_indices: Optional[List[int]] = None
+_training_thread: Optional[threading.Thread] = None
 
 
 def _ensure_models_dir():
@@ -182,13 +183,14 @@ def _fetch_price_history(ticker: str, max_date: Optional[str] = None) -> Tuple[O
                 SELECT md.price, md.volume, md.timestamp FROM market_data md
                 JOIN stocks s ON s.id = md.stock_id
                 WHERE s.ticker = %s
-                ORDER BY md.timestamp ASC
+                ORDER BY md.timestamp DESC
                 LIMIT 500
             """, (ticker,))
             rows = cur.fetchall()
             if len(rows) < 5:
                 _price_cache[cache_key] = (None, None, None)
                 return None, None
+            rows.reverse()
             all_prices = np.array([float(r[0]) for r in rows], dtype=float)
             all_volumes = np.array([float(r[1] or 0) for r in rows], dtype=float)
             all_dates = np.array([str(r[2]) for r in rows])
@@ -339,7 +341,19 @@ def _train_model(X: np.ndarray, y: np.ndarray, model_key: str) -> Optional[xgb.X
 
 
 def train(req: Dict):
-    """Fetch training data, engineer features, train per-sector models (sync)."""
+    """Start training in background thread so the IPC loop stays responsive."""
+    global _training_thread
+    if _training_thread and _training_thread.is_alive():
+        logger.warning("Training already in progress, skipping")
+        _send({'type': 'train_result', 'status': 'busy', 'message': 'Training already in progress'}, req)
+        return
+    _training_thread = threading.Thread(target=_train_async, args=(req,), daemon=True)
+    _training_thread.start()
+    _send({'type': 'train_started', 'message': 'Training started in background'}, req)
+
+
+def _train_async(req: Dict):
+    """Fetch training data, engineer features, train per-sector models (background)."""
     global _models, _model_info, _total_samples, _last_training
 
     logger.info("Starting training cycle...")
@@ -497,14 +511,17 @@ def predict(request: Dict):
 
 def status(req: Dict):
     """Return current model status."""
+    global _training_thread
     trained_models = list(_models.keys())
     selected = [FEATURES[i] for i in (_active_feature_indices or range(NUM_FEATURES))]
+    is_training = _training_thread is not None and _training_thread.is_alive()
     s = {
         'type': 'status_result',
         'models_loaded': len(trained_models),
         'model_names': trained_models,
         'total_samples': _total_samples,
         'last_training': _last_training,
+        'training_in_progress': is_training,
         'features_count': len(selected),
         'features_selected': selected[:10],
         'model_info': {k: {kk: vv for kk, vv in v.items() if kk != 'trained_at'}

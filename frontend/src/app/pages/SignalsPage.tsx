@@ -7,7 +7,7 @@ import {
 } from "../components/ui/select";
 import { Button } from "../components/ui/button";
 import {
-  TrendingUp, TrendingDown, Signal, Target, Search, Zap,
+  TrendingUp, TrendingDown, Signal, Search, Zap,
   Activity, Star, RefreshCw, Info, ChevronLeft, ChevronRight,
   ArrowUpRight, ArrowDownRight, BarChart3, Clock,
 } from "lucide-react";
@@ -21,9 +21,7 @@ const API_URL = import.meta.env.VITE_API_URL || "/api";
 const SIGNAL_STYLES: Record<string, { bg: string; text: string; border: string; icon: typeof TrendingUp }> = {
   "Strong Buy":  { bg: "bg-emerald-600", text: "text-white", border: "border-emerald-600", icon: TrendingUp },
   "Buy":         { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200", icon: TrendingUp },
-  "Accumulate":  { bg: "bg-teal-100", text: "text-teal-700", border: "border-teal-200", icon: Target },
   "Hold":        { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200", icon: Activity },
-  "Reduce":      { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-200", icon: TrendingDown },
   "Sell":        { bg: "bg-red-100", text: "text-red-700", border: "border-red-200", icon: TrendingDown },
   "Strong Sell": { bg: "bg-red-600", text: "text-white", border: "border-red-600", icon: TrendingDown },
 };
@@ -227,7 +225,7 @@ export function SignalsPage() {
         </Select>
         <Select value={filterSignal} onValueChange={setFilterSignal}>
           <SelectTrigger className="w-[130px] h-9 text-sm border-border"><SelectValue placeholder="Signal" /></SelectTrigger>
-          <SelectContent><SelectItem value="All">All Signals</SelectItem><SelectItem value="Strong Buy">Strong Buy</SelectItem><SelectItem value="Buy">Buy</SelectItem><SelectItem value="Accumulate">Accumulate</SelectItem><SelectItem value="Hold">Hold</SelectItem><SelectItem value="Sell">Sell</SelectItem><SelectItem value="Strong Sell">Strong Sell</SelectItem></SelectContent>
+          <SelectContent><SelectItem value="All">All Signals</SelectItem><SelectItem value="Strong Buy">Strong Buy</SelectItem><SelectItem value="Buy">Buy</SelectItem><SelectItem value="Hold">Hold</SelectItem><SelectItem value="Sell">Sell</SelectItem><SelectItem value="Strong Sell">Strong Sell</SelectItem></SelectContent>
         </Select>
         <Select value={filterSector} onValueChange={setFilterSector}>
           <SelectTrigger className="w-[140px] h-9 text-sm border-border"><SelectValue placeholder="Sector" /></SelectTrigger>

@@ -24,7 +24,6 @@ function formatMarketCap(mcap: number): string {
 const SIGNAL_COLORS: Record<string, string> = {
   "Strong Buy": "text-emerald-600 bg-emerald-50",
   "Buy": "text-emerald-600 bg-emerald-50",
-  "Accumulate": "text-teal-600 bg-teal-50",
   "Hold": "text-yellow-600 bg-yellow-50",
   "Sell": "text-red-600 bg-red-50",
   "Strong Sell": "text-red-600 bg-red-50",
@@ -33,7 +32,6 @@ const SIGNAL_COLORS: Record<string, string> = {
 const SIGNAL_BG: Record<string, string> = {
   "Strong Buy": "bg-emerald-500",
   "Buy": "bg-emerald-400",
-  "Accumulate": "bg-teal-400",
   "Hold": "bg-yellow-400",
   "Sell": "bg-red-400",
   "Strong Sell": "bg-red-500",

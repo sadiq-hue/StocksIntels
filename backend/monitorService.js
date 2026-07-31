@@ -75,7 +75,7 @@ async function detectSignalDrift() {
     }
 
     // Alert if > 60% of signals are Hold or Neutral (engine may be flatlining)
-    const holdRatio = (distribution['Hold'] || 0) + (distribution['Reduce'] || 0);
+    const holdRatio = (distribution['Hold'] || 0);
     if (holdRatio > 60) {
       triggerAlert('warning', `Signal drift: ${holdRatio}% neutral signals in last 24h`, {
         distribution,

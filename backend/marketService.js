@@ -585,15 +585,18 @@ async function getStockQuote(symbol) {
     return quoteCache.get(symbol);
   }
 
-  if (cached) {
+  if (cached && (Date.now() - (cached.timestamp * 1000) < MAX_QUOTE_AGE_MS * 2)) {
+    console.warn(`[marketService] Serving stale cache for ${symbol} (age: ${Math.round((Date.now() - (cached.timestamp * 1000)) / 1000)}s)`);
     return cached;
   }
 
+  console.warn(`[marketService] No fresh quote available for ${symbol}`);
   return null;
 }
 
-const CONCURRENCY = 40;
-const BATCH_TIMEOUT_MS = 60000;
+const CONCURRENCY = 15;
+const BATCH_DELAY_MS = 200;
+const BATCH_TIMEOUT_MS = 120000;
 
 function withTimeout(promise, ms, label) {
   let timer;
@@ -666,6 +669,10 @@ async function getQuotesBatch(symbols) {
         const stale = quoteCache.get(s);
         if (stale) results[s] = stale;
       }
+    }
+
+    if (i + CONCURRENCY < missing.length) {
+      await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
     }
   }
 

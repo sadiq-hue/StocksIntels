@@ -53,8 +53,9 @@ function calculateMACD(prices, fast = 12, slow = 26, signal = 9) {
   const macdLine = fastEMAs[fastEMAs.length - 1] - slowEMAs[slowEMAs.length - 1];
   
   // Compute full MACD series for signal line (EMA of MACD)
+  const macdLen = Math.min(fastEMAs.length, slowEMAs.length);
   const macdSeries = [];
-  for (let i = 0; i < fastEMAs.length; i++) {
+  for (let i = 0; i < macdLen; i++) {
     macdSeries.push(fastEMAs[i] - slowEMAs[i]);
   }
   

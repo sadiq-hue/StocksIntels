@@ -5,7 +5,7 @@ export interface Signal {
   price: number;
   change: number;
   type: "Intraday" | "Swing Trade" | "Long Term";
-  signal: "Strong Buy" | "Buy" | "Accumulate" | "Hold" | "Reduce" | "Sell" | "Strong Sell";
+  signal: "Strong Buy" | "Buy" | "Hold" | "Sell" | "Strong Sell";
   entry: number;
   stopLoss: number;
   target1: number;

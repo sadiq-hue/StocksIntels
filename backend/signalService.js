@@ -1843,13 +1843,13 @@ function getConfidenceMultiplier() {
 
 // ─── Persist Signal Outcomes to DB ──────────────────────────────────────────
 // Stores signal performance outcomes in the database so state survives restarts.
-async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result, resolvedAt) {
+async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result, resolvedAt, signalGeneratedAt) {
   try {
     const prevOutcome = _signalOutcomes.get(symbol);
-    const signalGeneratedAt = prevOutcome?.timestamp || Date.now();
+    const signalGenAtMs = signalGeneratedAt || prevOutcome?.timestamp || Date.now();
     const posSize = prevOutcome?.positionSize || 25;
     const now = new Date().toISOString();
-    const signalGenAt = new Date(signalGeneratedAt).toISOString();
+    const signalGenAt = new Date(signalGenAtMs).toISOString();
     await pool.query(
       `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at, signal_generated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -1861,14 +1861,14 @@ async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPri
     if (store) {
       store.outcomes.push({
         result, signal: signalAction, entryPrice, exitPrice: currentPrice,
-        generatedAt: signalGeneratedAt, resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
+        generatedAt: signalGenAtMs, resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
       });
       if (store.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) store.outcomes = store.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
     } else {
       _liveTestStore.set(symbol, {
         outcomes: [{
           result, signal: signalAction, entryPrice, exitPrice: currentPrice,
-          generatedAt: signalGeneratedAt, resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
+          generatedAt: signalGenAtMs, resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
         }]
       });
     }
@@ -2316,7 +2316,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     if (sigObj.signal !== 'Hold') {
       recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.action, sigObj.type, sigObj.sector).catch(() => {});
       if (prevOutcome && prevOutcome.result) {
-        persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null);
+        persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null, prevOutcome.timestamp);
         signalEventBus.emit('signal:resolved', {
           ticker: symbol,
           entryPrice: prevOutcome.entryPrice,

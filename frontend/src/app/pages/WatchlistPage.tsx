@@ -283,8 +283,6 @@ export function WatchlistPage() {
                         <div className={`text-[10px] font-black uppercase px-2 py-1 rounded tracking-wider border inline-block ${
                           s?.signal === 'Strong Buy' || s?.signal === 'Buy' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
                           s?.signal === 'Strong Sell' || s?.signal === 'Sell' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                          s?.signal === 'Reduce' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                          s?.signal === 'Accumulate' ? 'bg-teal-50 text-teal-700 border-teal-200' :
                           'bg-blue-50 text-blue-700 border-blue-200'
                         }`}>
                           {s?.signal || 'Hold'}

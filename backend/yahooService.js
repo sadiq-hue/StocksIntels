@@ -282,9 +282,9 @@ async function fetchGoogleFinanceQuote(symbol) {
           const vMult = vSuffix === 'T' ? 1e12 : vSuffix === 'B' ? 1e9 : vSuffix === 'M' ? 1e6 : vSuffix === 'K' ? 1e3 : 1;
           if (vNum > 0) result.volume = Math.round(vNum * vMult);
         }
-      } catch {}
+      } catch (e) { console.warn(`[YahooService] Volume parse error: ${e.message}`); }
       return result;
-    } catch {}
+    } catch (e) { console.warn(`[YahooService] Google Finance parse failed: ${e.message}`); }
   }
   return null;
 }
@@ -307,7 +307,7 @@ function extractDataArray(body, key) {
     else if (ch === ']') { depth--; if (depth === 0) { jsonEnd = i + 1; break; } }
   }
   if (jsonEnd === -1) return null;
-  try { return JSON.parse(body.substring(jsonStart, jsonEnd)); } catch { return null; }
+  try { return JSON.parse(body.substring(jsonStart, jsonEnd)); } catch (e) { console.warn(`[YahooService] extractDataArray JSON parse error`); return null; }
 }
 
 async function fetchV8Historical(symbol, range, interval) {
@@ -324,7 +324,7 @@ async function fetchV8Historical(symbol, range, interval) {
       );
       const bars = parseChartBars(data);
       if (bars?.length) return bars;
-    } catch {}
+    } catch (e) { console.warn(`[YahooService] V8 historical fetch failed for ${symbol}: ${e.message}`); }
   }
   return null;
 }
@@ -480,7 +480,36 @@ async function fetchHistorical(symbol, range = '6mo', interval = '1d') {
   bars = await fetchRapidapiHistorical(yahooSymbol, range, interval);
   if (bars) return cacheSet(histCache, cacheKey, bars, CACHE_TTL.historical, redisKey);
 
+  bars = await fetchYf2Historical(yahooSymbol, range, interval);
+  if (bars) return cacheSet(histCache, cacheKey, bars, CACHE_TTL.historical, redisKey);
+
   return null;
+}
+
+async function fetchYf2Historical(symbol, range, interval) {
+  if (breakers.yf2.isOpen()) return null;
+  try {
+    const { default: YahooFinance } = await import('yahoo-finance2');
+    const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    const result = await limiters.yf2.schedule(() =>
+      Promise.race([
+        yf.chart(symbol, { range, interval }),
+        new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 12000)),
+      ])
+    );
+    if (!result?.quotes?.length) return null;
+    return result.quotes.map(q => ({
+      date: q.date instanceof Date ? q.date.toISOString().split('T')[0] : String(q.date).slice(0, 10),
+      open: q.open ?? null,
+      high: q.high ?? null,
+      low: q.low ?? null,
+      close: q.close ?? null,
+      volume: q.volume ?? null,
+    })).filter(b => b.close != null);
+  } catch (e) {
+    console.warn(`[YahooService] yf2 historical failed for ${symbol}: ${e.message}`);
+    return null;
+  }
 }
 
 async function fetchQuoteSummary(symbol, modules) {
@@ -502,7 +531,7 @@ async function fetchQuoteSummary(symbol, modules) {
       const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
       const qs = await yf.quoteSummary(yahooSymbol, { modules });
       if (qs) return normalizeYahooResponse(qs);
-    } catch {}
+    } catch (e) { console.warn(`[YahooService] yf2 quoteSummary failed for ${symbol}: ${e.message}`); }
   }
 
   // Try RapidAPI
@@ -517,7 +546,7 @@ async function fetchQuoteSummary(symbol, modules) {
         timeout: 10000,
       });
       if (resp.data?.financialData?.marketCap) return resp.data;
-    } catch {}
+    } catch (e) { console.warn(`[YahooService] RapidAPI quoteSummary failed for ${symbol}: ${e.message}`); }
   }
 
   return null;
