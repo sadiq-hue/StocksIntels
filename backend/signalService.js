@@ -780,14 +780,10 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
             if (i === startIdx + maxHoldDays - 1 || i === bars.length - 1) {
               exitPrice = dayClose;
               const pnl = (dayClose - entry) / entry * 100;
-              const targetPct = isBuy ? (target - entry) / entry * 100 : (entry - target) / entry * 100;
-              const inDirection = isBuy ? pnl > 0 : pnl < 0;
-              if (targetPct > 0 && inDirection) {
-                const threshold = Math.max(0.25, Math.min(0.90, 0.70 - (targetPct - 10) * 0.025));
-                resultStr = (Math.abs(pnl) / targetPct >= threshold) ? 'win' : 'loss';
-              } else {
-                resultStr = inDirection ? 'win' : 'loss';
-              }
+              // Honest evaluation: a trade wins when it exits in the profitable
+              // direction. No arbitrary %-of-target threshold (that mislabeled
+              // profitable exits as losses).
+              resultStr = (isBuy ? pnl > 0 : pnl < 0) ? 'win' : 'loss';
               break;
             }
           }
