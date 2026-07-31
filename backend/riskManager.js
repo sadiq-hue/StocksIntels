@@ -120,7 +120,7 @@ function applyPortfolioConstraints(signals) {
   });
 }
 
-function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, symbol, currentPrice, newSignal) {
+function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, symbol, currentPrice, newSignal, marketOpen = true) {
   let previous = signalOutcomes.get(symbol);
   const posSize = parseInt(newSignal.positionSize) || 25;
 
@@ -138,7 +138,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
     // Require a real move past the level but reject impossible single-cycle moves
     // (garbage quotes) that would record absurd outcomes.
     const moved = pctMove > 0.0005 && pctMove < 0.5;
-    if (saneLevels && moved) {
+    if (marketOpen && saneLevels && moved) {
       if (isPrevBuy) {
         if (currentPrice <= previous.stopLoss) {
           previous.result = 'loss'; performanceStats.losses++; performanceStats.total++;
@@ -156,6 +156,12 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
           portfolioState.consecutiveLosses = 0;
         }
       }
+    } else if (!marketOpen) {
+      // A stop/target can only trigger during the exchange's live session. When the
+      // market is closed, the quote is a stale/after-hours value — resolving on it
+      // fabricates stop-fills (e.g. a 15:56 UTC "stop hit" for an NSE stock that
+      // closed at 12:00 UTC). Defer until the next session where a live quote decides.
+      console.warn(`[RiskManager] ${symbol} deferring stop/target resolution - market closed (entry=${entry} stop=${previous.stopLoss} t1=${previous.target1} price=${currentPrice})`);
     } else {
       console.warn(`[RiskManager] Skipping resolution for ${symbol} ${previous.signal} (${previous.action}) entry=${entry} stop=${previous.stopLoss} t1=${previous.target1} price=${currentPrice} saneLevels=${saneLevels} moved=${moved}`);    }
     if (previous.result) {

@@ -186,6 +186,27 @@ const _nseDailyHistory = new Map();
 const _nseIntradayBuffer = new Map();
 const MAX_DAYS = 90;
 
+// Max allowed deviation of a live quote from the prior session close before it is
+// treated as a garbage/stale quote (day-high-as-price, wrong symbol, broken feed).
+// Catches absurd entries without blocking real (large but plausible) moves.
+const MAX_ENTRY_DEVIATION = 0.5;
+
+// Stop/target resolution is only valid while the exchange's live session is open;
+// resolving on after-hours/stale quotes fabricates stop-fills and entries.
+function isExchangeOpen(symbol, now = new Date()) {
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false;
+  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  if (NSE_SYMBOLS.includes(symbol)) {
+    // Nairobi Stock Exchange: 09:00-15:00 EAT (UTC+3) = 06:00-12:00 UTC
+    return utcMinutes >= 360 && utcMinutes < 720;
+  }
+  // US markets: 09:30-16:00 ET
+  const isDST = now.getMonth() >= 2 && now.getMonth() <= 9;
+  const etMinutes = ((utcMinutes + (isDST ? -4 : -5) * 60) % 1440 + 1440) % 1440;
+  return etMinutes >= 570 && etMinutes < 960;
+}
+
 function accumulateNseQuote(symbol, price, volume) {
   const today = new Date().toISOString().split('T')[0];
   if (!_nseIntradayBuffer.has(symbol)) _nseIntradayBuffer.set(symbol, {});
@@ -2359,8 +2380,20 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     
     if (NSE_SYMBOLS.includes(symbol)) accumulateNseQuote(symbol, currentPrice, volume);
     
-    const fundamental = analyzeFundamentals(stock, currentPrice, newsSentiment[symbol] || null, _dynamicSectorPE);
+    const marketOpen = isExchangeOpen(symbol);
     const priceHistory = await getPriceHistory(symbol);
+    // Entry sanity check: the quote used to build stop/target levels must be
+    // plausible relative to the prior session close. Day-high-as-price or broken
+    // feed values create phantom entries with meaningless stops (e.g. CRWN 60.00).
+    const prevClose = priceHistory && priceHistory.length > 1 ? priceHistory[priceHistory.length - 1] : null;
+    if (currentPrice > 0 && prevClose && prevClose > 0) {
+      const dev = Math.abs(currentPrice - prevClose) / prevClose;
+      if (dev > MAX_ENTRY_DEVIATION) {
+        console.warn(`[SignalService] Skipping ${symbol}: quote ${currentPrice} deviates ${(dev * 100).toFixed(1)}% from prev close ${prevClose} - garbage/stale quote, no signal emitted`);
+        return null;
+      }
+    }
+    
     // Enrich volume from price history if quote cache returned 0
     if ((!volume || volume === 0) && priceHistory?.volumes?.length > 0) {
       for (let i = priceHistory.volumes.length - 1; i >= 0; i--) {
@@ -2404,7 +2437,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         if (!isExpired && !isFlip) {
           emitSignal = false;
           console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal`);
-        } else {
+        } else if (marketOpen) {
           // Score-based close at market: the open position either outlived its hold
           // window or the full analysis flipped direction against it.
           const isPrevBuy = prevAction === 'buy';
@@ -2418,10 +2451,15 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           performanceStats.winRate = performanceStats.total > 0
             ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;
           console.log(`[SignalService] ${symbol} closed previous ${prevAction} signal (${isExpired ? 'expired' : 'score flipped'}) at ${currentPrice} -> ${prevOutcome.result}, emitting fresh signal`);
+        } else {
+          // Expired/flipped while the exchange is closed: defer the close until the
+          // next live session so the exit price isn't a stale after-hours quote.
+          emitSignal = false;
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal ${isExpired ? 'expired' : 'flipped'} but ${NSE_SYMBOLS.includes(symbol) ? 'NSE' : 'US'} market closed - deferring close until next session`);
         }
       }
     }
-    trackSignalOutcomes(_portfolioState, _performanceStats, _signalOutcomes, symbol, currentPrice, sigObj);
+    trackSignalOutcomes(_portfolioState, _performanceStats, _signalOutcomes, symbol, currentPrice, sigObj, marketOpen);
     if (emitSignal && sigObj.signal !== 'Hold') {
       recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.action, sigObj.type, sigObj.sector).catch(() => {});
     }
