@@ -637,9 +637,11 @@ async function restoreStateFromDb() {
 
     console.log(`[SignalService] Restored ${_signalOutcomes.size} outcomes, ${_signalHistoryCount} history rows from DB (${wins} wins, ${losses} losses in last 30d)`);
 
-    // If no outcomes exist yet, approximate them from recent signal_history using current prices
+    // If no outcomes exist yet, approximate them from genuinely old signals
+    // (>=7 days) using current prices. Recent/open signals are excluded so the
+    // live monitor stays authoritative for them.
     if (_signalOutcomes.size === 0 && _signalHistoryCount > 0) {
-      await backfillOutcomesFromHistory(1, 50);
+      await backfillOutcomesFromHistory(30, 50);
     }
   } catch (e) { /* table may not exist — start fresh */ console.warn('[SignalService] restoreStateFromDb outcomes error:', e.message); }
   try {
@@ -665,6 +667,7 @@ async function backfillOutcomesFromHistory(days = 1, maxRows = 50) {
       FROM signal_history sh
       LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price
       WHERE sh.generated_at > NOW() - $1::interval
+        AND sh.generated_at < NOW() - INTERVAL '7 days'
         AND sh.signal IN ('Strong Buy','Buy','Sell','Strong Sell')
         AND sh.entry_price > 0
         AND so.id IS NULL
@@ -685,6 +688,13 @@ async function backfillOutcomesFromHistory(days = 1, maxRows = 50) {
 const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy';
 const isSell = row.signal === 'Sell' || row.signal === 'Strong Sell';
       if (!isBuy && !isSell) continue;
+      // Garbage guard: only backfill signals >7 days old whose current quote is
+      // within 50% of entry. Resolving recent/open signals at a live quote
+      // produced the implausible rows (e.g. CGEN 152 -> 2.25).
+      if (Math.abs(returnPct) > 50) {
+        console.warn(`[SignalService] Backfill skip ${row.ticker} - implausible quote ${row.entry_price} -> ${currentPrice}`);
+        continue;
+      }
       const won = isBuy ? returnPct > 0.5 : returnPct < -0.5;
       const resultStr = won ? 'win' : 'loss';
        try {
@@ -693,7 +703,7 @@ const isSell = row.signal === 'Sell' || row.signal === 'Strong Sell';
            `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT DO NOTHING`,
-           [row.ticker, row.entry_price, row.signal, currentPrice, resultStr, row.generated_at, now, row.generated_at]
+           [row.ticker, row.entry_price, row.signal, currentPrice, resultStr, now, now, row.generated_at]
          );
         inserted++;
         if (won) wins++; else losses++;
@@ -786,6 +796,16 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
           const isSell = sig.signal === 'Sell' || sig.signal === 'Strong Sell';
           if (!isBuy && !isSell) continue;
 
+          // Never race the live monitor: if this signal is still open in memory
+          // (result null) the gate owns its resolution. Backtest must not force
+          // a same-day close over a real stop/target being tracked.
+          const liveOpen = _signalOutcomes.get(ticker);
+          if (liveOpen && !liveOpen.result && liveOpen.timestamp &&
+              Math.abs((parseFloat(liveOpen.entryPrice) - entry) / (entry || 1)) < 0.001) {
+            console.log(`[HistoricalBacktest] Skip ${ticker} entry ${entry} - signal open and live-monitored`);
+            continue;
+          }
+
           // Find the first bar on or after the signal date
           let startIdx = bars.findIndex(b => new Date(b.date + 'T00:00:00Z').getTime() >= signalDate.getTime());
           if (startIdx < 0) startIdx = bars.length - 1;
@@ -795,7 +815,10 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
           let resultStr = null;
           let exitDay = 0;
 
-          for (let i = startIdx; i < Math.min(startIdx + maxHoldDays, bars.length); i++) {
+          // Evaluate from the NEXT bar after the signal date (exitDay >= 1).
+          // A signal generated mid-day must never be resolved against the same
+          // day's partial bar; that is what manufactured the day-0 close noise.
+          for (let i = startIdx + 1; i < Math.min(startIdx + 1 + maxHoldDays, bars.length); i++) {
             const bar = bars[i];
             const dayHigh = parseFloat(bar.high);
             const dayLow = parseFloat(bar.low);
@@ -813,7 +836,7 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
               if (dayLow <= target) { exitPrice = target; resultStr = 'win'; break; }
             }
 
-            if (i === startIdx + maxHoldDays - 1 || i === bars.length - 1) {
+            if (i === startIdx + maxHoldDays || i === bars.length - 1) {
               exitPrice = dayClose;
               const pnl = (dayClose - entry) / entry * 100;
               // Honest evaluation: a trade wins when it exits in the profitable
@@ -825,13 +848,19 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
           }
 
           if (!exitPrice || !resultStr) continue;
+          // Garbage guard: a valid resolution cannot be >50% away from entry
+          // (e.g. bad quote/split feeding an absurd exit like 152 -> 2.25).
+          if (Math.abs((exitPrice - entry) / (entry || 1)) > 0.5) {
+            console.warn(`[HistoricalBacktest] Skip ${ticker} - implausible exit ${entry} -> ${exitPrice}`);
+            continue;
+          }
 
-          const resolvedTs = exitDay > 0 ? new Date(new Date(sig.generated_at).getTime() + exitDay * 86400000).toISOString() : new Date().toISOString();
+          const now = new Date().toISOString();
           await pool.query(
             `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT DO NOTHING`,
-            [sig.ticker, entry, sig.signal, exitPrice, resultStr, sig.generated_at, resolvedTs, sig.generated_at]
+            [sig.ticker, entry, sig.signal, exitPrice, resultStr, now, now, sig.generated_at]
           );
           totalInserted++;
           if (resultStr === 'win') totalWins++; else totalLosses++;
