@@ -1165,6 +1165,12 @@ const _forwardTestStore = new Map(); // symbol -> { predictions: [{id, signal, c
 
 const FORWARD_TEST_MIN_AGE = 28800000; // 8 hours — predictions younger than this are skipped
 
+// A resolution quote that deviates more than 50% from the prediction entry cannot
+// be a legitimate stop/target touch (stops/targets sit within ~10-25% of entry).
+// Such quotes are treated as stale/garbage and the prediction is deferred instead
+// of manufacturing an outcome (e.g. CRWN, ARM +4373%, GLD -92%).
+const RESOLUTION_MAX_DEVIATION = 0.5;
+
 // Dynamic expiry by trade type (in milliseconds)
 const TRADE_TYPE_EXPIRY = {
   'Aggressive Buy': 14 * 24 * 60 * 60 * 1000,   // 14 days
@@ -1243,6 +1249,20 @@ async function resolveForwardPredictions(symbol) {
     for (const pred of unresolved) {
       if (Date.now() - pred.generatedAt < FORWARD_TEST_MIN_AGE) continue;
       const age = Date.now() - pred.generatedAt;
+      // Garbage/stale quote guard: a resolution quote wildly different from the
+      // prediction entry cannot be a legitimate stop/target touch. Defer instead
+      // of manufacturing an outcome from a broken quote.
+      if (!pred.price || pred.price <= 0 || !currentPrice || currentPrice <= 0 ||
+          Math.abs(currentPrice - pred.price) / pred.price > RESOLUTION_MAX_DEVIATION) {
+        const dev = Math.abs(currentPrice - pred.price) / pred.price * 100;
+        if (!pred._garbageWarned) {
+          pred._garbageWarned = true;
+          if (process.env.NODE_ENV !== 'test') {
+            console.warn(`[ForwardTest] Deferring ${symbol} resolution: quote ${currentPrice} is ${dev.toFixed(1)}% from entry ${pred.price} - stale/garbage quote`);
+          }
+        }
+        continue;
+      }
       pred.resolvedAt = Date.now();
       // Check dynamic expiry
       const dynamicExpiry = pred.expiry || (pred.generatedAt + (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']));
@@ -1288,14 +1308,15 @@ async function resolveForwardPredictions(symbol) {
         } else if (currentPrice <= pred.target1) {
           pred.correct = true; pred.resolved = true;
         }
+      } else if (isBuy || isSell) {
+        // Directional signal but stop/target not touched yet — keep monitoring.
+        continue;
       } else {
-        // Fallback: use simple price direction check
-        const isBuySignal = pred.signal === 'Strong Buy' || pred.signal === 'Buy';
-        const isSellSignal = pred.signal === 'Sell' || pred.signal === 'Strong Sell';
-        if (Math.abs(returnPct) < 0.01) continue;
-        if (isBuySignal) pred.correct = returnPct > 0.5;
-        else if (isSellSignal) pred.correct = returnPct < -0.5;
-        else pred.correct = Math.abs(returnPct) < 0.5;
+        // Missing directional action (legacy/foreign rows) — cannot be evaluated.
+        // Resolve as neutral instead of guessing from the signal name, so stale
+        // rows don't manufacture fake wins/losses.
+        pred.correct = null;
+        pred.actualReturn = null;
         pred.resolved = true;
       }
       if (pred.resolved && pred.id) {
@@ -1637,6 +1658,12 @@ async function validateExpiringPredictions() {
       const currentPrice = quote.price;
 
       for (const pred of expiring) {
+        // Garbage/stale quote guard — skip so the expiry path doesn't store a
+        // nonsensical actual_return from a broken quote.
+        if (!pred.price || pred.price <= 0 || !currentPrice || currentPrice <= 0 ||
+            Math.abs(currentPrice - pred.price) / pred.price > RESOLUTION_MAX_DEVIATION) {
+          continue;
+        }
         try {
           const { passes, details } = await validateForwardPrediction(pred, symbol, currentPrice);
 
@@ -1705,6 +1732,21 @@ async function resolveAllForwardPredictions() {
       for (const pred of unresolved) {
         if (Date.now() - pred.generatedAt < FORWARD_TEST_MIN_AGE) { skipped++; continue; }
         const age = Date.now() - pred.generatedAt;
+        // Garbage/stale quote guard: a resolution quote wildly different from the
+        // prediction entry cannot be a legitimate stop/target touch. Defer instead
+        // of manufacturing an outcome from a broken quote.
+        if (!pred.price || pred.price <= 0 || !currentPrice || currentPrice <= 0 ||
+            Math.abs(currentPrice - pred.price) / pred.price > RESOLUTION_MAX_DEVIATION) {
+          const dev = Math.abs(currentPrice - pred.price) / pred.price * 100;
+          if (!pred._garbageWarned) {
+            pred._garbageWarned = true;
+            if (process.env.NODE_ENV !== 'test') {
+              console.warn(`[ForwardTest] Deferring ${symbol} resolution: quote ${currentPrice} is ${dev.toFixed(1)}% from entry ${pred.price} - stale/garbage quote`);
+            }
+          }
+          skipped++;
+          continue;
+        }
         pred.resolvedAt = Date.now();
         // Check dynamic expiry first (trade-type based)
         const dynamicExpiry = pred.expiry || (pred.generatedAt + (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']));
@@ -1763,14 +1805,16 @@ async function resolveAllForwardPredictions() {
           } else if (currentPrice <= pred.target1) {
             pred.correct = true; pred.resolved = true;
           }
+        } else if (isBuy || isSell) {
+          // Directional signal but stop/target not touched yet — keep monitoring.
+          skipped++;
+          continue;
         } else {
-          // Fallback: use simple price direction check
-          const isBuySignal = pred.signal === 'Strong Buy' || pred.signal === 'Buy';
-          const isSellSignal = pred.signal === 'Sell' || pred.signal === 'Strong Sell';
-          if (Math.abs(returnPct) < 0.01) { skipped++; continue; }
-          if (isBuySignal) pred.correct = returnPct > 0.5;
-          else if (isSellSignal) pred.correct = returnPct < -0.5;
-          else pred.correct = Math.abs(returnPct) < 0.5;
+          // Missing directional action (legacy/foreign rows) — cannot be evaluated.
+          // Resolve as neutral instead of guessing from the signal name, so stale
+          // rows don't manufacture fake wins/losses.
+          pred.correct = null;
+          pred.actualReturn = null;
           pred.resolved = true;
         }
         if (pred.resolved && pred.id) {
