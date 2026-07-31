@@ -3573,11 +3573,19 @@ app.get('/api/signals/engine/diagnostics', authenticateToken, async (req, res) =
       pool.query('SELECT COUNT(*)::int as cnt FROM signal_history').catch(e => ({ rows: [{ cnt: 0 }], error: e.message })),
       pool.query('SELECT COUNT(*)::int as cnt FROM signal_outcomes').catch(e => ({ rows: [{ cnt: 0 }], error: e.message })),
       pool.query('SELECT COUNT(*)::int as cnt FROM forward_predictions').catch(e => ({ rows: [{ cnt: 0 }], error: e.message })),
-      pool.query("SELECT COUNT(*)::int as cnt FROM app_cache WHERE cache_key = 'signals_cache'").catch(e => ({ rows: [{ cnt: 0 }], error: e.message })),
+      pool.query("SELECT COALESCE((SELECT jsonb_array_length(cache_value) FROM app_cache WHERE cache_key = 'signals_cache'), 0)::int as cnt").catch(e => ({ rows: [{ cnt: 0 }], error: e.message })),
     ]);
 
     const lastSignal = await pool.query('SELECT MAX(generated_at) as ts FROM signal_history').catch(() => ({ rows: [{ ts: null }] }));
-    const recentSignals = await pool.query("SELECT signal, COUNT(*)::int as cnt FROM signal_history WHERE generated_at > NOW() - INTERVAL '24 hours' GROUP BY signal ORDER BY cnt DESC").catch(() => ({ rows: [] }));
+    // Distinct signals (latest per ticker) so repeated hour-bucket re-emissions of the
+    // same ticker don't inflate the 24h Buy/Sell counts (e.g. 337 rows but only 87 tickers).
+    const recentSignals = await pool.query(
+      `SELECT signal, COUNT(*)::int as cnt FROM (
+         SELECT DISTINCT ON (ticker) ticker, signal
+         FROM signal_history WHERE generated_at > NOW() - INTERVAL '24 hours'
+         ORDER BY ticker, generated_at DESC
+       ) latest GROUP BY signal ORDER BY cnt DESC`
+    ).catch(() => ({ rows: [] }));
     const lastOutcome = await pool.query('SELECT MAX(recorded_at) as ts FROM signal_outcomes').catch(() => ({ rows: [{ ts: null }] }));
     const sampleOutcomes = await pool.query(
       `SELECT ticker, signal, entry_price, exit_price, result, recorded_at
