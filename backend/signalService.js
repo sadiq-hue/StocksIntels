@@ -2312,8 +2312,41 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       priceHistory, degFactor
     });
     const prevOutcome = _signalOutcomes.get(symbol);
+    // Monitor-first gate: while the previous signal for this symbol is still open
+    // (live, unresolved), keep monitoring it instead of emitting a new signal. A new
+    // signal is only emitted when the open position (a) hits stop/target (resolved by
+    // trackSignalOutcomes below), (b) expires after its trade-type hold window, or
+    // (c) flips direction on the full all-conditions score (fundamental, technical,
+    // macro, news, regime, ML...). Without this, the hourly cycle re-emitted the same
+    // still-open signal over and over, ballooning the signal count for no reason.
+    let emitSignal = true;
+    if (prevOutcome && !prevOutcome.result && prevOutcome.timestamp) {
+      const prevAction = prevOutcome.action;
+      const monitoring = prevAction !== 'hold' && prevOutcome.stopLoss != null && prevOutcome.target1 != null;
+      if (monitoring) {
+        const expiryMs = TRADE_TYPE_EXPIRY[prevOutcome.type || 'Swing Trade'] || TRADE_TYPE_EXPIRY['Swing Trade'];
+        const isExpired = (Date.now() - prevOutcome.timestamp) > expiryMs;
+        const isFlip = (prevAction === 'buy' && sigObj.action === 'sell') || (prevAction === 'sell' && sigObj.action === 'buy');
+        if (!isExpired && !isFlip) {
+          emitSignal = false;
+        } else {
+          // Score-based close at market: the open position either outlived its hold
+          // window or the full analysis flipped direction against it.
+          const isPrevBuy = prevAction === 'buy';
+          const closedWin = isPrevBuy ? currentPrice >= prevOutcome.entryPrice : currentPrice <= prevOutcome.entryPrice;
+          prevOutcome.result = closedWin ? 'win' : 'loss';
+          prevOutcome.resolvedAt = Date.now();
+          if (closedWin) { performanceStats.wins++; } else { performanceStats.losses++; }
+          performanceStats.total++;
+          portfolioState.totalTrades++;
+          performanceStats.winRate = performanceStats.total > 0
+            ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;
+          console.log(`[SignalService] ${symbol} closed previous ${prevAction} signal (${isExpired ? 'expired' : 'score flipped'}) at ${currentPrice} -> ${prevOutcome.result}, emitting fresh signal`);
+        }
+      }
+    }
     trackSignalOutcomes(_portfolioState, _performanceStats, _signalOutcomes, symbol, currentPrice, sigObj);
-    if (sigObj.signal !== 'Hold') {
+    if (emitSignal && sigObj.signal !== 'Hold') {
       recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.action, sigObj.type, sigObj.sector).catch(() => {});
     }
     if (prevOutcome && prevOutcome.result && prevOutcome.timestamp) {
@@ -2365,7 +2398,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       });
     }
     resolveForwardPredictions(symbol).catch(() => {});
-    return sigObj;
+    return emitSignal ? sigObj : null;
   };
 
   for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
@@ -2433,7 +2466,19 @@ async function getSignalForStock(symbol) {
   // First check if it's in our main list
   if (ALL_SYMBOLS.includes(upper)) {
     const signals = await generateSignals();
-    return signals.find(s => s.ticker === upper);
+    const found = signals.find(s => s.ticker === upper);
+    if (found) return found;
+    // The symbol's prior signal is still open and being monitored — surface that
+    // state instead of a fresh (suppressed) signal.
+    const open = _signalOutcomes.get(upper);
+    if (open && !open.result && open.timestamp) {
+      return {
+        ticker: upper, signal: open.signal, action: open.action,
+        entryPrice: open.entryPrice, stopLoss: open.stopLoss, target1: open.target1,
+        confidence: open.confidence || 0, status: 'monitoring',
+      };
+    }
+    return null;
   }
   // Generate signal for a single unknown stock
   return generateSingleSignal(upper);
