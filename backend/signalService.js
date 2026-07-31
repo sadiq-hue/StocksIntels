@@ -2158,12 +2158,14 @@ setInterval(() => {
   generateSignals(null, false).catch(() => {});
 }, 60 * 60 * 1000);
 
-// Auto-run historical backtest every 6 hours to mature signal outcomes
+// Auto-run historical backtest every 6 hours to mature signal outcomes.
+// Window is SIGNAL_WINDOW_DAYS so only current-engine signals are evaluated,
+// keeping metrics aligned with live/forward test instead of old-engine data.
 setTimeout(() => {
-  runHistoricalBacktest({ days: 90, maxHoldDays: 20, maxSignals: 1000 }).catch(() => {});
+  runHistoricalBacktest({ days: SIGNAL_WINDOW_DAYS, maxHoldDays: 20, maxSignals: 1000 }).catch(() => {});
 }, 60000);
 setInterval(() => {
-  runHistoricalBacktest({ days: 90, maxHoldDays: 20, maxSignals: 1000 }).catch(() => {});
+  runHistoricalBacktest({ days: SIGNAL_WINDOW_DAYS, maxHoldDays: 20, maxSignals: 1000 }).catch(() => {});
 }, 6 * 60 * 60 * 1000);
 
 // Main function to generate signals for all tracked stocks
