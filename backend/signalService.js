@@ -2315,20 +2315,20 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     trackSignalOutcomes(_portfolioState, _performanceStats, _signalOutcomes, symbol, currentPrice, sigObj);
     if (sigObj.signal !== 'Hold') {
       recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.action, sigObj.type, sigObj.sector).catch(() => {});
-      if (prevOutcome && prevOutcome.result) {
-        persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null, prevOutcome.timestamp);
-        signalEventBus.emit('signal:resolved', {
-          ticker: symbol,
-          entryPrice: prevOutcome.entryPrice,
-          targetPrice: prevOutcome.target1,
-          stopPrice: prevOutcome.stopLoss,
-          currentPrice,
-          result: prevOutcome.result,
-          returnPct: prevOutcome.entryPrice > 0 ? Math.round(((currentPrice - prevOutcome.entryPrice) / prevOutcome.entryPrice) * 10000) / 100 : 0,
-          signal: prevOutcome.signal,
-          resolvedAt: prevOutcome.resolvedAt || Date.now(),
-        });
-      }
+    }
+    if (prevOutcome && prevOutcome.result) {
+      persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null, prevOutcome.timestamp);
+      signalEventBus.emit('signal:resolved', {
+        ticker: symbol,
+        entryPrice: prevOutcome.entryPrice,
+        targetPrice: prevOutcome.target1,
+        stopPrice: prevOutcome.stopLoss,
+        currentPrice,
+        result: prevOutcome.result,
+        returnPct: prevOutcome.entryPrice > 0 ? Math.round(((currentPrice - prevOutcome.entryPrice) / prevOutcome.entryPrice) * 10000) / 100 : 0,
+        signal: prevOutcome.signal,
+        resolvedAt: prevOutcome.resolvedAt || Date.now(),
+      });
     }
     // Check progress milestones on the current active signal
     const currentActive = _signalOutcomes.get(symbol);
