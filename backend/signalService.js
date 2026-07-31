@@ -563,6 +563,7 @@ async function restoreStateFromDb() {
       [`${SIGNAL_WINDOW_DAYS} days`]
     );
     _signalOutcomes.clear();
+    _liveTestStore.clear();
     for (const row of outcomes.rows) {
       _signalOutcomes.set(row.ticker, {
         entryPrice: parseFloat(row.entry_price) || 0,
