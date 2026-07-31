@@ -37,6 +37,8 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS sector VARCHAR(50)`);
   } catch {}
 })();
+// Signal evaluation window (must be declared before restoreStateFromDb runs)
+const SIGNAL_WINDOW_DAYS = 1;
 // Restore performance stats and portfolio state from DB on startup
 restoreStateFromDb().catch(() => {});
 
@@ -138,7 +140,6 @@ let _signalHistoryCount = 0;
 // Live test store — ring buffer of resolved signal outcomes with resolvedAt timestamps
 const _liveTestStore = new Map(); // symbol -> { outcomes: [{ result, entryPrice, exitPrice, signal, generatedAt, resolvedAt }] }
 const LIVE_TEST_MAX_PER_SYMBOL = 200;
-const SIGNAL_WINDOW_DAYS = 1;
 const _performanceStats = { total: 0, wins: 0, losses: 0, winRate: 0 };
 const _histBacktestCache = new Map(); // symbol -> { bars, ts }
 const HIST_BACKTEST_CACHE_TTL = 60 * 60 * 1000; // 1 hour
@@ -2329,6 +2330,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         const isFlip = (prevAction === 'buy' && sigObj.action === 'sell') || (prevAction === 'sell' && sigObj.action === 'buy');
         if (!isExpired && !isFlip) {
           emitSignal = false;
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal`);
         } else {
           // Score-based close at market: the open position either outlived its hold
           // window or the full analysis flipped direction against it.
