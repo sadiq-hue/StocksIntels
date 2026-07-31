@@ -32,8 +32,8 @@ const DEFAULTS = {
   thresholds: {
     strong_buy: 68,
     buy: 55,
-    hold: 40,
-    sell: 25,
+    hold: 30,
+    sell: 18,
     strong_sell: 0,
   },
 

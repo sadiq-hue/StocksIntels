@@ -1171,6 +1171,12 @@ const FORWARD_TEST_MIN_AGE = 28800000; // 8 hours — predictions younger than t
 // of manufacturing an outcome (e.g. CRWN, ARM +4373%, GLD -92%).
 const RESOLUTION_MAX_DEVIATION = 0.5;
 
+// Sells are exit/avoid ratings, not short positions — they carry no mirrored
+// stop/target levels. A sell resolves on whether the stock actually moved past
+// this fraction (~2%) of the signal price in the direction that validates the
+// rating (fell = right to exit/avoid) or refutes it (rose = wrong to exit).
+const SELL_EXIT_MOVE = 0.02;
+
 // Dynamic expiry by trade type (in milliseconds)
 const TRADE_TYPE_EXPIRY = {
   'Aggressive Buy': 14 * 24 * 60 * 60 * 1000,   // 14 days
@@ -1200,7 +1206,7 @@ async function _loadForwardPredictionsFromDb() {
       const expiry = row.generated_at ? new Date(row.generated_at).getTime() + (TRADE_TYPE_EXPIRY[tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) : Date.now() + TRADE_TYPE_EXPIRY['Swing Trade'];
       _forwardTestStore.get(row.symbol).predictions.push({
         id: row.id, signal: row.signal, confidence: row.confidence,
-        price: Number(row.price), stopLoss: Number(row.stop_loss), target1: Number(row.target1),
+        price: Number(row.price), stopLoss: row.stop_loss != null ? Number(row.stop_loss) : null, target1: row.target1 != null ? Number(row.target1) : null,
         action: row.action, tradeType, sector: row.sector,
         generatedAt: new Date(row.generated_at).getTime(),
         resolved: !!row.resolved, actualReturn: Number(row.actual_return), correct: row.correct,
@@ -1237,6 +1243,42 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
   if (store.predictions.length > 200) store.predictions = store.predictions.slice(-200);
 }
 
+// True when the resolution quote is stale/garbage — a quote that deviates more
+// than 50% from the prediction entry cannot be a legitimate price move.
+function isGarbageQuote(pred, currentPrice) {
+  return !pred.price || pred.price <= 0 || !currentPrice || currentPrice <= 0 ||
+    Math.abs(currentPrice - pred.price) / pred.price > RESOLUTION_MAX_DEVIATION;
+}
+
+// Shared forward-prediction resolution core (used by the per-symbol resolver,
+// the bulk resolver and the expiry validator so the outcome rules can't drift).
+// Returns one of:
+//   { status: 'defer' }   — stale/garbage quote, keep monitoring
+//   { status: 'pending' } — no level/move triggered yet, keep monitoring
+//   { status: 'neutral' } — missing directional action, cannot be evaluated
+//   { status: 'resolved', correct, actualReturn }
+function evaluateForwardPrediction(pred, currentPrice) {
+  if (isGarbageQuote(pred, currentPrice)) return { status: 'defer' };
+  const actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;
+  const isBuy = pred.action === 'buy';
+  const isSell = pred.action === 'sell';
+  if (isBuy && pred.stopLoss != null && pred.target1 != null) {
+    if (currentPrice <= pred.stopLoss) return { status: 'resolved', correct: false, actualReturn };
+    if (currentPrice >= pred.target1) return { status: 'resolved', correct: true, actualReturn };
+    return { status: 'pending' };
+  }
+  if (isSell) {
+    // Exit/avoid semantics: correct if the stock fell vs the signal price (the
+    // exit was right), incorrect if it rose. No stop/target levels involved.
+    const exitMove = (pred.price - currentPrice) / pred.price;
+    if (exitMove >= SELL_EXIT_MOVE) return { status: 'resolved', correct: true, actualReturn };
+    if (exitMove <= -SELL_EXIT_MOVE) return { status: 'resolved', correct: false, actualReturn };
+    return { status: 'pending' };
+  }
+  if (isBuy || isSell) return { status: 'pending' };
+  return { status: 'neutral' };
+}
+
 async function resolveForwardPredictions(symbol) {
   const store = _forwardTestStore.get(symbol);
   if (!store || !store.predictions.length) return;
@@ -1249,11 +1291,8 @@ async function resolveForwardPredictions(symbol) {
     for (const pred of unresolved) {
       if (Date.now() - pred.generatedAt < FORWARD_TEST_MIN_AGE) continue;
       const age = Date.now() - pred.generatedAt;
-      // Garbage/stale quote guard: a resolution quote wildly different from the
-      // prediction entry cannot be a legitimate stop/target touch. Defer instead
-      // of manufacturing an outcome from a broken quote.
-      if (!pred.price || pred.price <= 0 || !currentPrice || currentPrice <= 0 ||
-          Math.abs(currentPrice - pred.price) / pred.price > RESOLUTION_MAX_DEVIATION) {
+      const outcome = evaluateForwardPrediction(pred, currentPrice);
+      if (outcome.status === 'defer') {
         const dev = Math.abs(currentPrice - pred.price) / pred.price * 100;
         if (!pred._garbageWarned) {
           pred._garbageWarned = true;
@@ -1263,6 +1302,7 @@ async function resolveForwardPredictions(symbol) {
         }
         continue;
       }
+      const actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;
       pred.resolvedAt = Date.now();
       // Check dynamic expiry
       const dynamicExpiry = pred.expiry || (pred.generatedAt + (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']));
@@ -1276,7 +1316,7 @@ async function resolveForwardPredictions(symbol) {
           } else {
             pred.correct = null;
             pred.resolved = true;
-            pred.actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;
+            pred.actualReturn = actualReturn;
             if (pred.id) {
               pool.query(
                 `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = NULL, resolved_at = NOW() WHERE id = $2`,
@@ -1291,33 +1331,19 @@ async function resolveForwardPredictions(symbol) {
           continue;
         }
       }
-      const returnPct = ((currentPrice - pred.price) / pred.price) * 100;
-      pred.actualReturn = Math.round(returnPct * 10) / 10;
-      // Resolve using stop/target levels (same as live path)
-      const isBuy = pred.action === 'buy';
-      const isSell = pred.action === 'sell';
-      if (isBuy && pred.stopLoss != null && pred.target1 != null) {
-        if (currentPrice <= pred.stopLoss) {
-          pred.correct = false; pred.resolved = true;
-        } else if (currentPrice >= pred.target1) {
-          pred.correct = true; pred.resolved = true;
-        }
-      } else if (isSell && pred.stopLoss != null && pred.target1 != null) {
-        if (currentPrice >= pred.stopLoss) {
-          pred.correct = false; pred.resolved = true;
-        } else if (currentPrice <= pred.target1) {
-          pred.correct = true; pred.resolved = true;
-        }
-      } else if (isBuy || isSell) {
-        // Directional signal but stop/target not touched yet — keep monitoring.
-        continue;
-      } else {
+      pred.actualReturn = actualReturn;
+      if (outcome.status === 'resolved') {
+        pred.correct = outcome.correct;
+        pred.resolved = true;
+      } else if (outcome.status === 'neutral') {
         // Missing directional action (legacy/foreign rows) — cannot be evaluated.
         // Resolve as neutral instead of guessing from the signal name, so stale
         // rows don't manufacture fake wins/losses.
         pred.correct = null;
         pred.actualReturn = null;
         pred.resolved = true;
+      } else {
+        continue; // Pending — keep monitoring.
       }
       if (pred.resolved && pred.id) {
         pool.query(
@@ -1660,8 +1686,7 @@ async function validateExpiringPredictions() {
       for (const pred of expiring) {
         // Garbage/stale quote guard — skip so the expiry path doesn't store a
         // nonsensical actual_return from a broken quote.
-        if (!pred.price || pred.price <= 0 || !currentPrice || currentPrice <= 0 ||
-            Math.abs(currentPrice - pred.price) / pred.price > RESOLUTION_MAX_DEVIATION) {
+        if (isGarbageQuote(pred, currentPrice)) {
           continue;
         }
         try {
@@ -1732,11 +1757,8 @@ async function resolveAllForwardPredictions() {
       for (const pred of unresolved) {
         if (Date.now() - pred.generatedAt < FORWARD_TEST_MIN_AGE) { skipped++; continue; }
         const age = Date.now() - pred.generatedAt;
-        // Garbage/stale quote guard: a resolution quote wildly different from the
-        // prediction entry cannot be a legitimate stop/target touch. Defer instead
-        // of manufacturing an outcome from a broken quote.
-        if (!pred.price || pred.price <= 0 || !currentPrice || currentPrice <= 0 ||
-            Math.abs(currentPrice - pred.price) / pred.price > RESOLUTION_MAX_DEVIATION) {
+        const outcome = evaluateForwardPrediction(pred, currentPrice);
+        if (outcome.status === 'defer') {
           const dev = Math.abs(currentPrice - pred.price) / pred.price * 100;
           if (!pred._garbageWarned) {
             pred._garbageWarned = true;
@@ -1747,6 +1769,7 @@ async function resolveAllForwardPredictions() {
           skipped++;
           continue;
         }
+        const actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;
         pred.resolvedAt = Date.now();
         // Check dynamic expiry first (trade-type based)
         const dynamicExpiry = pred.expiry || (pred.generatedAt + (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']));
@@ -1767,7 +1790,7 @@ async function resolveAllForwardPredictions() {
               // Validation failed — mark as expired (neutral)
               pred.correct = null;
               pred.resolved = true;
-              pred.actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;
+              pred.actualReturn = actualReturn;
               if (pred.id) {
                 pool.query(
                   `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = NULL, resolved_at = NOW() WHERE id = $2`,
@@ -1788,34 +1811,20 @@ async function resolveAllForwardPredictions() {
             continue;
           }
         }
-        const returnPct = ((currentPrice - pred.price) / pred.price) * 100;
-        pred.actualReturn = Math.round(returnPct * 10) / 10;
-        // Resolve using stop/target levels (same as live path)
-        const isBuy = pred.action === 'buy';
-        const isSell = pred.action === 'sell';
-        if (isBuy && pred.stopLoss != null && pred.target1 != null) {
-          if (currentPrice <= pred.stopLoss) {
-            pred.correct = false; pred.resolved = true;
-          } else if (currentPrice >= pred.target1) {
-            pred.correct = true; pred.resolved = true;
-          }
-        } else if (isSell && pred.stopLoss != null && pred.target1 != null) {
-          if (currentPrice >= pred.stopLoss) {
-            pred.correct = false; pred.resolved = true;
-          } else if (currentPrice <= pred.target1) {
-            pred.correct = true; pred.resolved = true;
-          }
-        } else if (isBuy || isSell) {
-          // Directional signal but stop/target not touched yet — keep monitoring.
-          skipped++;
-          continue;
-        } else {
+        pred.actualReturn = actualReturn;
+        if (outcome.status === 'resolved') {
+          pred.correct = outcome.correct;
+          pred.resolved = true;
+        } else if (outcome.status === 'neutral') {
           // Missing directional action (legacy/foreign rows) — cannot be evaluated.
           // Resolve as neutral instead of guessing from the signal name, so stale
           // rows don't manufacture fake wins/losses.
           pred.correct = null;
           pred.actualReturn = null;
           pred.resolved = true;
+        } else {
+          skipped++;
+          continue;
         }
         if (pred.resolved && pred.id) {
           pool.query(
@@ -2812,6 +2821,32 @@ function searchStocks(query) {
   return results.slice(0, 20);
 }
 
+// ─── Signal Bucket Classifier ───────────────────────────────────────────────
+// Pure decision: maps the 0-100 composite score to a signal bucket. The buy side
+// is unchanged. The sell side is asymmetric and evidence-gated because a Sell in
+// equities means "the fundamentals/technical/financial/sentiment no longer
+// support holding for upside" — an exit/avoid rating, not the mirror of the buy
+// signal. Requiring multi-dimension negative agreement prevents a single noisy
+// indicator from dumping a stock into Sell.
+function classifySignalBucket(overallScore, thresholds, subScores, newsSent) {
+  if (overallScore >= thresholds.strong_buy) return { signal: 'Strong Buy', action: 'buy', strength: 'strong' };
+  if (overallScore >= thresholds.buy) return { signal: 'Buy', action: 'buy', strength: 'moderate' };
+  if (overallScore >= thresholds.hold) return { signal: 'Hold', action: 'hold', strength: 'neutral' };
+  // Below the hold band, a Sell needs confirmed negative agreement: at least two
+  // of {fundamentals, technical, financial, sentiment} genuinely negative, or one
+  // very negative (<25) backed by negative sentiment.
+  const negativeDims =
+    (subScores.fundamental < 40 ? 1 : 0) +
+    (subScores.technical < 40 ? 1 : 0) +
+    (subScores.financial < 40 ? 1 : 0) +
+    (newsSent === 'negative' ? 1 : 0);
+  const veryNegative = subScores.fundamental < 25 || subScores.technical < 25 || subScores.financial < 25;
+  const sellConfirmed = negativeDims >= 2 || (veryNegative && newsSent === 'negative');
+  if (!sellConfirmed) return { signal: 'Hold', action: 'hold', strength: 'neutral' };
+  if (overallScore >= thresholds.sell) return { signal: 'Sell', action: 'sell', strength: 'moderate' };
+  return { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
+}
+
 // ─── Shared Signal Builder ──────────────────────────────────────────────────
 // Consolidates scoring, confidence, position sizing, and signal object construction
 // used by both generateSignals() and generateSingleSignal().
@@ -2826,8 +2861,6 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const newsNeg = sc.news_negative ?? -5;
   const sparseFT = sc.sparse_fund_tech ?? -4;
   const sparseFF = sc.sparse_fund_fin ?? -3;
-  const dirBuy = sc.direction_buy_threshold ?? 55;
-  const dirSell = sc.direction_sell_threshold ?? 45;
   const wlrDefault = sc.kelly_wlr_default ?? 1.5;
   const portfolioCfg = engineConfig.getConfig().portfolio || {};
   const maxConcentration = portfolioCfg.maxConcentration || 0.25;
@@ -2862,7 +2895,6 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const weightSum = Object.values(w).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
   if (weightSum > 0) adjScore = adjScore / weightSum;
 
-  const direction = adjScore >= dirBuy ? 'buy' : adjScore < dirSell ? 'sell' : 'hold';
   const sparseFund = fundamental.metrics?.dataQuality === 'Very sparse data';
   const sparseTech = technical.indicators?.dataQuality === 'Insufficient history';
   const sparseFin = financial.analysis?.financialHealth === 'Limited financial data';
@@ -2872,16 +2904,13 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   else if (newsSent === 'negative') adjScore += newsNeg;
   let overallScore = Math.max(0, Math.min(100, Math.round(adjScore)));
 
-  // Use configurable thresholds instead of hardcoded
+  // Use configurable thresholds + the evidence-gated sell classifier
   const thresholds = engineConfig.getConfig().thresholds;
-  let sig;
-  if (overallScore >= thresholds.strong_buy) sig = { signal: 'Strong Buy', action: 'buy', strength: 'strong' };
-  else if (overallScore >= thresholds.buy) sig = { signal: 'Buy', action: 'buy', strength: 'moderate' };
-  else if (overallScore >= thresholds.hold) sig = { signal: 'Hold', action: 'hold', strength: 'neutral' };
-  else if (overallScore >= thresholds.sell) sig = { signal: 'Sell', action: 'sell', strength: 'moderate' };
-  else sig = { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
+  const sig = classifySignalBucket(overallScore, thresholds, {
+    fundamental: fundamental.score, technical: technical.score, financial: financial.score,
+  }, newsSent);
 
-  const tradeType = determineTradeType(technical.score, fundamental.score);
+  const tradeType = sig.action === 'sell' ? 'Avoid' : determineTradeType(technical.score, fundamental.score);
   const tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, stopLossPct, tradeType);
   const scoreVariance = Math.max(
     Math.abs(fundamental.score - overallScore),
@@ -2909,7 +2938,10 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     kellyPct = calculateKellyPositionSize(mlWinProb, wlr, maxConcentration);
   }
   let positionSize;
-  if (kellyPct != null && kellyPct > 0) {
+  if (sig.action === 'sell') {
+    // Exit/avoid rating — no position is opened, so no capital is allocated.
+    positionSize = 0;
+  } else if (kellyPct != null && kellyPct > 0) {
     positionSize = Math.round(kellyPct * regimePenalty);
   } else {
     positionSize = calculatePositionSize(sig, regime.regime, confidence, scoreVariance);
@@ -3049,6 +3081,10 @@ module.exports = {
   getForwardTestPredictions,
   resolveAllForwardPredictions,
   validateExpiringPredictions,
+  // Pure helpers (unit-testable sell/exit + resolution logic)
+  classifySignalBucket,
+  evaluateForwardPrediction,
+  isGarbageQuote,
   getLiveTestSnapshot,
   // Audit & Config
   getAuditLog,

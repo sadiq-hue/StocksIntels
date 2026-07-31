@@ -54,10 +54,14 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
     target1 = currentPrice + (atr * mult * TARGET1_MULT);
     target2 = currentPrice + (atr * mult * TARGET2_MULT);
   } else if (signal.action === 'sell') {
-    entry = currentPrice;
-    stopLoss = currentPrice + (atr * mult);
-    target1 = currentPrice - (atr * mult * TARGET1_MULT);
-    target2 = currentPrice - (atr * mult * TARGET2_MULT);
+    // Exit/avoid semantics: a Sell is a rating ("the fundamentals/technical/
+    // financial/sentiment no longer support holding"), not a mirrored short
+    // position. There are no short-style stop/target levels — the rating is
+    // validated by whether the stock declines vs this reference price.
+    return {
+      entry: Math.round(currentPrice * 100) / 100,
+      stopLoss: null, target1: null, target2: null, riskReward: null,
+    };
   } else {
     entry = currentPrice;
     stopLoss = currentPrice * (1 - stopLossPct);
