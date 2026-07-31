@@ -134,7 +134,10 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
     const saneLevels = entry > 0 && isPrevBuy
       ? previous.stopLoss < entry && previous.target1 > entry
       : entry > 0 && previous.stopLoss > entry && previous.target1 < entry;
-    const moved = Math.abs(currentPrice - entry) > Math.max(entry * 0.0005, 0.01);
+    const pctMove = entry > 0 ? Math.abs(currentPrice - entry) / entry : 0;
+    // Require a real move past the level but reject impossible single-cycle moves
+    // (garbage quotes) that would record absurd outcomes.
+    const moved = pctMove > 0.0005 && pctMove < 0.5;
     if (saneLevels && moved) {
       if (isPrevBuy) {
         if (currentPrice <= previous.stopLoss) {
@@ -154,8 +157,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
         }
       }
     } else {
-      console.warn(`[RiskManager] Skipping resolution for ${symbol} ${previous.signal} (${previous.action}) entry=${entry} stop=${previous.stopLoss} t1=${previous.target1} price=${currentPrice} saneLevels=${saneLevels} moved=${moved}`);
-    }
+      console.warn(`[RiskManager] Skipping resolution for ${symbol} ${previous.signal} (${previous.action}) entry=${entry} stop=${previous.stopLoss} t1=${previous.target1} price=${currentPrice} saneLevels=${saneLevels} moved=${moved}`);    }
     if (previous.result) {
       previous.resolvedAt = Date.now();
       portfolioState.totalTrades++;
