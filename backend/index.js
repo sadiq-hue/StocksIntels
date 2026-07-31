@@ -10974,6 +10974,22 @@ async function initDatabase() {
       console.error('[Migration] NSE financial statements migration error:', migErr.message);
     }
 
+    // ── Signal engine column migration (signal_outcomes / forward_predictions) ──
+    // Ensures resolved_at, position_size, signal_generated_at etc. exist so
+    // live test / health metrics populate on every deploy, not just fresh DBs.
+    try {
+      const fsp = require('fs');
+      const pt = require('path');
+      const sigMigSql = fsp.readFileSync(pt.join(__dirname, 'db', 'migration_signal_columns.sql'), 'utf8');
+      const statements = sigMigSql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+      for (const stmt of statements) {
+        try { await pool.query(stmt); } catch (e) { console.warn('[Migration] Signal statement warning:', e.message); }
+      }
+      console.log('[Migration] Signal engine columns verified');
+    } catch (sigMigErr) {
+      console.error('[Migration] Signal engine migration error:', sigMigErr.message);
+    }
+
     // ── Ensure financial_statements has correct schema (run unconditionally) ──
     try {
       const colInfo = await pool.query(
