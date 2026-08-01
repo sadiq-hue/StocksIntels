@@ -8,7 +8,7 @@ const { getStockQuote, getQuotesBatch } = require('./marketService');
 const { fetchHistoricalQuotes } = require('./globalScraper');
 const nseHistory = require('./nseHistoryService');
 const { getMacroScore, getCountryForSymbol, generateMacroReason } = require('./macroService');
-const { getAggregatedSentiment, initNewsHistory } = require('./newsService');
+const { getAggregatedSentiment, getCatalysts, initNewsHistory } = require('./newsService');
 const { getKeyMetrics, getQuote, getCompanyProfile } = require('./financialReportsService');
 const { calculateSMA } = require('./technicalIndicators');
 const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL_SYMBOLS, SECTOR_AVG_PE, INDUSTRY_MEDIAN_EV_EBITDA, TBILI_RATE, KNOWN_FUNDAMENTALS, NSE_FUNDAMENTALS } = require('./stockData');
@@ -2487,11 +2487,18 @@ async function generateSignals(marketData = null, quick = false, force = false) 
 
   // Quick mode: skip all external fetches, use only cached data
   let newsSentiment = {};
+  let catalysts = {};
   let regime = _marketRegime;
   if (!quick) {
     try {
       newsSentiment = await Promise.race([
         getAggregatedSentiment(),
+        new Promise(resolve => setTimeout(() => resolve({}), 15000)),
+      ]);
+    } catch { /* silent */ }
+    try {
+      catalysts = await Promise.race([
+        getCatalysts(),
         new Promise(resolve => setTimeout(() => resolve({}), 15000)),
       ]);
     } catch { /* silent */ }
@@ -2595,6 +2602,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       symbol, stock, currentPrice, priceChange, volume,
       fundamental, technical, financial, macro, regime, weights, weeklyTrend,
       newsSent: newsSentiment[symbol] || null,
+      catalyst: catalysts[symbol] || null,
       priceHistory, degFactor
     });
     const prevOutcome = _signalOutcomes.get(symbol);
@@ -2794,9 +2802,14 @@ async function generateSingleSignal(symbol) {
     const priceChange = quote.changePercent;
     const volume = quote.volume;
     let newsSent = null;
+    let catalyst = null;
     try {
       const sentimentMap = await getAggregatedSentiment();
       newsSent = sentimentMap[symbol] || null;
+    } catch { /* silent */ }
+    try {
+      const catalystMap = await getCatalysts();
+      catalyst = catalystMap[symbol] || null;
     } catch { /* silent */ }
     const priceHistory = await getPriceHistory(symbol).catch(() => null);
     const fundamental = analyzeFundamentals(stock, currentPrice, newsSent, _dynamicSectorPE);
@@ -2817,7 +2830,7 @@ async function generateSingleSignal(symbol) {
     const sigObj = await _buildSignal({
       symbol, stock, currentPrice, priceChange, volume,
       fundamental, technical, financial, macro, regime, weights, weeklyTrend,
-      newsSent, priceHistory, degFactor
+      newsSent, catalyst, priceHistory, degFactor
     });
     if (sigObj) persistPortfolioState().catch(() => {});
     return sigObj;
@@ -2967,12 +2980,16 @@ function classifySignalBucket(overallScore, thresholds, ctx) {
   const sub = ctx.subScores || {};
   const ind = ctx.indicators || {};
   const newsNegative = ctx.newsSent === 'negative';
+  const cat = ctx.catalyst || {};
+  const positiveCatalyst = cat.direction === 'positive';
+  const negativeCatalyst = cat.direction === 'negative';
 
   // Degree-aware negativity: deeper weakness counts more, shallow sub-40
   // readings contribute little (they may be noise).
   const neg = (s) => (s != null && s < 40) ? (40 - s) / 25 : 0;
   let evidence = neg(sub.fundamental) + neg(sub.technical) + neg(sub.financial);
   if (newsNegative) evidence += 1;
+  if (negativeCatalyst) evidence += 1;
 
   // Technical breakdown confirmation — the trend actually broke (price under the
   // slow SMA, bearish MACD, or falling momentum), not just a weak raw score.
@@ -3007,7 +3024,13 @@ function classifySignalBucket(overallScore, thresholds, ctx) {
   if (distressFlagged && !isFinancial) {
     // Even an uncorroborated suppression is a meaningful caution flag.
     evidence += 0.75;
-    if (deteriorating) {
+    // A positive deal catalyst (M&A/strategic-investor talk, capital injection)
+    // is a separate, market-visible narrative: the market can be pricing a
+    // premium that the last audited financials don't show (KQ strategic-investor
+    // talks, NCBA takeover bid). In that case don't force the Strong Sell — the
+    // catalyst-boosted composite decides instead (typically landing in the hold
+    // band with the catalyst surfaced on the signal).
+    if (deteriorating && !positiveCatalyst) {
       return { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
     }
   }
@@ -3050,7 +3073,7 @@ function getPriorScore(symbol) {
 // ─── Shared Signal Builder ──────────────────────────────────────────────────
 // Consolidates scoring, confidence, position sizing, and signal object construction
 // used by both generateSignals() and generateSingleSignal().
-async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, priceHistory, degFactor }) {
+async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, catalyst, priceHistory, degFactor }) {
   // Read scoring and portfolio config once at the top
   const sc = engineConfig.getConfig().scoring?.signal_confidence || {};
   const baselineConf = sc.baseline ?? 50;
@@ -3059,6 +3082,8 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const varMult = sc.variance_multiplier ?? 0.3;
   const newsPos = sc.news_positive ?? 5;
   const newsNeg = sc.news_negative ?? -5;
+  const catPos = sc.catalyst_positive ?? 10;
+  const catNeg = sc.catalyst_negative ?? -10;
   const sparseFT = sc.sparse_fund_tech ?? -4;
   const sparseFF = sc.sparse_fund_fin ?? -3;
   const wlrDefault = sc.kelly_wlr_default ?? 1.5;
@@ -3102,6 +3127,12 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   if (sparseFund && sparseFin) adjScore += sparseFF;
   if (newsSent === 'positive') adjScore += newsPos;
   else if (newsSent === 'negative') adjScore += newsNeg;
+  // Deal/narrative catalyst overlay (M&A talk, capital injection, crisis...).
+  // A positive catalyst lifts the composite so a fundamentals-Sell can be
+  // downgraded to a catalyst-aware reading; a negative one deepens it.
+  const cat = catalyst || {};
+  const catDelta = cat.direction === 'positive' ? catPos : cat.direction === 'negative' ? catNeg : 0;
+  if (catDelta !== 0) adjScore += catDelta;
   let overallScore = Math.max(0, Math.min(100, Math.round(adjScore)));
 
   // Use configurable thresholds + the evidence-gated sell classifier
@@ -3113,6 +3144,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       financial: financial.score,
     },
     newsSent,
+    catalyst: cat,
     indicators: technical.indicators,
     fundamentals: fundamental.metrics,
     sector: stock.sector,
@@ -3165,7 +3197,12 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   }
   const formattedVolume = volume >= 1000000 ? (volume / 1000000).toFixed(1) + 'M' : (volume / 1000).toFixed(1) + 'K';
   const macroReason = generateMacroReason(macro);
-  const reason = generateReason(symbol, fundamental, technical, financial, sig, macroReason);
+  let reason = generateReason(symbol, fundamental, technical, financial, sig, macroReason);
+  if (cat.direction === 'positive' && cat.type) {
+    reason += ` | Deal catalyst: ${cat.type} (${cat.direction})${cat.headline ? ` — ${cat.headline.slice(0, 80)}` : ''}`;
+  } else if (cat.direction === 'negative' && cat.type) {
+    reason += ` | Negative catalyst: ${cat.type}${cat.headline ? ` — ${cat.headline.slice(0, 80)}` : ''}`;
+  }
   const timeframes = { 'Aggressive Buy': '1-4 weeks', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks', 'Long Term Value': '3-6 months', 'Long Term': '3-6 months', 'Avoid': 'N/A' };
   const isNse = NSE_SYMBOLS.includes(symbol);
   const obj = {
@@ -3177,6 +3214,10 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     riskReward: tradeLevels.riskReward, confidence, positionSize: positionSize + '%',
     timeframe: timeframes[tradeType], sector: stock.sector, volume: formattedVolume, rawVolume: volume || 0,
     weeklyTrend: weeklyTrend.trend, regime: regime.regime,
+    catalyst: cat.direction ? {
+      type: cat.type, direction: cat.direction, strength: cat.strength || 1,
+      headline: cat.headline || null, source: cat.source || null, publishedAt: cat.publishedAt || null,
+    } : null,
     var95: riskMetrics.var95 + '%',
     var99: riskMetrics.var99 ? riskMetrics.var99 + '%' : null,
     cvar95: riskMetrics.cvar95 ? riskMetrics.cvar95 + '%' : null,

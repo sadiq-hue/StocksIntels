@@ -75,6 +75,57 @@ check('distressed airline suppress -> Strong Sell',
     regime: 'bull', price: 5.56, priorScore: null,
   }).signal, 'Strong Sell');
 
+// 5b. SAME distressed non-financial, but a positive deal catalyst (strategic
+//     investor / M&A talk) is present: the forced Strong Sell is suppressed and
+//     the catalyst-boosted composite decides (overall 42+10=52 -> Hold band,
+//     evidence 1.27 < 2 -> Hold). KQ 2026: market priced a $2B strategic-investor
+//     deal while financials showed distress.
+check('distressed airline + positive catalyst -> Hold (not Strong Sell)',
+  signalService.classifySignalBucket(42, TH, {
+    subScores: { fundamental: 39, technical: 38, financial: 30 },
+    newsSent: null,
+    catalyst: { direction: 'positive', type: 'M&A', strength: 2, headline: 'Kenya Airways in strategic investor talks' },
+    indicators: { rsi: undefined, macdSignal: 'No Data', momentum: '0.0%', smaSlow: undefined },
+    fundamentals: { altSignal: 'SUPPRESS' },
+    sector: 'Transport',
+    fundProfile: { roe: -35, epsGrowth: -40, revenueGrowth: -5 },
+    regime: 'bull', price: 5.56, priorScore: null,
+  }).signal, 'Hold');
+
+// 5c. Distressed non-financial + NEGATIVE catalyst stays Strong Sell (crisis
+//     reinforcement doesn't rescue the hard trigger).
+check('distressed airline + crisis catalyst -> Strong Sell',
+  signalService.classifySignalBucket(42, TH, {
+    subScores: { fundamental: 39, technical: 38, financial: 30 },
+    newsSent: null,
+    catalyst: { direction: 'negative', type: 'Crisis', strength: 2, headline: 'KQ probe widens' },
+    indicators: { rsi: undefined, macdSignal: 'No Data', momentum: '0.0%', smaSlow: undefined },
+    fundamentals: { altSignal: 'SUPPRESS' },
+    sector: 'Transport',
+    fundProfile: { roe: -35, epsGrowth: -40, revenueGrowth: -5 },
+    regime: 'bull', price: 5.56, priorScore: null,
+  }).signal, 'Strong Sell');
+
+// 5d. Sub-hold composite in the sell band with no catalyst stays Hold (bar 1.2);
+//     a negative catalyst tips it to Sell (evidence 0.36 + 1 >= 1.2).
+check('sell-band no catalyst -> Hold',
+  signalService.classifySignalBucket(20, TH, {
+    subScores: { fundamental: 35, technical: 36, financial: 40 },
+    newsSent: null,
+    indicators: { rsi: 45, macdSignal: 'No Data', momentum: '0.0%', smaSlow: undefined },
+    fundamentals: { altSignal: 'NEUTRAL' },
+    sector: 'Industrials', price: 20, priorScore: null,
+  }).signal, 'Hold');
+check('sell-band + negative catalyst -> Sell',
+  signalService.classifySignalBucket(20, TH, {
+    subScores: { fundamental: 35, technical: 36, financial: 40 },
+    newsSent: null,
+    catalyst: { direction: 'negative', type: 'Crisis', strength: 2, headline: 'fraud probe' },
+    indicators: { rsi: 45, macdSignal: 'No Data', momentum: '0.0%', smaSlow: undefined },
+    fundamentals: { altSignal: 'NEUTRAL' },
+    sector: 'Industrials', price: 20, priorScore: null,
+  }).signal, 'Sell');
+
 // 6. Non-financial suppressed but PROFITABLE (CAG-like): no hard trigger; evidence < 2 in hold band => Hold.
 check('profitable suppressed consumer -> Hold',
   signalService.classifySignalBucket(49, TH, {
@@ -226,6 +277,31 @@ check('merge: live wins over history',
 check('merge: history fills gaps',
   JSON.stringify(sh.mergeSentimentMaps({}, { KQ: 'positive' })),
   JSON.stringify({ KQ: 'positive' }));
+
+// 14. Directed deal-catalyst classification: M&A/strategic-investor/capital
+//     news is a positive catalyst; crisis/profit-warning/deal-collapse is a
+//     negative catalyst; routine headlines have no catalyst.
+const { classifyCatalyst } = require('./newsService');
+const catalystCases = [
+  ['Kenya Airways in strategic investor talks', 'M&A', 'positive'],
+  ['NCBA receives takeover bid from South African firm', 'M&A', 'positive'],
+  ['Equity Group in talks to acquire a regional bank', 'M&A', 'positive'],
+  ['KCB launches rights issue to raise fresh capital', 'Capital', 'positive'],
+  ['Kenya Power secures CBK approval for tariff hike', 'Regulatory', 'positive'],
+  ['KQ share price falls after profit warning', 'Crisis', 'negative'],
+  ['Safaricom board expands M-Pesa services', null, null],
+  ['East African Breweries launches new premium brand', null, null],
+];
+for (const [headline, type, direction] of catalystCases) {
+  const c = classifyCatalyst(headline, '');
+  check(`catalyst "${headline.slice(0, 30)}..." -> ${type}/${direction}`,
+    `${c.catalyst}/${c.direction}`, `${type}/${direction}`);
+}
+// NCBA headline must also tag NCBA via company-name alias.
+check('catalyst headline tags NCBA',
+  extractRelatedStocks('NCBA receives takeover bid from South African firm').includes('NCBA'), true);
+check('catalyst headline tags KQ',
+  extractRelatedStocks('Kenya Airways in strategic investor talks').includes('KQ'), true);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

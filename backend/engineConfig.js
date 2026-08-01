@@ -143,6 +143,8 @@ const DEFAULTS = {
       regime_penalty_crash: 0.5,
       news_positive: 5,
       news_negative: -5,
+      catalyst_positive: 10,
+      catalyst_negative: -10,
       sparse_fund_tech: -4,
       sparse_fund_fin: -3,
       direction_buy_threshold: 55,

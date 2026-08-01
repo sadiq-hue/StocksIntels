@@ -354,6 +354,56 @@ async function getAggregatedSentiment() {
   return result;
 }
 
+// ─── Catalyst aggregation ────────────────────────────────────────────────────
+// Per-symbol strongest deal/narrative catalyst (M&A talk, capital injection,
+// crisis...). Historical rows fill gaps so a catalyst survives quiet days.
+// Returns { [SYMBOL]: { direction, type, strength, headline, source, publishedAt } }.
+let catalystCache = null;
+let catalystCacheTime = 0;
+
+async function getCatalysts() {
+  if (catalystCache && Date.now() - catalystCacheTime < SENTIMENT_CACHE_TTL) {
+    return catalystCache;
+  }
+  const news = await Promise.race([
+    getAllNews(),
+    new Promise(resolve => setTimeout(() => resolve([]), 20000)),
+  ]);
+  const realNews = news.filter(a => !a.isMock && a.catalyst && a.catalystDirection);
+  const result = {};
+  for (const a of realNews) {
+    for (const ticker of a.relatedStocks || []) {
+      const t = String(ticker).toUpperCase();
+      if (!t) continue;
+      const strength = Number(a.catalystStrength) || 1;
+      const prev = result[t];
+      const prevTime = prev ? new Date(prev.publishedAt).getTime() : 0;
+      const thisTime = new Date(a.publishedAt).getTime() || 0;
+      if (!prev || strength > prev.strength || (strength === prev.strength && thisTime > prevTime)) {
+        result[t] = {
+          direction: a.catalystDirection,
+          type: a.catalyst,
+          strength,
+          headline: String(a.headline || '').slice(0, 200),
+          source: a.source || '',
+          publishedAt: a.publishedAt || null,
+        };
+      }
+    }
+  }
+
+  try {
+    const historical = await sentimentHistory.getCatalystHistorical(sentimentHistory.HISTORY_WINDOW_DAYS);
+    for (const [t, h] of Object.entries(historical)) {
+      if (!result[t]) result[t] = h;
+    }
+  } catch { /* history unavailable; live map still valid */ }
+
+  catalystCache = result;
+  catalystCacheTime = Date.now();
+  return result;
+}
+
 // Determine if article is NSE-related or global
 function classifyArticle(title, excerpt, relatedStocks) {
   if (relatedStocks.length > 0) return 'nse';
@@ -386,6 +436,57 @@ function classifyHotNews(title, excerpt) {
     }
   }
   return { hot: false, hotType: null };
+}
+
+// ─── Directed deal/narrative catalysts ───────────────────────────────────────
+// Distinct from daily sentiment: a catalyst is a specific market-moving event
+// (M&A / strategic-investor talk, capital injection, crisis, deal collapse).
+// These routinely drive rallies independent of the company's last audited
+// financials — KQ's strategic-investor talks, NCBA's takeover bid — so the
+// signal engine treats them as a separate overlay instead of a generic
+// ±sentiment tick. Only one (strongest) catalyst is reported per article.
+const CATALYST_RULES = [
+  { type: 'M&A', direction: 'positive', strength: 2, keywords: [
+    'acqui', 'takeover', 'buyout', 'merger', 'merged', 'merging', 'merges with',
+    'bid for', 'bid to', 'offer for', 'offer to', 'expression of interest', ' eoi ',
+    'strategic investor', 'strategic partner', 'strategic sale', 'talks to', 'in talks',
+    'investor talks', 'investor to', 'potential investor', 'new investor', 'foreign investor',
+    'to sell', 'sale of', 'stake in', 'sell its stake', 'selling its stake',
+    'pursuit', 'considers', 'mulling', 'reportedly interested', 'exploring options',
+  ]},
+  { type: 'Capital', direction: 'positive', strength: 2, keywords: [
+    'capital injection', 'recapitali', 'rights issue', 'private placement',
+    'fresh capital', 'raise capital', 'funding round', 'debt conversion',
+    'debt-to-equity', 'capital raise', 'equity injection',
+    'rescue deal', 'bailout', 'bail out', 'rescue',
+  ]},
+  { type: 'Regulatory', direction: 'positive', strength: 1, keywords: [
+    'approved', 'approval', 'licensed', 'cbk approval', 'cma approval', 'green light',
+  ]},
+  { type: 'Crisis', direction: 'negative', strength: 2, keywords: [
+    'fraud', 'investigation', 'probe', 'lawsuit', 'litigation', 'scandal',
+    'bankruptcy', 'insolven', 'default', 'profit warning', 'loss warning',
+    'suspended', 'delist', 'irregularit', 'embezzlement', 'money laundering',
+  ]},
+  { type: 'DealCollapse', direction: 'negative', strength: 2, keywords: [
+    'talks collapse', 'deal collapses', 'walked away', 'shelved', 'rejected bid',
+    'withdrew', 'withdraws', 'abandon', 'stalled', 'no deal', 'called off',
+  ]},
+];
+
+function classifyCatalyst(title, excerpt) {
+  const text = (title + ' ' + excerpt).toLowerCase();
+  let best = null;
+  for (const rule of CATALYST_RULES) {
+    if (rule.keywords.some(k => text.includes(k))) {
+      // Strongest first; keep the first (highest-strength) match.
+      if (!best || rule.strength > best.strength) {
+        best = { catalyst: rule.type, direction: rule.direction, strength: rule.strength };
+      }
+    }
+  }
+  if (best) return best;
+  return { catalyst: null, direction: null, strength: 0 };
 }
 
 // Fetch news from NewsAPI with Kenyan focus
@@ -902,6 +1003,11 @@ async function backfillKwsHistory(days = 14, maxPages = 100) {
           relatedStocks,
           sentiment: analyzeSentiment(text),
           sentimentScore: null,
+          hot: classifyHotNews(title, excerpt || '').hot,
+          hotType: classifyHotNews(title, excerpt || '').hotType,
+          catalyst: classifyCatalyst(title, excerpt || '').catalyst,
+          catalystDirection: classifyCatalyst(title, excerpt || '').direction,
+          catalystStrength: classifyCatalyst(title, excerpt || '').strength,
         });
       } catch { /* skip failed page */ }
     }));
@@ -1053,11 +1159,15 @@ async function getAllNews(limit = 50, categoryFilter) {
       if (!seen.has(key)) { seen.add(key); unique.push(a); }
     }
 
-    // Classify hot news
+    // Classify hot news + directed catalysts
     unique.forEach(a => {
       const hot = classifyHotNews(a.headline, a.excerpt);
       a.hot = hot.hot;
       a.hotType = hot.hotType;
+      const cat = classifyCatalyst(a.headline, a.excerpt);
+      a.catalyst = cat.catalyst;
+      a.catalystDirection = cat.direction;
+      a.catalystStrength = cat.strength;
     });
 
     unique.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
@@ -1123,5 +1233,5 @@ async function getNewsSummary() {
   };
 }
 
-module.exports = { getAllNews, getNewsSummary, getAggregatedSentiment, classifyHotNews, extractRelatedStocks, backfillSentimentHistory, initNewsHistory, KENYAN_STOCKS, STOCK_SYMBOLS };
+module.exports = { getAllNews, getNewsSummary, getAggregatedSentiment, getCatalysts, classifyHotNews, classifyCatalyst, extractRelatedStocks, backfillSentimentHistory, initNewsHistory, KENYAN_STOCKS, STOCK_SYMBOLS };
 
