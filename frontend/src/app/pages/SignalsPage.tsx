@@ -30,6 +30,10 @@ const TYPE_STYLES: Record<string, string> = {
   Intraday: "bg-orange-100 text-orange-700 border-orange-200",
   "Swing Trade": "bg-blue-100 text-blue-700 border-blue-200",
   "Long Term": "bg-purple-100 text-purple-700 border-purple-200",
+  "Aggressive Buy": "bg-emerald-600 text-white border-emerald-600",
+  "Momentum Trade": "bg-cyan-100 text-cyan-700 border-cyan-200",
+  "Long Term Value": "bg-violet-100 text-violet-700 border-violet-200",
+  Avoid: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
 // ── Signal condition definitions ─────────────────────────────────────────────
@@ -93,6 +97,20 @@ function formatCurrency(value: number) {
   const abs = Math.abs(value);
   const fracDigits = abs < 0.0001 ? 6 : abs < 0.01 ? 4 : abs < 1 ? 3 : 2;
   return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: fracDigits }).format(value);
+}
+
+function curSym(s: { currency?: string }): string {
+  return s.currency === "KES" ? "KSh " : "$";
+}
+
+function fmtPrice(s: { currency?: string }, v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return "—";
+  return curSym(s) + formatCurrency(v);
+}
+
+function fmtNum(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return "—";
+  return formatCurrency(v);
 }
 
 export function SignalsPage() {
@@ -221,7 +239,7 @@ export function SignalsPage() {
         </div>
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-[120px] h-9 text-sm border-border"><SelectValue placeholder="Type" /></SelectTrigger>
-          <SelectContent><SelectItem value="all">All Types</SelectItem><SelectItem value="Intraday">Intraday</SelectItem><SelectItem value="Swing Trade">Swing Trade</SelectItem><SelectItem value="Long Term">Long Term</SelectItem></SelectContent>
+          <SelectContent><SelectItem value="all">All Types</SelectItem><SelectItem value="Intraday">Intraday</SelectItem><SelectItem value="Swing Trade">Swing Trade</SelectItem><SelectItem value="Long Term">Long Term</SelectItem><SelectItem value="Aggressive Buy">Aggressive Buy</SelectItem><SelectItem value="Momentum Trade">Momentum Trade</SelectItem><SelectItem value="Long Term Value">Long Term Value</SelectItem><SelectItem value="Avoid">Avoid</SelectItem></SelectContent>
         </Select>
         <Select value={filterSignal} onValueChange={setFilterSignal}>
           <SelectTrigger className="w-[130px] h-9 text-sm border-border"><SelectValue placeholder="Signal" /></SelectTrigger>
@@ -263,7 +281,7 @@ export function SignalsPage() {
                 <span className="text-muted-foreground">|</span>
                 <span>{s.sector}</span>
                 <span className="text-muted-foreground">|</span>
-                <span>{s.timeframe}</span>
+                <span>{s.timeframe || "—"}</span>
                 {s.country && (
                   <>
                     <span className="text-muted-foreground">|</span>
@@ -276,7 +294,7 @@ export function SignalsPage() {
               <div className="px-4 pb-3 flex items-center gap-3">
                 <div className="flex-1 bg-muted rounded-lg p-2.5 border border-border">
                   <p className="text-[10px] text-muted-foreground font-medium">Price</p>
-                  <p className="text-sm font-bold text-foreground">${formatCurrency(s.price)}</p>
+                  <p className="text-sm font-bold text-foreground">{fmtPrice(s, s.price)}</p>
                 </div>
                 <div className={`flex-1 rounded-lg p-2.5 border ${s.change >= 0 ? "bg-emerald-50 border-emerald-100" : "bg-red-50 border-red-100"}`}>
                   <p className="text-[10px] text-muted-foreground font-medium">Change</p>
@@ -293,10 +311,10 @@ export function SignalsPage() {
 
               {/* Entry / Stop / Targets */}
               <div className="px-4 pb-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="bg-blue-50 rounded-md p-2 text-center border border-blue-100"><p className="text-[9px] font-medium text-blue-600 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 font-mono">{formatCurrency(s.entry)}</p></div>
-                <div className="bg-red-50 rounded-md p-2 text-center border border-red-100"><p className="text-[9px] font-medium text-red-600 uppercase">Stop</p><p className="text-xs font-bold text-red-900 font-mono">{formatCurrency(s.stopLoss)}</p></div>
-                <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">T1</p><p className="text-xs font-bold text-emerald-900 font-mono">{formatCurrency(s.target1)}</p></div>
-                <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">T2</p><p className="text-xs font-bold text-emerald-900 font-mono">{formatCurrency(s.target2)}</p></div>
+                <div className="bg-blue-50 rounded-md p-2 text-center border border-blue-100"><p className="text-[9px] font-medium text-blue-600 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 font-mono">{fmtPrice(s, s.entry)}</p></div>
+                <div className="bg-red-50 rounded-md p-2 text-center border border-red-100"><p className="text-[9px] font-medium text-red-600 uppercase">Stop</p><p className="text-xs font-bold text-red-900 font-mono">{fmtPrice(s, s.stopLoss)}</p></div>
+                <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">T1</p><p className="text-xs font-bold text-emerald-900 font-mono">{fmtPrice(s, s.target1)}</p></div>
+                <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">T2</p><p className="text-xs font-bold text-emerald-900 font-mono">{fmtPrice(s, s.target2)}</p></div>
               </div>
 
               {/* Risk / ML badges */}
@@ -306,20 +324,38 @@ export function SignalsPage() {
                 {s.mlWinProb && <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">ML: {s.mlWinProb}</span>}
                 {s.regime && <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">{s.regime}</span>}
                 {s.weeklyTrend && <span className={`px-1.5 py-0.5 rounded font-medium ${s.weeklyTrend === "Bullish" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>{s.weeklyTrend}</span>}
+                {s.speculative && <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-semibold">SPECULATIVE</span>}
+                {s.catalyst?.direction && <span className={`px-1.5 py-0.5 rounded font-semibold border ${s.catalyst.direction === "positive" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>{s.catalyst.direction === "positive" ? "CATALYST +" : "CATALYST −"}</span>}
               </div>
+
+              {s.speculative && (
+                <div className="mx-4 mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
+                  <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wide">Speculative Rally — Not a Buy</p>
+                  <p className="text-[11px] text-amber-800 leading-snug mt-0.5">+{s.speculative.momentumPct}% run over ~{s.speculative.lookbackSessions} sessions on sentiment/catalyst while fundamentals stay weak (Altman Z {s.speculative.altmanZ != null ? s.speculative.altmanZ : "n/a"}). Composite capped at Hold.</p>
+                </div>
+              )}
+
+              {s.catalyst?.headline && (
+                <div className="px-4 pb-3 -mt-1">
+                  <p className="text-[11px] leading-snug">
+                    <span className={`font-semibold ${s.catalyst.direction === "positive" ? "text-emerald-700" : "text-red-700"}`}>{s.catalyst.direction === "positive" ? "▲" : "▼"} {s.catalyst.type}</span>
+                    <span className="text-muted-foreground"> — {s.catalyst.headline.slice(0, 90)}{s.catalyst.headline.length > 90 ? "…" : ""}</span>
+                  </p>
+                </div>
+              )}
 
               {/* Confidence bar */}
               <div className="px-4 pb-3 flex items-center gap-3">
                 <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div className={`h-full rounded-full transition-all ${s.confidence >= 80 ? "bg-emerald-500" : s.confidence >= 70 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${s.confidence}%` }} />
                 </div>
-                <span className="text-xs text-muted-foreground">R:R 1:{s.riskReward.toFixed(1)}</span>
+                <span className="text-xs text-muted-foreground">R:R 1:{s.riskReward != null && !Number.isNaN(s.riskReward) ? s.riskReward.toFixed(1) : "—"}</span>
               </div>
 
               {/* Condition summary + Reason */}
               <div className="px-4 pb-4 pt-2 border-t border-border">
-                {s.analysis?.fundamental.metrics && (() => {
-                  const condSignals = getConditionSignals(s.analysis!.fundamental.metrics);
+                {s.analysis?.fundamental?.metrics && (() => {
+                  const condSignals = getConditionSignals(s.analysis?.fundamental?.metrics ?? {});
                   const counts = countBySignal(condSignals);
                   const buy = (counts['BUY'] || 0) + (counts['STRONG BUY'] || 0);
                   const sell = (counts['SELL'] || 0);
@@ -340,7 +376,7 @@ export function SignalsPage() {
                 })()}
                 <div className="flex items-start gap-1.5">
                   <Info className="w-3 h-3 text-[#0D7490] shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{s.reason}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{s.reason || "Insufficient data for a detailed rationale."}</p>
                 </div>
               </div>
             </Card>
@@ -349,11 +385,22 @@ export function SignalsPage() {
       </div>
 
       {paged.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-          <Search className="w-8 h-8 mb-3 opacity-30" />
-          <p className="text-sm font-medium text-muted-foreground">No signals match your filters</p>
-          <p className="text-xs mt-1 text-muted-foreground">Try adjusting your search or filter criteria</p>
-        </div>
+        signals.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Signal className="w-8 h-8 mb-3 opacity-30" />
+            <p className="text-sm font-medium text-muted-foreground">No signals available right now</p>
+            <p className="text-xs mt-1 text-muted-foreground">Signals regenerate every few minutes — markets may be closed or the engine is still warming up.</p>
+            <Button onClick={fetchSignals} disabled={loading} variant="outline" size="sm" className="border-border mt-4">
+              <RefreshCw className={`w-3.5 h-3.5 mr-2 ${loading ? "animate-spin" : ""}`} />Refresh
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Search className="w-8 h-8 mb-3 opacity-30" />
+            <p className="text-sm font-medium text-muted-foreground">No signals match your filters</p>
+            <p className="text-xs mt-1 text-muted-foreground">Try adjusting your search or filter criteria</p>
+          </div>
+        )
       )}
 
       {/* Pagination */}
@@ -383,7 +430,7 @@ export function SignalsPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-muted rounded-lg p-3 border border-border"><p className="text-xs text-muted-foreground">Price</p><p className="text-lg font-bold text-foreground">${formatCurrency(selected.price)}</p></div>
+                <div className="bg-muted rounded-lg p-3 border border-border"><p className="text-xs text-muted-foreground">Price</p><p className="text-lg font-bold text-foreground">{fmtPrice(selected, selected.price)}</p></div>
                 <div className={`rounded-lg p-3 border ${selected.change >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}><p className="text-xs text-muted-foreground">Change</p><p className={`text-lg font-bold flex items-center gap-1 ${selected.change >= 0 ? "text-emerald-700" : "text-red-700"}`}>{selected.change >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}{selected.change >= 0 ? "+" : ""}{selected.change}%</p></div>
                 <div className="bg-muted rounded-lg p-3 border border-border"><p className="text-xs text-muted-foreground">Confidence</p><p className={`text-lg font-bold ${selected.confidence >= 80 ? "text-emerald-600" : selected.confidence >= 70 ? "text-yellow-600" : "text-red-600"}`}>{selected.confidence}%</p></div>
               </div>
@@ -391,10 +438,10 @@ export function SignalsPage() {
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-3">Trade Parameters</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 text-center"><p className="text-[10px] font-medium text-blue-600 uppercase">Entry</p><p className="text-sm font-bold text-blue-900 font-mono">${formatCurrency(selected.entry)}</p></div>
-                  <div className="bg-red-50 rounded-lg p-3 border border-red-100 text-center"><p className="text-[10px] font-medium text-red-600 uppercase">Stop</p><p className="text-sm font-bold text-red-900 font-mono">${formatCurrency(selected.stopLoss)}</p></div>
-                  <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">T1</p><p className="text-sm font-bold text-emerald-900 font-mono">${formatCurrency(selected.target1)}</p></div>
-                  <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">T2</p><p className="text-sm font-bold text-emerald-900 font-mono">${formatCurrency(selected.target2)}</p></div>
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 text-center"><p className="text-[10px] font-medium text-blue-600 uppercase">Entry</p><p className="text-sm font-bold text-blue-900 font-mono">{fmtPrice(selected, selected.entry)}</p></div>
+                  <div className="bg-red-50 rounded-lg p-3 border border-red-100 text-center"><p className="text-[10px] font-medium text-red-600 uppercase">Stop</p><p className="text-sm font-bold text-red-900 font-mono">{fmtPrice(selected, selected.stopLoss)}</p></div>
+                  <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">T1</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target1)}</p></div>
+                  <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">T2</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target2)}</p></div>
                 </div>
               </div>
 
@@ -420,7 +467,7 @@ export function SignalsPage() {
                     <h3 className="text-sm font-semibold text-foreground mb-3">Why This Signal</h3>
                     <div className="space-y-2">
                       {(() => {
-                        const condSignals = getConditionSignals(selected.analysis!.fundamental.metrics || {});
+                        const condSignals = getConditionSignals(selected.analysis?.fundamental?.metrics || {});
                         const grouped: Record<string, typeof condSignals> = {};
                         condSignals.forEach(c => {
                           if (!grouped[c.category]) grouped[c.category] = [];
@@ -506,6 +553,27 @@ export function SignalsPage() {
                 </>
               )}
 
+              {selected.speculative && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+                  <p className="text-xs font-bold text-amber-800 uppercase tracking-wide mb-1">Speculative Rally — Not a Buy</p>
+                  <p className="text-xs text-amber-800 leading-relaxed">{selected.speculative.warning || "Sentiment/catalyst-driven run on weak fundamentals — composite capped at Hold, high reversal risk."}</p>
+                  <p className="text-[11px] text-amber-700 mt-2">+{selected.speculative.momentumPct}% momentum over ~{selected.speculative.lookbackSessions} sessions{selected.speculative.altmanZ != null ? ` · Altman Z ${selected.speculative.altmanZ}` : ""}</p>
+                </div>
+              )}
+
+              {selected.catalyst && (
+                <div className={`rounded-lg border p-4 ${selected.catalyst.direction === "positive" ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+                  <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${selected.catalyst.direction === "positive" ? "text-emerald-800" : "text-red-800"}`}>{selected.catalyst.direction === "positive" ? "Positive" : "Negative"} Catalyst</p>
+                  <p className="text-sm font-semibold text-foreground">{selected.catalyst.type}</p>
+                  {selected.catalyst.headline && <p className="text-xs text-muted-foreground leading-relaxed mt-1">{selected.catalyst.headline}</p>}
+                  <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground flex-wrap">
+                    {selected.catalyst.source && <span>Source: {selected.catalyst.source}</span>}
+                    {selected.catalyst.publishedAt && <span>Published: {new Date(selected.catalyst.publishedAt).toLocaleDateString()}</span>}
+                    {selected.catalyst.strength != null && <span>Strength: {selected.catalyst.strength}/5</span>}
+                  </div>
+                </div>
+              )}
+
               <div className="bg-[#0D7490]/5 rounded-lg p-4 border border-[#0D7490]/20">
                 <div className="flex items-start gap-2">
                   <Info className="w-4 h-4 text-[#0D7490] shrink-0 mt-0.5" />
@@ -526,7 +594,7 @@ export function SignalsPage() {
                     </>
                   )}
                 </div>
-                <span>R:R 1:{selected.riskReward.toFixed(1)}</span>
+                <span>R:R 1:{selected.riskReward != null && !Number.isNaN(selected.riskReward) ? selected.riskReward.toFixed(1) : "—"}</span>
               </div>
             </div>
           </div>
