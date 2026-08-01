@@ -194,10 +194,114 @@ const ALL_NEWS_TICKERS = [...STOCK_SYMBOLS, ...US_TICKERS];
 // Build word-boundary regex once
 const tickerPattern = new RegExp(`\\b(${ALL_NEWS_TICKERS.join('|')})\\b`, 'gi');
 
+// Company-name aliases -> ticker. Headlines almost always use company names
+// ("Kenya Airways", "Safaricom") rather than tickers ("KQ", "SCOM"), so the
+// symbol regex alone misses nearly every fetched Kenyan article and the
+// sentiment map collapses to empty. Match distinctive full names/fragments.
+// Aliases are chosen to be specific enough to avoid common-word collisions
+// (e.g. "equity group" instead of bare "equity").
+const NAME_ALIASES = {
+  'safaricom': 'SCOM',
+  'equity group': 'EQTY',
+  'equity bank': 'EQTY',
+  'kcb group': 'KCB',
+  'east african breweries': 'EABL',
+  'bamburi': 'BAMB',
+  'absa bank': 'ABSA',
+  'absa': 'ABSA',
+  'stanbic': 'SBIC',
+  'kenya power': 'KPLC',
+  'nation media': 'NMG',
+  'totalenergies': 'TOTL',
+  'total energies': 'TOTL',
+  'standard chartered': 'SCBK',
+  'kakuzi': 'KUKZ',
+  'kapchorua': 'KAPC',
+  'williamson tea': 'WTK',
+  'sasini': 'SASN',
+  'rea vipingo': 'REA',
+  'eaagads': 'EGAD',
+  'car & general': 'CGEN',
+  'car and general': 'CGEN',
+  'co-operative bank': 'COOP',
+  'cooperative bank': 'COOP',
+  'ncba': 'NCBA',
+  'i&m group': 'IMH',
+  'i & m group': 'IMH',
+  'diamond trust': 'DTK',
+  'bk group': 'BKG',
+  'hf group': 'HFCK',
+  'standard group': 'SGL',
+  'tps eastern africa': 'TPSE',
+  'scangroup': 'SCAN',
+  'kenya airways': 'KQ',
+  'express kenya': 'XPRS',
+  'sameer africa': 'SMER',
+  'portland cement': 'PORT',
+  'crown paints': 'CRWN',
+  'kengen': 'KEGN',
+  'umeme': 'UMME',
+  'jubilee holdings': 'JUB',
+  'jubilee insurance': 'JUB',
+  'kenya re': 'KNRE',
+  'cic insurance': 'CIC',
+  'britam': 'BRIT',
+  'liberty kenya': 'LBTY',
+  'sanlam': 'SLAM',
+  'centum': 'CTUM',
+  'olympia capital': 'OCH',
+  'home afrika': 'HAFR',
+  'africa mega': 'AMAC',
+  'british american tobacco': 'BAT',
+  'carbacid': 'CARB',
+  'unga': 'UNGA',
+  'mumias': 'MSC',
+  'flame tree': 'FTGH',
+  'eveready': 'EVRD',
+  'longhorn publishers': 'LKL',
+  'uchumi': 'UCHM',
+  'east african cables': 'CABL',
+  'deacons': 'DCON',
+  'homeboyz': 'HBE',
+  'kenya pipeline': 'KPC',
+  'kurwitu': 'KURV',
+  'laptrust': 'LAPR',
+  'transcentury': 'TCL',
+  'nairobi securities exchange': 'NSE',
+  // US mega-caps (distinctive names only, to keep the global feed useful)
+  'apple': 'AAPL',
+  'microsoft': 'MSFT',
+  'alphabet': 'GOOGL',
+  'nvidia': 'NVDA',
+  'meta': 'META',
+  'facebook': 'META',
+  'tesla': 'TSLA',
+  'netflix': 'NFLX',
+  'jpmorgan': 'JPM',
+  'walmart': 'WMT',
+  'exxon': 'XOM',
+  'johnson & johnson': 'JNJ',
+  'visa': 'V',
+  'salesforce': 'CRM',
+  'adobe': 'ADBE',
+  'intel': 'INTC',
+  'boeing': 'BA',
+  'goldman sachs': 'GS',
+  'morgan stanley': 'MS',
+};
+
+// Longest alias first so "kenya power" isn't shadowed by a shorter subset.
+const NAME_ALIAS_ENTRIES = Object.entries(NAME_ALIASES).sort((a, b) => b[0].length - a[0].length);
+
 function extractRelatedStocks(text) {
+  const lower = String(text || '').toLowerCase();
+  const found = new Set();
   const matches = text.match(tickerPattern);
-  if (!matches) return [];
-  return [...new Set(matches.map(m => m.toUpperCase()))];
+  if (matches) matches.forEach(m => found.add(m.toUpperCase()));
+  for (const [name, ticker] of NAME_ALIAS_ENTRIES) {
+    if (lower.includes(name)) found.add(ticker);
+  }
+  return [...found];
 }
 
 // Cache aggregated sentiment to avoid repeated API calls
@@ -211,7 +315,7 @@ async function getAggregatedSentiment() {
   }
   const news = await Promise.race([
     getAllNews(),
-    new Promise(resolve => setTimeout(() => resolve([]), 5000)),
+    new Promise(resolve => setTimeout(() => resolve([]), 20000)),
   ]);
   const sentimentCounts = {};
 
@@ -403,7 +507,7 @@ function getKenyanBusinessNews() {
       'The Central Bank of Kenya Monetary Policy Committee has decided to maintain the Central Bank Rate at 10.5%, citing stable inflation and exchange rate conditions.', 'https://www.kbc.co.ke'),
     makeArticle('ke-business-7', 'Bamburi Cement invests in green manufacturing initiatives', 'NTV Kenya', 14, ['BAMB'], 'positive',
       'Bamburi Cement has announced a $15 million investment in green manufacturing technologies as part of its sustainability commitment.', 'https://ntv.co.ke'),
-    makeArticle('ke-business-8', 'Kenya Airways reports improved load factors in Q4', 'K24 TV', 16, ['KLG'], 'positive',
+    makeArticle('ke-business-8', 'Kenya Airways reports improved load factors in Q4', 'K24 TV', 16, ['KQ'], 'positive',
       'Kenya Airways has reported improved passenger load factors of 78% in Q4, up from 65% in the same period last year, driven by increased regional travel.', 'https://www.k24tv.co.ke'),
   ];
 }
@@ -788,8 +892,8 @@ async function getAllNews(limit = 50, categoryFilter) {
   try {
     const [kenyanBusinessNews, kwsNews, globalRssNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews, yahooNews] = await Promise.allSettled([
       getKenyanBusinessNews(),
-      fetchFromKWS(),
-      fetchFromGlobalRSS(),
+      withTimeout(fetchFromKWS(), 12000),
+      withTimeout(fetchFromGlobalRSS(), 12000),
       withTimeout(fetchFromNewsAPI(), 8000),
       withTimeout(fetchFromFinnhub(), 8000),
       withTimeout(fetchFromBenzinga(), 8000),
@@ -887,5 +991,5 @@ async function getNewsSummary() {
   };
 }
 
-module.exports = { getAllNews, getNewsSummary, getAggregatedSentiment, classifyHotNews, KENYAN_STOCKS, STOCK_SYMBOLS };
+module.exports = { getAllNews, getNewsSummary, getAggregatedSentiment, classifyHotNews, extractRelatedStocks, KENYAN_STOCKS, STOCK_SYMBOLS };
 

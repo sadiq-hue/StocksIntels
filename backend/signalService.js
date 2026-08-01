@@ -6,6 +6,7 @@ const { pool } = require('./db');
 
 const { getStockQuote, getQuotesBatch } = require('./marketService');
 const { fetchHistoricalQuotes } = require('./globalScraper');
+const nseHistory = require('./nseHistoryService');
 const { getMacroScore, getCountryForSymbol, generateMacroReason } = require('./macroService');
 const { getAggregatedSentiment } = require('./newsService');
 const { getKeyMetrics, getQuote, getCompanyProfile } = require('./financialReportsService');
@@ -36,12 +37,15 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS trade_type VARCHAR(30)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS sector VARCHAR(50)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS bench_price NUMERIC(15,2)`);
+    await nseHistory.ensureTable().catch(() => {});
   } catch {}
 })();
 // Signal evaluation window (must be declared before restoreStateFromDb runs)
 const SIGNAL_WINDOW_DAYS = 1;
 // Restore performance stats and portfolio state from DB on startup
 restoreStateFromDb().catch(() => {});
+// Bootstrap durable NSE daily history (KenyanStocks seed + best-effort deep bootstrap) non-blocking
+nseHistory.bootstrapNseHistory().catch(() => {});
 
 // In-memory cache for generateSignals to prevent redundant calls
 let _signalsCache = null;
@@ -218,6 +222,10 @@ function accumulateNseQuote(symbol, price, volume) {
   bar.low = Math.min(bar.low, price);
   bar.close = price;
   bar.volume += volume || 0;
+  // Persist the accumulated day bar to Postgres so history survives container restarts.
+  try {
+    nseHistory.upsertBar(symbol, { date: today, ...bar }, 'live').catch(() => {});
+  } catch { /* best-effort */ }
 }
 
 function flushNseDailyBars() {
@@ -270,7 +278,16 @@ async function getPriceHistory(symbol) {
         return prices;
       }
     } catch (e) { /* fall through to accumulator */ }
-    // Fallback: accumulated daily history from scraper data
+    // Fallback 1: durable Postgres daily history (KenyanStocks seed + accumulated live bars)
+    try {
+      const dbBars = await nseHistory.getBars(symbol, MAX_DAYS);
+      const dbPrices = nseHistory.toPriceArray(dbBars);
+      if (dbPrices) {
+        _priceHistoryCache.set(symbol, { data: dbPrices, ts: Date.now() });
+        return dbPrices;
+      }
+    } catch (e) { /* fall through to in-memory accumulator */ }
+    // Fallback 2: in-memory accumulated daily history from scraper data
     const nsePrices = getNseDailyHistory(symbol);
     if (nsePrices) {
       _priceHistoryCache.set(symbol, { data: nsePrices, ts: Date.now() });
@@ -2473,7 +2490,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     try {
       newsSentiment = await Promise.race([
         getAggregatedSentiment(),
-        new Promise(resolve => setTimeout(() => resolve({}), 2000)),
+        new Promise(resolve => setTimeout(() => resolve({}), 15000)),
       ]);
     } catch { /* silent */ }
     await Promise.all([

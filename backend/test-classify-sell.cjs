@@ -164,5 +164,55 @@ for (const s of ['AAPL','BAC','NOC','CAG','MSFT','GS']) check(`macro country ${s
 check('KE macro country label', getMacroScore('KE').country, 'Kenya');
 check('US macro country label', getMacroScore('US').country, 'United States');
 
+// 11. NSE price-history service: durable daily bars must unlock technical
+//     analysis instead of the fixed "skipped / Insufficient history" 38 score.
+const { analyzeTechnicals } = require('./analysisEngine');
+const nseHistory = require('./nseHistoryService');
+
+// 11a. toPriceArray with a single bar stays null -> skip path preserved (no fake technicals).
+check('toPriceArray 1 bar -> null', nseHistory.toPriceArray([{ close: 5.56 }]), null);
+
+// 11b. toPriceArray with 2+ real bars returns closes + volume/high/low arrays.
+const twoBars = nseHistory.toPriceArray([
+  { date: '2026-07-31', open: 5.52, high: 5.94, low: 5.44, close: 5.56, volume: 826765 },
+  { date: '2026-08-03', open: 5.56, high: 5.62, low: 5.50, close: 5.60, volume: 500000 },
+]);
+check('toPriceArray 2 bars -> not null', twoBars !== null, true);
+check('toPriceArray closes length', twoBars ? twoBars.length : -1, 2);
+check('toPriceArray last close', twoBars ? twoBars[twoBars.length - 1] : -1, 5.6);
+check('toPriceArray volumes', twoBars ? twoBars.volumes.length : -1, 2);
+
+// 11c. analyzeTechnicals with a real 2-bar NSE series computes (no 'skipped' note),
+//     and the insufficient-history penalty is data-driven, not a fixed ignore.
+const tech2 = analyzeTechnicals('KQ', 5.6, [5.56, 5.6]);
+check('2-bar technicals: not skipped', tech2.indicators.note ? tech2.indicators.note.includes('skipped') : false, false);
+check('2-bar technicals: dataPoints', tech2.indicators.dataPoints, 2);
+check('2-bar technicals: grade computed', ['A','B','C','D','E','F'].includes(tech2.technicalGrade), true);
+
+// 11d. analyzeTechnicals with null history keeps the skip path (unchanged).
+const techNull = analyzeTechnicals('KQ', 5.6, null);
+check('null history: still skipped', techNull.indicators.note ? techNull.indicators.note.includes('skipped') : false, true);
+
+// 12. News company-name aliases: headlines that name a company (not its ticker)
+//     must still tag the right symbol so sentiment reaches the classifier.
+const { extractRelatedStocks } = require('./newsService');
+const aliasCases = [
+  ['Kenya Airways posts record passenger numbers in Q1', ['KQ']],
+  ['Safaricom unveils new M-Pesa lending features', ['SCOM']],
+  ['East African Breweries launches new premium brand', ['EABL']],
+  ['KCB Group reports strong half-year profit growth', ['KCB']],
+  ['Standard Chartered Kenya cuts lending rates', ['SCBK']],
+  ['Absa Bank Kenya completes capital raise', ['ABSA']],
+  ['Apple suppliers face production cuts as demand weakens', ['AAPL']],
+  ['Microsoft Azure growth accelerates after AI push', ['MSFT']],
+  ['Tesla deliveries miss estimates amid price cuts', ['TSLA']],
+  ['KQ share price falls after profit warning', ['KQ']],
+];
+for (const [headline, expected] of aliasCases) {
+  const actual = extractRelatedStocks(headline).slice().sort();
+  const exp = expected.slice().sort();
+  check(`alias "${headline.slice(0, 30)}..." -> ${expected.join(',')}`, JSON.stringify(actual) === JSON.stringify(exp), true);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
