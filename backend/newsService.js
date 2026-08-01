@@ -776,6 +776,129 @@ async function fetchFromGlobalRSS() {
   return articles;
 }
 
+// ─── Kenyan markets sources (Business Daily, Bizna Kenya) ───────────────────
+// Business Daily is the primary Kenyan corporate/markets paper and routinely
+// breaks the NSE deal/M&A/strategic-investor stories (KQ strategic-investor
+// talks, NCBA takeover bid) that the other feeds miss. Listing pages carry the
+// headline + URL but no date, so for articles that tag a stock we fetch the
+// article page and read the JSON-LD datePublished (capped).
+const KENYAN_MARKET_PAGES = [
+  { url: 'https://www.businessdailyafrica.com/bd/markets', source: 'Business Daily', type: 'bd' },
+  { url: 'https://www.businessdailyafrica.com/bd/markets/capital-markets', source: 'Business Daily', type: 'bd' },
+  { url: 'https://biznakenya.com/', source: 'Bizna Kenya', type: 'bizna' },
+];
+
+function cleanKenyanTitle(text) {
+  let t = String(text || '').replace(/\s+/g, ' ').trim();
+  t = t.replace(/^[A-Z][a-z]{2} [0-9]{1,2} - [0-9]+ min read\s*(PRIME\s*)?/i, '');
+  t = t.replace(/^(capital markets|markets|market news|currencies|corporate|companies)\s+prime\s+/i, '');
+  t = t.replace(/^prime\s+/i, '');
+  if (/\b(min read|read more)\b/i.test(t) && t.length < 40) return '';
+  return t;
+}
+
+async function fetchKenyanMarketPage({ url, source, type }) {
+  try {
+    const res = await generic.get(url, {
+      timeout: 20000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    const $ = cheerio.load(res.data);
+    const articles = [];
+    const seen = new Set();
+
+    if (type === 'bd') {
+      // Article cards are anchors whose URL ends in a numeric id; title is the
+      // anchor text (possibly prefixed with a section label + "PRIME").
+      $('a[href]').each(function() {
+        const href = $(this).attr('href') || '';
+        if (!href.match(/\/bd\/.+-[0-9]+$/)) return;
+        if (seen.has(href)) return;
+        seen.add(href);
+        const heading = $(this).find('h1,h2,h3,h4').first().text();
+        const title = cleanKenyanTitle(heading) || cleanKenyanTitle($(this).text());
+        if (!title || title.length < 15) return;
+        const relStocks = extractRelatedStocks(title);
+        articles.push({
+          id: 'bd-' + href.replace(/[^0-9]/g, '').slice(-14) + '-' + Date.now(),
+          headline: title.substring(0, 200),
+          source,
+          publishedAt: null,
+          category: 'nse',
+          relatedStocks: relStocks,
+          sentiment: analyzeSentiment(title),
+          excerpt: '',
+          url: 'https://www.businessdailyafrica.com' + href,
+          imageUrl: null,
+        });
+      });
+    } else if (type === 'bizna') {
+      // Bizna cards expose <time datetime="..."> with the title + link nearby.
+      $('time[datetime]').each(function() {
+        const pubDate = new Date($(this).attr('datetime'));
+        if (isNaN(pubDate.getTime())) return;
+        let link = $(this).closest('a[href]').attr('href') || '';
+        let title = '';
+        let anc = $(this).parent();
+        for (let i = 0; i < 5 && anc.length; i++) {
+          const a = anc.find('a[href]').first();
+          if (a.attr('href')) link = a.attr('href');
+          const t = anc.find('h1,h2,h3,h4,[class*=title]').first().text().replace(/\s+/g, ' ').trim();
+          if (t.length >= 10) { title = t; break; }
+          anc = anc.parent();
+        }
+        if (!link || seen.has(link)) return;
+        seen.add(link);
+        if (title.length < 10) return;
+        const relStocks = extractRelatedStocks(title);
+        articles.push({
+          id: 'bizna-' + link.replace(/[^a-z0-9]/gi, '').slice(-16) + '-' + Date.now(),
+          headline: title.substring(0, 200),
+          source,
+          publishedAt: pubDate.toISOString(),
+          category: 'nse',
+          relatedStocks: relStocks,
+          sentiment: analyzeSentiment(title),
+          excerpt: '',
+          url: link,
+          imageUrl: null,
+        });
+      });
+    }
+
+    // Business Daily listing pages carry no dates; fetch the JSON-LD date for
+    // stock-tagged articles only, so catalysts age correctly in history.
+    const tagged = articles.filter(a => a.relatedStocks.length > 0 && !a.publishedAt).slice(0, 8);
+    const withDates = await Promise.allSettled(tagged.map(async a => {
+      try {
+        const page = await generic.get(a.url, { timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const m = String(page.data).match(/"datePublished"\s*:\s*"([^"]+)"/);
+        const d = m ? new Date(m[1]) : null;
+        if (d && !isNaN(d.getTime())) a.publishedAt = d.toISOString();
+      } catch { /* keep null -> falls back to now */ }
+      return a;
+    }));
+    for (const r of withDates) if (r.status === 'fulfilled' && r.value) r.value.publishedAt = r.value.publishedAt || new Date().toISOString();
+
+    // Untagged Business Daily articles and any stragglers default to now.
+    for (const a of articles) if (!a.publishedAt) a.publishedAt = new Date().toISOString();
+    return articles;
+  } catch (error) {
+    console.error(`  ${source} fetch error:`, error.message);
+    return [];
+  }
+}
+
+async function fetchFromKenyanMarkets() {
+  const results = await Promise.allSettled(KENYAN_MARKET_PAGES.map(p => fetchKenyanMarketPage(p)));
+  const articles = [];
+  for (const r of results) if (r.status === 'fulfilled' && Array.isArray(r.value)) articles.push(...r.value);
+  console.log(`✅ Fetched ${articles.length} articles from Kenyan markets sources`);
+  return articles;
+}
+
 // Mock news data for demo purposes (fallback)
 function getMockNews() {
   return [
@@ -1128,7 +1251,7 @@ async function getAllNews(limit = 50, categoryFilter) {
   }
 
   try {
-    const [kenyanBusinessNews, kwsNews, globalRssNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews, yahooNews] = await Promise.allSettled([
+    const [kenyanBusinessNews, kwsNews, globalRssNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews, yahooNews, kenyanMarketsNews] = await Promise.allSettled([
       getKenyanBusinessNews(),
       withTimeout(fetchFromKWS(), 12000),
       withTimeout(fetchFromGlobalRSS(), 12000),
@@ -1137,6 +1260,7 @@ async function getAllNews(limit = 50, categoryFilter) {
       withTimeout(fetchFromBenzinga(), 8000),
       withTimeout(fetchFromAlphaVantage(), 12000),
       withTimeout(fetchFromYahoo(), 12000),
+      withTimeout(fetchFromKenyanMarkets(), 18000),
     ]);
 
     const extract = r => r.status === 'fulfilled' ? r.value : [];
@@ -1144,6 +1268,7 @@ async function getAllNews(limit = 50, categoryFilter) {
       ...extract(benzingaNews),
       ...extract(kwsNews),
       ...extract(kenyanBusinessNews),
+      ...extract(kenyanMarketsNews),
       ...extract(globalRssNews),
       ...extract(alphaVantageNews),
       ...extract(yahooNews),
