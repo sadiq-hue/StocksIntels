@@ -641,13 +641,20 @@ async function buildLocalNseReport(symbol) {
       ? (validParsed.find(v => (v.periodType || '').toLowerCase() === 'annual')?.parsed || parsed)
       : parsed;
 
-    // Supplementary: stock_fundamentals (may have different schema on Railway; errors are non-fatal)
+    // Supplementary: stock_fundamentals (schema differs between envs — some use
+    // `symbol`, others only `stock_id` FK to nse_stocks; resolve column once and
+    // fall through to the stock_id path instead of swallowing the error)
     let fundamentals = null;
     try {
-      const fundResult = await pool.query('SELECT * FROM stock_fundamentals WHERE symbol = $1', [ticker]);
-      if (fundResult.rows.length > 0) {
-        fundamentals = fundResult.rows[0];
-      } else {
+      const colResult = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'stock_fundamentals' AND column_name = 'symbol'`
+      );
+      const hasSymbolColumn = colResult.rows.length > 0;
+      if (hasSymbolColumn) {
+        const fundResult = await pool.query('SELECT * FROM stock_fundamentals WHERE symbol = $1', [ticker]);
+        if (fundResult.rows.length > 0) fundamentals = fundResult.rows[0];
+      }
+      if (!fundamentals) {
         const nsResult = await pool.query('SELECT id FROM nse_stocks WHERE UPPER(ticker) = UPPER($1)', [ticker]);
         if (nsResult.rows.length > 0) {
           const fundResult2 = await pool.query('SELECT * FROM stock_fundamentals WHERE stock_id = $1', [nsResult.rows[0].id]);
