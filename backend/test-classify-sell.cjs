@@ -288,6 +288,10 @@ const catalystCases = [
   ['Equity Group in talks to acquire a regional bank', 'M&A', 'positive'],
   ['KCB launches rights issue to raise fresh capital', 'Capital', 'positive'],
   ['Kenya Power secures CBK approval for tariff hike', 'Regulatory', 'positive'],
+  ['MP Ndindi Nyoro buys 10.4M Kenya Airways shares', 'Capital', 'positive'],
+  ['Kenya Airways load factors near 100% as passenger volumes surge', 'Operational', 'positive'],
+  ['Kenya Airways revamped board pushes turnaround narrative', 'Operational', 'positive'],
+  ['KQ Lenders Company sells 104.4M shares', null, null],
   ['KQ share price falls after profit warning', 'Crisis', 'negative'],
   ['Safaricom board expands M-Pesa services', null, null],
   ['East African Breweries launches new premium brand', null, null],
@@ -302,6 +306,36 @@ check('catalyst headline tags NCBA',
   extractRelatedStocks('NCBA receives takeover bid from South African firm').includes('NCBA'), true);
 check('catalyst headline tags KQ',
   extractRelatedStocks('Kenya Airways in strategic investor talks').includes('KQ'), true);
+
+// ─── Speculative-rally detection ─────────────────────────────────────────────
+// KQ 2026: ~Sh3.53 Jan -> ~Sh8.14 Apr (+~130%) on strategic-investor deal talk,
+// insider buying (Nyoro filing), lender liquidity and load-factor headlines,
+// while FY25 booked a Sh17.2B loss / negative equity. A run-up of that size on
+// weak fundamentals must be flagged as speculative (capped at Hold), and must
+// NOT fire for a healthy stock with real earnings support.
+const { detectSpeculativeRally } = signalService;
+const kqRally = Array.from({ length: 50 }, (_, i) => {
+  const t = i / 49;
+  return 3.53 + (8.14 - 3.53) * t; // linear 3.53 -> 8.14
+});
+const distressedFundamentals = { score: 25 };  // Weak fundamental score (Altman Z distress suppresses Buy)
+const healthyFundamentals = { score: 72 };     // Solid fundamentals - momentum is earnings-backed
+const flatSeries = Array.from({ length: 50 }, () => 40);   // No momentum
+
+const spec1 = detectSpeculativeRally(kqRally, distressedFundamentals);
+check('speculative rally fires on KQ-style momentum + weak fundamentals',
+  !!spec1 && spec1.momentum >= 60, true);
+check('speculative rally exposes momentum % and lookback',
+  !!spec1 && spec1.lookback === 40 && spec1.momentum > 0, true);
+
+check('no speculative flag when fundamentals are healthy',
+  detectSpeculativeRally(kqRally, healthyFundamentals), null);
+
+check('no speculative flag on flat price history',
+  detectSpeculativeRally(flatSeries, distressedFundamentals), null);
+
+check('no speculative flag on too-short history',
+  detectSpeculativeRally([10, 11, 12, 13], distressedFundamentals), null);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

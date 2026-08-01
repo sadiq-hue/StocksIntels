@@ -472,13 +472,26 @@ const CATALYST_RULES = [
     'talks collapse', 'deal collapses', 'walked away', 'shelved', 'rejected bid',
     'withdrew', 'withdraws', 'abandon', 'stalled', 'no deal', 'called off',
   ]},
+  { type: 'Capital', direction: 'positive', strength: 1, keywords: [
+    'accumulat', 'shareholder buys', 'shareholder raises stake', 'buys stake in',
+  ], regex: [
+    /\b(buys?|bought|purchases|purchased|accumulates|accumulating)\b.{0,60}?\bshares?\b/i,
+    /\b(buys?|bought|purchases|purchased)\b.{0,40}?\bstake\b/i,
+  ]},
+  { type: 'Operational', direction: 'positive', strength: 1, keywords: [
+    'load factor', 'turnaround', 'passenger traffic', 'passenger volumes',
+    'record passenger', 'improved load', 'return to profit', 'record revenue',
+    'record earnings', 'soaring passenger',
+  ]},
 ];
 
 function classifyCatalyst(title, excerpt) {
   const text = (title + ' ' + excerpt).toLowerCase();
   let best = null;
   for (const rule of CATALYST_RULES) {
-    if (rule.keywords.some(k => text.includes(k))) {
+    const kwHit = rule.keywords.some(k => text.includes(k));
+    const rxHit = rule.regex ? rule.regex.some(r => r.test(text)) : false;
+    if (kwHit || rxHit) {
       // Strongest first; keep the first (highest-strength) match.
       if (!best || rule.strength > best.strength) {
         best = { catalyst: rule.type, direction: rule.direction, strength: rule.strength };

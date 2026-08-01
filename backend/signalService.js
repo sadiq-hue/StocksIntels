@@ -3070,6 +3070,30 @@ function getPriorScore(symbol) {
   return _lastCycleScores.has(symbol) ? _lastCycleScores.get(symbol) : null;
 }
 
+// ─── Speculative-Rally Detection ─────────────────────────────────────────────
+// A strong price run-up on top of distressed fundamentals (low fundamental
+// score / negative Altman Z) is a sentiment/catalyst-driven rally, not an
+// earnings-backed one (e.g. KQ 2026: ~+130% Jan->Apr on strategic-investor
+// deal talk, insider buying and load-factor headlines while FY25 booked a
+// Sh17.2B loss and negative equity). Such rallies never justify a Buy: the
+// composite is capped at Hold and the flag is surfaced so the driver
+// (story vs fundamentals) is explicit in the reasoning.
+function detectSpeculativeRally(priceHistory, fundamental) {
+  const cfg = engineConfig.getConfig().scoring?.signal_confidence?.speculative_rally || {};
+  if (cfg.enabled === false) return null;
+  if (!Array.isArray(priceHistory) || priceHistory.length < (cfg.min_history || 20)) return null;
+  const lookback = cfg.momentum_lookback || 40;
+  const momentumThreshold = cfg.momentum_threshold ?? 40;
+  const n = Math.min(lookback, priceHistory.length - 1);
+  const start = priceHistory[priceHistory.length - 1 - n];
+  const end = priceHistory[priceHistory.length - 1];
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start <= 0) return null;
+  const momentum = ((end - start) / start) * 100;
+  if (momentum < momentumThreshold) return null;
+  if (fundamental.score > (cfg.fundamental_max_score ?? 40)) return null;
+  return { momentum: Math.round(momentum * 10) / 10, lookback: n };
+}
+
 // ─── Shared Signal Builder ──────────────────────────────────────────────────
 // Consolidates scoring, confidence, position sizing, and signal object construction
 // used by both generateSignals() and generateSingleSignal().
@@ -3133,6 +3157,20 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const cat = catalyst || {};
   const catDelta = cat.direction === 'positive' ? catPos : cat.direction === 'negative' ? catNeg : 0;
   if (catDelta !== 0) adjScore += catDelta;
+
+  // Speculative-rally gate: a large run-up on distressed fundamentals is a
+  // sentiment/catalyst story, not earnings support. Cap the composite at Hold
+  // (just below the Buy threshold) so the rally can never mint a Buy/Aggressive
+  // Buy, and surface the flag so the driver is explicit in the reasoning.
+  const speculative = detectSpeculativeRally(priceHistory, fundamental);
+  if (speculative) {
+    const specCap = sc.speculative_rally?.cap_score ?? 54;
+    if (adjScore > specCap) {
+      adjScore = specCap;
+      console.log(`[SignalService] ${symbol} speculative rally detected (+${speculative.momentum}% over ~${speculative.lookback} sessions vs distressed fundamentals) - composite capped at ${specCap} (Hold)`);
+    }
+  }
+
   let overallScore = Math.max(0, Math.min(100, Math.round(adjScore)));
 
   // Use configurable thresholds + the evidence-gated sell classifier
@@ -3203,6 +3241,10 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   } else if (cat.direction === 'negative' && cat.type) {
     reason += ` | Negative catalyst: ${cat.type}${cat.headline ? ` — ${cat.headline.slice(0, 80)}` : ''}`;
   }
+  if (speculative) {
+    const z = stock.altmanZ != null ? `Altman Z ${stock.altmanZ}` : 'distressed fundamentals';
+    reason += ` | SPECULATIVE: +${speculative.momentum}% run over ~${speculative.lookback} sessions on sentiment/catalyst while fundamentals stay weak (${z}) - rally not earnings-backed, composite capped at Hold, high reversal risk`;
+  }
   const timeframes = { 'Aggressive Buy': '1-4 weeks', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks', 'Long Term Value': '3-6 months', 'Long Term': '3-6 months', 'Avoid': 'N/A' };
   const isNse = NSE_SYMBOLS.includes(symbol);
   const obj = {
@@ -3217,6 +3259,12 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     catalyst: cat.direction ? {
       type: cat.type, direction: cat.direction, strength: cat.strength || 1,
       headline: cat.headline || null, source: cat.source || null, publishedAt: cat.publishedAt || null,
+    } : null,
+    speculative: speculative ? {
+      momentumPct: speculative.momentum,
+      lookbackSessions: speculative.lookback,
+      altmanZ: stock.altmanZ != null ? stock.altmanZ : null,
+      warning: 'Sentiment/catalyst-driven rally on distressed fundamentals - capped at Hold, not a Buy',
     } : null,
     var95: riskMetrics.var95 + '%',
     var99: riskMetrics.var99 ? riskMetrics.var99 + '%' : null,
@@ -3322,6 +3370,7 @@ module.exports = {
   searchStocks,
   warmFMPCache,
   getFundamentals,
+  detectSpeculativeRally,
   persistSignals,
   persistPredictionLog,
   resolvePredictionLogs,
