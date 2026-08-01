@@ -301,6 +301,7 @@ module.exports = {
   getSectorPerformance,
   getAllSectors,
   getCachedIndices,
+  fetchIndexLive,
   NSE_INDICES,
   GLOBAL_INDICES,
   ALL_INDICES,
