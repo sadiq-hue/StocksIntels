@@ -2934,8 +2934,13 @@ function searchStocks(query) {
 // A regime-adjusted conviction bar is then applied: sells fight the trend in a
 // bull market and need more evidence; in bear/crash markets the bar is lower.
 // A hard financial-distress trigger (Altman Z below the distress threshold)
-// forces a Strong Sell regardless of the score, and the RSI oversold guard
-// keeps the model from screaming Strong Sell at a likely bounce bottom.
+// forces a Strong Sell regardless of the score, but only when it is trustworthy:
+// Altman Z is a manufacturing-firm heuristic and is routinely < 1.81 for banks/
+// insurers (huge deposit liabilities, negative working capital) and for firms
+// with incomplete financials, so the hard trigger requires (a) a non-financial
+// sector and (b) corroborating profitability weakness. Otherwise a suppressed Z
+// just contributes to the evidence. The RSI oversold guard keeps the model from
+// screaming Strong Sell at a likely bounce bottom.
 function classifySignalBucket(overallScore, thresholds, ctx) {
   if (overallScore >= thresholds.strong_buy) return { signal: 'Strong Buy', action: 'buy', strength: 'strong' };
   if (overallScore >= thresholds.buy) return { signal: 'Buy', action: 'buy', strength: 'moderate' };
@@ -2943,10 +2948,6 @@ function classifySignalBucket(overallScore, thresholds, ctx) {
   const sub = ctx.subScores || {};
   const ind = ctx.indicators || {};
   const newsNegative = ctx.newsSent === 'negative';
-  // Altman Z below the distress threshold (analysisEngine suppresses the
-  // fundamental score to ≤40 and flags altSignal='SUPPRESS') — holding a
-  // possibly-insolvent name is never sound, whatever the composite says.
-  const distress = !!(ctx.fundamentals && ctx.fundamentals.altSignal === 'SUPPRESS');
 
   // Degree-aware negativity: deeper weakness counts more, shallow sub-40
   // readings contribute little (they may be noise).
@@ -2967,8 +2968,27 @@ function classifySignalBucket(overallScore, thresholds, ctx) {
   // classic "exit now" tell: the trend is changing for the worse.
   if (ctx.priorScore != null && (ctx.priorScore - overallScore) >= 8) evidence += 0.5;
 
-  // Hard financial-distress trigger.
-  if (distress) return { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
+  // Altman Z suppression: analysisEngine flags altSignal='SUPPRESS' when the
+  // computed Z falls below the distress threshold. That alone is NOT proof of
+  // insolvency — the Z model is unreliable for financials (banks/insurers have
+  // structurally huge liabilities and negative working capital) and for firms
+  // with sparse financials — so it only hard-triggers a Strong Sell when the
+  // company is a non-financial with corroborating profitability weakness.
+  const distressFlagged = !!(ctx.fundamentals && ctx.fundamentals.altSignal === 'SUPPRESS');
+  const sector = String(ctx.sector || '').toLowerCase();
+  const isFinancial = /financial|bank|insurance|reinsur/i.test(sector);
+  const fp = ctx.fundProfile || {};
+  const deteriorating =
+    Number(fp.roe) < 0 ||
+    Number(fp.epsGrowth) < 0 ||
+    Number(fp.revenueGrowth) < 0;
+  if (distressFlagged && !isFinancial) {
+    // Even an uncorroborated suppression is a meaningful caution flag.
+    evidence += 0.75;
+    if (deteriorating) {
+      return { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
+    }
+  }
 
   // Composite in the hold band: default to do-nothing, but overwhelming evidence
   // can break through — the composite is diluted by neutral priors, so a stock
@@ -3073,6 +3093,12 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     newsSent,
     indicators: technical.indicators,
     fundamentals: fundamental.metrics,
+    sector: stock.sector,
+    fundProfile: {
+      roe: stock.roe,
+      epsGrowth: stock.epsGrowth,
+      revenueGrowth: stock.revenueGrowth,
+    },
     regime: regime.regime,
     price: currentPrice,
     priorScore: getPriorScore(symbol),
