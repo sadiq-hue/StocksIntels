@@ -3371,6 +3371,7 @@ module.exports = {
   warmFMPCache,
   getFundamentals,
   detectSpeculativeRally,
+  _buildSignal,
   persistSignals,
   persistPredictionLog,
   resolvePredictionLogs,
