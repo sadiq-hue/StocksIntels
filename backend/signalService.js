@@ -2978,10 +2978,13 @@ function classifySignalBucket(overallScore, thresholds, ctx) {
   const sector = String(ctx.sector || '').toLowerCase();
   const isFinancial = /financial|bank|insurance|reinsur/i.test(sector);
   const fp = ctx.fundProfile || {};
+  // Corroboration = genuine profitability deterioration, not a hairline dip:
+  // a -0.4% revenue wobble on a healthy balance sheet (e.g. a capital-intensive
+  // utility whose Altman Z is structurally low) must not force a Strong Sell.
   const deteriorating =
     Number(fp.roe) < 0 ||
-    Number(fp.epsGrowth) < 0 ||
-    Number(fp.revenueGrowth) < 0;
+    Number(fp.epsGrowth) < -10 ||
+    Number(fp.revenueGrowth) < -5;
   if (distressFlagged && !isFinancial) {
     // Even an uncorroborated suppression is a meaningful caution flag.
     evidence += 0.75;

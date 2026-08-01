@@ -87,6 +87,43 @@ check('profitable suppressed consumer -> Hold',
     regime: 'bull', price: 13, priorScore: null,
   }).signal, 'Hold');
 
+// 6b. Capital-intensive utility (KEGN-like): SUPPRESS + hairline revenue dip
+//     (-0.4%), no roe/eps data => NOT corroborated => Hold, NOT Strong Sell.
+check('utility suppress with -0.4% revenue -> Hold',
+  signalService.classifySignalBucket(46, TH, {
+    subScores: { fundamental: 50, technical: 38, financial: 40 },
+    newsSent: null,
+    indicators: { rsi: undefined, macdSignal: 'No Data', momentum: '0.0%', smaSlow: undefined },
+    fundamentals: { altSignal: 'SUPPRESS' },
+    sector: 'Energy',
+    fundProfile: { roe: undefined, epsGrowth: undefined, revenueGrowth: -0.4 },
+    regime: 'bull', price: 10.75, priorScore: null,
+  }).signal, 'Hold');
+
+// 6c. Suppressed consumer with REAL revenue collapse (CAG-like -23.2%) => Strong Sell.
+check('suppressed consumer with revenue collapse -> Strong Sell',
+  signalService.classifySignalBucket(49, TH, {
+    subScores: { fundamental: 22, technical: 75, financial: 38 },
+    newsSent: null,
+    indicators: { rsi: 52.3, macdSignal: 'Bullish', momentum: '3.2%', smaSlow: 13.83 },
+    fundamentals: { altSignal: 'SUPPRESS' },
+    sector: 'Consumer',
+    fundProfile: { roe: undefined, epsGrowth: undefined, revenueGrowth: -23.2 },
+    regime: 'bull', price: 13, priorScore: null,
+  }).signal, 'Strong Sell');
+
+// 6d. Suppressed media with -69% revenue collapse (SCAN-like) => Strong Sell.
+check('suppressed media with -69% revenue -> Strong Sell',
+  signalService.classifySignalBucket(44, TH, {
+    subScores: { fundamental: 42, technical: 38, financial: 38 },
+    newsSent: null,
+    indicators: { rsi: undefined, macdSignal: 'No Data', momentum: '0.0%', smaSlow: undefined },
+    fundamentals: { altSignal: 'SUPPRESS' },
+    sector: 'Media',
+    fundProfile: { roe: undefined, epsGrowth: undefined, revenueGrowth: -69.1 },
+    regime: 'bull', price: 2.1, priorScore: null,
+  }).signal, 'Strong Sell');
+
 // 7. Genuine deep-value Strong Sell via score band still works (no SUPPRESS).
 check('deep score Strong Sell',
   signalService.classifySignalBucket(10, TH, {
