@@ -86,9 +86,15 @@ interface Recommendation {
   name?: string;
   price?: string;
   target1?: string;
+  target2?: string;
   reason?: string;
   market?: string;
   currency?: string;
+  sector?: string;
+  timeframe?: string;
+  riskReward?: string;
+  volume?: string;
+  inPortfolio?: boolean;
 }
 
 interface PortfolioAdvice {

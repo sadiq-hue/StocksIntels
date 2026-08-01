@@ -42,6 +42,8 @@ export interface CompanyProfile {
   website: string;
   description: string;
   ceo: string;
+  ceoRole?: string;
+  cik?: string;
   employees: number;
   marketCap: number;
   exchange: string;

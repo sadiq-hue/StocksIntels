@@ -248,7 +248,7 @@ const MarketPage: React.FC = () => {
         indicesRes.json().catch(() => []),
       ]);
       const indices = Array.isArray(indicesRaw) ? indicesRaw : [];
-      const normalize = (items) => (items || []).map(s => ({
+      const normalize = (items: any[]) => (items || []).map((s: any) => ({
         symbol: s.symbol,
         ticker: s.ticker,
         name: s.name,

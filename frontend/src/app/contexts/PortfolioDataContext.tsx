@@ -17,10 +17,12 @@ export interface PortfolioHolding {
   currentPrice: string;
   value: string;
   pnl: string;
-  pnlAmount: string;
+  pnlAmount?: string;
   isPositive: boolean;
   sector: string;
   market: "NSE" | "Global";
+  color?: string;
+  weight?: number;
   brokerConnectionId?: number;
 }
 
@@ -272,7 +274,14 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
   }, [holdings, fxRate]);
 
   const topHoldings = useMemo(() => {
-    return [...holdings].sort((a, b) => parseFloat(b.value) - parseFloat(a.value));
+    const totalValue = holdings.reduce((acc, h) => acc + (parseFloat(h.value) || 0), 0);
+    return [...holdings]
+      .sort((a, b) => parseFloat(b.value) - parseFloat(a.value))
+      .map((h, i) => ({
+        ...h,
+        color: h.color || ALLOCATION_COLORS[i % ALLOCATION_COLORS.length],
+        weight: totalValue > 0 ? Math.round((parseFloat(h.value) / totalValue) * 100) : 0,
+      }));
   }, [holdings]);
 
   const brokerTotals = useMemo(() => {

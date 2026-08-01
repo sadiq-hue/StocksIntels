@@ -200,7 +200,7 @@ export function SettingsPage() {
     setAppearance(updated);
     try {
       localStorage.setItem("appearanceSettings", JSON.stringify(updated));
-      toast.success(`${key === "darkMode" ? "Dark mode" : "Compact view"} ${value ? "enabled" : "disabled"}`);
+      toast.success(`Compact view ${value ? "enabled" : "disabled"}`);
     } catch {
       toast.error("Failed to update appearance settings");
       setAppearance(appearance);

@@ -22,6 +22,7 @@ interface BacktestStats {
   total: number; wins: number; losses: number; winRate: number;
   avgReturn: number; profitFactor: number; sharpe: number; maxDrawdown: number;
   bySignal: Record<string, { total: number; wins: number; losses: number; winRate: number; avgReturn: number }>;
+  dataSource?: string;
 }
 
 interface ForwardTestStats {
@@ -968,6 +969,19 @@ function DiagnosticsPanel() {
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 export function SignalEnginePage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+  if (!isAdmin) {
+    return (
+      <div className="p-4 md:p-6 max-w-[1400px] mx-auto flex items-center justify-center min-h-[60vh]">
+        <Card className="border-border bg-card p-8 text-center max-w-md">
+          <Shield className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
+          <h2 className="text-lg font-semibold text-foreground mb-2">Admin access required</h2>
+          <p className="text-sm text-muted-foreground">This area is reserved for account administrators.</p>
+        </Card>
+      </div>
+    );
+  }
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
       {/* Header */}

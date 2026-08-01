@@ -16,7 +16,7 @@ interface DisplayStock {
   name: string;
   price: number | null;
   changePercent: number | null;
-  volume: number;
+  volume: number | null;
 }
 
 type ExchangeStatus = "Open" | "Closed" | "Pre-Market" | "After-Hours";

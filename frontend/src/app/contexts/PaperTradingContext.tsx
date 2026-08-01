@@ -41,6 +41,15 @@ export interface PaperPosition {
   sector?: string;
 }
 
+export interface PaperOrderParams {
+  ticker: string;
+  name?: string;
+  shares: number;
+  type: "buy" | "sell";
+  market: string;
+  sector?: string;
+}
+
 export interface PaperTrade {
   id: number;
   ticker: string;
@@ -187,7 +196,7 @@ export function PaperTradingProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [user]);
 
-  const placeOrder = useCallback(async (params) => {
+  const placeOrder = useCallback(async (params: PaperOrderParams) => {
     if (!user) return { success: false, error: "Not authenticated" };
     setPlacingOrder(true);
     setError(null);

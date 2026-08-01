@@ -82,7 +82,7 @@ function getDividendFrequency(history: { date?: string | null }[]): string {
   return "Annual";
 }
 
-function findPriorYearPeriod(items, idx) {
+function findPriorYearPeriod(items: any[], idx: number) {
   const base = items[idx];
   if (!base || !base.date) return null;
   const baseMonth = new Date(base.date).getMonth();
@@ -486,7 +486,7 @@ export function FinancialsPage() {
     `${profile?.sector || ''} ${profile?.industry || ''} ${profile?.companyName || ''}`
   );
   const hasTotalRevenue = incHistory.some((i: any) => i.totalRevenue != null && i.totalRevenue !== i.revenue);
-  const incomeMetrics = isBank
+  const incomeMetrics: HistoryMetric[] = isBank
     ? [
         { label: "Revenue", key: "revenue", kind: "currency", calcGrowth: true },
         { label: "Interest & Operating Expenses", key: "costOfRevenue", kind: "currency" },
@@ -554,7 +554,7 @@ export function FinancialsPage() {
             <div className="flex items-baseline gap-3">
               <span className="text-3xl font-black text-foreground">{formatCurrency(quote?.price || 0, profile?.currency || "USD")}</span>
               <span className={`text-lg font-bold ${quote && quote.change >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                {quote && quote.change >= 0 ? "+" : ""}{quote?.change.toFixed(2)} ({formatPercent(quote?.changesPercentage || 0, 2)})
+                {quote && quote.change >= 0 ? "+" : ""}{(quote?.change || 0).toFixed(2)} ({formatPercent(quote?.changesPercentage || 0, 2)})
               </span>
             </div>
             <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1">Close: {formatDateTime(quote?.lastUpdated)}</p>
@@ -564,7 +564,13 @@ export function FinancialsPage() {
 
       {/* ─── KPI Row ─── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiCard label="Market Cap" value={formatCompactNumber(quote?.marketCap || (quote?.price > 0 && quote?.sharesOutstanding ? quote.price * quote.sharesOutstanding : 0))} sub={profile?.currency || "USD"} icon={<Globe className="w-4 h-4" />} />
+        {(() => {
+          const price = quote?.price || 0;
+          const shares = quote?.sharesOutstanding || 0;
+          const marketCap = quote?.marketCap || (price > 0 && shares > 0 ? price * shares : 0);
+          return <KpiCard label="Market Cap" value={formatCompactNumber(marketCap)} sub={profile?.currency || "USD"} icon={<Globe className="w-4 h-4" />} />;
+        })()}
+
         <KpiCard label="P/E Ratio" value={formatRatio((latestInc?.eps && latestInc.eps > 0) ? (latestMet?.peRatio || calculatedPe || quote?.pe || 0) : 0)} sub="Trailing 12M" icon={<Activity className="w-4 h-4" />} />
         <KpiCard label="Revenue" value={formatCurrency(latestInc?.revenue || 0, profile?.currency || "USD")} sub={latestInc?.date ? formatDate(latestInc.date) : ''} icon={<BarChart3 className="w-4 h-4" />} />
         <KpiCard label="Net Income" value={formatCurrency(latestInc?.netIncome || 0, profile?.currency || "USD")} sub={`Margin ${formatPercent(latestInc?.netIncomeRatio ? latestInc.netIncomeRatio * 100 : 0, 1)}`} icon={<Wallet className="w-4 h-4" />} positive />

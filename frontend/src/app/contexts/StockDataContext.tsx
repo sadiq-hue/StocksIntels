@@ -11,6 +11,8 @@ interface StockData {
   company_name: string;
   price: number;
   changePercent: number;
+  change?: number;
+  provider?: string;
   volume: number;
   currency: string;
   market_cap: string;
@@ -43,7 +45,7 @@ export function StockDataProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const { quotes: realtimeQuotes, refetch: refetchQuotes } = useRealtimeQuotes();
-  const { user, loading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const didAuthRefetch = useRef(false);
 
   const fetchStocks = async () => {
@@ -78,10 +80,10 @@ export function StockDataProvider({ children }: { children: ReactNode }) {
         setAllSymbols(syms);
       }
       // Merge signal data with list data for comprehensive stock info
-      const signalMap = new Map(signals.map((s: any) => [(s.ticker || s.symbol || '').toUpperCase(), s]));
+      const signalMap = new Map<string, Record<string, any>>(signals.map((s: any) => [(s.ticker || s.symbol || '').toUpperCase(), s]));
       const merged = listData.length > 0 ? listData.map((s: any) => {
         const key = s.ticker.toUpperCase();
-        const signal = signalMap.get(key) || {};
+        const signal: Record<string, any> = signalMap.get(key) || {};
         return {
           symbol: s.market === 'NSE' ? `NSE:${s.ticker}` : s.ticker,
           company_name: s.name || signal.name || '',

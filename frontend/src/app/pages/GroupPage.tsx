@@ -202,6 +202,7 @@ export function GroupPage() {
       description: newGroupDesc,
       members: 1,
       message_count: 0,
+      online_members: 1,
       isJoined: true,
       isAdmin: true,
       created_by: user?.id,

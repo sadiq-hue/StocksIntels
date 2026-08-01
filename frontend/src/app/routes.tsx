@@ -20,6 +20,7 @@ import { NotificationsPage } from "./pages/NotificationsPage";
 import { IpoPage } from "./pages/IpoPage";
 import { DerivativesPage } from "./pages/DerivativesPage";
 import { AdminStocks } from "./pages/AdminStocks";
+import { SignalEnginePage } from "./pages/SignalEnginePage";
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -52,12 +53,14 @@ export const router = createBrowserRouter([
       { path: "derivatives", Component: DerivativesPage },
       { path: "dashboard", loader: () => redirect("/app") },
       { path: "admin/stocks", Component: AdminStocks },
+      { path: "signals/engine", Component: SignalEnginePage },
     ],
   },
   { path: "/markets", loader: () => redirect("/app/markets") },
   { path: "/stocks", loader: () => redirect("/app/stocks") },
   { path: "/sectors", loader: () => redirect("/app/sectors") },
   { path: "/signals", loader: () => redirect("/app/signals") },
+  { path: "/signals/engine", loader: () => redirect("/app/signals/engine") },
   { path: "/news", loader: () => redirect("/app/news") },
   { path: "/financials", loader: () => redirect("/app/financials") },
   { path: "/chat", loader: () => redirect("/app/chat") },

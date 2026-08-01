@@ -3828,7 +3828,7 @@ app.get('/api/signals/engine/config', async (req, res) => {
   }
 });
 
-app.put('/api/signals/engine/config', async (req, res) => {
+app.put('/api/signals/engine/config', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const config = updateEngineConfig(req.body);
     res.json({ success: true, config });

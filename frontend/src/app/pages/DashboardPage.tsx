@@ -136,11 +136,11 @@ interface MarketPulseData {
 }
 
 const fallbackNews: NewsArticle[] = [
-  { id: "fallback-1", headline: "Safaricom reports record M-Pesa growth", source: "Business Daily", timestamp: "2h ago", relatedStocks: ["SCOM"], sentiment: "positive", excerpt: "", url: "#" },
-  { id: "fallback-2", headline: "Central Bank holds rates steady at 10.5%", source: "Reuters", timestamp: "4h ago", relatedStocks: [], sentiment: "neutral", excerpt: "", url: "#" },
-  { id: "fallback-3", headline: "Nvidia gains 4.5% after AI summit highlights", source: "CNBC", timestamp: "3h ago", relatedStocks: ["NVDA"], sentiment: "positive", excerpt: "", url: "#" },
-  { id: "fallback-4", headline: "Equity Group Q2 profit up 23%", source: "NSE", timestamp: "6h ago", relatedStocks: ["EQTY"], sentiment: "positive", excerpt: "", url: "#" },
-  { id: "fallback-5", headline: "New regulations for digital lenders announced", source: "Capital FM", timestamp: "8h ago", relatedStocks: [], sentiment: "neutral", excerpt: "", url: "#" },
+  { id: "fallback-1", headline: "Safaricom reports record M-Pesa growth", source: "Business Daily", timestamp: "2h ago", publishedAt: new Date().toISOString(), category: "nse", relatedStocks: ["SCOM"], sentiment: "positive", excerpt: "", url: "#" },
+  { id: "fallback-2", headline: "Central Bank holds rates steady at 10.5%", source: "Reuters", timestamp: "4h ago", publishedAt: new Date().toISOString(), category: "nse", relatedStocks: [], sentiment: "neutral", excerpt: "", url: "#" },
+  { id: "fallback-3", headline: "Nvidia gains 4.5% after AI summit highlights", source: "CNBC", timestamp: "3h ago", publishedAt: new Date().toISOString(), category: "global", relatedStocks: ["NVDA"], sentiment: "positive", excerpt: "", url: "#" },
+  { id: "fallback-4", headline: "Equity Group Q2 profit up 23%", source: "NSE", timestamp: "6h ago", publishedAt: new Date().toISOString(), category: "nse", relatedStocks: ["EQTY"], sentiment: "positive", excerpt: "", url: "#" },
+  { id: "fallback-5", headline: "New regulations for digital lenders announced", source: "Capital FM", timestamp: "8h ago", publishedAt: new Date().toISOString(), category: "nse", relatedStocks: [], sentiment: "neutral", excerpt: "", url: "#" },
 ];
 
 export function DashboardPage() {
@@ -200,8 +200,8 @@ export function DashboardPage() {
         if (cancelled) return;
         const combined = data.combined || { gainers: [], losers: [] };
         setMovers({
-          gainers: (combined.gainers || []).slice(0, 5).map(s => normalizeMover(s)),
-          losers: (combined.losers || []).slice(0, 5).map(s => normalizeMover(s)),
+          gainers: (combined.gainers || []).slice(0, 5).map((s: any) => normalizeMover(s)),
+          losers: (combined.losers || []).slice(0, 5).map((s: any) => normalizeMover(s)),
         });
         setActiveStocks((data.active || []).slice(0, 6));
       } catch {}
@@ -425,6 +425,7 @@ export function DashboardPage() {
       .sort((a, b) => b.confidence - a.confidence)
       .slice(0, 4)
       .map(s => ({
+        ...s,
         ticker: s.ticker,
         name: s.name,
         signal: s.signal,

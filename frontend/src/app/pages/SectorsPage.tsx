@@ -194,7 +194,7 @@ export const SectorsPage: React.FC = () => {
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase text-muted-foreground tracking-wider">Highest Volume</p>
             <p className="text-lg font-bold text-foreground truncate">
-              {highestVolumeSector.name !== "N/A" ? highestVolumeSector.displayName + " (" + highestVolumeSector.volumeLabel + ")" : "N/A"}
+              {highestVolumeSector.name === "N/A" ? "N/A" : `${"displayName" in highestVolumeSector ? highestVolumeSector.displayName : highestVolumeSector.name} (${highestVolumeSector.volumeLabel})`}
             </p>
           </div>
         </Card>
