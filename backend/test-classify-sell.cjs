@@ -154,5 +154,15 @@ check('healthy stock -> Hold',
     sector: 'Technology', price: 100, regime: 'bull', priorScore: null,
   }).signal, 'Hold');
 
+// 10. Country attribution: every NSE symbol (incl. previously-omitted KQ, SCAN,
+//     KEGN, BRIT, ...) must resolve to Kenya macro context, never fall through
+//     to US. US symbols must stay on US macro.
+const { getCountryForSymbol, getMacroScore } = require('./macroService');
+const keChecks = ['KQ','SCAN','KEGN','KCB','ABSA','BRIT','DTK','PORT','BKG','NCBA','LBTY','SLAM','OCH','SCOM','KUKZ','KPLC'];
+for (const s of keChecks) check(`macro country ${s} -> KE`, getCountryForSymbol(s), 'KE');
+for (const s of ['AAPL','BAC','NOC','CAG','MSFT','GS']) check(`macro country ${s} -> US`, getCountryForSymbol(s), 'US');
+check('KE macro country label', getMacroScore('KE').country, 'Kenya');
+check('US macro country label', getMacroScore('US').country, 'United States');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

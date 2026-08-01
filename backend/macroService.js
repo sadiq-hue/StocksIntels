@@ -2,6 +2,7 @@
 // Sources: World Bank API, IMF API, OECD Data API (free) + static reference data
 
 const { generic } = require('./apiClient');
+const { NSE_SYMBOLS } = require('./stockData');
 
 // ─── Static Reference Data (used when APIs are unavailable) ────────────────
 const COUNTRY_MACRO = {
@@ -93,10 +94,9 @@ const CREDIT_SCORE_MAP = {
 
 // ─── Country Mapping ───────────────────────────────────────────────────────
 function getCountryForSymbol(symbol) {
-  const sym = symbol.toUpperCase();
-  const NSE_SYMBOLS = ['SCOM','EQTY','KCB','EABL','BAMB','ABSA','SBIC','KPLC','NMG','CRAY','KLG','OLYM','UMEM','TOTL','STAN','COOP','JUB','KNRE','LKL','CIC','HFCK','IMH'];
-  if (NSE_SYMBOLS.includes(sym)) return 'KE';
-  return 'US';
+  // Use the canonical NSE universe from stockData so every NSE name (KQ, SCAN,
+  // KEGN, BRIT, ...) gets Kenya macro context instead of falling through to US.
+  return NSE_SYMBOLS.includes(String(symbol).toUpperCase()) ? 'KE' : 'US';
 }
 
 function getMacroData(country) {
