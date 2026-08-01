@@ -1193,6 +1193,14 @@ function benchmarkSymbolFor(symbol) {
 
 async function _getBenchmarkNow(symbol) {
   try {
+    if (symbol === 'NSE:NSE20') {
+      // NSE indices aren't stock quotes — they come from the NSE site scraper
+      // (marketService only knows NSE stocks). Reuse indicesService so NSE sells
+      // get a real index benchmark instead of an absolute fallback.
+      const { fetchIndexLive } = require('./indicesService');
+      const idx = await fetchIndexLive('NSE:NSE20');
+      return idx && idx.price > 0 ? idx.price : null;
+    }
     const q = await getStockQuote(symbol);
     return q && q.price > 0 ? q.price : null;
   } catch {
