@@ -35,6 +35,7 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS action VARCHAR(10)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS trade_type VARCHAR(30)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS sector VARCHAR(50)`);
+    await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS bench_price NUMERIC(15,2)`);
   } catch {}
 })();
 // Signal evaluation window (must be declared before restoreStateFromDb runs)
@@ -1177,6 +1178,28 @@ const RESOLUTION_MAX_DEVIATION = 0.5;
 // rating (fell = right to exit/avoid) or refutes it (rose = wrong to exit).
 const SELL_EXIT_MOVE = 0.02;
 
+// Benchmark-relative threshold for sells: a stock that moved sideways (±2%) can
+// still be resolved when it under/over-performed its benchmark by at least this
+// much (~3%) over the evaluation window (e.g. flat while the market fell 4% →
+// the exit/avoid rating was right).
+const SELL_REL_MOVE = 0.03;
+
+// Benchmark for benchmark-relative sell evaluation: NSE names run against the
+// NSE 20-share index, everything else against the S&P 500 proxy (the same index
+// the regime detector already relies on).
+function benchmarkSymbolFor(symbol) {
+  return NSE_SYMBOLS.includes(symbol) ? 'NSE:NSE20' : 'SPY';
+}
+
+async function _getBenchmarkNow(symbol) {
+  try {
+    const q = await getStockQuote(symbol);
+    return q && q.price > 0 ? q.price : null;
+  } catch {
+    return null;
+  }
+}
+
 // Dynamic expiry by trade type (in milliseconds)
 const TRADE_TYPE_EXPIRY = {
   'Aggressive Buy': 14 * 24 * 60 * 60 * 1000,   // 14 days
@@ -1193,7 +1216,7 @@ const VALIDATION_PASS_THRESHOLD = 3;
 async function _loadForwardPredictionsFromDb() {
   try {
     const result = await pool.query(
-      `SELECT id, symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, generated_at, resolved, actual_return, correct
+      `SELECT id, symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, bench_price, generated_at, resolved, actual_return, correct
        FROM forward_predictions WHERE generated_at > NOW() - $1::interval ORDER BY generated_at`,
       [`${SIGNAL_WINDOW_DAYS} days`]
     );
@@ -1208,6 +1231,7 @@ async function _loadForwardPredictionsFromDb() {
         id: row.id, signal: row.signal, confidence: row.confidence,
         price: Number(row.price), stopLoss: row.stop_loss != null ? Number(row.stop_loss) : null, target1: row.target1 != null ? Number(row.target1) : null,
         action: row.action, tradeType, sector: row.sector,
+        benchPrice: row.bench_price != null ? Number(row.bench_price) : null,
         generatedAt: new Date(row.generated_at).getTime(),
         resolved: !!row.resolved, actualReturn: Number(row.actual_return), correct: row.correct,
         expiry,
@@ -1223,20 +1247,26 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
     const recent = existing.predictions.find(p => !p.resolved && Date.now() - p.generatedAt < FORWARD_TEST_MIN_AGE);
     if (recent) return;
   }
+  // Benchmark snapshot for sell predictions so the exit thesis can be judged
+  // relative to the market later (best-effort; null → absolute evaluation).
+  let benchPrice = null;
+  if (signalObjAction === 'sell') {
+    benchPrice = await _getBenchmarkNow(benchmarkSymbolFor(symbol));
+  }
   if (!_forwardTestStore.has(symbol)) _forwardTestStore.set(symbol, { predictions: [] });
   const store = _forwardTestStore.get(symbol);
   const expiry = Date.now() + (TRADE_TYPE_EXPIRY[tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']);
   let dbId = null;
   try {
     const result = await pool.query(
-      `INSERT INTO forward_predictions (symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-      [symbol, signalAction, confidence, price, stopLoss, target1, signalObjAction, tradeType, sector]
+      `INSERT INTO forward_predictions (symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, bench_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      [symbol, signalAction, confidence, price, stopLoss, target1, signalObjAction, tradeType, sector, benchPrice]
     );
     dbId = result.rows[0].id;
   } catch (e) { /* persistence best-effort */ }
   store.predictions.push({
     id: dbId, signal: signalAction, confidence, price,
-    stopLoss, target1, action: signalObjAction, tradeType, sector,
+    stopLoss, target1, action: signalObjAction, tradeType, sector, benchPrice,
     generatedAt: Date.now(), resolved: false,
     actualReturn: null, correct: null, expiry,
   });
@@ -1277,6 +1307,29 @@ function evaluateForwardPrediction(pred, currentPrice) {
   }
   if (isBuy || isSell) return { status: 'pending' };
   return { status: 'neutral' };
+}
+
+// Benchmark-relative refinement for sells that the absolute evaluator left
+// pending (stock moved less than ±SELL_EXIT_MOVE). The exit thesis is judged
+// against holding the market: a stock that underperformed its benchmark by
+// SELL_REL_MOVE validates the exit, one that outperformed it while rising
+// refutes it. Missing benchmark data falls back to absolute evaluation.
+function evaluateSellRelative(pred, currentPrice, benchReturn) {
+  const stockReturn = (currentPrice - pred.price) / pred.price;
+  const actualReturn = Math.round(stockReturn * 1000) / 10;
+  const hasBench = benchReturn != null && pred.benchPrice != null && pred.benchPrice > 0;
+  if (stockReturn <= -SELL_EXIT_MOVE) return { resolved: true, correct: true, actualReturn };
+  if (stockReturn >= SELL_EXIT_MOVE) {
+    if (!hasBench) return { resolved: true, correct: false, actualReturn };
+    const lag = benchReturn - stockReturn;
+    if (lag >= SELL_REL_MOVE) return { resolved: true, correct: true, actualReturn }; // rose but lagged the market
+    return { resolved: true, correct: false, actualReturn };
+  }
+  if (!hasBench) return { resolved: false };
+  const lag = benchReturn - stockReturn;
+  if (lag >= SELL_REL_MOVE) return { resolved: true, correct: true, actualReturn };
+  if (lag <= -SELL_REL_MOVE) return { resolved: true, correct: false, actualReturn };
+  return { resolved: false };
 }
 
 async function resolveForwardPredictions(symbol) {
@@ -1342,6 +1395,24 @@ async function resolveForwardPredictions(symbol) {
         pred.correct = null;
         pred.actualReturn = null;
         pred.resolved = true;
+      } else if (pred.action === 'sell') {
+        // Pending sell — refine with benchmark-relative evaluation before
+        // staying on hold. A stock moving sideways while the market grinds
+        // lower is itself evidence the exit/avoid rating was right.
+        let benchReturn = null;
+        const benchNow = await _getBenchmarkNow(benchmarkSymbolFor(symbol));
+        if (pred.benchPrice && benchNow) {
+          const b = (benchNow - pred.benchPrice) / pred.benchPrice;
+          if (Math.abs(b) <= RESOLUTION_MAX_DEVIATION) benchReturn = b;
+        }
+        const rel = evaluateSellRelative(pred, currentPrice, benchReturn);
+        if (rel.resolved) {
+          pred.correct = rel.correct;
+          pred.resolved = true;
+          pred.actualReturn = rel.actualReturn;
+        } else {
+          continue; // Still pending — keep monitoring.
+        }
       } else {
         continue; // Pending — keep monitoring.
       }
@@ -1745,6 +1816,7 @@ async function resolveAllForwardPredictions() {
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS action VARCHAR(10)`).catch(() => {});
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS trade_type VARCHAR(30)`).catch(() => {});
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS sector VARCHAR(50)`).catch(() => {});
+  await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS bench_price NUMERIC(15,2)`).catch(() => {});
   await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
   let resolved = 0, failed = 0, skipped = 0;
   for (const [symbol, store] of _forwardTestStore) {
@@ -1822,6 +1894,24 @@ async function resolveAllForwardPredictions() {
           pred.correct = null;
           pred.actualReturn = null;
           pred.resolved = true;
+        } else if (pred.action === 'sell') {
+          // Pending sell — refine with benchmark-relative evaluation before
+          // staying on hold (see resolveForwardPredictions).
+          let benchReturn = null;
+          const benchNow = await _getBenchmarkNow(benchmarkSymbolFor(symbol));
+          if (pred.benchPrice && benchNow) {
+            const b = (benchNow - pred.benchPrice) / pred.benchPrice;
+            if (Math.abs(b) <= RESOLUTION_MAX_DEVIATION) benchReturn = b;
+          }
+          const rel = evaluateSellRelative(pred, currentPrice, benchReturn);
+          if (rel.resolved) {
+            pred.correct = rel.correct;
+            pred.resolved = true;
+            pred.actualReturn = rel.actualReturn;
+          } else {
+            skipped++;
+            continue;
+          }
         } else {
           skipped++;
           continue;
@@ -2826,25 +2916,85 @@ function searchStocks(query) {
 // is unchanged. The sell side is asymmetric and evidence-gated because a Sell in
 // equities means "the fundamentals/technical/financial/sentiment no longer
 // support holding for upside" — an exit/avoid rating, not the mirror of the buy
-// signal. Requiring multi-dimension negative agreement prevents a single noisy
-// indicator from dumping a stock into Sell.
-function classifySignalBucket(overallScore, thresholds, subScores, newsSent) {
+// signal.
+//
+// The evidence model deliberately looks past the composite score — which gets
+// diluted by neutral ML/confidence priors — at the raw stock dimensions:
+//   evidence = degree-aware negativity across fundamental/technical/financial
+//              + negative sentiment + technical-breakdown confirmation
+//              + prior-cycle deterioration
+// A regime-adjusted conviction bar is then applied: sells fight the trend in a
+// bull market and need more evidence; in bear/crash markets the bar is lower.
+// A hard financial-distress trigger (Altman Z below the distress threshold)
+// forces a Strong Sell regardless of the score, and the RSI oversold guard
+// keeps the model from screaming Strong Sell at a likely bounce bottom.
+function classifySignalBucket(overallScore, thresholds, ctx) {
   if (overallScore >= thresholds.strong_buy) return { signal: 'Strong Buy', action: 'buy', strength: 'strong' };
   if (overallScore >= thresholds.buy) return { signal: 'Buy', action: 'buy', strength: 'moderate' };
-  if (overallScore >= thresholds.hold) return { signal: 'Hold', action: 'hold', strength: 'neutral' };
-  // Below the hold band, a Sell needs confirmed negative agreement: at least two
-  // of {fundamentals, technical, financial, sentiment} genuinely negative, or one
-  // very negative (<25) backed by negative sentiment.
-  const negativeDims =
-    (subScores.fundamental < 40 ? 1 : 0) +
-    (subScores.technical < 40 ? 1 : 0) +
-    (subScores.financial < 40 ? 1 : 0) +
-    (newsSent === 'negative' ? 1 : 0);
-  const veryNegative = subScores.fundamental < 25 || subScores.technical < 25 || subScores.financial < 25;
-  const sellConfirmed = negativeDims >= 2 || (veryNegative && newsSent === 'negative');
-  if (!sellConfirmed) return { signal: 'Hold', action: 'hold', strength: 'neutral' };
-  if (overallScore >= thresholds.sell) return { signal: 'Sell', action: 'sell', strength: 'moderate' };
-  return { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
+
+  const sub = ctx.subScores || {};
+  const ind = ctx.indicators || {};
+  const newsNegative = ctx.newsSent === 'negative';
+  // Altman Z below the distress threshold (analysisEngine suppresses the
+  // fundamental score to ≤40 and flags altSignal='SUPPRESS') — holding a
+  // possibly-insolvent name is never sound, whatever the composite says.
+  const distress = !!(ctx.fundamentals && ctx.fundamentals.altSignal === 'SUPPRESS');
+
+  // Degree-aware negativity: deeper weakness counts more, shallow sub-40
+  // readings contribute little (they may be noise).
+  const neg = (s) => (s != null && s < 40) ? (40 - s) / 25 : 0;
+  let evidence = neg(sub.fundamental) + neg(sub.technical) + neg(sub.financial);
+  if (newsNegative) evidence += 1;
+
+  // Technical breakdown confirmation — the trend actually broke (price under the
+  // slow SMA, bearish MACD, or falling momentum), not just a weak raw score.
+  const price = Number(ctx.price);
+  const slowSma = Number(ind.smaSlow);
+  let breakdown = isFinite(price) && isFinite(slowSma) && slowSma > 0 && price < slowSma;
+  if (!breakdown && ind.macdSignal && /bearish/i.test(String(ind.macdSignal))) breakdown = true;
+  if (!breakdown && ind.momentum != null && Number(parseFloat(String(ind.momentum))) < 0) breakdown = true;
+  if (breakdown && sub.technical < 55) evidence += 0.5;
+
+  // Prior-cycle deterioration — a sharp composite drop vs the last cycle is the
+  // classic "exit now" tell: the trend is changing for the worse.
+  if (ctx.priorScore != null && (ctx.priorScore - overallScore) >= 8) evidence += 0.5;
+
+  // Hard financial-distress trigger.
+  if (distress) return { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
+
+  // Composite in the hold band: default to do-nothing, but overwhelming evidence
+  // can break through — the composite is diluted by neutral priors, so a stock
+  // whose real dimensions are all deep-negative can still deserve an exit.
+  if (overallScore >= thresholds.hold) {
+    if (evidence >= 2) return { signal: 'Sell', action: 'sell', strength: 'moderate' };
+    return { signal: 'Hold', action: 'hold', strength: 'neutral' };
+  }
+
+  // Regime-adjusted conviction bar for the below-hold band.
+  let bar = 1.2;
+  if (ctx.regime === 'bull') bar = 1.5;
+  else if (ctx.regime === 'bear' || ctx.regime === 'crash') bar = 1.0;
+  if (evidence < bar) return { signal: 'Hold', action: 'hold', strength: 'neutral' };
+
+  // Oversold-bounce guard: at extreme RSI oversold the downside may already be
+  // priced in and a bounce is likely — don't upgrade to Strong Sell at the bottom.
+  const rsi = Number.parseFloat(String(ind.rsi));
+  const oversold = Number.isFinite(rsi) && rsi <= 30;
+  const strongEvidence = evidence >= 1.7;
+
+  if (overallScore < thresholds.sell) {
+    if (strongEvidence && !oversold) return { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
+    return { signal: 'Sell', action: 'sell', strength: 'moderate' };
+  }
+  return { signal: 'Sell', action: 'sell', strength: 'moderate' };
+}
+
+// Prior-cycle composite scores keyed by symbol, updated at the end of every
+// _buildSignal call so the next cycle can detect deterioration (the "exit now"
+// tell of a score dropping sharply vs the previous reading).
+const _lastCycleScores = new Map();
+function getPriorScore(symbol) {
+  return _lastCycleScores.has(symbol) ? _lastCycleScores.get(symbol) : null;
 }
 
 // ─── Shared Signal Builder ──────────────────────────────────────────────────
@@ -2907,8 +3057,18 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // Use configurable thresholds + the evidence-gated sell classifier
   const thresholds = engineConfig.getConfig().thresholds;
   const sig = classifySignalBucket(overallScore, thresholds, {
-    fundamental: fundamental.score, technical: technical.score, financial: financial.score,
-  }, newsSent);
+    subScores: {
+      fundamental: fundamental.score,
+      technical: technical.score,
+      financial: financial.score,
+    },
+    newsSent,
+    indicators: technical.indicators,
+    fundamentals: fundamental.metrics,
+    regime: regime.regime,
+    price: currentPrice,
+    priorScore: getPriorScore(symbol),
+  });
 
   const tradeType = sig.action === 'sell' ? 'Avoid' : determineTradeType(technical.score, fundamental.score);
   const tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, stopLossPct, tradeType);
@@ -2982,6 +3142,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   };
   // Log prediction for accuracy tracking (fire-and-forget)
   persistPredictionLog(symbol, sig.signal, mlWinProb, confidence).catch(() => {});
+  _lastCycleScores.set(symbol, overallScore);
   return obj;
 }
 
@@ -3084,7 +3245,9 @@ module.exports = {
   // Pure helpers (unit-testable sell/exit + resolution logic)
   classifySignalBucket,
   evaluateForwardPrediction,
+  evaluateSellRelative,
   isGarbageQuote,
+  getPriorScore,
   getLiveTestSnapshot,
   // Audit & Config
   getAuditLog,

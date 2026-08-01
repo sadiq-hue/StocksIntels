@@ -161,12 +161,28 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
     const moved = pctMove > 0.0005 && pctMove < 0.5;
     if (marketOpen && saneLevels && moved) {
       if (isPrevBuy) {
+        // Long positions: the hard stop still caps downside, but a winner is no
+        // longer banked the moment target1 is touched. On the first touch the
+        // stop ratchets up to breakeven and then trails one stop-distance below
+        // the highest print, so the position can keep running while never giving
+        // back the gain. It resolves as a win when the price pulls back into the
+        // trailing stop (or the trade-type expiry closes it at the market).
         if (currentPrice <= previous.stopLoss) {
           previous.result = 'loss'; performanceStats.losses++; performanceStats.total++;
           portfolioState.consecutiveLosses++;
-        } else if (currentPrice >= previous.target1) {
-          previous.result = 'win'; performanceStats.wins++; performanceStats.total++;
-          portfolioState.consecutiveLosses = 0;
+        } else if (!previous.trailing && currentPrice >= previous.target1) {
+          const trailDist = Math.max(entry - previous.stopLoss, entry * 0.005);
+          previous.trailing = true;
+          previous.trailStop = Math.max(entry, currentPrice - trailDist);
+          previous.trailedAt = Date.now();
+        } else if (previous.trailing) {
+          const trailDist = Math.max(entry - previous.stopLoss, entry * 0.005);
+          const ratchet = currentPrice - trailDist;
+          if (ratchet > previous.trailStop) previous.trailStop = ratchet;
+          if (currentPrice <= previous.trailStop) {
+            previous.result = 'win'; performanceStats.wins++; performanceStats.total++;
+            portfolioState.consecutiveLosses = 0;
+          }
         }
       } else {
         if (currentPrice >= previous.stopLoss) {
@@ -188,9 +204,12 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
     if (previous.result) {
       previous.resolvedAt = Date.now();
       // Record the level that actually resolved the trade (stop for a loss,
-      // target for a win) so the persisted outcome shows the true exit, not
-      // the market price at the check moment.
-      previous.exitPrice = previous.result === 'win' ? previous.target1 : previous.stopLoss;
+      // the trailing stop once engaged / target otherwise for a win) so the
+      // persisted outcome shows the true exit, not the market price at the
+      // check moment.
+      previous.exitPrice = previous.result === 'win'
+        ? (previous.trailStop != null ? previous.trailStop : previous.target1)
+        : previous.stopLoss;
       portfolioState.totalTrades++;
       performanceStats.winRate = performanceStats.total > 0
         ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;

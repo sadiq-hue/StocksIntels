@@ -10711,6 +10711,7 @@ async function initDatabase() {
       action VARCHAR(10),
       trade_type VARCHAR(30),
       sector VARCHAR(50),
+      bench_price NUMERIC(15,2),
       generated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
       resolved BOOLEAN DEFAULT false,
       actual_return NUMERIC(10,4),
