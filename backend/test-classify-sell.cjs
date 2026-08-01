@@ -214,5 +214,18 @@ for (const [headline, expected] of aliasCases) {
   check(`alias "${headline.slice(0, 30)}..." -> ${expected.join(',')}`, JSON.stringify(actual) === JSON.stringify(exp), true);
 }
 
+// 13. Sentiment history: recency decay and live-wins merge must let quiet days
+//     fall back to previous sentiments without letting stale data override fresh.
+const sh = require('./sentimentHistoryService');
+check('ageWeight age 0', Math.round(sh.ageWeight(0) * 100), 100);
+check('ageWeight age 7 (half window)', Math.round(sh.ageWeight(7) * 100), 50);
+check('ageWeight floor 0.15 at window', sh.ageWeight(14), 0.15);
+check('merge: live wins over history',
+  JSON.stringify(sh.mergeSentimentMaps({ KQ: 'positive' }, { KQ: 'negative', SCOM: 'neutral' })),
+  JSON.stringify({ KQ: 'positive', SCOM: 'neutral' }));
+check('merge: history fills gaps',
+  JSON.stringify(sh.mergeSentimentMaps({}, { KQ: 'positive' })),
+  JSON.stringify({ KQ: 'positive' }));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

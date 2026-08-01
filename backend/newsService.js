@@ -10,6 +10,7 @@ const rssParser = new RssParser({
   }
 });
 const { newsapi, finnhub: finnhubClient, generic } = require('./apiClient');
+const sentimentHistory = require('./sentimentHistoryService');
 
 // API Keys - can be overridden by environment variables
 const NEWSAPI_KEY = process.env.VITE_NEWSAPI_KEY || '16eb777bdf469c92f9522c287a7e4d';
@@ -317,9 +318,10 @@ async function getAggregatedSentiment() {
     getAllNews(),
     new Promise(resolve => setTimeout(() => resolve([]), 20000)),
   ]);
+  const realNews = news.filter(a => !a.isMock);
   const sentimentCounts = {};
 
-  for (const article of news) {
+  for (const article of realNews) {
     for (const ticker of article.relatedStocks) {
       if (!sentimentCounts[ticker]) {
         sentimentCounts[ticker] = { positive: 0, negative: 0, neutral: 0 };
@@ -338,6 +340,15 @@ async function getAggregatedSentiment() {
       result[ticker] = 'neutral';
     }
   }
+
+  // Persist today's real articles so quiet days keep a recent sentiment, then merge
+  // recent history back in to fill gaps (live wins over historical).
+  sentimentHistory.persist(realNews).catch(() => {});
+  try {
+    const historical = await sentimentHistory.getHistorical(sentimentHistory.HISTORY_WINDOW_DAYS);
+    Object.assign(result, sentimentHistory.mergeSentimentMaps(result, historical));
+  } catch { /* sentiment history unavailable; live map still valid */ }
+
   sentimentCache = result;
   sentimentCacheTime = Date.now();
   return result;
@@ -490,7 +501,7 @@ function getKenyanBusinessNews() {
   const makeArticle = (id, headline, source, hoursAgo, relatedStocks, sentiment, excerpt, url) => {
     const pubDate = new Date(now - hoursAgo * 3600000);
     return { id, headline, source, timestamp: getTimeAgo(pubDate), publishedAt: pubDate.toISOString(),
-      category: 'nse', relatedStocks, sentiment, excerpt, url, imageUrl: null };
+      category: 'nse', relatedStocks, sentiment, excerpt, url, imageUrl: null, isMock: true };
   };
   return [
     makeArticle('ke-business-1', 'NSE 20 Share Index gains 2.3% on banking sector rally', 'Business Daily Africa', 2, ['EQTY', 'KCB', 'SBIC'], 'positive',
@@ -722,7 +733,7 @@ function getMockNews() {
       url: '#',
       imageUrl: null
     }
-  ];
+  ].map(a => ({ ...a, isMock: true }));
 }
 
 // Fetch from Benzinga API (if configured)
@@ -839,6 +850,127 @@ async function fetchYahooExcerpt(url) {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Historical sentiment backfill
+// ---------------------------------------------------------------------------
+// Walks the Kenyan Wall Street sitemap for the last N days and scrapes each
+// article page (title + body), tags companies via extractRelatedStocks, then
+// persists the rows. Combined with per-cycle persistence this gives symbols a
+// recent sentiment even on days when the live feed has no article for them.
+let kwsBackfillGuard = false;
+
+async function backfillKwsHistory(days = 14, maxPages = 100) {
+  const since = new Date(Date.now() - days * 864e5);
+  const sitemapDates = await fetchKwsSitemapDates(); // { path: lastmod }
+  const paths = Object.keys(sitemapDates)
+    .filter(p => {
+      const d = new Date(sitemapDates[p]);
+      return !isNaN(d.getTime()) && d >= since;
+    })
+    .sort((a, b) => String(sitemapDates[b]).localeCompare(String(sitemapDates[a])))
+    .slice(0, maxPages);
+
+  if (paths.length === 0) return 0;
+
+  const articles = [];
+  const concurrency = 4;
+  const seen = new Set();
+  for (let i = 0; i < paths.length; i += concurrency) {
+    const chunk = paths.slice(i, i + concurrency);
+    await Promise.all(chunk.map(async path => {
+      try {
+        const res = await generic.get('https://kenyanwallstreet.com' + path, { timeout: 15000 });
+        const $ = cheerio.load(res.data);
+        const title = ($('h1').first().text().trim() || $('title').text().split('|')[0].trim()).substring(0, 200);
+        const body = $('article, .entry-content, .post-content').first().text().replace(/\s+/g, ' ').trim();
+        if (!title || title.length < 10) return;
+        const text = title + ' ' + body.slice(0, 600);
+        const relatedStocks = extractRelatedStocks(text);
+        if (relatedStocks.length === 0) return;
+        const pubDate = new Date(sitemapDates[path]);
+        if (isNaN(pubDate.getTime())) return;
+        const key = path + '|' + pubDate.toISOString();
+        if (seen.has(key)) return;
+        seen.add(key);
+        articles.push({
+          id: 'kws-hist-' + path.replace(/\//g, ''),
+          headline: title,
+          source: 'Kenyan Wall Street',
+          publishedAt: pubDate.toISOString(),
+          relatedStocks,
+          sentiment: analyzeSentiment(text),
+          sentimentScore: null,
+        });
+      } catch { /* skip failed page */ }
+    }));
+  }
+  const inserted = await sentimentHistory.persist(articles);
+  if (inserted > 0) console.log(`[SentimentHistory] Backfilled ${articles.length} KWS articles (${inserted} rows) over last ${days}d`);
+  return inserted;
+}
+
+// Optional deep US history via Alpha Vantage NEWS_SENTIMENT for all US tickers
+// in a single call. Opt-in (NEWS_AV_BACKFILL=1) to protect the 25 req/day quota.
+async function backfillAvUsHistory(days = 30) {
+  const alphaKey = process.env.ALPHA_VANTAGE_API_KEY;
+  if (!alphaKey) return 0;
+  const fmt = d => d.toISOString().slice(0, 10);
+  const from = fmt(new Date(Date.now() - days * 864e5)) + 'T0000';
+  const to = fmt(new Date()) + 'T2359';
+  const url = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${US_TICKERS.join(',')}&time_from=${from}&time_to=${to}&limit=1000&apikey=${alphaKey}`;
+  try {
+    const res = await generic.get(url, { timeout: 30000 });
+    const feed = res.data?.feed;
+    if (!Array.isArray(feed) || feed.length === 0) return 0;
+    const articles = feed.map(a => {
+      const t = a.time_published || '';
+      const pubDate = t ? new Date(`${t.slice(0,4)}-${t.slice(4,6)}-${t.slice(6,8)}T${t.slice(9,11)}:${t.slice(11,13)}:${t.slice(13,15)}`) : new Date();
+      const label = (a.overall_sentiment_label || '').toLowerCase();
+      let sentiment = 'neutral';
+      if (label.includes('bullish')) sentiment = 'positive';
+      else if (label.includes('bearish')) sentiment = 'negative';
+      return {
+        id: 'av-hist-' + (a.url ? a.url.replace(/[^a-z0-9]/gi, '').slice(-24) : ''),
+        headline: (a.title || '').substring(0, 200),
+        source: a.source || 'Alpha Vantage',
+        publishedAt: isNaN(pubDate.getTime()) ? new Date().toISOString() : pubDate.toISOString(),
+        relatedStocks: Array.isArray(a.ticker_sentiment)
+          ? a.ticker_sentiment.map(x => (x.ticker || '').toUpperCase()).filter(t => US_TICKERS.includes(t))
+          : [],
+        sentiment,
+        sentimentScore: typeof a.overall_sentiment_score === 'number' ? a.overall_sentiment_score : null,
+      };
+    }).filter(a => a.relatedStocks.length > 0);
+    const inserted = await sentimentHistory.persist(articles);
+    if (inserted > 0) console.log(`[SentimentHistory] Backfilled ${articles.length} Alpha Vantage articles (${inserted} rows) over last ${days}d`);
+    return inserted;
+  } catch (e) {
+    console.error('[SentimentHistory] AV backfill failed:', e.message);
+    return 0;
+  }
+}
+
+// One-time non-blocking backfill at startup (re-runs guarded for 6h).
+async function backfillSentimentHistory() {
+  if (kwsBackfillGuard) return 0;
+  kwsBackfillGuard = true;
+  let total = 0;
+  try {
+    total += await backfillKwsHistory(14, 100);
+    if (process.env.NEWS_AV_BACKFILL === '1') total += await backfillAvUsHistory(30);
+  } finally {
+    setTimeout(() => { kwsBackfillGuard = false; }, 6 * 3600 * 1000);
+  }
+  return total;
+}
+
+// Init: ensure the table exists, prune old rows, then kick off a backfill.
+async function initNewsHistory() {
+  await sentimentHistory.ensureTable().catch(() => {});
+  sentimentHistory.prune().catch(() => {});
+  backfillSentimentHistory().catch(() => {});
 }
 
 // Fetch news from Yahoo Finance RSS (reliable, no API key)
@@ -991,5 +1123,5 @@ async function getNewsSummary() {
   };
 }
 
-module.exports = { getAllNews, getNewsSummary, getAggregatedSentiment, classifyHotNews, extractRelatedStocks, KENYAN_STOCKS, STOCK_SYMBOLS };
+module.exports = { getAllNews, getNewsSummary, getAggregatedSentiment, classifyHotNews, extractRelatedStocks, backfillSentimentHistory, initNewsHistory, KENYAN_STOCKS, STOCK_SYMBOLS };
 

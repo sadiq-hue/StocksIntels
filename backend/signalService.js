@@ -8,7 +8,7 @@ const { getStockQuote, getQuotesBatch } = require('./marketService');
 const { fetchHistoricalQuotes } = require('./globalScraper');
 const nseHistory = require('./nseHistoryService');
 const { getMacroScore, getCountryForSymbol, generateMacroReason } = require('./macroService');
-const { getAggregatedSentiment } = require('./newsService');
+const { getAggregatedSentiment, initNewsHistory } = require('./newsService');
 const { getKeyMetrics, getQuote, getCompanyProfile } = require('./financialReportsService');
 const { calculateSMA } = require('./technicalIndicators');
 const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL_SYMBOLS, SECTOR_AVG_PE, INDUSTRY_MEDIAN_EV_EBITDA, TBILI_RATE, KNOWN_FUNDAMENTALS, NSE_FUNDAMENTALS } = require('./stockData');
@@ -46,6 +46,8 @@ const SIGNAL_WINDOW_DAYS = 1;
 restoreStateFromDb().catch(() => {});
 // Bootstrap durable NSE daily history (KenyanStocks seed + best-effort deep bootstrap) non-blocking
 nseHistory.bootstrapNseHistory().catch(() => {});
+// Bootstrap durable news-sentiment history (ensure table, prune, backfill past ~2 weeks) non-blocking
+initNewsHistory().catch(() => {});
 
 // In-memory cache for generateSignals to prevent redundant calls
 let _signalsCache = null;
