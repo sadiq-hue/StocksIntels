@@ -3728,7 +3728,9 @@ app.get('/api/signals', async (req, res) => {
   try {
     const signals = await generateSignals(null, true);
     res.json({ success: true, signals });
-    generateSignals(null, false).catch(() => {});
+    // Background refresh is handled inside generateSignals' quick path (stale
+    // >30 min → regen while an exchange is open) plus the hourly timer — a read
+    // request must not unconditionally start a full cycle.
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
   }

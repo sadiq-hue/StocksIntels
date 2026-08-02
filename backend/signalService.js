@@ -222,6 +222,12 @@ const MAX_DAYS = 90;
 // Catches absurd entries without blocking real (large but plausible) moves.
 const MAX_ENTRY_DEVIATION = 0.5;
 
+// Strict signal eligibility: a stock only earns a signal when its data and
+// trade levels satisfy every condition. These are the floors for data
+// trustworthiness — see meetsSignalConditions() below.
+const MIN_SIGNAL_HISTORY = 20; // enough bars for ATR/RSI/SMA to be meaningful
+const MIN_RISK_REWARD = 1.2;   // buy setups must offer a sane reward vs the stop
+
 // Stop/target resolution is only valid while the exchange's live session is open;
 // resolving on after-hours/stale quotes fabricates stop-fills and entries.
 function isExchangeOpen(symbol, now = new Date()) {
@@ -236,6 +242,16 @@ function isExchangeOpen(symbol, now = new Date()) {
   const isDST = now.getMonth() >= 2 && now.getMonth() <= 9;
   const etMinutes = ((utcMinutes + (isDST ? -4 : -5) * 60) % 1440 + 1440) % 1440;
   return etMinutes >= 570 && etMinutes < 960;
+}
+
+// Whether any exchange the engine tracks (NSE 06:00-12:00 UTC, US 13:30-20:00
+// UTC) has a live session right now. Drives the dynamic generation guard: outside
+// exchange hours quotes are static last-close values, so regenerating would only
+// burn API quota and churn the feed. Pure clock math — no network calls.
+function anyTrackedExchangeOpen(now = new Date()) {
+  const nseOpen = NSE_SYMBOLS.length > 0 && isExchangeOpen(NSE_SYMBOLS[0], now);
+  const usOpen = isExchangeOpen('AAPL', now);
+  return nseOpen || usOpen;
 }
 
 function accumulateNseQuote(symbol, price, volume) {
@@ -2451,9 +2467,11 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     return _signalsCache;
   }
   if (!marketData && quick && _signalsCache) {
-    // Kick off background full regeneration if cache is stale (>30 min old)
+    // Kick off background full regeneration if cache is stale (>30 min old).
+    // No force: the exchange-hours guard below applies, so a cycle only runs
+    // when a tracked exchange is actually live — never on weekends/nights.
     if (!_signalsInProgress && Date.now() - _signalsCacheTime > 30 * 60 * 1000) {
-      generateSignals(null, false, true).catch(() => {});
+      generateSignals(null, false, false).catch(() => {});
     }
     return _signalsCache;
   }
@@ -2461,15 +2479,12 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     return _signalsCache || [];
   }
 
-  // Skip generation outside US market hours unless marketData is explicitly provided or force=true
+  // Dynamic generation guard: a fresh cycle only runs while at least one
+  // tracked exchange (NSE or US) has a live session, unless marketData is
+  // explicitly provided or force=true. Outside live sessions quotes are static
+  // last-close values, so regenerating would burn API quota and churn the feed.
   if (!marketData && !quick && !force) {
-    const now = new Date();
-    const day = now.getDay();
-    const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-    const isDST = now.getMonth() >= 2 && now.getMonth() <= 9;
-    const etMinutes = ((utcMinutes + (isDST ? -4 : -5) * 60) % 1440 + 1440) % 1440;
-    const marketOpen = day !== 0 && day !== 6 && etMinutes >= 570 && etMinutes < 960;
-    if (!marketOpen) {
+    if (!anyTrackedExchangeOpen()) {
       if (_signalsCache) return _signalsCache;
       return [];
     }
@@ -2609,6 +2624,23 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       priceHistory, degFactor
     });
     const prevOutcome = _signalOutcomes.get(symbol);
+    let emitSignal = true;
+    // Strict all-conditions gate: a stock only earns a (new) signal when its
+    // data and trade levels satisfy every condition. A stock with no open
+    // position is dropped entirely; one with an open position is still tracked
+    // (its stop/target use the previously-valid levels) but never emits a fresh
+    // signal built on untrustworthy data.
+    const eligibility = meetsSignalConditions(sigObj, {
+      currentPrice, priceHistory, volume, fundamental, technical, financial, macro,
+    });
+    if (!eligibility.ok) {
+      const hasOpen = prevOutcome && !prevOutcome.result && prevOutcome.timestamp;
+      if (!hasOpen) {
+        console.log(`[SignalService] ${symbol} ineligible for a signal: ${eligibility.reasons.join(', ')}`);
+        return null;
+      }
+      emitSignal = false;
+    }
     // Monitor-first gate: while the previous signal for this symbol is still open
     // (live, unresolved), keep monitoring it instead of emitting a new signal. A new
     // signal is only emitted when the open position (a) hits stop/target (resolved by
@@ -2616,14 +2648,15 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     // (c) flips direction on the full all-conditions score (fundamental, technical,
     // macro, news, regime, ML...). Without this, the hourly cycle re-emitted the same
     // still-open signal over and over, ballooning the signal count for no reason.
-    let emitSignal = true;
     if (prevOutcome && !prevOutcome.result && prevOutcome.timestamp) {
       const prevAction = prevOutcome.action;
       const monitoring = prevAction !== 'hold' && prevOutcome.stopLoss != null && prevOutcome.target1 != null;
       if (monitoring) {
         const expiryMs = TRADE_TYPE_EXPIRY[prevOutcome.type || 'Swing Trade'] || TRADE_TYPE_EXPIRY['Swing Trade'];
         const isExpired = (Date.now() - prevOutcome.timestamp) > expiryMs;
-        const isFlip = (prevAction === 'buy' && sigObj.action === 'sell') || (prevAction === 'sell' && sigObj.action === 'buy');
+        // A flip-close only counts when this cycle's analysis is trustworthy;
+        // on ineligible data only a genuine expiry can close the position.
+        const isFlip = eligibility.ok && ((prevAction === 'buy' && sigObj.action === 'sell') || (prevAction === 'sell' && sigObj.action === 'buy'));
         if (!isExpired && !isFlip) {
           emitSignal = false;
           console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal`);
@@ -2640,7 +2673,9 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           portfolioState.totalTrades++;
           performanceStats.winRate = performanceStats.total > 0
             ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;
-          console.log(`[SignalService] ${symbol} closed previous ${prevAction} signal (${isExpired ? 'expired' : 'score flipped'}) at ${currentPrice} -> ${prevOutcome.result}, emitting fresh signal`);
+          console.log(`[SignalService] ${symbol} closed previous ${prevAction} signal (${isExpired ? 'expired' : 'score flipped'}) at ${currentPrice} -> ${prevOutcome.result}${eligibility.ok ? ', emitting fresh signal' : ''}`);
+          // A fresh signal is only emitted when this cycle's analysis is trustworthy.
+          emitSignal = eligibility.ok;
         } else {
           // Expired/flipped while the exchange is closed: defer the close until the
           // next live session so the exit price isn't a stale after-hours quote.
@@ -2670,6 +2705,11 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         signal: prevOutcome.signal,
         resolvedAt: prevOutcome.resolvedAt || Date.now(),
       });
+      // If the position resolved on a cycle where the data was untrustworthy,
+      // drop it from the monitored set — trackSignalOutcomes re-seeds a fresh
+      // entry from this cycle's (invalid) signal object, which would otherwise
+      // linger as an inert position that can never resolve.
+      if (!eligibility.ok) _signalOutcomes.delete(symbol);
     }
     // Check progress milestones on the current active signal
     const currentActive = _signalOutcomes.get(symbol);
@@ -2835,7 +2875,18 @@ async function generateSingleSignal(symbol) {
       fundamental, technical, financial, macro, regime, weights, weeklyTrend,
       newsSent, catalyst, priceHistory, degFactor
     });
-    if (sigObj) persistPortfolioState().catch(() => {});
+    if (sigObj) {
+      // Same strict all-conditions gate as the batch path: an on-demand lookup
+      // only returns a signal when the stock genuinely qualifies.
+      const eligibility = meetsSignalConditions(sigObj, {
+        currentPrice, priceHistory, volume, fundamental, technical, financial, macro,
+      });
+      if (!eligibility.ok) {
+        console.log(`[SignalService] ${symbol} ineligible for a signal: ${eligibility.reasons.join(', ')}`);
+        return null;
+      }
+      persistPortfolioState().catch(() => {});
+    }
     return sigObj;
   } catch (error) {
     console.error(`Error generating signal for ${symbol}:`, error.message);
@@ -3292,6 +3343,56 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   persistPredictionLog(symbol, sig.signal, mlWinProb, confidence).catch(() => {});
   _lastCycleScores.set(symbol, overallScore);
   return obj;
+}
+
+// ─── Strict Signal Eligibility Gate ──────────────────────────────────────────
+// Dynamic, all-conditions check applied per stock BEFORE a signal may be issued:
+// a real quote, enough price history to compute trustworthy levels, a tradable
+// volume, every scoring dimension actually computed (not NaN), non-sparse data,
+// and sane stop/entry/target geometry with a minimum risk/reward. A stock that
+// fails any condition does not get a signal — no degraded/partial signals.
+// Note: the confidence bar is NOT part of this gate; it is enforced separately
+// on the final feed (minConfidence filter) so a momentarily low-confidence stock
+// never blocks an already-open monitored position from being tracked.
+function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fundamental, technical, financial, macro } = {}) {
+  const reasons = [];
+  const isFin = (v) => typeof v === 'number' && Number.isFinite(v);
+
+  if (!sigObj) { reasons.push('no signal object'); return { ok: false, reasons }; }
+
+  if (!isFin(currentPrice) || currentPrice <= 0) reasons.push(`invalid price ${currentPrice}`);
+
+  const histLen = Array.isArray(priceHistory) ? priceHistory.length : 0;
+  if (histLen < MIN_SIGNAL_HISTORY) reasons.push(`insufficient history (${histLen}/${MIN_SIGNAL_HISTORY} bars)`);
+
+  if (!volume || volume <= 0) reasons.push('no volume');
+
+  if (fundamental && !isFin(fundamental.score)) reasons.push('fundamental score missing');
+  if (technical && !isFin(technical.score)) reasons.push('technical score missing');
+  if (financial && !isFin(financial.score)) reasons.push('financial score missing');
+  if (macro && !isFin(macro.score)) reasons.push('macro score missing');
+
+  const doubleSparse =
+    fundamental?.metrics?.dataQuality === 'Very sparse data' &&
+    technical?.indicators?.dataQuality === 'Insufficient history';
+  if (doubleSparse) reasons.push('sparse fundamental + technical data');
+
+  if (sigObj.action === 'buy') {
+    const e = Number(sigObj.entry), s = Number(sigObj.stopLoss), t1 = Number(sigObj.target1);
+    if (!(isFin(e) && isFin(s) && isFin(t1) && e > 0 && s > 0 && t1 > 0)) {
+      reasons.push(`invalid buy levels (entry=${sigObj.entry}, stop=${sigObj.stopLoss}, target=${sigObj.target1})`);
+    } else if (!(s < e && e < t1)) {
+      reasons.push(`non-monotonic buy levels (stop=${s} >= entry=${e} >= target=${t1})`);
+    }
+    if (Number.isFinite(sigObj.riskReward) && sigObj.riskReward < MIN_RISK_REWARD) {
+      reasons.push(`low risk/reward ${sigObj.riskReward}`);
+    }
+  } else if (sigObj.action === 'sell') {
+    // Sell/Avoid ratings are exit references, not mirrored shorts — no levels
+    // are produced for them, so geometry checks don't apply.
+  }
+
+  return { ok: reasons.length === 0, reasons };
 }
 
 // ─── Prediction Accuracy Logging ──────────────────────────────────────────────
