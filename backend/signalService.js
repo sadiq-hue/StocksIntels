@@ -160,6 +160,7 @@ function _buildBaselineCache() {
 // Price history cache for technical analysis
 const _priceHistoryCache = new Map();
 const PRICE_HISTORY_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const PRICE_HISTORY_FAIL_TTL = 60 * 1000;       // retry a failed fetch after 60s (not 1h)
 
 // Financial report cache for fundamental analysis (daily refresh, persisted to DB on restart)
 const _financialReportCache = new PersistentCache('sigfin', 24 * 60 * 60 * 1000);
@@ -300,8 +301,13 @@ function getNseDailyHistory(symbol) {
 
 async function getPriceHistory(symbol) {
   const cached = _priceHistoryCache.get(symbol);
-  if (cached && Date.now() - cached.ts < PRICE_HISTORY_CACHE_TTL) {
-    return cached.data;
+  if (cached) {
+    const age = Date.now() - cached.ts;
+    if (cached.data && age < PRICE_HISTORY_CACHE_TTL) return cached.data;
+    // A failed fetch is cached only briefly so a transient blip can't retry-storm
+    // a dead upstream, but the short TTL means the next call/cycle recovers quickly
+    // instead of poisoning the symbol's history for the full hour.
+    if (!cached.data && age < PRICE_HISTORY_FAIL_TTL) return null;
   }
 
   const isNse = NSE_SYMBOLS.includes(symbol);
@@ -318,6 +324,8 @@ async function getPriceHistory(symbol) {
         prices.highs = valid.map(b => b.high);
         prices.lows = valid.map(b => b.low);
         _priceHistoryCache.set(symbol, { data: prices, ts: Date.now() });
+        // Persist durably so a later MyStocks outage still has history to serve.
+        nseHistory.persistBars(symbol, valid, 'mystocksafrica').catch(() => {});
         return prices;
       }
     } catch (e) { /* fall through to accumulator */ }

@@ -1,5 +1,7 @@
 // End-to-end verification harness for the insider dimension (NSE + US).
 // Run: node e2e-verify-insider.cjs
+// Load env exactly like the real server entry (index.js) so API keys are present.
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const signalService = require('./signalService');
 const { getStockQuote } = require('./marketService');
 const { classifyInsider, getInsiderNewsSignals, initNewsHistory } = require('./newsService');
@@ -8,7 +10,6 @@ const { pool } = require('./db');
 
 const NSE_SYMS = ['SCOM', 'EQTY', 'KQ', 'KCB'];
 const US_SYMS = ['AAPL', 'MSFT', 'META'];
-const TEST_ARTICLE_ID = 'e2e-verify-insider-scom';
 
 (async () => {
   // 1) DB plumbing: ensure the insider columns/table exist + read persisted insider rows
@@ -21,24 +22,27 @@ const TEST_ARTICLE_ID = 'e2e-verify-insider-scom';
     console.log(`E2E-DB ERROR: ${e.message}`);
   }
 
-  // 2) Seed a temporary director-dealing article (must precede the news-map
-  //    check so getInsiderNewsSignals' 5-min cache observes it). Cleaned up at the end.
+  // 2) Seed temporary director-dealing articles (must precede the news-map
+  //    check so getInsiderNewsSignals' 5-min cache observes them). Cleaned up at the end.
+  const TEST_ARTICLES = [
+    { id: 'e2e-verify-insider-scom', symbol: 'SCOM', headline: 'Safaricom director buys 50,000 shares in open market, raising stake' },
+    { id: 'e2e-verify-insider-kq', symbol: 'KQ', headline: 'Kenya Airways director buys 2 million shares, raising stake' },
+  ];
   try {
-    await sentimentHistory.persist([{
-      id: TEST_ARTICLE_ID,
-      headline: 'Safaricom director buys 50,000 shares in open market, raising stake',
+    await sentimentHistory.persist(TEST_ARTICLES.map(a => ({
+      id: a.id,
+      headline: a.headline,
       source: 'E2E-HARNESS',
       sentiment: 'positive',
       sentimentScore: 0.6,
-      relatedStocks: ['SCOM'],
+      relatedStocks: [a.symbol],
       publishedAt: new Date().toISOString(),
       insiderDirection: 'buy',
       insiderType: 'director',
-    }]);
-    console.log('E2E-SEED inserted temporary SCOM director-dealing article');
+    })));
+    console.log(`E2E-SEED inserted temporary articles for ${TEST_ARTICLES.map(a => a.symbol).join(', ')}`);
     const { rows } = await pool.query(
-      `SELECT article_id, symbol, insider_direction, insider_type FROM news_sentiment_history WHERE article_id=$1`,
-      [TEST_ARTICLE_ID]
+      `SELECT article_id, symbol, insider_direction, insider_type FROM news_sentiment_history WHERE article_id LIKE 'e2e-verify-insider-%'`
     );
     console.log(`E2E-SEED db row(s): ${JSON.stringify(rows)}`);
   } catch (e) {
@@ -51,10 +55,10 @@ const TEST_ARTICLE_ID = 'e2e-verify-insider-scom';
     const keys = Object.keys(ins);
     console.log(`E2E-NEWS insider symbols: ${keys.length ? keys.join(', ') : 'none right now'}`);
     for (const k of keys) console.log(`E2E-NEWS ${k}: ${JSON.stringify(ins[k])}`);
-    // Direct scoring of the seeded event through the shared NSE scorer.
-    if (ins.SCOM) {
-      const scored = signalService.scoreNewsInsider(ins.SCOM);
-      console.log(`E2E-NEWS SCOM scoreNewsInsider: ${JSON.stringify(scored)}`);
+    // Direct scoring of the seeded events through the shared NSE scorer.
+    for (const k of keys) {
+      const scored = signalService.scoreNewsInsider(ins[k]);
+      console.log(`E2E-NEWS ${k} scoreNewsInsider: ${JSON.stringify(scored)}`);
     }
   } catch (e) {
     console.log(`E2E-NEWS ERROR: ${e.message}`);
@@ -118,9 +122,9 @@ const TEST_ARTICLE_ID = 'e2e-verify-insider-scom';
     console.log(`   reason=${s.reason}`);
   }
 
-  // 6) Cleanup the temporary seed row.
+  // 6) Cleanup the temporary seed rows.
   try {
-    await pool.query(`DELETE FROM news_sentiment_history WHERE article_id = $1`, [TEST_ARTICLE_ID]);
+    await pool.query(`DELETE FROM news_sentiment_history WHERE article_id LIKE 'e2e-verify-insider-%'`);
     console.log('E2E-CLEANUP removed temporary article rows');
   } catch (e) {
     console.log(`E2E-CLEANUP ERROR: ${e.message}`);

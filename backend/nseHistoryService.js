@@ -146,6 +146,19 @@ async function seedFromKenyanStocks() {
   }
 }
 
+// Persist an array of bars ({date, open, high, low, close, volume}) into the
+// durable store. The signal engine calls this after every successful MyStocks
+// history fetch so that a later MyStocks outage still has history to serve.
+async function persistBars(ticker, bars, source = 'mystocksafrica') {
+  if (!ticker || !Array.isArray(bars) || bars.length === 0) return 0;
+  let n = 0;
+  for (const b of bars) {
+    const ok = await upsertBar(ticker, b, source);
+    if (ok) n++;
+  }
+  return n;
+}
+
 // Best-effort 6-month bootstrap from MyStocks Africa partner API (currently 401; recovers automatically).
 async function seedFromMystocksAfrica(ticker) {
   try {
@@ -274,6 +287,7 @@ module.exports = {
   upsertBar,
   getBars,
   toPriceArray,
+  persistBars,
   seedFromKenyanStocks,
   seedFromMystocksAfrica,
   seedFromAlphaVantage,
