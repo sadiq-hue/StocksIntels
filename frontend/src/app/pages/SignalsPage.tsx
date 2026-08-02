@@ -99,11 +99,14 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: fracDigits }).format(value);
 }
 
-function curSym(s: { currency?: string }): string {
-  return s.currency === "KES" ? "KSh " : "$";
+function curSym(s: { currency?: string; market?: string; country?: string }): string {
+  return s.currency === "KES" || s.market === "NSE" || s.country === "KE" ? "KSh " : "$";
 }
 
-function fmtPrice(s: { currency?: string }, v: number | null | undefined): string {
+function fmtPrice(
+  s: { currency?: string; market?: string; country?: string },
+  v: number | null | undefined
+): string {
   if (v == null || Number.isNaN(v)) return "—";
   return curSym(s) + formatCurrency(v);
 }
