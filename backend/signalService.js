@@ -71,7 +71,7 @@ async function _loadSignalCacheFromDb() {
       `SELECT cache_value FROM app_cache WHERE cache_key = 'signals_cache'`
     );
     if (result.rows.length && result.rows[0].cache_value) {
-      _signalsCache = result.rows[0].cache_value;
+      _signalsCache = _normalizeSignalCurrency(result.rows[0].cache_value);
       _signalsCacheTime = 0;
       console.log(`[SignalService] Loaded ${_signalsCache.length} signals from cache DB (will regenerate in background)`);
       return;
@@ -85,20 +85,20 @@ async function _loadSignalCacheFromDb() {
        FROM signal_history ORDER BY ticker, generated_at DESC LIMIT 500`
     );
     if (hist.rows.length > 0) {
-      _signalsCache = hist.rows.map(r => ({
+      _signalsCache = _normalizeSignalCurrency(hist.rows.map(r => ({
         ticker: r.ticker,
         name: r.ticker,
         sector: r.sector || 'General',
         price: parseFloat(r.price) || 0,
         change: parseFloat(r.change_pct) || 0,
-        market: r.market || 'US',
-        currency: r.currency || 'USD',
+        market: r.market || (NSE_SYMBOLS.includes(r.ticker) ? 'NSE' : 'Global'),
+        currency: r.currency || (NSE_SYMBOLS.includes(r.ticker) ? 'KES' : 'USD'),
         signal: r.signal || 'Hold',
         type: r.trade_type || 'Swing Trade',
         confidence: parseInt(r.confidence) || 0,
         volume: 0,
         analysis: { overall: { score: 50, grade: 'C' }, fundamental: { score: 50 }, technical: { score: 50 }, financial: { score: 50 }, macro: { score: 50 } },
-      }));
+      })));
       _signalsCacheTime = Date.now();
       console.log(`[SignalService] Loaded ${_signalsCache.length} signals from signal_history (fallback)`);
       return;
@@ -107,6 +107,19 @@ async function _loadSignalCacheFromDb() {
 
   // Final fallback: build baseline from KNOWN_FUNDAMENTALS
   _buildBaselineCache();
+}
+
+// Ensure every cached signal carries a correct currency/market for its ticker,
+// backfilling stale rows written by older engine versions.
+function _normalizeSignalCurrency(signals) {
+  if (!Array.isArray(signals)) return signals;
+  for (const s of signals) {
+    if (!s) continue;
+    const isNse = NSE_SYMBOLS.includes(s.ticker);
+    if (!s.currency && isNse) s.currency = 'KES';
+    if (!s.market && isNse) s.market = 'NSE';
+  }
+  return signals;
 }
 
 function _buildBaselineCache() {
