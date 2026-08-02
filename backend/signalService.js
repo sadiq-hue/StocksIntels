@@ -30,6 +30,10 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
 (async () => {
   try {
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`);
+    // Source of each outcome row: 'live' (live-monitor stop/target/trailing fills),
+    // 'backtest' (historical day-close evaluation), or 'backfill' (mark-to-market
+    // approximation). Live win-rate stats must only count 'live'.
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'live'`);
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS analysis_data JSONB`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS stop_loss NUMERIC(15,2)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS target1 NUMERIC(15,2)`);
@@ -628,7 +632,7 @@ async function restoreStateFromDb() {
   try {
     // Load all historical outcomes into memory so health/trade tracking works across restarts
     const outcomes = await pool.query(
-      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at FROM signal_outcomes WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - $1::interval AND result IS NOT NULL ORDER BY recorded_at DESC`,
+      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at FROM signal_outcomes WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - $1::interval AND result IS NOT NULL AND source = 'live' ORDER BY recorded_at DESC`,
       [`${SIGNAL_WINDOW_DAYS} days`]
     );
     _signalOutcomes.clear();
@@ -695,7 +699,7 @@ async function restoreStateFromDb() {
     // Compute performance stats from signals generated in the last 30 days
     const result = await pool.query(
       `SELECT result, COUNT(*) as cnt FROM signal_outcomes
-       WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - INTERVAL '30 days' AND result IS NOT NULL
+       WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - INTERVAL '30 days' AND result IS NOT NULL AND source = 'live'
        GROUP BY result`
     );
     let wins = 0, losses = 0;
@@ -715,12 +719,12 @@ async function restoreStateFromDb() {
 
     console.log(`[SignalService] Restored ${_signalOutcomes.size} outcomes, ${_signalHistoryCount} history rows from DB (${wins} wins, ${losses} losses in last 30d)`);
 
-    // If no outcomes exist yet, approximate them from genuinely old signals
-    // (>=7 days) using current prices. Recent/open signals are excluded so the
-    // live monitor stays authoritative for them.
-    if (_signalOutcomes.size === 0 && _signalHistoryCount > 0) {
-      await backfillOutcomesFromHistory(30, 50);
-    }
+    // NOTE: automatic backfill intentionally removed. backfillOutcomesFromHistory
+    // marked win/loss by comparing old entries to current quotes (no stop/target/
+    // trailing fills, no market-open guard) which polluted production win-rate
+    // stats with pseudo-outcomes (e.g. phantom CRWN 60.00 entry). It is still
+    // available manually via POST /api/signals/engine/backfill and tags rows as
+    // source='backfill' so they never count toward live stats.
   } catch (e) { /* table may not exist — start fresh */ console.warn('[SignalService] restoreStateFromDb outcomes error:', e.message); }
   try {
     const result = await pool.query(
@@ -778,30 +782,17 @@ const isSell = row.signal === 'Sell' || row.signal === 'Strong Sell';
        try {
          const now = new Date().toISOString();
          await pool.query(
-           `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, source)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'backfill')
             ON CONFLICT DO NOTHING`,
            [row.ticker, row.entry_price, row.signal, currentPrice, resultStr, now, now, row.generated_at]
          );
         inserted++;
         if (won) wins++; else losses++;
-        _signalOutcomes.set(row.ticker, { entryPrice: row.entry_price, signal: row.signal, exitPrice: currentPrice, result: resultStr, recordedAt: row.generated_at });
-        // Push to live test store
-        const gAt = new Date(row.generated_at).getTime();
-        const sym = row.ticker;
-        if (!_liveTestStore.has(sym)) _liveTestStore.set(sym, { outcomes: [] });
-        const lst = _liveTestStore.get(sym);
-        lst.outcomes.push({ result: resultStr, signal: row.signal, entryPrice: row.entry_price, exitPrice: currentPrice, generatedAt: gAt, resolvedAt: Date.now() });
-        if (lst.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) lst.outcomes = lst.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
       } catch { /* skip duplicates */ }
     }
 
-    _performanceStats.wins += wins;
-    _performanceStats.losses += losses;
-    _performanceStats.total += wins + losses;
-    _performanceStats.winRate = _performanceStats.total > 0
-      ? Math.round((_performanceStats.wins / _performanceStats.total) * 1000) / 10 : 0;
-    console.log(`[SignalService] Backfilled ${inserted} outcomes from signal_history (${wins} wins, ${losses} losses)`);
+    console.log(`[SignalService] Backfilled ${inserted} outcomes from signal_history (${wins} wins, ${losses} losses) — source='backfill', excluded from live stats`);
   } catch (e) {
     console.warn('[SignalService] backfillOutcomesFromHistory error:', e.message);
   }
@@ -935,33 +926,19 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
 
           const now = new Date().toISOString();
           await pool.query(
-            `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, source)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'backtest')
              ON CONFLICT DO NOTHING`,
             [sig.ticker, entry, sig.signal, exitPrice, resultStr, now, now, sig.generated_at]
           );
           totalInserted++;
           if (resultStr === 'win') totalWins++; else totalLosses++;
-          _signalOutcomes.set(sig.ticker, { entryPrice: entry, signal: sig.signal, exitPrice, result: resultStr, recordedAt: sig.generated_at });
-          // Push to live test store
-          const gAt = new Date(sig.generated_at).getTime();
-          const sym2 = sig.ticker;
-          if (!_liveTestStore.has(sym2)) _liveTestStore.set(sym2, { outcomes: [] });
-          const lst = _liveTestStore.get(sym2);
-          lst.outcomes.push({ result: resultStr, signal: sig.signal, entryPrice: entry, exitPrice, generatedAt: gAt, resolvedAt: resolvedTs ? new Date(resolvedTs).getTime() : Date.now() });
-          if (lst.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) lst.outcomes = lst.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
         } catch (e) {
           errors++;
           console.warn(`[HistoricalBacktest] Error evaluating ${sig.ticker}:`, e.message);
         }
       }
     }
-
-    _performanceStats.wins += totalWins;
-    _performanceStats.losses += totalLosses;
-    _performanceStats.total += totalWins + totalLosses;
-    _performanceStats.winRate = _performanceStats.total > 0
-      ? Math.round((_performanceStats.wins / _performanceStats.total) * 1000) / 10 : 0;
 
     console.log(`[HistoricalBacktest] Evaluated ${totalInserted} signals (${totalWins} wins, ${totalLosses} losses, ${errors} errors)`);
     return { evaluated: totalInserted, wins: totalWins, losses: totalLosses, errors };
@@ -1070,7 +1047,7 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
     // Primary data source: signal_outcomes — has actual exit prices and real win/loss results
     let outcomeRows;
     try {
-      const conditions = ['recorded_at > NOW() - $1::interval'];
+      const conditions = ['recorded_at > NOW() - $1::interval', "source != 'backfill'"];
       const params = [`${days} days`];
       let idx = 2;
       if (signalType && signalType !== 'All') { conditions.push(`signal = $${idx++}`); params.push(signalType); }
@@ -1095,7 +1072,7 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
           COUNT(*) FILTER (WHERE result = 'loss' AND (signal IN ('Strong Buy','Buy','Sell','Strong Sell'))) AS losses,
           COUNT(*) FILTER (WHERE signal IN ('Strong Buy','Buy','Sell','Strong Sell')) AS total
         FROM signal_outcomes
-        WHERE recorded_at > NOW() - $1::interval
+        WHERE recorded_at > NOW() - $1::interval AND source != 'backfill'
       `, [`${days} days`]);
       const agg = aggResult.rows[0];
       const total = parseInt(agg.total) || 0;
