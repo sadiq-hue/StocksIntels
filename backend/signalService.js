@@ -110,14 +110,17 @@ async function _loadSignalCacheFromDb() {
 }
 
 // Ensure every cached signal carries a correct currency/market for its ticker,
-// backfilling stale rows written by older engine versions.
+// backfilling stale rows written by older engine versions (some historically
+// defaulted NSE symbols to USD).
 function _normalizeSignalCurrency(signals) {
   if (!Array.isArray(signals)) return signals;
   for (const s of signals) {
     if (!s) continue;
     const isNse = NSE_SYMBOLS.includes(s.ticker);
-    if (!s.currency && isNse) s.currency = 'KES';
-    if (!s.market && isNse) s.market = 'NSE';
+    if (isNse) {
+      s.currency = 'KES';
+      s.market = 'NSE';
+    }
   }
   return signals;
 }
