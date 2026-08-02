@@ -2192,6 +2192,7 @@ function getEngineHealth() {
       maxDrawdown: Math.round(_portfolioState.maxDrawdown * 1000) / 10,
     },
     regime: _marketRegime.regime,
+    signalCount: Array.isArray(_signalsCache) ? _signalsCache.length : 0,
     openPositions: getOpenPositionCount(),
     confidenceMultiplier: getConfidenceMultiplier(),
   };
