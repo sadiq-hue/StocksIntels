@@ -227,6 +227,7 @@ const MAX_ENTRY_DEVIATION = 0.5;
 // trustworthiness — see meetsSignalConditions() below.
 const MIN_SIGNAL_HISTORY = 20; // enough bars for ATR/RSI/SMA to be meaningful
 const MIN_RISK_REWARD = 1.2;   // buy setups must offer a sane reward vs the stop
+const INSIDER_MAX_DELTA = 8;   // max composite swing from insider-activity conviction (0 = no data)
 
 // Stop/target resolution is only valid while the exchange's live session is open;
 // resolving on after-hours/stale quotes fabricates stop-fills and entries.
@@ -513,6 +514,9 @@ async function fetchRealFinancialMetrics(symbol) {
       const X5 = inc[0].revenue / totalAssets;
       metrics.altmanZ = Math.round((1.2 * X1 + 1.4 * X2 + 3.3 * X3 + 0.6 * X4 + 1.0 * X5) * 100) / 100;
     }
+
+    // Insider / institutional ownership (US only — NSE returns null from Yahoo)
+    if (d.ownership) metrics.ownership = d.ownership;
 
     const hasUsableMetrics = metrics.peRatio || metrics.roe || metrics.revenueGrowth || metrics.currentRatio;
     _financialReportCache.set(symbol, hasUsableMetrics ? metrics : null);
@@ -3148,6 +3152,86 @@ function detectSpeculativeRally(priceHistory, fundamental) {
   return { momentum: Math.round(momentum * 10) / 10, lookback: n };
 }
 
+// ─── Insider-Activity Scoring ─────────────────────────────────────────────────
+// Deliberate, informed transactions: when officers/directors put their own
+// money behind the stock it is one of the strongest non-quantitative tells,
+// and mass insider selling is a known forward-look warning. The score is
+// conviction (not volume-level): a big offsetting sell out of pre-existing
+// holdings should not out-shout a fresh accumulation campaign.
+//
+//   netShareRatio = (buys - sells) / (buys + sells)  in [-1, 1]
+//   recency factor weights recent months ~3x older ones
+//   base  = 50 + netShareRatio * 40 + (buys - sells) * 1.5      (0..100)
+//   score = clamp(base adjusted by recency, 3, 97)
+//
+// Only US stocks have Yahoo insider data; NSE symbols pass null (ownership
+// never resolves) and stay neutral. Rows with no share count or no usable
+// date are skipped as noise.
+function scoreInsiderActivity(ownership) {
+  const cfg = engineConfig.getConfig().scoring?.signal_confidence?.insider_activity || {};
+  if (cfg.enabled === false) return null;
+  const txns = ownership?.insiderTransactions;
+  if (!Array.isArray(txns) || txns.length === 0) return null;
+  const now = Date.now();
+  const maxAgeMs = (cfg.max_age_months ?? 12) * 30 * 24 * 60 * 60 * 1000;
+  let buys = 0, sells = 0, neutral = 0, buyShares = 0, sellShares = 0;
+  let latestDate = null, latestText = null, latestTs = 0;
+  for (const t of txns) {
+    let ts = 0;
+    if (t.startDate) {
+      const raw = String(t.startDate);
+      const asNum = /^\d{10,13}$/.test(raw) ? Number(raw) : NaN;
+      const d = asNum ? new Date(asNum) : new Date(raw);
+      if (!Number.isNaN(d.getTime())) ts = d.getTime();
+    }
+    const value = t.value ?? t.transactionValue ?? null;
+    const shares = (t.shares ?? value ?? 0) || 0;
+    const label = String(t.transactionText || '').toLowerCase();
+    const isSell = /sale|sold|dispose|exercised.*&.*sold|sell/i.test(label) && !/purchase|buy/i.test(label);
+    const isBuy = /purchase|buy|acquisition|award|grant|exercise/i.test(label);
+    if (ts > 0 && latestTs < ts) {
+      latestTs = ts;
+      latestDate = new Date(ts).toISOString().slice(0, 10);
+      latestText = t.transactionText || null;
+    }
+    if (ts > 0 && now - ts > maxAgeMs) continue;
+    if (isSell) { sells++; sellShares += shares; }
+    else if (isBuy) { buys++; buyShares += shares; }
+    else neutral++;
+  }
+  if (buys + sells === 0) {
+    return {
+      score: 50, hasActivity: false, netShares: null, netShareRatio: 0,
+      buyCount: buys, sellCount: sells, neutralCount: neutral,
+      latestDate, latestText, summary: 'No conviction insider transactions in the window',
+    };
+  }
+  const netShares = buyShares - sellShares;
+  const netRatio = (buyShares + sellShares) > 0 ? (buyShares - sellShares) / (buyShares + sellShares) : 0;
+  const countDiff = buys - sells;
+  const raw = 50 + netRatio * 40 + countDiff * 1.5;
+  // Recency: recent transactions (<=3 months) carry ~2x the weight of older ones.
+  let recency = 1;
+  if (latestTs > 0 && now > latestTs) {
+    const ageMonths = (now - latestTs) / (30 * 24 * 60 * 60 * 1000);
+    recency = ageMonths <= 3 ? 1.25 : ageMonths <= 6 ? 1.1 : 1;
+  }
+  const score = Math.max(3, Math.min(97, Math.round(50 + (raw - 50) * recency)));
+  return {
+    score, hasActivity: true, netShares, netShareRatio: Math.round(netRatio * 100) / 100,
+    buyCount: buys, sellCount: sells, neutralCount: neutral,
+    latestDate, latestText,
+    summary: netShares >= 0
+      ? `Insiders net bought ${netShares.toLocaleString()} shares (${buys} buys / ${sells} sells)`
+      : `Insiders net sold ${Math.abs(netShares).toLocaleString()} shares (${buys} buys / ${sells} sells)`,
+  };
+}
+
+function ownershipShortFloat(ownership) {
+  const v = ownership?.shortFloatPct ?? ownership?.sharesShort ?? null;
+  return v != null ? Math.round(Number(v) * 100) / 100 : null;
+}
+
 // ─── Shared Signal Builder ──────────────────────────────────────────────────
 // Consolidates scoring, confidence, position sizing, and signal object construction
 // used by both generateSignals() and generateSingleSignal().
@@ -3211,6 +3295,14 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const cat = catalyst || {};
   const catDelta = cat.direction === 'positive' ? catPos : cat.direction === 'negative' ? catNeg : 0;
   if (catDelta !== 0) adjScore += catDelta;
+
+  // Insider-activity overlay: deliberate, informed transactions shift the
+  // composite the same way a catalyst does — insider accumulation lifts it,
+  // mass insider selling deepens it. No data stays neutral. Applied before the
+  // speculative cap so a sentiment-driven rally can never be re-classified as
+  // a Buy by insider conviction (the cap below still holds).
+  const insider = scoreInsiderActivity(stock.ownership);
+  if (insider) adjScore += ((insider.score - 50) / 50) * INSIDER_MAX_DELTA;
 
   // Speculative-rally gate: a large run-up on distressed fundamentals is a
   // sentiment/catalyst story, not earnings support. Cap the composite at Hold
@@ -3299,6 +3391,11 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     const z = stock.altmanZ != null ? `Altman Z ${stock.altmanZ}` : 'distressed fundamentals';
     reason += ` | SPECULATIVE: +${speculative.momentum}% run over ~${speculative.lookback} sessions on sentiment/catalyst while fundamentals stay weak (${z}) - rally not earnings-backed, composite capped at Hold, high reversal risk`;
   }
+  if (insider && insider.hasActivity && insider.score !== 50) {
+    const dirWord = insider.netShares != null && insider.netShares >= 0 ? 'buying' : 'selling';
+    const latest = insider.latestDate ? `, latest: ${insider.latestDate}` : '';
+    reason += ` | Insider ${dirWord}: ${insider.buyCount} buys / ${insider.sellCount} sells, net ${Math.abs(insider.netShares).toLocaleString()} shares (score ${insider.score}${latest})`;
+  }
   const timeframes = { 'Aggressive Buy': '1-4 weeks', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks', 'Long Term Value': '3-6 months', 'Long Term': '3-6 months', 'Avoid': 'N/A' };
   const isNse = NSE_SYMBOLS.includes(symbol);
   const obj = {
@@ -3320,6 +3417,19 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       altmanZ: stock.altmanZ != null ? stock.altmanZ : null,
       warning: 'Sentiment/catalyst-driven rally on distressed fundamentals - capped at Hold, not a Buy',
     } : null,
+    insider: insider ? {
+      score: insider.score,
+      hasActivity: insider.hasActivity,
+      netShares: insider.netShares != null ? insider.netShares : null,
+      netShareRatio: insider.netShareRatio,
+      buyCount: insider.buyCount,
+      sellCount: insider.sellCount,
+      neutralCount: insider.neutralCount,
+      latestDate: insider.latestDate,
+      latestText: insider.latestText,
+      summary: insider.summary,
+      shortFloatPct: ownershipShortFloat(stock.ownership),
+    } : null,
     var95: riskMetrics.var95 + '%',
     var99: riskMetrics.var99 ? riskMetrics.var99 + '%' : null,
     cvar95: riskMetrics.cvar95 ? riskMetrics.cvar95 + '%' : null,
@@ -3332,6 +3442,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       technical: { score: technical.score, grade: technical.technicalGrade, indicators: technical.indicators },
       financial: { score: financial.score, grade: financial.financialGrade, analysis: financial.analysis },
       macro: { score: macro.score, grade: macro.grade, signal: macro.signal, country: macro.country, summary: macro.summary, conditions: macro.conditions },
+      insider: insider ? { score: insider.score, grade: getGrade(insider.score), hasActivity: insider.hasActivity, netShares: insider.netShares, buyCount: insider.buyCount, sellCount: insider.sellCount, latestDate: insider.latestDate, summary: insider.summary } : { score: null, grade: 'N/A', hasActivity: false, summary: 'No insider data (NSE stocks have no Yahoo insider coverage)' },
       mlFeatures,
       overall: { score: Math.round(overallScore), grade: getGrade(Math.round(overallScore)), dataSource: stock.dataSource || 'fallback' },
       forwardTest: getForwardTestSnapshot(),
@@ -3475,6 +3586,7 @@ module.exports = {
   warmFMPCache,
   getFundamentals,
   detectSpeculativeRally,
+  scoreInsiderActivity,
   _buildSignal,
   persistSignals,
   persistPredictionLog,

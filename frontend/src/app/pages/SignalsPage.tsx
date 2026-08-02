@@ -329,6 +329,11 @@ export function SignalsPage() {
                 {s.weeklyTrend && <span className={`px-1.5 py-0.5 rounded font-medium ${s.weeklyTrend === "Bullish" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>{s.weeklyTrend}</span>}
                 {s.speculative && <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-semibold">SPECULATIVE</span>}
                 {s.catalyst?.direction && <span className={`px-1.5 py-0.5 rounded font-semibold border ${s.catalyst.direction === "positive" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>{s.catalyst.direction === "positive" ? "CATALYST +" : "CATALYST −"}</span>}
+                {s.insider?.hasActivity && s.insider.score !== 50 && (
+                  <span className={`px-1.5 py-0.5 rounded font-semibold border ${s.insider.netShares != null && s.insider.netShares >= 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>
+                    INSIDER {s.insider.netShares != null && s.insider.netShares >= 0 ? "+" : "−"}
+                  </span>
+                )}
               </div>
 
               {s.speculative && (
@@ -343,6 +348,19 @@ export function SignalsPage() {
                   <p className="text-[11px] leading-snug">
                     <span className={`font-semibold ${s.catalyst.direction === "positive" ? "text-emerald-700" : "text-red-700"}`}>{s.catalyst.direction === "positive" ? "▲" : "▼"} {s.catalyst.type}</span>
                     <span className="text-muted-foreground"> — {s.catalyst.headline.slice(0, 90)}{s.catalyst.headline.length > 90 ? "…" : ""}</span>
+                  </p>
+                </div>
+              )}
+
+              {s.insider?.hasActivity && (
+                <div className="px-4 pb-3 -mt-1">
+                  <p className="text-[11px] leading-snug">
+                    <span className={`font-semibold ${s.insider.netShares != null && s.insider.netShares >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                      {s.insider.netShares != null && s.insider.netShares >= 0 ? "▲" : "▼"} Insiders {s.insider.netShares != null && s.insider.netShares >= 0 ? "net bought" : "net sold"} {s.insider.netShares != null ? `${Math.abs(s.insider.netShares).toLocaleString()} sh` : ""} ({s.insider.buyCount} buys / {s.insider.sellCount} sells)
+                    </span>
+                    {s.insider.latestDate && <span className="text-muted-foreground"> · latest {s.insider.latestDate}</span>}
+                    {s.insider.score != null && <span className="text-muted-foreground"> · insider score {s.insider.score}/100</span>}
+                    {s.insider.shortFloatPct != null && <span className="text-muted-foreground"> · short float {s.insider.shortFloatPct}%</span>}
                   </p>
                 </div>
               )}
@@ -538,9 +556,10 @@ export function SignalsPage() {
                   {/* ── Score Breakdown ── */}
                   <h3 className="text-sm font-semibold text-foreground">Score Breakdown</h3>
                   <div className="space-y-2">
-                    {(["fundamental", "technical", "financial", "macro", "overall"] as const).map(key => {
-                      const section = selected.analysis![key];
+                    {(["fundamental", "technical", "financial", "macro", "insider", "overall"] as const).map(key => {
+                      const section = selected.analysis![key] as any;
                       if (!section) return null;
+                      if (section.score == null) return null;
                       const label = key === 'overall' ? 'Overall' : key.charAt(0).toUpperCase() + key.slice(1);
                       return (
                         <div key={key} className="flex items-center gap-3">
@@ -573,6 +592,20 @@ export function SignalsPage() {
                     {selected.catalyst.source && <span>Source: {selected.catalyst.source}</span>}
                     {selected.catalyst.publishedAt && <span>Published: {new Date(selected.catalyst.publishedAt).toLocaleDateString()}</span>}
                     {selected.catalyst.strength != null && <span>Strength: {selected.catalyst.strength}/5</span>}
+                  </div>
+                </div>
+              )}
+
+              {selected.insider?.hasActivity && (
+                <div className={`rounded-lg border p-4 ${selected.insider.netShares != null && selected.insider.netShares >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+                  <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${selected.insider.netShares != null && selected.insider.netShares >= 0 ? "text-emerald-800" : "text-red-800"}`}>
+                    {selected.insider.netShares != null && selected.insider.netShares >= 0 ? "Insider Buying" : "Insider Selling"} {selected.insider.score != null ? `· Score ${selected.insider.score}/100` : ""}
+                  </p>
+                  <p className="text-sm text-foreground leading-relaxed">{selected.insider.summary}</p>
+                  <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground flex-wrap">
+                    {selected.insider.latestDate && <span>Latest: {selected.insider.latestDate}</span>}
+                    {selected.insider.latestText && <span>Last: {selected.insider.latestText}</span>}
+                    {selected.insider.shortFloatPct != null && <span>Short float: {selected.insider.shortFloatPct}%</span>}
                   </div>
                 </div>
               )}

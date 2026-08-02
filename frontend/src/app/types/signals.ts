@@ -16,6 +16,20 @@ export interface SpeculativeFlag {
   warning?: string;
 }
 
+export interface InsiderActivity {
+  score: number;
+  hasActivity: boolean;
+  netShares: number | null;
+  netShareRatio: number | null;
+  buyCount: number;
+  sellCount: number;
+  neutralCount: number;
+  latestDate?: string | null;
+  latestText?: string | null;
+  summary: string;
+  shortFloatPct?: number | null;
+}
+
 export interface Signal {
   id: string;
   ticker: string;
@@ -57,10 +71,12 @@ export interface Signal {
   dataSource?: string;
   catalyst?: Catalyst | null;
   speculative?: SpeculativeFlag | null;
+  insider?: InsiderActivity | null;
   analysis?: {
     fundamental: { score: number; grade: string; metrics: Record<string, string> };
     technical: { score: number; grade: string; indicators: Record<string, string> };
     financial: { score: number; grade: string; analysis: Record<string, string> };
+    insider?: { score: number | null; grade: string; hasActivity: boolean; netShares: number | null; buyCount: number; sellCount: number; latestDate: string | null; summary: string } | null;
     macro?: {
       score: number;
       grade: string;
