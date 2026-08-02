@@ -3178,8 +3178,11 @@ function detectSpeculativeRally(priceHistory, fundamental) {
 //   score = clamp(base adjusted by recency, 3, 97)
 //
 // Only US stocks have Yahoo insider data; NSE symbols pass null (ownership
-// never resolves) and stay neutral. Rows with no share count or no usable
-// date are skipped as noise.
+// never resolves) and stay neutral. Transaction rows carry their direction in
+// the `text` label (e.g. "Sale at price X", "Purchase at price X"); stock
+// awards/grants/gifts are compensation, not conviction, so they count as
+// neutral rather than buys. Rows with no usable date are treated as current
+// (Yahoo returns the latest 15, so age is bounded in practice).
 function scoreInsiderActivity(ownership) {
   const cfg = engineConfig.getConfig().scoring?.signal_confidence?.insider_activity || {};
   if (cfg.enabled === false) return null;
@@ -3191,7 +3194,7 @@ function scoreInsiderActivity(ownership) {
   let latestDate = null, latestText = null, latestTs = 0;
   for (const t of txns) {
     let ts = 0;
-    if (t.startDate) {
+    if (t.startDate && typeof t.startDate === 'string') {
       const raw = String(t.startDate);
       const asNum = /^\d{10,13}$/.test(raw) ? Number(raw) : NaN;
       const d = asNum ? new Date(asNum) : new Date(raw);
@@ -3199,13 +3202,15 @@ function scoreInsiderActivity(ownership) {
     }
     const value = t.value ?? t.transactionValue ?? null;
     const shares = (t.shares ?? value ?? 0) || 0;
-    const label = String(t.transactionText || '').toLowerCase();
-    const isSell = /sale|sold|dispose|exercised.*&.*sold|sell/i.test(label) && !/purchase|buy/i.test(label);
-    const isBuy = /purchase|buy|acquisition|award|grant|exercise/i.test(label);
+    const label = String(t.text ?? t.transactionText ?? '').toLowerCase();
+    // Compensation grants/gifts are not discretionary conviction trades.
+    const isComp = /stock (award|grant|gift)|restricted/i.test(label);
+    const isSell = !isComp && /sale|sold|sell/i.test(label) && !/purchase|buy/i.test(label);
+    const isBuy = !isComp && /purchase|acqui|buy/i.test(label);
     if (ts > 0 && latestTs < ts) {
       latestTs = ts;
       latestDate = new Date(ts).toISOString().slice(0, 10);
-      latestText = t.transactionText || null;
+      latestText = t.text || t.transactionText || null;
     }
     if (ts > 0 && now - ts > maxAgeMs) continue;
     if (isSell) { sells++; sellShares += shares; }
