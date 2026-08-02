@@ -2363,8 +2363,13 @@ async function cleanupOldSignals() {
   if (now - _lastCleanup < CLEANUP_INTERVAL) return;
   _lastCleanup = now;
   try {
+    // Keep signal_history for the full evaluation window (SIGNAL_WINDOW_DAYS) so the
+    // open-signal restore and historical backtests still see Long Term signals that
+    // can stay open up to ~90 days. A 7-day prune made those signals disappear and
+    // silently shrank Monitored Signals / history after restarts.
     const result = await pool.query(
-      "DELETE FROM signal_history WHERE generated_at < NOW() - INTERVAL '7 days'"
+      `DELETE FROM signal_history WHERE generated_at < NOW() - make_interval(days => $1::int)`,
+      [SIGNAL_WINDOW_DAYS]
     );
     if (result.rowCount > 0) {
       console.log(`[SignalService] Cleaned ${result.rowCount} old signal records`);
