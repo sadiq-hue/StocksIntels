@@ -40,8 +40,12 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     await nseHistory.ensureTable().catch(() => {});
   } catch {}
 })();
-// Signal evaluation window (must be declared before restoreStateFromDb runs)
-const SIGNAL_WINDOW_DAYS = 1;
+// Signal evaluation window (must be declared before restoreStateFromDb runs).
+// Covers the longest trade-type lifespan: 'Long Term'/'Long Term Value' expire at
+// 60 days (TRADE_TYPE_EXPIRY) and validations can extend signals by +50%, so a
+// 90-day window keeps monitored signals, live/forward test stats, and the auto
+// backtest aligned with the full signal lifecycle instead of only the last day.
+const SIGNAL_WINDOW_DAYS = 90;
 // Restore performance stats and portfolio state from DB on startup
 restoreStateFromDb().catch(() => {});
 // Bootstrap durable NSE daily history (KenyanStocks seed + best-effort deep bootstrap) non-blocking
