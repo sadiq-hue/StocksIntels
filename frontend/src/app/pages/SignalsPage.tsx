@@ -116,6 +116,11 @@ function fmtNum(v: number | null | undefined): string {
   return formatCurrency(v);
 }
 
+function insiderPositive(ins: { netShares: number | null; buyCount: number; sellCount: number } | null | undefined): boolean {
+  if (!ins) return false;
+  return ins.netShares != null ? ins.netShares >= 0 : ins.buyCount >= ins.sellCount;
+}
+
 export function SignalsPage() {
   const [signals, setSignals] = useState<StockSignal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -330,8 +335,8 @@ export function SignalsPage() {
                 {s.speculative && <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-semibold">SPECULATIVE</span>}
                 {s.catalyst?.direction && <span className={`px-1.5 py-0.5 rounded font-semibold border ${s.catalyst.direction === "positive" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>{s.catalyst.direction === "positive" ? "CATALYST +" : "CATALYST −"}</span>}
                 {s.insider?.hasActivity && s.insider.score !== 50 && (
-                  <span className={`px-1.5 py-0.5 rounded font-semibold border ${s.insider.netShares != null && s.insider.netShares >= 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                    INSIDER {s.insider.netShares != null && s.insider.netShares >= 0 ? "+" : "−"}
+                  <span className={`px-1.5 py-0.5 rounded font-semibold border ${insiderPositive(s.insider) ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>
+                    INSIDER {insiderPositive(s.insider) ? "+" : "−"}
                   </span>
                 )}
               </div>
@@ -355,9 +360,7 @@ export function SignalsPage() {
               {s.insider?.hasActivity && (
                 <div className="px-4 pb-3 -mt-1">
                   <p className="text-[11px] leading-snug">
-                    <span className={`font-semibold ${s.insider.netShares != null && s.insider.netShares >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                      {s.insider.netShares != null && s.insider.netShares >= 0 ? "▲" : "▼"} Insiders {s.insider.netShares != null && s.insider.netShares >= 0 ? "net bought" : "net sold"} {s.insider.netShares != null ? `${Math.abs(s.insider.netShares).toLocaleString()} sh` : ""} ({s.insider.buyCount} buys / {s.insider.sellCount} sells)
-                    </span>
+                    <span className={`font-semibold ${insiderPositive(s.insider) ? "text-emerald-700" : "text-red-700"}`}>{insiderPositive(s.insider) ? "▲" : "▼"} {s.insider.summary}</span>
                     {s.insider.latestDate && <span className="text-muted-foreground"> · latest {s.insider.latestDate}</span>}
                     {s.insider.score != null && <span className="text-muted-foreground"> · insider score {s.insider.score}/100</span>}
                     {s.insider.shortFloatPct != null && <span className="text-muted-foreground"> · short float {s.insider.shortFloatPct}%</span>}
@@ -597,9 +600,9 @@ export function SignalsPage() {
               )}
 
               {selected.insider?.hasActivity && (
-                <div className={`rounded-lg border p-4 ${selected.insider.netShares != null && selected.insider.netShares >= 0 ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
-                  <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${selected.insider.netShares != null && selected.insider.netShares >= 0 ? "text-emerald-800" : "text-red-800"}`}>
-                    {selected.insider.netShares != null && selected.insider.netShares >= 0 ? "Insider Buying" : "Insider Selling"} {selected.insider.score != null ? `· Score ${selected.insider.score}/100` : ""}
+                <div className={`rounded-lg border p-4 ${insiderPositive(selected.insider) ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
+                  <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${insiderPositive(selected.insider) ? "text-emerald-800" : "text-red-800"}`}>
+                    {insiderPositive(selected.insider) ? "Insider Buying" : "Insider Selling"} {selected.insider.score != null ? `· Score ${selected.insider.score}/100` : ""}
                   </p>
                   <p className="text-sm text-foreground leading-relaxed">{selected.insider.summary}</p>
                   <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground flex-wrap">

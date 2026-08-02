@@ -404,6 +404,66 @@ async function getCatalysts() {
   return result;
 }
 
+// Per-symbol news-derived insider/director activity. Combines today's live feed
+// (articles whose headlines classify as insider buys/sells) with persisted
+// history, so the insider dimension for a symbol survives quiet days the same
+// way catalysts do. Returns { [SYMBOL]: { buys, sells, latestTs, latestDate,
+// latestText, latestSource } }.
+let insiderNewsCache = null;
+let insiderNewsCacheTime = 0;
+
+async function getInsiderNewsSignals() {
+  if (insiderNewsCache && Date.now() - insiderNewsCacheTime < SENTIMENT_CACHE_TTL) {
+    return insiderNewsCache;
+  }
+  const news = await Promise.race([
+    getAllNews(),
+    new Promise(resolve => setTimeout(() => resolve([]), 20000)),
+  ]);
+  // Persist classified articles so they count across days (idempotent).
+  sentimentHistory.persist(news.filter(a => !a.isMock && a.insiderDirection)).catch(() => {});
+  const result = {};
+  for (const a of news) {
+    if (a.isMock) continue;
+    const dir = a.insiderDirection;
+    if (dir !== 'buy' && dir !== 'sell') continue;
+    const ts = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+    for (const ticker of a.relatedStocks || []) {
+      const t = String(ticker).toUpperCase();
+      if (!t) continue;
+      if (!result[t]) result[t] = { buys: 0, sells: 0, latestTs: 0, latestDate: null, latestText: null, latestSource: null };
+      const e = result[t];
+      if (dir === 'buy') e.buys++;
+      else e.sells++;
+      if (ts > e.latestTs) {
+        e.latestTs = ts;
+        e.latestDate = a.publishedAt ? a.publishedAt.slice(0, 10) : null;
+        e.latestText = String(a.headline || '').slice(0, 160);
+        e.latestSource = a.source || null;
+      }
+    }
+  }
+  try {
+    const historical = await sentimentHistory.getInsiderHistorical(sentimentHistory.HISTORY_WINDOW_DAYS);
+    for (const [t, h] of Object.entries(historical)) {
+      if (!result[t]) result[t] = h;
+      else {
+        result[t].buys += h.buys;
+        result[t].sells += h.sells;
+        if (h.latestTs > result[t].latestTs) {
+          result[t].latestTs = h.latestTs;
+          result[t].latestDate = h.latestDate;
+          result[t].latestText = h.latestText;
+          result[t].latestSource = h.latestSource;
+        }
+      }
+    }
+  } catch { /* history unavailable; live map still valid */ }
+  insiderNewsCache = result;
+  insiderNewsCacheTime = Date.now();
+  return result;
+}
+
 // Determine if article is NSE-related or global
 function classifyArticle(title, excerpt, relatedStocks) {
   if (relatedStocks.length > 0) return 'nse';
@@ -500,6 +560,37 @@ function classifyCatalyst(title, excerpt) {
   }
   if (best) return best;
   return { catalyst: null, direction: null, strength: 0 };
+}
+
+// ─── Insider/director-transaction detection from news ────────────────────────
+// NSE stocks have no Yahoo insider ownership coverage, so the engine derives
+// the insider dimension for them from reported transactions: director/CEO/
+// major-shareholder purchases and sales, and the "Acquisition/Disposal of
+// shares by director" phrasing NSE director-dealings notices use. Every match
+// carries a direction so the signal builder can score conviction like the
+// Yahoo-based scorer does for US symbols.
+const INSIDER_RULES = [
+  { direction: 'buy', type: 'insider-buy', regex: [
+    /\b(director|directors|chairman|chairwoman|chairperson|ceo|managing director|\bmd\b|executive|executives|founder|board member|board|insider|insiders|major shareholder|largest shareholder|controlling shareholder|tycoon|billionaire)\b.{0,70}?\b(buys?|bought|purchases?|purchased|acquires?|acquired|accumulates?|accumulating|raises? stake|increases? stake|increases? (his|her|its|their) holding|adds? to|takes? (a )?stake)\b/i,
+    /\b(buys?|bought|purchases?|purchased|acquires?|acquired|accumulates?)\b.{0,45}?\b(shares?|stake|stock|holding)\b.{0,60}?\b(by a director|by the chairman|by the ceo|by executives|by insiders|by the board|by management|by the founder)\b/i,
+    /(acquisition|acquisitions|acquires?|acquired) of shares (by|from) (a )?(director|chairman|ceo|executive|insider|the board|management)/i,
+  ]},
+  { direction: 'sell', type: 'insider-sell', regex: [
+    /\b(director|directors|chairman|chairwoman|chairperson|ceo|managing director|\bmd\b|executive|executives|founder|board member|board|insider|insiders|major shareholder|largest shareholder|controlling shareholder|tycoon|billionaire)\b.{0,70}?\b(sells?|sold|offloads?|offloaded|disposes?|disposed|reduces? stake|trims?|cuts? stake|exits?|sheds?)\b/i,
+    /\b(sells?|sold|offloads?|offloaded|disposes?|disposed)\b.{0,45}?\b(shares?|stake|stock|holding)\b.{0,60}?\b(by a director|by the chairman|by the ceo|by executives|by insiders|by the board|by management|by the founder)\b/i,
+    /(disposal|disposals|disposes?|disposed) of shares (by|of) (a )?(director|chairman|ceo|executive|insider|the board|management)/i,
+    /sale of shares (by|of) (a )?(director|chairman|ceo|executive|insider|the board|management)/i,
+  ]},
+];
+
+function classifyInsider(title, excerpt) {
+  const text = (String(title || '') + ' ' + String(excerpt || '')).toLowerCase();
+  for (const rule of INSIDER_RULES) {
+    if (rule.regex.some(r => r.test(text))) {
+      return { direction: rule.direction, type: rule.type };
+    }
+  }
+  return { direction: null, type: null };
 }
 
 // Fetch news from NewsAPI with Kenyan focus
@@ -1144,6 +1235,8 @@ async function backfillKwsHistory(days = 14, maxPages = 100) {
           catalyst: classifyCatalyst(title, excerpt || '').catalyst,
           catalystDirection: classifyCatalyst(title, excerpt || '').direction,
           catalystStrength: classifyCatalyst(title, excerpt || '').strength,
+          insiderDirection: classifyInsider(title, excerpt || '').direction,
+          insiderType: classifyInsider(title, excerpt || '').type,
         });
       } catch { /* skip failed page */ }
     }));
@@ -1306,6 +1399,9 @@ async function getAllNews(limit = 50, categoryFilter) {
       a.catalyst = cat.catalyst;
       a.catalystDirection = cat.direction;
       a.catalystStrength = cat.strength;
+      const ins = classifyInsider(a.headline, a.excerpt);
+      a.insiderDirection = ins.direction;
+      a.insiderType = ins.type;
     });
 
     unique.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
@@ -1371,5 +1467,7 @@ async function getNewsSummary() {
   };
 }
 
-module.exports = { getAllNews, getNewsSummary, getAggregatedSentiment, getCatalysts, classifyHotNews, classifyCatalyst, extractRelatedStocks, backfillSentimentHistory, initNewsHistory, KENYAN_STOCKS, STOCK_SYMBOLS };
+module.exports = { getAllNews, getNewsSummary, getAggregatedSentiment, getCatalysts, getInsiderNewsSignals, classifyHotNews,
+    classifyCatalyst, classifyInsider, extractRelatedStocks, backfillSentimentHistory, initNewsHistory, KENYAN_STOCKS,
+    STOCK_SYMBOLS };
 

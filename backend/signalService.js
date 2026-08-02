@@ -8,7 +8,7 @@ const { getStockQuote, getQuotesBatch } = require('./marketService');
 const { fetchHistoricalQuotes } = require('./globalScraper');
 const nseHistory = require('./nseHistoryService');
 const { getMacroScore, getCountryForSymbol, generateMacroReason } = require('./macroService');
-const { getAggregatedSentiment, getCatalysts, initNewsHistory } = require('./newsService');
+const { getAggregatedSentiment, getCatalysts, getInsiderNewsSignals, initNewsHistory } = require('./newsService');
 const { getKeyMetrics, getQuote, getCompanyProfile } = require('./financialReportsService');
 const { calculateSMA } = require('./technicalIndicators');
 const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL_SYMBOLS, SECTOR_AVG_PE, INDUSTRY_MEDIAN_EV_EBITDA, TBILI_RATE, KNOWN_FUNDAMENTALS, NSE_FUNDAMENTALS } = require('./stockData');
@@ -2510,6 +2510,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   // Quick mode: skip all external fetches, use only cached data
   let newsSentiment = {};
   let catalysts = {};
+  let insiderNews = {};
   let regime = _marketRegime;
   if (!quick) {
     try {
@@ -2521,6 +2522,12 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     try {
       catalysts = await Promise.race([
         getCatalysts(),
+        new Promise(resolve => setTimeout(() => resolve({}), 15000)),
+      ]);
+    } catch { /* silent */ }
+    try {
+      insiderNews = await Promise.race([
+        getInsiderNewsSignals(),
         new Promise(resolve => setTimeout(() => resolve({}), 15000)),
       ]);
     } catch { /* silent */ }
@@ -2625,6 +2632,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       fundamental, technical, financial, macro, regime, weights, weeklyTrend,
       newsSent: newsSentiment[symbol] || null,
       catalyst: catalysts[symbol] || null,
+      insiderNews: insiderNews[symbol] || null,
       priceHistory, degFactor
     });
     const prevOutcome = _signalOutcomes.get(symbol);
@@ -2858,6 +2866,11 @@ async function generateSingleSignal(symbol) {
       const catalystMap = await getCatalysts();
       catalyst = catalystMap[symbol] || null;
     } catch { /* silent */ }
+    let insiderNews = null;
+    try {
+      const insiderNewsMap = await getInsiderNewsSignals();
+      insiderNews = insiderNewsMap[symbol] || null;
+    } catch { /* silent */ }
     const priceHistory = await getPriceHistory(symbol).catch(() => null);
     const fundamental = analyzeFundamentals(stock, currentPrice, newsSent, _dynamicSectorPE);
     const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume);
@@ -2877,7 +2890,7 @@ async function generateSingleSignal(symbol) {
     const sigObj = await _buildSignal({
       symbol, stock, currentPrice, priceChange, volume,
       fundamental, technical, financial, macro, regime, weights, weeklyTrend,
-      newsSent, catalyst, priceHistory, degFactor
+      newsSent, catalyst, insiderNews, priceHistory, degFactor
     });
     if (sigObj) {
       // Same strict all-conditions gate as the batch path: an on-demand lookup
@@ -3232,10 +3245,43 @@ function ownershipShortFloat(ownership) {
   return v != null ? Math.round(Number(v) * 100) / 100 : null;
 }
 
+// ─── News-derived Insider Scoring (NSE) ──────────────────────────────────────
+// NSE stocks have no Yahoo insider-transaction coverage (ownership never
+// resolves), so their insider dimension comes from reported director/insider/
+// major-shareholder transactions in the news pipeline (Kenyan Wall Street,
+// Business Daily, Bizna Kenya, NewsAPI...). Each reported event shifts the
+// score; no events means no data (neutral). Produces the same shape as
+// scoreInsiderActivity so _buildSignal treats both sources identically.
+function scoreNewsInsider(info) {
+  const cfg = engineConfig.getConfig().scoring?.signal_confidence?.insider_activity || {};
+  if (cfg.enabled === false) return null;
+  if (!info) return null;
+  const buys = Number(info.buys) || 0;
+  const sells = Number(info.sells) || 0;
+  if (buys + sells === 0) return null;
+  const perEvent = cfg.news_per_event ?? 6;
+  const raw = 50 + (buys - sells) * perEvent;
+  // Recency: a fresh report (<=7 days) carries more weight than a stale one.
+  let recency = 1;
+  if (info.latestTs) {
+    const ageDays = (Date.now() - Number(info.latestTs)) / 864e5;
+    recency = ageDays <= 7 ? 1.3 : ageDays <= 21 ? 1.1 : 1;
+  }
+  const score = Math.max(5, Math.min(95, Math.round(50 + (raw - 50) * recency)));
+  return {
+    score, hasActivity: true, netShares: null, netShareRatio: null,
+    buyCount: buys, sellCount: sells, neutralCount: 0,
+    latestDate: info.latestDate || null, latestText: info.latestText || null,
+    summary: buys >= sells
+      ? `News reports ${buys} insider/director buying event(s)${sells ? ` vs ${sells} selling` : ''} (latest ${info.latestDate || 'n/a'})`
+      : `News reports ${sells} insider/director selling event(s)${buys ? ` vs ${buys} buying` : ''} (latest ${info.latestDate || 'n/a'})`,
+  };
+}
+
 // ─── Shared Signal Builder ──────────────────────────────────────────────────
 // Consolidates scoring, confidence, position sizing, and signal object construction
 // used by both generateSignals() and generateSingleSignal().
-async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, catalyst, priceHistory, degFactor }) {
+async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, catalyst, insiderNews, priceHistory, degFactor }) {
   // Read scoring and portfolio config once at the top
   const sc = engineConfig.getConfig().scoring?.signal_confidence || {};
   const baselineConf = sc.baseline ?? 50;
@@ -3301,7 +3347,9 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // mass insider selling deepens it. No data stays neutral. Applied before the
   // speculative cap so a sentiment-driven rally can never be re-classified as
   // a Buy by insider conviction (the cap below still holds).
-  const insider = scoreInsiderActivity(stock.ownership);
+  // US symbols score from Yahoo ownership transactions; NSE symbols (no Yahoo
+  // insider coverage) score from director/insider dealings reported in news.
+  const insider = scoreInsiderActivity(stock.ownership) || scoreNewsInsider(insiderNews || null);
   if (insider) adjScore += ((insider.score - 50) / 50) * INSIDER_MAX_DELTA;
 
   // Speculative-rally gate: a large run-up on distressed fundamentals is a
@@ -3392,9 +3440,11 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     reason += ` | SPECULATIVE: +${speculative.momentum}% run over ~${speculative.lookback} sessions on sentiment/catalyst while fundamentals stay weak (${z}) - rally not earnings-backed, composite capped at Hold, high reversal risk`;
   }
   if (insider && insider.hasActivity && insider.score !== 50) {
-    const dirWord = insider.netShares != null && insider.netShares >= 0 ? 'buying' : 'selling';
+    const netPos = insider.netShares != null ? insider.netShares >= 0 : insider.buyCount >= insider.sellCount;
+    const dirWord = netPos ? 'buying' : 'selling';
+    const netTxt = insider.netShares != null ? `, net ${Math.abs(insider.netShares).toLocaleString()} shares` : '';
     const latest = insider.latestDate ? `, latest: ${insider.latestDate}` : '';
-    reason += ` | Insider ${dirWord}: ${insider.buyCount} buys / ${insider.sellCount} sells, net ${Math.abs(insider.netShares).toLocaleString()} shares (score ${insider.score}${latest})`;
+    reason += ` | Insider ${dirWord}: ${insider.buyCount} buys / ${insider.sellCount} sells${netTxt} (score ${insider.score}${latest})`;
   }
   const timeframes = { 'Aggressive Buy': '1-4 weeks', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks', 'Long Term Value': '3-6 months', 'Long Term': '3-6 months', 'Avoid': 'N/A' };
   const isNse = NSE_SYMBOLS.includes(symbol);
@@ -3587,6 +3637,7 @@ module.exports = {
   getFundamentals,
   detectSpeculativeRally,
   scoreInsiderActivity,
+  scoreNewsInsider,
   _buildSignal,
   persistSignals,
   persistPredictionLog,

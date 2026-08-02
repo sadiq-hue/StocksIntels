@@ -28,6 +28,10 @@ async function ensureTable() {
   await pool.query(`ALTER TABLE news_sentiment_history ADD COLUMN IF NOT EXISTS hot_type VARCHAR(30)`);
   await pool.query(`ALTER TABLE news_sentiment_history ADD COLUMN IF NOT EXISTS catalyst_direction VARCHAR(10)`);
   await pool.query(`ALTER TABLE news_sentiment_history ADD COLUMN IF NOT EXISTS catalyst_strength SMALLINT`);
+  // Insider-transaction columns (news-derived insider/director dealings — the only
+  // insider source for NSE stocks, which have no Yahoo ownership coverage).
+  await pool.query(`ALTER TABLE news_sentiment_history ADD COLUMN IF NOT EXISTS insider_direction VARCHAR(10)`);
+  await pool.query(`ALTER TABLE news_sentiment_history ADD COLUMN IF NOT EXISTS insider_type VARCHAR(30)`);
 }
 
 // Recency weight for a row aged `ageDays`, linear decay over `window` days.
@@ -46,7 +50,7 @@ async function persist(articles) {
   const flush = async () => {
     if (valueGroups.length === 0) return;
     const sql = `
-      INSERT INTO news_sentiment_history (article_id, symbol, headline, source, sentiment, sentiment_score, published_at, hot_type, catalyst_direction, catalyst_strength)
+      INSERT INTO news_sentiment_history (article_id, symbol, headline, source, sentiment, sentiment_score, published_at, hot_type, catalyst_direction, catalyst_strength, insider_direction, insider_type)
       VALUES ${valueGroups.join(', ')}
       ON CONFLICT (article_id, symbol) DO NOTHING
     `;
@@ -68,14 +72,16 @@ async function persist(articles) {
       : String(a.hotType || '').slice(0, 30);
     const catDir = ['positive', 'negative'].includes(a.catalystDirection) ? String(a.catalystDirection) : null;
     const catStrength = a.catalystDirection && a.catalystStrength != null && !isNaN(Number(a.catalystStrength)) ? Number(a.catalystStrength) : null;
+    const insiderDir = ['buy', 'sell'].includes(a.insiderDirection) ? String(a.insiderDirection) : null;
+    const insiderType = insiderDir ? String(a.insiderType || 'insider').slice(0, 30) : null;
     for (const sym of syms) {
       const s = String(sym || '').toUpperCase().trim();
       if (!s) continue;
       params.push(
         String(a.id || ''), s, String(a.headline || '').slice(0, 300), String(a.source || '').slice(0, 80),
-        sentiment, score, publishedAt, hotType, catDir, catStrength
+        sentiment, score, publishedAt, hotType, catDir, catStrength, insiderDir, insiderType
       );
-      valueGroups.push(`($${params.length - 9}, $${params.length - 8}, $${params.length - 7}, $${params.length - 6}, $${params.length - 5}, $${params.length - 4}, $${params.length - 3}, $${params.length - 2}, $${params.length - 1}, $${params.length})`);
+      valueGroups.push(`($${params.length - 11}, $${params.length - 10}, $${params.length - 9}, $${params.length - 8}, $${params.length - 7}, $${params.length - 6}, $${params.length - 5}, $${params.length - 4}, $${params.length - 3}, $${params.length - 2}, $${params.length - 1}, $${params.length})`);
       if (valueGroups.length >= 200) await flush();
     }
   }
@@ -147,6 +153,35 @@ async function getCatalystHistorical(days = HISTORY_WINDOW_DAYS) {
   return result;
 }
 
+// Per-symbol news-derived insider/director transactions over the last `days`.
+// Returns { [SYMBOL]: { buys, sells, latestDate, latestTs, latestText, latestSource } }.
+async function getInsiderHistorical(days = HISTORY_WINDOW_DAYS) {
+  const { rows } = await pool.query(
+    `SELECT symbol, insider_direction, insider_type, headline, source, published_at
+     FROM news_sentiment_history
+     WHERE insider_direction IN ('buy', 'sell')
+       AND published_at >= now() - ($1::int * interval '1 day')`,
+    [days]
+  );
+  const agg = {};
+  for (const r of rows) {
+    const sym = String(r.symbol || '').toUpperCase();
+    if (!sym) continue;
+    const ts = new Date(r.published_at).getTime();
+    if (!agg[sym]) agg[sym] = { buys: 0, sells: 0, latestTs: 0, latestDate: null, latestText: null, latestSource: null };
+    const entry = agg[sym];
+    if (r.insider_direction === 'buy') entry.buys++;
+    else entry.sells++;
+    if (ts > entry.latestTs) {
+      entry.latestTs = ts;
+      entry.latestDate = new Date(ts).toISOString().slice(0, 10);
+      entry.latestText = String(r.headline || '').slice(0, 160);
+      entry.latestSource = r.source || null;
+    }
+  }
+  return agg;
+}
+
 // Merge live (today) sentiment over historical. Live wins for symbols present
 // in both; historical fills gaps so quiet days keep a signal.
 function mergeSentimentMaps(live, historical) {
@@ -160,4 +195,4 @@ async function prune(days = PRUNE_AFTER_DAYS) {
   return res.rowCount || 0;
 }
 
-module.exports = { ensureTable, persist, getHistorical, getCatalystHistorical, mergeSentimentMaps, ageWeight, prune, HISTORY_WINDOW_DAYS };
+module.exports = { ensureTable, persist, getHistorical, getCatalystHistorical, getInsiderHistorical, mergeSentimentMaps, ageWeight, prune, HISTORY_WINDOW_DAYS };
