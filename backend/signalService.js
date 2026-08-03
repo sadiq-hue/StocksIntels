@@ -34,6 +34,10 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     // 'backtest' (historical day-close evaluation), or 'backfill' (mark-to-market
     // approximation). Live win-rate stats must only count 'live'.
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'live'`);
+    // The restore/win-rate queries COALESCE(signal_generated_at, recorded_at), so a
+    // deploy that predates this column used to crash boot with
+    // 'column "signal_generated_at" does not exist'. Idempotent ALTER fixes that.
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS signal_generated_at TIMESTAMP WITH TIME ZONE`);
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS analysis_data JSONB`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS stop_loss NUMERIC(15,2)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS target1 NUMERIC(15,2)`);
@@ -1261,6 +1265,50 @@ const TRADE_TYPE_EXPIRY = {
   'Long Term': 60 * 24 * 60 * 60 * 1000,        // 60 days
   'Avoid': 7 * 24 * 60 * 60 * 1000,             // 7 days
 };
+
+// Conviction-fade exit: an open position is closed when its fresh all-conditions
+// analysis degrades to neutral (buy -> hold / sell -> hold) instead of flipping.
+// A fade is less decisive than a full flip, so it needs this many consecutive
+// trustworthy readings before it can close, keeping a single noisy re-scoring
+// pass from churning a still-valid position.
+const FADE_CLOSE_CONFIRMATIONS = 2;
+// Re-leveling: while a long is monitored, the hard stop is re-derived from the
+// current price/ATR (never loosened) and ratchets to breakeven / locked gains as
+// price advances toward the target, so the open position tracks live behavior.
+const RELEVEL_BREAKEVEN_PROGRESS = 50; // % of target1 distance to move stop to entry
+const RELEVEL_LOCK_PROGRESS = 75;      // % of target1 distance to lock part of the gain
+const RELEVEL_LOCK_RATIO = 0.5;        // fraction of the open gain locked once lock progress is reached
+
+// ─── Pure decision helpers (unit-testable, used by processSymbol) ────────
+// Conviction-fade: classify whether an open position's fresh analysis no longer
+// supports its direction (buy -> hold / sell -> hold) but hasn't flipped. A fade
+// only counts on trustworthy data and needs FADE_CLOSE_CONFIRMATIONS consecutive
+// readings before the gate may close the position.
+function assessConvictionFade(prevAction, freshAction, eligibilityOk, prevFadeCount = 0) {
+  const isFade = eligibilityOk && freshAction === 'hold' && (prevAction === 'buy' || prevAction === 'sell');
+  const fadeCount = isFade ? (prevFadeCount || 0) + 1 : 0;
+  return { isFade, fadeCount, fadeConfirmed: fadeCount >= FADE_CLOSE_CONFIRMATIONS };
+}
+
+// Re-level: derive the new hard stop for a monitored long from the fresh ATR stop
+// (never loosening it) with breakeven / locked-gain floors as price advances toward
+// target1. Returns changed=false when the new stop isn't a real improvement or
+// would sit at/above the market price.
+function computeRelevelStop(position, currentPrice, freshStopLoss) {
+  const { entryPrice, stopLoss, target1 } = position || {};
+  if (freshStopLoss == null || currentPrice <= 0 || entryPrice <= 0 || !(target1 > entryPrice)) {
+    return { newStop: stopLoss, changed: false, progress: 0 };
+  }
+  const progress = ((currentPrice - entryPrice) / (target1 - entryPrice)) * 100;
+  let newStop = stopLoss;
+  // Math.max can only tighten, never loosen, the hard stop.
+  newStop = Math.max(newStop, freshStopLoss);
+  if (progress >= RELEVEL_BREAKEVEN_PROGRESS) newStop = Math.max(newStop, entryPrice);
+  if (progress >= RELEVEL_LOCK_PROGRESS) newStop = Math.max(newStop, entryPrice + (currentPrice - entryPrice) * RELEVEL_LOCK_RATIO);
+  newStop = Math.round(newStop * 100) / 100;
+  const changed = newStop > (stopLoss || 0) && newStop < currentPrice;
+  return { newStop, changed, progress };
+}
 
 // Validation threshold: extend if 3+ checks pass
 const VALIDATION_PASS_THRESHOLD = 3;
@@ -2677,12 +2725,20 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         // A flip-close only counts when this cycle's analysis is trustworthy;
         // on ineligible data only a genuine expiry can close the position.
         const isFlip = eligibility.ok && ((prevAction === 'buy' && sigObj.action === 'sell') || (prevAction === 'sell' && sigObj.action === 'buy'));
-        if (!isExpired && !isFlip) {
+        // Conviction fade: the fresh analysis no longer supports the open direction
+        // (buy -> hold / sell -> hold) without being decisive enough to flip. A fade
+        // needs FADE_CLOSE_CONFIRMATIONS consecutive trustworthy readings so a single
+        // noisy re-scoring pass can't churn an otherwise valid position.
+        const { isFade, fadeCount: nextFadeCount, fadeConfirmed } = assessConvictionFade(prevAction, sigObj.action, eligibility.ok, prevOutcome.fadeCount);
+        prevOutcome.fadeCount = nextFadeCount;
+        if (!isExpired && !isFlip && !(isFade && fadeConfirmed)) {
           emitSignal = false;
-          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal`);
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${isFade ? ` (conviction fading ${prevOutcome.fadeCount}/${FADE_CLOSE_CONFIRMATIONS})` : ''}`);
         } else if (marketOpen) {
           // Score-based close at market: the open position either outlived its hold
-          // window or the full analysis flipped direction against it.
+          // window, the full analysis flipped direction against it, or its conviction
+          // faded to neutral on consecutive readings.
+          const closeReason = isExpired ? 'expired' : isFlip ? 'score flipped' : 'conviction faded';
           const isPrevBuy = prevAction === 'buy';
           const closedWin = isPrevBuy ? currentPrice >= prevOutcome.entryPrice : currentPrice <= prevOutcome.entryPrice;
           prevOutcome.result = closedWin ? 'win' : 'loss';
@@ -2693,14 +2749,14 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           portfolioState.totalTrades++;
           performanceStats.winRate = performanceStats.total > 0
             ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;
-          console.log(`[SignalService] ${symbol} closed previous ${prevAction} signal (${isExpired ? 'expired' : 'score flipped'}) at ${currentPrice} -> ${prevOutcome.result}${eligibility.ok ? ', emitting fresh signal' : ''}`);
+          console.log(`[SignalService] ${symbol} closed previous ${prevAction} signal (${closeReason}) at ${currentPrice} -> ${prevOutcome.result}${eligibility.ok ? ', emitting fresh signal' : ''}`);
           // A fresh signal is only emitted when this cycle's analysis is trustworthy.
           emitSignal = eligibility.ok;
         } else {
-          // Expired/flipped while the exchange is closed: defer the close until the
-          // next live session so the exit price isn't a stale after-hours quote.
+          // Expired/flipped/faded while the exchange is closed: defer the close until
+          // the next live session so the exit price isn't a stale after-hours quote.
           emitSignal = false;
-          console.log(`[SignalService] ${symbol} previous ${prevAction} signal ${isExpired ? 'expired' : 'flipped'} but ${NSE_SYMBOLS.includes(symbol) ? 'NSE' : 'US'} market closed - deferring close until next session`);
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal ${isExpired ? 'expired' : isFlip ? 'flipped' : 'conviction faded'} but ${NSE_SYMBOLS.includes(symbol) ? 'NSE' : 'US'} market closed - deferring close until next session`);
         }
       }
     }
@@ -2760,6 +2816,34 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           });
         }
       });
+    }
+    // Re-level open positions to current market behavior: while a long is being
+    // monitored on trustworthy data during a live session, re-derive the hard stop
+    // from the current price/ATR (only ever tightening it, never loosening), and
+    // ratchet it to breakeven / locked-gain floors as price advances toward the
+    // target. This keeps the open position's risk geometry in sync with live
+    // volatility and price action instead of freezing the entry-cycle levels
+    // forever. The tighter stop is persisted to the open signal_history row so a
+    // restart re-arms it instead of falling back to the original entry-cycle stop.
+    const relevelTarget = _signalOutcomes.get(symbol);
+    if (relevelTarget && !relevelTarget.result && relevelTarget.action === 'buy'
+        && eligibility.ok && marketOpen && currentPrice > 0
+        && Array.isArray(priceHistory) && priceHistory.length >= 14) {
+      const freshLevels = calculateTradeLevels(symbol, currentPrice, { action: 'buy' }, priceHistory, 0.05, relevelTarget.type || 'Swing Trade');
+      const { newStop, changed, progress } = computeRelevelStop(relevelTarget, currentPrice, freshLevels.stopLoss);
+      if (changed) {
+        const prevStop = relevelTarget.stopLoss;
+        relevelTarget.stopLoss = newStop;
+        const genAtIso = new Date(relevelTarget.timestamp).toISOString();
+        pool.query(
+          `UPDATE signal_history SET stop_loss = $1
+           WHERE id = (SELECT id FROM signal_history WHERE ticker = $2
+                       AND generated_at BETWEEN $3::timestamptz - interval '30 seconds' AND $3::timestamptz + interval '30 seconds'
+                       AND stop_loss > 0 ORDER BY generated_at DESC LIMIT 1)`,
+          [newStop, symbol, genAtIso]
+        ).catch(() => {});
+        console.log(`[SignalService] ${symbol} re-leveled stop ${prevStop} -> ${newStop} (price=${currentPrice}, progress=${Math.round(progress)}% of target1)`);
+      }
     }
     resolveForwardPredictions(symbol).catch(() => {});
     return emitSignal ? sigObj : null;
@@ -3676,6 +3760,9 @@ module.exports = {
   isGarbageQuote,
   getPriorScore,
   getLiveTestSnapshot,
+  // Monitor gate decisions (unit-testable conviction-fade exit + stop re-leveling)
+  assessConvictionFade,
+  computeRelevelStop,
   // Audit & Config
   getAuditLog,
   logAuditEvent,
