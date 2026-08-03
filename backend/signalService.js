@@ -1372,11 +1372,15 @@ async function _loadForwardPredictionsFromDb() {
 }
 
 async function recordForwardPrediction(symbol, signalAction, confidence, price, stopLoss, target1, signalObjAction, tradeType, sector) {
-  // Dedup: skip if an unresolved prediction for this symbol exists from the last 2 hours
+  // Dedup: one live prediction per symbol+action. A persistent sell that never
+  // triggers a decisive move must NOT re-emit a fresh prediction every signal
+  // cycle — the audit would count the same call N times (same ref price, same
+  // outcome). The old prediction stays until it resolves (decisive move,
+  // benchmark lag, or expiry validation), then a new one may be created.
   const existing = _forwardTestStore.get(symbol);
   if (existing) {
-    const recent = existing.predictions.find(p => !p.resolved && Date.now() - p.generatedAt < FORWARD_TEST_MIN_AGE);
-    if (recent) return;
+    const open = existing.predictions.find(p => !p.resolved && p.action === signalObjAction);
+    if (open) return;
   }
   // Benchmark snapshot for sell predictions so the exit thesis can be judged
   // relative to the market later (best-effort; null → absolute evaluation).
@@ -1748,6 +1752,35 @@ function getForwardTestSnapshot() {
 // monitored as positions (no stop/target levels); they are judged benchmark-
 // relative via the forward-test sell predictions. This exposes that trail so
 // sell accuracy can be audited independently of the Buy monitor.
+
+// Collapse raw forward_predictions sell rows so one call is counted once:
+//   • resolved rows share a resolution event — re-emissions of the same call
+//     resolve within the same bulk pass (ms apart), so (symbol, price,
+//     resolved_at rounded to the minute) identifies the call, surviving the
+//     ms-level noise that defeats SQL DISTINCT;
+//   • unresolved rows collapse to the latest per (symbol, ref price), while a
+//     genuinely new call created after a resolution stays separate.
+// Rows are returned newest-first (callers ORDER BY generated_at DESC).
+function dedupeSellPredictions(rows) {
+  const resolvedKeys = new Set();
+  const pendingKeys = new Set();
+  const out = [];
+  for (const p of rows) {
+    if (p.resolved) {
+      const resMs = p.resolved_at ? Math.floor(new Date(p.resolved_at).getTime() / 60000) * 60000 : 't';
+      const key = `${p.symbol}|${p.price}|${resMs}`;
+      if (resolvedKeys.has(key)) continue;
+      resolvedKeys.add(key);
+    } else {
+      const key = `${p.symbol}|${p.price}`;
+      if (pendingKeys.has(key)) continue;
+      pendingKeys.add(key);
+    }
+    out.push(p);
+  }
+  return out;
+}
+
 async function getSellAudit() {
   const windowDays = SIGNAL_WINDOW_DAYS;
   const stats = {
@@ -1758,16 +1791,27 @@ async function getSellAudit() {
   const ratings = [];
   const predictions = [];
   try {
-    // All Sell/Strong Sell ratings in the evaluation window.
-    const ratingsRes = await pool.query(
-      `SELECT ticker, signal, confidence, price, entry_price, sector, reason, generated_at
-       FROM signal_history
-       WHERE generated_at > NOW() - $1::interval AND signal IN ('Sell','Strong Sell')
-       ORDER BY generated_at DESC LIMIT 500`,
+    // Total Sell/Strong Sell ratings in the evaluation window (event count).
+    const totalRes = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM signal_history
+       WHERE generated_at > NOW() - $1::interval AND signal IN ('Sell','Strong Sell')`,
       [`${windowDays} days`]
     );
-    stats.totalRatings = ratingsRes.rows.length;
+    stats.totalRatings = totalRes.rows[0]?.n || 0;
+
+    // Active sell ratings — single source of truth for both the stat and the
+    // Current table: tickers whose LATEST rating in the window is a Sell/Strong
+    // Sell. A ticker regraded to Buy (e.g. CAG) drops out of both, so the count
+    // and the table can never disagree.
+    const ratingsRes = await pool.query(
+      `SELECT DISTINCT ON (ticker) ticker, signal, confidence, price, entry_price, sector, reason, generated_at
+       FROM signal_history
+       WHERE generated_at > NOW() - $1::interval
+       ORDER BY ticker, generated_at DESC`,
+      [`${windowDays} days`]
+    );
     for (const r of ratingsRes.rows) {
+      if (r.signal !== 'Sell' && r.signal !== 'Strong Sell') continue;
       ratings.push({
         ticker: r.ticker, signal: r.signal, confidence: r.confidence,
         price: r.price != null ? parseFloat(r.price) : (r.entry_price != null ? parseFloat(r.entry_price) : null),
@@ -1775,29 +1819,24 @@ async function getSellAudit() {
         generatedAt: r.generated_at ? new Date(r.generated_at).getTime() : null,
       });
     }
-
-    // In-force sell ratings: tickers whose LATEST rating in the window is a Sell.
-    const activeRes = await pool.query(
-      `SELECT COUNT(*)::int AS n FROM (
-         SELECT DISTINCT ON (ticker) ticker, signal
-         FROM signal_history
-         WHERE generated_at > NOW() - $1::interval
-         ORDER BY ticker, generated_at DESC
-       ) latest
-       WHERE latest.signal IN ('Sell','Strong Sell')`,
-      [`${windowDays} days`]
-    );
-    stats.activeRatings = activeRes.rows[0]?.n || 0;
+    stats.activeRatings = ratings.length;
 
     // Sell forward-test predictions — the benchmark-relative audit trail.
+    // The engine used to re-emit a fresh prediction every signal cycle for a
+    // persistent sell, so one call can appear as several rows with the same ref
+    // price and outcome. Dedupe in JS:
+    //   • resolved rows collapse into their resolution event (same symbol, price
+    //     and resolved_at — the ms-level timestamps make SQL DISTINCT unreliable);
+    //   • unresolved rows collapse to the latest per (symbol, price), while a
+    //     genuinely new call created after a resolution stays separate.
     const predRes = await pool.query(
       `SELECT id, symbol, signal, confidence, price, bench_price, actual_return, correct, resolved, generated_at, resolved_at
        FROM forward_predictions
        WHERE action = 'sell' AND generated_at > NOW() - $1::interval
-       ORDER BY generated_at DESC LIMIT 500`,
+       ORDER BY symbol, generated_at DESC LIMIT 500`,
       [`${windowDays} days`]
     );
-    for (const p of predRes.rows) {
+    for (const p of dedupeSellPredictions(predRes.rows)) {
       predictions.push({
         id: p.id, symbol: p.symbol, signal: p.signal, confidence: p.confidence,
         price: p.price != null ? parseFloat(p.price) : null,
@@ -3922,6 +3961,7 @@ module.exports = {
   evaluateForwardPrediction,
   evaluateSellRelative,
   evaluateSellAtHorizon,
+  dedupeSellPredictions,
   isGarbageQuote,
   getPriorScore,
   getLiveTestSnapshot,

@@ -423,5 +423,66 @@ check('fwd: sell fell 4% -> resolved correct',
 check('fwd: sell moved 1% -> pending',
   fwd(100, 101, 100).status, 'pending');
 
+// ─── Sell audit dedup (dedupeSellPredictions) ───
+// Re-emissions of the same persistent sell must count once per call, while a
+// genuinely new call (fresh unresolved row created after a resolution) stays.
+const { dedupeSellPredictions } = signalService;
+const T = '2026-08-03T07:18:00.000Z';
+const row = (id, symbol, price, resolved, resolvedAt) => ({
+  id, symbol, price, resolved: !!resolved,
+  resolved_at: resolved ? resolvedAt : null,
+});
+const dedup = rows => dedupeSellPredictions(rows).map(r => r.id).join(',');
+
+// 4 resolved re-emissions of the same SCAN call (ms apart, same minute) -> 1.
+check('dedup: 4 resolved re-emissions collapse to 1',
+  dedup([
+    row(1, 'SCAN', 2.10, true, '2026-08-03T07:18:39.612Z'),
+    row(2, 'SCAN', 2.10, true, '2026-08-03T07:18:39.763Z'),
+    row(3, 'SCAN', 2.10, true, '2026-08-03T07:18:39.838Z'),
+    row(4, 'SCAN', 2.10, true, '2026-08-03T07:18:39.914Z'),
+  ]), '1');
+
+// Resolutions in different minutes are different calls -> kept separate.
+check('dedup: resolved calls in different minutes stay separate',
+  dedup([
+    row(1, 'SCAN', 2.10, true, '2026-08-03T07:18:00.000Z'),
+    row(2, 'SCAN', 2.10, true, '2026-08-03T13:33:00.000Z'),
+  ]), '1,2');
+
+// Resolved AND a fresh unresolved call for the same symbol+price both count.
+check('dedup: resolved + fresh pending call both kept',
+  dedup([
+    row(1, 'SCAN', 2.10, true, '2026-08-03T07:18:39.612Z'),
+    row(5, 'SCAN', 2.10, false, null),
+  ]), '1,5');
+
+// 5 pending re-emissions of PFE at the same price -> latest kept (1 row).
+check('dedup: 5 pending re-emissions collapse to latest',
+  dedup([
+    row(9, 'PFE', 25.01, false, null),
+    row(8, 'PFE', 25.01, false, null),
+    row(7, 'PFE', 25.01, false, null),
+    row(6, 'PFE', 25.01, false, null),
+    row(5, 'PFE', 25.01, false, null),
+  ]), '9');
+
+// Same symbol pending at different ref prices = different calls.
+check('dedup: pending at different ref prices stay separate',
+  dedup([
+    row(1, 'KEY', 22.59, false, null),
+    row(2, 'KEY', 22.65, false, null),
+  ]), '1,2');
+
+// Different symbols never collide, even at the same price + resolution minute.
+check('dedup: different symbols never collide',
+  dedup([
+    row(1, 'SCAN', 2.10, true, '2026-08-03T07:18:39.612Z'),
+    row(2, 'KQ', 2.10, true, '2026-08-03T07:18:39.612Z'),
+  ]), '1,2');
+
+check('dedup: empty input -> empty output',
+  dedup([]), '');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

@@ -5541,7 +5541,7 @@ async function resolveForwardTest() {
         ${decisive === 0 ? '<p style="font-size:11px;color:#6b7280;margin-bottom:8px">Sells resolve on a decisive move (±2%), a benchmark lag (≥3%), or the 5-day horizon fallback (neutral when both stock and benchmark sit flat).</p>' : ''}
        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
          <p style="font-size:13px;font-weight:600;margin-bottom:4px">Sell Outcome Check — were the sell ratings right?</p>
-         <p style="font-size:11px;color:#6b7280;margin-bottom:8px">Benchmark = SPY for US names, NSE20 for Kenyan names, taken when the rating was made. ✓ correct · ✗ incorrect · • neutral · ⏳ still pending. A sell is correct if the stock fell ≥2%, or rose less than the benchmark by ≥3%. A sell is neutral if both stayed roughly flat.</p>
+         <p style="font-size:11px;color:#6b7280;margin-bottom:8px">Benchmark = SPY for US names, NSE20 for Kenyan names, taken when the rating was made. ✓ correct · ✗ incorrect · • neutral · ⏳ still pending. A sell is correct if the stock fell ≥2%, or rose less than the benchmark by ≥3%. A sell is neutral if both stayed roughly flat. Each rating is counted once per call (re-emissions of the same persistent sell at the same ref price are collapsed).</p>
          <div style="overflow-x:auto;max-height:340px;overflow-y:auto">
            <table style="width:100%;font-size:11px">
              <thead><tr style="border-bottom:1px solid #e5e7eb">
