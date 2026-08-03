@@ -662,7 +662,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
           <div style="margin:0 20px 16px 20px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)">
             <div style="overflow-x:auto">
               <table class="w-full" style="min-width:900px">
-                <thead><tr><th style="padding:12px 14px">Ticker</th><th style="padding:12px 14px">Signal</th><th style="padding:12px 14px">Conf.</th><th style="padding:12px 14px">Price</th><th style="padding:12px 14px">Chg %</th><th style="padding:12px 14px">Entry</th><th style="padding:12px 14px">Stop</th><th style="padding:12px 14px">T1</th><th style="padding:12px 14px">T2</th><th style="padding:12px 14px">Market</th><th style="padding:12px 14px">Timeframe</th><th style="padding:12px 14px">Generated</th><th style="padding:12px 14px"></th></tr></thead>
+                <thead><tr><th style="padding:12px 14px">Ticker</th><th style="padding:12px 14px">Signal</th><th style="padding:12px 14px">Conf.</th><th style="padding:12px 14px">Price</th><th style="padding:12px 14px">Chg %</th><th style="padding:12px 14px">Entry</th><th style="padding:12px 14px">Stop</th><th style="padding:12px 14px">T1</th><th style="padding:12px 14px">T2</th><th style="padding:12px 14px">T3</th><th style="padding:12px 14px">Market</th><th style="padding:12px 14px">Timeframe</th><th style="padding:12px 14px">Generated</th><th style="padding:12px 14px"></th></tr></thead>
                 <tbody id="signalsTableBody"></tbody>
               </table>
             </div>
@@ -690,6 +690,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
           <div><label class="text-gray-500 text-xs">Stop Loss</label><input id="editSigStop" type="number" step="0.01" class="input-field mt-1"></div>
           <div><label class="text-gray-500 text-xs">Target 1</label><input id="editSigT1" type="number" step="0.01" class="input-field mt-1"></div>
           <div><label class="text-gray-500 text-xs">Target 2</label><input id="editSigT2" type="number" step="0.01" class="input-field mt-1"></div>
+          <div><label class="text-gray-500 text-xs">Target 3</label><input id="editSigT3" type="number" step="0.01" class="input-field mt-1"></div>
           <div><label class="text-gray-500 text-xs">Risk/Reward</label><input id="editSigRR" type="number" step="0.1" class="input-field mt-1"></div>
           <div><label class="text-gray-500 text-xs">Timeframe</label>
             <select id="editSigTimeframe" class="input-field mt-1">
@@ -2418,7 +2419,7 @@ async function fetchSignals() {
     sigTotal = d.total;
     const tbody = document.getElementById('signalsTableBody');
     if (d.signals.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="14" class="text-center text-gray-400 py-8">No signals found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="15" class="text-center text-gray-400 py-8">No signals found</td></tr>';
     } else {
       tbody.innerHTML = d.signals.map(s => {
 const sigClass = s.signal === 'Buy' ? 'pill-verified' : s.signal === 'Sell' || s.signal === 'Strong Sell' ? 'pill-unverified' : 'pill-free';
@@ -2441,6 +2442,7 @@ const sigClass = s.signal === 'Buy' ? 'pill-verified' : s.signal === 'Sell' || s
           <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#dc2626">${s.stop_loss != null ? Number(s.stop_loss).toFixed(2) : '-'}</td>
           <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#059669">${s.target1 != null ? Number(s.target1).toFixed(2) : '-'}</td>
           <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#059669">${s.target2 != null ? Number(s.target2).toFixed(2) : '-'}</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#059669">${s.target3 != null ? Number(s.target3).toFixed(2) : '-'}</td>
           <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280">${esc(s.market || '-')}</td>
           <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280">${esc(s.timeframe || '-')}</td>
           <td style="padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:12px;color:#6b7280">${formatDate(s.generated_at)}</td>
@@ -2536,6 +2538,10 @@ async function selectSignal(id) {
               <p style="font-weight:600;color:#059669;margin-top:2px">${s.target2 != null ? Number(s.target2).toFixed(2) : '-'}</p>
             </div>
             <div style="background:#f9fafb;border-radius:8px;padding:10px">
+              <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Target 3</span>
+              <p style="font-weight:600;color:#059669;margin-top:2px">${s.target3 != null ? Number(s.target3).toFixed(2) : '-'}</p>
+            </div>
+            <div style="background:#f9fafb;border-radius:8px;padding:10px">
               <span style="color:#9ca3af;font-size:11px;text-transform:uppercase;letter-spacing:.03em">Risk/Reward</span>
               <p style="font-weight:600;color:#111827;margin-top:2px">${s.risk_reward != null ? s.risk_reward + ':1' : '-'}</p>
             </div>
@@ -2585,6 +2591,7 @@ function showSignalEdit(id) {
     document.getElementById('editSigStop').value = s.stop_loss || '';
     document.getElementById('editSigT1').value = s.target1 || '';
     document.getElementById('editSigT2').value = s.target2 || '';
+    document.getElementById('editSigT3').value = s.target3 || '';
     document.getElementById('editSigRR').value = s.risk_reward || '';
     document.getElementById('editSigTimeframe').value = s.timeframe || 'medium_term';
   }).catch(() => { closeSignalEditModal(); toast('Error loading signal', 'error'); });
@@ -2604,6 +2611,7 @@ async function saveSignalEdit() {
     stop_loss: parseFloat(document.getElementById('editSigStop').value) || null,
     target1: parseFloat(document.getElementById('editSigT1').value) || null,
     target2: parseFloat(document.getElementById('editSigT2').value) || null,
+    target3: parseFloat(document.getElementById('editSigT3').value) || null,
     risk_reward: parseFloat(document.getElementById('editSigRR').value) || null,
     timeframe: document.getElementById('editSigTimeframe').value,
   };

@@ -568,7 +568,7 @@ app.get('/api/admin/signals', async (req, res) => {
     const dataParams = [...params, limit, offset];
     const dataResult = await pool.query(`
       SELECT id, ticker, signal, confidence, price, change_pct, entry_price, stop_loss,
-             target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, generated_at
+             target1, target2, target3, risk_reward, sector, market, currency, trade_type, timeframe, reason, generated_at
       FROM signal_history ${whereClause}
       ORDER BY generated_at DESC
       LIMIT $${idx++} OFFSET $${idx}
@@ -591,7 +591,7 @@ app.get('/api/admin/signals/:id', async (req, res) => {
 app.put('/api/admin/signals/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { signal, confidence, entry_price, stop_loss, target1, target2, risk_reward, timeframe } = req.body;
+    const { signal, confidence, entry_price, stop_loss, target1, target2, target3, risk_reward, timeframe } = req.body;
     const fields = []; const params = []; let idx = 1;
     if (signal !== undefined) { fields.push(`signal = $${idx++}`); params.push(signal); }
     if (confidence !== undefined) { fields.push(`confidence = $${idx++}`); params.push(confidence); }
@@ -599,6 +599,7 @@ app.put('/api/admin/signals/:id', async (req, res) => {
     if (stop_loss !== undefined) { fields.push(`stop_loss = $${idx++}`); params.push(stop_loss); }
     if (target1 !== undefined) { fields.push(`target1 = $${idx++}`); params.push(target1); }
     if (target2 !== undefined) { fields.push(`target2 = $${idx++}`); params.push(target2); }
+    if (target3 !== undefined) { fields.push(`target3 = $${idx++}`); params.push(target3); }
     if (risk_reward !== undefined) { fields.push(`risk_reward = $${idx++}`); params.push(risk_reward); }
     if (timeframe !== undefined) { fields.push(`timeframe = $${idx++}`); params.push(timeframe); }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
@@ -7298,7 +7299,7 @@ app.post('/api/ai/insights', async (req, res) => {
 
         if (signal) {
           answer += `\n**Signal:** ${signal.signal} (${signal.confidence}% confidence)\n`;
-          answer += `**Entry Zone:** ${curr} ${fmtPrice(signal.entry)} | **Targets:** ${curr} ${fmtPrice(signal.target1)} / ${curr} ${fmtPrice(signal.target2)}\n`;
+          answer += `**Entry Zone:** ${curr} ${fmtPrice(signal.entry)} | **Targets:** ${curr} ${fmtPrice(signal.target1)} / ${curr} ${fmtPrice(signal.target2)} / ${curr} ${fmtPrice(signal.target3)}\n`;
           answer += `**Stop Loss:** ${curr} ${fmtPrice(signal.stopLoss)}\n`;
           answer += `**Trade Type:** ${signal.type} | **Risk/Reward:** ${fmt(signal.riskReward)}\n`;
           if (signal.weeklyTrend) answer += `**Weekly Trend:** ${signal.weeklyTrend}`;
@@ -10680,6 +10681,7 @@ async function initDatabase() {
       stop_loss NUMERIC(15,2),
       target1 NUMERIC(15,2),
       target2 NUMERIC(15,2),
+      target3 NUMERIC(15,2),
       risk_reward NUMERIC(5,2),
       sector VARCHAR(100),
       market VARCHAR(20),
@@ -10693,6 +10695,7 @@ async function initDatabase() {
     // Migration: add position_size column if missing (safe for existing tables)
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS position_size INTEGER DEFAULT 25`).catch(() => {});
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS analysis_data JSONB`).catch(() => {});
+    await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS target3 NUMERIC(15,2)`).catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_history_ticker ON signal_history(ticker)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_history_generated_at ON signal_history(generated_at)');
 

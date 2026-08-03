@@ -39,20 +39,25 @@ const TRADE_TYPE_STOP_MULT = {
   'Long Term Value': 3,
   'Long Term': 3,
 };
-// Target multiples keep the same ~1.33 / ~2.33 risk-reward profile at any stop width.
-const TARGET1_MULT = 4 / 3;
-const TARGET2_MULT = 7 / 3;
+// Target multiples keep a wide risk-reward profile at any stop width: the
+// investor holds for the long term (weeks to months), so T1/T2/T3 are sized at
+// 3x / 5x / 8x the stop distance instead of the old tight ~1.33x / ~2.33x.
+// T1 is the resolution target (touch = win); T2/T3 are informational upside.
+const TARGET1_MULT = 3;
+const TARGET2_MULT = 5;
+const TARGET3_MULT = 8;
 
 function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = 0.05, tradeType = 'Swing Trade') {
   const volatility = calculateATR(priceHistory);
   const atr = currentPrice * volatility;
   const mult = TRADE_TYPE_STOP_MULT[tradeType] || 1.5;
-  let entry, stopLoss, target1, target2;
+  let entry, stopLoss, target1, target2, target3;
   if (signal.action === 'buy') {
     entry = currentPrice;
     stopLoss = currentPrice - (atr * mult);
     target1 = currentPrice + (atr * mult * TARGET1_MULT);
     target2 = currentPrice + (atr * mult * TARGET2_MULT);
+    target3 = currentPrice + (atr * mult * TARGET3_MULT);
   } else if (signal.action === 'sell') {
     // Exit/avoid semantics: a Sell is a rating ("the fundamentals/technical/
     // financial/sentiment no longer support holding"), not a mirrored short
@@ -60,13 +65,14 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
     // validated by whether the stock declines vs this reference price.
     return {
       entry: Math.round(currentPrice * 100) / 100,
-      stopLoss: null, target1: null, target2: null, riskReward: null,
+      stopLoss: null, target1: null, target2: null, target3: null, riskReward: null,
     };
   } else {
     entry = currentPrice;
     stopLoss = currentPrice * (1 - stopLossPct);
     target1 = currentPrice * (1 + stopLossPct);
     target2 = currentPrice * (1 + stopLossPct * 2);
+    target3 = currentPrice * (1 + stopLossPct * 3);
   }
   // Cap stop distance at 2x the base stop, but never more than 10% of price so a
   // high-ATR name can't produce an absurd 45% stop.
@@ -84,6 +90,7 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
     stopLoss: Math.round(stopLoss * 100) / 100,
     target1: Math.round(target1 * 100) / 100,
     target2: Math.round(target2 * 100) / 100,
+    target3: Math.round(target3 * 100) / 100,
     riskReward: parseFloat(riskReward)
   };
 }

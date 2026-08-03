@@ -705,7 +705,7 @@ async function restoreStateFromDb() {
     // and there is nothing to track (any leveled Sell rows in history are legacy
     // artifacts from before that rule and are deliberately ignored here).
     const openRes = await pool.query(
-      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, trade_type, position_size, generated_at
+      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, trade_type, position_size, generated_at
        FROM signal_history
        WHERE generated_at > NOW() - $1::interval
          AND signal IN ('Strong Buy','Buy')
@@ -730,7 +730,9 @@ async function restoreStateFromDb() {
       if (!saneLevels) continue;
       _signalOutcomes.set(sym, {
         entryPrice: entry, signal: row.signal, action, type: row.trade_type || 'Swing Trade',
-        stopLoss: stop, target1: target, positionSize: parseInt(row.position_size) || 25,
+        stopLoss: stop, target1: target, target2: row.target2 != null ? parseFloat(row.target2) : null,
+        target3: row.target3 != null ? parseFloat(row.target3) : null,
+        positionSize: parseInt(row.position_size) || 25,
         timestamp: genAt, result: null, lastProgressAlert: 0,
       });
     }
@@ -1315,8 +1317,8 @@ const TRADE_TYPE_EXPIRY = {
   'Aggressive Buy': 14 * 24 * 60 * 60 * 1000,   // 14 days
   'Momentum Trade': 21 * 24 * 60 * 60 * 1000,   // 21 days
   'Swing Trade': 21 * 24 * 60 * 60 * 1000,      // 21 days
-  'Long Term Value': 60 * 24 * 60 * 60 * 1000,  // 60 days
-  'Long Term': 60 * 24 * 60 * 60 * 1000,        // 60 days
+  'Long Term Value': 365 * 24 * 60 * 60 * 1000, // 1 year
+  'Long Term': 365 * 24 * 60 * 60 * 1000,       // 1 year
   'Avoid': 7 * 24 * 60 * 60 * 1000,             // 7 days
 };
 
@@ -2601,20 +2603,20 @@ async function persistSignals(signals) {
     console.log(`[SignalService] Persisting ${actionable.length} actionable signals to signal_history`);
     const values = actionable.map(s => [
       s.ticker, s.signal, s.confidence, s.price, s.change || 0,
-      s.entry || s.price, s.stopLoss || 0, s.target1 || 0, s.target2 || 0,
+      s.entry || s.price, s.stopLoss || 0, s.target1 || 0, s.target2 || 0, s.target3 || 0,
       s.riskReward || 1, s.sector || 'General', s.market || 'Global',
       s.currency || 'USD', s.type || 'Swing Trade', s.timeframe || '2-4 weeks', s.reason || '',
       parseInt(s.positionSize) || 25,
       s.analysis ? JSON.stringify(s.analysis) : null,
     ]);
-    const cols = 18;
+    const cols = 19;
     const placeholders = values.map((_, i) => {
       const base = i * cols;
-      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, $${base+17}, $${base+18}, NOW(), date_trunc('hour', NOW()))`;
+      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, $${base+17}, $${base+18}, $${base+19}, NOW(), date_trunc('hour', NOW()))`;
     }).join(',');
     const flat = values.flat();
     const result = await pool.query(
-      `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, position_size, analysis_data, generated_at, signal_bucket)
+      `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, target3, risk_reward, sector, market, currency, trade_type, timeframe, reason, position_size, analysis_data, generated_at, signal_bucket)
        VALUES ${placeholders}
        ON CONFLICT DO NOTHING`,
       flat
@@ -2671,7 +2673,7 @@ async function getSignalHistory({ ticker, signal, market, sector, limit = 100, o
     const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
     const data = await pool.query(
       `SELECT id, ticker, signal, confidence, price, change_pct, entry_price, stop_loss,
-              target1, target2, risk_reward, sector, market, currency, trade_type, timeframe, reason, generated_at
+              target1, target2, target3, risk_reward, sector, market, currency, trade_type, timeframe, reason, generated_at
        FROM signal_history ${where}
        ORDER BY generated_at DESC LIMIT $${idx++} OFFSET $${idx}`,
       [...params, limit, offset]
@@ -2944,18 +2946,28 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       if (monitoring) {
         const expiryMs = TRADE_TYPE_EXPIRY[prevOutcome.type || 'Swing Trade'] || TRADE_TYPE_EXPIRY['Swing Trade'];
         const isExpired = (Date.now() - prevOutcome.timestamp) > expiryMs;
+        // Long-term holds (Long Term / Long Term Value) are closed ONLY by their
+        // stop, target or expiry. A score-based close (flip or conviction fade)
+        // resolves them at whatever the market price happens to be — usually a
+        // coin-flip around entry — which churns a weeks/months thesis out at
+        // ~0% return. That 30-minute break-even exit was the source of the tiny
+        // "target hit" returns. Short-term trade types keep the old behavior.
+        const longTermHold = prevOutcome.type === 'Long Term Value' || prevOutcome.type === 'Long Term';
+        const allowScoreClose = !longTermHold;
         // A flip-close only counts when this cycle's analysis is trustworthy;
         // on ineligible data only a genuine expiry can close the position.
-        const isFlip = eligibility.ok && ((prevAction === 'buy' && sigObj.action === 'sell') || (prevAction === 'sell' && sigObj.action === 'buy'));
+        const isFlip = eligibility.ok && allowScoreClose && ((prevAction === 'buy' && sigObj.action === 'sell') || (prevAction === 'sell' && sigObj.action === 'buy'));
         // Conviction fade: the fresh analysis no longer supports the open direction
         // (buy -> hold / sell -> hold) without being decisive enough to flip. A fade
         // needs FADE_CLOSE_CONFIRMATIONS consecutive trustworthy readings so a single
         // noisy re-scoring pass can't churn an otherwise valid position.
-        const { isFade, fadeCount: nextFadeCount, fadeConfirmed } = assessConvictionFade(prevAction, sigObj.action, eligibility.ok, prevOutcome.fadeCount);
+        const { isFade, fadeCount: nextFadeCount, fadeConfirmed } = allowScoreClose
+          ? assessConvictionFade(prevAction, sigObj.action, eligibility.ok, prevOutcome.fadeCount)
+          : { isFade: false, fadeCount: 0, fadeConfirmed: false };
         prevOutcome.fadeCount = nextFadeCount;
-        if (!isExpired && !isFlip && !(isFade && fadeConfirmed)) {
+        if (!isExpired && !(isFlip || (isFade && fadeConfirmed))) {
           emitSignal = false;
-          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${isFade ? ` (conviction fading ${prevOutcome.fadeCount}/${FADE_CLOSE_CONFIRMATIONS})` : ''}`);
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${isFade ? ` (conviction fading ${prevOutcome.fadeCount}/${FADE_CLOSE_CONFIRMATIONS})` : ''}${longTermHold ? ' [long-term hold: score-based close disabled]' : ''}`);
         } else if (marketOpen) {
           // Score-based close at market: the open position either outlived its hold
           // window, the full analysis flipped direction against it, or its conviction
@@ -3772,7 +3784,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     price: Math.round(currentPrice * 100) / 100, change: Math.round(priceChange * 10) / 10,
     market: isNse ? 'NSE' : 'Global', country: getCountryForSymbol(symbol), currency: isNse ? 'KES' : 'USD',
     type: tradeType, signal: sig.signal, action: sig.action, entry: tradeLevels.entry,
-    stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2,
+    stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2, target3: tradeLevels.target3,
     riskReward: tradeLevels.riskReward, confidence, positionSize: positionSize + '%',
     timeframe: timeframes[tradeType], sector: stock.sector, volume: formattedVolume, rawVolume: volume || 0,
     weeklyTrend: weeklyTrend.trend, regime: regime.regime,
