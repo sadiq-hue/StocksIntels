@@ -423,6 +423,62 @@ check('fwd: sell fell 4% -> resolved correct',
 check('fwd: sell moved 1% -> pending',
   fwd(100, 101, 100).status, 'pending');
 
+// ─── NSE-aware sell thresholds (sellThresholdsFor + wide bands) ───
+// Low-float volatile Kenyan names get wider decisive-move, relative-lag and
+// horizon-tolerance bands than liquid US names, so a 2-5% pop on a flat NSE20
+// resolves neutral instead of a wrong-sell (that pop is ordinary NSE noise).
+const { sellThresholdsFor } = signalService;
+const NSE_TH = sellThresholdsFor('SCAN');
+const US_TH = sellThresholdsFor('PFE');
+
+check('nse: SCAN gets NSE bands',
+  JSON.stringify(NSE_TH),
+  JSON.stringify({ exitMove: 0.06, relMove: 0.08, horizonTolerance: 0.06 }));
+
+check('nse: PFE keeps US bands',
+  JSON.stringify(US_TH),
+  JSON.stringify({ exitMove: 0.02, relMove: 0.03, horizonTolerance: 0.01 }));
+
+check('nse: unknown symbol defaults to US bands',
+  JSON.stringify(sellThresholdsFor('ZZZZZ')),
+  JSON.stringify(US_TH));
+
+// SCAN-style case: +3.8% pop, flat NSE20 → neutral at horizon, not wrong.
+check('nse: +3.8% pop vs flat NSE20 -> neutral at horizon',
+  evaluateSellAtHorizon({ price: 100, benchPrice: 100 }, 103.8, 0, NSE_TH).correct, null);
+
+check('nse: +4.7% pop vs flat NSE20 -> neutral at horizon',
+  evaluateSellAtHorizon({ price: 100, benchPrice: 100 }, 104.7, 0, NSE_TH).correct, null);
+
+check('nse: +2.5% pop vs flat NSE20 -> neutral at horizon',
+  evaluateSellAtHorizon({ price: 100, benchPrice: 100 }, 102.5, 0, NSE_TH).correct, null);
+
+// Same case under US bands still resolves wrong (proves the bands differ).
+check('nse: same +3.8% pop under US bands -> wrong at horizon',
+  evaluateSellAtHorizon({ price: 100, benchPrice: 100 }, 103.8, 0, US_TH).correct, false);
+
+// NSE bands still call a real underperformer correct and an outlier wrong.
+check('nse: -7% drop vs flat NSE20 -> correct (exit gate)',
+  evaluateSellAtHorizon({ price: 100, benchPrice: 100 }, 93, 0, NSE_TH).correct, true);
+
+check('nse: +9% pop vs flat NSE20 -> wrong (decisive beat)',
+  evaluateSellAtHorizon({ price: 100, benchPrice: 100 }, 109, 0, NSE_TH).correct, false);
+
+check('nse: +5% pop vs NSE20 +9% -> unresolved (sideways, lag 4% < relMove 8%)',
+  evaluateSellRelative({ price: 100, benchPrice: 100 }, 105, 0.09, NSE_TH).resolved, false);
+
+check('nse: +7% pop vs NSE20 +16% -> correct (rose but lagged by 9% >= relMove 8%)',
+  evaluateSellRelative({ price: 100, benchPrice: 100 }, 107, 0.16, NSE_TH).correct, true);
+
+check('nse: +7% pop with no bench still wrong (absolute fallback, exitMove 6%)',
+  evaluateSellRelative({ price: 100, benchPrice: null }, 107, null, NSE_TH).correct, false);
+
+check('nse: fwd dispatch defers +5% pop WITH bench -> pending',
+  evaluateForwardPrediction({ action: 'sell', price: 100, benchPrice: 100 }, 105, NSE_TH).status, 'pending');
+
+check('nse: fwd dispatch resolves +7% pop with no bench -> wrong',
+  evaluateForwardPrediction({ action: 'sell', price: 100, benchPrice: null }, 107, NSE_TH).status, 'resolved');
+
 // ─── Sell audit dedup (dedupeSellPredictions) ───
 // Re-emissions of the same persistent sell must count once per call, while a
 // genuinely new call (fresh unresolved row created after a resolution) stays.
