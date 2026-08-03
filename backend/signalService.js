@@ -1433,7 +1433,14 @@ function evaluateForwardPrediction(pred, currentPrice) {
     // exit was right), incorrect if it rose. No stop/target levels involved.
     const exitMove = (pred.price - currentPrice) / pred.price;
     if (exitMove >= SELL_EXIT_MOVE) return { status: 'resolved', correct: true, actualReturn };
-    if (exitMove <= -SELL_EXIT_MOVE) return { status: 'resolved', correct: false, actualReturn };
+    // A decisive up-move only verdicts "incorrect" when there is no benchmark
+    // to compare against. When a benchmark was captured at rating time, defer
+    // to the benchmark-relative refinement instead: a stock that rose but
+    // LAGGED its market by SELL_REL_MOVE still validates the exit/avoid call,
+    // and the absolute path would wrongly mark it incorrect here.
+    if (exitMove <= -SELL_EXIT_MOVE && (pred.benchPrice == null || pred.benchPrice <= 0)) {
+      return { status: 'resolved', correct: false, actualReturn };
+    }
     return { status: 'pending' };
   }
   if (isBuy || isSell) return { status: 'pending' };

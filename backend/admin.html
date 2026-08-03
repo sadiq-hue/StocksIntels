@@ -1639,7 +1639,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       <!-- Engine: Sells -->
       <div id="eng-sells" class="hidden space-y-4">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <p style="font-size:12px;color:#6b7280">Exit/avoid ratings audit — Sells are benchmark-relative exit ratings, not monitored short positions (no stop/target levels). Accuracy comes from the forward-test sell evaluations.</p>
+          <p style="font-size:12px;color:#6b7280">How accurate were our Sell/Avoid ratings? Each row is one sell rating and what happened afterwards. Sells are exit ratings — we don't monitor them as short positions.</p>
           <div style="display:flex;gap:6px;align-items:center">
             <span id="sellsMsg" style="font-size:12px;color:#059669;display:none"></span>
             <button class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="resolveSellsNow()">Resolve now</button>
@@ -5540,7 +5540,8 @@ async function resolveForwardTest() {
         </div>
         ${decisive === 0 ? '<p style="font-size:11px;color:#6b7280;margin-bottom:8px">Sells resolve on a decisive move (±2%), a benchmark lag (≥3%), or the 5-day horizon fallback (neutral when both stock and benchmark sit flat).</p>' : ''}
        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
-         <p style="font-size:13px;font-weight:600;margin-bottom:8px">Sell Prediction Audit (benchmark-relative)</p>
+         <p style="font-size:13px;font-weight:600;margin-bottom:4px">Sell Outcome Check — were the sell ratings right?</p>
+         <p style="font-size:11px;color:#6b7280;margin-bottom:8px">Benchmark = SPY for US names, NSE20 for Kenyan names, taken when the rating was made. ✓ correct · ✗ incorrect · • neutral · ⏳ still pending. A sell is correct if the stock fell ≥2%, or rose less than the benchmark by ≥3%. A sell is neutral if both stayed roughly flat.</p>
          <div style="overflow-x:auto;max-height:340px;overflow-y:auto">
            <table style="width:100%;font-size:11px">
              <thead><tr style="border-bottom:1px solid #e5e7eb">
@@ -5594,38 +5595,12 @@ async function resolveForwardTest() {
                  <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${formatDate(r.generatedAt)}</td>
                </tr>
              `).join('')}</tbody>
-           </table>
-         </div>
-       </div>
-       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
-         <p style="font-size:13px;font-weight:600;margin-bottom:8px">Sell Rating History (90d)</p>
-         <div style="overflow-x:auto;max-height:340px;overflow-y:auto">
-           <table style="width:100%;font-size:11px">
-             <thead><tr style="border-bottom:1px solid #e5e7eb">
-               <th style="text-align:left;padding:4px 8px;color:#6b7280">Ticker</th>
-               <th style="text-align:left;padding:4px 8px;color:#6b7280">Signal</th>
-               <th style="text-align:right;padding:4px 8px;color:#6b7280">Conf</th>
-               <th style="text-align:right;padding:4px 8px;color:#6b7280">Price</th>
-               <th style="text-align:left;padding:4px 8px;color:#6b7280">Sector</th>
-               <th style="text-align:left;padding:4px 8px;color:#6b7280">Reason</th>
-               <th style="text-align:right;padding:4px 8px;color:#6b7280">Generated</th>
-             </tr></thead>
-             <tbody>${a.ratings.length === 0 ? '<tr><td colspan="7" style="text-align:center;padding:24px;color:#6b7280">No sell ratings in window</td></tr>' : a.ratings.map(r => `
-               <tr style="border-bottom:1px solid #f3f4f6">
-                 <td style="padding:4px 8px;font-weight:500">${esc(r.ticker)}</td>
-                 <td style="padding:4px 8px"><span class="pill ${r.signal === 'Strong Sell' ? 'bg-rose-100 text-rose-700' : 'bg-red-100 text-red-700'}">${esc(r.signal)}</span></td>
-                 <td style="padding:4px 8px;text-align:right;color:#6b7280">${r.confidence}%</td>
-                 <td style="padding:4px 8px;text-align:right;color:#6b7280">${r.price ? '$' + Number(r.price).toFixed(2) : '—'}</td>
-                 <td style="padding:4px 8px;color:#6b7280">${esc(r.sector || '—')}</td>
-                 <td style="padding:4px 8px;color:#6b7280;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.reason || '')}">${esc(r.reason || '—')}</td>
-                 <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${formatDate(r.generatedAt)}</td>
-               </tr>
-             `).join('')}</tbody>
-           </table>
-         </div>
-       </div>`;
-   } catch { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Error loading sell/avoid audit</div>'; }
- }
+            </table>
+          </div>
+        </div>`;
+
+    } catch { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Error loading sell/avoid audit</div>'; }
+  }
 
  async function resolveSellsNow() {
    const btn = document.querySelector('#eng-sells .btn-secondary');

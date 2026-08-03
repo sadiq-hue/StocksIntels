@@ -378,5 +378,50 @@ check('horizon: no bench, stock +4% -> incorrect',
 check('horizon: no bench, stock -0.5% -> neutral',
   evaluateSellAtHorizon({ price: 100, benchPrice: null }, 99.5, null).correct, null);
 
+// ─── Benchmark-relative decisive-move refinement (evaluateSellRelative) ───
+// The absolute evaluator must NOT short-circuit a decisive up-move when a
+// benchmark was captured: a stock that rose but lagged its market validates
+// the exit/avoid call. evaluateSellRelative owns that decision.
+const { evaluateSellRelative } = signalService;
+const rel = (entry, px, bench, benchPrice = 100) =>
+  evaluateSellRelative({ price: entry, benchPrice }, px, bench);
+
+check('relative: stock -4% vs bench -1% -> correct (fell, exit gate)',
+  rel(100, 96, -0.01).correct, true);
+
+check('relative: stock +4% vs bench +8% -> correct (rose but lagged by >3%)',
+  rel(100, 104, 0.08).correct, true);
+
+check('relative: stock +4% vs bench +2% -> incorrect (beat market)',
+  rel(100, 104, 0.02).correct, false);
+
+check('relative: stock +4% with no bench -> incorrect (absolute fallback)',
+  evaluateSellRelative({ price: 100, benchPrice: null }, 104, null).correct, false);
+
+check('relative: stock +2.5% vs bench +5.5% -> correct (lag exactly 3%)',
+  rel(100, 102.5, 0.055).correct, true);
+
+check('relative: stock +2% vs bench +5% -> correct (decisive rise but lagged)',
+  rel(100, 102, 0.05).correct, true);
+
+// ─── Absolute evaluator dispatch (evaluateForwardPrediction) ───
+// Decisive up-move WITH a benchmark must stay pending so the benchmark-relative
+// refinement can run; WITHOUT a benchmark it resolves incorrect immediately.
+const { evaluateForwardPrediction } = signalService;
+const fwd = (entry, px, benchPrice) =>
+  evaluateForwardPrediction({ action: 'sell', price: entry, benchPrice }, px);
+
+check('fwd: sell rose 4% with bench captured -> pending (defer to relative)',
+  JSON.stringify(fwd(100, 104, 100)), JSON.stringify({ status: 'pending' }));
+
+check('fwd: sell rose 4% with no bench -> resolved incorrect',
+  fwd(100, 104, null).status, 'resolved');
+
+check('fwd: sell fell 4% -> resolved correct',
+  fwd(100, 96, 100).status, 'resolved');
+
+check('fwd: sell moved 1% -> pending',
+  fwd(100, 101, 100).status, 'pending');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);
