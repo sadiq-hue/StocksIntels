@@ -3738,10 +3738,50 @@ app.get('/api/signals/monitored', async (req, res) => {
 app.get('/api/signals', async (req, res) => {
   try {
     const signals = await generateSignals(null, true);
-    res.json({ success: true, signals });
-    // Background refresh is handled inside generateSignals' quick path (stale
-    // >30 min → regen while an exchange is open) plus the hourly timer — a read
-    // request must not unconditionally start a full cycle.
+    // generateSignals returns the shared cache reference — copy before merging so
+    // we never mutate the engine's cached signal list.
+    const merged = (Array.isArray(signals) ? signals : []).map(s => ({ ...s }));
+    const byTicker = new Map(merged.map(s => [s.ticker, s]));
+    const TYPE_TIMEFRAME = {
+      'Intraday': 'Intraday', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks',
+      'Long Term': '3-6 months', 'Long Term Value': '3-6 months', 'Aggressive Buy': '1-3 weeks', 'Avoid': 'N/A',
+    };
+    // Open Buy positions are held by the monitor-first gate (never re-emitted as
+    // fresh signals), so they would be invisible on the frontend. Re-surface each
+    // monitored position as a Buy card with its live stop/target levels.
+    for (const m of getMonitoredSignals()) {
+      const isNse = m.market === 'NSE';
+      const existing = byTicker.get(m.ticker);
+      const base = existing || {
+        ticker: m.ticker,
+        name: m.name || '',
+        price: m.price,
+        change: m.change ?? 0,
+        type: m.type,
+        signal: m.signal,
+        action: 'buy',
+        confidence: m.confidence ?? 50,
+        timeframe: m.timeframe || TYPE_TIMEFRAME[m.type] || '2-4 weeks',
+        sector: m.sector || 'General',
+        currency: m.currency,
+        market: m.market,
+        country: isNse ? 'KE' : 'US',
+        positionSize: m.positionSize + '%',
+        dataSource: 'monitor',
+        reason: `Open ${m.type} position the engine is actively monitoring — held ${m.daysHeld} day(s) with stop/target levels live (expiry ${m.expiryDays}d).`,
+        analysis: null,
+      };
+      const stopDist = m.entryPrice - m.stopLoss;
+      base.signal = m.signal;
+      base.entry = m.entryPrice;
+      base.stopLoss = m.stopLoss;
+      base.target1 = m.target1;
+      base.target2 = m.target2;
+      base.target3 = m.target3;
+      base.riskReward = stopDist > 0 ? Math.round(((m.target1 - m.entryPrice) / stopDist) * 10) / 10 : null;
+      if (!existing) merged.push(base);
+    }
+    res.json({ success: true, signals: merged });
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
   }
