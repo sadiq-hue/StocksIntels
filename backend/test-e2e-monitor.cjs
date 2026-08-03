@@ -7,10 +7,10 @@
 //      an independently DB-derived count of monitorable open positions. The live
 //      server keeps writing to this DB, so a small drift tolerance is applied and
 //      any diff is reported for inspection.
-//   2. That derived set contains ONLY monitorable entries: real direction calls
-//      (Buy/Strong Buy/Sell/Strong Sell) with valid stop/target levels and no
-//      resolved outcome — i.e. zero Hold ratings and zero level-less entries can
-//      be monitored.
+//   2. That derived set contains ONLY monitorable entries: Buy-direction calls
+//      (Strong Buy/Buy) with valid stop/target levels and no resolved outcome.
+//      Hold ratings and Sell/Strong Sell (exit/avoid ratings — not mirrored
+//      shorts) can never be monitored.
 //   3. The seeding path (riskManager.trackSignalOutcomes, the real function the
 //      live monitor calls every cycle) is the exact function verified by
 //      test-monitor-seeding.cjs — module identity asserted.
@@ -36,14 +36,15 @@ const LIVE_DRIFT_TOLERANCE = 2;
 (async () => {
   // Snapshot the DB-derived expectation FIRST, then boot. Any rows the live
   // server writes between these two moments show up as a reported diff, not a
-  // silent mismatch.
+  // silent mismatch. Sells are exit/avoid ratings — never monitored positions —
+  // so only Buy-direction signals with valid levels count.
   const openRes = await pool.query(
     `SELECT sh.ticker, sh.signal
      FROM (
        SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, generated_at
        FROM signal_history
        WHERE generated_at > NOW() - $1::interval
-         AND signal IN ('Strong Buy','Buy','Sell','Strong Sell')
+         AND signal IN ('Strong Buy','Buy')
          AND entry_price > 0 AND stop_loss > 0 AND target1 > 0
        ORDER BY ticker, generated_at DESC
      ) sh
@@ -53,8 +54,7 @@ const LIVE_DRIFT_TOLERANCE = 2;
        LIMIT 1
      ) r ON true
      WHERE r.resolved IS NULL
-       AND ( (sh.signal ILIKE '%buy%' AND sh.stop_loss < sh.entry_price AND sh.target1 > sh.entry_price)
-          OR (sh.signal ILIKE '%sell%' AND sh.stop_loss > sh.entry_price AND sh.target1 < sh.entry_price) )`,
+       AND (sh.signal ILIKE '%buy%' AND sh.stop_loss < sh.entry_price AND sh.target1 > sh.entry_price)`,
     [`${WINDOW_DAYS} days`]
   );
   const expected = openRes.rows.length;
@@ -76,7 +76,7 @@ const LIVE_DRIFT_TOLERANCE = 2;
   }
 
   const totalRows = openRes.rows.length;
-  check('every DB-derived candidate is an actionable buy/sell with valid levels',
+  check('every DB-derived candidate is a Buy with valid levels (no sells/holds)',
     totalRows === expectedSet.size && expected >= 0,
     'restore SQL already enforces this');
   check('live seeding uses the identical function verified by unit tests',

@@ -144,12 +144,12 @@ function applyPortfolioConstraints(signals) {
 function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, symbol, currentPrice, newSignal, marketOpen = true) {
   let previous = signalOutcomes.get(symbol);
   const posSize = parseInt(newSignal.positionSize) || 25;
-  // Only keep entries the monitor can actually track: an open directional call with
-  // stop/target levels. Hold ratings and level-less Sell ratings are ratings, not
-  // positions — storing them inflated "Monitored Signals", refreshed their timestamp
-  // every cycle (so they never aged out), and could evict real positions under the
-  // 500-entry cap.
-  const monitorable = newSignal.action !== 'hold' && newSignal.stopLoss != null && newSignal.target1 != null;
+  // Only open Buy-direction positions are tracked. Sell/Strong Sell are exit/avoid
+  // ratings, not mirrored shorts — they have no stop/target levels and must never
+  // enter the monitored map. Storing Holds or ratings inflated "Monitored Signals",
+  // refreshed their timestamp every cycle (so they never aged out), and could evict
+  // real positions under the 500-entry cap.
+  const monitorable = newSignal.action === 'buy' && newSignal.stopLoss != null && newSignal.target1 != null;
 
   if (previous && previous.action !== 'hold' && previous.stopLoss != null && previous.target1 != null && !previous.result) {
     const isPrevBuy = previous.action === 'buy';

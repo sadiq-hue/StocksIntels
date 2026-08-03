@@ -700,11 +700,15 @@ async function restoreStateFromDb() {
     // Restore still-open (unresolved) live positions from signal_history so the
     // monitor-first gate survives restarts. Without this every boot re-emitted a
     // fresh signal for every tracked symbol because _signalOutcomes started empty.
+    // Only Buy-direction signals are ever monitored as positions. Sell/Strong Sell
+    // are exit/avoid ratings, not mirrored shorts — they carry no stop/target levels
+    // and there is nothing to track (any leveled Sell rows in history are legacy
+    // artifacts from before that rule and are deliberately ignored here).
     const openRes = await pool.query(
       `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, trade_type, position_size, generated_at
        FROM signal_history
        WHERE generated_at > NOW() - $1::interval
-         AND signal IN ('Strong Buy','Buy','Sell','Strong Sell')
+         AND signal IN ('Strong Buy','Buy')
          AND entry_price > 0 AND stop_loss > 0 AND target1 > 0
        ORDER BY ticker, generated_at DESC`,
       [`${SIGNAL_WINDOW_DAYS} days`]
@@ -847,8 +851,7 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
         AND sh.generated_at < NOW() - INTERVAL '1 hour'
         AND sh.signal IN ('Strong Buy','Buy','Sell','Strong Sell')
         AND sh.entry_price > 0
-        AND sh.stop_loss > 0
-        AND sh.target1 > 0
+        AND (sh.stop_loss > 0 AND sh.target1 > 0 OR sh.signal IN ('Sell','Strong Sell'))
         ${force ? '' : 'AND so.id IS NULL'}
       ORDER BY sh.generated_at DESC
       LIMIT $2
@@ -936,9 +939,15 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
               if (dayLow <= stop) { exitPrice = stop; resultStr = 'loss'; break; }
               if (dayHigh >= target) { exitPrice = target; resultStr = 'win'; break; }
             } else {
-              // Sell direction: profit when price falls to target1, loss when it rises to stop_loss
-              if (dayHigh >= stop) { exitPrice = stop; resultStr = 'loss'; break; }
-              if (dayLow <= target) { exitPrice = target; resultStr = 'win'; break; }
+              // Exit/avoid rating — a Sell is not a mirrored short, so it has no
+              // stop/target levels to walk. It is validated by whether the stock
+              // declined over the hold window relative to the signal price (same
+              // direction semantics as the forward-test benchmark-relative eval).
+              if (i === startIdx + maxHoldDays || i === bars.length - 1) {
+                exitPrice = dayClose;
+                resultStr = dayClose < entry ? 'win' : 'loss';
+                break;
+              }
             }
 
             if (i === startIdx + maxHoldDays || i === bars.length - 1) {

@@ -16,6 +16,9 @@ function perf() { return { wins: 0, losses: 0, total: 0, winRate: 0 }; }
 function holdSig() { return { signal: 'Hold', action: 'hold', stopLoss: 95, target1: 105, positionSize: '25%' }; }
 function buySig() { return { signal: 'Buy', action: 'buy', stopLoss: 95, target1: 105, positionSize: '25%' }; }
 function sellSig() { return { signal: 'Sell', action: 'sell', stopLoss: null, target1: null, positionSize: '25%' }; }
+// Legacy artifact form: a Sell carrying short-style levels. Sells are exit/avoid
+// ratings, NOT mirrored shorts — even a leveled Sell must never be monitored.
+function leveledSellSig() { return { signal: 'Sell', action: 'sell', stopLoss: 105, target1: 95, positionSize: '25%' }; }
 
 console.log('── fresh symbol seeding ──');
 
@@ -31,6 +34,10 @@ check('  buy entry carries stop/target/timestamp', m.get('X2').stopLoss === 95 &
 m = new Map(); st = state(); pf = perf();
 trackSignalOutcomes(st, pf, m, 'X3', 100, sellSig(), true);
 check('level-less Sell rating is NOT stored', m.size === 0);
+
+m = new Map(); st = state(); pf = perf();
+trackSignalOutcomes(st, pf, m, 'X3b', 100, leveledSellSig(), true);
+check('leveled Sell is NOT stored either (sells are never monitored)', m.size === 0);
 
 console.log('── open buy persistence (no resolution) ──');
 
@@ -51,6 +58,11 @@ m = new Map(); st = state(); pf = perf();
 trackSignalOutcomes(st, pf, m, 'X6', 100, buySig(), true);
 trackSignalOutcomes(st, pf, m, 'X6', 94, sellSig(), true);
 check('stop-hit loss with fresh Sell rating also clears the entry', m.size === 0 && pf.losses === 1);
+
+m = new Map(); st = state(); pf = perf();
+trackSignalOutcomes(st, pf, m, 'X6b', 100, buySig(), true);
+trackSignalOutcomes(st, pf, m, 'X6b', 94, leveledSellSig(), true);
+check('stop-hit loss with fresh leveled Sell also clears it', m.size === 0 && pf.losses === 1);
 
 console.log('── market-closed deferral ──');
 
