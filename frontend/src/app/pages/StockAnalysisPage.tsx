@@ -1485,7 +1485,7 @@ export function StockAnalysisPage() {
                       stockSignal?.mlWinProb && { label: `ML: ${stockSignal.mlWinProb}`, cls: "bg-blue-50 text-blue-700 border-blue-200" },
                       stockSignal?.regime && { label: stockSignal.regime, cls: "bg-muted text-muted-foreground border-border" },
                       stockSignal?.weeklyTrend && { label: stockSignal.weeklyTrend, cls: stockSignal.weeklyTrend === "Bullish" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200" },
-                      stockSignal?.positionSize && { label: `Size: ${stockSignal.positionSize}`, cls: "bg-purple-50 text-purple-700 border-purple-100" },
+                      stockSignal?.positionSize && parseInt(stockSignal.positionSize) > 0 && { label: `Size: ${stockSignal.positionSize}`, cls: "bg-purple-50 text-purple-700 border-purple-100" },
                       stockSignal?.var95 && { label: `VaR: ${stockSignal.var95}`, cls: "bg-orange-50 text-orange-700 border-orange-100" },
                       stockSignal?.cvar95 && { label: `CVaR: ${stockSignal.cvar95}`, cls: "bg-orange-50 text-orange-700 border-orange-100" },
                     ].filter(Boolean).length > 0 && (
@@ -1494,7 +1494,7 @@ export function StockAnalysisPage() {
                           stockSignal?.mlWinProb && { label: `ML: ${stockSignal.mlWinProb}`, cls: "bg-blue-50 text-blue-700 border-blue-200" },
                           stockSignal?.regime && { label: stockSignal.regime, cls: "bg-muted text-muted-foreground border-border" },
                           stockSignal?.weeklyTrend && { label: stockSignal.weeklyTrend, cls: stockSignal.weeklyTrend === "Bullish" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200" },
-                          stockSignal?.positionSize && { label: `Size: ${stockSignal.positionSize}`, cls: "bg-purple-50 text-purple-700 border-purple-100" },
+                          stockSignal?.positionSize && parseInt(stockSignal.positionSize) > 0 && { label: `Size: ${stockSignal.positionSize}`, cls: "bg-purple-50 text-purple-700 border-purple-100" },
                           stockSignal?.var95 && { label: `VaR: ${stockSignal.var95}`, cls: "bg-orange-50 text-orange-700 border-orange-100" },
                           stockSignal?.cvar95 && { label: `CVaR: ${stockSignal.cvar95}`, cls: "bg-orange-50 text-orange-700 border-orange-100" },
                         ].filter(Boolean).map((tag: any, i) => (

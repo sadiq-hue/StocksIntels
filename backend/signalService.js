@@ -2514,7 +2514,14 @@ function getEngineHealth() {
       maxDrawdown: Math.round(_portfolioState.maxDrawdown * 1000) / 10,
     },
     regime: _marketRegime.regime,
-    signalCount: Array.isArray(_signalsCache) ? _signalsCache.length : 0,
+    signalCount: (() => {
+      // Match what GET /api/signals returns to the frontend: the engine cache
+      // plus monitored open positions that are surfaced as Buy cards.
+      const cached = Array.isArray(_signalsCache) ? _signalsCache : [];
+      const cacheTickers = new Set(cached.map(s => s && s.ticker).filter(Boolean));
+      const monitored = getMonitoredSignals();
+      return cached.length + monitored.filter(m => !cacheTickers.has(m.ticker)).length;
+    })(),
     openPositions: getOpenPositionCount(),
     confidenceMultiplier: getConfidenceMultiplier(),
   };

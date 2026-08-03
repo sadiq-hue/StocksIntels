@@ -328,7 +328,7 @@ export function SignalsPage() {
 
               {/* Risk / ML badges */}
               <div className="px-4 pb-2 flex items-center gap-2 flex-wrap text-[10px]">
-                {s.positionSize && <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100 font-medium">Size: {s.positionSize}</span>}
+                {s.positionSize && parseInt(s.positionSize) > 0 && <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100 font-medium">Size: {s.positionSize}</span>}
                 {s.var95 && <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-100">VaR: {s.var95}</span>}
                 {s.mlWinProb && <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">ML: {s.mlWinProb}</span>}
                 {s.regime && <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">{s.regime}</span>}
@@ -476,7 +476,7 @@ export function SignalsPage() {
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-3">Risk & ML</h3>
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                    {selected.positionSize && <div className="bg-purple-50 rounded-lg p-2.5 border border-purple-100 text-center"><p className="text-[9px] font-medium text-purple-600 uppercase">Size</p><p className="text-sm font-bold text-purple-900">{selected.positionSize}</p></div>}
+                    {selected.positionSize && parseInt(selected.positionSize) > 0 && <div className="bg-purple-50 rounded-lg p-2.5 border border-purple-100 text-center"><p className="text-[9px] font-medium text-purple-600 uppercase">Size</p><p className="text-sm font-bold text-purple-900">{selected.positionSize}</p></div>}
                     {selected.var95 && <div className="bg-orange-50 rounded-lg p-2.5 border border-orange-100 text-center"><p className="text-[9px] font-medium text-orange-600 uppercase">VaR 95%</p><p className="text-sm font-bold text-orange-900">{selected.var95}</p></div>}
                     {selected.var99 && <div className="bg-orange-50 rounded-lg p-2.5 border border-orange-100 text-center"><p className="text-[9px] font-medium text-orange-600 uppercase">VaR 99%</p><p className="text-sm font-bold text-orange-900">{selected.var99}</p></div>}
                     {selected.cvar95 && <div className="bg-red-50 rounded-lg p-2.5 border border-red-100 text-center"><p className="text-[9px] font-medium text-red-600 uppercase">CVaR</p><p className="text-sm font-bold text-red-900">{selected.cvar95}</p></div>}
