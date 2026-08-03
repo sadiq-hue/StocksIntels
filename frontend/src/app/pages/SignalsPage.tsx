@@ -318,11 +318,12 @@ export function SignalsPage() {
               </div>
 
               {/* Entry / Stop / Targets */}
-              <div className="px-4 pb-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className={`px-4 pb-3 grid grid-cols-2 gap-2 ${s.target3 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
                 <div className="bg-blue-50 rounded-md p-2 text-center border border-blue-100"><p className="text-[9px] font-medium text-blue-600 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 font-mono">{fmtPrice(s, s.entry)}</p></div>
                 <div className="bg-red-50 rounded-md p-2 text-center border border-red-100"><p className="text-[9px] font-medium text-red-600 uppercase">Stop</p><p className="text-xs font-bold text-red-900 font-mono">{fmtPrice(s, s.stopLoss)}</p></div>
                 <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">T1</p><p className="text-xs font-bold text-emerald-900 font-mono">{fmtPrice(s, s.target1)}</p></div>
                 <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">T2</p><p className="text-xs font-bold text-emerald-900 font-mono">{fmtPrice(s, s.target2)}</p></div>
+                {s.target3 && <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">T3</p><p className="text-xs font-bold text-emerald-900 font-mono">{fmtPrice(s, s.target3)}</p></div>}
               </div>
 
               {/* Risk / ML badges */}
@@ -461,11 +462,12 @@ export function SignalsPage() {
 
               <div>
                 <h3 className="text-sm font-semibold text-foreground mb-3">Trade Parameters</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className={`grid grid-cols-2 gap-2 ${selected.target3 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
                   <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 text-center"><p className="text-[10px] font-medium text-blue-600 uppercase">Entry</p><p className="text-sm font-bold text-blue-900 font-mono">{fmtPrice(selected, selected.entry)}</p></div>
                   <div className="bg-red-50 rounded-lg p-3 border border-red-100 text-center"><p className="text-[10px] font-medium text-red-600 uppercase">Stop</p><p className="text-sm font-bold text-red-900 font-mono">{fmtPrice(selected, selected.stopLoss)}</p></div>
                   <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">T1</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target1)}</p></div>
                   <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">T2</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target2)}</p></div>
+                  {selected.target3 && <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">T3</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target3)}</p></div>}
                 </div>
               </div>
 

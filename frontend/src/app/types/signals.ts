@@ -71,6 +71,7 @@ export interface Signal {
   stopLoss: number | null;
   target1: number | null;
   target2: number | null;
+  target3?: number | null;
   riskReward: number | null;
   confidence: number;
   timeframe?: string;

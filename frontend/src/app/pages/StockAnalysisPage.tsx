@@ -1156,6 +1156,9 @@ export function StockAnalysisPage() {
                       {stockSignal?.target2 && (
                         <ReferenceLine y={stockSignal.target2} stroke="#0D7490" strokeWidth={1} strokeDasharray="4 4" label={{ value: 'T2', position: 'right', fill: '#0D7490', fontSize: 10 }} />
                       )}
+                      {stockSignal?.target3 && (
+                        <ReferenceLine y={stockSignal.target3} stroke="#8b5cf6" strokeWidth={1} strokeDasharray="4 4" label={{ value: 'T3', position: 'right', fill: '#8b5cf6', fontSize: 10 }} />
+                      )}
                     </AreaChart>
                   </ResponsiveContainer>
 
@@ -1454,6 +1457,12 @@ export function StockAnalysisPage() {
                           <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
                             <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target 2</div>
                             <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target2)}</div>
+                          </div>
+                        )}
+                        {stockSignal?.target3 && (
+                          <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
+                            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target 3</div>
+                            <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target3)}</div>
                           </div>
                         )}
                         {stockSignal?.riskReward && (
