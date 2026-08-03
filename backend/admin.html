@@ -1676,10 +1676,9 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       <!-- Engine: Forward Test -->
       <div id="eng-forward" class="hidden space-y-4">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <p style="font-size:12px;color:#6b7280">Tracks signal predictions and compares actual outcomes after 8 hours</p>
+          <p style="font-size:12px;color:#6b7280">Audits the same resolved live outcomes the Health tab uses — win = target hit, loss = stop hit. Sell/exit ratings live in the Sells tab.</p>
           <div style="display:flex;gap:6px">
-            <span id="fwResolveResult" style="font-size:12px;color:#059669;display:none"></span>
-            <button class="btn btn-primary" style="font-size:12px;padding:4px 12px" onclick="resolveForwardTest()">Resolve Now</button>
+            <button class="btn btn-primary" style="font-size:12px;padding:4px 12px" onclick="fetchForwardTest()">Refresh</button>
           </div>
         </div>
         <div id="engineForwardContent"><div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading forward test data...</div></div>
@@ -5398,19 +5397,40 @@ async function fetchForwardTest() {
   try {
     const res = await fetch('/api/signals/forward-test');
     const d = await res.json();
-    if (!d.success) { el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">No data</div>'; return; }
+    if (!d.success || !d.stats) { el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">No data</div>'; return; }
     _fwStats = d.stats;
     const s = d.stats;
-    const accColor = s.accuracy >= 60 ? '#059669' : s.accuracy >= 45 ? '#d97706' : '#dc2626';
-    const statusText = !s || s.totalPredictions === 0 ? 'No Data' : s.accuracy >= 60 ? 'Good' : 'Needs Work';
+    const hasData = s.totalOutcomes > 0;
+    const accColor = !hasData ? '#6b7280' : s.winRate >= 60 ? '#059669' : s.winRate >= 45 ? '#d97706' : '#dc2626';
+    const statusText = !hasData ? 'No Data' : s.winRate >= 60 ? 'Good' : s.winRate >= 45 ? 'Needs Work' : 'Poor';
+    const resultBadge = r => r === 'win'
+      ? '<span class="pill bg-emerald-100 text-emerald-700">Win</span>'
+      : '<span class="pill bg-red-100 text-red-700">Loss</span>';
+    const confLabel = b => b === 'unknown' ? 'Unknown' : b.charAt(0).toUpperCase() + b.slice(1);
     el.innerHTML = `
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
-        <div class="stat-card"><div class="stat-value" style="color:#111827">${s.totalPredictions || 0}</div><div class="stat-label">Resolved</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:#d97706">${s.pendingPredictions || 0}</div><div class="stat-label">Pending</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:${accColor}">${s ? fmtPct(s.accuracy) : '—'}</div><div class="stat-label">Accuracy</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:${s && s.totalPredictions > 0 ? (s.accuracy >= 60 ? '#059669' : '#d97706') : '#6b7280'}">${statusText}</div><div class="stat-label">Status</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${s.totalOutcomes || 0}</div><div class="stat-label">Total Outcomes</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#059669">${s.wins || 0}</div><div class="stat-label">Wins</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#dc2626">${s.losses || 0}</div><div class="stat-label">Losses</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:${accColor}">${hasData ? fmtPct(s.winRate) : '—'}</div><div class="stat-label">Win Rate</div></div>
       </div>
-      ${s.bySymbol && Object.keys(s.bySymbol).length > 0 ? `
+      <div class="grid grid-cols-2 md:grid-cols-2 gap-4" style="margin-bottom:16px">
+        <div class="stat-card"><div class="stat-value" style="color:#d97706">${s.pending != null ? s.pending : 0}</div><div class="stat-label">Monitored Open Positions</div></div>
+        <div class="stat-card"><div class="stat-value" style="color:#111827">${s.avgDaysToResolve != null ? s.avgDaysToResolve.toFixed(1) + ' days' : '—'}</div><div class="stat-label">Avg Days to Resolve</div></div>
+      </div>
+      ${s.byTimeBucket ? `
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
+          <p style="font-size:13px;font-weight:600;margin-bottom:8px">Resolution Time Buckets</p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            ${Object.entries(s.byTimeBucket).map(([k, b]) => `
+              <div style="text-align:center">
+                <div class="stat-value" style="color:#111827">${b.total}</div>
+                <div class="stat-label">${k} (Win ${b.total > 0 ? fmtPct(b.winRate) : '—'})</div>
+              </div>`).join('')}
+          </div>
+        </div>
+      ` : ''}
+      ${hasData ? `
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" style="margin-bottom:16px">
           <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
             <p style="font-size:13px;font-weight:600;margin-bottom:8px">By Symbol</p>
@@ -5419,15 +5439,17 @@ async function fetchForwardTest() {
                 <thead><tr style="border-bottom:1px solid #e5e7eb">
                   <th style="text-align:left;padding:6px 8px;color:#6b7280">Symbol</th>
                   <th style="text-align:right;padding:6px 8px;color:#6b7280">Total</th>
-                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Correct</th>
-                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Accuracy</th>
+                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Wins</th>
+                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Losses</th>
+                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Win Rate</th>
                 </tr></thead>
-                <tbody>${Object.entries(s.bySymbol).map(([sym, st]) => `
+                <tbody>${Object.entries(s.bySymbol || {}).map(([sym, st]) => `
                   <tr style="border-bottom:1px solid #f3f4f6">
                     <td style="padding:6px 8px;font-weight:500">${esc(sym)}</td>
                     <td style="padding:6px 8px;text-align:right;color:#6b7280">${st.total}</td>
-                    <td style="padding:6px 8px;text-align:right;color:#059669">${st.correct}</td>
-                    <td style="padding:6px 8px;text-align:right;font-weight:500;color:${st.accuracy >= 60 ? '#059669' : '#d97706'}">${fmtPct(st.accuracy)}</td>
+                    <td style="padding:6px 8px;text-align:right;color:#059669">${st.wins}</td>
+                    <td style="padding:6px 8px;text-align:right;color:#dc2626">${st.losses}</td>
+                    <td style="padding:6px 8px;text-align:right;font-weight:500;color:${st.total > 0 ? (st.winRate >= 60 ? '#059669' : '#d97706') : '#6b7280'}">${st.total > 0 ? fmtPct(st.winRate) : '—'}</td>
                   </tr>
                 `).join('')}</tbody>
               </table>
@@ -5440,46 +5462,52 @@ async function fetchForwardTest() {
                 <thead><tr style="border-bottom:1px solid #e5e7eb">
                   <th style="text-align:left;padding:6px 8px;color:#6b7280">Confidence</th>
                   <th style="text-align:right;padding:6px 8px;color:#6b7280">Total</th>
-                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Accurate</th>
-                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Accuracy</th>
+                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Wins</th>
+                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Losses</th>
+                  <th style="text-align:right;padding:6px 8px;color:#6b7280">Win Rate</th>
                 </tr></thead>
-                <tbody>${Object.entries(s.byConfidence || {}).length === 0 ? '<tr><td colspan="4" style="text-align:center;padding:24px;color:#6b7280">No data</td></tr>' : Object.entries(s.byConfidence).map(([bucket, st]) => `
+                <tbody>${Object.entries(s.byConfidence || {}).length === 0 ? '<tr><td colspan="5" style="text-align:center;padding:24px;color:#6b7280">No data</td></tr>' : Object.entries(s.byConfidence).map(([bucket, st]) => `
                   <tr style="border-bottom:1px solid #f3f4f6">
-                    <td style="padding:6px 8px;font-weight:500;text-transform:capitalize">${esc(bucket)}</td>
+                    <td style="padding:6px 8px;font-weight:500;text-transform:capitalize">${esc(confLabel(bucket))}</td>
                     <td style="padding:6px 8px;text-align:right;color:#6b7280">${st.total}</td>
-                    <td style="padding:6px 8px;text-align:right;color:#059669">${st.accurate}</td>
-                    <td style="padding:6px 8px;text-align:right;font-weight:500;color:${st.accuracy >= 60 ? '#059669' : '#d97706'}">${fmtPct(st.accuracy)}</td>
+                    <td style="padding:6px 8px;text-align:right;color:#059669">${st.wins}</td>
+                    <td style="padding:6px 8px;text-align:right;color:#dc2626">${st.losses}</td>
+                    <td style="padding:6px 8px;text-align:right;font-weight:500;color:${st.total > 0 ? (st.winRate >= 60 ? '#059669' : '#d97706') : '#6b7280'}">${st.total > 0 ? fmtPct(st.winRate) : '—'}</td>
                   </tr>
                 `).join('')}</tbody>
               </table>
             </div>
           </div>
         </div>
-      ` : '<div style="text-align:center;padding:24px;color:#6b7280;font-size:13px">No resolved predictions yet</div>'}
-      ${d.predictions && d.predictions.length > 0 ? `
+      ` : '<div style="text-align:center;padding:24px;color:#6b7280;font-size:13px">No resolved outcomes yet</div>'}
+      ${s.log && s.log.length > 0 ? `
         <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
-          <p style="font-size:13px;font-weight:600;margin-bottom:8px">Prediction Log</p>
-          <div style="overflow-x:auto">
+          <p style="font-size:13px;font-weight:600;margin-bottom:8px">Outcome Log</p>
+          <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
             <table style="width:100%;font-size:11px">
               <thead><tr style="border-bottom:1px solid #e5e7eb">
                 <th style="text-align:left;padding:4px 8px;color:#6b7280">Symbol</th>
                 <th style="text-align:left;padding:4px 8px;color:#6b7280">Signal</th>
                 <th style="text-align:right;padding:4px 8px;color:#6b7280">Conf</th>
-                <th style="text-align:right;padding:4px 8px;color:#6b7280">Price</th>
+                <th style="text-align:right;padding:4px 8px;color:#6b7280">Entry</th>
+                <th style="text-align:right;padding:4px 8px;color:#6b7280">Exit</th>
                 <th style="text-align:right;padding:4px 8px;color:#6b7280">Return</th>
                 <th style="text-align:center;padding:4px 8px;color:#6b7280">Result</th>
                 <th style="text-align:right;padding:4px 8px;color:#6b7280">Generated</th>
+                <th style="text-align:right;padding:4px 8px;color:#6b7280">Resolved</th>
               </tr></thead>
-              <tbody>${d.predictions.map(p => {
+              <tbody>${s.log.map(p => {
                 const sigColor = { 'Strong Buy': 'bg-emerald-100 text-emerald-700', 'Buy': 'bg-green-100 text-green-700', 'Hold': 'bg-gray-100 text-gray-600', 'Sell': 'bg-red-100 text-red-700', 'Strong Sell': 'bg-rose-100 text-rose-700' }[p.signal] || 'bg-gray-100 text-gray-600';
                 return `<tr style="border-bottom:1px solid #f3f4f6">
                   <td style="padding:4px 8px;font-weight:500">${esc(p.symbol)}</td>
                   <td style="padding:4px 8px"><span class="pill ${sigColor}">${esc(p.signal)}</span></td>
-                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.confidence}%</td>
-                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.price ? '$' + Number(p.price).toFixed(2) : '—'}</td>
-                  <td style="padding:4px 8px;text-align:right;font-weight:500;color:${p.actualReturn !== null ? (p.actualReturn > 0 ? '#059669' : '#dc2626') : '#6b7280'}">${p.actualReturn !== null ? (p.actualReturn > 0 ? '+' : '') + Number(p.actualReturn).toFixed(1) + '%' : '—'}</td>
-                  <td style="padding:4px 8px;text-align:center">${p.resolved ? (p.correct ? '✓' : '✗') : '⏳'}</td>
-                  <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${formatDate(p.generatedAt)}</td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.confidence != null ? p.confidence + '%' : '—'}</td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.entryPrice != null ? '$' + Number(p.entryPrice).toFixed(2) : '—'}</td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.exitPrice != null ? '$' + Number(p.exitPrice).toFixed(2) : '—'}</td>
+                  <td style="padding:4px 8px;text-align:right;font-weight:500;color:${p.returnPct != null ? (p.returnPct > 0 ? '#059669' : '#dc2626') : '#6b7280'}">${p.returnPct != null ? (p.returnPct > 0 ? '+' : '') + Number(p.returnPct).toFixed(1) + '%' : '—'}</td>
+                  <td style="padding:4px 8px;text-align:center">${resultBadge(p.result)}</td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${p.generatedAt ? formatDate(p.generatedAt) : '—'}</td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${p.resolvedAt ? formatDate(p.resolvedAt) : '—'}</td>
                 </tr>`;
               }).join('')}</tbody>
             </table>
@@ -5489,26 +5517,6 @@ async function fetchForwardTest() {
   } catch { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Error loading forward test data</div>'; }
 }
 
-async function resolveForwardTest() {
-   const btn = document.querySelector('#eng-forward .btn-primary');
-   const prev = btn.textContent;
-   btn.disabled = true;
-   btn.textContent = 'Resolving...';
-   const resultEl = document.getElementById('fwResolveResult');
-   resultEl.style.display = 'none';
-   try {
-     const res = await fetch('/api/signals/forward-test/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-     const d = await res.json();
-     if (d.success) {
-       resultEl.textContent = 'Resolved ' + d.resolved + ', failed ' + d.failed;
-       resultEl.style.display = 'inline';
-       setTimeout(() => { resultEl.style.display = 'none'; }, 5000);
-     }
-     fetchForwardTest();
-   } catch { toast('Error resolving predictions', 'error'); }
-   btn.disabled = false;
-   btn.textContent = prev;
- }
 
  async function fetchSellsAudit() {
    const el = document.getElementById('engineSellsContent');

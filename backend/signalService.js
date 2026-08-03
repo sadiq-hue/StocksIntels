@@ -1626,114 +1626,107 @@ async function resolveForwardPredictions(symbol) {
 }
 
 async function getForwardTestStats() {
-  // Load in-memory predictions (current session)
-  const now = Date.now();
-  const maxAge = SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  let total = 0, correct = 0, losses = 0, neutral = 0, pending = 0;
+  // Forward Test mirrors the Health tab's accuracy story: it audits the SAME
+  // resolved live outcomes the Health tab's win rate is computed from
+  // (signal_outcomes source='live' — win = target/trailing-stop hit, loss =
+  // stop hit). It deliberately does NOT re-score sells benchmark-relative; that
+  // trail lives in the dedicated Sells tab. The only difference is the drill-
+  // down: per symbol, per confidence band, per time-to-resolve bucket, plus a
+  // full outcome log, so an operator can audit the engine from one number.
+  const rows = [];
+  try {
+    const res = await pool.query(
+      `SELECT o.ticker, o.signal, o.entry_price, o.exit_price, o.result,
+              o.recorded_at, o.resolved_at, o.signal_generated_at,
+              h.confidence
+       FROM signal_outcomes o
+       LEFT JOIN LATERAL (
+         SELECT h.confidence FROM signal_history h
+         WHERE h.ticker = o.ticker
+           AND h.generated_at BETWEEN COALESCE(o.signal_generated_at, o.recorded_at) - interval '5 minutes'
+                                 AND COALESCE(o.signal_generated_at, o.recorded_at) + interval '5 minutes'
+         ORDER BY ABS(EXTRACT(EPOCH FROM (h.generated_at - COALESCE(o.signal_generated_at, o.recorded_at))))
+         LIMIT 1
+       ) h ON true
+       WHERE o.result IS NOT NULL AND o.source = 'live'
+         AND COALESCE(o.signal_generated_at, o.recorded_at) > NOW() - $1::interval
+       ORDER BY COALESCE(o.resolved_at, o.recorded_at) DESC`,
+      [`${SIGNAL_WINDOW_DAYS} days`]
+    );
+    rows.push(...res.rows);
+  } catch (e) {
+    console.warn('[SignalService] getForwardTestStats outcomes query failed:', e.message);
+  }
+
+  let total = 0, wins = 0, losses = 0;
   let totalHours = 0, hourlyCount = 0;
   const byConfidence = {};
   const bySymbol = {};
-  const buckets = { '1d': { total: 0, correct: 0, losses: 0, neutral: 0 }, '5d': { total: 0, correct: 0, losses: 0, neutral: 0 }, '20d': { total: 0, correct: 0, losses: 0, neutral: 0 } };
+  const buckets = { '1d': { total: 0, wins: 0, losses: 0 }, '15d': { total: 0, wins: 0, losses: 0 }, '30d': { total: 0, wins: 0, losses: 0 }, '60d': { total: 0, wins: 0, losses: 0 } };
+  const log = [];
 
-  for (const [symbol, store] of _forwardTestStore) {
-    for (const p of store.predictions) {
-      if (p.generatedAt && (now - p.generatedAt) > maxAge) continue;
-      if (!p.resolved) { pending++; continue; }
-      total++;
-      if (p.correct === true) correct++;
-      else if (p.correct === false) losses++;
-      else if (p.correct === null) neutral++;
-      const bucket = p.confidence >= 80 ? 'high' : p.confidence >= 60 ? 'med' : 'low';
-      if (!byConfidence[bucket]) byConfidence[bucket] = { total: 0, correct: 0, losses: 0, neutral: 0 };
-      byConfidence[bucket].total++;
-      if (p.correct === true) byConfidence[bucket].correct++;
-      else if (p.correct === false) byConfidence[bucket].losses++;
-      else if (p.correct === null) byConfidence[bucket].neutral++;
-      if (!bySymbol[symbol]) bySymbol[symbol] = { total: 0, correct: 0, losses: 0, neutral: 0, accuracy: 0 };
-      bySymbol[symbol].total++;
-      if (p.correct === true) bySymbol[symbol].correct++;
-      else if (p.correct === false) bySymbol[symbol].losses++;
-      else if (p.correct === null) bySymbol[symbol].neutral++;
-      if (p.resolvedAt) {
-        const hours = (p.resolvedAt - p.generatedAt) / 3600000;
-        totalHours += hours;
-        hourlyCount++;
-        if (hours <= 24) { buckets['1d'].total++; if (p.correct === true) buckets['1d'].correct++; else if (p.correct === false) buckets['1d'].losses++; else if (p.correct === null) buckets['1d'].neutral++; }
-        if (hours <= 120) { buckets['5d'].total++; if (p.correct === true) buckets['5d'].correct++; else if (p.correct === false) buckets['5d'].losses++; else if (p.correct === null) buckets['5d'].neutral++; }
-        if (hours <= 480) { buckets['20d'].total++; if (p.correct === true) buckets['20d'].correct++; else if (p.correct === false) buckets['20d'].losses++; else if (p.correct === null) buckets['20d'].neutral++; }
-      }
+  const bucketOf = (hours) => hours <= 24 ? '1d' : hours <= 360 ? '15d' : hours <= 720 ? '30d' : '60d';
+  const confOf = (c) => c == null ? 'unknown' : c >= 80 ? 'high' : c >= 60 ? 'med' : 'low';
+
+  for (const r of rows) {
+    if (r.result !== 'win' && r.result !== 'loss') continue;
+    total++;
+    if (r.result === 'win') wins++; else losses++;
+    const gAt = r.signal_generated_at ? new Date(r.signal_generated_at).getTime() : null;
+    const rAt = r.resolved_at ? new Date(r.resolved_at).getTime() : (r.recorded_at ? new Date(r.recorded_at).getTime() : gAt);
+    const hours = (gAt && rAt) ? (rAt - gAt) / 3600000 : null;
+    if (hours != null) { totalHours += hours; hourlyCount++; }
+    const sym = r.ticker;
+    if (!bySymbol[sym]) bySymbol[sym] = { total: 0, wins: 0, losses: 0, winRate: 0 };
+    bySymbol[sym].total++;
+    if (r.result === 'win') bySymbol[sym].wins++; else bySymbol[sym].losses++;
+    const cb = confOf(r.confidence);
+    if (!byConfidence[cb]) byConfidence[cb] = { total: 0, wins: 0, losses: 0, winRate: 0 };
+    byConfidence[cb].total++;
+    if (r.result === 'win') byConfidence[cb].wins++; else byConfidence[cb].losses++;
+    if (hours != null) {
+      const bk = bucketOf(hours);
+      buckets[bk].total++;
+      if (r.result === 'win') buckets[bk].wins++; else buckets[bk].losses++;
     }
+    const entry = r.entry_price != null ? parseFloat(r.entry_price) : null;
+    const exit = r.exit_price != null ? parseFloat(r.exit_price) : null;
+    log.push({
+      symbol: sym,
+      signal: r.signal,
+      confidence: r.confidence != null ? Math.round(Number(r.confidence)) : null,
+      action: /buy|strong buy/i.test(r.signal) ? 'buy' : /sell|strong sell/i.test(r.signal) ? 'sell' : null,
+      entryPrice: entry,
+      exitPrice: exit,
+      result: r.result,
+      returnPct: entry && exit ? Math.round(((exit - entry) / entry) * 1000) / 10 : null,
+      generatedAt: gAt ? new Date(gAt).toISOString() : null,
+      resolvedAt: rAt ? new Date(rAt).toISOString() : null,
+    });
   }
 
-  // Also load resolved predictions from DB (prior sessions)
-  try {
-    const dbResult = await pool.query(
-      `SELECT id, symbol, confidence, correct, resolved_at, generated_at, stop_loss, target1, action, trade_type FROM forward_predictions WHERE resolved = TRUE
-       AND generated_at > NOW() - $1::interval`,
-      [`${SIGNAL_WINDOW_DAYS} days`]
-    );
-    for (const row of dbResult.rows) {
-      const sym = row.symbol;
-      const bucket = row.confidence >= 80 ? 'high' : row.confidence >= 60 ? 'med' : 'low';
-      // Deduplicate: skip if this exact prediction is already in the in-memory store
-      const store = _forwardTestStore.get(sym);
-      if (store) {
-        const dup = store.predictions.some(p => p.id === row.id);
-        if (dup) continue;
-      }
-      total++;
-      if (row.correct === true) correct++;
-      else if (row.correct === false) losses++;
-      else if (row.correct === null) neutral++;
-      if (!byConfidence[bucket]) byConfidence[bucket] = { total: 0, correct: 0, losses: 0, neutral: 0 };
-      byConfidence[bucket].total++;
-      if (row.correct === true) byConfidence[bucket].correct++;
-      else if (row.correct === false) byConfidence[bucket].losses++;
-      else if (row.correct === null) byConfidence[bucket].neutral++;
-      if (!bySymbol[sym]) bySymbol[sym] = { total: 0, correct: 0, losses: 0, neutral: 0, accuracy: 0 };
-      bySymbol[sym].total++;
-      if (row.correct === true) bySymbol[sym].correct++;
-      else if (row.correct === false) bySymbol[sym].losses++;
-      else if (row.correct === null) bySymbol[sym].neutral++;
-      if (row.resolved_at) {
-        const hours = (new Date(row.resolved_at).getTime() - new Date(row.generated_at).getTime()) / 3600000;
-        totalHours += hours;
-        hourlyCount++;
-        if (hours <= 24) { buckets['1d'].total++; if (row.correct === true) buckets['1d'].correct++; else if (row.correct === false) buckets['1d'].losses++; else if (row.correct === null) buckets['1d'].neutral++; }
-        if (hours <= 120) { buckets['5d'].total++; if (row.correct === true) buckets['5d'].correct++; else if (row.correct === false) buckets['5d'].losses++; else if (row.correct === null) buckets['5d'].neutral++; }
-        if (hours <= 480) { buckets['20d'].total++; if (row.correct === true) buckets['20d'].correct++; else if (row.correct === false) buckets['20d'].losses++; else if (row.correct === null) buckets['20d'].neutral++; }
-      }
-    }
-  } catch { /* table may not exist */ }
-
+  const winRate = total > 0 ? Math.round((wins / total) * 1000) / 10 : 0;
   for (const k of Object.keys(bySymbol)) {
-    const symResolved = bySymbol[k].correct + bySymbol[k].losses;
-    bySymbol[k].accuracy = symResolved > 0
-      ? Math.round((bySymbol[k].correct / symResolved) * 1000) / 10 : 0;
+    bySymbol[k].winRate = bySymbol[k].total > 0 ? Math.round((bySymbol[k].wins / bySymbol[k].total) * 1000) / 10 : 0;
   }
-  const resolvedTotal = correct + losses;
+  for (const k of Object.keys(byConfidence)) {
+    byConfidence[k].winRate = byConfidence[k].total > 0 ? Math.round((byConfidence[k].wins / byConfidence[k].total) * 1000) / 10 : 0;
+  }
+  for (const k of Object.keys(buckets)) {
+    buckets[k].winRate = buckets[k].total > 0 ? Math.round((buckets[k].wins / buckets[k].total) * 1000) / 10 : 0;
+  }
+
   return {
-    totalPredictions: total,
-    pendingPredictions: pending,
-    neutralPredictions: neutral,
+    totalOutcomes: total,
+    wins,
     losses,
-    accuracy: resolvedTotal > 0 ? Math.round((correct / resolvedTotal) * 1000) / 10 : 0,
+    pending: getOpenPositionCount(),
+    winRate,
     avgDaysToResolve: hourlyCount > 0 ? Math.round((totalHours / hourlyCount / 24) * 100) / 100 : 0,
-    byConfidence: Object.fromEntries(Object.entries(byConfidence).map(([k, v]) => {
-      const confResolved = v.correct + v.losses;
-      return [k, {
-        total: v.total, accurate: v.correct, losses: v.losses, neutral: v.neutral,
-        accuracy: confResolved > 0 ? Math.round((v.correct / confResolved) * 1000) / 10 : 0,
-      }];
-    })),
-    byTimeBucket: Object.fromEntries(Object.entries(buckets).map(([k, v]) => {
-      const bucketResolved = v.correct + v.losses;
-      return [k, {
-        total: v.total, correct: v.correct, losses: v.losses, neutral: v.neutral,
-        accuracy: bucketResolved > 0 ? Math.round((v.correct / bucketResolved) * 1000) / 10 : 0,
-      }];
-    })),
     bySymbol,
+    byConfidence,
+    byTimeBucket: buckets,
+    log,
   };
 }
 

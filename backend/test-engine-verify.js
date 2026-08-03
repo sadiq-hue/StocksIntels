@@ -112,13 +112,16 @@ async function main() {
     const fwdStats = await ss.getForwardTestStats();
     check('getForwardTestStats returns object', fwdStats && typeof fwdStats === 'object');
     if (fwdStats) {
-      check('has accuracy', fwdStats.accuracy !== undefined, `${fwdStats.accuracy}%`);
-      check('has total predictions', fwdStats.totalPredictions >= 0, fwdStats.totalPredictions);
+      check('has winRate', typeof fwdStats.winRate === 'number', `${fwdStats.winRate}%`);
+      check('has total outcomes', fwdStats.totalOutcomes >= 0, fwdStats.totalOutcomes);
+      check('wins+losses = total', fwdStats.wins + fwdStats.losses === fwdStats.totalOutcomes, `${fwdStats.wins}+${fwdStats.losses}`);
+      check('has pending (open positions)', fwdStats.pending !== undefined, fwdStats.pending);
       check('has per-bucket data', fwdStats.byTimeBucket !== undefined);
       if (fwdStats.byTimeBucket) {
         check('bucket 1d', fwdStats.byTimeBucket['1d'] !== undefined);
-        check('bucket 5d', fwdStats.byTimeBucket['5d'] !== undefined);
+        check('bucket 15d', fwdStats.byTimeBucket['15d'] !== undefined);
       }
+      check('has outcome log', Array.isArray(fwdStats.log));
     }
   } catch(e) { check('getForwardTestStats', false, e.message); }
   console.log();
