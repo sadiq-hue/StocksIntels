@@ -337,5 +337,46 @@ check('no speculative flag on flat price history',
 check('no speculative flag on too-short history',
   detectSpeculativeRally([10, 11, 12, 13], distressedFundamentals), null);
 
+// ─── Sell resolution horizon (evaluateSellAtHorizon) ───
+// Bounded-resolution fallback: sells that never crossed a decisive move or
+// benchmark lag must resolve by total relative performance after the horizon
+// instead of pending forever. Within tolerance on both legs → neutral.
+const { evaluateSellAtHorizon } = signalService;
+const horiz = (entry, px, bench, benchPrice = 100) =>
+  evaluateSellAtHorizon({ price: entry, benchPrice }, px, bench);
+
+check('horizon: flat stock / flat bench -> neutral',
+  JSON.stringify(horiz(100, 100, 0)), JSON.stringify({ resolved: true, correct: null, actualReturn: 0 }));
+
+check('horizon: stock -3% -> correct (exit gate)',
+  evaluateSellAtHorizon({ price: 100, benchPrice: 100 }, 97, 0).correct, true);
+
+check('horizon: stock -1.5% vs flat bench -> correct (underperformed)',
+  horiz(100, 98.5, 0).correct, true);
+
+check('horizon: stock +1.5% vs flat bench -> incorrect (outperformed)',
+  horiz(100, 101.5, 0).correct, false);
+
+check('horizon: flat stock vs bench -2% -> incorrect (outperformed falling market)',
+  horiz(100, 100, -0.02).correct, false);
+
+check('horizon: flat stock vs bench +2% -> correct (underperformed rising market)',
+  horiz(100, 100, 0.02).correct, true);
+
+check('horizon: stock +3% vs bench +1% -> incorrect (beat market by 2%)',
+  horiz(100, 103, 0.01).correct, false);
+
+check('horizon: stock +4% vs bench +8% -> correct (rose but lagged by >3%)',
+  horiz(100, 104, 0.08).correct, true);
+
+check('horizon: no bench, stock -4% -> correct',
+  evaluateSellAtHorizon({ price: 100, benchPrice: null }, 96, null).correct, true);
+
+check('horizon: no bench, stock +4% -> incorrect',
+  evaluateSellAtHorizon({ price: 100, benchPrice: null }, 104, null).correct, false);
+
+check('horizon: no bench, stock -0.5% -> neutral',
+  evaluateSellAtHorizon({ price: 100, benchPrice: null }, 99.5, null).correct, null);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

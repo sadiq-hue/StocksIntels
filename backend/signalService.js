@@ -1245,11 +1245,29 @@ const SELL_EXIT_MOVE = 0.02;
 // the exit/avoid rating was right).
 const SELL_REL_MOVE = 0.03;
 
+// Bounded resolution horizon for sell predictions. Sells are exit/avoid ratings
+// that normally resolve on a decisive move or benchmark lag; without a horizon a
+// sell whose stock and benchmark both sit flat would pend forever and the audit
+// accuracy could never populate. After this age the exit thesis is judged by the
+// total relative performance (see evaluateSellAtHorizon).
+const SELL_RESOLVE_MAX_AGE = 5 * 24 * 60 * 60 * 1000; // 5 days
+
+// Relative-performance tolerance at the sell horizon: a stock that stayed within
+// ~1% of its benchmark after SELL_RESOLVE_MAX_AGE is noise, resolved neutral.
+const SELL_HORIZON_TOLERANCE = 0.01;
+
 // Benchmark for benchmark-relative sell evaluation: NSE names run against the
 // NSE 20-share index, everything else against the S&P 500 proxy (the same index
 // the regime detector already relies on).
 function benchmarkSymbolFor(symbol) {
   return NSE_SYMBOLS.includes(symbol) ? 'NSE:NSE20' : 'SPY';
+}
+
+// marketService only resolves NSE names under the 'NSE:' prefix (mystocks/AFX);
+// the resolvers must quote the prefixed symbol or NSE predictions never get a
+// price to evaluate against.
+function _marketQuoteSymbol(symbol) {
+  return NSE_SYMBOLS.includes(symbol) ? 'NSE:' + symbol : symbol;
 }
 
 async function _getBenchmarkNow(symbol) {
@@ -1445,13 +1463,37 @@ function evaluateSellRelative(pred, currentPrice, benchReturn) {
   return { resolved: false };
 }
 
+// Horizon fallback for sells that never crossed a decisive move (±2%) or a
+// decisive benchmark lag (±3%): after SELL_RESOLVE_MAX_AGE the exit/avoid
+// thesis is judged by the total relative performance. A stock that under- or
+// outperformed its benchmark by more than SELL_HORIZON_TOLERANCE over the
+// horizon resolves the rating (avoid was right / wrong); within tolerance on
+// both legs it's a neutral (the exit neither helped nor hurt — nothing moved).
+// Missing benchmark data falls back to the absolute return.
+function evaluateSellAtHorizon(pred, currentPrice, benchReturn) {
+  const stockReturn = (currentPrice - pred.price) / pred.price;
+  const actualReturn = Math.round(stockReturn * 1000) / 10;
+  const hasBench = benchReturn != null && pred.benchPrice != null && pred.benchPrice > 0;
+  if (stockReturn <= -SELL_EXIT_MOVE) return { resolved: true, correct: true, actualReturn };
+  if (stockReturn >= SELL_EXIT_MOVE) {
+    if (!hasBench) return { resolved: true, correct: false, actualReturn };
+    const lag = benchReturn - stockReturn;
+    return { resolved: true, correct: lag >= SELL_REL_MOVE, actualReturn };
+  }
+  if (!hasBench) return { resolved: true, correct: null, actualReturn };
+  const lag = benchReturn - stockReturn;
+  if (lag >= SELL_HORIZON_TOLERANCE) return { resolved: true, correct: true, actualReturn };
+  if (lag <= -SELL_HORIZON_TOLERANCE) return { resolved: true, correct: false, actualReturn };
+  return { resolved: true, correct: null, actualReturn };
+}
+
 async function resolveForwardPredictions(symbol) {
   const store = _forwardTestStore.get(symbol);
   if (!store || !store.predictions.length) return;
   const unresolved = store.predictions.filter(p => !p.resolved);
   if (!unresolved.length) return;
   try {
-    const quote = await getStockQuote(symbol);
+    const quote = await getStockQuote(_marketQuoteSymbol(symbol));
     if (!quote || !quote.price) return;
     const currentPrice = quote.price;
     for (const pred of unresolved) {
@@ -1523,6 +1565,15 @@ async function resolveForwardPredictions(symbol) {
           pred.correct = rel.correct;
           pred.resolved = true;
           pred.actualReturn = rel.actualReturn;
+        } else if (age >= SELL_RESOLVE_MAX_AGE) {
+          const horiz = evaluateSellAtHorizon(pred, currentPrice, benchReturn);
+          if (horiz.resolved) {
+            pred.correct = horiz.correct;
+            pred.resolved = true;
+            pred.actualReturn = horiz.actualReturn;
+          } else {
+            continue; // Keep monitoring.
+          }
         } else {
           continue; // Still pending — keep monitoring.
         }
@@ -1945,7 +1996,7 @@ async function validateExpiringPredictions() {
     if (!expiring.length) continue;
 
     try {
-      const quote = await getStockQuote(symbol);
+      const quote = await getStockQuote(_marketQuoteSymbol(symbol));
       if (!quote || !quote.price) { failed += expiring.length; continue; }
       const currentPrice = quote.price;
 
@@ -2018,7 +2069,7 @@ async function resolveAllForwardPredictions() {
     const unresolved = store.predictions.filter(p => !p.resolved);
     if (!unresolved.length) continue;
     try {
-      const quote = await getStockQuote(symbol);
+      const quote = await getStockQuote(_marketQuoteSymbol(symbol));
       if (!quote || !quote.price) { failed += unresolved.length; continue; }
       const currentPrice = quote.price;
       for (const pred of unresolved) {
@@ -2103,6 +2154,16 @@ async function resolveAllForwardPredictions() {
             pred.correct = rel.correct;
             pred.resolved = true;
             pred.actualReturn = rel.actualReturn;
+          } else if (age >= SELL_RESOLVE_MAX_AGE) {
+            const horiz = evaluateSellAtHorizon(pred, currentPrice, benchReturn);
+            if (horiz.resolved) {
+              pred.correct = horiz.correct;
+              pred.resolved = true;
+              pred.actualReturn = horiz.actualReturn;
+            } else {
+              skipped++;
+              continue;
+            }
           } else {
             skipped++;
             continue;
@@ -3853,6 +3914,7 @@ module.exports = {
   classifySignalBucket,
   evaluateForwardPrediction,
   evaluateSellRelative,
+  evaluateSellAtHorizon,
   isGarbageQuote,
   getPriorScore,
   getLiveTestSnapshot,
