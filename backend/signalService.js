@@ -1685,6 +1685,88 @@ function getForwardTestSnapshot() {
   };
 }
 
+// ─── Sell/Avoid Audit ─────────────────────────────────────────────────────────
+// Dedicated audit surface for the exit/avoid rating logic. Sells are NOT
+// monitored as positions (no stop/target levels); they are judged benchmark-
+// relative via the forward-test sell predictions. This exposes that trail so
+// sell accuracy can be audited independently of the Buy monitor.
+async function getSellAudit() {
+  const windowDays = SIGNAL_WINDOW_DAYS;
+  const stats = {
+    totalRatings: 0, activeRatings: 0,
+    sellPredictions: 0, pendingPredictions: 0, resolvedPredictions: 0,
+    correct: 0, incorrect: 0, neutral: 0, accuracy: null,
+  };
+  const ratings = [];
+  const predictions = [];
+  try {
+    // All Sell/Strong Sell ratings in the evaluation window.
+    const ratingsRes = await pool.query(
+      `SELECT ticker, signal, confidence, price, entry_price, sector, reason, generated_at
+       FROM signal_history
+       WHERE generated_at > NOW() - $1::interval AND signal IN ('Sell','Strong Sell')
+       ORDER BY generated_at DESC LIMIT 500`,
+      [`${windowDays} days`]
+    );
+    stats.totalRatings = ratingsRes.rows.length;
+    for (const r of ratingsRes.rows) {
+      ratings.push({
+        ticker: r.ticker, signal: r.signal, confidence: r.confidence,
+        price: r.price != null ? parseFloat(r.price) : (r.entry_price != null ? parseFloat(r.entry_price) : null),
+        sector: r.sector, reason: r.reason || '',
+        generatedAt: r.generated_at ? new Date(r.generated_at).getTime() : null,
+      });
+    }
+
+    // In-force sell ratings: tickers whose LATEST rating in the window is a Sell.
+    const activeRes = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM (
+         SELECT DISTINCT ON (ticker) ticker, signal
+         FROM signal_history
+         WHERE generated_at > NOW() - $1::interval
+         ORDER BY ticker, generated_at DESC
+       ) latest
+       WHERE latest.signal IN ('Sell','Strong Sell')`,
+      [`${windowDays} days`]
+    );
+    stats.activeRatings = activeRes.rows[0]?.n || 0;
+
+    // Sell forward-test predictions — the benchmark-relative audit trail.
+    const predRes = await pool.query(
+      `SELECT id, symbol, signal, confidence, price, bench_price, actual_return, correct, resolved, generated_at, resolved_at
+       FROM forward_predictions
+       WHERE action = 'sell' AND generated_at > NOW() - $1::interval
+       ORDER BY generated_at DESC LIMIT 500`,
+      [`${windowDays} days`]
+    );
+    for (const p of predRes.rows) {
+      predictions.push({
+        id: p.id, symbol: p.symbol, signal: p.signal, confidence: p.confidence,
+        price: p.price != null ? parseFloat(p.price) : null,
+        benchPrice: p.bench_price != null ? parseFloat(p.bench_price) : null,
+        actualReturn: p.actual_return != null ? parseFloat(p.actual_return) : null,
+        correct: p.correct, resolved: !!p.resolved,
+        generatedAt: p.generated_at ? new Date(p.generated_at).getTime() : null,
+        resolvedAt: p.resolved_at ? new Date(p.resolved_at).getTime() : null,
+      });
+      stats.sellPredictions++;
+      if (p.resolved) {
+        stats.resolvedPredictions++;
+        if (p.correct === true) stats.correct++;
+        else if (p.correct === false) stats.incorrect++;
+        else stats.neutral++;
+      } else {
+        stats.pendingPredictions++;
+      }
+    }
+    const resolvedTotal = stats.correct + stats.incorrect;
+    stats.accuracy = resolvedTotal > 0 ? Math.round((stats.correct / resolvedTotal) * 1000) / 10 : null;
+  } catch (e) {
+    console.warn('[SignalService] getSellAudit error:', e.message);
+  }
+  return { stats, ratings, predictions };
+}
+
 function getSignalProgress(symbol, currentPrice) {
   const prev = _signalOutcomes.get(symbol);
   if (!prev || prev.result || prev.action === 'hold' || prev.entryPrice == null || prev.stopLoss == null || prev.target1 == null) return null;
@@ -3764,6 +3846,7 @@ module.exports = {
   computeBacktestStats,
   getForwardTestStats,
   getForwardTestPredictions,
+  getSellAudit,
   resolveAllForwardPredictions,
   validateExpiringPredictions,
   // Pure helpers (unit-testable sell/exit + resolution logic)

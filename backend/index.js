@@ -12,7 +12,8 @@ const { getAllNews, getNewsSummary, getAggregatedSentiment, KENYAN_STOCKS, STOCK
 const { generateWeeklyDigestContent, generateDailyBriefContent, generateEarningsContent } = require('./contentGenerator');
 const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
-const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions, getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats, getForwardTestPredictions, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, validateExpiringPredictions } = require('./signalService');
+const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats,
+           getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, validateExpiringPredictions } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
 const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
@@ -3803,6 +3804,15 @@ app.get('/api/signals/live-path', async (req, res) => {
   try {
     const snapshot = getLiveTestSnapshot();
     res.json({ success: true, snapshot });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+app.get('/api/signals/sells', async (req, res) => {
+  try {
+    const audit = await getSellAudit();
+    res.json({ success: true, audit });
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
   }

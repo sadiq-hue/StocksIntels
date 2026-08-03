@@ -1622,6 +1622,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       <!-- Engine sub-tab buttons -->
       <div style="display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid #e5e7eb;padding-bottom:8px">
         <button class="tab-btn active" data-engtab="health" onclick="switchEngTab('health')">Health</button>
+        <button class="tab-btn" data-engtab="sells" onclick="switchEngTab('sells')">Sells</button>
         <button class="tab-btn" data-engtab="backtest" onclick="switchEngTab('backtest')">Backtest</button>
         <button class="tab-btn" data-engtab="forward" onclick="switchEngTab('forward')">Forward Test</button>
         <button class="tab-btn" data-engtab="live" onclick="switchEngTab('live')">Live Path</button>
@@ -1633,6 +1634,18 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       <!-- Engine: Health -->
       <div id="eng-health" class="space-y-4">
         <div id="engineHealthContent"><div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading health data...</div></div>
+      </div>
+
+      <!-- Engine: Sells -->
+      <div id="eng-sells" class="hidden space-y-4">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <p style="font-size:12px;color:#6b7280">Exit/avoid ratings audit — Sells are benchmark-relative exit ratings, not monitored short positions (no stop/target levels). Accuracy comes from the forward-test sell evaluations.</p>
+          <div style="display:flex;gap:6px">
+            <span id="sellsMsg" style="font-size:12px;color:#059669;display:none"></span>
+            <button class="btn btn-secondary" style="font-size:12px;padding:4px 12px" onclick="fetchSellsAudit()">Refresh</button>
+          </div>
+        </div>
+        <div id="engineSellsContent"><div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading sell/avoid audit...</div></div>
       </div>
 
       <!-- Engine: Backtest -->
@@ -5256,6 +5269,7 @@ function switchEngTab(tab) {
   document.querySelectorAll('[id^="eng-"]').forEach(el => { if (el.id.startsWith('eng-')) el.classList.add('hidden'); });
   document.getElementById('eng-' + tab).classList.remove('hidden');
   if (tab === 'health') fetchEngineHealth();
+  if (tab === 'sells') fetchSellsAudit();
   if (tab === 'backtest') fetchBacktest();
   if (tab === 'forward') fetchForwardTest();
   if (tab === 'live') fetchLivePath();
@@ -5493,6 +5507,90 @@ async function resolveForwardTest() {
    } catch { toast('Error resolving predictions', 'error'); }
    btn.disabled = false;
    btn.textContent = prev;
+ }
+
+ async function fetchSellsAudit() {
+   const el = document.getElementById('engineSellsContent');
+   el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading...</div>';
+   try {
+     const res = await fetch('/api/signals/sells');
+     const d = await res.json();
+     if (!d.success || !d.audit) { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Failed to load sell/avoid audit</div>'; return; }
+     const a = d.audit, s = a.stats;
+     const accColor = s.accuracy == null ? '#6b7280' : s.accuracy >= 60 ? '#059669' : s.accuracy >= 45 ? '#d97706' : '#dc2626';
+     const predColor = c => c === true ? 'color:#059669' : c === false ? 'color:#dc2626' : 'color:#6b7280';
+     el.innerHTML = `
+       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
+         <div class="stat-card" title="Tickers whose latest rating in the window is a Sell/Strong Sell"><div class="stat-value" style="color:#b91c1c">${s.activeRatings}</div><div class="stat-label">Active Sell Ratings</div></div>
+         <div class="stat-card" title="All Sell/Strong Sell ratings in the 90-day evaluation window"><div class="stat-value" style="color:#111827">${s.totalRatings}</div><div class="stat-label">Total Ratings (window)</div></div>
+         <div class="stat-card" title="Sell forward-test predictions resolved benchmark-relative (vs SPY/NSE benchmark)"><div class="stat-value" style="color:#111827">${s.resolvedPredictions}</div><div class="stat-label">Sell Preds Resolved</div></div>
+         <div class="stat-card" title="Correct ÷ resolved sell predictions (benchmark-relative). ${s.pendingPredictions} pending."><div class="stat-value" style="color:${accColor}">${s.accuracy == null ? '—' : fmtPct(s.accuracy)}</div><div class="stat-label">Sell Accuracy</div></div>
+       </div>
+       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;font-size:12px;color:#6b7280">
+         <span>Correct: <b style="color:#059669">${s.correct}</b></span>
+         <span>Incorrect: <b style="color:#dc2626">${s.incorrect}</b></span>
+         <span>Neutral: <b style="color:#6b7280">${s.neutral}</b></span>
+         <span>Pending: <b style="color:#d97706">${s.pendingPredictions}</b></span>
+       </div>
+       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
+         <p style="font-size:13px;font-weight:600;margin-bottom:8px">Sell Prediction Audit (benchmark-relative)</p>
+         <div style="overflow-x:auto;max-height:340px;overflow-y:auto">
+           <table style="width:100%;font-size:11px">
+             <thead><tr style="border-bottom:1px solid #e5e7eb">
+               <th style="text-align:left;padding:4px 8px;color:#6b7280">Symbol</th>
+               <th style="text-align:left;padding:4px 8px;color:#6b7280">Signal</th>
+               <th style="text-align:right;padding:4px 8px;color:#6b7280">Conf</th>
+               <th style="text-align:right;padding:4px 8px;color:#6b7280">Ref Price</th>
+               <th style="text-align:right;padding:4px 8px;color:#6b7280">Bench</th>
+               <th style="text-align:right;padding:4px 8px;color:#6b7280">Return</th>
+               <th style="text-align:center;padding:4px 8px;color:#6b7280">Result</th>
+               <th style="text-align:right;padding:4px 8px;color:#6b7280">Generated</th>
+               <th style="text-align:right;padding:4px 8px;color:#6b7280">Resolved</th>
+             </tr></thead>
+             <tbody>${a.predictions.length === 0 ? '<tr><td colspan="9" style="text-align:center;padding:24px;color:#6b7280">No sell predictions in window</td></tr>' : a.predictions.map(p => `
+               <tr style="border-bottom:1px solid #f3f4f6">
+                 <td style="padding:4px 8px;font-weight:500">${esc(p.symbol)}</td>
+                 <td style="padding:4px 8px"><span class="pill ${p.signal === 'Strong Sell' ? 'bg-rose-100 text-rose-700' : 'bg-red-100 text-red-700'}">${esc(p.signal)}</span></td>
+                 <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.confidence}%</td>
+                 <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.price ? '$' + Number(p.price).toFixed(2) : '—'}</td>
+                 <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.benchPrice ? '$' + Number(p.benchPrice).toFixed(2) : '—'}</td>
+                 <td style="padding:4px 8px;text-align:right;font-weight:500;${predColor(p.correct)}">${p.actualReturn != null ? (p.actualReturn > 0 ? '+' : '') + Number(p.actualReturn).toFixed(1) + '%' : '—'}</td>
+                 <td style="padding:4px 8px;text-align:center">${p.resolved ? (p.correct === true ? '✓' : p.correct === false ? '✗' : '•') : '⏳'}</td>
+                 <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${formatDate(p.generatedAt)}</td>
+                 <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${p.resolvedAt ? formatDate(p.resolvedAt) : '—'}</td>
+               </tr>
+             `).join('')}</tbody>
+           </table>
+         </div>
+       </div>
+       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+         <p style="font-size:13px;font-weight:600;margin-bottom:8px">Live Sell Ratings</p>
+         <div style="overflow-x:auto;max-height:340px;overflow-y:auto">
+           <table style="width:100%;font-size:11px">
+             <thead><tr style="border-bottom:1px solid #e5e7eb">
+               <th style="text-align:left;padding:4px 8px;color:#6b7280">Ticker</th>
+               <th style="text-align:left;padding:4px 8px;color:#6b7280">Signal</th>
+               <th style="text-align:right;padding:4px 8px;color:#6b7280">Conf</th>
+               <th style="text-align:right;padding:4px 8px;color:#6b7280">Price</th>
+               <th style="text-align:left;padding:4px 8px;color:#6b7280">Sector</th>
+               <th style="text-align:left;padding:4px 8px;color:#6b7280">Reason</th>
+               <th style="text-align:right;padding:4px 8px;color:#6b7280">Generated</th>
+             </tr></thead>
+             <tbody>${a.ratings.length === 0 ? '<tr><td colspan="7" style="text-align:center;padding:24px;color:#6b7280">No sell ratings in window</td></tr>' : a.ratings.map(r => `
+               <tr style="border-bottom:1px solid #f3f4f6">
+                 <td style="padding:4px 8px;font-weight:500">${esc(r.ticker)}</td>
+                 <td style="padding:4px 8px"><span class="pill ${r.signal === 'Strong Sell' ? 'bg-rose-100 text-rose-700' : 'bg-red-100 text-red-700'}">${esc(r.signal)}</span></td>
+                 <td style="padding:4px 8px;text-align:right;color:#6b7280">${r.confidence}%</td>
+                 <td style="padding:4px 8px;text-align:right;color:#6b7280">${r.price ? '$' + Number(r.price).toFixed(2) : '—'}</td>
+                 <td style="padding:4px 8px;color:#6b7280">${esc(r.sector || '—')}</td>
+                 <td style="padding:4px 8px;color:#6b7280;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.reason || '')}">${esc(r.reason || '—')}</td>
+                 <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${formatDate(r.generatedAt)}</td>
+               </tr>
+             `).join('')}</tbody>
+           </table>
+         </div>
+       </div>`;
+   } catch { el.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Error loading sell/avoid audit</div>'; }
  }
 
  async function fetchLivePath() {
