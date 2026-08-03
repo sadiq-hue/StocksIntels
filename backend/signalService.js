@@ -173,11 +173,15 @@ const _financialReportCache = new PersistentCache('sigfin', 24 * 60 * 60 * 1000)
 const _signalOutcomes = new Map();
 let _signalHistoryCount = 0;
 
-// Count of positions the live monitor is actively tracking (open entries with a
-// timestamp — resolved ones have result set and no timestamp).
+// Count of positions the live monitor is actively tracking (open directional calls
+// with stop/target levels and a timestamp — resolved ones have result set and no
+// timestamp). Hold ratings and level-less Sell ratings are not tracked, so they
+// are excluded to keep the "Monitored Signals" stat honest.
 function getOpenPositionCount() {
   let n = 0;
-  for (const v of _signalOutcomes.values()) if (!v.result && v.timestamp) n++;
+  for (const v of _signalOutcomes.values()) {
+    if (!v.result && v.timestamp && v.action !== 'hold' && v.stopLoss != null && v.target1 != null) n++;
+  }
   return n;
 }
 

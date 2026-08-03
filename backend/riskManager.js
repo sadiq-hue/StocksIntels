@@ -144,6 +144,12 @@ function applyPortfolioConstraints(signals) {
 function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, symbol, currentPrice, newSignal, marketOpen = true) {
   let previous = signalOutcomes.get(symbol);
   const posSize = parseInt(newSignal.positionSize) || 25;
+  // Only keep entries the monitor can actually track: an open directional call with
+  // stop/target levels. Hold ratings and level-less Sell ratings are ratings, not
+  // positions — storing them inflated "Monitored Signals", refreshed their timestamp
+  // every cycle (so they never aged out), and could evict real positions under the
+  // 500-entry cap.
+  const monitorable = newSignal.action !== 'hold' && newSignal.stopLoss != null && newSignal.target1 != null;
 
   if (previous && previous.action !== 'hold' && previous.stopLoss != null && previous.target1 != null && !previous.result) {
     const isPrevBuy = previous.action === 'buy';
@@ -214,20 +220,31 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
       performanceStats.winRate = performanceStats.total > 0
         ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;
     }
-    // Only overwrite if resolved — unresolved signals persist across cycles
+    // Clear the resolved entry; re-seed only if the fresh signal is itself a new
+    // monitored position (a Buy re-rating). Hold/Sell-after-close means the symbol
+    // is no longer tracked rather than lingering as a stale entry.
     if (previous.result) {
+      signalOutcomes.delete(symbol);
+      if (monitorable) {
+        signalOutcomes.set(symbol, {
+          entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
+          stopLoss: newSignal.stopLoss, target1: newSignal.target1,
+          timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
+        });
+      }
+    }
+  } else {
+    // Covers: no previous entry, a non-monitored entry, or an entry already resolved
+    // by the monitor gate before this call. Drop a stale resolved entry and only
+    // store a fresh position when the new signal is itself monitorable.
+    if (previous && previous.result) signalOutcomes.delete(symbol);
+    if (monitorable) {
       signalOutcomes.set(symbol, {
         entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
         stopLoss: newSignal.stopLoss, target1: newSignal.target1,
         timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
       });
     }
-  } else {
-    signalOutcomes.set(symbol, {
-      entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
-      stopLoss: newSignal.stopLoss, target1: newSignal.target1,
-      timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
-    });
   }
 
   if (signalOutcomes.size > 500) {
