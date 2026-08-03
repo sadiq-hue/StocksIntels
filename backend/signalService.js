@@ -185,6 +185,42 @@ function getOpenPositionCount() {
   return n;
 }
 
+// Detail list of the positions the live monitor is actively tracking — every one
+// is a Buy-direction call (Sell ratings are exit/avoid flags with no levels, so
+// they are never tracked as positions). Exposed so the frontend can show the
+// monitored buys instead of only the fresh generation output, where open buys
+// are held by the monitor-first gate and therefore don't appear.
+function getMonitoredSignals() {
+  const out = [];
+  for (const [ticker, v] of _signalOutcomes) {
+    if (v.result || !v.timestamp || v.action === 'hold' || v.stopLoss == null || v.target1 == null) continue;
+    const expiryMs = TRADE_TYPE_EXPIRY[v.type || 'Swing Trade'] || TRADE_TYPE_EXPIRY['Swing Trade'];
+    const cached = Array.isArray(_signalsCache) ? _signalsCache.find(s => s.ticker === ticker) : null;
+    const isNse = NSE_SYMBOLS.includes(ticker);
+    out.push({
+      ticker,
+      signal: v.signal,
+      action: v.action,
+      type: v.type || 'Swing Trade',
+      entryPrice: v.entryPrice,
+      stopLoss: v.stopLoss,
+      target1: v.target1,
+      target2: v.target2 != null ? v.target2 : null,
+      target3: v.target3 != null ? v.target3 : null,
+      positionSize: v.positionSize || 25,
+      price: cached && cached.price ? cached.price : null,
+      market: isNse ? 'NSE' : 'Global',
+      currency: isNse ? 'KES' : 'USD',
+      openedAt: new Date(v.timestamp).toISOString(),
+      daysHeld: Math.max(0, Math.round((Date.now() - v.timestamp) / 86400000)),
+      expiryDays: Math.round(expiryMs / 86400000),
+      expiresAt: new Date(v.timestamp + expiryMs).toISOString(),
+    });
+  }
+  out.sort((a, b) => new Date(b.openedAt) - new Date(a.openedAt));
+  return out;
+}
+
 // Live test store — ring buffer of resolved signal outcomes with resolvedAt timestamps
 const _liveTestStore = new Map(); // symbol -> { outcomes: [{ result, entryPrice, exitPrice, signal, generatedAt, resolvedAt }] }
 const LIVE_TEST_MAX_PER_SYMBOL = 200;
@@ -4020,4 +4056,5 @@ module.exports = {
   getSignalsCacheTime: () => _signalsCacheTime,
   signalEventBus,
   getSignalProgress,
+  getMonitoredSignals,
 };

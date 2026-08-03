@@ -1,5 +1,25 @@
 export type SignalAction = "buy" | "sell" | "hold";
 
+export interface MonitoredPosition {
+  ticker: string;
+  signal: string;
+  action: SignalAction;
+  type: string;
+  entryPrice: number;
+  stopLoss: number;
+  target1: number;
+  target2: number | null;
+  target3: number | null;
+  positionSize: number;
+  price: number | null;
+  market?: string;
+  currency?: string;
+  openedAt: string;
+  daysHeld: number;
+  expiryDays: number;
+  expiresAt: string;
+}
+
 export interface Catalyst {
   type: string;
   direction: "positive" | "negative" | string;

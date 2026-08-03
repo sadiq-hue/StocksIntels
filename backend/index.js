@@ -13,7 +13,7 @@ const { generateWeeklyDigestContent, generateDailyBriefContent, generateEarnings
 const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats,
-           getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, validateExpiringPredictions } = require('./signalService');
+           getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, validateExpiringPredictions, getMonitoredSignals } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
 const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
@@ -3725,6 +3725,15 @@ app.use('/api/portfolio/optimize', ...authSubs);
 app.use('/api/portfolio/var', ...authSubs);
 app.use('/api/support/chat', ...authSubs);
 app.use('/api/support/chats', ...authSubs);
+
+app.get('/api/signals/monitored', async (req, res) => {
+  try {
+    const monitored = getMonitoredSignals();
+    res.json({ success: true, monitored, total: monitored.length });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
 
 app.get('/api/signals', async (req, res) => {
   try {

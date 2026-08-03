@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../auth/AuthContext";
-import type { Signal as StockSignal } from "../types/signals";
+import type { Signal as StockSignal, MonitoredPosition } from "../types/signals";
 import { authFetch } from "../auth/tokenStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
@@ -121,8 +121,56 @@ function insiderPositive(ins: { netShares: number | null; buyCount: number; sell
   return ins.netShares != null ? ins.netShares >= 0 : ins.buyCount >= ins.sellCount;
 }
 
+function MonitoredCard({ m }: { m: MonitoredPosition }) {
+  const s = { currency: m.currency, market: m.market, country: m.market === "NSE" ? "KE" : undefined };
+  const sign = m.price != null ? ((m.price - m.entryPrice) / m.entryPrice) * 100 : null;
+  const expiringSoon = m.expiryDays - m.daysHeld <= 7;
+  return (
+    <Card className="bg-card border-border overflow-hidden hover:border-[#0D7490] hover:shadow-md transition-all">
+      <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <Link to={`/app/stock/${m.ticker}`} className="text-sm font-bold text-foreground hover:text-[#0D7490]">{m.ticker}</Link>
+              {m.price != null && <span className="text-xs text-muted-foreground">{curSym(s)}{m.price.toFixed(2)}</span>}
+            </div>
+          </div>
+        </div>
+        <Badge className="shrink-0 bg-emerald-600 text-white border-0 text-[10px] font-semibold"><TrendingUp className="w-3 h-3 mr-1" />{m.signal}</Badge>
+      </div>
+
+      <div className="px-4 pb-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+        <Badge className={`${TYPE_STYLES[m.type]} border-0 text-[10px] font-medium`}>{m.type}</Badge>
+        <span className="text-muted-foreground">|</span>
+        <span>{m.market === "NSE" ? "Nairobi" : "Global"}</span>
+        {m.price != null && sign != null && (
+          <>
+            <span className="text-muted-foreground">|</span>
+            <span className={`font-semibold ${sign >= 0 ? "text-emerald-700" : "text-red-700"}`}>{sign >= 0 ? "+" : ""}{sign.toFixed(1)}%</span>
+          </>
+        )}
+      </div>
+
+      <div className="px-4 pb-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
+        <div className="bg-blue-50 rounded-md p-2 text-center border border-blue-100"><p className="text-[9px] font-medium text-blue-600 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 font-mono">{fmtPrice(s, m.entryPrice)}</p></div>
+        <div className="bg-red-50 rounded-md p-2 text-center border border-red-100"><p className="text-[9px] font-medium text-red-600 uppercase">Stop</p><p className="text-xs font-bold text-red-900 font-mono">{fmtPrice(s, m.stopLoss)}</p></div>
+        <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">T1</p><p className="text-xs font-bold text-emerald-900 font-mono">{fmtPrice(s, m.target1)}</p></div>
+        <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">T2</p><p className="text-xs font-bold text-emerald-900 font-mono">{fmtPrice(s, m.target2)}</p></div>
+        <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">T3</p><p className="text-xs font-bold text-emerald-900 font-mono">{fmtPrice(s, m.target3)}</p></div>
+      </div>
+
+      <div className="px-4 pb-4 flex items-center gap-2 flex-wrap text-[10px]">
+        <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100 font-medium">Size: {m.positionSize}%</span>
+        <span className={`px-1.5 py-0.5 rounded font-medium border ${expiringSoon ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-muted text-muted-foreground border-border"}`}>Held {m.daysHeld}d / {m.expiryDays}d{expiringSoon ? " — expiring soon" : ""}</span>
+      </div>
+    </Card>
+  );
+}
+
 export function SignalsPage() {
   const [signals, setSignals] = useState<StockSignal[]>([]);
+  const [monitored, setMonitored] = useState<MonitoredPosition[]>([]);
+  const [view, setView] = useState<"signals" | "monitored">("signals");
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState("");
   const [search, setSearch] = useState("");
@@ -146,7 +194,20 @@ export function SignalsPage() {
     } catch (e) { console.error("Signals fetch error:", e); } finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchSignals(); const i = setInterval(fetchSignals, 300000); return () => clearInterval(i); }, [user?.id]);
+  const fetchMonitored = async () => {
+    try {
+      const res = await authFetch(`${API_URL}/signals/monitored`);
+      const data = await res.json();
+      if (data.success) setMonitored(data.monitored || []);
+    } catch (e) { console.error("Monitored fetch error:", e); }
+  };
+
+  useEffect(() => {
+    fetchSignals();
+    fetchMonitored();
+    const i = setInterval(() => { fetchSignals(); fetchMonitored(); }, 300000);
+    return () => clearInterval(i);
+  }, [user?.id]);
 
   useEffect(() => {
     const ticker = searchParams.get("ticker");
@@ -241,10 +302,18 @@ export function SignalsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-1 border border-border">
+          <button onClick={() => setView("signals")} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${view === "signals" ? "bg-card text-[#0D7490] shadow-sm border border-border" : "text-muted-foreground hover:text-foreground"}`}>Signals ({signals.length})</button>
+          <button onClick={() => setView("monitored")} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${view === "monitored" ? "bg-card text-[#0D7490] shadow-sm border border-border" : "text-muted-foreground hover:text-foreground"}`}>Monitored ({monitored.length})</button>
+        </div>
+        {view === "signals" ? (
         <div className="relative flex-1 min-w-[180px] max-w-[260px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search ticker or name..." className="pl-9 h-9 text-sm border-border" />
         </div>
+        ) : (
+          <p className="text-xs text-muted-foreground ml-1">Open Buy positions the engine is actively monitoring with stop/target levels. Sells are ratings, not tracked positions.</p>
+        )}
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-[120px] h-9 text-sm border-border"><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent><SelectItem value="all">All Types</SelectItem><SelectItem value="Intraday">Intraday</SelectItem><SelectItem value="Swing Trade">Swing Trade</SelectItem><SelectItem value="Long Term">Long Term</SelectItem><SelectItem value="Aggressive Buy">Aggressive Buy</SelectItem><SelectItem value="Momentum Trade">Momentum Trade</SelectItem><SelectItem value="Long Term Value">Long Term Value</SelectItem><SelectItem value="Avoid">Avoid</SelectItem></SelectContent>
@@ -261,6 +330,22 @@ export function SignalsPage() {
       </div>
 
       {/* Signal cards */}
+      {view === "monitored" ? (
+        monitored.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Activity className="w-8 h-8 mb-3 opacity-30" />
+            <p className="text-sm font-medium text-muted-foreground">No open positions being monitored right now</p>
+            <p className="text-xs mt-1 text-muted-foreground">Buy signals with stop/target levels show up here while they're actively tracked. Sell ratings are not tracked as positions.</p>
+            <Button onClick={fetchMonitored} disabled={loading} variant="outline" size="sm" className="border-border mt-4">
+              <RefreshCw className={`w-3.5 h-3.5 mr-2 ${loading ? "animate-spin" : ""}`} />Refresh
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {monitored.map(m => <MonitoredCard key={m.ticker} m={m} />)}
+          </div>
+        )
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {paged.map(s => {
           const ss = SIGNAL_STYLES[s.signal];
@@ -406,9 +491,10 @@ export function SignalsPage() {
             </Card>
           );
         })}
-      </div>
+        </div>
+      )}
 
-      {paged.length === 0 && (
+      {view === "signals" && paged.length === 0 && (
         signals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Signal className="w-8 h-8 mb-3 opacity-30" />
