@@ -5521,6 +5521,7 @@ async function resolveForwardTest() {
       const decisive = s.correct + s.incorrect;
       const accColor = decisive === 0 ? '#6b7280' : s.accuracy >= 60 ? '#059669' : s.accuracy >= 45 ? '#d97706' : '#dc2626';
       const predColor = c => c === true ? 'color:#059669' : c === false ? 'color:#dc2626' : 'color:#6b7280';
+      const cSym = c => c === 'KES' ? 'KSh ' : '$';
       const currentByTicker = new Map();
       for (const r of a.ratings) if (!currentByTicker.has(r.ticker)) currentByTicker.set(r.ticker, r);
       const currentRatings = Array.from(currentByTicker.values());
@@ -5560,8 +5561,8 @@ async function resolveForwardTest() {
                  <td style="padding:4px 8px;font-weight:500">${esc(p.symbol)}</td>
                  <td style="padding:4px 8px"><span class="pill ${p.signal === 'Strong Sell' ? 'bg-rose-100 text-rose-700' : 'bg-red-100 text-red-700'}">${esc(p.signal)}</span></td>
                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.confidence}%</td>
-                 <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.price ? '$' + Number(p.price).toFixed(2) : '—'}</td>
-                 <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.benchPrice ? '$' + Number(p.benchPrice).toFixed(2) : '—'}</td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.price ? cSym(p.currency) + Number(p.price).toFixed(2) : '—'}</td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.benchPrice ? cSym(p.currency) + Number(p.benchPrice).toFixed(2) : '—'}</td>
                  <td style="padding:4px 8px;text-align:right;font-weight:500;${predColor(p.correct)}">${p.actualReturn != null ? (p.actualReturn > 0 ? '+' : '') + Number(p.actualReturn).toFixed(1) + '%' : '—'}</td>
                  <td style="padding:4px 8px;text-align:center">${p.resolved ? (p.correct === true ? '✓' : p.correct === false ? '✗' : '•') : '⏳'}</td>
                  <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${formatDate(p.generatedAt)}</td>
@@ -5589,7 +5590,7 @@ async function resolveForwardTest() {
                  <td style="padding:4px 8px;font-weight:500">${esc(r.ticker)}</td>
                  <td style="padding:4px 8px"><span class="pill ${r.signal === 'Strong Sell' ? 'bg-rose-100 text-rose-700' : 'bg-red-100 text-red-700'}">${esc(r.signal)}</span></td>
                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${r.confidence}%</td>
-                 <td style="padding:4px 8px;text-align:right;color:#6b7280">${r.price ? '$' + Number(r.price).toFixed(2) : '—'}</td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${r.price ? cSym(r.currency) + Number(r.price).toFixed(2) : '—'}</td>
                  <td style="padding:4px 8px;color:#6b7280">${esc(r.sector || '—')}</td>
                  <td style="padding:4px 8px;color:#6b7280;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.reason || '')}">${esc(r.reason || '—')}</td>
                  <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${formatDate(r.generatedAt)}</td>

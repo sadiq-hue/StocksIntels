@@ -1816,6 +1816,7 @@ async function getSellAudit() {
         ticker: r.ticker, signal: r.signal, confidence: r.confidence,
         price: r.price != null ? parseFloat(r.price) : (r.entry_price != null ? parseFloat(r.entry_price) : null),
         sector: r.sector, reason: r.reason || '',
+        currency: NSE_SYMBOLS.includes(r.ticker) ? 'KES' : 'USD',
         generatedAt: r.generated_at ? new Date(r.generated_at).getTime() : null,
       });
     }
@@ -1843,6 +1844,7 @@ async function getSellAudit() {
         benchPrice: p.bench_price != null ? parseFloat(p.bench_price) : null,
         actualReturn: p.actual_return != null ? parseFloat(p.actual_return) : null,
         correct: p.correct, resolved: !!p.resolved,
+        currency: NSE_SYMBOLS.includes(p.symbol) ? 'KES' : 'USD',
         generatedAt: p.generated_at ? new Date(p.generated_at).getTime() : null,
         resolvedAt: p.resolved_at ? new Date(p.resolved_at).getTime() : null,
       });
