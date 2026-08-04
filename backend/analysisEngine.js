@@ -712,7 +712,9 @@ function generateReason(symbol, fundamental, technical, financial, signal, macro
   }
 
   if (macroReason) {
-    reasons.push(`Macro: ${macroReason}`);
+    // generateMacroReason ends with a period; strip it so the single terminal
+    // period added below doesn't produce a doubled ".." in the reason string.
+    reasons.push(`Macro: ${String(macroReason).replace(/\.+$/, '')}`);
   }
 
   return reasons.length > 0 ? reasons.join(', ') + '.' : 'Based on comprehensive analysis of fundamental, technical, and financial factors.';

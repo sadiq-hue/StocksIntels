@@ -13,7 +13,7 @@ const { generateWeeklyDigestContent, generateDailyBriefContent, generateEarnings
 const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats,
-           getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals } = require('./signalService');
+            getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
 const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
@@ -3728,6 +3728,7 @@ app.use('/api/support/chats', ...authSubs);
 
 app.get('/api/signals/monitored', async (req, res) => {
   try {
+    await refreshMonitoredQuotes();
     const monitored = getMonitoredSignals();
     res.json({ success: true, monitored, total: monitored.length });
   } catch (error) {
@@ -3748,7 +3749,9 @@ app.get('/api/signals', async (req, res) => {
     };
     // Open Buy positions are held by the monitor-first gate (never re-emitted as
     // fresh signals), so they would be invisible on the frontend. Re-surface each
-    // monitored position as a Buy card with its live stop/target levels.
+    // monitored position as a Buy card with its live stop/target levels. Refresh
+    // their quotes first so the cards render a live price/change, not a blank.
+    await refreshMonitoredQuotes();
     for (const m of getMonitoredSignals()) {
       const isNse = m.market === 'NSE';
       const existing = byTicker.get(m.ticker);

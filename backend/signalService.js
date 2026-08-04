@@ -200,6 +200,14 @@ function getMonitoredSignals() {
   for (const [ticker, v] of _signalOutcomes) {
     if (v.result || !v.timestamp || v.action === 'hold' || v.stopLoss == null || v.target1 == null) continue;
     const cached = Array.isArray(_signalsCache) ? _signalsCache.find(s => s.ticker === ticker) : null;
+    // Monitored positions are held by the monitor-first gate and thus never appear
+    // in the fresh generation cache, so their live price/change come from the
+    // batch quote cache (warmed by prefetchQuotes during generation cycles and by
+    // refreshMonitoredQuotes() on the /api/signals routes). Prefer the fresh-signal
+    // values when present, else the quote cache, else a warm refresh.
+    const qc = _quoteCache.get(ticker);
+    const price = (cached && cached.price) || (qc && qc.price) || null;
+    const change = cached && cached.change != null ? cached.change : (qc && qc.changePercent != null ? qc.changePercent : null);
     const isNse = NSE_SYMBOLS.includes(ticker);
     out.push({
       ticker,
@@ -212,8 +220,8 @@ function getMonitoredSignals() {
       target2: v.target2 != null ? v.target2 : null,
       target3: v.target3 != null ? v.target3 : null,
       positionSize: v.positionSize || 25,
-      price: cached && cached.price ? cached.price : null,
-      change: cached && cached.change != null ? cached.change : null,
+      price,
+      change,
       confidence: cached && cached.confidence != null ? cached.confidence : null,
       name: cached && cached.name ? cached.name : null,
       sector: cached && cached.sector ? cached.sector : null,
@@ -224,13 +232,55 @@ function getMonitoredSignals() {
       daysHeld: Math.max(0, Math.round((Date.now() - v.timestamp) / 86400000)),
       // Surface the original signal's rationale + analysis so monitored cards show
       // the same comprehensive explanation as fresh signals instead of a generic
-      // "being monitored" placeholder.
-      reason: v.reason || null,
+      // "being monitored" placeholder. Double periods are collapsed: older stored
+      // reasons carry ".." both trailing ("...risk..") and mid-string before a
+      // catalyst append ("...pressure.. | Deal catalyst") from the macro-reason
+      // embed bug in generateReason.
+      reason: (v.reason || '').replace(/\.{2,}/g, '.') || null,
       analysis: v.analysis || null,
     });
   }
+  _warmMonitoredQuotes().catch(() => {});
   out.sort((a, b) => new Date(b.openedAt) - new Date(a.openedAt));
   return out;
+}
+
+// Guard against concurrent refreshes from the two signals routes + the sync
+// getMonitoredSignals background warm colliding on the same batch.
+let _monitoredQuoteWarming = false;
+
+// Fetches fresh quotes (via the batch quote cache) for every monitored position
+// that currently lacks a usable price/change, so /api/signals and
+// /api/signals/monitored can render live prices on the held-buy cards instead of
+// a blank placeholder. Network work is capped by QUOTE_CACHE_TTL.
+async function _warmMonitoredQuotes() {
+  if (_monitoredQuoteWarming) return;
+  const tickers = [];
+  for (const [ticker, v] of _signalOutcomes) {
+    if (v.result || !v.timestamp || v.stopLoss == null || v.target1 == null) continue;
+    const cached = Array.isArray(_signalsCache) ? _signalsCache.find(s => s.ticker === ticker) : null;
+    if (cached && cached.price) continue;
+    const qc = _quoteCache.get(ticker);
+    if (qc && Date.now() - qc.ts < QUOTE_CACHE_TTL) continue;
+    tickers.push(ticker);
+  }
+  if (!tickers.length) return;
+  _monitoredQuoteWarming = true;
+  try {
+    await prefetchQuotes(tickers);
+  } catch { /* best-effort — cards fall back to the last cached price */ }
+  finally {
+    _monitoredQuoteWarming = false;
+  }
+}
+
+// Awaited by the /api/signals* route handlers so the monitored cards they merge
+// in are rendered with a live quote, not whatever the last generation cycle left.
+// Bounded: when a provider chain is slow (Google Finance scrape regressed and the
+// proxy/Yahoo fallbacks each take seconds), the route still responds promptly and
+// the background warm in getMonitoredSignals() keeps refreshing for the next poll.
+async function refreshMonitoredQuotes() {
+  await Promise.race([_warmMonitoredQuotes(), new Promise(resolve => setTimeout(resolve, 25000))]);
 }
 
 // Live test store — ring buffer of resolved signal outcomes with resolvedAt timestamps
@@ -3633,6 +3683,10 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const formattedVolume = volume >= 1000000 ? (volume / 1000000).toFixed(1) + 'M' : (volume / 1000).toFixed(1) + 'K';
   const macroReason = generateMacroReason(macro);
   let reason = generateReason(symbol, fundamental, technical, financial, sig, macroReason);
+  // generateReason ends with a terminal period; drop it before appending the
+  // catalyst/speculative/insider segments so the period lands exactly once, at
+  // the very end, instead of producing "risk.. | Deal catalyst" fragments.
+  reason = reason.replace(/\.+$/, '');
   if (cat.direction === 'positive' && cat.type) {
     reason += ` | Deal catalyst: ${cat.type} (${cat.direction})${cat.headline ? ` — ${cat.headline.slice(0, 80)}` : ''}`;
   } else if (cat.direction === 'negative' && cat.type) {
@@ -3649,6 +3703,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     const latest = insider.latestDate ? `, latest: ${insider.latestDate}` : '';
     reason += ` | Insider ${dirWord}: ${insider.buyCount} buys / ${insider.sellCount} sells${netTxt} (score ${insider.score}${latest})`;
   }
+  reason += '.';
   const timeframes = { 'Aggressive Buy': '1-4 weeks', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks', 'Long Term Value': '3-6 months', 'Long Term': '3-6 months', 'Avoid': 'N/A' };
   const isNse = NSE_SYMBOLS.includes(symbol);
   const obj = {
@@ -3895,4 +3950,5 @@ module.exports = {
   signalEventBus,
   getSignalProgress,
   getMonitoredSignals,
+  refreshMonitoredQuotes,
 };

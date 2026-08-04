@@ -107,9 +107,15 @@ function toYahooSymbol(symbol) {
 
 function formatQuote(meta, symbol, provider) {
   const price = Number(meta.regularMarketPrice ?? meta.previousClose ?? meta.chartPreviousClose ?? 0);
-  const prevClose = Number(meta.previousClose ?? meta.chartPreviousClose ?? price);
+  // yahoo-finance2 exposes the prior close as regularMarketPreviousClose, not
+  // previousClose/chartPreviousClose (v8 chart meta). Missing it made every
+  // yf2-sourced quote report a 0.00% change; fall back to the explicit
+  // regularMarketChangePercent when the provider already computed it.
+  const prevClose = Number(meta.regularMarketPreviousClose ?? meta.previousClose ?? meta.chartPreviousClose ?? price);
   const change = price - prevClose;
-  const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+  const changePercent = (meta.regularMarketChangePercent != null && !isNaN(Number(meta.regularMarketChangePercent)))
+    ? Number(meta.regularMarketChangePercent)
+    : prevClose > 0 ? (change / prevClose) * 100 : 0;
   return {
     symbol: symbol || meta.symbol || '',
     company_name: meta.shortName || meta.longName || symbol || '',
@@ -135,7 +141,9 @@ async function fetchV8Quote(symbol) {
   if (symbol.endsWith('.NR')) return null;
   if (breakers.v8.isOpen()) return null;
   const host = pickHost();
-  const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+  // range=1d so meta.chartPreviousClose is yesterday's close (range=5d would set
+  // it to the session ~5 days back, inflating the computed daily changePercent).
+  const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
   try {
     const { data } = await limiters.v8.schedule(() =>
       proxyService.fetchWithProxyFallback(url)
@@ -384,27 +392,34 @@ async function fetchQuote(symbol) {
   const cacheKey = symbol.toUpperCase();
   const redisKey = useRedis ? `yahoo:quote:${cacheKey}` : null;
   const cached = await cacheGet(quoteCache, cacheKey, CACHE_TTL.quote, redisKey);
-  if (cached) return cached;
+  // Reject cached garbage: Google Finance layout changes have yielded price:'r'
+  // (truthy, NaN as a number). Only serve cached quotes with a real price so a
+  // bad scrape can never silently poison every consumer.
+  if (cached && Number(cached.price) > 0) return cached;
 
   const yahooSymbol = toYahooSymbol(symbol);
   if (symbol.startsWith('NSE:')) return null;
 
   // 1. Google Finance scrape — fastest and most reliable free option (no IP blocks)
   const google = await fetchGoogleFinanceQuote(yahooSymbol);
-  if (google?.price) {
+  if (google?.price && Number(google.price) > 0) {
+      const price = Number(google.price);
+      const change = Number(google.change) || 0;
+      const changePercent = Number(google.changePercent) || 0;
+      const previousClose = Number(google.previousClose) > 0 ? Number(google.previousClose) : price - change;
       return cacheSet(quoteCache, cacheKey, {
         symbol: symbol.toUpperCase(),
         company_name: google.companyName || symbol.toUpperCase(),
-        price: google.price,
+        price,
         currency: google.currency || 'USD',
-        change: google.change || 0,
-        changePercent: google.changePercent || 0,
-        changesPercentage: google.changePercent || 0,
-        volume: google.volume || 0,
-        dayHigh: google.dayHigh || google.price,
-        dayLow: google.dayLow || google.price,
-        previousClose: google.previousClose || google.price,
-        marketCap: google.marketCap || 0,
+        change,
+        changePercent,
+        changesPercentage: changePercent,
+        volume: Number(google.volume) || 0,
+        dayHigh: Number(google.dayHigh) > 0 ? Number(google.dayHigh) : price,
+        dayLow: Number(google.dayLow) > 0 ? Number(google.dayLow) : price,
+        previousClose,
+        marketCap: Number(google.marketCap) || 0,
         timestamp: Math.floor(Date.now() / 1000),
         lastUpdated: new Date().toISOString(),
         exchange: 'Global',
@@ -416,20 +431,23 @@ async function fetchQuote(symbol) {
   if (!symbol.startsWith('NSE:')) {
     try {
       const proxyResult = await fetchPriceViaProxy(yahooSymbol);
-      if (proxyResult?.price) {
+      if (proxyResult?.price && Number(proxyResult.price) > 0) {
+        const price = Number(proxyResult.price);
+        const previousClose = Number(proxyResult.previousClose) > 0 ? Number(proxyResult.previousClose) : price;
+        const changePercent = previousClose > 0 ? ((price - previousClose) / previousClose) * 100 : 0;
         return cacheSet(quoteCache, cacheKey, {
           symbol: symbol.toUpperCase(),
           company_name: proxyResult.companyName || symbol.toUpperCase(),
-          price: proxyResult.price,
+          price,
           currency: proxyResult.currency || 'USD',
-          change: proxyResult.price - (proxyResult.previousClose || proxyResult.price),
-          changePercent: (proxyResult.previousClose && proxyResult.previousClose > 0) ? ((proxyResult.price - proxyResult.previousClose) / proxyResult.previousClose) * 100 : 0,
-          changesPercentage: (proxyResult.previousClose && proxyResult.previousClose > 0) ? ((proxyResult.price - proxyResult.previousClose) / proxyResult.previousClose) * 100 : 0,
-          volume: proxyResult.volume || 0,
-          dayHigh: proxyResult.dayHigh || proxyResult.price,
-          dayLow: proxyResult.dayLow || proxyResult.price,
-          previousClose: proxyResult.previousClose || proxyResult.price,
-          marketCap: proxyResult.marketCap || 0,
+          change: price - previousClose,
+          changePercent,
+          changesPercentage: changePercent,
+          volume: Number(proxyResult.volume) || 0,
+          dayHigh: Number(proxyResult.dayHigh) > 0 ? Number(proxyResult.dayHigh) : price,
+          dayLow: Number(proxyResult.dayLow) > 0 ? Number(proxyResult.dayLow) : price,
+          previousClose,
+          marketCap: Number(proxyResult.marketCap) || 0,
           timestamp: Math.floor(Date.now() / 1000),
           lastUpdated: new Date().toISOString(),
           exchange: proxyResult.exchange || 'Global',

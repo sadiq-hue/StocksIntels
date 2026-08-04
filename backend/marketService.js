@@ -560,7 +560,7 @@ async function getStockQuote(symbol) {
   if (!symbol) return null;
 
   const cached = quoteCache.get(symbol);
-  if (cached && (Date.now() - (cached.timestamp * 1000) < MAX_QUOTE_AGE_MS)) {
+  if (cached && Number(cached.price) > 0 && (Date.now() - (cached.timestamp * 1000) < MAX_QUOTE_AGE_MS)) {
     return cached;
   }
 
@@ -585,7 +585,7 @@ async function getStockQuote(symbol) {
     return quoteCache.get(symbol);
   }
 
-  if (cached && (Date.now() - (cached.timestamp * 1000) < MAX_QUOTE_AGE_MS * 2)) {
+  if (cached && Number(cached.price) > 0 && (Date.now() - (cached.timestamp * 1000) < MAX_QUOTE_AGE_MS * 2)) {
     console.warn(`[marketService] Serving stale cache for ${symbol} (age: ${Math.round((Date.now() - (cached.timestamp * 1000)) / 1000)}s)`);
     return cached;
   }
@@ -637,7 +637,7 @@ async function getQuotesBatch(symbols) {
 
   symbols.forEach(s => {
     const cached = quoteCache.get(s);
-    if (cached && (Date.now() - (cached.timestamp * 1000) < MAX_QUOTE_AGE_MS)) {
+    if (cached && Number(cached.price) > 0 && (Date.now() - (cached.timestamp * 1000) < MAX_QUOTE_AGE_MS)) {
       results[s] = cached;
     } else {
       missing.push(s);
@@ -662,12 +662,12 @@ async function getQuotesBatch(symbols) {
       const r = batchResults[j];
       const quote = r.status === 'fulfilled' ? r.value : null;
 
-      if (quote) {
+      if (quote && Number(quote.price) > 0) {
         quoteCache.set(s, { ...quote, symbol: s });
         results[s] = quoteCache.get(s);
       } else {
         const stale = quoteCache.get(s);
-        if (stale) results[s] = stale;
+        if (stale && Number(stale.price) > 0) results[s] = stale;
       }
     }
 
