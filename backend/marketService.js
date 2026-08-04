@@ -367,6 +367,15 @@ async function enrichVolumeFromAfx(quote, symbol) {
 //   -> AFX (afx.kwayisi.org, free) -> Apify (needs key)
 // Lazy-requires each module so a missing/optional scraper never crashes boot.
 async function getNseBaseQuote(symbol) {
+  // 0c) NSE official portal ticker API — authoritative live feed (powers the
+  //     nse.co.ke widget). Its previous close / % change match the portal; the
+  //     KenyanStocks / MyStocks feeds below share a stale upstream reference.
+  try {
+    const nseTicker = require('./nseTickerScraper');
+    const tq = await nseTicker.getQuoteForSymbol(symbol);
+    if (tq && Number(tq.price) > 0) return tq;
+  } catch (e) { /* fall through to other sources */ }
+
   // 0a) KenyanStocks.com API — fast, reliable, covers all NSE stocks
   try {
     const ksMod = require('./kenyanStocksScraper');
