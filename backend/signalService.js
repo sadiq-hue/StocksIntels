@@ -39,6 +39,11 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     // 'column "signal_generated_at" does not exist'. Idempotent ALTER fixes that.
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS signal_generated_at TIMESTAMP WITH TIME ZONE`);
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS analysis_data JSONB`);
+    // restoreStateFromDb SELECTs target3/reason from signal_history to re-seed
+    // monitored positions across restarts; the idempotent ALTERs keep restores
+    // working on schemas created before target3/T2 existed.
+    await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS target3 NUMERIC(15,2)`);
+    await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS reason TEXT`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS stop_loss NUMERIC(15,2)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS target1 NUMERIC(15,2)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS action VARCHAR(10)`);
@@ -217,6 +222,11 @@ function getMonitoredSignals() {
       currency: isNse ? 'KES' : 'USD',
       openedAt: new Date(v.timestamp).toISOString(),
       daysHeld: Math.max(0, Math.round((Date.now() - v.timestamp) / 86400000)),
+      // Surface the original signal's rationale + analysis so monitored cards show
+      // the same comprehensive explanation as fresh signals instead of a generic
+      // "being monitored" placeholder.
+      reason: v.reason || null,
+      analysis: v.analysis || null,
     });
   }
   out.sort((a, b) => new Date(b.openedAt) - new Date(a.openedAt));
@@ -743,7 +753,7 @@ async function restoreStateFromDb() {
     // and there is nothing to track (any leveled Sell rows in history are legacy
     // artifacts from before that rule and are deliberately ignored here).
     const openRes = await pool.query(
-      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, trade_type, position_size, generated_at
+      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, trade_type, position_size, generated_at, reason, analysis_data
        FROM signal_history
        WHERE generated_at > NOW() - $1::interval
          AND signal IN ('Strong Buy','Buy')
@@ -772,6 +782,7 @@ async function restoreStateFromDb() {
         target3: row.target3 != null ? parseFloat(row.target3) : null,
         positionSize: parseInt(row.position_size) || 25,
         timestamp: genAt, result: null, lastProgressAlert: 0,
+        reason: row.reason || '', analysis: row.analysis_data || null,
       });
     }
     console.log(`[SignalService] Restored open live positions from signal_history`);

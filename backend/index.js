@@ -3768,8 +3768,8 @@ app.get('/api/signals', async (req, res) => {
         country: isNse ? 'KE' : 'US',
         positionSize: m.positionSize + '%',
         dataSource: 'monitor',
-        reason: `Open ${m.type} position the engine is actively monitoring — held ${m.daysHeld} day(s) with stop/target levels live (no expiry; runs until stop/target).`,
-        analysis: null,
+        reason: m.reason || `Open ${m.type} position the engine is actively monitoring — held ${m.daysHeld} day(s) with stop/target levels live (no expiry; runs until stop/target).`,
+        analysis: m.analysis || null,
       };
       const stopDist = m.entryPrice - m.stopLoss;
       base.signal = m.signal;
