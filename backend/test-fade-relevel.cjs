@@ -3,7 +3,7 @@
 //  2) computeRelevelStop   - stop re-leveling to live market behavior
 // Run: node backend/test-fade-relevel.cjs
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-const { assessConvictionFade, computeRelevelStop } = require('./signalService');
+const { assessConvictionFade, computeRelevelStop, fadeCloseReason, staleThesisDaysFor, isLongTermHold } = require('./signalService');
 
 let passed = 0, failed = 0;
 function check(name, actual, expected) {
@@ -129,6 +129,73 @@ for (let i = 1; i <= 3; i++) {
 }
 const closeAllowed = out.fadeCount >= 2;
 check('close allowed only after confirmation threshold', closeAllowed, true);
+
+// ─── fadeCloseReason (tightened re-validation) ───────────────────────────────
+section('fadeCloseReason (tightened re-validation)');
+const now = Date.now();
+const DAY = 86400000;
+
+check('long-term hold types are never score-closed',
+  [isLongTermHold('Long Term'), isLongTermHold('Long Term Value'), isLongTermHold('Swing Trade')],
+  [true, true, false]);
+
+check('staleThesisDaysFor scales by trade type',
+  [staleThesisDaysFor('Day Trade'), staleThesisDaysFor('Momentum Trade'), staleThesisDaysFor('Swing Trade'), staleThesisDaysFor('Aggressive Buy')],
+  [5, 21, 30, 30]);
+
+// base position: entry 100, target1 110, fresh, swing
+const basePos = { action: 'buy', entryPrice: 100, stopLoss: 92, target1: 110, timestamp: now, type: 'Swing Trade' };
+
+check('fresh action still buy -> no fade close',
+  fadeCloseReason(basePos, 'buy', true, 102), null);
+
+check('fresh action sell -> no fade close (flip handles it)',
+  fadeCloseReason(basePos, 'sell', true, 102), null);
+
+check('fresh hold on young position -> null (needs confirmation)',
+  fadeCloseReason(basePos, 'hold', true, 102), null);
+
+check('fresh hold at/above target1 -> profit fade',
+  [fadeCloseReason({ ...basePos }, 'hold', true, 110), fadeCloseReason({ ...basePos }, 'hold', true, 114)],
+  ['profit fade', 'profit fade']);
+
+check('fresh hold on untrustworthy data -> null even above target1',
+  fadeCloseReason(basePos, 'hold', false, 112), null);
+
+check('long-term hold never immediate-close, even stale or above target',
+  fadeCloseReason({ ...basePos, type: 'Long Term', timestamp: now - 200 * DAY }, 'hold', true, 112), null);
+
+check('trailing position excluded (trail stop books the exit)',
+  fadeCloseReason({ ...basePos, trailing: true }, 'hold', true, 105), null);
+
+check('stale swing (>30d) hold -> stale thesis',
+  fadeCloseReason({ ...basePos, timestamp: now - 31 * DAY }, 'hold', true, 105), 'stale thesis');
+
+check('young momentum (<21d) hold -> null',
+  fadeCloseReason({ ...basePos, type: 'Momentum Trade', timestamp: now - 10 * DAY }, 'hold', true, 105), null);
+
+check('stale momentum (>21d) hold -> stale thesis',
+  fadeCloseReason({ ...basePos, type: 'Momentum Trade', timestamp: now - 25 * DAY }, 'hold', true, 105), 'stale thesis');
+
+check('stale day-trade (>=5d) hold -> stale thesis',
+  fadeCloseReason({ ...basePos, type: 'Day Trade', timestamp: now - 5 * DAY }, 'hold', true, 102), 'stale thesis');
+
+check('exactly at threshold counts as stale (age >= threshold)',
+  fadeCloseReason({ ...basePos, timestamp: now - 30 * DAY }, 'hold', true, 105), 'stale thesis');
+
+check('no timestamp treated as fresh (age 0)',
+  fadeCloseReason({ action: 'buy', entryPrice: 100, target1: 110, type: 'Swing Trade' }, 'hold', true, 102), null);
+
+check('undefined position -> null',
+  fadeCloseReason(undefined, 'hold', true, 102), null);
+
+check('profit fade wins over stale (both true, above target)',
+  fadeCloseReason({ ...basePos, timestamp: now - 60 * DAY }, 'hold', true, 112), 'profit fade');
+
+// gate interaction: profit fade closes on the FIRST fade reading, no confirmation
+let fadeOut = { action: 'buy', fadeCount: 0, entryPrice: 100, target1: 110, timestamp: now, type: 'Swing Trade' };
+check('single fade reading at target1 immediately closes (no 2-reading wait)',
+  fadeCloseReason(fadeOut, 'hold', true, 112) !== null, true);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

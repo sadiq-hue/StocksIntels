@@ -1375,6 +1375,52 @@ function assessConvictionFade(prevAction, freshAction, eligibilityOk, prevFadeCo
   return { isFade, fadeCount, fadeConfirmed: fadeCount >= FADE_CLOSE_CONFIRMATIONS };
 }
 
+// Long-term holds are closed ONLY by their stop/target (see the monitor gate);
+// score-based closes are reserved for short-term trade types.
+function isLongTermHold(type) {
+  return type === 'Long Term Value' || type === 'Long Term';
+}
+
+// Max age (days) a monitored position may run before a fresh fade can close it on
+// a single reading. Scaled to the trade type's intended holding window; long-term
+// types are excluded (stop/target only). The wide-target regime can take weeks, so
+// these thresholds sit comfortably past the stated timeframes.
+const STALE_THESIS_DAYS = 30; // default (Swing Trade, Aggressive Buy, ...)
+function staleThesisDaysFor(type) {
+  switch (type) {
+    case 'Day Trade': return 5;
+    case 'Momentum Trade': return 21;
+    case 'Long Term': return Infinity;
+    case 'Long Term Value': return Infinity;
+    default: return STALE_THESIS_DAYS;
+  }
+}
+
+// Immediate-close reasons for a fresh conviction fade on an open position
+// (non-long-term trades only). Trailing positions are excluded — the trail stop,
+// not the market print, books those exits. Returns:
+//   'profit fade'  - price already at/above target1: a degraded thesis banks the
+//                    gain now instead of waiting for multi-reading confirmation.
+//   'stale thesis' - open past its trade type's threshold with no stop/target
+//                    fill: age is the confirmation, so a position can't sit open
+//                    forever bouncing Buy/Hold and never accumulating consecutive
+//                    fade readings.
+//   null           - fall through to the regular FADE_CLOSE_CONFIRMATIONS path.
+function fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice) {
+  if (!eligibilityOk || !prevOutcome || freshAction !== 'hold') return null;
+  const type = prevOutcome.type || 'Swing Trade';
+  if (isLongTermHold(type)) return null;
+  if (prevOutcome.trailing === true) return null;
+  const { entryPrice, target1 } = prevOutcome;
+  if (entryPrice > 0 && target1 > entryPrice) {
+    const progress = ((currentPrice - entryPrice) / (target1 - entryPrice)) * 100;
+    if (progress >= 100) return 'profit fade';
+  }
+  const ageDays = prevOutcome.timestamp ? (Date.now() - prevOutcome.timestamp) / 86400000 : 0;
+  if (ageDays >= staleThesisDaysFor(type)) return 'stale thesis';
+  return null;
+}
+
 // Re-level: derive the new hard stop for a monitored long from the fresh ATR stop
 // (never loosening it) with breakeven / locked-gain floors as price advances toward
 // target1. Returns changed=false when the new stop isn't a real improvement or
@@ -2758,7 +2804,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         // them at whatever the market price happens to be — usually a coin-flip
         // around entry — which churns a weeks/months thesis out at ~0% return.
         // Short-term trade types may also be closed by a scored flip/fade.
-        const longTermHold = prevOutcome.type === 'Long Term Value' || prevOutcome.type === 'Long Term';
+        const longTermHold = isLongTermHold(prevOutcome.type);
         const allowScoreClose = !longTermHold;
         // A flip-close only counts when this cycle's analysis is trustworthy; on
         // ineligible data the position simply stays open until stop or target.
@@ -2771,14 +2817,23 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           ? assessConvictionFade(prevAction, sigObj.action, eligibility.ok, prevOutcome.fadeCount)
           : { isFade: false, fadeCount: 0, fadeConfirmed: false };
         prevOutcome.fadeCount = nextFadeCount;
-        if (!(isFlip || (isFade && fadeConfirmed))) {
+        // Tightened re-validation: a fade still needs its consecutive confirmations,
+        // UNLESS the thesis is profit-protected or stale —
+        //   'profit fade'  - already at/above target1 (bank the gain now)
+        //   'stale thesis' - open past the trade type's threshold, never resolved
+        // Trailing positions are excluded so the trail stop, not the market print,
+        // books those exits. See fadeCloseReason.
+        const fadeReason = allowScoreClose && isFade ? fadeCloseReason(prevOutcome, sigObj.action, eligibility.ok, currentPrice) : null;
+        if (!(isFlip || fadeReason || (isFade && fadeConfirmed))) {
           emitSignal = false;
           console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${isFade ? ` (conviction fading ${prevOutcome.fadeCount}/${FADE_CLOSE_CONFIRMATIONS})` : ''}${longTermHold ? ' [long-term hold: score-based close disabled]' : ''}`);
         } else if (marketOpen) {
           // Score-based close at market: the full analysis flipped direction against
-          // the open position, or its conviction faded to neutral on consecutive
-          // readings. The position is never closed for simply aging.
-          const closeReason = isFlip ? 'score flipped' : 'conviction faded';
+          // the open position, its conviction faded to neutral on consecutive
+          // readings, or (non-long-term only) a fade was backed by a banked gain or
+          // a stale thesis. The position is never closed for simply aging — a stale
+          // close still requires the fresh thesis to have gone neutral first.
+          const closeReason = isFlip ? 'score flipped' : (fadeReason || 'conviction faded');
           const isPrevBuy = prevAction === 'buy';
           const closedWin = isPrevBuy ? currentPrice >= prevOutcome.entryPrice : currentPrice <= prevOutcome.entryPrice;
           prevOutcome.result = closedWin ? 'win' : 'loss';
@@ -3805,6 +3860,9 @@ module.exports = {
   getLiveTestSnapshot,
   // Monitor gate decisions (unit-testable conviction-fade exit + stop re-leveling)
   assessConvictionFade,
+  isLongTermHold,
+  staleThesisDaysFor,
+  fadeCloseReason,
   computeRelevelStop,
   // Audit & Config
   getAuditLog,

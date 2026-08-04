@@ -237,6 +237,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
           entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
           stopLoss: newSignal.stopLoss, target1: newSignal.target1,
           timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
+          type: newSignal.type,
         });
       }
     }
@@ -250,6 +251,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
         entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
         stopLoss: newSignal.stopLoss, target1: newSignal.target1,
         timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
+        type: newSignal.type,
       });
     }
   }
