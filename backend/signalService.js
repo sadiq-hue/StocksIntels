@@ -49,10 +49,10 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
   } catch {}
 })();
 // Signal evaluation window (must be declared before restoreStateFromDb runs).
-// Covers the longest trade-type lifespan: 'Long Term'/'Long Term Value' expire at
-// 60 days (TRADE_TYPE_EXPIRY) and validations can extend signals by +50%, so a
-// 90-day window keeps monitored signals, live/forward test stats, and the auto
-// backtest aligned with the full signal lifecycle instead of only the last day.
+// Covers the longest monitored position lifespan: wide targets can take weeks to
+// fill and positions run until stop/target (no expiry), so a 90-day window keeps
+// monitored signals, live/forward test stats, and the auto backtest aligned with
+// the full signal lifecycle instead of only the last day.
 const SIGNAL_WINDOW_DAYS = 90;
 // Restore performance stats and portfolio state from DB on startup
 restoreStateFromDb().catch(() => {});
@@ -194,7 +194,6 @@ function getMonitoredSignals() {
   const out = [];
   for (const [ticker, v] of _signalOutcomes) {
     if (v.result || !v.timestamp || v.action === 'hold' || v.stopLoss == null || v.target1 == null) continue;
-    const expiryMs = TRADE_TYPE_EXPIRY[v.type || 'Swing Trade'] || TRADE_TYPE_EXPIRY['Swing Trade'];
     const cached = Array.isArray(_signalsCache) ? _signalsCache.find(s => s.ticker === ticker) : null;
     const isNse = NSE_SYMBOLS.includes(ticker);
     out.push({
@@ -218,8 +217,6 @@ function getMonitoredSignals() {
       currency: isNse ? 'KES' : 'USD',
       openedAt: new Date(v.timestamp).toISOString(),
       daysHeld: Math.max(0, Math.round((Date.now() - v.timestamp) / 86400000)),
-      expiryDays: Math.round(expiryMs / 86400000),
-      expiresAt: new Date(v.timestamp + expiryMs).toISOString(),
     });
   }
   out.sort((a, b) => new Date(b.openedAt) - new Date(a.openedAt));
@@ -1354,15 +1351,6 @@ async function _getBenchmarkNow(symbol) {
 }
 
 // Dynamic expiry by trade type (in milliseconds)
-const TRADE_TYPE_EXPIRY = {
-  'Aggressive Buy': 14 * 24 * 60 * 60 * 1000,   // 14 days
-  'Momentum Trade': 21 * 24 * 60 * 60 * 1000,   // 21 days
-  'Swing Trade': 21 * 24 * 60 * 60 * 1000,      // 21 days
-  'Long Term Value': 365 * 24 * 60 * 60 * 1000, // 1 year
-  'Long Term': 365 * 24 * 60 * 60 * 1000,       // 1 year
-  'Avoid': 7 * 24 * 60 * 60 * 1000,             // 7 days
-};
-
 // Conviction-fade exit: an open position is closed when its fresh all-conditions
 // analysis degrades to neutral (buy -> hold / sell -> hold) instead of flipping.
 // A fade is less decisive than a full flip, so it needs this many consecutive
@@ -1407,9 +1395,6 @@ function computeRelevelStop(position, currentPrice, freshStopLoss) {
   return { newStop, changed, progress };
 }
 
-// Validation threshold: extend if 3+ checks pass
-const VALIDATION_PASS_THRESHOLD = 3;
-
 async function _loadForwardPredictionsFromDb() {
   try {
     const result = await pool.query(
@@ -1423,7 +1408,6 @@ async function _loadForwardPredictionsFromDb() {
     for (const row of result.rows) {
       if (!_forwardTestStore.has(row.symbol)) _forwardTestStore.set(row.symbol, { predictions: [] });
       const tradeType = row.trade_type || 'Swing Trade';
-      const expiry = row.generated_at ? new Date(row.generated_at).getTime() + (TRADE_TYPE_EXPIRY[tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) : Date.now() + TRADE_TYPE_EXPIRY['Swing Trade'];
       _forwardTestStore.get(row.symbol).predictions.push({
         id: row.id, signal: row.signal, confidence: row.confidence,
         price: Number(row.price), stopLoss: row.stop_loss != null ? Number(row.stop_loss) : null, target1: row.target1 != null ? Number(row.target1) : null,
@@ -1431,7 +1415,6 @@ async function _loadForwardPredictionsFromDb() {
         benchPrice: row.bench_price != null ? Number(row.bench_price) : null,
         generatedAt: new Date(row.generated_at).getTime(),
         resolved: !!row.resolved, actualReturn: Number(row.actual_return), correct: row.correct,
-        expiry,
       });
     }
   } catch (e) { /* table may not exist yet */ }
@@ -1441,8 +1424,8 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
   // Dedup: one live prediction per symbol+action. A persistent sell that never
   // triggers a decisive move must NOT re-emit a fresh prediction every signal
   // cycle — the audit would count the same call N times (same ref price, same
-  // outcome). The old prediction stays until it resolves (decisive move,
-  // benchmark lag, or expiry validation), then a new one may be created.
+  // outcome). The old prediction stays until it resolves (decisive move or
+  // benchmark lag), then a new one may be created.
   const existing = _forwardTestStore.get(symbol);
   if (existing) {
     const open = existing.predictions.find(p => !p.resolved && p.action === signalObjAction);
@@ -1456,7 +1439,6 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
   }
   if (!_forwardTestStore.has(symbol)) _forwardTestStore.set(symbol, { predictions: [] });
   const store = _forwardTestStore.get(symbol);
-  const expiry = Date.now() + (TRADE_TYPE_EXPIRY[tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']);
   let dbId = null;
   try {
     const result = await pool.query(
@@ -1469,7 +1451,7 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
     id: dbId, signal: signalAction, confidence, price,
     stopLoss, target1, action: signalObjAction, tradeType, sector, benchPrice,
     generatedAt: Date.now(), resolved: false,
-    actualReturn: null, correct: null, expiry,
+    actualReturn: null, correct: null,
   });
   if (store.predictions.length > 200) store.predictions = store.predictions.slice(-200);
 }
@@ -1590,33 +1572,6 @@ async function resolveForwardPredictions(symbol) {
       }
       const actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;
       pred.resolvedAt = Date.now();
-      // Check dynamic expiry
-      const dynamicExpiry = pred.expiry || (pred.generatedAt + (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']));
-      if (age >= dynamicExpiry) {
-        try {
-          const { passes, details } = await validateForwardPrediction(pred, symbol, currentPrice);
-          if (passes >= VALIDATION_PASS_THRESHOLD) {
-            const extension = (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) * 0.5;
-            pred.expiry = Date.now() + extension;
-            continue; // Extended, not resolved
-          } else {
-            pred.correct = null;
-            pred.resolved = true;
-            pred.actualReturn = actualReturn;
-            if (pred.id) {
-              pool.query(
-                `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = NULL, resolved_at = NOW() WHERE id = $2`,
-                [pred.actualReturn, pred.id]
-              ).catch(() => {});
-            }
-            continue;
-          }
-        } catch {
-          const extension = (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) * 0.5;
-          pred.expiry = Date.now() + extension;
-          continue;
-        }
-      }
       pred.actualReturn = actualReturn;
       if (outcome.status === 'resolved') {
         pred.correct = outcome.correct;
@@ -2010,159 +1965,6 @@ function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0 } 
   return { predictions: all.slice(offset, offset + limit), total: all.length };
 }
 
-// ─── Signal Validation for Dynamic Expiry ────────────────────────────────────
-// Checks if a forward prediction is still valid based on current market conditions.
-// Returns pass count (0-4 checks) and details.
-async function validateForwardPrediction(pred, symbol, currentPrice) {
-  let passes = 0;
-  const details = [];
-
-  try {
-    // Check 1: Sector alignment — stock should still be in the same sector
-    const fundamentals = await getFundamentals(symbol);
-    if (fundamentals && fundamentals.sector) {
-      const originalSector = pred.sector || 'Other';
-      if (fundamentals.sector === originalSector) {
-        passes++;
-        details.push('sector_aligned');
-      } else {
-        details.push(`sector_changed:${originalSector}->${fundamentals.sector}`);
-      }
-    } else {
-      passes++; // No data available, assume unchanged
-      details.push('sector_unknown');
-    }
-
-    // Check 2: Price proximity — stock shouldn't be too far from entry
-    if (pred.price > 0 && currentPrice > 0) {
-      const priceChange = Math.abs((currentPrice - pred.price) / pred.price) * 100;
-      if (priceChange < 30) {
-        passes++;
-        details.push(`price_stable:${Math.round(priceChange)}%`);
-      } else {
-        details.push(`price_drifted:${Math.round(priceChange)}%`);
-      }
-    }
-
-    // Check 3: Signal confidence still relevant — check if signal direction is still valid
-    if (pred.signal && pred.stopLoss != null && pred.target1 != null) {
-      const isBuy = pred.action === 'buy';
-      let stillValid = false;
-      if (isBuy) {
-        // For buy signals, price should not have crashed below stop loss
-        stillValid = currentPrice > pred.stopLoss * 0.9; // 10% buffer below stop
-      } else {
-        // For sell signals, price should not have rallied above target
-        stillValid = currentPrice < pred.target1 * 1.1; // 10% buffer above target
-      }
-      if (stillValid) {
-        passes++;
-        details.push('direction_valid');
-      } else {
-        details.push('direction_invalid');
-      }
-    } else {
-      passes++; // No stop/target, assume still valid
-      details.push('levels_unknown');
-    }
-
-    // Check 4: Market regime — check if regime has shifted dramatically
-    const country = getCountryForSymbol(symbol);
-    const macro = getMacroScore(country);
-    if (macro && macro.score != null) {
-      // If regime shifted from bull to bear or vice versa, count as partial pass
-      const regimeShift = Math.abs(macro.score - 50); // 50 is neutral
-      if (regimeShift < 30) {
-        passes++;
-        details.push('regime_stable');
-      } else {
-        // Still count as pass if the shift isn't extreme
-        passes += 0.5;
-        details.push(`regime_shifted:${macro.score}`);
-      }
-    } else {
-      passes++; // No macro data, assume stable
-      details.push('macro_unknown');
-    }
-  } catch {
-    // If validation fails, give benefit of the doubt (count as pass)
-    passes++;
-    details.push('validation_error');
-  }
-
-  return { passes, details };
-}
-
-// ─── Bulk Forward Prediction Validation ──────────────────────────────────────
-// Runs periodically to validate and extend expiring predictions.
-async function validateExpiringPredictions() {
-  const now = Date.now();
-  let extended = 0, expired = 0, failed = 0;
-
-  for (const [symbol, store] of _forwardTestStore) {
-    const expiring = store.predictions.filter(p => !p.resolved && p.expiry && now >= p.expiry - 3 * 24 * 60 * 60 * 1000);
-    if (!expiring.length) continue;
-
-    try {
-      const quote = await getStockQuote(_marketQuoteSymbol(symbol));
-      if (!quote || !quote.price) { failed += expiring.length; continue; }
-      const currentPrice = quote.price;
-
-      for (const pred of expiring) {
-        // Garbage/stale quote guard — skip so the expiry path doesn't store a
-        // nonsensical actual_return from a broken quote.
-        if (isGarbageQuote(pred, currentPrice)) {
-          continue;
-        }
-        try {
-          const { passes, details } = await validateForwardPrediction(pred, symbol, currentPrice);
-
-          if (passes >= VALIDATION_PASS_THRESHOLD) {
-            // Extend by 50%
-            const extension = (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) * 0.5;
-            pred.expiry = now + extension;
-            if (pred.id) {
-              pool.query(
-                `UPDATE forward_predictions SET trade_type = $1 WHERE id = $2`,
-                [pred.tradeType, pred.id]
-              ).catch(() => {});
-            }
-            extended++;
-            if (process.env.NODE_ENV !== 'test') {
-              console.log(`[ForwardTest] Extended prediction for ${symbol} (${pred.signal}) — validation passed (${passes}/4): ${details.join(', ')}`);
-            }
-          } else {
-            // Mark as expired (neutral — not correct or incorrect)
-            pred.correct = null;
-            pred.resolved = true;
-            pred.resolvedAt = now;
-            pred.actualReturn = ((currentPrice - pred.price) / pred.price) * 100;
-            if (pred.id) {
-              pool.query(
-                `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = NULL, resolved_at = NOW() WHERE id = $2`,
-                [pred.actualReturn, pred.id]
-              ).catch(() => {});
-            }
-            expired++;
-            if (process.env.NODE_ENV !== 'test') {
-              console.log(`[ForwardTest] Expired prediction for ${symbol} (${pred.signal}) — validation failed (${passes}/4): ${details.join(', ')}`);
-            }
-          }
-        } catch (e) {
-          // On error, extend as fallback
-          const extension = (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) * 0.5;
-          pred.expiry = now + extension;
-          extended++;
-        }
-      }
-    } catch {
-      failed += expiring.length;
-    }
-  }
-
-  return { extended, expired, failed };
-}
-
 async function resolveAllForwardPredictions() {
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS stop_loss NUMERIC(15,2)`).catch(() => {});
@@ -2198,46 +2000,6 @@ async function resolveAllForwardPredictions() {
         }
         const actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;
         pred.resolvedAt = Date.now();
-        // Check dynamic expiry first (trade-type based)
-        const dynamicExpiry = pred.expiry || (pred.generatedAt + (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']));
-        if (age >= dynamicExpiry) {
-          // Dynamic expiry reached — validate and potentially extend
-          try {
-            const { passes, details } = await validateForwardPrediction(pred, symbol, currentPrice);
-            if (passes >= VALIDATION_PASS_THRESHOLD) {
-              // Extend by 50%
-              const extension = (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) * 0.5;
-              pred.expiry = Date.now() + extension;
-              skipped++; // Not resolved, just extended
-              if (process.env.NODE_ENV !== 'test') {
-                console.log(`[ForwardTest] Auto-extended ${symbol} (${pred.tradeType}) — validation passed (${passes}/4)`);
-              }
-              continue;
-            } else {
-              // Validation failed — mark as expired (neutral)
-              pred.correct = null;
-              pred.resolved = true;
-              pred.actualReturn = actualReturn;
-              if (pred.id) {
-                pool.query(
-                  `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = NULL, resolved_at = NOW() WHERE id = $2`,
-                  [pred.actualReturn, pred.id]
-                ).catch(() => {});
-              }
-              resolved++;
-              if (process.env.NODE_ENV !== 'test') {
-                console.log(`[ForwardTest] Expired ${symbol} (${pred.tradeType}) — validation failed (${passes}/4): ${details.join(', ')}`);
-              }
-              continue;
-            }
-          } catch {
-            // On validation error, extend as fallback
-            const extension = (TRADE_TYPE_EXPIRY[pred.tradeType] || TRADE_TYPE_EXPIRY['Swing Trade']) * 0.5;
-            pred.expiry = Date.now() + extension;
-            skipped++;
-            continue;
-          }
-        }
         pred.actualReturn = actualReturn;
         if (outcome.status === 'resolved') {
           pred.correct = outcome.correct;
@@ -2773,10 +2535,6 @@ setTimeout(async () => {
 setInterval(() => {
   resolveAllForwardPredictions().catch(() => {});
 }, 5 * 60 * 1000);
-// Auto-validate expiring predictions every 12 hours
-setInterval(() => {
-  validateExpiringPredictions().catch(() => {});
-}, 12 * 60 * 60 * 1000);
 // Auto-generate signals every hour (checks market hours internally)
 setInterval(() => {
   generateSignals(null, false).catch(() => {});
@@ -2984,26 +2742,26 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     // Monitor-first gate: while the previous signal for this symbol is still open
     // (live, unresolved), keep monitoring it instead of emitting a new signal. A new
     // signal is only emitted when the open position (a) hits stop/target (resolved by
-    // trackSignalOutcomes below), (b) expires after its trade-type hold window, or
-    // (c) flips direction on the full all-conditions score (fundamental, technical,
-    // macro, news, regime, ML...). Without this, the hourly cycle re-emitted the same
-    // still-open signal over and over, ballooning the signal count for no reason.
+    // trackSignalOutcomes below), or (b) flips direction (or its conviction fades to
+    // neutral) on the full all-conditions score (fundamental, technical, macro, news,
+    // regime, ML...). Positions are deliberately NOT force-closed after a trade-type
+    // hold window: wide targets can take weeks to fill, and an expiry close at market
+    // price was the source of the coin-flip "~0% target hit" churn. Without this gate,
+    // the hourly cycle re-emitted the same still-open signal over and over, ballooning
+    // the signal count for no reason.
     if (prevOutcome && !prevOutcome.result && prevOutcome.timestamp) {
       const prevAction = prevOutcome.action;
       const monitoring = prevAction !== 'hold' && prevOutcome.stopLoss != null && prevOutcome.target1 != null;
       if (monitoring) {
-        const expiryMs = TRADE_TYPE_EXPIRY[prevOutcome.type || 'Swing Trade'] || TRADE_TYPE_EXPIRY['Swing Trade'];
-        const isExpired = (Date.now() - prevOutcome.timestamp) > expiryMs;
         // Long-term holds (Long Term / Long Term Value) are closed ONLY by their
-        // stop, target or expiry. A score-based close (flip or conviction fade)
-        // resolves them at whatever the market price happens to be — usually a
-        // coin-flip around entry — which churns a weeks/months thesis out at
-        // ~0% return. That 30-minute break-even exit was the source of the tiny
-        // "target hit" returns. Short-term trade types keep the old behavior.
+        // stop or target. A score-based close (flip or conviction fade) resolves
+        // them at whatever the market price happens to be — usually a coin-flip
+        // around entry — which churns a weeks/months thesis out at ~0% return.
+        // Short-term trade types may also be closed by a scored flip/fade.
         const longTermHold = prevOutcome.type === 'Long Term Value' || prevOutcome.type === 'Long Term';
         const allowScoreClose = !longTermHold;
-        // A flip-close only counts when this cycle's analysis is trustworthy;
-        // on ineligible data only a genuine expiry can close the position.
+        // A flip-close only counts when this cycle's analysis is trustworthy; on
+        // ineligible data the position simply stays open until stop or target.
         const isFlip = eligibility.ok && allowScoreClose && ((prevAction === 'buy' && sigObj.action === 'sell') || (prevAction === 'sell' && sigObj.action === 'buy'));
         // Conviction fade: the fresh analysis no longer supports the open direction
         // (buy -> hold / sell -> hold) without being decisive enough to flip. A fade
@@ -3013,14 +2771,14 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           ? assessConvictionFade(prevAction, sigObj.action, eligibility.ok, prevOutcome.fadeCount)
           : { isFade: false, fadeCount: 0, fadeConfirmed: false };
         prevOutcome.fadeCount = nextFadeCount;
-        if (!isExpired && !(isFlip || (isFade && fadeConfirmed))) {
+        if (!(isFlip || (isFade && fadeConfirmed))) {
           emitSignal = false;
           console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${isFade ? ` (conviction fading ${prevOutcome.fadeCount}/${FADE_CLOSE_CONFIRMATIONS})` : ''}${longTermHold ? ' [long-term hold: score-based close disabled]' : ''}`);
         } else if (marketOpen) {
-          // Score-based close at market: the open position either outlived its hold
-          // window, the full analysis flipped direction against it, or its conviction
-          // faded to neutral on consecutive readings.
-          const closeReason = isExpired ? 'expired' : isFlip ? 'score flipped' : 'conviction faded';
+          // Score-based close at market: the full analysis flipped direction against
+          // the open position, or its conviction faded to neutral on consecutive
+          // readings. The position is never closed for simply aging.
+          const closeReason = isFlip ? 'score flipped' : 'conviction faded';
           const isPrevBuy = prevAction === 'buy';
           const closedWin = isPrevBuy ? currentPrice >= prevOutcome.entryPrice : currentPrice <= prevOutcome.entryPrice;
           prevOutcome.result = closedWin ? 'win' : 'loss';
@@ -3035,10 +2793,10 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           // A fresh signal is only emitted when this cycle's analysis is trustworthy.
           emitSignal = eligibility.ok;
         } else {
-          // Expired/flipped/faded while the exchange is closed: defer the close until
-          // the next live session so the exit price isn't a stale after-hours quote.
+          // Flipped/faded while the exchange is closed: defer the close until the
+          // next live session so the exit price isn't a stale after-hours quote.
           emitSignal = false;
-          console.log(`[SignalService] ${symbol} previous ${prevAction} signal ${isExpired ? 'expired' : isFlip ? 'flipped' : 'conviction faded'} but ${NSE_SYMBOLS.includes(symbol) ? 'NSE' : 'US'} market closed - deferring close until next session`);
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal ${isFlip ? 'flipped' : 'conviction faded'} but ${NSE_SYMBOLS.includes(symbol) ? 'NSE' : 'US'} market closed - deferring close until next session`);
         }
       }
     }
@@ -4035,7 +3793,6 @@ module.exports = {
   getForwardTestPredictions,
   getSellAudit,
   resolveAllForwardPredictions,
-  validateExpiringPredictions,
   // Pure helpers (unit-testable sell/exit + resolution logic)
   classifySignalBucket,
   evaluateForwardPrediction,

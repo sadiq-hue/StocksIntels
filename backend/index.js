@@ -13,7 +13,7 @@ const { generateWeeklyDigestContent, generateDailyBriefContent, generateEarnings
 const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats,
-           getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, validateExpiringPredictions, getMonitoredSignals } = require('./signalService');
+           getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
 const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
@@ -3768,7 +3768,7 @@ app.get('/api/signals', async (req, res) => {
         country: isNse ? 'KE' : 'US',
         positionSize: m.positionSize + '%',
         dataSource: 'monitor',
-        reason: `Open ${m.type} position the engine is actively monitoring — held ${m.daysHeld} day(s) with stop/target levels live (expiry ${m.expiryDays}d).`,
+        reason: `Open ${m.type} position the engine is actively monitoring — held ${m.daysHeld} day(s) with stop/target levels live (no expiry; runs until stop/target).`,
         analysis: null,
       };
       const stopDist = m.entryPrice - m.stopLoss;

@@ -16,8 +16,6 @@ export interface MonitoredPosition {
   currency?: string;
   openedAt: string;
   daysHeld: number;
-  expiryDays: number;
-  expiresAt: string;
 }
 
 export interface Catalyst {
