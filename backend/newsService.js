@@ -11,6 +11,7 @@ const rssParser = new RssParser({
 });
 const { newsapi, finnhub: finnhubClient, generic } = require('./apiClient');
 const sentimentHistory = require('./sentimentHistoryService');
+const { US_SYMBOLS } = require('./stockData');
 
 // API Keys - can be overridden by environment variables
 const NEWSAPI_KEY = process.env.VITE_NEWSAPI_KEY || '16eb777bdf469c92f9522c287a7e4d';
@@ -179,21 +180,27 @@ function analyzeSentiment(text) {
 }
 
 // Major US tickers for news matching (curated to avoid common-word collisions)
-const US_TICKERS = [
-  'AAPL','MSFT','GOOGL','AMZN','NVDA','META','TSLA','JPM','V','NFLX',
-  'LLY','AVGO','UNH','XOM','PG','JNJ','WMT','CVX','HD','KO',
-  'PEP','COST','MRK','ABBV','BAC','TMO','ORCL','CSCO','ADBE','CRM',
-  'AMD','INTC','TXN','QCOM','AMGN','IBM','BA','GE','CAT','DIS',
-  'MCD','NKE','SBUX','GS','MS','C','WFC','BLK','PYPL','SQ',
-  'UBER','ABNB','PLTR','SNOW','DDOG','CRWD','PANW','GME','AMC','HOOD',
-  'SPOT','SNAP','RBLX','COIN','MRNA','ZM','NET','SOFI','AFRM','UPST',
-];
+// Full US signal universe for news matching. Only tickers of length >= 3 go in
+// the word-boundary regex: shorter tickers collide with everyday words (F-16,
+// T-Mobile, "on", "so", "tm", "ip") and would mint false catalyst/sentiment tags
+// that swing scores. Every other 1- and 2-character ticker is recovered via a
+// distinctive company-name alias below (e.g. 'at&t', 'citigroup', 'kroger').
+// LEGACY_SHORT_TICKERS were already in production's regex; they're kept so
+// literal-ticker headlines ("GE reports earnings") keep matching.
+const LEGACY_SHORT_TICKERS = ['PG', 'HD', 'KO', 'BA', 'GE', 'GS', 'MS', 'SQ', 'ZM'];
+const US_TICKERS = [...US_SYMBOLS.filter(t => t.length >= 3), ...LEGACY_SHORT_TICKERS];
+
+// Alpha Vantage NEWS_SENTIMENT caps each query at 50 tickers.
+const AV_QUERY_TICKERS = US_TICKERS.slice(0, 50);
 
 // Combined ticker list for news matching
 const ALL_NEWS_TICKERS = [...STOCK_SYMBOLS, ...US_TICKERS];
 
+// Escape regex-special chars (e.g. the '.' in 'BRK.B') so tickers match literally.
+const escapeRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // Build word-boundary regex once
-const tickerPattern = new RegExp(`\\b(${ALL_NEWS_TICKERS.join('|')})\\b`, 'gi');
+const tickerPattern = new RegExp(`\\b(${ALL_NEWS_TICKERS.map(escapeRegExp).join('|')})\\b`, 'gi');
 
 // Company-name aliases -> ticker. Headlines almost always use company names
 // ("Kenya Airways", "Safaricom") rather than tickers ("KQ", "SCOM"), so the
@@ -289,6 +296,55 @@ const NAME_ALIASES = {
   'boeing': 'BA',
   'goldman sachs': 'GS',
   'morgan stanley': 'MS',
+  // 1- and 2-character US tickers can't use the word-boundary regex (F-16,
+  // T-Mobile, "on", "so" collisions), so recover them via distinctive company
+  // names. Chosen to be specific enough to avoid common-word collisions.
+  'ford motor': 'F',
+  'citigroup': 'C',
+  'at&t': 'T',
+  'realty income': 'O',
+  'wayfair': 'W',
+  'kellogg': 'K',
+  'kellanova': 'K',
+  'procter & gamble': 'PG',
+  'procter and gamble': 'PG',
+  'home depot': 'HD',
+  'coca-cola': 'KO',
+  'general electric': 'GE',
+  'micron': 'MU',
+  'block inc': 'SQ',
+  'verizon': 'VZ',
+  'colgate': 'CL',
+  'zoom': 'ZM',
+  'electronic arts': 'EA',
+  'dollar general': 'DG',
+  'kroger': 'KR',
+  'deere': 'DE',
+  'waste management': 'WM',
+  'bank of new york': 'BK',
+  'bny': 'BK',
+  'general motors': 'GM',
+  'zscaler': 'ZS',
+  'cigna': 'CI',
+  'edwards lifesciences': 'EW',
+  'fiserv': 'FI',
+  'chubb': 'CB',
+  'southern company': 'SO',
+  'consolidated edison': 'ED',
+  'general dynamics': 'GD',
+  'dupont': 'DD',
+  'trane technologies': 'TT',
+  'trane': 'TT',
+  'parker hannifin': 'PH',
+  'ingersoll rand': 'IR',
+  'international paper': 'IP',
+  'cf industries': 'CF',
+  'onsemi': 'ON',
+  'on semiconductor': 'ON',
+  'regions financial': 'RF',
+  'toyota': 'TM',
+  'nubank': 'NU',
+  'planet labs': 'PL',
 };
 
 // Longest alias first so "kenya power" isn't shadowed by a shorter subset.
@@ -1254,7 +1310,7 @@ async function backfillAvUsHistory(days = 30) {
   const fmt = d => d.toISOString().slice(0, 10);
   const from = fmt(new Date(Date.now() - days * 864e5)) + 'T0000';
   const to = fmt(new Date()) + 'T2359';
-  const url = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${US_TICKERS.join(',')}&time_from=${from}&time_to=${to}&limit=1000&apikey=${alphaKey}`;
+  const url = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${AV_QUERY_TICKERS.join(',')}&time_from=${from}&time_to=${to}&limit=1000&apikey=${alphaKey}`;
   try {
     const res = await generic.get(url, { timeout: 30000 });
     const feed = res.data?.feed;
