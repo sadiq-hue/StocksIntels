@@ -108,11 +108,13 @@ function toYahooSymbol(symbol) {
 function formatQuote(meta, symbol, provider) {
   const price = Number(meta.regularMarketPrice ?? meta.previousClose ?? meta.chartPreviousClose ?? 0);
   // yahoo-finance2 exposes the prior close as regularMarketPreviousClose, not
-  // previousClose/chartPreviousClose (v8 chart meta). Missing it made every
-  // yf2-sourced quote report a 0.00% change; fall back to the explicit
-  // regularMarketChangePercent when the provider already computed it.
-  const prevClose = Number(meta.regularMarketPreviousClose ?? meta.previousClose ?? meta.chartPreviousClose ?? price);
-  const change = price - prevClose;
+  // previousClose/chartPreviousClose (v8 chart meta). Prefer an explicit prior
+  // close; do NOT fall back to the live price here — that would silently mark a
+  // missing previous close as equal to price and emit a 0.00% change (which then
+  // blocks the authoritative yahoo-finance2 fallback). Callers gate on
+  // previousClose > 0 to decide whether the change is determinate.
+  const prevClose = Number(meta.regularMarketPreviousClose || meta.previousClose || meta.chartPreviousClose || 0);
+  const change = prevClose > 0 ? price - prevClose : 0;
   const changePercent = (meta.regularMarketChangePercent != null && !isNaN(Number(meta.regularMarketChangePercent)))
     ? Number(meta.regularMarketChangePercent)
     : prevClose > 0 ? (change / prevClose) * 100 : 0;
@@ -428,47 +430,96 @@ async function fetchQuote(symbol) {
   }
 
   // 2. Proxy fallback — Yahoo v8 via free proxy pool or CORS relay
+  //    Remember a price-only fallback (no reliable previous close) so we can still
+  //    surface a price, but only cache a proxy quote when its previous close is
+  //    determinate. Otherwise fall through to Yahoo-v8 direct / yahoo-finance2 so a
+  //    missing chartPreviousClose (observed for e.g. TMO) doesn't freeze the change
+  //    at 0.00% and block the authoritative yf2 fallback.
+  let priceOnly = null;
   if (!symbol.startsWith('NSE:')) {
     try {
       const proxyResult = await fetchPriceViaProxy(yahooSymbol);
       if (proxyResult?.price && Number(proxyResult.price) > 0) {
         const price = Number(proxyResult.price);
-        const previousClose = Number(proxyResult.previousClose) > 0 ? Number(proxyResult.previousClose) : price;
-        const changePercent = previousClose > 0 ? ((price - previousClose) / previousClose) * 100 : 0;
-        return cacheSet(quoteCache, cacheKey, {
+        const previousClose = Number(proxyResult.regularMarketPreviousClose) || Number(proxyResult.previousClose);
+        // Reject stale chartPreviousClose values that collapsed to the
+        // current price (v8 chart's chartPreviousClose is frequently
+        // stale/wrong — e.g. BLK returned prev≈price with a real change%).
+        // Fall through to Yahoo-finance2 which carries a reliable
+        // regularMarketPreviousClose + regularMarketChangePercent.
+        if (previousClose > 0 && Math.abs(price - previousClose) / previousClose > 0.005) {
+          const change = price - previousClose;
+          const changePercent = (proxyResult.regularMarketChangePercent != null && !isNaN(Number(proxyResult.regularMarketChangePercent)))
+            ? Number(proxyResult.regularMarketChangePercent)
+            : (change / previousClose) * 100;
+          return cacheSet(quoteCache, cacheKey, {
+            symbol: symbol.toUpperCase(),
+            company_name: proxyResult.companyName || symbol.toUpperCase(),
+            price,
+            currency: proxyResult.currency || 'USD',
+            change,
+            changePercent,
+            changesPercentage: changePercent,
+            volume: Number(proxyResult.volume) || 0,
+            dayHigh: Number(proxyResult.dayHigh) > 0 ? Number(proxyResult.dayHigh) : price,
+            dayLow: Number(proxyResult.dayLow) > 0 ? Number(proxyResult.dayLow) : price,
+            previousClose,
+            marketCap: Number(proxyResult.marketCap) || 0,
+            timestamp: Math.floor(Date.now() / 1000),
+            lastUpdated: new Date().toISOString(),
+            exchange: proxyResult.exchange || 'Global',
+            provider: 'proxy',
+          }, CACHE_TTL.quote, redisKey);
+        }
+        if (!priceOnly) priceOnly = {
           symbol: symbol.toUpperCase(),
           company_name: proxyResult.companyName || symbol.toUpperCase(),
           price,
           currency: proxyResult.currency || 'USD',
-          change: price - previousClose,
-          changePercent,
-          changesPercentage: changePercent,
+          change: 0,
+          changePercent: 0,
+          changesPercentage: 0,
           volume: Number(proxyResult.volume) || 0,
           dayHigh: Number(proxyResult.dayHigh) > 0 ? Number(proxyResult.dayHigh) : price,
           dayLow: Number(proxyResult.dayLow) > 0 ? Number(proxyResult.dayLow) : price,
-          previousClose,
+          previousClose: price,
           marketCap: Number(proxyResult.marketCap) || 0,
           timestamp: Math.floor(Date.now() / 1000),
           lastUpdated: new Date().toISOString(),
           exchange: proxyResult.exchange || 'Global',
           provider: 'proxy',
-        }, CACHE_TTL.quote, redisKey);
+        };
       }
     } catch {}
   }
 
   // 3. Yahoo V8 direct (works from local dev, usually blocked on cloud)
   let quote = await fetchV8Quote(yahooSymbol);
-  if (quote) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
+  if (quote && Number(quote.previousClose) > 0 && Math.abs(Number(quote.price) - Number(quote.previousClose)) / Number(quote.previousClose) > 0.005) {
+    return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
+  }
+  // v8 gave a price but no reliable previous close (stale chartPreviousClose
+  // collapsed to the current price, or missing entirely) — keep as price-only
+  // fallback so the card still shows a price while we try the authoritative yf2.
+  if (quote && !priceOnly) priceOnly = { ...quote, change: 0, changePercent: 0, changesPercentage: 0, previousClose: quote.price };
 
-  // 4. yahoo-finance2 npm package
+  // 4. yahoo-finance2 npm package — authoritative previous close + change %
   quote = await fetchYf2Quote(yahooSymbol);
-  if (quote) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
+  if (quote) {
+    if (Number(quote.previousClose) > 0) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
+    if (!priceOnly) priceOnly = quote;
+  }
 
   // 5. RapidAPI (needs RAPIDAPI_KEY)
   quote = await fetchRapidapiQuote(yahooSymbol);
-  if (quote) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
+  if (quote) {
+    if (Number(quote.previousClose) > 0) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
+    if (!priceOnly) priceOnly = quote;
+  }
 
+  // Price known but no provider could determine a previous close — surface the
+  // price (change stays 0) rather than leaving the card blank.
+  if (priceOnly) return cacheSet(quoteCache, cacheKey, priceOnly, CACHE_TTL.quote, redisKey);
   return null;
 }
 
@@ -609,14 +660,16 @@ function parsePriceProxyResult(data, symbol) {
   } catch {}
   return {
     price: meta.regularMarketPrice,
-    previousClose: meta.chartPreviousClose || meta.regularMarketPrice,
+    previousClose: meta.regularMarketPreviousClose || meta.chartPreviousClose || meta.previousClose || null,
     currency: meta.currency || 'USD',
     exchange: meta.exchangeName || '',
     marketCap: meta.marketCap || 0,
     symbol: symbol.toUpperCase(),
     companyName: meta.shortName || meta.longName || '',
     regularMarketPrice: meta.regularMarketPrice,
-    regularMarketPreviousClose: meta.chartPreviousClose || meta.regularMarketPrice,
+    regularMarketPreviousClose: meta.regularMarketPreviousClose || meta.chartPreviousClose || meta.previousClose || null,
+    regularMarketChangePercent: meta.regularMarketChangePercent ?? null,
+    regularMarketChange: meta.regularMarketChange ?? null,
     preMarketPrice: meta.preMarketPrice ?? null,
     preMarketChange: meta.preMarketChange ?? null,
     preMarketChangePercent: meta.preMarketChangePercent ?? null,
