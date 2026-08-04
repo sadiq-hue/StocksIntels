@@ -3708,7 +3708,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const isNse = NSE_SYMBOLS.includes(symbol);
   const obj = {
     id: `signal-${symbol}-${Date.now()}`, ticker: symbol, name: stock.name,
-    price: Math.round(currentPrice * 100) / 100, change: Math.round(priceChange * 10) / 10,
+    price: Math.round(currentPrice * 100) / 100, change: Math.round(priceChange * 100) / 100,
     market: isNse ? 'NSE' : 'Global', country: getCountryForSymbol(symbol), currency: isNse ? 'KES' : 'USD',
     type: tradeType, signal: sig.signal, action: sig.action, entry: tradeLevels.entry,
     stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2, target3: tradeLevels.target3,
