@@ -74,9 +74,11 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
     target2 = currentPrice * (1 + stopLossPct * 2);
     target3 = currentPrice * (1 + stopLossPct * 3);
   }
-  // Cap stop distance at 2x the base stop, but never more than 10% of price so a
-  // high-ATR name can't produce an absurd 45% stop.
-  const maxStopDistance = Math.min(currentPrice * volatility * mult * 2, currentPrice * 0.10);
+  // Cap stop distance at 2x the base stop, but never more than 15% of price so a
+  // high-ATR name can't produce an absurd 45% stop. The 15% ceiling lets genuinely
+  // volatile names keep a workable stop instead of clamping them to the flat 5%
+  // fallback width.
+  const maxStopDistance = Math.min(currentPrice * volatility * mult * 2, currentPrice * 0.15);
   if (signal.action === 'buy') {
     stopLoss = Math.max(stopLoss, currentPrice - maxStopDistance);
   } else if (signal.action === 'sell') {

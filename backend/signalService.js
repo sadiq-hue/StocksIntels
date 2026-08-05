@@ -1486,11 +1486,14 @@ const SCORE_CLOSE_CUT_MIN_PCT = Math.max(0, parseFloat(process.env.SCORE_CLOSE_C
 // current price/ATR (never loosened) and capped so it NEVER climbs above the
 // entry zone until the stock is near its target. A rally that retraces to the
 // entry point (e.g. +10% up then back to entry) must not stop the position — the
-// stock can pump again. The stop rides below entry (entry minus the buffer)
-// through the whole pre-lock phase; only once progress crosses
+// stock can pump again. The stop rides below entry through the whole pre-lock
+// phase with a volatility-scaled buffer (at least RELEVEL_BREAKEVEN_BUFFER_PCT,
+// and scaled up for high-ATR names) so a normal pullback after a run doesn't stop
+// a dip-and-rally stock at ~breakeven; only once progress crosses
 // RELEVEL_LOCK_PROGRESS does it start banking a locked share of the gain, and the
 // post-target trailing stop protects the final run.
-const RELEVEL_BREAKEVEN_BUFFER_PCT = parseFloat(process.env.RELEVEL_BREAKEVEN_BUFFER_PCT || '2'); // % below entry the pre-lock stop may approach (never above entry)
+const RELEVEL_BREAKEVEN_BUFFER_PCT = parseFloat(process.env.RELEVEL_BREAKEVEN_BUFFER_PCT || '2'); // floor: % below entry the pre-lock stop may approach (never above entry)
+const RELEVEL_BREAKEVEN_BUFFER_ATR_FRACTION = parseFloat(process.env.RELEVEL_BREAKEVEN_BUFFER_ATR_FRACTION || '0.5'); // pre-lock cap stays at least this fraction of the fresh ATR stop distance below entry
 const RELEVEL_LOCK_PROGRESS = 75;      // % of target1 distance to lock part of the gain
 const RELEVEL_LOCK_RATIO = 0.5;        // fraction of the open gain locked once lock progress is reached
 
@@ -1652,9 +1655,10 @@ function evaluateScoreClose(prevOutcome, freshAction, eligibilityOk, currentPric
 // Re-level: derive the new hard stop for a monitored long from the fresh ATR stop
 // (never loosening it) with a below-entry pre-lock cap and a locked-gain floor as
 // price advances toward target1. Through the whole pre-lock phase the stop tightens
-// only as far as entry minus RELEVEL_BREAKEVEN_BUFFER_PCT, so a rally that retraces
+// only as far as entry minus a volatility-scaled buffer, so a rally that retraces
 // to (or just past) entry keeps the position alive for a second leg instead of
-// stopping it at ~0%. Once progress crosses RELEVEL_LOCK_PROGRESS the stop starts
+// stopping it at ~0%, and a normal pullback after a run doesn't yank a dip-and-rally
+// stock. Once progress crosses RELEVEL_LOCK_PROGRESS the stop starts
 // banking RELEVEL_LOCK_RATIO of the open gain; an already-raised stop is never
 // loosened if price later retraces below lock. Returns changed=false when the new
 // stop isn't a real improvement or would sit at/above the market price.
@@ -1664,7 +1668,18 @@ function computeRelevelStop(position, currentPrice, freshStopLoss) {
     return { newStop: stopLoss, changed: false, progress: 0 };
   }
   const progress = ((currentPrice - entryPrice) / (target1 - entryPrice)) * 100;
-  const breakevenCap = entryPrice - (entryPrice * RELEVEL_BREAKEVEN_BUFFER_PCT) / 100;
+  // The pre-lock cap is entry minus a volatility-scaled buffer: the fresher the
+  // ATR stop (i.e. the more the stock is moving), the further below entry the stop
+  // must stay. A fixed tiny buffer lets the cap climb to just under entry on a
+  // rally, and a normal pullback then stops a position that would have recovered
+  // (dip-and-rally names get yanked at ~breakeven). The buffer is at least
+  // RELEVEL_BREAKEVEN_BUFFER_PCT and never smaller than
+  // RELEVEL_BREAKEVEN_BUFFER_ATR_FRACTION of the fresh ATR stop distance, so the
+  // stop always rides comfortably below entry through the whole pre-lock phase.
+  const freshStopDistancePct = freshStopLoss != null && currentPrice > 0 && freshStopLoss < currentPrice
+    ? ((currentPrice - freshStopLoss) / currentPrice) * 100
+    : 0;
+  const breakevenCap = entryPrice - (entryPrice * Math.max(RELEVEL_BREAKEVEN_BUFFER_PCT, freshStopDistancePct * RELEVEL_BREAKEVEN_BUFFER_ATR_FRACTION)) / 100;
   let newStop = stopLoss;
   // Math.max can only tighten, never loosen, the hard stop.
   newStop = Math.max(newStop, freshStopLoss);

@@ -134,9 +134,17 @@ check('entry <= 0 guard -> no change',
   computeRelevelStop({ entryPrice: 0, stopLoss: 92, target1: 110 }, 102, 95),
   { newStop: 92, changed: false, progress: 0 });
 
-check('pre-lock stop never ratchets above entry minus buffer (fresh 99 capped at 98)',
+check('pre-lock stop never ratchets above entry minus ATR-scaled buffer (fresh 99 capped at 96.7)',
   computeRelevelStop(pos, 106, 99),
-  { newStop: 98, changed: true, progress: 60 });
+  { newStop: 96.7, changed: true, progress: 60 });
+
+check('wide fresh ATR stop widens the pre-lock cap (buffer scales with volatility)',
+  computeRelevelStop(pos, 106, 97),
+  { newStop: 95.75, changed: true, progress: 60 });
+
+check('calm name with a nearly-breakeven fresh stop is still held at the 2% floor (cap 98)',
+  computeRelevelStop(pos, 102, 99.5),
+  { newStop: 98, changed: true, progress: 20 });
 
 check('the +10% rally then dip-to-entry scenario keeps the stop below entry (98), position alive',
   computeRelevelStop(pos, 100, 98),
@@ -402,9 +410,9 @@ check('no position / zero prices -> false',
   [fadeCutReached(null, 102), fadeCutReached(bandPos, 0), fadeCutReached({ ...bandPos, entryPrice: 0 }, 102)],
   [false, false, false]);
 
-// The re-leveled pre-lock stop sits at entry - 2% (RELEVEL_BREAKEVEN_BUFFER_PCT);
-// SCORE_CLOSE_CUT_MIN_PCT (3%) must keep a confirmed fade from yanking a position
-// near breakeven — the hard stop is what books those exits.
+// The re-leveled pre-lock stop sits at least 2% below entry (volatility-scaled
+// buffer); SCORE_CLOSE_CUT_MIN_PCT (3%) must keep a confirmed fade from yanking
+// a position near breakeven — the hard stop is what books those exits.
 const tightBand = { action: 'buy', entryPrice: 100, stopLoss: 98, target1: 110 };
 
 check('tight re-leveled stop (-2%): fade cut does NOT fire at -1% (noise floor)',
