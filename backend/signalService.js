@@ -38,6 +38,16 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     // deploy that predates this column used to crash boot with
     // 'column "signal_generated_at" does not exist'. Idempotent ALTER fixes that.
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS signal_generated_at TIMESTAMP WITH TIME ZONE`);
+    // Dedupe and enforce one outcome per emitted signal. signal_outcomes had no
+    // unique constraint, so the same (ticker, signal_generated_at) could be
+    // inserted twice (e.g. double resolution or a backtest/live race) and the
+    // ON CONFLICT DO NOTHING inserts above were silent no-ops. This self-heals
+    // on any DB then makes those guards actually work going forward.
+    await pool.query(`DELETE FROM signal_outcomes a USING signal_outcomes b
+      WHERE a.ctid < b.ctid AND a.ticker = b.ticker
+        AND a.signal_generated_at IS NOT DISTINCT FROM b.signal_generated_at`).catch(() => {});
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_signal_outcomes_signal
+      ON signal_outcomes (ticker, signal_generated_at)`).catch(() => {});
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS analysis_data JSONB`);
     // restoreStateFromDb SELECTs target3/reason from signal_history to re-seed
     // monitored positions across restarts; the idempotent ALTERs keep restores
@@ -913,8 +923,7 @@ async function backfillOutcomesFromHistory(days = 1, maxRows = 50) {
       const currentPrice = quote.price;
       const returnPct = ((currentPrice - row.entry_price) / row.entry_price) * 100;
 const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy';
-const isSell = row.signal === 'Sell' || row.signal === 'Strong Sell';
-      if (!isBuy && !isSell) continue;
+      if (!isBuy) continue;
       // Garbage guard: only backfill signals >7 days old whose current quote is
       // within 50% of entry. Resolving recent/open signals at a live quote
       // produced the implausible rows (e.g. CGEN 152 -> 2.25).
@@ -922,7 +931,7 @@ const isSell = row.signal === 'Sell' || row.signal === 'Strong Sell';
         console.warn(`[SignalService] Backfill skip ${row.ticker} - implausible quote ${row.entry_price} -> ${currentPrice}`);
         continue;
       }
-      const won = isBuy ? returnPct > 0.5 : returnPct < -0.5;
+      const won = returnPct > 0.5;
       const resultStr = won ? 'win' : 'loss';
        try {
          const now = new Date().toISOString();
@@ -954,9 +963,9 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
       ${force ? '' : 'LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price'}
       WHERE sh.generated_at > NOW() - $1::interval
         AND sh.generated_at < NOW() - INTERVAL '1 hour'
-        AND sh.signal IN ('Strong Buy','Buy','Sell','Strong Sell')
+        AND sh.signal IN ('Strong Buy','Buy')
         AND sh.entry_price > 0
-        AND (sh.stop_loss > 0 AND sh.target1 > 0 OR sh.signal IN ('Sell','Strong Sell'))
+        AND sh.stop_loss > 0 AND sh.target1 > 0
         ${force ? '' : 'AND so.id IS NULL'}
       ORDER BY sh.generated_at DESC
       LIMIT $2
@@ -1006,8 +1015,7 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
           const target = parseFloat(sig.target1);
           const signalDate = new Date(sig.generated_at);
           const isBuy = sig.signal === 'Strong Buy' || sig.signal === 'Buy';
-          const isSell = sig.signal === 'Sell' || sig.signal === 'Strong Sell';
-          if (!isBuy && !isSell) continue;
+          if (!isBuy) continue;
 
           // Never race the live monitor: if this signal is still open in memory
           // (result null) the gate owns its resolution. Backtest must not force
@@ -1040,20 +1048,10 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
 
             exitDay = i - startIdx;
 
-            if (isBuy) {
-              if (dayLow <= stop) { exitPrice = stop; resultStr = 'loss'; break; }
-              if (dayHigh >= target) { exitPrice = target; resultStr = 'win'; break; }
-            } else {
-              // Exit/avoid rating — a Sell is not a mirrored short, so it has no
-              // stop/target levels to walk. It is validated by whether the stock
-              // declined over the hold window relative to the signal price (same
-              // direction semantics as the forward-test benchmark-relative eval).
-              if (i === startIdx + maxHoldDays || i === bars.length - 1) {
-                exitPrice = dayClose;
-                resultStr = dayClose < entry ? 'win' : 'loss';
-                break;
-              }
-            }
+            // Sells are never evaluated here — the SELECT above restricts to
+            // Buy/Strong Buy (sells are exit/avoid ratings, not positions).
+            if (dayLow <= stop) { exitPrice = stop; resultStr = 'loss'; break; }
+            if (dayHigh >= target) { exitPrice = target; resultStr = 'win'; break; }
 
             if (i === startIdx + maxHoldDays || i === bars.length - 1) {
               exitPrice = dayClose;
