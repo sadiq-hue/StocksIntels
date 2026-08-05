@@ -43,9 +43,14 @@ const TRADE_TYPE_STOP_MULT = {
 // stock can shrink to ~2% (1% daily range x 2x), which is only two days of
 // ordinary noise — one bad day or a small gap stops it out on noise, not thesis
 // failure. The floor keeps the stop (and the 3x targets it sizes) at a realistic
-// distance from entry, and the re-level pre-lock cap respects the same floor so
-// live monitoring never tightens a calm stock's stop back into the noise.
-const MIN_STOP_PCT = 0.05;
+// distance from entry. 5% proved too tight in production: a normal 2-4% daily
+// range is barely 1-2 ATRs under a 5% stop, so ordinary intraday swings stopped
+// out names before a move could play out (e.g. PINS stopped at -5.6% on noise).
+// 10% is ~2.5-5 ATRs of room for typical US names — enough to breathe through a
+// pullback while still capping a stop-out loss at a bounded 10%. The re-level
+// pre-lock cap respects the same floor so live monitoring never tightens a calm
+// stock's stop back into the noise.
+const MIN_STOP_PCT = 0.10;
 // Absolute stop ceiling (fraction of price). calculateATR clamps daily range at
 // 15%, so the widest legitimate ATR-scaled stop is 2x that (30%) for a swing
 // trade — a stop must always leave a high-volatility name at least ~2 daily
@@ -60,7 +65,7 @@ const TARGET1_MULT = 3;
 const TARGET2_MULT = 5;
 const TARGET3_MULT = 8;
 
-function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = 0.05, tradeType = 'Swing Trade') {
+function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = MIN_STOP_PCT, tradeType = 'Swing Trade') {
   const volatility = calculateATR(priceHistory);
   const mult = TRADE_TYPE_STOP_MULT[tradeType] || 1.5;
   const baseDistancePct = Math.max(volatility * mult, MIN_STOP_PCT);
@@ -91,7 +96,7 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
   // price so an extreme name can't produce an absurd 60%+ stop. The 30% ceiling
   // still covers the full ATR-scaled range (ATR is clamped at 15%, so a swing
   // stop is at most 2 x 15% = 30%) — it only bites for genuinely pathological
-  // cases. Sizing the cap off the floored base distance keeps the 5% minimum
+  // cases. Sizing the cap off the floored base distance keeps the 10% minimum
   // stop intact for calm names.
   const maxStopDistance = Math.min(currentPrice * baseDistancePct * 2, currentPrice * MAX_STOP_PCT);
   if (signal.action === 'buy') {

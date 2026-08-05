@@ -3226,7 +3226,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     if (relevelTarget && !relevelTarget.result && relevelTarget.action === 'buy'
         && eligibility.ok && marketOpen && currentPrice > 0
         && Array.isArray(priceHistory) && priceHistory.length >= 14) {
-      const freshLevels = calculateTradeLevels(symbol, currentPrice, { action: 'buy' }, priceHistory, 0.05, relevelTarget.type || 'Swing Trade');
+      const freshLevels = calculateTradeLevels(symbol, currentPrice, { action: 'buy' }, priceHistory, MIN_STOP_PCT, relevelTarget.type || 'Swing Trade');
       const { newStop, changed, progress } = computeRelevelStop(relevelTarget, currentPrice, freshLevels.stopLoss);
       if (changed) {
         const prevStop = relevelTarget.stopLoss;
