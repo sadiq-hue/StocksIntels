@@ -672,6 +672,7 @@ async function prefetchQuotes(symbols) {
         const q = quotes[NSE_SYMBOLS.includes(s) ? `NSE:${s}` : s];
         if (q && q.price) {
           _quoteCache.set(s, { price: q.price, changePercent: q.changePercent || 0, volume: q.volume || 0, ts: Date.now() });
+          _lastKnownPrices.set(s, q.price);
         }
       }
     } catch { /* individual fallback handled in main loop */ }
@@ -2460,6 +2461,19 @@ function getLiveWinRate(signalOutcomes = _signalOutcomes, lastKnownPrices = _las
 // ─── Health Check ───────────────────────────────────────────────────────────
 function getEngineHealth() {
   const perf = _performanceStats;
+  // After a restart _lastKnownPrices is empty until the first live cycle runs
+  // (hourly interval + exchange-hours guard). Open positions restored from DB
+  // would then mark 0 quotes and show an empty mark-to-market. Kick a
+  // best-effort quote warm while any tracked position lacks a last-known price
+  // so the health poll itself backfills them (bounded: _monitoredQuoteWarming +
+  // QUOTE_CACHE_TTL, and it stops once every position has a mark).
+  if (getOpenPositionCount() > 0) {
+    let missing = false;
+    for (const [sym] of _signalOutcomes) {
+      if (!_lastKnownPrices.has(sym)) { missing = true; break; }
+    }
+    if (missing) _warmMonitoredQuotes().catch(() => {});
+  }
   return {
     status: Object.values(_sourceHealth).every(h => h.ok) ? 'healthy' : 'degraded',
     uptime: process.uptime(),
