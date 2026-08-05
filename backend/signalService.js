@@ -1457,13 +1457,13 @@ const FADE_CLOSE_CONFIRMATIONS = 2;
 // The guard also gives a fresh thesis room to develop: a 4-hour-old swing position
 // (EABL Aug 5) was fade-closed at +1.2% before it ever approached its +14% target.
 const SCORE_CLOSE_MIN_AGE_MS = (Math.max(1, parseInt(process.env.SCORE_CLOSE_MIN_AGE_HOURS || '6', 10) || 6)) * 3600000; // 6 hours by default
-// Minimum-move band for conviction-fade closes (see fadeCloseBandReached): a fade
-// only books the exit once the position has moved decisively — a winner banks at
-// least SCORE_CLOSE_BANK_MIN_PCT, a loser cuts only after traveling
-// SCORE_CLOSE_CUT_FRACTION_OF_STOP of its stop distance. Inside the band (± a small
-// flicker around entry) the position keeps monitoring so a stock that may recover
-// is never churned out at a ~±1% move.
-const SCORE_CLOSE_BANK_MIN_PCT = parseFloat(process.env.SCORE_CLOSE_BANK_MIN_PCT || '2.5');
+// A fade (buy -> hold) is a WEAK signal — the composite sits on the buy/hold
+// boundary and stocks take time to reach their targets — so a fading position is
+// NEVER closed while it is winning or flat: it rides to target1 (the trailing
+// stop books the exit once target is touched), the stale-thesis cleanup, a full
+// flip, or its hard stop. The ONLY fade exit is the loss-side cut below: a loser
+// that has meaningfully failed toward its stop while conviction is gone is cut
+// early; the stop itself stays the final risk cap.
 const SCORE_CLOSE_CUT_FRACTION_OF_STOP = Math.max(0, Math.min(1, parseFloat(process.env.SCORE_CLOSE_CUT_FRACTION_OF_STOP || '0.5')));
 // Re-leveling: while a long is monitored, the hard stop is re-derived from the
 // current price/ATR (never loosened) and ratchets to breakeven / locked gains as
@@ -1529,28 +1529,23 @@ function fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice) 
   return null;
 }
 
-// Minimum-move band for a conviction-fade close. A fade confirms the exit only when
-// the position has actually moved decisively toward an outcome:
-//   - a winner books the gain only once it is up at least SCORE_CLOSE_BANK_MIN_PCT;
-//   - a loser cuts only after it has traveled SCORE_CLOSE_CUT_FRACTION_OF_STOP of the
-//     way to its hard stop (the stop itself stays the final risk cap).
-// Inside the band (e.g. ±1% around entry) the position keeps monitoring — a stock
-// can recover from there, and a fade is a weak signal, not a realized move. The
-// stop/target, stale-thesis and flip paths still own the exit in that zone.
-function fadeCloseBandReached(prevOutcome, currentPrice) {
+// Fade-cut threshold: whether a fading position has a REALIZED LOSS big enough to
+// justify an early exit. Winners and flat positions always return false — a stock
+// that is up (or merely consolidating around entry) is given time to reach its
+// target. Only a loser that has traveled SCORE_CLOSE_CUT_FRACTION_OF_STOP of the
+// way to its hard stop is cut by a fade (the stop itself remains the final cap).
+// A full flip (buy -> sell) and the stale-thesis path close regardless of move.
+function fadeCutReached(prevOutcome, currentPrice) {
   if (!prevOutcome || !(prevOutcome.entryPrice > 0) || !(currentPrice > 0)) return false;
   const entry = prevOutcome.entryPrice;
   const pctMove = ((currentPrice - entry) / entry) * 100;
+  const stop = prevOutcome.stopLoss;
   if (prevOutcome.action !== 'buy') {
-    if (pctMove <= -SCORE_CLOSE_BANK_MIN_PCT) return true;
-    const stop = prevOutcome.stopLoss;
     if (stop != null && stop > 0 && stop > entry) {
       return pctMove >= (((stop - entry) / entry) * 100) * SCORE_CLOSE_CUT_FRACTION_OF_STOP;
     }
     return false;
   }
-  if (pctMove >= SCORE_CLOSE_BANK_MIN_PCT) return true;
-  const stop = prevOutcome.stopLoss;
   if (stop != null && stop > 0 && stop < entry) {
     return pctMove <= -(((entry - stop) / entry) * 100) * SCORE_CLOSE_CUT_FRACTION_OF_STOP;
   }
@@ -1560,6 +1555,8 @@ function fadeCloseBandReached(prevOutcome, currentPrice) {
 // Pure verdict for the monitor gate's score-based close. Combines the flip, the
 // profit-fade/stale-thesis rules, and the conviction-fade confirmation with the
 // minimum-age guard into a single testable decision (see test-fade-relevel.cjs).
+// 'conviction faded' only fires on a REALIZED LOSS (see fadeCutReached) — a fading
+// winner/flat position is given time to reach its target instead of being yanked.
 // Returns:
 //   close         - null (keep monitoring) or a close reason string:
 //                   'score flipped' | 'profit fade' | 'stale thesis' | 'conviction faded'
@@ -1582,7 +1579,7 @@ function evaluateScoreClose(prevOutcome, freshAction, eligibilityOk, currentPric
   let close = null;
   if (isFlip) close = 'score flipped';
   else if (fadeReason) close = fadeReason;
-  else if (isFade && fadeConfirmed && fadeCloseBandReached(prevOutcome, currentPrice)) close = 'conviction faded';
+  else if (isFade && fadeConfirmed && fadeCutReached(prevOutcome, currentPrice)) close = 'conviction faded';
   return { close, fadeCount, isFade, tooYoung, longTermHold };
 }
 
@@ -4078,7 +4075,7 @@ module.exports = {
   staleThesisDaysFor,
   fadeCloseReason,
   evaluateScoreClose,
-  fadeCloseBandReached,
+  fadeCutReached,
   computeRelevelStop,
   // Audit & Config
   getAuditLog,

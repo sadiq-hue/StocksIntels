@@ -3,7 +3,7 @@
 //  2) computeRelevelStop   - stop re-leveling to live market behavior
 // Run: node backend/test-fade-relevel.cjs
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-const { assessConvictionFade, computeRelevelStop, fadeCloseReason, staleThesisDaysFor, isLongTermHold, evaluateScoreClose, fadeCloseBandReached, getLiveWinRate } = require('./signalService');
+const { assessConvictionFade, computeRelevelStop, fadeCloseReason, staleThesisDaysFor, isLongTermHold, evaluateScoreClose, fadeCutReached, getLiveWinRate } = require('./signalService');
 
 let passed = 0, failed = 0;
 function check(name, actual, expected) {
@@ -234,12 +234,16 @@ check('2h-old first fade reading waits for confirmation (1/2)',
   evaluateScoreClose(freshPos, 'hold', true, 102, T0 + 2 * HOUR, HOUR),
   { close: null, fadeCount: 1, isFade: true, tooYoung: false, longTermHold: false });
 
-check('2h-old 2nd fade inside the move band (+2% < 2.5% bank min) does NOT close',
+check('2h-old 2nd fade on a WINNER (+2%) does NOT close (winners ride)',
   evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 102, T0 + 2 * HOUR, HOUR),
   { close: null, fadeCount: 2, isFade: true, tooYoung: false, longTermHold: false });
 
-check('2h-old 2nd fade beyond the move band (+4% >= 2.5% bank min) closes',
+check('2h-old 2nd fade on a WINNER (+4%) does NOT close (winners ride)',
   evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 104, T0 + 2 * HOUR, HOUR),
+  { close: null, fadeCount: 2, isFade: true, tooYoung: false, longTermHold: false });
+
+check('2h-old 2nd fade on a LOSER past half-stop (-4%) closes',
+  evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 96, T0 + 2 * HOUR, HOUR),
   { close: 'conviction faded', fadeCount: 2, isFade: true, tooYoung: false, longTermHold: false });
 
 check('2h-old hold at/above target1 profit-fades on first reading',
@@ -262,44 +266,48 @@ check('default min-age (6h): 4h-old 2nd fade does NOT close (too young)',
   evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 104, T0 + 4 * HOUR),
   { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
 
-check('default min-age (6h): 7h-old 2nd fade closes (band reached +4%)',
+check('default min-age (6h): 7h-old 2nd fade on a WINNER (+4%) does NOT close',
   evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 104, T0 + 7 * HOUR),
+  { close: null, fadeCount: 2, isFade: true, tooYoung: false, longTermHold: false });
+
+check('default min-age (6h): 7h-old 2nd fade on a LOSER past half-stop (-4%) closes',
+  evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 96, T0 + 7 * HOUR),
   { close: 'conviction faded', fadeCount: 2, isFade: true, tooYoung: false, longTermHold: false });
 
-// ─── fadeCloseBandReached (minimum-move band for fade closes) ─────────────
-section('fadeCloseBandReached (minimum-move band)');
+// ─── fadeCutReached (fair fade cut: losers only, winners ride) ────────────
+section('fadeCutReached (fair fade cut - losers only)');
 const bandPos = { action: 'buy', entryPrice: 100, stopLoss: 92, target1: 110 };
 const bandSell = { action: 'sell', entryPrice: 100, stopLoss: 108, target1: 90 };
 
-check('buy +2% (below 2.5% bank min) -> band NOT reached',
-  fadeCloseBandReached(bandPos, 102), false);
+check('buy WINNER +2% -> NO fade cut (winners always ride)',
+  fadeCutReached(bandPos, 102), false);
 
-check('buy +2.5% (exactly bank min) -> band reached',
-  fadeCloseBandReached(bandPos, 102.5), true);
+check('buy WINNER +10% -> NO fade cut (winners always ride)',
+  fadeCutReached(bandPos, 110), false);
 
-check('buy +4% -> band reached',
-  fadeCloseBandReached(bandPos, 104), true);
+check('buy flat 0% -> NO fade cut',
+  fadeCutReached(bandPos, 100), false);
 
-check('buy -1% loss (inside band) -> NOT reached',
-  fadeCloseBandReached(bandPos, 99), false);
+check('buy -1% loss (inside band) -> NO cut',
+  fadeCutReached(bandPos, 99), false);
 
-check('buy at half stop distance (stop -8%, half -4%) -> reached',
-  fadeCloseBandReached(bandPos, 96), true);
+check('buy at half stop distance (stop -8%, half -4%) -> cut',
+  fadeCutReached(bandPos, 96), true);
 
-check('buy at 40% of stop distance (-3.2%) -> NOT reached',
-  fadeCloseBandReached(bandPos, 96.8), false);
+check('buy at 40% of stop distance (-3.2%) -> NO cut',
+  fadeCutReached(bandPos, 96.8), false);
 
-check('sell -4% (bank min 2.5%) -> band reached',
-  fadeCloseBandReached(bandSell, 96), true);
+check('sell WINNER -4% -> NO fade cut (winners always ride)',
+  fadeCutReached(bandSell, 96), false);
 
-check('sell +4% (half of +8% stop distance) -> band reached',
-  fadeCloseBandReached(bandSell, 104), true);
+check('sell at half of +8% stop distance (+4%) -> cut',
+  fadeCutReached(bandSell, 104), true);
 
-check('sell +2% -> band NOT reached',
-  fadeCloseBandReached(bandSell, 102), false);
+check('sell +2% -> NO cut',
+  fadeCutReached(bandSell, 102), false);
 
 check('no position / zero prices -> false',
-  [fadeCloseBandReached(null, 102), fadeCloseBandReached(bandPos, 0), fadeCloseBandReached({ ...bandPos, entryPrice: 0 }, 102)],
+  [fadeCutReached(null, 102), fadeCutReached(bandPos, 0), fadeCutReached({ ...bandPos, entryPrice: 0 }, 102)],
   [false, false, false]);
 
 // ─── getLiveWinRate (mark-to-market win rate incl. open positions) ────────────
