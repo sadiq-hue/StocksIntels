@@ -3,7 +3,7 @@
 //  2) computeRelevelStop   - stop re-leveling to live market behavior
 // Run: node backend/test-fade-relevel.cjs
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-const { assessConvictionFade, computeRelevelStop, fadeCloseReason, staleThesisDaysFor, isLongTermHold, evaluateScoreClose } = require('./signalService');
+const { assessConvictionFade, computeRelevelStop, fadeCloseReason, staleThesisDaysFor, isLongTermHold, evaluateScoreClose, getLiveWinRate } = require('./signalService');
 
 let passed = 0, failed = 0;
 function check(name, actual, expected) {
@@ -250,6 +250,44 @@ check('long-term hold type + old + flip -> still no score close (stop/target onl
 check('undefined position -> no close',
   evaluateScoreClose(undefined, 'hold', true, 102, T0 + 2 * HOUR),
   { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
+
+// ─── getLiveWinRate (mark-to-market win rate incl. open positions) ────────────
+section('getLiveWinRate (mark-to-market)');
+const outcomes = new Map([
+  ['AMAT', { action: 'buy', entryPrice: 100, result: null }],
+  ['WFC', { action: 'buy', entryPrice: 90, result: null }],
+  ['BA', { action: 'buy', entryPrice: 200, result: null }],
+  ['DDOG', { action: 'buy', entryPrice: 300, result: 'win' }],        // resolved — ignored by open pass
+  ['HOLD', { action: 'hold', entryPrice: 50, result: null }],          // hold — not a monitored position
+]);
+const prices = new Map([['AMAT', 105], ['WFC', 88], ['BA', 210]]);    // no quote for DDOG/HOLD
+const perf = { total: 40, wins: 24, losses: 16, winRate: 60 };
+
+check('resolved-only rate passes through unchanged',
+  getLiveWinRate(new Map(), new Map(), perf).resolved,
+  { total: 40, wins: 24, losses: 16, winRate: 60 });
+
+const mtm = getLiveWinRate(outcomes, prices, perf);
+check('open long above entry counts as win (AMAT 105 vs 100)',
+  [mtm.open.wins, mtm.open.losses, mtm.open.total], [2, 1, 3]);
+
+check('open long below entry counts as loss (WFC 88 vs 90)',
+  mtm.openPositions.find(p => p.symbol === 'WFC').mtm, 'loss');
+
+check('open long above entry counted as win (BA 210 vs 200)',
+  mtm.openPositions.find(p => p.symbol === 'BA').mtm, 'win');
+
+check('resolved + hold positions excluded from open pass',
+  mtm.openPositions.some(p => p.symbol === 'DDOG' || p.symbol === 'HOLD'), false);
+
+check('unrealized pct is signed and rounded (AMAT +5%)',
+  mtm.openPositions.find(p => p.symbol === 'AMAT').unrealizedPct, 5);
+
+check('combined = resolved + open (24+2 wins / 40+3 total -> 60.5%)',
+  [mtm.combined.total, mtm.combined.wins, mtm.combined.winRate], [43, 26, 60.5]);
+
+check('symbol without a live quote is skipped, not guessed',
+  getLiveWinRate(new Map([['NOQ', { action: 'buy', entryPrice: 100, result: null }]]), new Map(), perf).open.total, 0);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

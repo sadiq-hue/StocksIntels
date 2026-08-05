@@ -59,8 +59,22 @@ interface EngineHealth {
   portfolio: { consecutiveLosses: number; totalTrades: number; maxDrawdown: number };
 }
 
+interface WinRateSlice { total: number; wins: number; losses: number; winRate: number; }
+interface LiveOpenPosition {
+  symbol: string; action: string; entryPrice: number; lastPrice: number;
+  mtm: "win" | "loss"; unrealizedPct: number;
+}
+interface LiveWinRate {
+  resolved: WinRateSlice; open: WinRateSlice; combined: WinRateSlice;
+  openPositions: LiveOpenPosition[]; asOf: number;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtPct(v: number) { return `${v >= 0 ? "" : ""}${v.toFixed(1)}%`; }
+function wrColor(v?: number) {
+  if (v == null) return "text-muted-foreground";
+  return v >= 60 ? "text-emerald-600" : v >= 45 ? "text-yellow-600" : "text-red-600";
+}
 function fmtNum(v: number) { return new Intl.NumberFormat("en-US").format(v); }
 function fmtDuration(seconds: number) {
   const d = Math.floor(seconds / 86400);
@@ -223,6 +237,7 @@ function BacktestPanel() {
 // ─── Forward Test Tab ────────────────────────────────────────────────────────
 function ForwardTestPanel() {
   const [stats, setStats] = useState<ForwardTestStats | null>(null);
+  const [live, setLive] = useState<LiveWinRate | null>(null);
   const [predictions, setPredictions] = useState<ForwardPrediction[]>([]);
   const [predTotal, setPredTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -238,9 +253,16 @@ function ForwardTestPanel() {
   const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await authFetch(`${API_URL}/signals/forward-test${userIdParam}`);
-      const data = await res.json();
-      if (data.success) setStats(data.stats);
+      const [ftRes, healthRes] = await Promise.all([
+        authFetch(`${API_URL}/signals/forward-test${userIdParam}`),
+        authFetch(`${API_URL}/signals/engine/health`),
+      ]);
+      const ftData = await ftRes.json();
+      if (ftData.success) setStats(ftData.stats);
+      const healthData = await healthRes.json();
+      if (healthData.success && healthData.health?.performance?.live) {
+        setLive(healthData.health.performance.live);
+      }
     } catch (e) { console.error(e); } finally { setLoading(false); }
   }, [userIdParam]);
 
@@ -325,6 +347,60 @@ function ForwardTestPanel() {
             {!stats ? "—" : stats.totalPredictions === 0 ? "No Data" : stats.accuracy >= 60 ? "Good" : "Needs Work"}
           </p>
         </Card>
+      </div>
+
+      {/* Live Win Rate (mark-to-market) */}
+      <div>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <p className="text-sm font-semibold text-foreground">Live Win Rate</p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">open positions marked at last live quote</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-2">
+          <Card className="bg-card border-border p-3 text-center">
+            <p className="text-muted-foreground text-[10px] uppercase tracking-wider mb-1">Resolved ({live?.resolved.total ?? 0})</p>
+            <p className={`text-2xl font-bold ${wrColor(live?.resolved.winRate)}`}>{live ? fmtPct(live.resolved.winRate) : "—"}</p>
+          </Card>
+          <Card className="bg-card border-border p-3 text-center">
+            <p className="text-muted-foreground text-[10px] uppercase tracking-wider mb-1">Open / Mark-to-Market ({live?.open.total ?? 0})</p>
+            <p className={`text-2xl font-bold ${wrColor(live?.open.winRate)}`}>{live ? fmtPct(live.open.winRate) : "—"}</p>
+          </Card>
+          <Card className="bg-card border-border p-3 text-center">
+            <p className="text-muted-foreground text-[10px] uppercase tracking-wider mb-1">Combined ({live?.combined.total ?? 0})</p>
+            <p className={`text-2xl font-bold ${wrColor(live?.combined.winRate)}`}>{live ? fmtPct(live.combined.winRate) : "—"}</p>
+          </Card>
+        </div>
+        {live && live.openPositions.length > 0 && (
+          <div className="mt-3 overflow-x-auto border border-border rounded-lg">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-muted">
+                <tr className="border-b border-border">
+                  <th className="text-left py-2 px-3 text-muted-foreground font-medium">Symbol</th>
+                  <th className="text-left py-2 px-3 text-muted-foreground font-medium">Action</th>
+                  <th className="text-right py-2 px-3 text-muted-foreground font-medium">Entry</th>
+                  <th className="text-right py-2 px-3 text-muted-foreground font-medium">Last</th>
+                  <th className="text-right py-2 px-3 text-muted-foreground font-medium">Unrealized</th>
+                  <th className="text-right py-2 px-3 text-muted-foreground font-medium">Mark</th>
+                </tr>
+              </thead>
+              <tbody>
+                {live.openPositions.map(p => (
+                  <tr key={p.symbol} className="border-b border-border hover:bg-accent">
+                    <td className="py-2 px-3 font-medium text-foreground">{p.symbol}</td>
+                    <td className="py-2 px-3 capitalize text-muted-foreground">{p.action}</td>
+                    <td className="py-2 px-3 text-right text-muted-foreground">${p.entryPrice.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right text-muted-foreground">${p.lastPrice.toFixed(2)}</td>
+                    <td className={`py-2 px-3 text-right font-medium ${p.unrealizedPct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {p.unrealizedPct >= 0 ? "+" : ""}{p.unrealizedPct.toFixed(2)}%
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      <span className={`text-[10px] font-semibold uppercase tracking-wider ${p.mtm === "win" ? "text-emerald-600" : "text-red-600"}`}>{p.mtm}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Main content */}

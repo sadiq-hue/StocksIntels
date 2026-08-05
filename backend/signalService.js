@@ -287,6 +287,9 @@ async function refreshMonitoredQuotes() {
 const _liveTestStore = new Map(); // symbol -> { outcomes: [{ result, entryPrice, exitPrice, signal, generatedAt, resolvedAt }] }
 const LIVE_TEST_MAX_PER_SYMBOL = 200;
 const _performanceStats = { total: 0, wins: 0, losses: 0, winRate: 0 };
+// Last known live price per symbol, refreshed every cycle — the mark-to-market
+// basis for scoring open positions toward the live win rate without extra fetches.
+const _lastKnownPrices = new Map();
 const _histBacktestCache = new Map(); // symbol -> { bars, ts }
 const HIST_BACKTEST_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
@@ -2405,6 +2408,55 @@ async function persistPortfolioState() {
   } catch { /* table may not exist yet */ }
 }
 
+// ─── Live (mark-to-market) win rate ─────────────────────────────────────────
+// Resolved outcomes PLUS open positions marked to their last known live price.
+// With wide targets positions can stay open for weeks, so the resolved-only rate
+// sits frozen while ~30 positions run; this shows the running picture instead. An
+// open long above its entry counts as a win right now, below it as a loss — the
+// same rule the monitor gate applies when a score-close books the market print.
+// Positions without a live quote this session are left out rather than guessed.
+// State maps are injectable for unit tests (see test-fade-relevel.cjs).
+function getLiveWinRate(signalOutcomes = _signalOutcomes, lastKnownPrices = _lastKnownPrices, performanceStats = _performanceStats) {
+  const resolvedWins = performanceStats.wins || 0;
+  const resolvedLosses = performanceStats.losses || 0;
+  const resolvedTotal = resolvedWins + resolvedLosses;
+  let openWins = 0, openLosses = 0;
+  const openPositions = [];
+  for (const [symbol, pos] of signalOutcomes) {
+    if (!pos || pos.result || pos.action === 'hold' || pos.entryPrice == null || pos.entryPrice <= 0) continue;
+    const price = lastKnownPrices.get(symbol);
+    if (!price || price <= 0) continue;
+    const isBuy = pos.action === 'buy';
+    const mtmWin = isBuy ? price >= pos.entryPrice : price <= pos.entryPrice;
+    if (mtmWin) openWins++; else openLosses++;
+    openPositions.push({
+      symbol, action: pos.action, entryPrice: pos.entryPrice, lastPrice: price,
+      mtm: mtmWin ? 'win' : 'loss',
+      unrealizedPct: Math.round(((price - pos.entryPrice) / pos.entryPrice) * 1000) / 10,
+    });
+  }
+  const openTotal = openPositions.length;
+  const combinedWins = resolvedWins + openWins;
+  const combinedLosses = resolvedLosses + openLosses;
+  const combinedTotal = combinedWins + combinedLosses;
+  return {
+    resolved: {
+      total: resolvedTotal, wins: resolvedWins, losses: resolvedLosses,
+      winRate: resolvedTotal > 0 ? Math.round((resolvedWins / resolvedTotal) * 1000) / 10 : 0,
+    },
+    open: {
+      total: openTotal, wins: openWins, losses: openLosses,
+      winRate: openTotal > 0 ? Math.round((openWins / openTotal) * 1000) / 10 : 0,
+    },
+    combined: {
+      total: combinedTotal, wins: combinedWins, losses: combinedLosses,
+      winRate: combinedTotal > 0 ? Math.round((combinedWins / combinedTotal) * 1000) / 10 : 0,
+    },
+    openPositions,
+    asOf: Date.now(),
+  };
+}
+
 // ─── Health Check ───────────────────────────────────────────────────────────
 function getEngineHealth() {
   const perf = _performanceStats;
@@ -2412,7 +2464,7 @@ function getEngineHealth() {
     status: Object.values(_sourceHealth).every(h => h.ok) ? 'healthy' : 'degraded',
     uptime: process.uptime(),
     sources: { ..._sourceHealth },
-    performance: { ...perf },
+    performance: { ...perf, live: getLiveWinRate() },
     portfolio: {
       consecutiveLosses: _portfolioState.consecutiveLosses,
       totalTrades: perf.total,
@@ -2822,6 +2874,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     }
     
     if (NSE_SYMBOLS.includes(symbol)) accumulateNseQuote(symbol, currentPrice, volume);
+    if (currentPrice > 0) _lastKnownPrices.set(symbol, currentPrice);
     
     const marketOpen = isExchangeOpen(symbol);
     const fundamental = analyzeFundamentals(stock, currentPrice, newsSentiment[symbol] || null, _dynamicSectorPE);
@@ -3945,6 +3998,7 @@ module.exports = {
   isGarbageQuote,
   getPriorScore,
   getLiveTestSnapshot,
+  getLiveWinRate,
   // Monitor gate decisions (unit-testable conviction-fade exit + stop re-leveling)
   assessConvictionFade,
   isLongTermHold,
