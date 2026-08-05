@@ -73,6 +73,11 @@ const SIGNAL_WINDOW_DAYS = 90;
 // position after a restart. Anything older than this is treated as a stale
 // (unused/expired) signal, not an active position — otherwise old buys pile up
 // as "open positions" that only close on stop/target and never age out.
+// Long-term types (Long Term / Long Term Value) are exempt: their whole thesis
+// is a months-long stop/target hold (score closes are disabled for them), so a
+// 72h restart cap would silently kill a position that had simply been running
+// for weeks. They are restored within the full SIGNAL_WINDOW_DAYS evaluation
+// window instead; short-term types keep the tight cap below.
 const OPEN_POSITION_MAX_AGE_HOURS = Math.max(1, parseInt(process.env.OPEN_POSITION_MAX_AGE_HOURS || '72', 10) || 72);
 // Restore performance stats and portfolio state from DB on startup
 restoreStateFromDb().catch(() => {});
@@ -826,11 +831,18 @@ async function restoreStateFromDb() {
     // are exit/avoid ratings, not mirrored shorts — they carry no stop/target levels
     // and there is nothing to track (any leveled Sell rows in history are legacy
     // artifacts from before that rule and are deliberately ignored here).
+    // The restore window is trade-type aware: Long Term / Long Term Value positions
+    // (stop/target-only closes, no expiry by design) are brought back across the full
+    // SIGNAL_WINDOW_DAYS evaluation window so a weeks/months-old long-term hold
+    // survives a restart; short-term types are capped at OPEN_POSITION_MAX_AGE_HOURS
+    // so stale short-term buys don't pile up forever.
     const openRes = await pool.query(
       `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, trade_type, position_size, generated_at, reason, analysis_data
        FROM signal_history
-       WHERE generated_at > NOW() - $1::interval
-         AND generated_at > NOW() - $2::interval
+       WHERE generated_at > NOW() - CASE
+           WHEN trade_type IN ('Long Term','Long Term Value') THEN $1::interval
+           ELSE $2::interval
+         END
          AND signal IN ('Strong Buy','Buy')
          AND entry_price > 0 AND stop_loss > 0 AND target1 > 0
        ORDER BY ticker, generated_at DESC`,

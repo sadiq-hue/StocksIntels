@@ -32,10 +32,13 @@ function check(name, cond, detail) {
 
 const LIVE_DRIFT_TOLERANCE = 2;
 // The restore only resurrects Buy signals newer than OPEN_POSITION_MAX_AGE_HOURS
-// as open positions (older buys are stale/expired and must not pile up). The
-// DB-derived expectation below must mirror that exact window or the stat check
-// compares 90 days of candidates against a 72h restore and always diverges.
+// as open positions (older buys are stale/expired and must not pile up), EXCEPT
+// Long Term / Long Term Value signals which restore across the full
+// SIGNAL_WINDOW_DAYS window. The DB-derived expectation below must mirror that
+// exact type-aware window or the stat check compares wrong candidate sets and
+// always diverges.
 const RESTORE_HOURS = signalService.OPEN_POSITION_MAX_AGE_HOURS || 72;
+const SIGNAL_WINDOW_DAYS = 90;
 
 (async () => {
   // Snapshot the DB-derived expectation FIRST, then boot. Any rows the live
@@ -45,9 +48,12 @@ const RESTORE_HOURS = signalService.OPEN_POSITION_MAX_AGE_HOURS || 72;
   const openRes = await pool.query(
     `SELECT sh.ticker, sh.signal
      FROM (
-       SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, generated_at
+       SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, generated_at, trade_type
        FROM signal_history
-       WHERE generated_at > NOW() - $1::interval
+       WHERE generated_at > NOW() - CASE
+           WHEN trade_type IN ('Long Term','Long Term Value') THEN $1::interval
+           ELSE $2::interval
+         END
          AND signal IN ('Strong Buy','Buy')
          AND entry_price > 0 AND stop_loss > 0 AND target1 > 0
        ORDER BY ticker, generated_at DESC
@@ -59,7 +65,7 @@ const RESTORE_HOURS = signalService.OPEN_POSITION_MAX_AGE_HOURS || 72;
       ) r ON true
      WHERE r.resolved IS NULL
        AND (sh.signal ILIKE '%buy%' AND sh.stop_loss < sh.entry_price AND sh.target1 > sh.entry_price)`,
-    [`${RESTORE_HOURS} hours`]
+    [`${SIGNAL_WINDOW_DAYS} days`, `${RESTORE_HOURS} hours`]
   );
   const expected = openRes.rows.length;
   const expectedSet = new Set(openRes.rows.map(r => r.ticker));
