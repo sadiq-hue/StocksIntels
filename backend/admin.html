@@ -635,20 +635,23 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       </div>
       <!-- Filters -->
       <div style="padding:8px 20px 14px 20px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button id="sigLatestToggle" onclick="toggleSigLatest()" class="btn btn-primary" style="font-size:12px;padding:7px 12px;border-radius:8px;height:36px;white-space:nowrap">Latest per ticker</button>
         <div style="position:relative;flex:1;min-width:120px;max-width:160px">
           <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:#9ca3af;pointer-events:none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
           <input id="sigTickerInput" placeholder="Ticker..." class="input-field" oninput="debounceSigFilter()" style="padding-left:30px;font-size:13px;border-radius:8px;background:#f9fafb;border-color:#e5e7eb;height:36px">
         </div>
         <select id="sigSignalSelect" class="input-field" onchange="debounceSigFilter()" style="font-size:13px;border-radius:8px;background:#f9fafb;border-color:#e5e7eb;height:36px;width:120px">
           <option value="">All Signals</option>
+          <option value="Strong Buy">Strong Buy</option>
           <option value="Buy">Buy</option>
           <option value="Hold">Hold</option>
           <option value="Sell">Sell</option>
           <option value="Strong Sell">Strong Sell</option>
         </select>
-        <select id="sigMarketSelect" class="input-field" onchange="debounceSigFilter()" style="font-size:13px;border-radius:8px;background:#f9fafb;border-color:#e5e7eb;height:36px;width:110px">
+        <select id="sigMarketSelect" class="input-field" onchange="debounceSigFilter()" style="font-size:13px;border-radius:8px;background:#f9fafb;border-color:#e5e7eb;height:36px;width:120px">
           <option value="">All Markets</option>
           <option value="NSE">NSE</option>
+          <option value="Global">Global</option>
           <option value="NASDAQ">NASDAQ</option>
           <option value="NYSE">NYSE</option>
         </select>
@@ -2360,6 +2363,7 @@ let sigMarket = '';
 let sigSector = '';
 let sigDateFrom = '';
 let sigDateTo = '';
+let sigLatest = true;
 let selectedSignalId = null;
 let editingSignalId = null;
 
@@ -2385,19 +2389,30 @@ function debounceSigFilter() {
   }, 300);
 }
 
+function toggleSigLatest() {
+  sigLatest = !sigLatest;
+  const btn = document.getElementById('sigLatestToggle');
+  btn.textContent = sigLatest ? 'Latest per ticker' : 'All history';
+  btn.classList.toggle('btn-primary', sigLatest);
+  btn.classList.toggle('btn-secondary', !sigLatest);
+  sigPage = 1;
+  fetchSignalStats();
+  fetchSignals();
+}
+
 async function fetchSignalStats() {
   try {
-    const res = await fetch('/api/admin/signals/stats');
+    const res = await fetch('/api/admin/signals/stats?latest=' + (sigLatest ? '1' : '0'));
     if (!res.ok) return;
     const d = await res.json();
     document.getElementById('sigTotal').textContent = Number(d.totalSignals).toLocaleString();
     document.getElementById('sigTickers').textContent = d.distinctTickers;
     const bySig = {};
     d.bySignal.forEach(s => bySig[s.signal] = s.cnt);
-    document.getElementById('sigBuy').textContent = bySig['Buy'] ? Number(bySig['Buy']).toLocaleString() : '0';
+    document.getElementById('sigBuy').textContent = (bySig['Buy']||0) + (bySig['Strong Buy']||0);
     document.getElementById('sigSell').textContent = (bySig['Sell']||0) + (bySig['Strong Sell']||0);
     document.getElementById('sigHold').textContent = (bySig['Hold']||0);
-    document.getElementById('signalTotalLabel').textContent = Number(d.totalSignals).toLocaleString() + ' signals';
+    document.getElementById('signalTotalLabel').textContent = Number(d.totalSignals).toLocaleString() + (d.latest ? ' current signals' : ' signals');
     document.getElementById('signalBadge').textContent = Number(d.totalSignals).toLocaleString();
     if (d.lastGenerated) document.getElementById('signalLastGen').textContent = 'Last: ' + new Date(d.lastGenerated).toLocaleString();
   } catch {}
@@ -2406,7 +2421,7 @@ async function fetchSignalStats() {
 async function fetchSignals() {
   closeSignalDetail();
   try {
-    const params = new URLSearchParams({ page: sigPage, limit: 50 });
+    const params = new URLSearchParams({ page: sigPage, limit: 50, latest: sigLatest ? '1' : '0' });
     if (sigTicker) params.set('ticker', sigTicker);
     if (sigSignal) params.set('signal', sigSignal);
     if (sigMarket) params.set('market', sigMarket);

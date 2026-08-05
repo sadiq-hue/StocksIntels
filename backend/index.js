@@ -526,10 +526,19 @@ app.post('/api/admin/send-announcement', requireSuperAdmin, async (req, res) => 
 // ── Admin Signals API ──
 app.get('/api/admin/signals/stats', async (req, res) => {
   try {
-    const [total, bySignal, bySector, latest, tickerCount] = await Promise.all([
-      pool.query('SELECT COUNT(*)::int as cnt FROM signal_history'),
-      pool.query('SELECT signal, COUNT(*)::int as cnt FROM signal_history GROUP BY signal ORDER BY cnt DESC'),
-      pool.query('SELECT sector, COUNT(*)::int as cnt FROM signal_history WHERE sector IS NOT NULL GROUP BY sector ORDER BY cnt DESC LIMIT 20'),
+    const latest = req.query.latest !== '0';
+    // Latest mode: one row per ticker (most recent signal), so the cards reflect
+    // the current live set instead of every historical regeneration cycle.
+    const [total, bySignal, bySector, latestGen, tickerCount] = await Promise.all([
+      latest
+        ? pool.query(`SELECT COUNT(*)::int as cnt FROM (SELECT DISTINCT ON (ticker) ticker FROM signal_history ORDER BY ticker, generated_at DESC) t`)
+        : pool.query('SELECT COUNT(*)::int as cnt FROM signal_history'),
+      latest
+        ? pool.query(`SELECT signal, COUNT(*)::int as cnt FROM (SELECT DISTINCT ON (ticker) ticker, signal FROM signal_history ORDER BY ticker, generated_at DESC) t GROUP BY signal ORDER BY cnt DESC`)
+        : pool.query('SELECT signal, COUNT(*)::int as cnt FROM signal_history GROUP BY signal ORDER BY cnt DESC'),
+      latest
+        ? pool.query(`SELECT sector, COUNT(*)::int as cnt FROM (SELECT DISTINCT ON (ticker) ticker, sector FROM signal_history WHERE sector IS NOT NULL ORDER BY ticker, generated_at DESC) t GROUP BY sector ORDER BY cnt DESC LIMIT 20`)
+        : pool.query('SELECT sector, COUNT(*)::int as cnt FROM signal_history WHERE sector IS NOT NULL GROUP BY sector ORDER BY cnt DESC LIMIT 20'),
       pool.query('SELECT MAX(generated_at) as last_generated FROM signal_history'),
       pool.query('SELECT COUNT(DISTINCT ticker)::int as cnt FROM signal_history'),
     ]);
@@ -538,7 +547,8 @@ app.get('/api/admin/signals/stats', async (req, res) => {
       distinctTickers: tickerCount.rows[0].cnt,
       bySignal: bySignal.rows,
       bySector: bySector.rows,
-      lastGenerated: latest.rows[0].last_generated,
+      lastGenerated: latestGen.rows[0].last_generated,
+      latest,
     });
   } catch (err) { console.error('Admin signals stats error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
@@ -547,6 +557,7 @@ app.get('/api/admin/signals', async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 50));
+    const latest = req.query.latest !== '0';
     const ticker = (req.query.ticker || '').trim().toUpperCase();
     const signal = (req.query.signal || '').trim();
     const sector = (req.query.sector || '').trim();
@@ -564,16 +575,25 @@ app.get('/api/admin/signals', async (req, res) => {
     if (dateFrom) { conditions.push(`generated_at >= $${idx++}::date`); params.push(dateFrom); }
     if (dateTo) { conditions.push(`generated_at <= $${idx++}::date + interval '1 day'`); params.push(dateTo); }
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
-    const countResult = await pool.query(`SELECT COUNT(*)::int as cnt FROM signal_history ${whereClause}`, params);
     const dataParams = [...params, limit, offset];
-    const dataResult = await pool.query(`
-      SELECT id, ticker, signal, confidence, price, change_pct, entry_price, stop_loss,
-             target1, target2, target3, risk_reward, sector, market, currency, trade_type, timeframe, reason, generated_at
-      FROM signal_history ${whereClause}
-      ORDER BY generated_at DESC
-      LIMIT $${idx++} OFFSET $${idx}
-    `, dataParams);
-    res.json({ signals: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
+    const columns = `id, ticker, signal, confidence, price, change_pct, entry_price, stop_loss,
+           target1, target2, target3, risk_reward, sector, market, currency, trade_type, timeframe, reason, generated_at`;
+    if (latest) {
+      const countResult = await pool.query(`SELECT COUNT(*)::int as cnt FROM (SELECT DISTINCT ON (ticker) ticker FROM signal_history ${whereClause} ORDER BY ticker, generated_at DESC) t`, params);
+      const dataResult = await pool.query(`
+        SELECT * FROM (
+          SELECT DISTINCT ON (ticker) ${columns}
+          FROM signal_history ${whereClause}
+          ORDER BY ticker, generated_at DESC
+        ) sub ORDER BY generated_at DESC
+        LIMIT $${idx++} OFFSET $${idx}
+      `, dataParams);
+      res.json({ signals: dataResult.rows, total: countResult.rows[0].cnt, page, limit, latest });
+    } else {
+      const countResult = await pool.query(`SELECT COUNT(*)::int as cnt FROM signal_history ${whereClause}`, params);
+      const dataResult = await pool.query(`SELECT ${columns} FROM signal_history ${whereClause} ORDER BY generated_at DESC LIMIT $${idx++} OFFSET $${idx}`, dataParams);
+      res.json({ signals: dataResult.rows, total: countResult.rows[0].cnt, page, limit, latest });
+    }
   } catch (err) { console.error('Admin signals error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
