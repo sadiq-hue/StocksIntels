@@ -1,6 +1,8 @@
-// Signal Publisher - Background worker that generates signals and publishes via Redis (deploy trigger)
+// Signal Publisher - Background worker that publishes signals via Redis.
+// Signal generation is owned by signalService (hourly interval + 30-min stale
+// background refresh). This worker only republishes the current cached set so it
+// never triggers a guards-bypassing full regeneration every cycle.
 const { generateSignals } = require('./signalService');
-const { getQuotesBatch } = require('./marketService');
 const { connect, publishBatchSignalUpdate, publishSignalNotifications } = require('./queueService');
 const { pool } = require('./db');
 const engineConfig = require('./engineConfig');
@@ -20,23 +22,10 @@ function isMarketOpenNow() {
 function getSignalIntervalMs() {
   return engineConfig.getConfig().signalInterval || 300000;
 }
-const GLOBAL_SYMBOLS = [
-  'AAPL','MSFT','GOOGL','AMZN','NVDA','META','TSLA','JPM','V','NFLX',
-  'LLY','AVGO','UNH','XOM','PG','JNJ','WMT','CVX','HD','KO',
-  'PEP','COST','MRK','ABBV','BAC','TMO','ORCL','CSCO','ADBE','CRM',
-  'AMD','INTC','TXN','QCOM','AMGN','IBM','BA','GE','CAT','DIS',
-  'MCD','NKE','SBUX','GS','MS','C','WFC','BLK','SCHW','AXP',
-  'UPS','RTX','HON','LOW','MMM','MDT','AMAT','MU','NOW','UBER',
-  'ABNB','PLTR','SNOW','DDOG','CRWD','PANW','FTNT','SQ','PYPL','COIN',
-  'SPCX','NOK','SMCI','RKLB','RDW','ASTS','SATS','IREN','GRAB','PATH',
-  'MRVL','CPNG','NU','TTD','ITUB','CCL','SOUN','HPE','VALE','NIO',
-  'ARM','MSTR','ROKU','IONQ','HIMS','STLA','CAG','ACHR','PL',
-];
-
-const ALL_SYMBOLS = GLOBAL_SYMBOLS;
 
 let intervalHandle = null;
 let running = false;
+let lastRatings = new Map();
 
 async function generateAndPublish() {
   if (running) return;
@@ -51,33 +40,25 @@ async function generateAndPublish() {
 
     const startTime = Date.now();
 
-    // 1. Fetch live market data
-    const marketData = await getQuotesBatch(ALL_SYMBOLS);
+    // Pull the current cached signal set without forcing a regeneration cycle.
+    // quick=true returns the cache immediately (kicking the designed 30-min stale
+    // background refresh when needed) instead of running a full generation here.
+    const signals = await generateSignals(null, true);
+    if (!Array.isArray(signals) || signals.length === 0) return;
 
-    // 2. Build marketData map keyed by ticker as expected by generateSignals
-    const liveMarketData = {};
-    for (const [symbol, quote] of Object.entries(marketData)) {
-      const ticker = symbol.replace('NSE:', '');
-      liveMarketData[ticker] = {
-        price: quote.price,
-        changePercent: quote.changePercent,
-        volume: quote.volume,
-      };
-    }
+    // Publish the current set to Redis subscribers
+    await publishBatchSignalUpdate(signals);
+    console.log(`[SignalPublisher] Published ${signals.length} signals in ${Date.now() - startTime}ms`);
 
-    // 3. Generate signals using real market data
-    const signals = await generateSignals(liveMarketData);
-
-    // 4. Publish all signals via Redis
-    if (signals.length > 0) {
-      await publishBatchSignalUpdate(signals);
-      console.log(`[SignalPublisher] Published ${signals.length} signals in ${Date.now() - startTime}ms`);
-    }
-
-    // 5. Create notifications for important signal changes and publish via Redis
-    const notifications = await createSignalNotifications(signals);
-    if (notifications.length > 0) {
-      await publishSignalNotifications(notifications);
+    // Only notify when a ticker's rating actually changed. Without this every
+    // cycle inserts a duplicate notification for every user per significant signal.
+    const changedSignals = signals.filter(s => lastRatings.get(s.ticker) !== s.signal);
+    for (const s of signals) lastRatings.set(s.ticker, s.signal);
+    if (changedSignals.length > 0) {
+      const notifications = await createSignalNotifications(changedSignals);
+      if (notifications.length > 0) {
+        await publishSignalNotifications(notifications);
+      }
     }
 
   } catch (error) {

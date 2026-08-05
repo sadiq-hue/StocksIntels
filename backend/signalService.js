@@ -80,7 +80,7 @@ initNewsHistory().catch(() => {});
 let _signalsCache = null;
 let _signalsCacheTime = 0;
 let _signalsInProgress = false;
-const SIGNALS_CACHE_TTL = 60000; // 60 seconds
+const SIGNALS_CACHE_TTL = 30 * 60 * 1000; // 30 minutes (matches the quick-mode stale background refresh threshold)
 
 async function _persistSignalCache(signals) {
   try {
@@ -723,7 +723,12 @@ async function detectMarketRegime() {
 
   for (const etf of REGIME_ETFS) {
     try {
-      const prices = await getPriceHistory(etf);
+      // getPriceHistory only returns ~3 months of daily bars (< trendSlow=100),
+      // which made this branch always fail and silently fall through to the
+      // single-stock SCOM fallback. Fetch 6 months (~126 trading days) so the
+      // 100-day SMA checks actually run against the real index.
+      const bars = await fetchHistoricalQuotes(etf, '6mo', '1d');
+      const prices = bars && bars.length ? bars.filter(b => b && b.close != null).map(b => b.close) : null;
       if (prices && prices.length >= trendSlow) {
         const currentPrice = prices[prices.length - 1];
         const smaSlow = calculateSMA(prices, trendSlow);
