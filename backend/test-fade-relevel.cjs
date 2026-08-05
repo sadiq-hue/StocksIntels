@@ -3,7 +3,7 @@
 //  2) computeRelevelStop   - stop re-leveling to live market behavior
 // Run: node backend/test-fade-relevel.cjs
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-const { assessConvictionFade, computeRelevelStop, fadeCloseReason, staleThesisDaysFor, isLongTermHold, evaluateScoreClose, getLiveWinRate } = require('./signalService');
+const { assessConvictionFade, computeRelevelStop, fadeCloseReason, staleThesisDaysFor, isLongTermHold, evaluateScoreClose, fadeCloseBandReached, getLiveWinRate } = require('./signalService');
 
 let passed = 0, failed = 0;
 function check(name, actual, expected) {
@@ -203,53 +203,104 @@ const T0 = Date.now();
 const HOUR = 3600000;
 const freshPos = { action: 'buy', entryPrice: 100, stopLoss: 92, target1: 110, timestamp: T0, type: 'Swing Trade', fadeCount: 0 };
 
+// The min-age section pins the boundary to a 1h guard explicitly so the
+// mechanism is tested time-agnostically; the production default (6h) is covered
+// by the dedicated "default min-age" checks at the end of the section.
 check('5-min-old flip reading does NOT close (min-age guard)',
-  evaluateScoreClose(freshPos, 'sell', true, 102, T0 + 5 * 60000),
+  evaluateScoreClose(freshPos, 'sell', true, 102, T0 + 5 * 60000, HOUR),
   { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
 
 check('5-min-old fade reading does NOT close and does NOT accumulate confirmations',
-  evaluateScoreClose(freshPos, 'hold', true, 102, T0 + 5 * 60000),
+  evaluateScoreClose(freshPos, 'hold', true, 102, T0 + 5 * 60000, HOUR),
   { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
 
 check('5-min-old 2nd fade reading still suppressed (counter can never pre-load)',
-  evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 102, T0 + 5 * 60000),
+  evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 102, T0 + 5 * 60000, HOUR),
   { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
 
 check('5-min-old hold at/above target1 does NOT profit-fade (guard wins)',
-  evaluateScoreClose(freshPos, 'hold', true, 112, T0 + 5 * 60000),
+  evaluateScoreClose(freshPos, 'hold', true, 112, T0 + 5 * 60000, HOUR),
   { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
 
 check('exactly at the guard boundary is old enough (>= min age)',
-  evaluateScoreClose(freshPos, 'sell', true, 102, T0 + HOUR),
+  evaluateScoreClose(freshPos, 'sell', true, 102, T0 + HOUR, HOUR),
   { close: 'score flipped', fadeCount: 0, isFade: false, tooYoung: false, longTermHold: false });
 
 check('2h-old flip reading closes immediately',
-  evaluateScoreClose(freshPos, 'sell', true, 102, T0 + 2 * HOUR),
+  evaluateScoreClose(freshPos, 'sell', true, 102, T0 + 2 * HOUR, HOUR),
   { close: 'score flipped', fadeCount: 0, isFade: false, tooYoung: false, longTermHold: false });
 
 check('2h-old first fade reading waits for confirmation (1/2)',
-  evaluateScoreClose(freshPos, 'hold', true, 102, T0 + 2 * HOUR),
+  evaluateScoreClose(freshPos, 'hold', true, 102, T0 + 2 * HOUR, HOUR),
   { close: null, fadeCount: 1, isFade: true, tooYoung: false, longTermHold: false });
 
-check('2h-old 2nd consecutive fade reading closes (2/2)',
-  evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 102, T0 + 2 * HOUR),
+check('2h-old 2nd fade inside the move band (+2% < 2.5% bank min) does NOT close',
+  evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 102, T0 + 2 * HOUR, HOUR),
+  { close: null, fadeCount: 2, isFade: true, tooYoung: false, longTermHold: false });
+
+check('2h-old 2nd fade beyond the move band (+4% >= 2.5% bank min) closes',
+  evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 104, T0 + 2 * HOUR, HOUR),
   { close: 'conviction faded', fadeCount: 2, isFade: true, tooYoung: false, longTermHold: false });
 
 check('2h-old hold at/above target1 profit-fades on first reading',
-  evaluateScoreClose(freshPos, 'hold', true, 112, T0 + 2 * HOUR),
+  evaluateScoreClose(freshPos, 'hold', true, 112, T0 + 2 * HOUR, HOUR),
   { close: 'profit fade', fadeCount: 1, isFade: true, tooYoung: false, longTermHold: false });
 
 check('stale position (>30d) + hold -> stale thesis',
-  evaluateScoreClose({ ...freshPos, timestamp: T0 - 31 * DAY }, 'hold', true, 105, T0 + 2 * HOUR),
+  evaluateScoreClose({ ...freshPos, timestamp: T0 - 31 * DAY }, 'hold', true, 105, T0 + 2 * HOUR, HOUR),
   { close: 'stale thesis', fadeCount: 1, isFade: true, tooYoung: false, longTermHold: false });
 
 check('long-term hold type + old + flip -> still no score close (stop/target only)',
-  evaluateScoreClose({ ...freshPos, type: 'Long Term' }, 'sell', true, 102, T0 + 2 * HOUR),
+  evaluateScoreClose({ ...freshPos, type: 'Long Term' }, 'sell', true, 102, T0 + 2 * HOUR, HOUR),
   { close: null, fadeCount: 0, isFade: false, tooYoung: false, longTermHold: true });
 
 check('undefined position -> no close',
-  evaluateScoreClose(undefined, 'hold', true, 102, T0 + 2 * HOUR),
+  evaluateScoreClose(undefined, 'hold', true, 102, T0 + 2 * HOUR, HOUR),
   { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
+
+check('default min-age (6h): 4h-old 2nd fade does NOT close (too young)',
+  evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 104, T0 + 4 * HOUR),
+  { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
+
+check('default min-age (6h): 7h-old 2nd fade closes (band reached +4%)',
+  evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 104, T0 + 7 * HOUR),
+  { close: 'conviction faded', fadeCount: 2, isFade: true, tooYoung: false, longTermHold: false });
+
+// ─── fadeCloseBandReached (minimum-move band for fade closes) ─────────────
+section('fadeCloseBandReached (minimum-move band)');
+const bandPos = { action: 'buy', entryPrice: 100, stopLoss: 92, target1: 110 };
+const bandSell = { action: 'sell', entryPrice: 100, stopLoss: 108, target1: 90 };
+
+check('buy +2% (below 2.5% bank min) -> band NOT reached',
+  fadeCloseBandReached(bandPos, 102), false);
+
+check('buy +2.5% (exactly bank min) -> band reached',
+  fadeCloseBandReached(bandPos, 102.5), true);
+
+check('buy +4% -> band reached',
+  fadeCloseBandReached(bandPos, 104), true);
+
+check('buy -1% loss (inside band) -> NOT reached',
+  fadeCloseBandReached(bandPos, 99), false);
+
+check('buy at half stop distance (stop -8%, half -4%) -> reached',
+  fadeCloseBandReached(bandPos, 96), true);
+
+check('buy at 40% of stop distance (-3.2%) -> NOT reached',
+  fadeCloseBandReached(bandPos, 96.8), false);
+
+check('sell -4% (bank min 2.5%) -> band reached',
+  fadeCloseBandReached(bandSell, 96), true);
+
+check('sell +4% (half of +8% stop distance) -> band reached',
+  fadeCloseBandReached(bandSell, 104), true);
+
+check('sell +2% -> band NOT reached',
+  fadeCloseBandReached(bandSell, 102), false);
+
+check('no position / zero prices -> false',
+  [fadeCloseBandReached(null, 102), fadeCloseBandReached(bandPos, 0), fadeCloseBandReached({ ...bandPos, entryPrice: 0 }, 102)],
+  [false, false, false]);
 
 // ─── getLiveWinRate (mark-to-market win rate incl. open positions) ────────────
 section('getLiveWinRate (mark-to-market)');
