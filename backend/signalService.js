@@ -1444,10 +1444,18 @@ async function _getBenchmarkNow(symbol) {
 // Dynamic expiry by trade type (in milliseconds)
 // Conviction-fade exit: an open position is closed when its fresh all-conditions
 // analysis degrades to neutral (buy -> hold / sell -> hold) instead of flipping.
-// A fade is less decisive than a full flip, so it needs this many consecutive
-// trustworthy readings before it can close, keeping a single noisy re-scoring
-// pass from churning a still-valid position.
-const FADE_CLOSE_CONFIRMATIONS = 2;
+// A fade is less decisive than a full flip, so it needs FADE_CLOSE_CONFIRMATIONS
+// consecutive trustworthy readings SPANNING at least two distinct days before it
+// can close — a cluster of readings inside a single session can all come from one
+// bad data spell, so the streak must survive a day boundary (see
+// assessConvictionFade).
+const FADE_CLOSE_CONFIRMATIONS = 3;
+// Fade strength: the fresh composite score sits in the Hold band (production
+// thresholds: buy starts at 55, hold band is 30..54). A DEEP fade has fallen to
+// FADE_DEEP_SCORE or below (more than halfway toward Sell) and confirms at the
+// base count. A MARGINAL fade that merely crossed the buy/hold line (e.g. 61 -> 49
+// vs 50 -> 49) is a weaker signal and demands one extra confirmation.
+const FADE_DEEP_SCORE = 42;      // <= this: deep fade; 43..54: marginal fade
 // Score-based closes (flip or fade) are suppressed until a monitored position is at
 // least this old. The composite score sits right on the buy/hold boundary, so a
 // re-scoring pass can flicker Buy<->Hold/Sell within minutes of entry; closing at
@@ -1463,24 +1471,57 @@ const SCORE_CLOSE_MIN_AGE_MS = (Math.max(1, parseInt(process.env.SCORE_CLOSE_MIN
 // stop books the exit once target is touched), the stale-thesis cleanup, a full
 // flip, or its hard stop. The ONLY fade exit is the loss-side cut below: a loser
 // that has meaningfully failed toward its stop while conviction is gone is cut
-// early; the stop itself stays the final risk cap.
-const SCORE_CLOSE_CUT_FRACTION_OF_STOP = Math.max(0, Math.min(1, parseFloat(process.env.SCORE_CLOSE_CUT_FRACTION_OF_STOP || '0.5')));
+// early; the stop itself stays the final risk cap. The cut fires only once the
+// position has traveled 75% of the way to its hard stop (default
+// SCORE_CLOSE_CUT_FRACTION_OF_STOP) so a fading loser is given almost its full
+// risk budget before being yanked — the close is a failure exit, not a jitter.
+const SCORE_CLOSE_CUT_FRACTION_OF_STOP = Math.max(0, Math.min(1, parseFloat(process.env.SCORE_CLOSE_CUT_FRACTION_OF_STOP || '0.75')));
+// A fade cut also requires the position to be at least this far past entry in the
+// loss direction — a sub-noise move near entry is consolidation, not failure, so a
+// fading position inside this envelope rides instead of being yanked at ~breakeven.
+// With the 3% floor, a BOC-style tight-stop position (-3.4% stop) can only be cut
+// inside the -3%..-3.4% sliver: effectively the hard stop books those exits.
+const SCORE_CLOSE_CUT_MIN_PCT = Math.max(0, parseFloat(process.env.SCORE_CLOSE_CUT_MIN_PCT || '3'));
 // Re-leveling: while a long is monitored, the hard stop is re-derived from the
-// current price/ATR (never loosened) and ratchets to breakeven / locked gains as
-// price advances toward the target, so the open position tracks live behavior.
-const RELEVEL_BREAKEVEN_PROGRESS = 50; // % of target1 distance to move stop to entry
+// current price/ATR (never loosened) and capped so it NEVER climbs above the
+// entry zone until the stock is near its target. A rally that retraces to the
+// entry point (e.g. +10% up then back to entry) must not stop the position — the
+// stock can pump again. The stop rides below entry (entry minus the buffer)
+// through the whole pre-lock phase; only once progress crosses
+// RELEVEL_LOCK_PROGRESS does it start banking a locked share of the gain, and the
+// post-target trailing stop protects the final run.
+const RELEVEL_BREAKEVEN_BUFFER_PCT = parseFloat(process.env.RELEVEL_BREAKEVEN_BUFFER_PCT || '2'); // % below entry the pre-lock stop may approach (never above entry)
 const RELEVEL_LOCK_PROGRESS = 75;      // % of target1 distance to lock part of the gain
 const RELEVEL_LOCK_RATIO = 0.5;        // fraction of the open gain locked once lock progress is reached
 
 // ─── Pure decision helpers (unit-testable, used by processSymbol) ────────
 // Conviction-fade: classify whether an open position's fresh analysis no longer
 // supports its direction (buy -> hold / sell -> hold) but hasn't flipped. A fade
-// only counts on trustworthy data and needs FADE_CLOSE_CONFIRMATIONS consecutive
-// readings before the gate may close the position.
-function assessConvictionFade(prevAction, freshAction, eligibilityOk, prevFadeCount = 0) {
+// only counts on trustworthy data. To confirm, the streak needs
+// FADE_CLOSE_CONFIRMATIONS consecutive readings (one extra when the fade is
+// MARGINAL — score still high in the Hold band) AND the streak must span at least
+// two distinct days: a batch of readings inside a single session can all come from
+// one bad data spell, so the fade must survive a day boundary before the gate may
+// close the position.
+// Returns { isFade, fadeCount, fadeConfirmed, fadeFirstSeen, required } where
+// fadeFirstSeen is the timestamp of the first reading in the current streak (reset
+// with the counter) and required is the confirmation count this reading demanded.
+function assessConvictionFade(prevAction, freshAction, eligibilityOk, prevFadeCount = 0, prevFadeFirstSeen = null, now = Date.now(), freshScore = null) {
   const isFade = eligibilityOk && freshAction === 'hold' && (prevAction === 'buy' || prevAction === 'sell');
-  const fadeCount = isFade ? (prevFadeCount || 0) + 1 : 0;
-  return { isFade, fadeCount, fadeConfirmed: fadeCount >= FADE_CLOSE_CONFIRMATIONS };
+  let fadeCount, fadeFirstSeen;
+  if (isFade) {
+    fadeCount = (prevFadeCount || 0) + 1;
+    fadeFirstSeen = prevFadeFirstSeen || now;
+  } else {
+    fadeCount = 0;
+    fadeFirstSeen = null;
+  }
+  const deep = freshScore != null && freshScore <= FADE_DEEP_SCORE;
+  const required = isFade ? (FADE_CLOSE_CONFIRMATIONS + (deep ? 0 : 1)) : FADE_CLOSE_CONFIRMATIONS;
+  const spansTwoDays = fadeFirstSeen != null
+    && Math.floor(fadeFirstSeen / 86400000) !== Math.floor(now / 86400000);
+  const fadeConfirmed = fadeCount >= required && spansTwoDays;
+  return { isFade, fadeCount, fadeConfirmed, fadeFirstSeen, required };
 }
 
 // Long-term holds are closed ONLY by their stop/target (see the monitor gate);
@@ -1494,14 +1535,29 @@ function isLongTermHold(type) {
 // types are excluded (stop/target only). The wide-target regime can take weeks, so
 // these thresholds sit comfortably past the stated timeframes.
 const STALE_THESIS_DAYS = 30; // default (Swing Trade, Aggressive Buy, ...)
-function staleThesisDaysFor(type) {
+const STALE_THESIS_REF_RR = 3; // risk/reward that maps to the base window
+// Dynamic stale-thesis window. The base days are per trade type, but a stock's
+// expected move time scales with how far its target is relative to its stop
+// (risk/reward): a +30% target reached off a -5% stop legitimately takes far
+// longer than a +6% target off a -3% stop. The window is stretched by the
+// position's actual RR so a slow-moving wide-target trade is not called stale
+// (and force-closed on a fade) just because a fixed calendar number elapsed. The
+// window only ever grows from the type base — it never gets shorter.
+function staleThesisDaysFor(type, position = {}) {
+  let base = STALE_THESIS_DAYS;
   switch (type) {
-    case 'Day Trade': return 5;
-    case 'Momentum Trade': return 21;
+    case 'Day Trade': base = 5; break;
+    case 'Momentum Trade': base = 21; break;
     case 'Long Term': return Infinity;
     case 'Long Term Value': return Infinity;
-    default: return STALE_THESIS_DAYS;
+    default: base = STALE_THESIS_DAYS;
   }
+  const { entryPrice, stopLoss, target1 } = position;
+  if (entryPrice > 0 && stopLoss != null && stopLoss > 0 && target1 != null && target1 > entryPrice && stopLoss < entryPrice) {
+    const rr = (target1 - entryPrice) / (entryPrice - stopLoss);
+    base = Math.max(base, Math.round(base * (rr / STALE_THESIS_REF_RR)));
+  }
+  return base;
 }
 
 // Immediate-close reasons for a fresh conviction fade on an open position
@@ -1525,16 +1581,22 @@ function fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice) 
     if (progress >= 100) return 'profit fade';
   }
   const ageDays = prevOutcome.timestamp ? (Date.now() - prevOutcome.timestamp) / 86400000 : 0;
-  if (ageDays >= staleThesisDaysFor(type)) return 'stale thesis';
+  if (ageDays >= staleThesisDaysFor(type, prevOutcome)) return 'stale thesis';
   return null;
 }
 
 // Fade-cut threshold: whether a fading position has a REALIZED LOSS big enough to
 // justify an early exit. Winners and flat positions always return false — a stock
 // that is up (or merely consolidating around entry) is given time to reach its
-// target. Only a loser that has traveled SCORE_CLOSE_CUT_FRACTION_OF_STOP of the
-// way to its hard stop is cut by a fade (the stop itself remains the final cap).
-// A full flip (buy -> sell) and the stale-thesis path close regardless of move.
+// target. Only a loser that has traveled SCORE_CLOSE_CUT_FRACTION_OF_STOP (75% by
+// default) of the way to its hard stop is cut by a fade (the stop itself remains
+// the final cap). The move must also clear SCORE_CLOSE_CUT_MIN_PCT (3% default) —
+// a sub-noise dip near entry is consolidation, and with re-leveling (pre-lock stop
+// capped at entry minus the buffer) the stop distance can shrink, which would
+// otherwise shrink the cut closer to breakeven; the floor keeps a fading position
+// from being yanked at ~1% moves (BOC/EABL were closed at -1.1%/+1.2% by older
+// logic). A full flip (buy -> sell) and the stale-thesis path close regardless of
+// move.
 function fadeCutReached(prevOutcome, currentPrice) {
   if (!prevOutcome || !(prevOutcome.entryPrice > 0) || !(currentPrice > 0)) return false;
   const entry = prevOutcome.entryPrice;
@@ -1542,12 +1604,12 @@ function fadeCutReached(prevOutcome, currentPrice) {
   const stop = prevOutcome.stopLoss;
   if (prevOutcome.action !== 'buy') {
     if (stop != null && stop > 0 && stop > entry) {
-      return pctMove >= (((stop - entry) / entry) * 100) * SCORE_CLOSE_CUT_FRACTION_OF_STOP;
+      return pctMove >= Math.max(((stop - entry) / entry) * 100 * SCORE_CLOSE_CUT_FRACTION_OF_STOP, SCORE_CLOSE_CUT_MIN_PCT);
     }
     return false;
   }
   if (stop != null && stop > 0 && stop < entry) {
-    return pctMove <= -(((entry - stop) / entry) * 100) * SCORE_CLOSE_CUT_FRACTION_OF_STOP;
+    return pctMove <= -Math.max(((entry - stop) / entry) * 100 * SCORE_CLOSE_CUT_FRACTION_OF_STOP, SCORE_CLOSE_CUT_MIN_PCT);
   }
   return false;
 }
@@ -1557,47 +1619,62 @@ function fadeCutReached(prevOutcome, currentPrice) {
 // minimum-age guard into a single testable decision (see test-fade-relevel.cjs).
 // 'conviction faded' only fires on a REALIZED LOSS (see fadeCutReached) — a fading
 // winner/flat position is given time to reach its target instead of being yanked.
+// freshScore is the current composite score (0-100); it grades the fade as deep
+// (<= FADE_DEEP_SCORE, base confirmations) or marginal (one extra confirmation).
 // Returns:
 //   close         - null (keep monitoring) or a close reason string:
 //                   'score flipped' | 'profit fade' | 'stale thesis' | 'conviction faded'
 //   fadeCount     - next fade counter (0 while the min-age guard suppresses it)
+//   fadeFirstSeen - timestamp of the first reading in the current fade streak
+//   required      - confirmations this reading demands (for logging)
 //   isFade        - a fade reading occurred this cycle (for logging)
 //   tooYoung      - position is still under the min-age guard
 //   longTermHold  - long-term type (score closes permanently disabled)
-function evaluateScoreClose(prevOutcome, freshAction, eligibilityOk, currentPrice, now = Date.now(), minAgeMs = SCORE_CLOSE_MIN_AGE_MS) {
-  if (!prevOutcome) return { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false };
+function evaluateScoreClose(prevOutcome, freshAction, eligibilityOk, currentPrice, now = Date.now(), minAgeMs = SCORE_CLOSE_MIN_AGE_MS, freshScore = null) {
+  if (!prevOutcome) return { close: null, fadeCount: 0, fadeFirstSeen: null, required: FADE_CLOSE_CONFIRMATIONS, isFade: false, tooYoung: true, longTermHold: false };
   const prevAction = prevOutcome.action;
   const longTermHold = isLongTermHold(prevOutcome.type);
   const allowScoreClose = !longTermHold;
   const tooYoung = prevOutcome.timestamp ? (now - prevOutcome.timestamp) < minAgeMs : true;
   const scoreCloseAllowed = allowScoreClose && !tooYoung;
   const isFlip = eligibilityOk && scoreCloseAllowed && ((prevAction === 'buy' && freshAction === 'sell') || (prevAction === 'sell' && freshAction === 'buy'));
-  const { isFade, fadeCount, fadeConfirmed } = scoreCloseAllowed
-    ? assessConvictionFade(prevAction, freshAction, eligibilityOk, prevOutcome.fadeCount)
-    : { isFade: false, fadeCount: 0, fadeConfirmed: false };
+  const { isFade, fadeCount, fadeConfirmed, fadeFirstSeen, required } = scoreCloseAllowed
+    ? assessConvictionFade(prevAction, freshAction, eligibilityOk, prevOutcome.fadeCount, prevOutcome.fadeFirstSeen, now, freshScore)
+    : { isFade: false, fadeCount: 0, fadeConfirmed: false, fadeFirstSeen: null, required: FADE_CLOSE_CONFIRMATIONS };
   const fadeReason = scoreCloseAllowed && isFade ? fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice) : null;
   let close = null;
   if (isFlip) close = 'score flipped';
   else if (fadeReason) close = fadeReason;
   else if (isFade && fadeConfirmed && fadeCutReached(prevOutcome, currentPrice)) close = 'conviction faded';
-  return { close, fadeCount, isFade, tooYoung, longTermHold };
+  return { close, fadeCount, fadeFirstSeen, required, isFade, tooYoung, longTermHold };
 }
 
 // Re-level: derive the new hard stop for a monitored long from the fresh ATR stop
-// (never loosening it) with breakeven / locked-gain floors as price advances toward
-// target1. Returns changed=false when the new stop isn't a real improvement or
-// would sit at/above the market price.
+// (never loosening it) with a below-entry pre-lock cap and a locked-gain floor as
+// price advances toward target1. Through the whole pre-lock phase the stop tightens
+// only as far as entry minus RELEVEL_BREAKEVEN_BUFFER_PCT, so a rally that retraces
+// to (or just past) entry keeps the position alive for a second leg instead of
+// stopping it at ~0%. Once progress crosses RELEVEL_LOCK_PROGRESS the stop starts
+// banking RELEVEL_LOCK_RATIO of the open gain; an already-raised stop is never
+// loosened if price later retraces below lock. Returns changed=false when the new
+// stop isn't a real improvement or would sit at/above the market price.
 function computeRelevelStop(position, currentPrice, freshStopLoss) {
   const { entryPrice, stopLoss, target1 } = position || {};
   if (freshStopLoss == null || currentPrice <= 0 || entryPrice <= 0 || !(target1 > entryPrice)) {
     return { newStop: stopLoss, changed: false, progress: 0 };
   }
   const progress = ((currentPrice - entryPrice) / (target1 - entryPrice)) * 100;
+  const breakevenCap = entryPrice - (entryPrice * RELEVEL_BREAKEVEN_BUFFER_PCT) / 100;
   let newStop = stopLoss;
   // Math.max can only tighten, never loosen, the hard stop.
   newStop = Math.max(newStop, freshStopLoss);
-  if (progress >= RELEVEL_BREAKEVEN_PROGRESS) newStop = Math.max(newStop, entryPrice);
-  if (progress >= RELEVEL_LOCK_PROGRESS) newStop = Math.max(newStop, entryPrice + (currentPrice - entryPrice) * RELEVEL_LOCK_RATIO);
+  if (progress >= RELEVEL_LOCK_PROGRESS) {
+    newStop = Math.max(newStop, entryPrice + (currentPrice - entryPrice) * RELEVEL_LOCK_RATIO);
+  } else if (stopLoss != null && stopLoss <= breakevenCap) {
+    // Pre-lock: tighten toward entry but never above entry minus the buffer. A stop
+    // already raised past the cap by a prior lock phase is left exactly where it is.
+    newStop = Math.min(newStop, breakevenCap);
+  }
   newStop = Math.round(newStop * 100) / 100;
   const changed = newStop > (stopLoss || 0) && newStop < currentPrice;
   return { newStop, changed, progress };
@@ -3027,11 +3104,12 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         // Score-based close verdict (flip / profit-fade / stale-thesis / conviction
         // fade) with the minimum-age guard and fade-confirmation rules — extracted
         // as a pure helper so this decision is unit-verifiable (test-fade-relevel.cjs).
-        const sc = evaluateScoreClose(prevOutcome, sigObj.action, eligibility.ok, currentPrice);
+        const sc = evaluateScoreClose(prevOutcome, sigObj.action, eligibility.ok, currentPrice, Date.now(), SCORE_CLOSE_MIN_AGE_MS, sigObj.analysis?.overall?.score);
         prevOutcome.fadeCount = sc.fadeCount;
+        prevOutcome.fadeFirstSeen = sc.fadeFirstSeen;
         if (!sc.close) {
           emitSignal = false;
-          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${sc.isFade ? ` (conviction fading ${sc.fadeCount}/${FADE_CLOSE_CONFIRMATIONS})` : ''}${sc.longTermHold ? ' [long-term hold: score-based close disabled]' : ''}${sc.tooYoung && !sc.longTermHold ? ` [min-age guard: ${Math.max(0, Math.round((SCORE_CLOSE_MIN_AGE_MS - (Date.now() - prevOutcome.timestamp)) / 60000))}m remaining]` : ''}`);
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${sc.isFade ? ` (conviction fading ${sc.fadeCount}/${sc.required})` : ''}${sc.longTermHold ? ' [long-term hold: score-based close disabled]' : ''}${sc.tooYoung && !sc.longTermHold ? ` [min-age guard: ${Math.max(0, Math.round((SCORE_CLOSE_MIN_AGE_MS - (Date.now() - prevOutcome.timestamp)) / 60000))}m remaining]` : ''}`);
         } else if (marketOpen) {
           // Score-based close at market: the full analysis flipped direction against
           // the open position, its conviction faded to neutral on consecutive
@@ -3119,12 +3197,14 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     }
     // Re-level open positions to current market behavior: while a long is being
     // monitored on trustworthy data during a live session, re-derive the hard stop
-    // from the current price/ATR (only ever tightening it, never loosening), and
-    // ratchet it to breakeven / locked-gain floors as price advances toward the
-    // target. This keeps the open position's risk geometry in sync with live
-    // volatility and price action instead of freezing the entry-cycle levels
-    // forever. The tighter stop is persisted to the open signal_history row so a
-    // restart re-arms it instead of falling back to the original entry-cycle stop.
+    // from the current price/ATR (only ever tightening it, never loosening), with
+    // the pre-lock stop capped below entry (entry minus the buffer) and locked-gain
+    // floors only once progress nears the target. This keeps the open position's
+    // risk geometry in sync with live volatility and price action instead of
+    // freezing the entry-cycle levels forever, while a +X% rally that retraces to
+    // entry rides the below-entry stop instead of stopping at ~0%. The tighter stop
+    // is persisted to the open signal_history row so a restart re-arms it instead
+    // of falling back to the original entry-cycle stop.
     const relevelTarget = _signalOutcomes.get(symbol);
     if (relevelTarget && !relevelTarget.result && relevelTarget.action === 'buy'
         && eligibility.ok && marketOpen && currentPrice > 0
