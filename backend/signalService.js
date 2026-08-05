@@ -2105,7 +2105,7 @@ function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0 } 
       if (p.generatedAt && (now - p.generatedAt) > maxAge) continue;
       if (symbol && sym !== symbol) continue;
       if (resolved !== undefined && p.resolved !== resolved) continue;
-      all.push({ symbol: sym, ...p, generatedAt: new Date(p.generatedAt).toISOString(), resolvedAt: p.resolvedAt ? new Date(p.resolvedAt).toISOString() : null });
+      all.push({ symbol: sym, ...p, currency: NSE_SYMBOLS.includes(sym) ? 'KES' : 'USD', generatedAt: new Date(p.generatedAt).toISOString(), resolvedAt: p.resolvedAt ? new Date(p.resolvedAt).toISOString() : null });
     }
   }
   all.sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt));
@@ -2432,6 +2432,7 @@ function getLiveWinRate(signalOutcomes = _signalOutcomes, lastKnownPrices = _las
     if (mtmWin) openWins++; else openLosses++;
     openPositions.push({
       symbol, action: pos.action, entryPrice: pos.entryPrice, lastPrice: price,
+      currency: NSE_SYMBOLS.includes(symbol) ? 'KES' : 'USD',
       mtm: mtmWin ? 'win' : 'loss',
       unrealizedPct: Math.round(((price - pos.entryPrice) / pos.entryPrice) * 1000) / 10,
     });

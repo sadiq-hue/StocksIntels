@@ -5342,8 +5342,8 @@ async function fetchEngineHealth() {
               <tr style="border-top:1px solid #f3f4f6">
                 <td style="padding:8px 10px;font-weight:500">${p.symbol}</td>
                 <td style="padding:8px 10px;color:#6b7280;text-transform:capitalize">${p.action}</td>
-                <td style="padding:8px 10px;text-align:right;color:#6b7280">$${Number(p.entryPrice).toFixed(2)}</td>
-                <td style="padding:8px 10px;text-align:right;color:#6b7280">$${Number(p.lastPrice).toFixed(2)}</td>
+                <td style="padding:8px 10px;text-align:right;color:#6b7280">${p.currency === 'KES' ? 'KES ' : '$'}${Number(p.entryPrice).toFixed(2)}</td>
+                <td style="padding:8px 10px;text-align:right;color:#6b7280">${p.currency === 'KES' ? 'KES ' : '$'}${Number(p.lastPrice).toFixed(2)}</td>
                 <td style="padding:8px 10px;text-align:right;font-weight:500;color:${p.unrealizedPct >= 0 ? '#059669' : '#dc2626'}">${p.unrealizedPct >= 0 ? '+' : ''}${Number(p.unrealizedPct).toFixed(2)}%</td>
                 <td style="padding:8px 10px;text-align:right"><span style="font-size:11px;font-weight:600;text-transform:uppercase;color:${p.mtm === 'win' ? '#059669' : '#dc2626'}">${p.mtm}</span></td>
               </tr>

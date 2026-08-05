@@ -33,7 +33,7 @@ interface ForwardTestStats {
 
 interface ForwardPrediction {
   symbol: string; signal: string; confidence: number; price: number;
-  generatedAt: string; resolved: boolean; actualReturn: number | null; correct: boolean | null;
+  currency?: string; generatedAt: string; resolved: boolean; actualReturn: number | null; correct: boolean | null;
 }
 
 interface AuditEntry {
@@ -62,7 +62,7 @@ interface EngineHealth {
 interface WinRateSlice { total: number; wins: number; losses: number; winRate: number; }
 interface LiveOpenPosition {
   symbol: string; action: string; entryPrice: number; lastPrice: number;
-  mtm: "win" | "loss"; unrealizedPct: number;
+  currency?: string; mtm: "win" | "loss"; unrealizedPct: number;
 }
 interface LiveWinRate {
   resolved: WinRateSlice; open: WinRateSlice; combined: WinRateSlice;
@@ -387,8 +387,8 @@ function ForwardTestPanel() {
                   <tr key={p.symbol} className="border-b border-border hover:bg-accent">
                     <td className="py-2 px-3 font-medium text-foreground">{p.symbol}</td>
                     <td className="py-2 px-3 capitalize text-muted-foreground">{p.action}</td>
-                    <td className="py-2 px-3 text-right text-muted-foreground">${p.entryPrice.toFixed(2)}</td>
-                    <td className="py-2 px-3 text-right text-muted-foreground">${p.lastPrice.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right text-muted-foreground">{p.currency === 'KES' ? 'KES ' : '$'}{p.entryPrice.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right text-muted-foreground">{p.currency === 'KES' ? 'KES ' : '$'}{p.lastPrice.toFixed(2)}</td>
                     <td className={`py-2 px-3 text-right font-medium ${p.unrealizedPct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                       {p.unrealizedPct >= 0 ? "+" : ""}{p.unrealizedPct.toFixed(2)}%
                     </td>
@@ -535,7 +535,7 @@ function ForwardTestPanel() {
                     </Badge>
                   </td>
                   <td className="py-2 px-3 text-right text-muted-foreground">{p.confidence}%</td>
-                  <td className="py-2 px-3 text-right text-muted-foreground">${p.price?.toFixed(2)}</td>
+                  <td className="py-2 px-3 text-right text-muted-foreground">{p.currency === 'KES' ? 'KES ' : '$'}{p.price?.toFixed(2)}</td>
                   <td className={`py-2 px-3 text-right font-medium ${p.actualReturn !== null ? (p.actualReturn > 0 ? "text-emerald-600" : "text-red-600") : "text-muted-foreground"}`}>
                     {p.actualReturn !== null ? `${p.actualReturn > 0 ? "+" : ""}${p.actualReturn.toFixed(1)}%` : "—"}
                   </td>
