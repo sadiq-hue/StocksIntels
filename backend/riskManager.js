@@ -39,6 +39,13 @@ const TRADE_TYPE_STOP_MULT = {
   'Long Term Value': 3,
   'Long Term': 3,
 };
+// Minimum stop distance (fraction of price). A pure ATR-scaled stop on a calm
+// stock can shrink to ~2% (1% daily range x 2x), which is only two days of
+// ordinary noise — one bad day or a small gap stops it out on noise, not thesis
+// failure. The floor keeps the stop (and the 3x targets it sizes) at a realistic
+// distance from entry, and the re-level pre-lock cap respects the same floor so
+// live monitoring never tightens a calm stock's stop back into the noise.
+const MIN_STOP_PCT = 0.05;
 // Target multiples keep a wide risk-reward profile at any stop width: the
 // investor holds for the long term (weeks to months), so T1/T2/T3 are sized at
 // 3x / 5x / 8x the stop distance instead of the old tight ~1.33x / ~2.33x.
@@ -49,15 +56,15 @@ const TARGET3_MULT = 8;
 
 function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = 0.05, tradeType = 'Swing Trade') {
   const volatility = calculateATR(priceHistory);
-  const atr = currentPrice * volatility;
   const mult = TRADE_TYPE_STOP_MULT[tradeType] || 1.5;
+  const baseDistancePct = Math.max(volatility * mult, MIN_STOP_PCT);
   let entry, stopLoss, target1, target2, target3;
   if (signal.action === 'buy') {
     entry = currentPrice;
-    stopLoss = currentPrice - (atr * mult);
-    target1 = currentPrice + (atr * mult * TARGET1_MULT);
-    target2 = currentPrice + (atr * mult * TARGET2_MULT);
-    target3 = currentPrice + (atr * mult * TARGET3_MULT);
+    stopLoss = currentPrice - (currentPrice * baseDistancePct);
+    target1 = currentPrice + (currentPrice * baseDistancePct * TARGET1_MULT);
+    target2 = currentPrice + (currentPrice * baseDistancePct * TARGET2_MULT);
+    target3 = currentPrice + (currentPrice * baseDistancePct * TARGET3_MULT);
   } else if (signal.action === 'sell') {
     // Exit/avoid semantics: a Sell is a rating ("the fundamentals/technical/
     // financial/sentiment no longer support holding"), not a mirrored short
@@ -77,8 +84,9 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
   // Cap stop distance at 2x the base stop, but never more than 15% of price so a
   // high-ATR name can't produce an absurd 45% stop. The 15% ceiling lets genuinely
   // volatile names keep a workable stop instead of clamping them to the flat 5%
-  // fallback width.
-  const maxStopDistance = Math.min(currentPrice * volatility * mult * 2, currentPrice * 0.15);
+  // fallback width. Sizing the cap off the floored base distance keeps the 5%
+  // minimum stop intact for calm names.
+  const maxStopDistance = Math.min(currentPrice * baseDistancePct * 2, currentPrice * 0.15);
   if (signal.action === 'buy') {
     stopLoss = Math.max(stopLoss, currentPrice - maxStopDistance);
   } else if (signal.action === 'sell') {
@@ -268,6 +276,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
 }
 
 module.exports = {
+  MIN_STOP_PCT,
   calculatePositionSize,
   calculateKellyPositionSize,
   calculateTradeLevels,

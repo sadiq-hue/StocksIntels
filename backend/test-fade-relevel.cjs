@@ -134,21 +134,21 @@ check('entry <= 0 guard -> no change',
   computeRelevelStop({ entryPrice: 0, stopLoss: 92, target1: 110 }, 102, 95),
   { newStop: 92, changed: false, progress: 0 });
 
-check('pre-lock stop never ratchets above entry minus ATR-scaled buffer (fresh 99 capped at 96.7)',
+check('pre-lock stop never ratchets above entry minus the 5% floor (fresh 99 capped at 95)',
   computeRelevelStop(pos, 106, 99),
-  { newStop: 96.7, changed: true, progress: 60 });
+  { newStop: 95, changed: true, progress: 60 });
 
-check('wide fresh ATR stop widens the pre-lock cap (buffer scales with volatility)',
-  computeRelevelStop(pos, 106, 97),
-  { newStop: 95.75, changed: true, progress: 60 });
+check('extreme-volatility fresh stop scales the pre-lock cap above the 5% floor (fresh 95 -> cap 94.39)',
+  computeRelevelStop(pos, 107, 95),
+  { newStop: 94.39, changed: true, progress: 70 });
 
-check('calm name with a nearly-breakeven fresh stop is still held at the 2% floor (cap 98)',
+check('calm name with a nearly-breakeven fresh stop is held at the 5% floor (cap 95)',
   computeRelevelStop(pos, 102, 99.5),
-  { newStop: 98, changed: true, progress: 20 });
+  { newStop: 95, changed: true, progress: 20 });
 
-check('the +10% rally then dip-to-entry scenario keeps the stop below entry (98), position alive',
+check('the +10% rally then dip-to-entry scenario keeps the stop below entry (95), position alive',
   computeRelevelStop(pos, 100, 98),
-  { newStop: 98, changed: true, progress: 0 });
+  { newStop: 95, changed: true, progress: 0 });
 
 check('stop already at the cap does not churn when price retraces to entry',
   computeRelevelStop({ entryPrice: 100, stopLoss: 98, target1: 110 }, 100, 97),

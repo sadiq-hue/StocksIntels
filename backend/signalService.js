@@ -15,7 +15,7 @@ const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL
 const financialReportsService = require('./financialReportsService');
 const edgarService = require('./edgarService');
 const { getEffectiveSectorPE, getGrade, determineSignal, determineTradeType, getSectorMacroAdjustment, analyzeFundamentals, analyzeTechnicals, analyzeFinancials, generateReason } = require('./analysisEngine');
-const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
+const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, MIN_STOP_PCT, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
 const mlModel = require('./mlSignalModel');
 const engineConfig = require('./engineConfig');
 const { trackSignalQuality, logHealth, detectSignalDrift, getQualityScore } = require('./monitorService');
@@ -1674,12 +1674,14 @@ function computeRelevelStop(position, currentPrice, freshStopLoss) {
   // rally, and a normal pullback then stops a position that would have recovered
   // (dip-and-rally names get yanked at ~breakeven). The buffer is at least
   // RELEVEL_BREAKEVEN_BUFFER_PCT and never smaller than
-  // RELEVEL_BREAKEVEN_BUFFER_ATR_FRACTION of the fresh ATR stop distance, so the
-  // stop always rides comfortably below entry through the whole pre-lock phase.
+  // RELEVEL_BREAKEVEN_BUFFER_ATR_FRACTION of the fresh ATR stop distance, and it
+  // also respects the MIN_STOP_PCT floor — a calm stock's stop is never tightened
+  // closer to entry than the floor, so monitoring can't undo the initial stop
+  // width that gave it a fair chance.
   const freshStopDistancePct = freshStopLoss != null && currentPrice > 0 && freshStopLoss < currentPrice
     ? ((currentPrice - freshStopLoss) / currentPrice) * 100
     : 0;
-  const breakevenCap = entryPrice - (entryPrice * Math.max(RELEVEL_BREAKEVEN_BUFFER_PCT, freshStopDistancePct * RELEVEL_BREAKEVEN_BUFFER_ATR_FRACTION)) / 100;
+  const breakevenCap = entryPrice - (entryPrice * Math.max(RELEVEL_BREAKEVEN_BUFFER_PCT, MIN_STOP_PCT * 100, freshStopDistancePct * RELEVEL_BREAKEVEN_BUFFER_ATR_FRACTION)) / 100;
   let newStop = stopLoss;
   // Math.max can only tighten, never loosen, the hard stop.
   newStop = Math.max(newStop, freshStopLoss);
