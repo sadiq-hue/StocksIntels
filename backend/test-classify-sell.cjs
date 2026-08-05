@@ -392,17 +392,75 @@ check('relative: stock -4% vs bench -1% -> correct (fell, exit gate)',
 check('relative: stock +4% vs bench +8% -> correct (rose but lagged by >3%)',
   rel(100, 104, 0.08).correct, true);
 
-check('relative: stock +4% vs bench +2% -> incorrect (beat market)',
-  rel(100, 104, 0.02).correct, false);
+check('relative: stock +4% vs bench +2% -> deferred (beat by 2% < relMove 3%, no day-one verdict)',
+  rel(100, 104, 0.02).resolved, false);
 
 check('relative: stock +4% with no bench -> incorrect (absolute fallback)',
   evaluateSellRelative({ price: 100, benchPrice: null }, 104, null).correct, false);
+
+check('relative: knife-edge +2.1% vs bench +0.5% -> deferred (tick noise, no verdict)',
+  rel(100, 102.1, 0.005).resolved, false);
+
+check('relative: +2.5% vs bench +0.5% -> deferred (lag -2% < relMove 3%)',
+  rel(100, 102.5, 0.005).resolved, false);
+
+check('relative: decisive rise but bench feed hiccuped -> deferred, not wrong by guess',
+  evaluateSellRelative({ price: 100, benchPrice: 100 }, 104, null).resolved, false);
 
 check('relative: stock +2.5% vs bench +5.5% -> correct (lag exactly 3%)',
   rel(100, 102.5, 0.055).correct, true);
 
 check('relative: stock +2% vs bench +5% -> correct (decisive rise but lagged)',
   rel(100, 102, 0.05).correct, true);
+
+check('relative: stock +4% vs bench +1% -> incorrect (beat market by 3% = relMove)',
+  rel(100, 104, 0.01).correct, false);
+
+// The deferred knife-edge cases land a verdict at the 5-day horizon.
+check('horizon: deferred +4% vs bench +2% -> incorrect after horizon',
+  horiz(100, 104, 0.02).correct, false);
+
+check('horizon: deferred +2.1% vs bench +0.5% -> incorrect (beat market over horizon)',
+  horiz(100, 102.1, 0.005).correct, false);
+
+check('horizon: +2.5% vs bench +2.0% -> neutral (within tolerance 1%)',
+  horiz(100, 102.5, 0.02).correct, null);
+
+check('horizon: +4% vs bench +4.5% -> neutral (within tolerance 1%)',
+  horiz(100, 104, 0.045).correct, null);
+
+check('horizon: bench captured but live bench missing -> neutral (cannot judge)',
+  evaluateSellAtHorizon({ price: 100, benchPrice: 100 }, 104, null).correct, null);
+
+// ─── Live-feed fundamental sanitization (sanitizeLiveFundamentals) ───
+// The financial reports feed sometimes ships misaligned-quarter artifacts (e.g.
+// AAPL "revenue -38.7%" / "D/E 6.08") that would manufacture sell evidence.
+const { sanitizeLiveFundamentals } = signalService;
+
+check('sanitize: garbage live revenue falls back to baseline',
+  sanitizeLiveFundamentals({ revenueGrowth: 8.2, debtToEquity: 1.5 }, { revenueGrowth: -38.7, debtToEquity: 6.08 }).revenueGrowth, 8.2);
+
+check('sanitize: garbage live D/E falls back to baseline',
+  sanitizeLiveFundamentals({ revenueGrowth: 8.2, debtToEquity: 1.5 }, { revenueGrowth: -38.7, debtToEquity: 6.08 }).debtToEquity, 1.5);
+
+check('sanitize: sane live values pass through unchanged',
+  JSON.stringify([sanitizeLiveFundamentals({ revenueGrowth: 8.2, debtToEquity: 1.5 }, { revenueGrowth: 12.5, debtToEquity: 1.8 }).revenueGrowth, sanitizeLiveFundamentals({ revenueGrowth: 8.2, debtToEquity: 1.5 }, { revenueGrowth: 12.5, debtToEquity: 1.8 }).debtToEquity]),
+  JSON.stringify([12.5, 1.8]));
+
+check('sanitize: no baseline + implausible live revenue -> dropped to null',
+  sanitizeLiveFundamentals({}, { revenueGrowth: -84 }).revenueGrowth, null);
+
+check('sanitize: no baseline + plausible live revenue passes',
+  sanitizeLiveFundamentals({}, { revenueGrowth: 120.5 }).revenueGrowth, 120.5);
+
+check('sanitize: D/E beyond 5 with no baseline -> dropped to null',
+  sanitizeLiveFundamentals({}, { debtToEquity: 6.08 }).debtToEquity, null);
+
+check('sanitize: absent live metrics keep baseline untouched',
+  sanitizeLiveFundamentals({ revenueGrowth: 8.2, debtToEquity: 1.5 }, {}).revenueGrowth, 8.2);
+
+check('sanitize: null live input returns stock unchanged',
+  sanitizeLiveFundamentals({ revenueGrowth: 8.2 }, null).revenueGrowth, 8.2);
 
 // ─── Absolute evaluator dispatch (evaluateForwardPrediction) ───
 // Decisive up-move WITH a benchmark must stay pending so the benchmark-relative

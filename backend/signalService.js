@@ -1818,16 +1818,26 @@ function evaluateForwardPrediction(pred, currentPrice, th = DEFAULT_SELL_THRESHO
 // against holding the market: a stock that underperformed its benchmark by
 // th.relMove validates the exit, one that outperformed it while rising
 // refutes it. Missing benchmark data falls back to absolute evaluation.
+//
+// Benchmark-first: a decisive rise is only "incorrect" when the stock also
+// beat the market by th.relMove — a knife-edge +2-3% pop on a flat tape is NOT
+// a verdict, so it stays pending and defers to the horizon (evaluateSellAtHorizon)
+// instead of manufacturing a wrong rating on day one. When a benchmark was
+// captured at rating time but the live benchmark feed hiccups, hold rather than
+// guess with the absolute path.
 function evaluateSellRelative(pred, currentPrice, benchReturn, th = DEFAULT_SELL_THRESHOLDS) {
   const stockReturn = (currentPrice - pred.price) / pred.price;
   const actualReturn = Math.round(stockReturn * 1000) / 10;
-  const hasBench = benchReturn != null && pred.benchPrice != null && pred.benchPrice > 0;
+  const benchCaptured = pred.benchPrice != null && pred.benchPrice > 0;
+  const hasBench = benchReturn != null && benchCaptured;
   if (stockReturn <= -th.exitMove) return { resolved: true, correct: true, actualReturn };
   if (stockReturn >= th.exitMove) {
-    if (!hasBench) return { resolved: true, correct: false, actualReturn };
+    if (!benchCaptured) return { resolved: true, correct: false, actualReturn };
+    if (!hasBench) return { resolved: false }; // bench captured but the live feed hiccuped — hold
     const lag = benchReturn - stockReturn;
-    if (lag >= th.relMove) return { resolved: true, correct: true, actualReturn }; // rose but lagged the market
-    return { resolved: true, correct: false, actualReturn };
+    if (lag >= th.relMove) return { resolved: true, correct: true, actualReturn }; // rose but lagged the market decisively
+    if (lag <= -th.relMove) return { resolved: true, correct: false, actualReturn }; // rose AND beat the market decisively
+    return { resolved: false }; // knife-edge rise vs a flat/similar market — defer to the horizon
   }
   if (!hasBench) return { resolved: false };
   const lag = benchReturn - stockReturn;
@@ -1842,17 +1852,15 @@ function evaluateSellRelative(pred, currentPrice, benchReturn, th = DEFAULT_SELL
 // under- or outperformed its benchmark by more than th.horizonTolerance over
 // the horizon resolves the rating (avoid was right / wrong); within tolerance
 // on both legs it's a neutral (the exit neither helped nor hurt — nothing
-// moved). Missing benchmark data falls back to the absolute return.
+// moved). Missing benchmark data falls back to the absolute return; a captured
+// benchmark with no live value at the horizon resolves neutral (cannot judge).
 function evaluateSellAtHorizon(pred, currentPrice, benchReturn, th = DEFAULT_SELL_THRESHOLDS) {
   const stockReturn = (currentPrice - pred.price) / pred.price;
   const actualReturn = Math.round(stockReturn * 1000) / 10;
-  const hasBench = benchReturn != null && pred.benchPrice != null && pred.benchPrice > 0;
+  const benchCaptured = pred.benchPrice != null && pred.benchPrice > 0;
+  const hasBench = benchReturn != null && benchCaptured;
   if (stockReturn <= -th.exitMove) return { resolved: true, correct: true, actualReturn };
-  if (stockReturn >= th.exitMove) {
-    if (!hasBench) return { resolved: true, correct: false, actualReturn };
-    const lag = benchReturn - stockReturn;
-    return { resolved: true, correct: lag >= th.relMove, actualReturn };
-  }
+  if (stockReturn >= th.exitMove && !benchCaptured) return { resolved: true, correct: false, actualReturn };
   if (!hasBench) return { resolved: true, correct: null, actualReturn };
   const lag = benchReturn - stockReturn;
   if (lag >= th.horizonTolerance) return { resolved: true, correct: true, actualReturn };
@@ -2120,11 +2128,17 @@ async function getSellAudit() {
   const ratings = [];
   const predictions = [];
   try {
+    // Only real ratings are audited: a signal below the emission floor
+    // (minConfidence) is not a rating the engine stands behind, so it must not
+    // inflate Total Ratings or the accuracy denominator. Applies at read time
+    // so legacy sub-threshold rows are excluded too.
+    const minConfidence = engineConfig.getConfig().minConfidence || 30;
     // Total Sell/Strong Sell ratings in the evaluation window (event count).
     const totalRes = await pool.query(
       `SELECT COUNT(*)::int AS n FROM signal_history
-       WHERE generated_at > NOW() - $1::interval AND signal IN ('Sell','Strong Sell')`,
-      [`${windowDays} days`]
+       WHERE generated_at > NOW() - $1::interval AND signal IN ('Sell','Strong Sell')
+         AND confidence >= $2::int`,
+      [`${windowDays} days`, minConfidence]
     );
     stats.totalRatings = totalRes.rows[0]?.n || 0;
 
@@ -2135,9 +2149,9 @@ async function getSellAudit() {
     const ratingsRes = await pool.query(
       `SELECT DISTINCT ON (ticker) ticker, signal, confidence, price, entry_price, sector, reason, generated_at
        FROM signal_history
-       WHERE generated_at > NOW() - $1::interval
+       WHERE generated_at > NOW() - $1::interval AND confidence >= $2::int
        ORDER BY ticker, generated_at DESC`,
-      [`${windowDays} days`]
+      [`${windowDays} days`, minConfidence]
     );
     for (const r of ratingsRes.rows) {
       if (r.signal !== 'Sell' && r.signal !== 'Strong Sell') continue;
@@ -2162,9 +2176,9 @@ async function getSellAudit() {
     const predRes = await pool.query(
       `SELECT id, symbol, signal, confidence, price, bench_price, actual_return, correct, resolved, generated_at, resolved_at
        FROM forward_predictions
-       WHERE action = 'sell' AND generated_at > NOW() - $1::interval
+       WHERE action = 'sell' AND generated_at > NOW() - $1::interval AND confidence >= $2::int
        ORDER BY symbol, generated_at DESC LIMIT 500`,
-      [`${windowDays} days`]
+      [`${windowDays} days`, minConfidence]
     );
     for (const p of dedupeSellPredictions(predRes.rows)) {
       predictions.push({
@@ -2736,6 +2750,37 @@ async function warmFMPCache(symbols) {
 
 // ─── NSE Static Fundamentals (from frontend stock universe) ──────────────────
 
+// Sanitize live-feed fundamentals against feed artifacts before they reach the
+// scorer. The financial reports feed (Alpha Vantage Overview / Yahoo / EDGAR)
+// sometimes ships misaligned-quarter or unit-shifted values (e.g. AAPL showing
+// "revenue -38.7%" or "D/E 6.08" — data that would never appear in the curated
+// baseline). An artifact like that inflates sell evidence (declining revenue /
+// high leverage) and would manufacture a wrong Sell rating. Rules:
+//   • revenueGrowth outside [-60, 500] is implausible for the tracked universe
+//     (S&P + NSE blue chips) — drop it;
+//   • a live revenueGrowth that contradicts the curated baseline by > 30pp is a
+//     misalignment — fall back to the baseline instead of the garbage;
+//   • debtToEquity outside [0, 5] or contradicting the baseline by > 2.5 is a
+//     feed error — fall back to the baseline / drop it.
+// Dropped metrics become null so the scorer reports "no data" rather than a
+// false positive/negative signal.
+function sanitizeLiveFundamentals(stock, live) {
+  if (!live) return stock;
+  const isNum = (v) => v != null && v !== '' && isFinite(Number(v));
+  const out = { ...stock, ...live };
+  const revBase = isNum(stock.revenueGrowth) ? Number(stock.revenueGrowth) : null;
+  const revLive = isNum(live.revenueGrowth) ? Number(live.revenueGrowth) : null;
+  if (revLive != null && (revLive < -60 || revLive > 500 || (revBase != null && Math.abs(revLive - revBase) > 30))) {
+    out.revenueGrowth = revBase != null && revBase >= -60 && revBase <= 500 ? revBase : null;
+  }
+  const deBase = isNum(stock.debtToEquity) ? Number(stock.debtToEquity) : null;
+  const deLive = isNum(live.debtToEquity) ? Number(live.debtToEquity) : null;
+  if (deLive != null && (deLive < 0 || deLive > 5 || (deBase != null && deBase >= 0 && deBase <= 5 && Math.abs(deLive - deBase) > 2.5))) {
+    out.debtToEquity = deBase != null && deBase >= 0 && deBase <= 5 ? deBase : null;
+  }
+  return out;
+}
+
 function getFundamentals(symbol) {
   const cached = realFundamentalsCache.get(symbol);
   let base;
@@ -2755,7 +2800,7 @@ function getFundamentals(symbol) {
   // Merge real financial metrics from the live pipeline (Yahoo/Alpha Vantage/EDGAR/NSE DB)
   const fm = _financialReportCache.get(symbol);
   if (fm) {
-    Object.assign(result, fm);
+    Object.assign(result, sanitizeLiveFundamentals(result, fm));
     result.dataSource = 'live';
   } else {
     result.dataSource = 'fallback';
@@ -3075,7 +3120,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     }
     const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume, engineConfig.getConfig().indicator_params);
     const reportMetrics = _financialReportCache.get(symbol);
-    if (reportMetrics) Object.assign(stock, reportMetrics);
+    if (reportMetrics) stock = sanitizeLiveFundamentals(stock, reportMetrics);
     const financial = analyzeFinancials(stock, fundamental);
     const country = getCountryForSymbol(symbol);
     let macro = getMacroScore(country);
@@ -3168,6 +3213,28 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       }
     }
     trackSignalOutcomes(_portfolioState, _performanceStats, _signalOutcomes, symbol, currentPrice, sigObj, marketOpen);
+    // Sell emission gate: one sell rating per symbol until it resolves. A
+    // persistent sell must not re-emit a fresh rating every cycle — the audit
+    // counts every persisted Sell (signal_history AND forward_predictions), so
+    // the same call would be counted N times. The existing unresolved rating
+    // stays until its resolution horizon, then a fresh sell may be emitted.
+    if (emitSignal && sigObj.action === 'sell') {
+      const sellStore = _forwardTestStore.get(symbol);
+      const openSell = sellStore && sellStore.predictions.find(p => !p.resolved && p.action === 'sell');
+      if (openSell) {
+        emitSignal = false;
+        console.log(`[SignalService] ${symbol} sell rating already pending (entry=${openSell.price}) - monitoring, not emitting a fresh sell`);
+      }
+    }
+    // Confidence floor: a signal below the emission threshold is not a real
+    // rating. Sells below the floor must not be persisted — the Sells audit
+    // would count a rating the engine itself refuses to surface. (The same
+    // floor already drops them from the returned signals list at the end of
+    // generateSignals; this stops the persistence leak for sells.)
+    if (emitSignal && sigObj.action === 'sell' && sigObj.confidence != null && sigObj.confidence < (cfg.minConfidence || 40)) {
+      emitSignal = false;
+      console.log(`[SignalService] ${symbol} ${sigObj.signal} confidence ${sigObj.confidence} below emission floor ${cfg.minConfidence || 40} - not persisting`);
+    }
     if (emitSignal && sigObj.signal !== 'Hold') {
       recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.action, sigObj.type, sigObj.sector).catch(() => {});
     }
@@ -3343,7 +3410,7 @@ async function getSignalForStock(symbol) {
 
 async function generateSingleSignal(symbol) {
   try {
-    const stock = getFundamentals(symbol);
+    let stock = getFundamentals(symbol);
     if (!stock) {
       console.warn(`[SignalService] Cannot generate signal for ${symbol} — no fundamentals`);
       return null;
@@ -3376,7 +3443,7 @@ async function generateSingleSignal(symbol) {
     const fundamental = analyzeFundamentals(stock, currentPrice, newsSent, _dynamicSectorPE);
     const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume);
     const reportMetrics = _financialReportCache.get(symbol);
-    if (reportMetrics) Object.assign(stock, reportMetrics);
+    if (reportMetrics) stock = sanitizeLiveFundamentals(stock, reportMetrics);
     const financial = analyzeFinancials(stock, fundamental);
     const country = getCountryForSymbol(symbol);
     let macro = getMacroScore(country);
@@ -4166,6 +4233,7 @@ module.exports = {
   getForwardTestStats,
   getForwardTestPredictions,
   getSellAudit,
+  sanitizeLiveFundamentals,
   resolveAllForwardPredictions,
   // Pure helpers (unit-testable sell/exit + resolution logic)
   classifySignalBucket,

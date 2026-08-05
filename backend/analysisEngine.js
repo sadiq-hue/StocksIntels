@@ -185,7 +185,12 @@ function analyzeFundamentals(stock, currentPrice, overrideNewsSentiment = null, 
   }
 
   const revCfg = getScoring('fundamentals.revenue', { strong_threshold: 15, strong_delta: 12, moderate_threshold: 10, moderate_delta: 8, slight_threshold: 5, slight_delta: 3, decline_delta: -5 });
-  if (stock.revenueGrowth > revCfg.strong_threshold) {
+  if (stock.revenueGrowth == null || stock.revenueGrowth === '' || !isFinite(Number(stock.revenueGrowth))) {
+    // Feed value unavailable / dropped as an artifact (see sanitizeLiveFundamentals):
+    // report "no data" instead of inventing a buy/sell narrative.
+    metrics.revSignal = 'NEUTRAL';
+    metrics.revRating = 'Revenue data unavailable';
+  } else if (stock.revenueGrowth > revCfg.strong_threshold) {
     score += revCfg.strong_delta;
     metrics.revSignal = 'BUY';
     metrics.revRating = `Strong revenue growth ${stock.revenueGrowth}% > ${revCfg.strong_threshold}%`;
