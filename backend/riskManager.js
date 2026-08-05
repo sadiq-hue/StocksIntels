@@ -46,6 +46,12 @@ const TRADE_TYPE_STOP_MULT = {
 // distance from entry, and the re-level pre-lock cap respects the same floor so
 // live monitoring never tightens a calm stock's stop back into the noise.
 const MIN_STOP_PCT = 0.05;
+// Absolute stop ceiling (fraction of price). calculateATR clamps daily range at
+// 15%, so the widest legitimate ATR-scaled stop is 2x that (30%) for a swing
+// trade — a stop must always leave a high-volatility name at least ~2 daily
+// ranges of room, or one bad day stops it out on noise. A tighter ceiling (the
+// old 15%) truncated an 8%+ daily-range stock's stop to less than two ranges.
+const MAX_STOP_PCT = 0.30;
 // Target multiples keep a wide risk-reward profile at any stop width: the
 // investor holds for the long term (weeks to months), so T1/T2/T3 are sized at
 // 3x / 5x / 8x the stop distance instead of the old tight ~1.33x / ~2.33x.
@@ -81,12 +87,13 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
     target2 = currentPrice * (1 + stopLossPct * 2);
     target3 = currentPrice * (1 + stopLossPct * 3);
   }
-  // Cap stop distance at 2x the base stop, but never more than 15% of price so a
-  // high-ATR name can't produce an absurd 45% stop. The 15% ceiling lets genuinely
-  // volatile names keep a workable stop instead of clamping them to the flat 5%
-  // fallback width. Sizing the cap off the floored base distance keeps the 5%
-  // minimum stop intact for calm names.
-  const maxStopDistance = Math.min(currentPrice * baseDistancePct * 2, currentPrice * 0.15);
+  // Cap stop distance at 2x the base stop, but never more than MAX_STOP_PCT of
+  // price so an extreme name can't produce an absurd 60%+ stop. The 30% ceiling
+  // still covers the full ATR-scaled range (ATR is clamped at 15%, so a swing
+  // stop is at most 2 x 15% = 30%) — it only bites for genuinely pathological
+  // cases. Sizing the cap off the floored base distance keeps the 5% minimum
+  // stop intact for calm names.
+  const maxStopDistance = Math.min(currentPrice * baseDistancePct * 2, currentPrice * MAX_STOP_PCT);
   if (signal.action === 'buy') {
     stopLoss = Math.max(stopLoss, currentPrice - maxStopDistance);
   } else if (signal.action === 'sell') {
@@ -277,6 +284,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
 
 module.exports = {
   MIN_STOP_PCT,
+  MAX_STOP_PCT,
   calculatePositionSize,
   calculateKellyPositionSize,
   calculateTradeLevels,
