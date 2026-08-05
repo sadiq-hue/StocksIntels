@@ -2462,19 +2462,13 @@ function getLiveWinRate(signalOutcomes = _signalOutcomes, lastKnownPrices = _las
 // ─── Health Check ───────────────────────────────────────────────────────────
 function getEngineHealth() {
   const perf = _performanceStats;
-  // After a restart _lastKnownPrices is empty until the first live cycle runs
-  // (hourly interval + exchange-hours guard). Open positions restored from DB
-  // would then mark 0 quotes and show an empty mark-to-market. Kick a
-  // best-effort quote warm while any tracked position lacks a last-known price
-  // so the health poll itself backfills them (bounded: _monitoredQuoteWarming +
-  // QUOTE_CACHE_TTL, and it stops once every position has a mark).
-  if (getOpenPositionCount() > 0) {
-    let missing = false;
-    for (const [sym] of _signalOutcomes) {
-      if (!_lastKnownPrices.has(sym)) { missing = true; break; }
-    }
-    if (missing) _warmMonitoredQuotes().catch(() => {});
-  }
+  // Keep the mark-to-market basis fresh: open positions' last-known prices are
+  // only written by quote fetches (generation cycles + monitored-quote warms),
+  // so after a restart or while nobody polls /api/signals the marks go stale.
+  // Fire a bounded warm on every health read — _monitoredQuoteWarming + the 30s
+  // QUOTE_CACHE_TTL dedupe it, so it is at most one quote refresh per symbol per
+  // 30s and the next health poll renders updated marks.
+  if (getOpenPositionCount() > 0) _warmMonitoredQuotes().catch(() => {});
   return {
     status: Object.values(_sourceHealth).every(h => h.ok) ? 'healthy' : 'degraded',
     uptime: process.uptime(),

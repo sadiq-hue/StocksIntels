@@ -3904,6 +3904,9 @@ app.put('/api/signals/engine/config', authenticateToken, requireAdmin, async (re
 
 app.get('/api/signals/engine/health', async (req, res) => {
   try {
+    // Warm stale quotes for monitored positions (bounded by _monitoredQuoteWarming
+    // + the 30s QUOTE_CACHE_TTL) so the health read returns fresh mark-to-market.
+    await refreshMonitoredQuotes();
     const health = getEngineHealth();
     health.liveTest = getLiveTestSnapshot();
     res.json({ success: true, health });
