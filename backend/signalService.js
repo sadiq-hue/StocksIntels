@@ -69,6 +69,11 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
 // monitored signals, live/forward test stats, and the auto backtest aligned with
 // the full signal lifecycle instead of only the last day.
 const SIGNAL_WINDOW_DAYS = 90;
+// Only the most recent Buy signal per ticker is restored as an open monitored
+// position after a restart. Anything older than this is treated as a stale
+// (unused/expired) signal, not an active position — otherwise old buys pile up
+// as "open positions" that only close on stop/target and never age out.
+const OPEN_POSITION_MAX_AGE_HOURS = Math.max(1, parseInt(process.env.OPEN_POSITION_MAX_AGE_HOURS || '72', 10) || 72);
 // Restore performance stats and portfolio state from DB on startup
 restoreStateFromDb().catch(() => {});
 // Bootstrap durable NSE daily history (KenyanStocks seed + best-effort deep bootstrap) non-blocking
@@ -825,17 +830,18 @@ async function restoreStateFromDb() {
       `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, trade_type, position_size, generated_at, reason, analysis_data
        FROM signal_history
        WHERE generated_at > NOW() - $1::interval
+         AND generated_at > NOW() - $2::interval
          AND signal IN ('Strong Buy','Buy')
          AND entry_price > 0 AND stop_loss > 0 AND target1 > 0
        ORDER BY ticker, generated_at DESC`,
-      [`${SIGNAL_WINDOW_DAYS} days`]
+      [`${SIGNAL_WINDOW_DAYS} days`, `${OPEN_POSITION_MAX_AGE_HOURS} hours`]
     );
     for (const row of openRes.rows) {
       const sym = row.ticker;
       const genAt = new Date(row.generated_at).getTime();
       // Skip if this signal has already produced a resolved outcome
       const resolved = await pool.query(
-        `SELECT 1 FROM signal_outcomes WHERE ticker = $1 AND signal_generated_at >= $2 AND result IS NOT NULL LIMIT 1`,
+        `SELECT 1 FROM signal_outcomes WHERE ticker = $1 AND signal_generated_at >= date_trunc('milliseconds', $2::timestamptz) AND result IS NOT NULL LIMIT 1`,
         [sym, row.generated_at]
       );
       if (resolved.rows.length > 0) continue;
@@ -962,16 +968,23 @@ const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy';
 // own stop_loss / target1 levels to decide win/loss, then inserts the outcome.
 async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals = 1000, force = false } = {}) {
   try {
+    // Dedupe by (ticker, signal_generated_at) so a signal is evaluated once no
+    // matter how many cycles run — the old entry_price match collided across
+    // same-price re-emissions and the forced 6h run re-inserted duplicate rows.
+    // force=true explicitly bypasses the dedupe for a manual re-run.
+    const dedupeClause = force ? '' : `NOT EXISTS (
+          SELECT 1 FROM signal_outcomes so
+          WHERE so.ticker = sh.ticker AND so.signal_generated_at = date_trunc('milliseconds', sh.generated_at)
+        ) AND `;
     const result = await pool.query(`
       SELECT sh.id, sh.ticker, sh.signal, sh.entry_price, sh.stop_loss, sh.target1, sh.target2, sh.generated_at
       FROM signal_history sh
-      ${force ? '' : 'LEFT JOIN signal_outcomes so ON so.ticker = sh.ticker AND so.entry_price = sh.entry_price'}
-      WHERE sh.generated_at > NOW() - $1::interval
+      WHERE ${dedupeClause}
+        sh.generated_at > NOW() - $1::interval
         AND sh.generated_at < NOW() - INTERVAL '1 hour'
         AND sh.signal IN ('Strong Buy','Buy')
         AND sh.entry_price > 0
         AND sh.stop_loss > 0 AND sh.target1 > 0
-        ${force ? '' : 'AND so.id IS NULL'}
       ORDER BY sh.generated_at DESC
       LIMIT $2
     `, [`${days} days`, maxSignals]);
@@ -1021,6 +1034,16 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
           const signalDate = new Date(sig.generated_at);
           const isBuy = sig.signal === 'Strong Buy' || sig.signal === 'Buy';
           if (!isBuy) continue;
+          // Never backtest live-mutated levels: the monitor ratchets stops to
+          // breakeven/locked-gain floors (stop == entry) and tightens targets as
+          // price advances, so a re-leveled row can't be resolved against entry-
+          // cycle geometry. A stop >= entry fires the very first bar as an
+          // instant 0% "loss" (EABL Aug 3). Only entry-cycle-shaped levels are
+          // backtestable.
+          if (!(stop < entry && target > entry)) {
+            console.warn(`[HistoricalBacktest] Skip ${sig.ticker} entry ${entry} - stop ${stop} not below entry (re-leveled/live-mutated levels aren't backtestable)`);
+            continue;
+          }
 
           // Never race the live monitor: if this signal is still open in memory
           // (result null) the gate owns its resolution. Backtest must not force
@@ -4039,4 +4062,5 @@ module.exports = {
   getSignalProgress,
   getMonitoredSignals,
   refreshMonitoredQuotes,
+  OPEN_POSITION_MAX_AGE_HOURS,
 };

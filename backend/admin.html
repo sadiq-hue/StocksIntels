@@ -662,10 +662,11 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       <!-- Table + Detail -->
       <div class="flex flex-1 min-h-0 relative">
         <div id="signalsLeftPanel" class="w-full min-w-0 min-h-0" style="background:#f9fafb;overflow-y:auto;height:100%">
+          <p style="padding:0 20px 8px 20px;font-size:11px;color:#6b7280">Price @ Sig / Chg (Gen) are frozen at signal generation. For live marks see the Signal Engine page (Health tab → Live Open Positions).</p>
           <div style="margin:0 20px 16px 20px;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)">
             <div style="overflow-x:auto">
               <table class="w-full" style="min-width:900px">
-                <thead><tr><th style="padding:12px 14px">Ticker</th><th style="padding:12px 14px">Signal</th><th style="padding:12px 14px">Conf.</th><th style="padding:12px 14px">Price</th><th style="padding:12px 14px">Chg %</th><th style="padding:12px 14px">Entry</th><th style="padding:12px 14px">Stop</th><th style="padding:12px 14px">T1</th><th style="padding:12px 14px">T2</th><th style="padding:12px 14px">T3</th><th style="padding:12px 14px">Market</th><th style="padding:12px 14px">Timeframe</th><th style="padding:12px 14px">Generated</th><th style="padding:12px 14px"></th></tr></thead>
+                <thead><tr><th style="padding:12px 14px">Ticker</th><th style="padding:12px 14px">Signal</th><th style="padding:12px 14px">Conf.</th><th style="padding:12px 14px" title="Price at signal generation (not a live quote)">Price @ Sig</th><th style="padding:12px 14px" title="Change % at signal generation">Chg (Gen)</th><th style="padding:12px 14px">Entry</th><th style="padding:12px 14px">Stop</th><th style="padding:12px 14px">T1</th><th style="padding:12px 14px">T2</th><th style="padding:12px 14px">T3</th><th style="padding:12px 14px">Market</th><th style="padding:12px 14px">Timeframe</th><th style="padding:12px 14px">Generated</th><th style="padding:12px 14px"></th></tr></thead>
                 <tbody id="signalsTableBody"></tbody>
               </table>
             </div>
@@ -1237,7 +1238,14 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
     <div id="tab-signal-outcomes" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
       <div class="flex items-center justify-between mb-2">
         <h1 class="text-xl font-bold text-gray-900">Signal Outcomes</h1>
-        <span id="signalOutcomeTotalLabel" class="text-sm text-gray-500"></span>
+        <div class="flex items-center gap-2">
+          <select id="soSourceSelect" class="input-field text-sm py-1.5" style="width:auto" onchange="soPage=1;fetchSignalOutcomes()">
+            <option value="live">Live</option>
+            <option value="backtest">Backtest</option>
+            <option value="all">All</option>
+          </select>
+          <span id="signalOutcomeTotalLabel" class="text-sm text-gray-500"></span>
+        </div>
       </div>
       <div class="grid grid-cols-4 gap-4">
         <div class="stat-card"><div class="stat-value text-[#0D7490]" id="soStatTotal">-</div><div class="stat-label">Total</div></div>
@@ -1247,7 +1255,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       </div>
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
         <table class="w-full">
-          <thead><tr><th>Ticker</th><th>Signal</th><th>Entry Price</th><th>Exit Price</th><th>Result</th><th>Date</th></tr></thead>
+          <thead><tr><th>Ticker</th><th>Signal</th><th>Entry Price</th><th>Exit Price</th><th>Result</th><th>Source</th><th>Date</th></tr></thead>
           <tbody id="signalOutcomesTableBody"></tbody>
         </table>
       </div>
@@ -4327,12 +4335,12 @@ let soTotal = 0;
 
 async function fetchSignalOutcomes() {
   try {
-    const params = new URLSearchParams({ page: soPage, limit: 50 });
+    const params = new URLSearchParams({ page: soPage, limit: 50, source: document.getElementById('soSourceSelect').value });
     const res = await fetch('/api/admin/signal-outcomes?' + params.toString());
     if (!res.ok) return;
     const d = await res.json();
     soTotal = d.total;
-    document.getElementById('signalOutcomeTotalLabel').textContent = d.total + ' outcomes';
+    document.getElementById('signalOutcomeTotalLabel').textContent = d.total + ' outcomes (' + (d.source || 'live') + ')';
     const stats = d.stats || {};
     document.getElementById('soStatTotal').textContent = stats.total || 0;
     document.getElementById('soStatWins').textContent = stats.wins || 0;
@@ -4341,7 +4349,7 @@ async function fetchSignalOutcomes() {
     document.getElementById('soStatWinRate').textContent = total > 0 ? Math.round((stats.wins / total) * 100) + '%' : '-';
     const tbody = document.getElementById('signalOutcomesTableBody');
     if (d.outcomes.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">No outcomes recorded yet</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">No outcomes recorded yet</td></tr>';
     } else {
       tbody.innerHTML = d.outcomes.map(o => `
         <tr>
@@ -4350,6 +4358,7 @@ async function fetchSignalOutcomes() {
           <td class="text-gray-700 text-xs">${o.entry_price != null ? Number(o.entry_price).toFixed(2) : '-'}</td>
           <td class="text-gray-700 text-xs">${o.exit_price != null ? Number(o.exit_price).toFixed(2) : '-'}</td>
           <td><span class="pill ${o.result === 'win' ? 'pill-verified' : 'pill-unverified'}">${esc(o.result)}</span></td>
+          <td class="text-gray-500 text-xs"><span class="pill ${o.source === 'live' ? 'pill-free' : 'pill-unverified'}">${esc(o.source || '-')}</span></td>
           <td class="text-gray-500 text-xs">${formatDate(o.recorded_at)}</td>
         </tr>
       `).join('');

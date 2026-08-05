@@ -1341,20 +1341,27 @@ app.get('/api/admin/signal-outcomes', async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
     const offset = (page - 1) * limit;
-    const countResult = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_outcomes');
+    // Default to live source: backtest rows are estimates from OHLC history, not
+    // real monitored resolutions, and counting them here inflates win/loss stats
+    // (e.g. a re-leveled breakeven stop resolving as an instant 0% "loss").
+    const source = (req.query.source || 'live').trim();
+    const src = ['live', 'backtest', 'all'].includes(source) ? source : 'live';
+    const cond = src === 'all' ? '' : ' WHERE source = $1';
+    const countResult = await pool.query(`SELECT COUNT(*)::int as cnt FROM signal_outcomes${cond}`, src === 'all' ? [] : [src]);
     const dataResult = await pool.query(
-      `SELECT id, ticker, signal, entry_price, exit_price, result, recorded_at
-       FROM signal_outcomes
-       ORDER BY recorded_at DESC LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      `SELECT id, ticker, signal, entry_price, exit_price, result, source, recorded_at
+       FROM signal_outcomes${cond}
+       ORDER BY recorded_at DESC LIMIT $${src === 'all' ? 1 : 2} OFFSET $${src === 'all' ? 2 : 3}`,
+      src === 'all' ? [limit, offset] : [src, limit, offset]
     );
     const statsResult = await pool.query(
       `SELECT COUNT(*)::int as total,
               COALESCE(SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END), 0)::int as wins,
               COALESCE(SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END), 0)::int as losses
-       FROM signal_outcomes`
+       FROM signal_outcomes${cond}`,
+      src === 'all' ? [] : [src]
     );
-    res.json({ outcomes: dataResult.rows, total: countResult.rows[0].cnt, page, limit, stats: statsResult.rows[0] });
+    res.json({ outcomes: dataResult.rows, total: countResult.rows[0].cnt, page, limit, source: src, stats: statsResult.rows[0] });
   } catch (err) { console.error('Admin signal outcomes error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
