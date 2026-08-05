@@ -5317,14 +5317,49 @@ async function fetchEngineHealth() {
         <div class="stat-card"><div class="stat-value" style="color:#dc2626">${fmtNum(h.performance.losses)}</div><div class="stat-label">Losses</div></div>
         <div class="stat-card"><div class="stat-value" style="color:${h.portfolio.consecutiveLosses >= 3 ? '#dc2626' : '#111827'}">${h.portfolio.consecutiveLosses}</div><div class="stat-label">Consec. Losses</div></div>
       </div>
-      ${h.liveTest ? `
+      ${(h.performance && h.performance.live) ? `
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4" style="margin-bottom:16px">
+        <div class="stat-card" title="Resolved outcomes only (win rate of closed trades)"><div class="stat-value" style="color:${h.performance.live.resolved.winRate >= 60 ? '#059669' : '#d97706'}">${fmtPct(h.performance.live.resolved.winRate)}</div><div class="stat-label">Live Win Rate · Resolved (${h.performance.live.resolved.total})</div></div>
+        <div class="stat-card" title="Open positions marked at last live quote — a long above entry counts as a win right now"><div class="stat-value" style="color:${h.performance.live.open.winRate >= 50 ? '#059669' : '#d97706'}">${fmtPct(h.performance.live.open.winRate)}</div><div class="stat-label">Open / Mark-to-Market (${h.performance.live.open.total})</div></div>
+        <div class="stat-card" title="Resolved wins/losses plus mark-to-market on open positions"><div class="stat-value" style="color:${h.performance.live.combined.winRate >= 60 ? '#059669' : '#d97706'}">${fmtPct(h.performance.live.combined.winRate)}</div><div class="stat-label">Combined (${h.performance.live.combined.total})</div></div>
+      </div>
+      ${h.performance.live.openPositions.length > 0 ? `
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
+        <p style="font-size:13px;font-weight:600;margin-bottom:8px">Open Positions <span style="color:#6b7280;font-weight:400">(marked at last live quote)</span></p>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="text-align:left;color:#6b7280;font-size:11px;text-transform:uppercase;letter-spacing:.04em">
+              <th style="padding:8px 10px">Symbol</th>
+              <th style="padding:8px 10px">Action</th>
+              <th style="padding:8px 10px;text-align:right">Entry</th>
+              <th style="padding:8px 10px;text-align:right">Last</th>
+              <th style="padding:8px 10px;text-align:right">Unrealized</th>
+              <th style="padding:8px 10px;text-align:right">Mark</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${h.performance.live.openPositions.map(p => `
+              <tr style="border-top:1px solid #f3f4f6">
+                <td style="padding:8px 10px;font-weight:500">${p.symbol}</td>
+                <td style="padding:8px 10px;color:#6b7280;text-transform:capitalize">${p.action}</td>
+                <td style="padding:8px 10px;text-align:right;color:#6b7280">$${Number(p.entryPrice).toFixed(2)}</td>
+                <td style="padding:8px 10px;text-align:right;color:#6b7280">$${Number(p.lastPrice).toFixed(2)}</td>
+                <td style="padding:8px 10px;text-align:right;font-weight:500;color:${p.unrealizedPct >= 0 ? '#059669' : '#dc2626'}">${p.unrealizedPct >= 0 ? '+' : ''}${Number(p.unrealizedPct).toFixed(2)}%</td>
+                <td style="padding:8px 10px;text-align:right"><span style="font-size:11px;font-weight:600;text-transform:uppercase;color:${p.mtm === 'win' ? '#059669' : '#dc2626'}">${p.mtm}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      ` : ''}
+      ` : (h.liveTest ? `
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
         <div class="stat-card"><div class="stat-value" style="color:#111827">${h.liveTest.total || 0}</div><div class="stat-label">Live Outcomes</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#059669">${h.liveTest.wins || 0}</div><div class="stat-label">Live Wins</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#dc2626">${h.liveTest.losses || 0}</div><div class="stat-label">Live Losses</div></div>
         <div class="stat-card"><div class="stat-value" style="color:${h.liveTest.winRate >= 60 ? '#059669' : '#d97706'}">${h.liveTest.winRate != null ? fmtPct(h.liveTest.winRate) : '—'}</div><div class="stat-label">Live Win Rate</div></div>
       </div>
-      ` : ''}
+      ` : '')}
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
         <p style="font-size:13px;font-weight:600;margin-bottom:12px">Source Health</p>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
