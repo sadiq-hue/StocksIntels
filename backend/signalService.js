@@ -1418,6 +1418,13 @@ async function _getBenchmarkNow(symbol) {
 // trustworthy readings before it can close, keeping a single noisy re-scoring
 // pass from churning a still-valid position.
 const FADE_CLOSE_CONFIRMATIONS = 2;
+// Score-based closes (flip or fade) are suppressed until a monitored position is at
+// least this old. The composite score sits right on the buy/hold boundary, so a
+// re-scoring pass can flicker Buy<->Hold/Sell within minutes of entry; closing at
+// market then books entry==exit — the ~0% coin-flip churn. During the guard the
+// position resolves ONLY by stop/target (trackSignalOutcomes). A genuine target1
+// touch is still handled there via the trailing stop, so no realized gain is lost.
+const SCORE_CLOSE_MIN_AGE_MS = 3600000; // 1 hour
 // Re-leveling: while a long is monitored, the hard stop is re-derived from the
 // current price/ATR (never loosened) and ratchets to breakeven / locked gains as
 // price advances toward the target, so the open position tracks live behavior.
@@ -1480,6 +1487,35 @@ function fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice) 
   const ageDays = prevOutcome.timestamp ? (Date.now() - prevOutcome.timestamp) / 86400000 : 0;
   if (ageDays >= staleThesisDaysFor(type)) return 'stale thesis';
   return null;
+}
+
+// Pure verdict for the monitor gate's score-based close. Combines the flip, the
+// profit-fade/stale-thesis rules, and the conviction-fade confirmation with the
+// minimum-age guard into a single testable decision (see test-fade-relevel.cjs).
+// Returns:
+//   close         - null (keep monitoring) or a close reason string:
+//                   'score flipped' | 'profit fade' | 'stale thesis' | 'conviction faded'
+//   fadeCount     - next fade counter (0 while the min-age guard suppresses it)
+//   isFade        - a fade reading occurred this cycle (for logging)
+//   tooYoung      - position is still under the min-age guard
+//   longTermHold  - long-term type (score closes permanently disabled)
+function evaluateScoreClose(prevOutcome, freshAction, eligibilityOk, currentPrice, now = Date.now(), minAgeMs = SCORE_CLOSE_MIN_AGE_MS) {
+  if (!prevOutcome) return { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false };
+  const prevAction = prevOutcome.action;
+  const longTermHold = isLongTermHold(prevOutcome.type);
+  const allowScoreClose = !longTermHold;
+  const tooYoung = prevOutcome.timestamp ? (now - prevOutcome.timestamp) < minAgeMs : true;
+  const scoreCloseAllowed = allowScoreClose && !tooYoung;
+  const isFlip = eligibilityOk && scoreCloseAllowed && ((prevAction === 'buy' && freshAction === 'sell') || (prevAction === 'sell' && freshAction === 'buy'));
+  const { isFade, fadeCount, fadeConfirmed } = scoreCloseAllowed
+    ? assessConvictionFade(prevAction, freshAction, eligibilityOk, prevOutcome.fadeCount)
+    : { isFade: false, fadeCount: 0, fadeConfirmed: false };
+  const fadeReason = scoreCloseAllowed && isFade ? fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice) : null;
+  let close = null;
+  if (isFlip) close = 'score flipped';
+  else if (fadeReason) close = fadeReason;
+  else if (isFade && fadeConfirmed) close = 'conviction faded';
+  return { close, fadeCount, isFade, tooYoung, longTermHold };
 }
 
 // Re-level: derive the new hard stop for a monitored long from the fresh ATR stop
@@ -2865,36 +2901,21 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         // them at whatever the market price happens to be — usually a coin-flip
         // around entry — which churns a weeks/months thesis out at ~0% return.
         // Short-term trade types may also be closed by a scored flip/fade.
-        const longTermHold = isLongTermHold(prevOutcome.type);
-        const allowScoreClose = !longTermHold;
-        // A flip-close only counts when this cycle's analysis is trustworthy; on
-        // ineligible data the position simply stays open until stop or target.
-        const isFlip = eligibility.ok && allowScoreClose && ((prevAction === 'buy' && sigObj.action === 'sell') || (prevAction === 'sell' && sigObj.action === 'buy'));
-        // Conviction fade: the fresh analysis no longer supports the open direction
-        // (buy -> hold / sell -> hold) without being decisive enough to flip. A fade
-        // needs FADE_CLOSE_CONFIRMATIONS consecutive trustworthy readings so a single
-        // noisy re-scoring pass can't churn an otherwise valid position.
-        const { isFade, fadeCount: nextFadeCount, fadeConfirmed } = allowScoreClose
-          ? assessConvictionFade(prevAction, sigObj.action, eligibility.ok, prevOutcome.fadeCount)
-          : { isFade: false, fadeCount: 0, fadeConfirmed: false };
-        prevOutcome.fadeCount = nextFadeCount;
-        // Tightened re-validation: a fade still needs its consecutive confirmations,
-        // UNLESS the thesis is profit-protected or stale —
-        //   'profit fade'  - already at/above target1 (bank the gain now)
-        //   'stale thesis' - open past the trade type's threshold, never resolved
-        // Trailing positions are excluded so the trail stop, not the market print,
-        // books those exits. See fadeCloseReason.
-        const fadeReason = allowScoreClose && isFade ? fadeCloseReason(prevOutcome, sigObj.action, eligibility.ok, currentPrice) : null;
-        if (!(isFlip || fadeReason || (isFade && fadeConfirmed))) {
+        // Score-based close verdict (flip / profit-fade / stale-thesis / conviction
+        // fade) with the minimum-age guard and fade-confirmation rules — extracted
+        // as a pure helper so this decision is unit-verifiable (test-fade-relevel.cjs).
+        const sc = evaluateScoreClose(prevOutcome, sigObj.action, eligibility.ok, currentPrice);
+        prevOutcome.fadeCount = sc.fadeCount;
+        if (!sc.close) {
           emitSignal = false;
-          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${isFade ? ` (conviction fading ${prevOutcome.fadeCount}/${FADE_CLOSE_CONFIRMATIONS})` : ''}${longTermHold ? ' [long-term hold: score-based close disabled]' : ''}`);
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${sc.isFade ? ` (conviction fading ${sc.fadeCount}/${FADE_CLOSE_CONFIRMATIONS})` : ''}${sc.longTermHold ? ' [long-term hold: score-based close disabled]' : ''}${sc.tooYoung && !sc.longTermHold ? ` [min-age guard: ${Math.max(0, Math.round((SCORE_CLOSE_MIN_AGE_MS - (Date.now() - prevOutcome.timestamp)) / 60000))}m remaining]` : ''}`);
         } else if (marketOpen) {
           // Score-based close at market: the full analysis flipped direction against
           // the open position, its conviction faded to neutral on consecutive
           // readings, or (non-long-term only) a fade was backed by a banked gain or
           // a stale thesis. The position is never closed for simply aging — a stale
           // close still requires the fresh thesis to have gone neutral first.
-          const closeReason = isFlip ? 'score flipped' : (fadeReason || 'conviction faded');
+          const closeReason = sc.close;
           const isPrevBuy = prevAction === 'buy';
           const closedWin = isPrevBuy ? currentPrice >= prevOutcome.entryPrice : currentPrice <= prevOutcome.entryPrice;
           prevOutcome.result = closedWin ? 'win' : 'loss';
@@ -2912,7 +2933,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           // Flipped/faded while the exchange is closed: defer the close until the
           // next live session so the exit price isn't a stale after-hours quote.
           emitSignal = false;
-          console.log(`[SignalService] ${symbol} previous ${prevAction} signal ${isFlip ? 'flipped' : 'conviction faded'} but ${NSE_SYMBOLS.includes(symbol) ? 'NSE' : 'US'} market closed - deferring close until next session`);
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal ${sc.close === 'score flipped' ? 'flipped' : 'conviction faded'} but ${NSE_SYMBOLS.includes(symbol) ? 'NSE' : 'US'} market closed - deferring close until next session`);
         }
       }
     }
@@ -3929,6 +3950,7 @@ module.exports = {
   isLongTermHold,
   staleThesisDaysFor,
   fadeCloseReason,
+  evaluateScoreClose,
   computeRelevelStop,
   // Audit & Config
   getAuditLog,

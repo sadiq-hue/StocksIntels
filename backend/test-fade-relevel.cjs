@@ -3,7 +3,7 @@
 //  2) computeRelevelStop   - stop re-leveling to live market behavior
 // Run: node backend/test-fade-relevel.cjs
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-const { assessConvictionFade, computeRelevelStop, fadeCloseReason, staleThesisDaysFor, isLongTermHold } = require('./signalService');
+const { assessConvictionFade, computeRelevelStop, fadeCloseReason, staleThesisDaysFor, isLongTermHold, evaluateScoreClose } = require('./signalService');
 
 let passed = 0, failed = 0;
 function check(name, actual, expected) {
@@ -196,6 +196,60 @@ check('profit fade wins over stale (both true, above target)',
 let fadeOut = { action: 'buy', fadeCount: 0, entryPrice: 100, target1: 110, timestamp: now, type: 'Swing Trade' };
 check('single fade reading at target1 immediately closes (no 2-reading wait)',
   fadeCloseReason(fadeOut, 'hold', true, 112) !== null, true);
+
+// ─── evaluateScoreClose (monitor-gate verdict + min-age guard) ────────────────
+section('evaluateScoreClose (min-age guard)');
+const T0 = Date.now();
+const HOUR = 3600000;
+const freshPos = { action: 'buy', entryPrice: 100, stopLoss: 92, target1: 110, timestamp: T0, type: 'Swing Trade', fadeCount: 0 };
+
+check('5-min-old flip reading does NOT close (min-age guard)',
+  evaluateScoreClose(freshPos, 'sell', true, 102, T0 + 5 * 60000),
+  { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
+
+check('5-min-old fade reading does NOT close and does NOT accumulate confirmations',
+  evaluateScoreClose(freshPos, 'hold', true, 102, T0 + 5 * 60000),
+  { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
+
+check('5-min-old 2nd fade reading still suppressed (counter can never pre-load)',
+  evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 102, T0 + 5 * 60000),
+  { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
+
+check('5-min-old hold at/above target1 does NOT profit-fade (guard wins)',
+  evaluateScoreClose(freshPos, 'hold', true, 112, T0 + 5 * 60000),
+  { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
+
+check('exactly at the guard boundary is old enough (>= min age)',
+  evaluateScoreClose(freshPos, 'sell', true, 102, T0 + HOUR),
+  { close: 'score flipped', fadeCount: 0, isFade: false, tooYoung: false, longTermHold: false });
+
+check('2h-old flip reading closes immediately',
+  evaluateScoreClose(freshPos, 'sell', true, 102, T0 + 2 * HOUR),
+  { close: 'score flipped', fadeCount: 0, isFade: false, tooYoung: false, longTermHold: false });
+
+check('2h-old first fade reading waits for confirmation (1/2)',
+  evaluateScoreClose(freshPos, 'hold', true, 102, T0 + 2 * HOUR),
+  { close: null, fadeCount: 1, isFade: true, tooYoung: false, longTermHold: false });
+
+check('2h-old 2nd consecutive fade reading closes (2/2)',
+  evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 102, T0 + 2 * HOUR),
+  { close: 'conviction faded', fadeCount: 2, isFade: true, tooYoung: false, longTermHold: false });
+
+check('2h-old hold at/above target1 profit-fades on first reading',
+  evaluateScoreClose(freshPos, 'hold', true, 112, T0 + 2 * HOUR),
+  { close: 'profit fade', fadeCount: 1, isFade: true, tooYoung: false, longTermHold: false });
+
+check('stale position (>30d) + hold -> stale thesis',
+  evaluateScoreClose({ ...freshPos, timestamp: T0 - 31 * DAY }, 'hold', true, 105, T0 + 2 * HOUR),
+  { close: 'stale thesis', fadeCount: 1, isFade: true, tooYoung: false, longTermHold: false });
+
+check('long-term hold type + old + flip -> still no score close (stop/target only)',
+  evaluateScoreClose({ ...freshPos, type: 'Long Term' }, 'sell', true, 102, T0 + 2 * HOUR),
+  { close: null, fadeCount: 0, isFade: false, tooYoung: false, longTermHold: true });
+
+check('undefined position -> no close',
+  evaluateScoreClose(undefined, 'hold', true, 102, T0 + 2 * HOUR),
+  { close: null, fadeCount: 0, isFade: false, tooYoung: true, longTermHold: false });
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
