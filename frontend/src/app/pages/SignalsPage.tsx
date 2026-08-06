@@ -651,7 +651,7 @@ export function SignalsPage() {
                   {selected.target3 && <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">T3</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target3)}</p></div>}
                 </div>
                 <div className="mt-2 space-y-1 text-[11px] text-muted-foreground leading-relaxed">
-                  <p><span className="font-semibold text-blue-700">Entry {fmtPrice(selected, selected.entry)}</span> — the price you should wait for before buying.</p>
+                  <p><span className="font-semibold text-blue-700">Entry {fmtPrice(selected, selected.entry)}</span> — the market price when the signal was generated, used as the reference to size the stop and targets. Buy at the current market price — you don't need to wait for this exact level.</p>
                   <p><span className="font-semibold text-red-700">Stop {fmtPrice(selected, selected.stopLoss)}</span> — the safety-net price. If the stock drops to this level, sell immediately to prevent further losses.</p>
                   {selected.target1 && <p><span className="font-semibold text-emerald-700">T1 {fmtPrice(selected, selected.target1)}</span> — first profit goal. Many investors take some profit here.</p>}
                   {selected.target2 && <p><span className="font-semibold text-emerald-700">T2 {fmtPrice(selected, selected.target2)}</span> — middle profit goal — take more profit if it reaches here.</p>}
