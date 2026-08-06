@@ -851,9 +851,14 @@ async function restoreStateFromDb() {
     for (const row of openRes.rows) {
       const sym = row.ticker;
       const genAt = new Date(row.generated_at).getTime();
-      // Skip if this signal has already produced a resolved outcome
+      // Skip if this signal has already produced a resolved outcome. Use a
+      // ±30s window around the history row's generated_at (matching the apply
+      // scripts) because the outcome's signal_generated_at can land a moment
+      // before the history row's generated_at (e.g. C 19:40:45 vs 19:40:56);
+      // a strict >= match would miss it and re-monitor a resolved position
+      // with stale levels after a restart.
       const resolved = await pool.query(
-        `SELECT 1 FROM signal_outcomes WHERE ticker = $1 AND signal_generated_at >= date_trunc('milliseconds', $2::timestamptz) AND result IS NOT NULL LIMIT 1`,
+        `SELECT 1 FROM signal_outcomes WHERE ticker = $1 AND COALESCE(signal_generated_at, recorded_at) >= date_trunc('milliseconds', $2::timestamptz) - interval '30 seconds' AND COALESCE(signal_generated_at, recorded_at) <= date_trunc('milliseconds', $2::timestamptz) + interval '30 seconds' AND result IS NOT NULL LIMIT 1`,
         [sym, row.generated_at]
       );
       if (resolved.rows.length > 0) continue;
