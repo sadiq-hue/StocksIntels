@@ -223,6 +223,81 @@ function timeframePlain(timeframe: string | null | undefined): string {
   return "a longer-term position, meant to be held for months or more";
 }
 
+interface PlainReasonItem {
+  group: 'for' | 'against' | 'note';
+  label: string;
+  text: string;
+}
+
+function extractTechFragment(reason: string): string {
+  const preMacro = reason.split(/\bMacro\s*:/i)[0] || '';
+  return preMacro
+    .split(',')
+    .map(f => f.trim())
+    .filter(Boolean)
+    .filter(f => /bullish|bearish|MACD|momentum|trend|breakout|RSI|support|resistance|moving average|golden cross|death cross|volume|setup/i.test(f))
+    .join(', ');
+}
+
+function buildPlainReason(s: StockSignal): PlainReasonItem[] {
+  const items: PlainReasonItem[] = [];
+  const metrics = s.analysis?.fundamental?.metrics || {};
+
+  getConditionSignals(metrics).forEach(c => {
+    const sig = c.signal;
+    if (!sig || sig === 'NEUTRAL') return;
+    const group = (sig === 'BUY' || sig === 'STRONG BUY') ? 'for' : 'against';
+    items.push({ group, label: c.name, text: `${c.rating} — ${ratingPlain(sig).toLowerCase()}.` });
+  });
+
+  const techFrag = extractTechFragment(s.reason || '');
+  if (techFrag) items.push({ group: 'note', label: 'Chart / Technicals', text: techFrag });
+
+  const macro = s.analysis?.macro;
+  if (macro?.conditions) {
+    Object.entries(macro.conditions).forEach(([k, c]) => {
+      const sig = (c as any).signal;
+      if (sig !== 'BUY' && sig !== 'SELL') return;
+      items.push({
+        group: sig === 'BUY' ? 'for' : 'against',
+        label: MACRO_LABELS[k] || k,
+        text: `${(c as any).detail} — ${ratingPlain(sig).toLowerCase()}.`,
+      });
+    });
+  }
+
+  const insTop = s.insider;
+  const insSec = s.analysis?.insider as any;
+  const insScore = insTop?.score ?? insSec?.score;
+  const insActive = insTop?.hasActivity || (insSec && insSec.hasActivity) || (insScore != null && insScore < 45);
+  if (insActive) {
+    const insSummary = insTop?.summary || insSec?.summary || '';
+    const insPositive = (insTop ? insiderPositive(insTop) : false) || (insScore != null && insScore >= 50);
+    items.push({
+      group: insPositive ? 'for' : 'against',
+      label: 'Insider Activity',
+      text: `${insSummary || (insScore != null ? `score ${insScore}/100` : 'insiders selling more than buying')} — they know the business best.`,
+    });
+  }
+
+  return items;
+}
+
+function overallVerdict(s: StockSignal): string {
+  const overall = s.analysis?.overall as any;
+  const score = overall?.score;
+  const conf = s.confidence;
+  const rated = `rates this a ${s.signal.toLowerCase()}`;
+  const lead = score != null && overall?.grade
+    ? `the stock scores an overall ${overall.grade} (${score}) and ${rated}`
+    : `the model ${rated}`;
+  let tail: string;
+  if (conf >= 60) tail = `${conf}% confidence — a relatively strong signal.`;
+  else if (conf >= 40) tail = `${conf}% confidence — balanced, so treat it as a starting point, not a certainty.`;
+  else tail = `${conf}% confidence — a cautious call.`;
+  return `After weighing everything, ${lead} with ${tail}`;
+}
+
 export function SignalsPage() {
   const [signals, setSignals] = useState<StockSignal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -797,15 +872,70 @@ export function SignalsPage() {
                 <div className="flex items-start gap-2">
                   <Info className="w-4 h-4 text-[#0D7490] shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline justify-between flex-wrap gap-2 mb-1.5">
+                    <div className="flex items-baseline justify-between flex-wrap gap-2 mb-2">
                       <p className="text-sm font-medium text-foreground">Signal Reason</p>
                       <p className="text-[10px] text-muted-foreground italic">The full story behind the rating, in one place</p>
                     </div>
-                    <ul className="list-disc pl-4 space-y-1">
-                      {reasonBullets(selected.reason || "").map((b, i) => (
-                        <li key={i} className="text-sm text-muted-foreground leading-relaxed">{b}</li>
-                      ))}
-                    </ul>
+                    {(() => {
+                      const plainItems = buildPlainReason(selected);
+                      const forItems = plainItems.filter(i => i.group === 'for');
+                      const againstItems = plainItems.filter(i => i.group === 'against');
+                      const noteItems = plainItems.filter(i => i.group === 'note');
+                      return (
+                        <div className="space-y-2.5">
+                          {forItems.length > 0 && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">What's working in favor</p>
+                              <ul className="mt-1 space-y-1">
+                                {forItems.map((it, i) => (
+                                  <li key={i} className="text-xs text-muted-foreground leading-relaxed flex gap-1.5">
+                                    <span className="text-emerald-600 shrink-0">✓</span>
+                                    <span><span className="font-medium text-foreground">{it.label}</span> — {it.text}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {againstItems.length > 0 && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-red-700 uppercase tracking-wider">What's working against</p>
+                              <ul className="mt-1 space-y-1">
+                                {againstItems.map((it, i) => (
+                                  <li key={i} className="text-xs text-muted-foreground leading-relaxed flex gap-1.5">
+                                    <span className="text-red-600 shrink-0">✕</span>
+                                    <span><span className="font-medium text-foreground">{it.label}</span> — {it.text}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {noteItems.length > 0 && (
+                            <div>
+                              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Other context</p>
+                              <ul className="mt-1 space-y-1">
+                                {noteItems.map((it, i) => (
+                                  <li key={i} className="text-xs text-muted-foreground leading-relaxed flex gap-1.5">
+                                    <span className="text-[#0D7490] shrink-0">•</span>
+                                    <span><span className="font-medium text-foreground">{it.label}</span> — {it.text}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          <p className="pt-1.5 border-t border-[#0D7490]/10 text-xs text-muted-foreground leading-relaxed">
+                            <span className="font-semibold text-foreground">The verdict:</span> {overallVerdict(selected)}
+                          </p>
+                        </div>
+                      );
+                    })()}
+                    <details className="mt-2">
+                      <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">Model's original reasoning (technical details)</summary>
+                      <ul className="list-disc pl-4 space-y-1 mt-1">
+                        {reasonBullets(selected.reason || "").map((b, i) => (
+                          <li key={i} className="text-[11px] text-muted-foreground/70 leading-relaxed">{b}</li>
+                        ))}
+                      </ul>
+                    </details>
                   </div>
                 </div>
               </div>
