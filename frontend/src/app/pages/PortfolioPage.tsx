@@ -2500,7 +2500,7 @@ export function PortfolioPage() {
                     {portfolioAdvice.marketContext.topSectors.slice(0, 3).map((s, i) => (
                       <div key={i} className="flex justify-between text-xs text-muted-foreground py-1 border-b border-emerald-100/50 last:border-0">
                         <span>{s.name}</span>
-                        <span className={`font-medium ${parseFloat(s.change) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{s.change}%</span>
+                        <span className={`font-medium ${parseFloat(s.change) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{parseFloat(s.change).toFixed(2)}%</span>
                       </div>
                     ))}
                   </div>
@@ -2512,7 +2512,7 @@ export function PortfolioPage() {
                     {portfolioAdvice.marketContext.bottomSectors.slice(0, 3).map((s, i) => (
                       <div key={i} className="flex justify-between text-xs text-muted-foreground py-1 border-b border-red-100/50 last:border-0">
                         <span>{s.name}</span>
-                        <span className={`font-medium ${parseFloat(s.change) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{s.change}%</span>
+                        <span className={`font-medium ${parseFloat(s.change) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{parseFloat(s.change).toFixed(2)}%</span>
                       </div>
                     ))}
                   </div>

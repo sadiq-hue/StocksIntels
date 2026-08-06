@@ -259,7 +259,7 @@ export const SectorsPage: React.FC = () => {
                       </Badge>
                     </td>
                     <td className={`px-6 py-4 text-right font-black ${sector.change >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                      {sector.change >= 0 ? "+" : ""}{sector.change}%
+                      {sector.change >= 0 ? "+" : ""}{sector.change.toFixed(2)}%
                     </td>
                     <td className="px-6 py-4 text-right text-muted-foreground font-medium text-sm">
                       {sector.volumeLabel}

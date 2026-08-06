@@ -308,7 +308,7 @@ export function DashboardPage() {
           ticker: s.ticker,
           name: s.name,
           price: s.price.toFixed(2),
-          change: `${s.change > 0 ? "+" : ""}${s.change}%`,
+          change: `${s.change > 0 ? "+" : ""}${s.change.toFixed(2)}%`,
           isPositive: s.change >= 0,
           alert: Math.abs(s.change) > 5,
           market: s.market,
@@ -430,7 +430,7 @@ export function DashboardPage() {
         name: s.name,
         signal: s.signal,
         confidence: s.confidence,
-        change: `${s.change >= 0 ? "+" : ""}${s.change}%`,
+        change: `${s.change >= 0 ? "+" : ""}${s.change.toFixed(2)}%`,
         trend: s.change >= 0 ? "up" as const : "down" as const,
         market: s.market,
       })),
@@ -639,7 +639,7 @@ export function DashboardPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-semibold ${s.avgChange >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {s.avgChange >= 0 ? "+" : ""}{s.change}%
+                    {s.avgChange >= 0 ? "+" : ""}{s.avgChange.toFixed(2)}%
                   </span>
                   <span className="text-[10px] text-muted-foreground">({s.count})</span>
                 </div>
@@ -803,7 +803,7 @@ export function DashboardPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="text-emerald-600 font-bold text-sm shrink-0">{stock.change > 0 ? "+" : ""}{stock.change}%</div>
+                    <div className="text-emerald-600 font-bold text-sm shrink-0">{stock.change > 0 ? "+" : ""}{stock.change.toFixed(2)}%</div>
                   </div>
               );
             })}
@@ -846,7 +846,7 @@ export function DashboardPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="text-red-500 font-bold text-sm shrink-0">{stock.change >= 0 ? "+" : ""}{stock.change}%</div>
+                    <div className="text-red-500 font-bold text-sm shrink-0">{stock.change >= 0 ? "+" : ""}{stock.change.toFixed(2)}%</div>
                   </div>
               );
             })}
@@ -1278,7 +1278,7 @@ export function DashboardPage() {
                     <p className="text-[10px] text-muted-foreground font-medium">Change</p>
                     <p className={`text-lg font-bold flex items-center gap-1 ${s.change >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                       {s.change >= 0 ? <ArrowUpRight className="size-4" /> : <ArrowDownRight className="size-4" />}
-                      {s.change >= 0 ? '+' : ''}{s.change}%
+                      {s.change >= 0 ? '+' : ''}{s.change.toFixed(2)}%
                     </p>
                   </div>
                   <div className="bg-muted rounded-lg p-3 border border-border">

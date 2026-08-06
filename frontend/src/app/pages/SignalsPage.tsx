@@ -308,7 +308,7 @@ export function SignalsPage() {
                   <p className="text-[10px] text-muted-foreground font-medium">Change</p>
                   <p className={`text-sm font-bold flex items-center gap-1 ${s.change >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                     {s.change >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                    {s.change >= 0 ? "+" : ""}{s.change}%
+                    {s.change >= 0 ? "+" : ""}{s.change.toFixed(2)}%
                   </p>
                 </div>
                 <div className="flex-1 bg-muted rounded-lg p-2.5 border border-border">
@@ -456,7 +456,7 @@ export function SignalsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-muted rounded-lg p-3 border border-border"><p className="text-xs text-muted-foreground">Price</p><p className="text-lg font-bold text-foreground">{fmtPrice(selected, selected.price)}</p></div>
-                <div className={`rounded-lg p-3 border ${selected.change >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}><p className="text-xs text-muted-foreground">Change</p><p className={`text-lg font-bold flex items-center gap-1 ${selected.change >= 0 ? "text-emerald-700" : "text-red-700"}`}>{selected.change >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}{selected.change >= 0 ? "+" : ""}{selected.change}%</p></div>
+                <div className={`rounded-lg p-3 border ${selected.change >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}><p className="text-xs text-muted-foreground">Change</p><p className={`text-lg font-bold flex items-center gap-1 ${selected.change >= 0 ? "text-emerald-700" : "text-red-700"}`}>{selected.change >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}{selected.change >= 0 ? "+" : ""}{selected.change.toFixed(2)}%</p></div>
                 <div className="bg-muted rounded-lg p-3 border border-border"><p className="text-xs text-muted-foreground">Confidence</p><p className={`text-lg font-bold ${selected.confidence >= 80 ? "text-emerald-600" : selected.confidence >= 70 ? "text-yellow-600" : "text-red-600"}`}>{selected.confidence}%</p></div>
               </div>
 
