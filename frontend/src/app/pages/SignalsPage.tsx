@@ -116,6 +116,11 @@ function fmtNum(v: number | null | undefined): string {
   return formatCurrency(v);
 }
 
+function changeDisplay(s: { price: number | null | undefined; change: number }): string {
+  if (s.price == null || Number.isNaN(s.price)) return "—";
+  return `${s.change >= 0 ? "+" : ""}${s.change.toFixed(2)}%`;
+}
+
 function insiderPositive(ins: { netShares: number | null; buyCount: number; sellCount: number } | null | undefined): boolean {
   if (!ins) return false;
   return ins.netShares != null ? ins.netShares >= 0 : ins.buyCount >= ins.sellCount;
@@ -191,7 +196,7 @@ function plainSummary(s: StockSignal): string {
   if (conf >= 60) tail = "This is a relatively strong signal — but always check the levels below.";
   else if (conf >= 40) tail = "Treat this as a starting point, not a certainty — the model is fairly balanced.";
   else tail = "Be cautious — the model is not very confident about this one.";
-  return `The model rates this ${verb} with ${confidencePlain(conf)} (${conf}% confidence). ${tail}`;
+  return `The model rates this ${verb} with ${conf}% confidence (${confidencePlain(conf)}). ${tail}`;
 }
 
 function reasonBullets(reason: string): string[] {
@@ -405,7 +410,7 @@ export function SignalsPage() {
                   <p className="text-[10px] text-muted-foreground font-medium">Change</p>
                   <p className={`text-sm font-bold flex items-center gap-1 ${s.change >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                     {s.change >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                    {s.change >= 0 ? "+" : ""}{s.change.toFixed(2)}%
+                    {changeDisplay(s)}
                   </p>
                 </div>
                 <div className="flex-1 bg-muted rounded-lg p-2.5 border border-border">
@@ -554,7 +559,7 @@ export function SignalsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-muted rounded-lg p-3 border border-border"><p className="text-xs text-muted-foreground">Price</p><p className="text-lg font-bold text-foreground">{fmtPrice(selected, selected.price)}</p></div>
-                <div className={`rounded-lg p-3 border ${selected.change >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}><p className="text-xs text-muted-foreground">Change</p><p className={`text-lg font-bold flex items-center gap-1 ${selected.change >= 0 ? "text-emerald-700" : "text-red-700"}`}>{selected.change >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}{selected.change >= 0 ? "+" : ""}{selected.change.toFixed(2)}%</p></div>
+                <div className={`rounded-lg p-3 border ${selected.change >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}><p className="text-xs text-muted-foreground">Change</p><p className={`text-lg font-bold flex items-center gap-1 ${selected.change >= 0 ? "text-emerald-700" : "text-red-700"}`}>{selected.change >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}{changeDisplay(selected)}</p></div>
                 <div className="bg-muted rounded-lg p-3 border border-border"><p className="text-xs text-muted-foreground">Confidence</p><p className={`text-lg font-bold ${selected.confidence >= 80 ? "text-emerald-600" : selected.confidence >= 70 ? "text-yellow-600" : "text-red-600"}`}>{selected.confidence}%</p></div>
               </div>
 
@@ -577,7 +582,7 @@ export function SignalsPage() {
                   {selected.target2 && <p><span className="font-semibold text-emerald-700">T2 {fmtPrice(selected, selected.target2)}</span> — middle profit goal — take more profit if it reaches here.</p>}
                   {selected.target3 && <p><span className="font-semibold text-emerald-700">T3 {fmtPrice(selected, selected.target3)}</span> — ultimate profit goal — the full win.</p>}
                   {selected.riskReward != null && !Number.isNaN(selected.riskReward) && (
-                    <p><span className="font-semibold text-foreground">Risk-to-reward {selected.riskReward.toFixed(1)}:1</span> — for every $1 you risk, the plan targets {selected.riskReward.toFixed(1)} of profit.</p>
+                    <p><span className="font-semibold text-foreground">Risk-to-reward {selected.riskReward.toFixed(1)}:1</span> — for every {curSym(selected)}1 you risk, the plan targets {curSym(selected)}{formatCurrency(selected.riskReward)} in profit.</p>
                   )}
                 </div>
               </div>
@@ -656,7 +661,7 @@ export function SignalsPage() {
                     <div>
                       <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
                         <h3 className="text-sm font-semibold text-foreground">
-                          Macro Conditions — {selected.analysis.macro.country}
+                          Macro Conditions — {selected.analysis.macro.country}{' '}
                           <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded ${
                             selected.analysis.macro.signal === 'Bullish' || selected.analysis.macro.signal === 'Favorable'
                               ? 'bg-emerald-100 text-emerald-700'
@@ -730,11 +735,14 @@ export function SignalsPage() {
                           <span className="font-semibold text-foreground">In plain words:</span> mixing all the strengths and weaknesses together, the overall grade is{" "}
                           <span className="font-semibold text-foreground">{overall.grade} ({overall.score})</span> — {gradePlain(overall.grade) || 'average'}.
                         </p>
-                        {insiderWeak && selected.insider?.hasActivity && (
-                          <p>
-                            <span className="font-semibold text-red-700">Why the insider score is low:</span> company insiders {selected.insider.summary?.toLowerCase()}. They know the business best, so heavy selling is a caution flag.
-                          </p>
-                        )}
+                        {insiderWeak && (() => {
+                          const insSummary = selected.insider?.summary || insiderSec?.summary || '';
+                          return (
+                            <p>
+                              <span className="font-semibold text-red-700">Why the insider score is low:</span> {insSummary || 'insiders are selling more than they buy.'}{insSummary ? ' — ' : ' '}They know the business best, so heavy selling is a caution flag.
+                            </p>
+                          );
+                        })()}
                         <p>
                           <span className="font-semibold text-foreground">Timeframe:</span> {selected.timeframe || '—'} — {timeframePlain(selected.timeframe)}.
                         </p>
