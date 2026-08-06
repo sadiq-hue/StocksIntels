@@ -9,7 +9,7 @@ import { Button } from "../components/ui/button";
 import {
   TrendingUp, TrendingDown, Signal, Search, Zap,
   Activity, Star, RefreshCw, Info, ChevronLeft, ChevronRight,
-  ArrowUpRight, ArrowDownRight, BarChart3, Clock,
+  ArrowUpRight, ArrowDownRight, BarChart3, Clock, Gauge, FilterX, ArrowUpDown,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../auth/AuthContext";
@@ -18,12 +18,12 @@ import { authFetch } from "../auth/tokenStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
-const SIGNAL_STYLES: Record<string, { bg: string; text: string; border: string; icon: typeof TrendingUp }> = {
-  "Strong Buy":  { bg: "bg-emerald-600", text: "text-white", border: "border-emerald-600", icon: TrendingUp },
-  "Buy":         { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200", icon: TrendingUp },
-  "Hold":        { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200", icon: Activity },
-  "Sell":        { bg: "bg-red-100", text: "text-red-700", border: "border-red-200", icon: TrendingDown },
-  "Strong Sell": { bg: "bg-red-600", text: "text-white", border: "border-red-600", icon: TrendingDown },
+const SIGNAL_STYLES: Record<string, { bg: string; text: string; border: string; accent: string; icon: typeof TrendingUp }> = {
+  "Strong Buy":  { bg: "bg-emerald-600", text: "text-white", border: "border-emerald-600", accent: "bg-emerald-600", icon: TrendingUp },
+  "Buy":         { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200", accent: "bg-emerald-400", icon: TrendingUp },
+  "Hold":        { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-200", accent: "bg-yellow-400", icon: Activity },
+  "Sell":        { bg: "bg-red-100", text: "text-red-700", border: "border-red-200", accent: "bg-red-400", icon: TrendingDown },
+  "Strong Sell": { bg: "bg-red-600", text: "text-white", border: "border-red-600", accent: "bg-red-600", icon: TrendingDown },
 };
 
 const TYPE_STYLES: Record<string, string> = {
@@ -306,6 +306,7 @@ export function SignalsPage() {
   const [filterType, setFilterType] = useState("all");
   const [filterSignal, setFilterSignal] = useState("All");
   const [filterSector, setFilterSector] = useState("All");
+  const [sortBy, setSortBy] = useState<"confidence" | "change" | "ticker">("confidence");
   const [page, setPage] = useState(1);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [selected, setSelected] = useState<StockSignal | null>(null);
@@ -333,22 +334,43 @@ export function SignalsPage() {
     }
   }, [searchParams, signals]);
 
-  const filtered = useMemo(() => signals.filter(s =>
-    (s.ticker.toLowerCase().includes(search.toLowerCase()) || s.name.toLowerCase().includes(search.toLowerCase())) &&
-    (filterType === "all" || s.type === filterType) &&
-    (filterSignal === "All" || s.signal === filterSignal) &&
-    (filterSector === "All" || s.sector === filterSector)
-  ), [signals, search, filterType, filterSignal, filterSector]);
+  const filtered = useMemo(() => {
+    const list = signals.filter(s =>
+      (s.ticker.toLowerCase().includes(search.toLowerCase()) || s.name.toLowerCase().includes(search.toLowerCase())) &&
+      (filterType === "all" || s.type === filterType) &&
+      (filterSignal === "All" || s.signal === filterSignal) &&
+      (filterSector === "All" || s.sector === filterSector)
+    );
+    const sorted = [...list];
+    if (sortBy === "confidence") sorted.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+    else if (sortBy === "change") sorted.sort((a, b) => (b.change ?? 0) - (a.change ?? 0));
+    else sorted.sort((a, b) => a.ticker.localeCompare(b.ticker));
+    return sorted;
+  }, [signals, search, filterType, filterSignal, filterSector, sortBy]);
+
+  const hasActiveFilters = search !== "" || filterType !== "all" || filterSignal !== "All" || filterSector !== "All";
+
+  const clearFilters = () => {
+    setSearch(""); setFilterType("all"); setFilterSignal("All"); setFilterSector("All"); setSortBy("confidence");
+  };
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(page, totalPages);
   const paged = filtered.slice((safePage - 1) * perPage, safePage * perPage);
-  useEffect(() => { setPage(1); }, [search, filterType, filterSignal, filterSector]);
+  useEffect(() => { setPage(1); }, [search, filterType, filterSignal, filterSector, sortBy]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setSelected(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected]);
 
   const sectors = [...new Set(signals.map(s => s.sector))].sort();
   const strongBuy = signals.filter(s => s.signal === "Strong Buy" || s.signal === "Buy").length;
   const strongSell = signals.filter(s => s.signal === "Sell" || s.signal === "Strong Sell").length;
-  const highConf = signals.filter(s => s.confidence >= 80);
+  const topConf = [...signals].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0)).slice(0, 5);
+  const peakConf = topConf.length ? Math.round(topConf[0].confidence ?? 0) : 0;
 
   const toggleFav = (t: string) => setFavorites(p => p.includes(t) ? p.filter(f => f !== t) : [...p, t]);
 
@@ -387,29 +409,41 @@ export function SignalsPage() {
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-        <Card className="bg-card border-border p-3"><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Total Signals</p><p className="text-foreground text-xl font-bold">{signals.length}</p></Card>
-        <Card className="bg-card border-border p-3"><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Strong Buy/Buy</p><p className="text-emerald-600 text-xl font-bold">{strongBuy}</p></Card>
-        <Card className="bg-card border-border p-3"><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Sell/Strong Sell</p><p className="text-red-600 text-xl font-bold">{strongSell}</p></Card>
-        <Card className="bg-card border-border p-3"><p className="text-muted-foreground text-[10px] uppercase tracking-wider">High Confidence</p><p className="text-foreground text-xl font-bold">{highConf.length}</p></Card>
-        <Card className="bg-card border-border p-3">
-          <p className="text-muted-foreground text-[10px] uppercase tracking-wider">Avg Confidence</p>
-          <p className="text-foreground text-xl font-bold">{signals.length ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / signals.length) : 0}%</p>
+        <Card className="bg-card border-border p-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-[#0D7490]/10 flex items-center justify-center shrink-0"><Signal className="w-4 h-4 text-[#0D7490]" /></div>
+          <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Total Signals</p><p className="text-foreground text-xl font-bold leading-tight">{signals.length}</p></div>
         </Card>
-        <Card className="bg-card border-border p-3">
-          <p className="text-muted-foreground text-[10px] uppercase tracking-wider">Favorites</p>
-          <p className="text-amber-500 text-xl font-bold">{favorites.length}</p>
+        <Card className="bg-card border-border p-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0"><TrendingUp className="w-4 h-4 text-emerald-600" /></div>
+          <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Strong Buy/Buy</p><p className="text-emerald-600 text-xl font-bold leading-tight">{strongBuy}</p></div>
+        </Card>
+        <Card className="bg-card border-border p-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center shrink-0"><TrendingDown className="w-4 h-4 text-red-600" /></div>
+          <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Sell/Strong Sell</p><p className="text-red-600 text-xl font-bold leading-tight">{strongSell}</p></div>
+        </Card>
+        <Card className="bg-card border-border p-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-yellow-100 flex items-center justify-center shrink-0"><Zap className="w-4 h-4 text-yellow-600" /></div>
+          <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Peak Confidence</p><p className="text-[#0D7490] text-xl font-bold leading-tight">{peakConf}%</p></div>
+        </Card>
+        <Card className="bg-card border-border p-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0"><Gauge className="w-4 h-4 text-blue-600" /></div>
+          <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Avg Confidence</p><p className="text-foreground text-xl font-bold leading-tight">{signals.length ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / signals.length) : 0}%</p></div>
+        </Card>
+        <Card className="bg-card border-border p-3 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0"><Star className="w-4 h-4 text-amber-500" /></div>
+          <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Favorites</p><p className="text-amber-500 text-xl font-bold leading-tight">{favorites.length}</p></div>
         </Card>
       </div>
 
-      {/* High confidence banner */}
-      {highConf.length > 0 && (
+      {/* Top signals by confidence */}
+      {topConf.length > 0 && (
         <div className="bg-gradient-to-r from-emerald-50 to-emerald-100/50 border border-emerald-200 rounded-lg p-4 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <Zap className="w-5 h-5 text-emerald-600" />
-            <div><p className="text-emerald-900 text-sm font-semibold">{highConf.length} high-confidence signal{highConf.length > 1 ? "s" : ""} available</p><p className="text-emerald-700 text-xs">Confidence ≥ 80% — strong probability setups</p></div>
+            <div><p className="text-emerald-900 text-sm font-semibold">Top signals by confidence</p><p className="text-emerald-700 text-xs">Highest-conviction setups in the feed right now</p></div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {highConf.slice(0, 3).map(s => (
+            {topConf.map(s => (
               <button key={s.ticker} onClick={() => { setSelected(s); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="px-2.5 py-1 bg-card border border-emerald-200 rounded-md text-xs font-medium text-emerald-700 hover:bg-emerald-50">{s.ticker} <span className="text-emerald-500">{s.confidence}%</span></button>
             ))}
           </div>
@@ -434,7 +468,16 @@ export function SignalsPage() {
           <SelectTrigger className="w-[140px] h-9 text-sm border-border"><SelectValue placeholder="Sector" /></SelectTrigger>
           <SelectContent><SelectItem value="All">All Sectors</SelectItem>{sectors.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
         </Select>
+        <Select value={sortBy} onValueChange={v => setSortBy(v as "confidence" | "change" | "ticker")}>
+          <SelectTrigger className="w-[160px] h-9 text-sm border-border"><ArrowUpDown className="w-3.5 h-3.5 mr-2" /><SelectValue placeholder="Sort" /></SelectTrigger>
+          <SelectContent><SelectItem value="confidence">Confidence ↓</SelectItem><SelectItem value="change">Change ↓</SelectItem><SelectItem value="ticker">Ticker A–Z</SelectItem></SelectContent>
+        </Select>
         <Badge className="h-9 px-3 flex items-center gap-1.5 bg-[#0D7490] text-white border-0 text-xs">{filtered.length} signal{filtered.length !== 1 ? "s" : ""}</Badge>
+        {hasActiveFilters && (
+          <button onClick={clearFilters} className="h-9 px-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-red-600 transition-colors">
+            <FilterX className="w-3.5 h-3.5" />Clear filters
+          </button>
+        )}
       </div>
 
       {/* Signal cards */}
@@ -443,9 +486,11 @@ export function SignalsPage() {
           const ss = SIGNAL_STYLES[s.signal];
           const Icon = ss.icon;
           return (
-            <Card key={s.id || s.ticker} className="bg-card border-border overflow-hidden hover:border-[#0D7490] hover:shadow-md transition-all cursor-pointer group" onClick={() => setSelected(s)}>
+            <Card key={s.id || s.ticker} className="bg-card border-border overflow-hidden hover:border-[#0D7490] hover:shadow-md transition-all cursor-pointer group flex flex-col" onClick={() => setSelected(s)}>
+              {/* Signal accent bar */}
+              <div className={`h-1 w-full ${ss.accent}`} />
               {/* Top: ticker, signal badge */}
-              <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-2">
+              <div className="px-4 pt-3 pb-2 flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <button onClick={e => { e.stopPropagation(); toggleFav(s.ticker); }} className="shrink-0 hover:text-amber-400 transition-colors">
                     <Star className={`w-4 h-4 ${favorites.includes(s.ticker) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
@@ -555,7 +600,7 @@ export function SignalsPage() {
               </div>
 
               {/* Condition summary + Reason */}
-              <div className="px-4 pb-4 pt-2 border-t border-border">
+              <div className="px-4 pb-4 pt-2 border-t border-border mt-auto">
                 {s.analysis?.fundamental?.metrics && (() => {
                   const condSignals = getConditionSignals(s.analysis?.fundamental?.metrics ?? {});
                   const counts = countBySignal(condSignals);

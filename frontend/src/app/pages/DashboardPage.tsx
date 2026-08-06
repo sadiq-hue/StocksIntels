@@ -396,10 +396,10 @@ export function DashboardPage() {
     signals.forEach(s => { if (counts[s.signal] !== undefined) counts[s.signal]++; });
     const total = signals.length;
     const avgConf = total ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / total) : 0;
-    const highConf = signals.filter(s => s.confidence >= 80).length;
+    const peakConf = total ? Math.round(signals.reduce((a, b) => Math.max(a, b.confidence), 0)) : 0;
     const strongBuy = signals.filter(s => s.signal === "Strong Buy" || s.signal === "Buy").length;
     const strongSell = signals.filter(s => s.signal === "Sell" || s.signal === "Strong Sell").length;
-    return { total, avgConf, highConf, strongBuy, strongSell, counts };
+    return { total, avgConf, peakConf, strongBuy, strongSell, counts };
   }, [signals]);
 
   const benchmarkMetrics = useMemo(() => {
@@ -522,7 +522,7 @@ export function DashboardPage() {
           { icon: TrendingUp, color: "bg-emerald-100 text-emerald-600", label: "NSE Portfolio", value: `KES ${enhancedTotals.nseValue.toLocaleString()}`, sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
           { icon: Globe, color: "bg-indigo-100 text-indigo-600", label: "Global Portfolio", value: `$${enhancedTotals.globalValue.toLocaleString()}`, sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${brokerTotals.posCount} pos)`, valColor: "text-foreground" },
           { icon: PieChart, color: "bg-purple-100 text-purple-600", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} NSE · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
-          { icon: Sparkles, color: "bg-yellow-100 text-yellow-600", label: "AI Signals", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · ${signalSummary.highConf} high conf`, valColor: "text-foreground" },
+          { icon: Sparkles, color: "bg-yellow-100 text-yellow-600", label: "AI Signals", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: "text-foreground" },
           { icon: BarChart3, color: "bg-blue-100 text-blue-600", label: "vs Benchmarks", value: perfMeta.hasHistory ? `${benchmarkMetrics.alpha >= 0 ? '+' : ''}${benchmarkMetrics.alpha.toFixed(1)}%` : '—', sub: perfMeta.hasHistory ? `Portfolio ${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}% · NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%` : `NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%`, valColor: perfMeta.hasHistory ? (benchmarkMetrics.alpha >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
         ].map((m, i) => (
           <Card key={i} className="border shadow-sm p-5">
