@@ -225,7 +225,7 @@ export function WatchlistPage() {
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden xl:table-cell">T3</th>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden lg:table-cell">R:R</th>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Signal</th>
-                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider hidden lg:table-cell">Timeframe</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider hidden lg:table-cell">Holding Period</th>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Actions</th>
                   </tr>
                 </thead>

@@ -2408,7 +2408,7 @@ export function PortfolioPage() {
               {/* Additional details */}
               <div className="grid grid-cols-2 gap-2 text-sm">
                 {selectedRec.sector && <div className="text-muted-foreground">Sector: <span className="text-foreground">{selectedRec.sector}</span></div>}
-                {selectedRec.timeframe && <div className="text-muted-foreground">Timeframe: <span className="text-foreground">{selectedRec.timeframe}</span></div>}
+                {selectedRec.timeframe && <div className="text-muted-foreground">Holding Period: <span className="text-foreground">{selectedRec.timeframe}</span></div>}
                 {selectedRec.riskReward && <div className="text-muted-foreground">Risk/Reward: <span className="text-foreground">{selectedRec.riskReward}</span></div>}
                 {selectedRec.volume && <div className="text-muted-foreground">Volume: <span className="text-foreground">{selectedRec.volume}</span></div>}
               </div>

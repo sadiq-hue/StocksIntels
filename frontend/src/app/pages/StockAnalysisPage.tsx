@@ -1473,7 +1473,7 @@ export function StockAnalysisPage() {
                         )}
                         {stockSignal?.timeframe && (
                           <div className="bg-muted/40 rounded-lg p-2.5 border border-border/50">
-                            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Timeframe</div>
+                            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Holding Period</div>
                             <div className="text-sm font-semibold text-foreground">{stockSignal.timeframe}</div>
                           </div>
                         )}

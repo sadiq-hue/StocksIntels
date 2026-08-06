@@ -464,13 +464,13 @@ export function SignalsPage() {
               <div className="px-4 pb-3 flex items-center gap-2 text-[11px] text-muted-foreground">
                 <Badge className={`${TYPE_STYLES[s.type]} border-0 text-[10px] font-medium`}>{s.type}</Badge>
                 <span className="text-muted-foreground">|</span>
-                <span>{s.sector}</span>
+                <span>Sector: {s.sector}</span>
                 <span className="text-muted-foreground">|</span>
-                <span>{s.timeframe || "—"}</span>
+                <span>Holding Period: {s.timeframe || "—"}</span>
                 {s.country && (
                   <>
                     <span className="text-muted-foreground">|</span>
-                    <span className="font-medium text-[#0D7490]">{s.country}</span>
+                    <span className="font-medium text-[#0D7490]">Market: {s.country}</span>
                   </>
                 )}
               </div>
@@ -819,7 +819,7 @@ export function SignalsPage() {
                           );
                         })()}
                         <p>
-                          <span className="font-semibold text-foreground">Timeframe:</span> {selected.timeframe || '—'} — {timeframePlain(selected.timeframe)}.
+                          <span className="font-semibold text-foreground">Holding Period:</span> {selected.timeframe || '—'} — {timeframePlain(selected.timeframe)}.
                         </p>
                       </div>
                     );
@@ -943,13 +943,13 @@ export function SignalsPage() {
               <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge className={TYPE_STYLES[selected.type]}>{selected.type}</Badge>
-                  <span title={timeframePlain(selected.timeframe)}>Timeframe: {selected.timeframe}</span>
+                  <span title={timeframePlain(selected.timeframe)}>Holding Period: {selected.timeframe}</span>
                   <span className="text-muted-foreground">|</span>
                   <span>Sector: {selected.sector}</span>
                   {selected.country && (
                     <>
                       <span className="text-muted-foreground">|</span>
-                      <span className="font-medium text-[#0D7490]">{selected.country}</span>
+                      <span className="font-medium text-[#0D7490]">Market: {selected.country}</span>
                     </>
                   )}
                 </div>

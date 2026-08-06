@@ -245,7 +245,7 @@ function getMonitoredSignals() {
       confidence: v.confidence != null ? v.confidence : (cached && cached.confidence != null ? cached.confidence : null),
       name: cached && cached.name ? cached.name : null,
       sector: cached && cached.sector ? cached.sector : null,
-      timeframe: cached && cached.timeframe ? cached.timeframe : null,
+      timeframe: v.timeframe || (cached && cached.timeframe ? cached.timeframe : null),
       market: isNse ? 'NSE' : 'Global',
       currency: isNse ? 'KES' : 'USD',
       openedAt: new Date(v.timestamp).toISOString(),
@@ -837,7 +837,7 @@ async function restoreStateFromDb() {
     // survives a restart; short-term types are capped at OPEN_POSITION_MAX_AGE_HOURS
     // so stale short-term buys don't pile up forever.
     const openRes = await pool.query(
-      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, trade_type, position_size, generated_at, reason, analysis_data, confidence
+      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, trade_type, position_size, generated_at, reason, analysis_data, confidence, timeframe
        FROM signal_history
        WHERE generated_at > NOW() - CASE
            WHEN trade_type IN ('Long Term','Long Term Value') THEN $1::interval
@@ -871,6 +871,7 @@ async function restoreStateFromDb() {
         timestamp: genAt, result: null, lastProgressAlert: 0,
         reason: row.reason || '', analysis: row.analysis_data || null,
         confidence: row.confidence != null ? parseInt(row.confidence) : null,
+        timeframe: row.timeframe || null,
       });
     }
     console.log(`[SignalService] Restored open live positions from signal_history`);
@@ -3855,6 +3856,23 @@ function scoreNewsInsider(info) {
 // ─── Shared Signal Builder ──────────────────────────────────────────────────
 // Consolidates scoring, confidence, position sizing, and signal object construction
 // used by both generateSignals() and generateSingleSignal().
+// Renders the engine-computed holding period (trading sessions to reach target1
+// at the stock's average daily range) into a human label, so the value shown on
+// the cards reflects each stock's real volatility instead of a static per-type
+// string like "2-4 weeks" for everything. Long-term classifications are floored
+// at their classified horizon — the engine's score-based trade type says "hold
+// for months", so an ATR estimate of a few weeks never contradicts it.
+function formatHoldingPeriod(days, tradeType) {
+  if (tradeType === 'Long Term' || tradeType === 'Long Term Value') return '3-6 months';
+  if (days == null || !isFinite(days) || days <= 0) return null;
+  if (days <= 5) return '~1 week';
+  if (days <= 10) return '1-2 weeks';
+  if (days <= 15) return '~2 weeks';
+  if (days <= 25) return '2-4 weeks';
+  if (days <= 40) return '~1 month';
+  if (days <= 90) return '1-3 months';
+  return '3-6 months';
+}
 async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, catalyst, insiderNews, priceHistory, degFactor }) {
   // Read scoring and portfolio config once at the top
   const sc = engineConfig.getConfig().scoring?.signal_confidence || {};
@@ -4025,7 +4043,12 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     reason += ` | Insider ${dirWord}: ${insider.buyCount} buys / ${insider.sellCount} sells${netTxt} (score ${insider.score}${latest})`;
   }
   reason += '.';
+  // Expected holding period derived from the engine's own volatility measurement:
+  // how many trading sessions price needs to travel from entry to target1 at the
+  // stock's average daily range (tradeLevels.expectedDays). Falls back to the
+  // per-type label when no target exists (Sell/Avoid ratings have no levels).
   const timeframes = { 'Aggressive Buy': '1-4 weeks', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks', 'Long Term Value': '3-6 months', 'Long Term': '3-6 months', 'Avoid': 'N/A' };
+  const holdingPeriod = formatHoldingPeriod(tradeLevels.expectedDays, tradeType);
   const isNse = NSE_SYMBOLS.includes(symbol);
   const obj = {
     id: `signal-${symbol}-${Date.now()}`, ticker: symbol, name: stock.name,
@@ -4034,7 +4057,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     type: tradeType, signal: sig.signal, action: sig.action, entry: tradeLevels.entry,
     stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2, target3: tradeLevels.target3,
     riskReward: tradeLevels.riskReward, confidence, positionSize: positionSize + '%',
-    timeframe: timeframes[tradeType], sector: stock.sector, volume: formattedVolume, rawVolume: volume || 0,
+    timeframe: holdingPeriod || timeframes[tradeType], sector: stock.sector, volume: formattedVolume, rawVolume: volume || 0,
     weeklyTrend: weeklyTrend.trend, regime: regime.regime,
     catalyst: cat.direction ? {
       type: cat.type, direction: cat.direction, strength: cat.strength || 1,

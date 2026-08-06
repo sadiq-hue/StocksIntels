@@ -107,13 +107,21 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
   const risk = Math.abs(entry - stopLoss);
   const reward = Math.abs(target1 - entry);
   const riskReward = risk > 0 ? (reward / risk).toFixed(1) : '1.0';
+  // Expected holding period (trading sessions) for the trade to play out: the
+  // distance price must travel to hit target1, divided by the stock's own average
+  // daily range. Uses the real volatility the stop was sized from, so a calm name
+  // shows a longer horizon than a fast mover instead of a static per-type label.
+  const expectedDays = signal.action === 'buy' && target1 > entry && volatility > 0
+    ? Math.max(1, Math.ceil((target1 - entry) / (currentPrice * volatility)))
+    : null;
   return {
     entry: Math.round(entry * 100) / 100,
     stopLoss: Math.round(stopLoss * 100) / 100,
     target1: Math.round(target1 * 100) / 100,
     target2: Math.round(target2 * 100) / 100,
     target3: Math.round(target3 * 100) / 100,
-    riskReward: parseFloat(riskReward)
+    riskReward: parseFloat(riskReward),
+    expectedDays,
   };
 }
 
@@ -262,6 +270,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
           type: newSignal.type,
           reason: newSignal.reason || '', analysis: newSignal.analysis || null,
           confidence: newSignal.confidence != null ? newSignal.confidence : null,
+          timeframe: newSignal.timeframe || null,
         });
       }
     }
@@ -278,6 +287,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
         type: newSignal.type,
         reason: newSignal.reason || '', analysis: newSignal.analysis || null,
         confidence: newSignal.confidence != null ? newSignal.confidence : null,
+        timeframe: newSignal.timeframe || null,
       });
     }
   }
