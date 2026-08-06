@@ -1239,16 +1239,21 @@ async function getWeeklyTrend(symbol) {
 async function computeBacktestStats({ days = 30, limit = 500, signalType, minConfidence = 0 } = {}) {
   try {
     console.log(`[Backtest] computeBacktestStats requested: days=${days}, signalType=${signalType || 'all'}`);
-    // Primary data source: signal_outcomes — has actual exit prices and real win/loss results
+    // Primary data source: signal_outcomes — has actual exit prices and real win/loss results.
+    // Single consistent source filter + signal filter shared by every query below so the
+    // aggregate, by-signal, returns and outcome-row figures all reconcile.
+    const tradable = "signal IN ('Strong Buy','Buy','Sell','Strong Sell')";
+    const conditions = ['recorded_at > NOW() - $1::interval', "source IN ('live','backtest')", tradable];
+    const params = [`${days} days`];
+    let idx = 2;
+    if (signalType && signalType !== 'All' && signalType !== 'all') { conditions.push(`signal = $${idx++}`); params.push(signalType); }
+    const whereClause = conditions.join(' AND ');
+
     let outcomeRows;
     try {
-      const conditions = ['recorded_at > NOW() - $1::interval', "source != 'backfill'"];
-      const params = [`${days} days`];
-      let idx = 2;
-      if (signalType && signalType !== 'All') { conditions.push(`signal = $${idx++}`); params.push(signalType); }
       const result = await pool.query(
         `SELECT ticker, signal, entry_price, exit_price, result, recorded_at
-         FROM signal_outcomes ${'WHERE ' + conditions.join(' AND ')}
+         FROM signal_outcomes WHERE ${whereClause}
          ORDER BY recorded_at DESC LIMIT $${idx}`,
         [...params, limit]
       );
@@ -1263,12 +1268,12 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
       // Aggregate win/loss counts
       const aggResult = await pool.query(`
         SELECT
-          COUNT(*) FILTER (WHERE result = 'win' AND (signal IN ('Strong Buy','Buy','Sell','Strong Sell'))) AS wins,
-          COUNT(*) FILTER (WHERE result = 'loss' AND (signal IN ('Strong Buy','Buy','Sell','Strong Sell'))) AS losses,
-          COUNT(*) FILTER (WHERE signal IN ('Strong Buy','Buy','Sell','Strong Sell')) AS total
+          COUNT(*) FILTER (WHERE result = 'win') AS wins,
+          COUNT(*) FILTER (WHERE result = 'loss') AS losses,
+          COUNT(*) AS total
         FROM signal_outcomes
-        WHERE recorded_at > NOW() - $1::interval AND source != 'backfill'
-      `, [`${days} days`]);
+        WHERE ${whereClause}
+      `, params);
       const agg = aggResult.rows[0];
       const total = parseInt(agg.total) || 0;
       const wins = parseInt(agg.wins) || 0;
@@ -1281,10 +1286,9 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
           COUNT(*) FILTER (WHERE result = 'loss') AS losses,
           COUNT(*) AS total
         FROM signal_outcomes
-        WHERE recorded_at > NOW() - $1::interval
-          AND signal IN ('Strong Buy','Buy','Sell','Strong Sell')
+        WHERE ${whereClause}
         GROUP BY signal
-      `, [`${days} days`]);
+      `, params);
       const bySignal = {};
       for (const r of bySignalResult.rows) {
         bySignal[r.signal] = {
@@ -1302,11 +1306,10 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
             (exit_price - entry_price) / entry_price * 100 AS return_pct,
             COALESCE(position_size, 25) AS position_size
           FROM signal_outcomes
-          WHERE recorded_at > NOW() - $1::interval
-            AND signal IN ('Strong Buy','Buy','Sell','Strong Sell')
+          WHERE ${whereClause}
             AND entry_price > 0 AND exit_price > 0 AND exit_price != entry_price
           ORDER BY recorded_at ASC
-        `, [`${days} days`]);
+        `, params);
 
         let avgReturn = 0, profitFactor = 0, sharpe = 0, maxDrawdown = 0;
         let retVals = returnsResult.rows.map(r => ({ return: parseFloat(r.return_pct), posSize: parseInt(r.position_size) || 25 }));
