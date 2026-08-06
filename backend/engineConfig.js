@@ -6,7 +6,7 @@ const DEFAULTS = {
   enabled: true,
   preset: 'simple', // 'simple' or 'advanced' — controls which knobs are returned by GET /api/signals/engine/config?view=simple
   signalInterval: 300000,
-  maxSymbols: 500,
+  maxSymbols: 2000,
   minConfidence: 30,
   backtestDays: 30,
   forwardTestMinAge: 28800000,

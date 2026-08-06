@@ -3030,7 +3030,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   // universe cannot break a cycle. maxSymbols (Config page) remains the cap.
   const symbols = [...rawSymbols];
   const cfg = engineConfig.getConfig();
-  const maxSymbols = cfg.maxSymbols || 500;
+  const maxSymbols = cfg.maxSymbols || 2000;
   if (!marketData && symbols.length > maxSymbols) {
     symbols.length = maxSymbols;
   }
