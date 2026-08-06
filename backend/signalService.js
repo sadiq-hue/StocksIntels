@@ -3021,8 +3021,14 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   const signals = [];
   // When marketData is provided (e.g. from publisher), only process those symbols
   const rawSymbols = marketData ? Object.keys(marketData) : ALL_SYMBOLS;
-  // Include NSE symbols (they have their own quote sources) + US stocks with SEC EDGAR CIK mapping
-  const symbols = rawSymbols.filter(s => NSE_SYMBOLS.includes(s) || edgarService.cikLookup(s));
+  // Track the entire universe. US names used to require a SEC EDGAR CIK mapping,
+  // but cikLookup was only a membership gate here — never used to build a signal.
+  // Real fundamentals come from the shared Yahoo/Alpha Vantage pipeline
+  // (fetchRealFinancialMetrics) which covers every US ticker, so the gate only
+  // starved ~200 otherwise-quotable names of signals. Symbols that fail quote or
+  // fundamental fetch are skipped downstream by processSymbol, so a broader
+  // universe cannot break a cycle. maxSymbols (Config page) remains the cap.
+  const symbols = [...rawSymbols];
   const cfg = engineConfig.getConfig();
   const maxSymbols = cfg.maxSymbols || 500;
   if (!marketData && symbols.length > maxSymbols) {
