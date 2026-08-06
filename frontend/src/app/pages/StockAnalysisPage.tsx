@@ -1151,7 +1151,7 @@ export function StockAnalysisPage() {
                         <ReferenceLine y={stockSignal.stopLoss} stroke="#dc2626" strokeWidth={1} strokeDasharray="4 4" label={{ value: 'SL', position: 'right', fill: '#dc2626', fontSize: 10 }} />
                       )}
                       {stockSignal?.target1 && (
-                        <ReferenceLine y={stockSignal.target1} stroke="#059669" strokeWidth={1} strokeDasharray="4 4" label={{ value: 'T1', position: 'right', fill: '#059669', fontSize: 10 }} />
+                        <ReferenceLine y={stockSignal.target1} stroke="#059669" strokeWidth={1} strokeDasharray="4 4" label={{ value: 'Target 1', position: 'right', fill: '#059669', fontSize: 10 }} />
                       )}
                       {stockSignal?.target2 && (
                         <ReferenceLine y={stockSignal.target2} stroke="#0D7490" strokeWidth={1} strokeDasharray="4 4" label={{ value: 'T2', position: 'right', fill: '#0D7490', fontSize: 10 }} />
