@@ -242,7 +242,7 @@ function getMonitoredSignals() {
       positionSize: v.positionSize || 25,
       price,
       change,
-      confidence: cached && cached.confidence != null ? cached.confidence : null,
+      confidence: v.confidence != null ? v.confidence : (cached && cached.confidence != null ? cached.confidence : null),
       name: cached && cached.name ? cached.name : null,
       sector: cached && cached.sector ? cached.sector : null,
       timeframe: cached && cached.timeframe ? cached.timeframe : null,
@@ -837,7 +837,7 @@ async function restoreStateFromDb() {
     // survives a restart; short-term types are capped at OPEN_POSITION_MAX_AGE_HOURS
     // so stale short-term buys don't pile up forever.
     const openRes = await pool.query(
-      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, trade_type, position_size, generated_at, reason, analysis_data
+      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, trade_type, position_size, generated_at, reason, analysis_data, confidence
        FROM signal_history
        WHERE generated_at > NOW() - CASE
            WHEN trade_type IN ('Long Term','Long Term Value') THEN $1::interval
@@ -870,6 +870,7 @@ async function restoreStateFromDb() {
         positionSize: parseInt(row.position_size) || 25,
         timestamp: genAt, result: null, lastProgressAlert: 0,
         reason: row.reason || '', analysis: row.analysis_data || null,
+        confidence: row.confidence != null ? parseInt(row.confidence) : null,
       });
     }
     console.log(`[SignalService] Restored open live positions from signal_history`);

@@ -261,6 +261,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
           timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
           type: newSignal.type,
           reason: newSignal.reason || '', analysis: newSignal.analysis || null,
+          confidence: newSignal.confidence != null ? newSignal.confidence : null,
         });
       }
     }
@@ -276,6 +277,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
         timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
         type: newSignal.type,
         reason: newSignal.reason || '', analysis: newSignal.analysis || null,
+        confidence: newSignal.confidence != null ? newSignal.confidence : null,
       });
     }
   }
