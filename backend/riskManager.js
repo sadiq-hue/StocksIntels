@@ -1,6 +1,6 @@
 // Risk management — position sizing, trade levels, portfolio constraints, outcome tracking.
 // Functions are stateless and take all required state as parameters.
-const { calculateATR } = require('./technicalIndicators');
+const { calculateATR, findResistanceLevels } = require('./technicalIndicators');
 const { kellyFraction, monteCarloVaR } = require('./portfolioOptimizer');
 
 // ─── Kelly Criterion Position Sizing ────────────────────────────────────────
@@ -57,25 +57,35 @@ const MIN_STOP_PCT = 0.10;
 // ranges of room, or one bad day stops it out on noise. A tighter ceiling (the
 // old 15%) truncated an 8%+ daily-range stock's stop to less than two ranges.
 const MAX_STOP_PCT = 0.30;
-// Target multiples keep a wide risk-reward profile at any stop width: the
-// investor holds for the long term (weeks to months), so T1/T2/T3 are sized at
-// 3x / 5x / 8x the stop distance instead of the old tight ~1.33x / ~2.33x.
-// T1 is the resolution target (touch = win); T2/T3 are informational upside.
-const TARGET1_MULT = 3;
-const TARGET2_MULT = 5;
-const TARGET3_MULT = 8;
+// Target multiples anchor T1/T2/T3 to the actual stop distance, so the
+// risk-reward profile holds at any stop width: T1 is the resolution target
+// (touch = win) sized at 2x the risk (a guaranteed minimum 2:1 reward), while
+// T2/T3 are informational upside at 4x / 6x the risk.
+const TARGET1_MULT = 2;
+const TARGET2_MULT = 4;
+const TARGET3_MULT = 6;
+
+// T1 is the near-term resolution target, anchored to the real stop distance so
+// the 2:1 reward floor is a genuine guarantee for every name (calm or volatile).
+// T2/T3 are then snapped onto real pivot-high resistance when a suitable level
+// exists, so the informational targets line up with actual supply zones instead
+// of arbitrary prices. A level is accepted when it sits no more than
+// RESISTANCE_SNAP_TOLERANCE above the raw risk-multiple target (chasing a
+// distant historical print would blow the spacing out of proportion). When no
+// resistance is close enough the raw multiple is kept, but MIN_TARGET_SPACING
+// guarantees each target sits at least that far above the previous one so
+// T1 < T2 < T3 always holds strictly.
+const RESISTANCE_SNAP_TOLERANCE = 0.30;
+const MIN_TARGET_SPACING = 0.15;
 
 function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = MIN_STOP_PCT, tradeType = 'Swing Trade') {
   const volatility = calculateATR(priceHistory);
   const mult = TRADE_TYPE_STOP_MULT[tradeType] || 1.5;
   const baseDistancePct = Math.max(volatility * mult, MIN_STOP_PCT);
-  let entry, stopLoss, target1, target2, target3;
+  let entry, stopLoss;
   if (signal.action === 'buy') {
     entry = currentPrice;
     stopLoss = currentPrice - (currentPrice * baseDistancePct);
-    target1 = currentPrice + (currentPrice * baseDistancePct * TARGET1_MULT);
-    target2 = currentPrice + (currentPrice * baseDistancePct * TARGET2_MULT);
-    target3 = currentPrice + (currentPrice * baseDistancePct * TARGET3_MULT);
   } else if (signal.action === 'sell') {
     // Exit/avoid semantics: a Sell is a rating ("the fundamentals/technical/
     // financial/sentiment no longer support holding"), not a mirrored short
@@ -88,9 +98,6 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
   } else {
     entry = currentPrice;
     stopLoss = currentPrice * (1 - stopLossPct);
-    target1 = currentPrice * (1 + stopLossPct);
-    target2 = currentPrice * (1 + stopLossPct * 2);
-    target3 = currentPrice * (1 + stopLossPct * 3);
   }
   // Cap stop distance at 2x the base stop, but never more than MAX_STOP_PCT of
   // price so an extreme name can't produce an absurd 60%+ stop. The 30% ceiling
@@ -101,9 +108,35 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
   const maxStopDistance = Math.min(currentPrice * baseDistancePct * 2, currentPrice * MAX_STOP_PCT);
   if (signal.action === 'buy') {
     stopLoss = Math.max(stopLoss, currentPrice - maxStopDistance);
-  } else if (signal.action === 'sell') {
-    stopLoss = Math.min(stopLoss, currentPrice + maxStopDistance);
   }
+
+  // Targets anchor to the final stop distance, so the 2:1 / 4:1 / 6:1 ladder is
+  // exact even when the cap widens the stop on a pathological name.
+  let target1, target2, target3;
+  if (signal.action !== 'sell') {
+    const risk = Math.abs(entry - stopLoss);
+    target1 = entry + risk * TARGET1_MULT;
+    target2 = entry + risk * TARGET2_MULT;
+    target3 = entry + risk * TARGET3_MULT;
+  }
+
+  // Resistance-aware T2/T3 (buy/hold only — sells have no levels). T1 stays at
+  // its 2x-risk anchor; each informational target is pushed onto the next real
+  // pivot-high resistance at or above the raw multiple (which already enforces
+  // MIN_TARGET_SPACING), so the exit map matches chart structure. Falls back to
+  // the spacing-guaranteed multiple when no level is close enough.
+  if (signal.action !== 'sell' && priceHistory) {
+    const levels = findResistanceLevels(priceHistory, entry);
+    const snapUp = (raw, prev) => {
+      const floor = Math.max(raw, prev * (1 + MIN_TARGET_SPACING));
+      const lvl = levels.find(p => p >= floor);
+      if (lvl != null && lvl <= raw * (1 + RESISTANCE_SNAP_TOLERANCE)) return lvl;
+      return floor;
+    };
+    target2 = snapUp(target2, target1);
+    target3 = snapUp(target3, target2);
+  }
+
   const risk = Math.abs(entry - stopLoss);
   const reward = Math.abs(target1 - entry);
   const riskReward = risk > 0 ? (reward / risk).toFixed(1) : '1.0';

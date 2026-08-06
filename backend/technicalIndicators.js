@@ -111,6 +111,43 @@ function calculateATR(prices) {
   return Math.min(Math.max(atr, 0.01), 0.15);
 }
 
+// Find pivot-high resistance levels above a floor price from the recent price
+// history. A pivot high is a bar whose high is the strict local max over +/-k
+// bars; bars near the end of the window are skipped (an unconfirmed print is not
+// a stable supply zone). Levels within ~2% of each other are clustered into one
+// (keeping the highest), then returned ascending. Falls back to close prices
+// when true intraday highs are unavailable (thin NSE names).
+function findResistanceLevels(prices, floorPrice = null, pivotRadius = 3, clusterPct = 0.02) {
+  if (!Array.isArray(prices) || prices.length < pivotRadius * 2 + 2) return [];
+  const hasRange = Array.isArray(prices.highs) && prices.highs.length === prices.length;
+  const val = (i) => hasRange ? prices.highs[i] : prices[i];
+  const pivots = [];
+  for (let i = pivotRadius; i < prices.length - pivotRadius; i++) {
+    const h = val(i);
+    if (h == null || !Number.isFinite(h) || h <= 0) continue;
+    let isPivot = true;
+    for (let j = i - pivotRadius; j <= i + pivotRadius; j++) {
+      if (j === i) continue;
+      const nj = val(j);
+      if (nj == null || !Number.isFinite(nj) || nj >= h) { isPivot = false; break; }
+    }
+    if (isPivot) pivots.push(h);
+  }
+  pivots.sort((a, b) => a - b);
+  const clustered = [];
+  for (const p of pivots) {
+    const last = clustered[clustered.length - 1];
+    if (last != null && (p - last) / last <= clusterPct) {
+      if (p > last) clustered[clustered.length - 1] = p;
+    } else {
+      clustered.push(p);
+    }
+  }
+  return floorPrice != null
+    ? clustered.filter(p => p > floorPrice)
+    : clustered;
+}
+
 module.exports = {
   calculateRSI,
   calculateEMASeries,
@@ -119,4 +156,5 @@ module.exports = {
   calculateBollingerBands,
   calculateSMA,
   calculateATR,
+  findResistanceLevels,
 };
