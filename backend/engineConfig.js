@@ -10,6 +10,7 @@ const DEFAULTS = {
   minConfidence: 30,
   backtestDays: 30,
   forwardTestMinAge: 28800000,
+  retentionDays: 365,
 
   // Webhook URLs for alerting (empty = no webhook)
   alerts: {

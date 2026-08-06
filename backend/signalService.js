@@ -71,9 +71,11 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
 const SIGNAL_WINDOW_DAYS = 90;
 // Physical retention is decoupled from the display/backtest window: the runtime
 // window (SIGNAL_WINDOW_DAYS) decides what the stats, live/forward test and auto
-// backtest show, while RETENTION_DAYS decides how long signal_history and other
-// audit-critical rows are kept before the scheduled cleanup deletes them. Audit
-// trails must survive far longer than the evaluation window, so keep 1yr+ here.
+// backtest show, while retentionDays (engine config, default 365; env override
+// RETENTION_DAYS) decides how long signal_history and other audit-critical rows
+// are kept before the scheduled cleanup deletes them. Audit trails must survive
+// far longer than the evaluation window, so keep 1yr+ here. The value is read at
+// runtime (not cached) so it can be edited from the admin Config page.
 const RETENTION_DAYS = Math.max(90, parseInt(process.env.RETENTION_DAYS || '365', 10) || 365);
 // Only the most recent Buy signal per ticker is restored as an open monitored
 // position after a restart. Anything older than this is treated as a stale
@@ -2886,12 +2888,13 @@ async function cleanupOldSignals() {
     // open-signal restore and historical backtests still see Long Term signals that
     // can stay open up to ~90 days. A 7-day prune made those signals disappear and
     // silently shrank Monitored Signals / history after restarts.
-    // Physical cleanup uses RETENTION_DAYS (default 365), NOT SIGNAL_WINDOW_DAYS:
-    // the signal history is the primary audit record and must survive longer than
-    // the stats/backtest window it feeds.
+    // Physical cleanup uses the runtime retentionDays config (admin Config page,
+    // default 365) NOT SIGNAL_WINDOW_DAYS: the signal history is the primary audit
+    // record and must survive longer than the stats/backtest window it feeds.
+    const retentionDays = Math.max(90, parseInt(engineConfig.getConfig().retentionDays, 10) || RETENTION_DAYS);
     const result = await pool.query(
       `DELETE FROM signal_history WHERE generated_at < NOW() - make_interval(days => $1::int)`,
-      [RETENTION_DAYS]
+      [retentionDays]
     );
     if (result.rowCount > 0) {
       console.log(`[SignalService] Cleaned ${result.rowCount} old signal records`);

@@ -46,7 +46,7 @@ interface AuditResult {
 
 interface EngineConfig {
   enabled: boolean; signalInterval: number; maxSymbols: number; minConfidence: number;
-  backtestDays: number; forwardTestMinAge: number;
+  backtestDays: number; forwardTestMinAge: number; retentionDays: number;
   weights: { fundamental: number; technical: number; financial: number; macro: number };
   portfolio: { maxConcentration: number; maxDrawdown: number; stopLoss: number };
 }
@@ -748,6 +748,7 @@ function ConfigPanel() {
           <FieldRow label="Min Confidence" value={config.minConfidence} unit="%" onChange={v => updateField("minConfidence", parseInt(v) || 40)} />
           <FieldRow label="Backtest Days" value={config.backtestDays} unit="days" onChange={v => updateField("backtestDays", parseInt(v) || 30)} />
           <FieldRow label="Forward Test Min Age" value={config.forwardTestMinAge} unit="ms" onChange={v => updateField("forwardTestMinAge", parseInt(v) || 3600000)} />
+          <FieldRow label="History Retention" value={config.retentionDays} unit="days" onChange={v => updateField("retentionDays", parseInt(v) || 365)} />
         </Card>
       </div>
 
