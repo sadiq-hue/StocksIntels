@@ -121,6 +121,103 @@ function insiderPositive(ins: { netShares: number | null; buyCount: number; sell
   return ins.netShares != null ? ins.netShares >= 0 : ins.buyCount >= ins.sellCount;
 }
 
+// ── Plain-language explanations ──────────────────────────────────────────────
+const CONDITION_PLAIN: Record<string, string> = {
+  peSignal: "Price compared to the company's earnings, vs similar companies — is the stock cheap or expensive?",
+  evSignal: "What you pay for the whole business vs its earnings — a cheaper multiple is usually better.",
+  pbSignal: "Price vs the value of the company's assets — how much you pay per dollar of assets.",
+  divSignal: "Cash the company pays shareholders each year as a % of the share price.",
+  revSignal: "How fast sales are growing compared to the same period last year.",
+  epsSignal: "Whether the latest profit report beat analyst expectations — surprises can move the stock.",
+  mgnSignal: "Whether the company's profit margins are widening or shrinking over time.",
+  fcfSignal: "Cash left after expenses and reinvestment — the real money the business actually generates.",
+  deSignal: "How much debt the company carries vs shareholder money — lower is safer.",
+  crSignal: "Can it pay its short-term bills with short-term assets? Above 1.5 is generally healthy.",
+  roeSignal: "Profit earned per dollar of shareholder money — how efficiently it uses investors' capital.",
+  altSignal: "Bankruptcy-risk score. Above 3 = low risk; below 1.8 = danger zone.",
+  insiderSignal: "Are the company's own directors and executives buying or selling its shares?",
+  newsSignal: "The overall tone of recent news coverage — positive, negative, or mixed.",
+};
+
+const MACRO_LABELS: Record<string, string> = {
+  pmi: "Manufacturing Activity",
+  gdp: "GDP Growth",
+  gdpGrowth: "GDP Growth",
+  inflation: "Inflation",
+  creditRating: "Credit Rating",
+  politicalRisk: "Political Risk",
+  currentAccount: "Current Account",
+  interestRateDifferential: "Interest Rates vs Fed",
+};
+
+const MACRO_PLAIN: Record<string, string> = {
+  pmi: "Business activity gauge — above 50 means the economy is growing, below 50 it's shrinking.",
+  gdp: "How fast the whole economy is growing — steady growth supports company earnings.",
+  gdpGrowth: "How fast the whole economy is growing — steady growth supports company earnings.",
+  inflation: "How fast prices are rising — high inflation squeezes margins and consumer spending.",
+  creditRating: "The country's creditworthiness — investment grade means a safer backdrop for business.",
+  politicalRisk: "Political stability — a low score means a very stable environment.",
+  currentAccount: "Trade and income balance with the rest of the world — a large deficit can weaken the currency.",
+  interestRateDifferential: "Local interest rates vs the US Federal Reserve — affects currency strength and borrowing costs.",
+};
+
+function ratingPlain(signal: string): string {
+  switch (signal) {
+    case 'BUY': return "Positive — helps this stock";
+    case 'STRONG BUY': return "Strongly positive — a clear tailwind";
+    case 'SELL': return "Negative — a headwind to watch";
+    case 'WATCH': return "Watch closely — could go either way";
+    case 'SUPPRESS': return "A red-flag override — this one metric alone blocks a buy";
+    default: return "Neutral — no strong impact";
+  }
+}
+
+function confidencePlain(conf: number): string {
+  if (conf >= 80) return "high conviction";
+  if (conf >= 60) return "moderate conviction";
+  if (conf >= 40) return "balanced — the model sees real pros and cons";
+  return "low conviction";
+}
+
+function plainSummary(s: StockSignal): string {
+  const verb = s.signal === "Strong Buy" ? "a strong buy"
+    : s.signal === "Buy" ? "a buy"
+    : s.signal === "Hold" ? "a hold"
+    : s.signal === "Sell" ? "a sell"
+    : s.signal === "Strong Sell" ? "a strong sell"
+    : s.signal;
+  const conf = s.confidence;
+  let tail: string;
+  if (conf >= 60) tail = "This is a relatively strong signal — but always check the levels below.";
+  else if (conf >= 40) tail = "Treat this as a starting point, not a certainty — the model is fairly balanced.";
+  else tail = "Be cautious — the model is not very confident about this one.";
+  return `The model rates this ${verb} with ${confidencePlain(conf)} (${conf}% confidence). ${tail}`;
+}
+
+function reasonBullets(reason: string): string[] {
+  return reason
+    .split('|')
+    .flatMap(part => part.split(';'))
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function gradePlain(grade: string): string {
+  const head = (grade || '').trim().charAt(0).toUpperCase();
+  if (['A', 'B'].includes(head)) return "strong";
+  if (head === 'C') return "average";
+  if (['D', 'F'].includes(head)) return "weak";
+  return "";
+}
+
+function timeframePlain(timeframe: string | null | undefined): string {
+  const t = (timeframe || '').toLowerCase();
+  if (t.includes('intraday') || t.includes('day')) return "an intraday trade — opened and closed within the same trading day";
+  if (t.includes('week')) return "a short-term trade, entered and exited within a few weeks — not a long-term investment";
+  if (t.includes('month')) return "a medium-term position, meant to be held over months";
+  return "a longer-term position, meant to be held for months or more";
+}
+
 export function SignalsPage() {
   const [signals, setSignals] = useState<StockSignal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -450,6 +547,7 @@ export function SignalsPage() {
                     {(() => { const s = SIGNAL_STYLES[selected.signal]; const I = s.icon; return <Badge className={`${s.bg} ${s.text} border-0`}><I className="w-3 h-3 mr-1" />{selected.signal}</Badge>; })()}
                   </div>
                   <p className="text-sm text-muted-foreground truncate">{selected.name}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed mt-1.5 max-w-md">{plainSummary(selected)}</p>
                 </div>
                 <button onClick={() => setSelected(null)} className="p-1.5 hover:bg-accent rounded-md transition-colors shrink-0"><span className="text-muted-foreground text-lg font-bold">&times;</span></button>
               </div>
@@ -461,7 +559,10 @@ export function SignalsPage() {
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold text-foreground mb-3">Trade Parameters</h3>
+                <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
+                  <h3 className="text-sm font-semibold text-foreground">Trade Parameters</h3>
+                  <p className="text-[10px] text-muted-foreground italic">The action plan — what to do, step by step</p>
+                </div>
                 <div className={`grid grid-cols-2 gap-2 ${selected.target3 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
                   <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 text-center"><p className="text-[10px] font-medium text-blue-600 uppercase">Entry</p><p className="text-sm font-bold text-blue-900 font-mono">{fmtPrice(selected, selected.entry)}</p></div>
                   <div className="bg-red-50 rounded-lg p-3 border border-red-100 text-center"><p className="text-[10px] font-medium text-red-600 uppercase">Stop</p><p className="text-sm font-bold text-red-900 font-mono">{fmtPrice(selected, selected.stopLoss)}</p></div>
@@ -469,12 +570,25 @@ export function SignalsPage() {
                   <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">T2</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target2)}</p></div>
                   {selected.target3 && <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">T3</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target3)}</p></div>}
                 </div>
+                <div className="mt-2 space-y-1 text-[11px] text-muted-foreground leading-relaxed">
+                  <p><span className="font-semibold text-blue-700">Entry {fmtPrice(selected, selected.entry)}</span> — the price you should wait for before buying.</p>
+                  <p><span className="font-semibold text-red-700">Stop {fmtPrice(selected, selected.stopLoss)}</span> — the safety-net price. If the stock drops to this level, sell immediately to prevent further losses.</p>
+                  {selected.target1 && <p><span className="font-semibold text-emerald-700">T1 {fmtPrice(selected, selected.target1)}</span> — first profit goal. Many investors take some profit here.</p>}
+                  {selected.target2 && <p><span className="font-semibold text-emerald-700">T2 {fmtPrice(selected, selected.target2)}</span> — middle profit goal — take more profit if it reaches here.</p>}
+                  {selected.target3 && <p><span className="font-semibold text-emerald-700">T3 {fmtPrice(selected, selected.target3)}</span> — ultimate profit goal — the full win.</p>}
+                  {selected.riskReward != null && !Number.isNaN(selected.riskReward) && (
+                    <p><span className="font-semibold text-foreground">Risk-to-reward {selected.riskReward.toFixed(1)}:1</span> — for every $1 you risk, the plan targets {selected.riskReward.toFixed(1)} of profit.</p>
+                  )}
+                </div>
               </div>
 
               {/* Risk / ML detail row */}
               {(selected.positionSize || selected.var95 || selected.var99 || selected.cvar95 || selected.mlWinProb || selected.regime) && (
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-3">Risk & ML</h3>
+                  <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
+                    <h3 className="text-sm font-semibold text-foreground">Risk & ML</h3>
+                    <p className="text-[10px] text-muted-foreground italic">How risky this trade is, and how big a slice of your money it should be</p>
+                  </div>
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                     {selected.positionSize && parseInt(selected.positionSize) > 0 && <div className="bg-purple-50 rounded-lg p-2.5 border border-purple-100 text-center"><p className="text-[9px] font-medium text-purple-600 uppercase">Size</p><p className="text-sm font-bold text-purple-900">{selected.positionSize}</p></div>}
                     {selected.var95 && <div className="bg-orange-50 rounded-lg p-2.5 border border-orange-100 text-center"><p className="text-[9px] font-medium text-orange-600 uppercase">VaR 95%</p><p className="text-sm font-bold text-orange-900">{selected.var95}</p></div>}
@@ -483,6 +597,14 @@ export function SignalsPage() {
                     {selected.mlWinProb && <div className="bg-blue-50 rounded-lg p-2.5 border border-blue-100 text-center"><p className="text-[9px] font-medium text-blue-600 uppercase">ML Win Prob</p><p className="text-sm font-bold text-blue-900">{selected.mlWinProb}</p></div>}
                     {selected.regime && <div className="bg-muted rounded-lg p-2.5 border border-border text-center"><p className="text-[9px] font-medium text-muted-foreground uppercase">Regime</p><p className={`text-sm font-bold ${selected.regime === 'bull' ? 'text-emerald-600' : selected.regime === 'bear' ? 'text-red-600' : 'text-foreground'}`}>{selected.regime}</p></div>}
                   </div>
+                  <div className="mt-2 space-y-1 text-[11px] text-muted-foreground leading-relaxed">
+                    {selected.positionSize && parseInt(selected.positionSize) > 0 && <p><span className="font-semibold text-purple-700">Size {selected.positionSize}</span> — the suggested share of your investment money for this single trade.</p>}
+                    {selected.var95 && <p><span className="font-semibold text-orange-700">VaR 95% {selected.var95}</span> — the worst loss expected on a normal bad day (only about 5% of days lose more).</p>}
+                    {selected.var99 && <p><span className="font-semibold text-orange-700">VaR 99% {selected.var99}</span> — the worst loss expected on a rare, extreme day.</p>}
+                    {selected.cvar95 && <p><span className="font-semibold text-red-700">CVaR {selected.cvar95}</span> — the average loss in the worst 5% of scenarios.</p>}
+                    {selected.mlWinProb && <p><span className="font-semibold text-blue-700">ML Win Prob {selected.mlWinProb}</span> — how often this machine-learning model has been right on similar setups in the past.</p>}
+                    {selected.regime && <p><span className="font-semibold text-foreground">Regime: {selected.regime}</span> — the broad market state the model detects. Bull = prices generally rising, Bear = falling, Neutral = sideways.</p>}
+                  </div>
                 </div>
               )}
 
@@ -490,7 +612,10 @@ export function SignalsPage() {
                 <>
                   {/* ── Why This Signal ── */}
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-3">Why This Signal</h3>
+                    <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
+                      <h3 className="text-sm font-semibold text-foreground">Why This Signal</h3>
+                      <p className="text-[10px] text-muted-foreground italic">The company health check — how the business itself looks</p>
+                    </div>
                     <div className="space-y-2">
                       {(() => {
                         const condSignals = getConditionSignals(selected.analysis?.fundamental?.metrics || {});
@@ -502,15 +627,20 @@ export function SignalsPage() {
                         return CATEGORY_ORDER.filter(cat => grouped[cat]).map(cat => (
                           <div key={cat} className="bg-muted rounded-lg p-3 border border-border">
                             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{cat}</p>
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                               {grouped[cat].map(c => {
                                 const signal = c.signal || 'NEUTRAL';
                                 const style = CONDITION_SIGNAL_STYLES[signal] || CONDITION_SIGNAL_STYLES['NEUTRAL'];
                                 return (
-                                  <div key={c.key} className="flex items-start gap-2 text-xs">
-                                    <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${style}`}>{signal}</span>
-                                    <span className="font-medium text-foreground min-w-[7rem]">{c.name}</span>
-                                    <span className="text-muted-foreground leading-tight">{c.rating}</span>
+                                  <div key={c.key} className="text-xs">
+                                    <div className="flex items-start gap-2">
+                                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${style}`}>{signal}</span>
+                                      <span className="font-medium text-foreground min-w-[7rem]">{c.name}</span>
+                                      <span className="text-muted-foreground leading-tight">{c.rating}</span>
+                                    </div>
+                                    <p className="pl-[4.25rem] text-[10px] text-muted-foreground/80 leading-snug mt-0.5">
+                                      <span className="font-medium text-foreground/70">What it means:</span> {CONDITION_PLAIN[c.key] || 'See the detail above.'} <span className="font-medium text-foreground/70">Verdict:</span> {ratingPlain(signal).toLowerCase()}.
+                                    </p>
                                   </div>
                                 );
                               })}
@@ -524,16 +654,19 @@ export function SignalsPage() {
                   {/* ── Macro Conditions ── */}
                   {selected.analysis?.macro && (
                     <div>
-                      <h3 className="text-sm font-semibold text-foreground mb-3">
-                        Macro Conditions — {selected.analysis.macro.country}
-                        <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                          selected.analysis.macro.signal === 'Bullish' || selected.analysis.macro.signal === 'Favorable'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : selected.analysis.macro.signal === 'Caution' || selected.analysis.macro.signal === 'Bearish'
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-muted text-muted-foreground'
-                        }`}>{selected.analysis.macro.signal} ({selected.analysis.macro.score})</span>
-                      </h3>
+                      <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
+                        <h3 className="text-sm font-semibold text-foreground">
+                          Macro Conditions — {selected.analysis.macro.country}
+                          <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            selected.analysis.macro.signal === 'Bullish' || selected.analysis.macro.signal === 'Favorable'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : selected.analysis.macro.signal === 'Caution' || selected.analysis.macro.signal === 'Bearish'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-muted text-muted-foreground'
+                          }`}>{selected.analysis.macro.signal} ({selected.analysis.macro.score})</span>
+                        </h3>
+                        <p className="text-[10px] text-muted-foreground italic">The big economic picture around this stock</p>
+                      </div>
                       <div className="grid grid-cols-2 gap-2">
                         {Object.entries(selected.analysis.macro.conditions).map(([key, cond]) => {
                           const sig = (cond as any).signal || 'NEUTRAL';
@@ -543,7 +676,7 @@ export function SignalsPage() {
                             <div key={key} className={`rounded-lg p-2.5 border ${style}`}>
                               <div className="flex items-center justify-between mb-1">
                                 <span className="text-[10px] font-semibold text-muted-foreground uppercase">
-                                  {key.replace(/([A-Z])/g, ' $1').trim()}
+                                  {MACRO_LABELS[key] || key.replace(/([A-Z])/g, ' $1').trim()}
                                 </span>
                                 <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
                                   sig === 'BUY' ? 'bg-emerald-100 text-emerald-700' :
@@ -551,6 +684,9 @@ export function SignalsPage() {
                                 }`}>{sig}</span>
                               </div>
                               <p className="text-[11px] text-muted-foreground leading-tight">{(cond as any).detail}</p>
+                              <p className="mt-1 text-[10px] text-muted-foreground/80 leading-snug">
+                                <span className="font-medium text-foreground/70">What it means:</span> {MACRO_PLAIN[key] || ''} <span className="font-medium text-foreground/70">Verdict:</span> {ratingPlain(sig).toLowerCase()}.
+                              </p>
                             </div>
                           );
                         })}
@@ -559,7 +695,10 @@ export function SignalsPage() {
                   )}
 
                   {/* ── Score Breakdown ── */}
-                  <h3 className="text-sm font-semibold text-foreground">Score Breakdown</h3>
+                  <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
+                    <h3 className="text-sm font-semibold text-foreground">Score Breakdown</h3>
+                    <p className="text-[10px] text-muted-foreground italic">The grade card — how the stock scores in each area</p>
+                  </div>
                   <div className="space-y-2">
                     {(["fundamental", "technical", "financial", "macro", "insider", "overall"] as const).map(key => {
                       const section = selected.analysis![key] as any;
@@ -572,11 +711,36 @@ export function SignalsPage() {
                           <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                             <div className={`h-full rounded-full ${section.score >= 70 ? 'bg-emerald-500' : section.score >= 45 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${section.score}%` }} />
                           </div>
-                          <Badge className={`shrink-0 border-0 ${section.score >= 70 ? 'bg-emerald-100 text-emerald-700' : section.score >= 45 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{section.grade} ({section.score})</Badge>
+                          <Badge className={`shrink-0 border-0 ${section.score >= 70 ? 'bg-emerald-100 text-emerald-700' : section.score >= 45 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{section.grade} ({section.score}){gradePlain(section.grade) ? ` · ${gradePlain(section.grade)}` : ''}</Badge>
                         </div>
                       );
                     })}
                   </div>
+                  <p className="mt-2 text-[10px] text-muted-foreground leading-snug">
+                    Each area is graded 0–100 (A–F). <span className="text-emerald-600">A–B</span> = strong, <span className="text-yellow-600">C</span> = average, <span className="text-red-600">D–F</span> = weak.
+                  </p>
+                  {(() => {
+                    const overall = selected.analysis!.overall as any;
+                    if (!overall || overall.score == null) return null;
+                    const insiderSec = selected.analysis!.insider as any;
+                    const insiderWeak = insiderSec && insiderSec.score != null && insiderSec.score < 45;
+                    return (
+                      <div className="mt-3 rounded-lg border border-border bg-muted/50 p-3 text-[11px] text-muted-foreground leading-relaxed space-y-1">
+                        <p>
+                          <span className="font-semibold text-foreground">In plain words:</span> mixing all the strengths and weaknesses together, the overall grade is{" "}
+                          <span className="font-semibold text-foreground">{overall.grade} ({overall.score})</span> — {gradePlain(overall.grade) || 'average'}.
+                        </p>
+                        {insiderWeak && selected.insider?.hasActivity && (
+                          <p>
+                            <span className="font-semibold text-red-700">Why the insider score is low:</span> company insiders {selected.insider.summary?.toLowerCase()}. They know the business best, so heavy selling is a caution flag.
+                          </p>
+                        )}
+                        <p>
+                          <span className="font-semibold text-foreground">Timeframe:</span> {selected.timeframe || '—'} — {timeframePlain(selected.timeframe)}.
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </>
               )}
 
@@ -593,6 +757,9 @@ export function SignalsPage() {
                   <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${selected.catalyst.direction === "positive" ? "text-emerald-800" : "text-red-800"}`}>{selected.catalyst.direction === "positive" ? "Positive" : "Negative"} Catalyst</p>
                   <p className="text-sm font-semibold text-foreground">{selected.catalyst.type}</p>
                   {selected.catalyst.headline && <p className="text-xs text-muted-foreground leading-relaxed mt-1">{selected.catalyst.headline}</p>}
+                  <p className="text-[11px] text-muted-foreground/80 mt-1.5">
+                    What this means: a {selected.catalyst.direction === "positive" ? "positive" : "negative"} news event that can move the stock — weigh it together with the fundamentals above.
+                  </p>
                   <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground flex-wrap">
                     {selected.catalyst.source && <span>Source: {selected.catalyst.source}</span>}
                     {selected.catalyst.publishedAt && <span>Published: {new Date(selected.catalyst.publishedAt).toLocaleDateString()}</span>}
@@ -607,6 +774,9 @@ export function SignalsPage() {
                     {insiderPositive(selected.insider) ? "Insider Buying" : "Insider Selling"} {selected.insider.score != null ? `· Score ${selected.insider.score}/100` : ""}
                   </p>
                   <p className="text-sm text-foreground leading-relaxed">{selected.insider.summary}</p>
+                  <p className="text-[11px] text-muted-foreground/80 mt-1.5">
+                    Insiders know the business best — when they sell more than they buy (or vice versa), it's often a clue about how they see the company's prospects.
+                  </p>
                   <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground flex-wrap">
                     {selected.insider.latestDate && <span>Latest: {selected.insider.latestDate}</span>}
                     {selected.insider.latestText && <span>Last: {selected.insider.latestText}</span>}
@@ -618,14 +788,24 @@ export function SignalsPage() {
               <div className="bg-[#0D7490]/5 rounded-lg p-4 border border-[#0D7490]/20">
                 <div className="flex items-start gap-2">
                   <Info className="w-4 h-4 text-[#0D7490] shrink-0 mt-0.5" />
-                  <div><p className="text-sm font-medium text-foreground mb-1">Signal Reason</p><p className="text-sm text-muted-foreground leading-relaxed">{selected.reason}</p></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between flex-wrap gap-2 mb-1.5">
+                      <p className="text-sm font-medium text-foreground">Signal Reason</p>
+                      <p className="text-[10px] text-muted-foreground italic">The full story behind the rating, in one place</p>
+                    </div>
+                    <ul className="list-disc pl-4 space-y-1">
+                      {reasonBullets(selected.reason || "").map((b, i) => (
+                        <li key={i} className="text-sm text-muted-foreground leading-relaxed">{b}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
 
               <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge className={TYPE_STYLES[selected.type]}>{selected.type}</Badge>
-                  <span>Timeframe: {selected.timeframe}</span>
+                  <span title={timeframePlain(selected.timeframe)}>Timeframe: {selected.timeframe}</span>
                   <span className="text-muted-foreground">|</span>
                   <span>Sector: {selected.sector}</span>
                   {selected.country && (
