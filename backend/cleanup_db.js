@@ -68,9 +68,9 @@ async function main() {
     WHERE uploaded_at < NOW() - INTERVAL '30 days' AND file_data IS NOT NULL
   `);
 
-  // 6. Delete old signal_history (keep last 60 days)
-  await run('DELETE signal_history >60 days', `
-    DELETE FROM signal_history WHERE generated_at < NOW() - INTERVAL '60 days'
+  // 6. Delete old signal_history (keep last 365 days — audit trail, not just the 90d window)
+  await run('DELETE signal_history >365 days', `
+    DELETE FROM signal_history WHERE generated_at < NOW() - INTERVAL '365 days'
   `);
 
   // 7. Delete old signal_audit_log (keep last 30 days)
@@ -113,9 +113,10 @@ async function main() {
     DELETE FROM broker_account_snapshots WHERE recorded_at < NOW() - INTERVAL '90 days'
   `);
 
-  // 15. Delete old forward_predictions (keep last 90 days)
-  await run('DELETE forward_predictions >90 days', `
-    DELETE FROM forward_predictions WHERE created_at < NOW() - INTERVAL '90 days'
+  // 15. Delete old forward_predictions (keep last 365 days). Column is generated_at,
+  // not created_at — the previous statement referenced a column that never existed.
+  await run('DELETE forward_predictions >365 days', `
+    DELETE FROM forward_predictions WHERE generated_at < NOW() - INTERVAL '365 days'
   `);
 
   // 16. Delete old OTP codes
@@ -133,9 +134,9 @@ async function main() {
     DELETE FROM notifications WHERE created_at < NOW() - INTERVAL '30 days'
   `);
 
-  // 19. Delete old admin_audit_log (keep last 60 days)
-  await run('DELETE admin_audit_log >60 days', `
-    DELETE FROM admin_audit_log WHERE created_at < NOW() - INTERVAL '60 days'
+  // 19. Delete old admin_audit_log (keep last 365 days)
+  await run('DELETE admin_audit_log >365 days', `
+    DELETE FROM admin_audit_log WHERE created_at < NOW() - INTERVAL '365 days'
   `);
 
   // 20. Run VACUUM on biggest tables

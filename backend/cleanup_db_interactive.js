@@ -91,14 +91,14 @@ async function main() {
     },
     {
       name: 'admin_audit_log',
-      days: 60,
+      days: 365,
       desc: 'Admin action logs',
       check: async () => {
-        const old = await count('admin_audit_log', 'created_at < NOW() - INTERVAL \'60 days\'');
+        const old = await count('admin_audit_log', 'created_at < NOW() - INTERVAL \'365 days\'');
         const total = await count('admin_audit_log');
         return { old, total };
       },
-      clean: () => pool.query('DELETE FROM admin_audit_log WHERE created_at < NOW() - INTERVAL \'60 days\'')
+      clean: () => pool.query('DELETE FROM admin_audit_log WHERE created_at < NOW() - INTERVAL \'365 days\'')
     },
     {
       name: 'broker_account_snapshots',
@@ -113,14 +113,14 @@ async function main() {
     },
     {
       name: 'forward_predictions',
-      days: 90,
+      days: 365,
       desc: 'ML forward predictions',
       check: async () => {
-        const old = await count('forward_predictions', 'created_at < NOW() - INTERVAL \'90 days\'');
+        const old = await count('forward_predictions', 'generated_at < NOW() - INTERVAL \'365 days\'');
         const total = await count('forward_predictions');
         return { old, total };
       },
-      clean: () => pool.query('DELETE FROM forward_predictions WHERE created_at < NOW() - INTERVAL \'90 days\'')
+      clean: () => pool.query('DELETE FROM forward_predictions WHERE generated_at < NOW() - INTERVAL \'365 days\'')
     },
     {
       name: 'paper_trades',
@@ -146,14 +146,14 @@ async function main() {
     },
     {
       name: 'signal_history',
-      days: 60,
+      days: 365,
       desc: 'Generated trading signals',
       check: async () => {
-        const old = await count('signal_history', 'generated_at < NOW() - INTERVAL \'60 days\'');
+        const old = await count('signal_history', 'generated_at < NOW() - INTERVAL \'365 days\'');
         const total = await count('signal_history');
         return { old, total };
       },
-      clean: () => pool.query('DELETE FROM signal_history WHERE generated_at < NOW() - INTERVAL \'60 days\'')
+      clean: () => pool.query('DELETE FROM signal_history WHERE generated_at < NOW() - INTERVAL \'365 days\'')
     },
     {
       name: 'prediction_log',
