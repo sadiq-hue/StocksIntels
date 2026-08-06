@@ -224,7 +224,18 @@ app.use((req, res, next) => {
 const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
 const serveFrontend = fs.existsSync(frontendDist);
 if (serveFrontend) {
-  app.use(express.static(frontendDist));
+  // Cache rules for the SPA: index.html must never be cached for long (or the
+  // browser/CDN keeps an old copy that references purged hashed chunks -> 404).
+  // The hashed /assets/* bundles are immutable, so they can be cached forever.
+  app.use(express.static(frontendDist, {
+    setHeaders(res, filePath) {
+      if (filePath.endsWith(path.sep + 'index.html')) {
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      } else if (filePath.includes(path.sep + 'assets' + path.sep)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    },
+  }));
 }
 // Serve backend/public assets (logo, etc.) for admin panel
 app.use(express.static(path.join(__dirname, 'public')));
