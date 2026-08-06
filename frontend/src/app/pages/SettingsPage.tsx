@@ -455,8 +455,8 @@ export function SettingsPage() {
 
               <div className="flex items-center justify-between gap-4 p-4 bg-muted rounded-lg border border-border">
                 <div>
-                  <div className="text-foreground font-medium">Trading Signals</div>
-                  <div className="text-muted-foreground text-sm">Receive AI-generated trading signals</div>
+                  <div className="text-foreground font-medium">Market Intelligence</div>
+                  <div className="text-muted-foreground text-sm">Receive machine learning-driven market intelligence</div>
                 </div>
                 <Switch 
                   checked={notifications.tradingSignals}

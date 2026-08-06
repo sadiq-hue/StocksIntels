@@ -135,7 +135,7 @@ export function WatchlistPage() {
             <Star className="w-7 h-7 md:w-8 md:h-8 text-amber-400 fill-amber-400" />
             Watchlist
           </h1>
-          <p className="text-muted-foreground mt-1 text-base md:text-lg">Monitor your favorite assets and AI trading signals.</p>
+          <p className="text-muted-foreground mt-1 text-base md:text-lg">Monitor your favorite assets and machine learning-driven market intelligence.</p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">

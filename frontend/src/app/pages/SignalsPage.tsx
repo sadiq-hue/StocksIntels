@@ -377,7 +377,7 @@ export function SignalsPage() {
   if (loading && signals.length === 0) {
     return (
       <div className="p-4 md:p-6 max-w-[1400px] mx-auto flex items-center justify-center min-h-[60vh]">
-        <div className="text-center"><RefreshCw className="w-8 h-8 text-[#0D7490] animate-spin mx-auto mb-4" /><p className="text-muted-foreground text-sm">Loading trading signals...</p></div>
+        <div className="text-center"><RefreshCw className="w-8 h-8 text-[#0D7490] animate-spin mx-auto mb-4" /><p className="text-muted-foreground text-sm">Loading market intelligence...</p></div>
       </div>
     );
   }
@@ -390,9 +390,9 @@ export function SignalsPage() {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <div className="p-2 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9]"><Signal className="w-5 h-5 text-white" /></div>
-            <h1 className="text-2xl font-bold text-foreground">Trading Signals</h1>
+            <h1 className="text-2xl font-bold text-foreground">Quantitative Market Intelligence</h1>
           </div>
-          <p className="text-muted-foreground text-sm">AI-generated opportunities based on fundamental, technical & financial analysis</p>
+          <p className="text-muted-foreground text-sm">Data-driven market opportunities verified by core fundamental and advanced technical metrics.</p>
         </div>
         <div className="flex items-center gap-3">
           {lastUpdated && <span className="text-muted-foreground text-xs hidden sm:flex items-center gap-1"><Clock className="w-3 h-3" /> {lastUpdated}</span>}
