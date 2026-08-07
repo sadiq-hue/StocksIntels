@@ -3173,7 +3173,21 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           priceChange = quote.changePercent;
           volume = quote.volume;
         } else if (NSE_SYMBOLS.includes(symbol)) {
-          // Fallback: use KenyanStocks API data directly
+          // Fallback chain for NSE: mystocksAfrica partner API first,
+          // then KenyanStocks scraper. The per-symbol fetch is cached
+          // for the cycle so each NSE ticker hits the API once at most.
+          try {
+            const msa = require('./mystocksAfricaApi');
+            if (msa.getCached) {
+              const cq = msa.getCached(symbol);
+              if (cq && Number(cq.price) > 0) {
+                currentPrice = Number(cq.price);
+                priceChange = cq.changePercent || 0;
+                volume = Number(cq.volume) || 0;
+                return; // fall through to accumulator below
+              }
+            }
+          } catch { /* mystocksAfricaApi may not be available */ }
           try {
             const ksMod = require('./kenyanStocksScraper');
             const ksStocks = await ksMod.getStocksData();
@@ -3199,6 +3213,13 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     if (currentPrice > 0) _lastKnownPrices.set(symbol, currentPrice);
     
     const marketOpen = isExchangeOpen(symbol);
+    // Merge live financial report cache BEFORE fundamental analysis so the
+    // Yahoo/Alpha Vantage pipeline (PE, revenue growth, debt/equity, ROE,
+    // Altman Z, etc.) feeds into the scorer instead of the hardcoded defaults
+    // that only cover ~20 US tickers. The sanitizeLiveFundamentals guard
+    // rejects feed artifacts (e.g. AAPL -38.7% revenue) vs the curated baseline.
+    const reportMetrics = _financialReportCache.get(symbol);
+    if (reportMetrics) stock = sanitizeLiveFundamentals(stock, reportMetrics);
     const fundamental = analyzeFundamentals(stock, currentPrice, newsSentiment[symbol] || null, _dynamicSectorPE);
     const priceHistory = await getPriceHistory(symbol);
     // Entry sanity check: the quote used to build stop/target levels must be
@@ -3220,8 +3241,6 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       }
     }
     const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume, engineConfig.getConfig().indicator_params);
-    const reportMetrics = _financialReportCache.get(symbol);
-    if (reportMetrics) stock = sanitizeLiveFundamentals(stock, reportMetrics);
     const financial = analyzeFinancials(stock, fundamental);
     const country = getCountryForSymbol(symbol);
     let macro = getMacroScore(country);
@@ -3541,10 +3560,10 @@ async function generateSingleSignal(symbol) {
       insiderNews = insiderNewsMap[symbol] || null;
     } catch { /* silent */ }
     const priceHistory = await getPriceHistory(symbol).catch(() => null);
-    const fundamental = analyzeFundamentals(stock, currentPrice, newsSent, _dynamicSectorPE);
-    const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume);
     const reportMetrics = _financialReportCache.get(symbol);
     if (reportMetrics) stock = sanitizeLiveFundamentals(stock, reportMetrics);
+    const fundamental = analyzeFundamentals(stock, currentPrice, newsSent, _dynamicSectorPE);
+    const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume);
     const financial = analyzeFinancials(stock, fundamental);
     const country = getCountryForSymbol(symbol);
     let macro = getMacroScore(country);

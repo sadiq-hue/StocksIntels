@@ -343,8 +343,23 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
   }
 
   if (signalOutcomes.size > 500) {
-    const oldest = signalOutcomes.keys().next().value;
-    signalOutcomes.delete(oldest);
+    // Evict resolved or Hold entries first — never evict a monitored position
+    // that hasn't resolved yet. A live monitored Buy that gets evicted by the
+    // FIFO flush becomes a zombie: its stop/target is forgotten and the position
+    // can never resolve. Only as a last resort do we trim the oldest entry.
+    let evicted = false;
+    for (const [key, val] of signalOutcomes) {
+      if (val.result) { signalOutcomes.delete(key); evicted = true; break; }
+    }
+    if (!evicted && signalOutcomes.size > 500) {
+      for (const [key, val] of signalOutcomes) {
+        if (val.action === 'hold' || !val.stopLoss) { signalOutcomes.delete(key); evicted = true; break; }
+      }
+    }
+    if (!evicted && signalOutcomes.size > 500) {
+      const oldest = signalOutcomes.keys().next().value;
+      signalOutcomes.delete(oldest);
+    }
   }
   return performanceStats;
 }

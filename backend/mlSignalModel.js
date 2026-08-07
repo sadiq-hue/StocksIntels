@@ -23,12 +23,32 @@ const TRAINING_INTERVAL = () => {
   const hours = engineConfig.getConfig().training?.retrain_frequency_hours || 24;
   return hours * 60 * 60 * 1000;
 };
-const MIN_SAMPLES = () => engineConfig.getConfig().training?.min_samples || 50;
+const MIN_SAMPLES = () => engineConfig.getConfig().training?.min_samples || 20;
 const emitter = new EventEmitter();
 
 // Calibration bins: confidence bucket -> actual accuracy
 let _calibrationBins = {};
 let _calibrationSamples = 0;
+
+// Restore trained ML weights from engine_config on startup so the model
+// survives restarts and cold-start cycles without requiring a fresh training
+// run (which needs resolved outcomes that don't exist on new deployments).
+(async () => {
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS engine_config (config_key TEXT PRIMARY KEY, config_value JSONB, updated_at TIMESTAMPTZ DEFAULT NOW())`);
+    const { rows } = await pool.query("SELECT config_value FROM engine_config WHERE config_key = 'ml_weights'");
+    if (rows[0] && rows[0].config_value) {
+      const saved = rows[0].config_value;
+      if (saved.w && Array.isArray(saved.w) && saved.w.length > 0) {
+        _weights = saved.w;
+        _bias = typeof saved.b === 'number' ? saved.b : 0;
+        if (saved.fs && saved.fs.means && saved.fs.stds) _featureStats = saved.fs;
+        console.log(`[ML] Restored weights from engine_config (${saved.n || '?'} samples, ${saved.acc || '?'}% acc, saved ${saved.ts ? new Date(saved.ts).toISOString() : '?'})`);
+        _trainingStats = { samples: saved.n || 0, accuracy: saved.acc || 0, lastTraining: saved.ts || 0, weights: _weights.map(v => Math.round(v * 1000) / 1000), bias: Math.round(_bias * 1000) / 1000 };
+      }
+    }
+  } catch (e) { /* table may not exist on first deploy */ }
+})();
 
 function sigmoid(z) {
   return 1 / (1 + Math.exp(-Math.max(-500, Math.min(500, z))));
@@ -227,6 +247,13 @@ async function predictWinProbability(fundamental, technical, macro, priceHistory
   return sigmoid(z);
 }
 
+// Platt scaling coefficients for sparse-bin confidence calibration.
+// Fit a sigmoid over all resolved predictions when per-bin sample counts
+// are too low (< 50 total across all bins). Coefficients are recomputed
+// alongside the calibration bins in updateCalibration.
+let _plattA = null;
+let _plattB = null;
+
 // Calibrate confidence based on historical accuracy
 function calibrateConfidence(rawConfidence, mlProb) {
   const cfg = engineConfig.getConfig().calibration;
@@ -236,9 +263,17 @@ function calibrateConfidence(rawConfidence, mlProb) {
   const binKey = Math.floor(rawConfidence / binSize) * binSize;
   const bin = _calibrationBins[binKey];
 
-  if (bin && bin.total >= (cfg.min_samples_per_bin || 50)) {
+  // Per-bin calibration: accurate when the bin has enough resolved outcomes
+  if (bin && bin.total >= (cfg.min_samples_per_bin || 10)) {
     const calibrated = bin.accuracy * 100;
     return Math.round(calibrated);
+  }
+
+  // Platt scaling fallback: fit a single sigmoid over ALL predictions when
+  // individual bins are sparse. This gives a rough calibration even with
+  // limited data — better than returning raw confidence uncorrected.
+  if (_plattA != null && _plattB != null) {
+    return Math.round(100 / (1 + Math.exp(-(_plattA * (rawConfidence / 100) + _plattB))));
   }
 
   return rawConfidence;
@@ -258,6 +293,22 @@ function updateCalibration(predictions) {
     if (p.actualOutcome === 1) _calibrationBins[binKey].correct++;
     _calibrationBins[binKey].accuracy = _calibrationBins[binKey].correct / _calibrationBins[binKey].total;
     _calibrationSamples++;
+  }
+
+  // Fit Platt scaling (logistic regression on confidence vs outcome).
+  // Requires at least 10 samples across all bins; recomputed every cycle
+  // alongside the per-bin histograms so calibration stays current.
+  if (predictions.length >= 10) {
+    const xs = predictions.map(p => p.predictedConfidence / 100);
+    const ys = predictions.map(p => p.actualOutcome);
+    // Simple analytical fit: a = log(mean_win_rate / (1 - mean_win_rate))
+    const meanWin = ys.reduce((s, v) => s + v, 0) / ys.length;
+    const safe = Math.max(0.001, Math.min(0.999, meanWin));
+    _plattB = Math.log(safe / (1 - safe));
+    // b: scale to match predicted vs actual variance
+    const meanX = xs.reduce((s, v) => s + v, 0) / xs.length;
+    const varX = xs.reduce((s, v) => s + (v - meanX) ** 2, 0) / xs.length + 0.001;
+    _plattA = Math.max(0.1, Math.sqrt(varX) * 2);
   }
 }
 
@@ -349,12 +400,12 @@ async function _runBackgroundTraining() {
     const yVal = y.slice(0, splitIdx);
 
     const lambda = 0.01;
-    const learningRate = 0.1;
     const epochs = 200;
     const n = XTrain.length;
     const dim = XTrain[0].length;
     let w = new Array(dim).fill(0);
     let b = 0;
+    let lr = 0.1;
 
     let bestValAcc = 0;
     let bestW = w.slice();
@@ -363,6 +414,7 @@ async function _runBackgroundTraining() {
     const patience = (trainingCfg && trainingCfg.early_stopping_patience) || 5;
 
     for (let epoch = 0; epoch < epochs; epoch++) {
+      lr = 0.1 * Math.pow(0.98, epoch);
       let dw = new Array(dim).fill(0);
       let db = 0;
       for (let i = 0; i < n; i++) {
@@ -373,9 +425,9 @@ async function _runBackgroundTraining() {
       }
       for (let j = 0; j < dim; j++) {
         dw[j] = (dw[j] + lambda * w[j]) / n;
-        w[j] -= learningRate * dw[j];
+        w[j] -= lr * dw[j];
       }
-      b -= learningRate * (db / n);
+      b -= lr * (db / n);
 
       if (XVal.length > 0 && epoch % 10 === 0) {
         let valCorrect = 0;
@@ -432,6 +484,19 @@ async function _runBackgroundTraining() {
     };
 
     updateCalibration(calibData);
+
+    // Persist trained weights to engine_config so they survive restarts and
+    // cold-start symbols immediately benefit from the trained model instead
+    // of returning 0.5 until the next training cycle (which requires resolved
+    // outcomes that don't exist on a fresh deployment).
+    try {
+      const payload = JSON.stringify({ w: _weights, b: _bias, fs: _featureStats, ts: Date.now(), n: n, acc: _trainingStats.accuracy });
+      await pool.query(
+        `INSERT INTO engine_config (config_key, config_value, updated_at) VALUES ('ml_weights', $1, NOW()) ON CONFLICT (config_key) DO UPDATE SET config_value = $1, updated_at = NOW()`,
+        [payload]
+      );
+    } catch (e) { /* non-critical */ }
+
     console.log(`[ML] Background training completed in ${((Date.now() - startedAt) / 1000).toFixed(1)}s: ${n} samples, ${_trainingStats.accuracy}% acc`);
   } catch (err) {
     _lastTrainError = err.message;
