@@ -6632,6 +6632,9 @@ app.get('/api/screener', async (req, res) => {
       const a = getMonitoredAction(sym);
       console.log(`[Screener] getMonitoredAction(${sym}) = ${a}`);
     }
+    // Check if monitored tickers are in signals at all
+    const sigTickers = new Set(signals.map(s => s.ticker));
+    console.log(`[Screener] Signals tickers: ${sigTickers.size}, has CTSH=${sigTickers.has('CTSH')}, has ADC=${sigTickers.has('ADC')}, has LDOS=${sigTickers.has('LDOS')}`);
     for (const s of signals) {
       const action = getMonitoredAction(s.ticker);
       if (action) monitored.set(s.ticker, action);
