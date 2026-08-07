@@ -6923,8 +6923,45 @@ app.get('/api/earnings/upcoming', async (req, res) => {
       toDate: req.query.to,
       limit: parseInt(req.query.limit, 10) || 100,
       offset: parseInt(req.query.offset, 10) || 0,
-    });
-    res.json(result);
+    }).catch(() => null);
+    if (result && result.total > 0) return res.json(result);
+    // Fallback: fetch Alpha Vantage directly for global earnings
+    const alphaKey = process.env.ALPHA_VANTAGE_API_KEY;
+    if (alphaKey && (!req.query.market || req.query.market === 'global')) {
+      try {
+        const axios = require('axios');
+        const url = `https://www.alphavantage.co/query?function=EARNINGS_CALENDAR&horizon=3month&apikey=${alphaKey}`;
+        const resp = await axios.get(url, { timeout: 15000 });
+        const csv = resp.data;
+        if (typeof csv === 'string') {
+          const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          const lines = csv.trim().split('\n');
+          const events = [];
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(',');
+            const ticker = cols[0];
+            if (!ticker) continue;
+            const reportDate = new Date(cols[2]);
+            if (isNaN(reportDate.getTime())) continue;
+            const fromDate = req.query.from ? new Date(req.query.from) : new Date(Date.now() - 90 * 86400000);
+            if (reportDate < fromDate) continue;
+            events.push({
+              ticker, name: cols[1] || ticker,
+              date: reportDate.toISOString(),
+              dateStr: `${MONTHS[reportDate.getMonth()]} ${reportDate.getDate()}, ${reportDate.getFullYear()}`,
+              estEPS: parseFloat(cols[4]) || 0,
+              market: 'global',
+              currency: 'USD',
+              quarter: `Q${Math.floor(reportDate.getMonth() / 3) + 1}`,
+              fiscalYear: reportDate.getFullYear(),
+            });
+          }
+          events.sort((a, b) => new Date(a.date) - new Date(b.date));
+          return res.json({ earnings: events, total: events.length, sectors: [], dateRange: { from: events[0]?.date || null, to: events[events.length - 1]?.date || null } });
+        }
+      } catch (e) { console.error('[Earnings] Direct Alpha Vantage fallback failed:', e.message); }
+    }
+    res.json(result || { earnings: [], total: 0, sectors: [], dateRange: { from: null, to: null } });
   } catch (error) {
     console.error('Error fetching earnings:', error.message);
     res.status(500).json({ error: 'Failed to fetch earnings data' });
