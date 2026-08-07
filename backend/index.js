@@ -6631,6 +6631,7 @@ app.get('/api/screener', async (req, res) => {
       const action = getMonitoredAction(s.ticker);
       if (action) monitored.set(s.ticker, action);
     }
+    console.log(`[Screener] Overlay: ${monitored.size} monitored positions found across ${signals.length} signals`);
     let filtered = monitored.size > 0
       ? signals.map(s => monitored.has(s.ticker) ? { ...s, signal: monitored.get(s.ticker) } : s)
       : [...signals];
