@@ -301,17 +301,26 @@ async function fetchAllFundamentalsInternal(symbol) {
     const yf = await createYf();
     const periodEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const periodStart = new Date(Date.now() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const fts = await Promise.race([
-      yf.fundamentalsTimeSeries(symbol, {
-        period1: periodStart,
-        period2: periodEnd,
-        module: 'financials',
-      }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('fundamentalsTimeSeries fallback timeout')), 15000)),
+    const timeoutMs = 20000;
+    const timeoutP = () => new Promise((_, reject) => setTimeout(() => reject(new Error('fundamentalsTimeSeries module timeout')), timeoutMs));
+    const yfOpts = (module) => ({ period1: periodStart, period2: periodEnd, module });
+    const [finItems, balItems, cfItems] = await Promise.all([
+      Promise.race([yf.fundamentalsTimeSeries(symbol, yfOpts('financials')), timeoutP()]).catch(() => []),
+      Promise.race([yf.fundamentalsTimeSeries(symbol, yfOpts('balance-sheet')), timeoutP()]).catch(() => []),
+      Promise.race([yf.fundamentalsTimeSeries(symbol, yfOpts('cash-flow')), timeoutP()]).catch(() => []),
     ]);
-    if (!fts || fts.length === 0) return null;
+    const allFundamentals = [...(finItems || []), ...(balItems || []), ...(cfItems || [])];
+    if (!allFundamentals || allFundamentals.length === 0) return null;
 
-    const items = fts
+    const mergedMap = new Map();
+    for (const f of allFundamentals) {
+      if (!f || !f.date) continue;
+      const periodKey = f.periodType || 'FY';
+      const key = `${getDateStr(f.date)}|${periodKey}`;
+      mergedMap.set(key, { ...(mergedMap.get(key) || {}), ...f });
+    }
+
+    const items = [...mergedMap.values()]
       .filter(f => f.date)
       .sort((a, b) => (getDateStr(b.date) || '').localeCompare(getDateStr(a.date) || ''))
       .slice(0, 4)
