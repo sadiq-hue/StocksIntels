@@ -1498,12 +1498,13 @@ async function _getBenchmarkNow(symbol) {
 }
 
 // Dynamic expiry by trade type (in milliseconds)
-// Score-based closes: when enabled, a position may be closed before hitting
-// its stop or target if the fresh thesis flips direction (Buy->Sell) or
-// conviction fades for enough consecutive readings. When disabled, ALL
-// positions resolve ONLY via stop/target (trackSignalOutcomes) — no score
-// or fade-based exit. Set to 'false' to disable, 'true' to enable.
-const SCORE_CLOSE_ENABLED = (process.env.SCORE_CLOSE_ENABLED || 'false').toLowerCase() === 'true';
+// Score-based closes (flip or fade) are re-enabled. A flip requires
+// FLIP_CLOSE_CONFIRMATIONS consecutive readings and the position must have
+// traveled at least FLIP_CLOSE_CUT_FRACTION_OF_STOP of the way to its stop
+// before the close can fire — a Buy->Sell flip at -0.3% when the stop is at
+// -10% no longer qualifies; the position must be meaningfully under water.
+const FLIP_CLOSE_CONFIRMATIONS = 2;  // consecutive flip readings to confirm
+const FLIP_CLOSE_CUT_FRACTION_OF_STOP = 0.5; // must be >50% toward stop
 // A fade is less decisive than a full flip, so it needs FADE_CLOSE_CONFIRMATIONS
 // consecutive trustworthy readings SPANNING at least two distinct days before it
 // can close — a cluster of readings inside a single session can all come from one
@@ -1676,6 +1677,22 @@ function fadeCutReached(prevOutcome, currentPrice) {
   return false;
 }
 
+// Flip-loss gate: a theoretical flip (Buy->Sell) must first prove the market agrees.
+// The position must have traveled at least FLIP_CLOSE_CUT_FRACTION_OF_STOP of the
+// way to its stop before a flip close fires — a -0.3% loss when the stop is -10%
+// can't close (only 3% of stop distance), but a -6% loss can (60% of stop distance).
+function flipCutReached(prevOutcome, currentPrice) {
+  if (!prevOutcome || !(prevOutcome.entryPrice > 0) || !(currentPrice > 0)) return false;
+  const entry = prevOutcome.entryPrice;
+  const pctMove = ((currentPrice - entry) / entry) * 100;
+  const stop = prevOutcome.stopLoss;
+  if (prevOutcome.action === 'buy' && stop != null && stop > 0 && stop < entry) {
+    const stopPctFromEntry = ((entry - stop) / entry) * 100;
+    return pctMove <= -(stopPctFromEntry * FLIP_CLOSE_CUT_FRACTION_OF_STOP / 100);
+  }
+  return false;
+}
+
 // Pure verdict for the monitor gate's score-based close. Combines the flip, the
 // profit-fade/stale-thesis rules, and the conviction-fade confirmation with the
 // minimum-age guard into a single testable decision (see test-fade-relevel.cjs).
@@ -1694,19 +1711,39 @@ function fadeCutReached(prevOutcome, currentPrice) {
 //   longTermHold  - long-term type (score closes permanently disabled)
 function evaluateScoreClose(prevOutcome, freshAction, eligibilityOk, currentPrice, now = Date.now(), minAgeMs = SCORE_CLOSE_MIN_AGE_MS, freshScore = null) {
   if (!prevOutcome) return { close: null, fadeCount: 0, fadeFirstSeen: null, required: FADE_CLOSE_CONFIRMATIONS, isFade: false, tooYoung: true, longTermHold: false };
-  if (!SCORE_CLOSE_ENABLED) return { close: null, fadeCount: 0, fadeFirstSeen: null, required: FADE_CLOSE_CONFIRMATIONS, isFade: false, tooYoung: true, longTermHold: false };
   const prevAction = prevOutcome.action;
   const longTermHold = isLongTermHold(prevOutcome.type);
   const allowScoreClose = !longTermHold;
   const tooYoung = prevOutcome.timestamp ? (now - prevOutcome.timestamp) < minAgeMs : true;
   const scoreCloseAllowed = allowScoreClose && !tooYoung;
-  const isFlip = eligibilityOk && scoreCloseAllowed && ((prevAction === 'buy' && freshAction === 'sell') || (prevAction === 'sell' && freshAction === 'buy'));
+
+  // Flip: fresh thesis flipped direction (Buy->Sell or Sell->Buy). Unlike the
+  // fade (which only closes losers), a flip reflects a genuine directional
+  // change. But a single-cycle flicker at -0.3% must not yank the position:
+  // — requires FLIP_CLOSE_CONFIRMATIONS consecutive flip readings
+  // — AND the position must be at least 50% toward its stop (flipCutReached)
+  const isFlipCandidate = eligibilityOk && scoreCloseAllowed && ((prevAction === 'buy' && freshAction === 'sell') || (prevAction === 'sell' && freshAction === 'buy'));
+  if (isFlipCandidate) {
+    if (prevOutcome.flipFirstSeen == null) {
+      prevOutcome.flipFirstSeen = now;
+      prevOutcome.flipCount = 1;
+    } else {
+      prevOutcome.flipCount++;
+    }
+    // Non-consecutive break: reading didn't flip this cycle
+  } else {
+    prevOutcome.flipCount = 0;
+    prevOutcome.flipFirstSeen = null;
+  }
+  const flipConfirmed = prevOutcome.flipCount >= FLIP_CLOSE_CONFIRMATIONS;
+  const flipQualifies = flipConfirmed && flipCutReached(prevOutcome, currentPrice);
+
   const { isFade, fadeCount, fadeConfirmed, fadeFirstSeen, required } = scoreCloseAllowed
     ? assessConvictionFade(prevAction, freshAction, eligibilityOk, prevOutcome.fadeCount, prevOutcome.fadeFirstSeen, now, freshScore)
     : { isFade: false, fadeCount: 0, fadeConfirmed: false, fadeFirstSeen: null, required: FADE_CLOSE_CONFIRMATIONS };
   const fadeReason = scoreCloseAllowed && isFade ? fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice) : null;
   let close = null;
-  if (isFlip) close = 'score flipped';
+  if (flipQualifies) close = 'score flipped';
   else if (fadeReason) close = fadeReason;
   else if (isFade && fadeConfirmed && fadeCutReached(prevOutcome, currentPrice)) close = 'conviction faded';
   return { close, fadeCount, fadeFirstSeen, required, isFade, tooYoung, longTermHold };
