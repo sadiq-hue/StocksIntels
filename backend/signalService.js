@@ -3174,8 +3174,8 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           volume = quote.volume;
         } else if (NSE_SYMBOLS.includes(symbol)) {
           // Fallback chain for NSE: mystocksAfrica partner API first,
-          // then KenyanStocks scraper. The per-symbol fetch is cached
-          // for the cycle so each NSE ticker hits the API once at most.
+          // then KenyanStocks scraper.
+          let nseResolved = false;
           try {
             const msa = require('./mystocksAfricaApi');
             if (msa.getCached) {
@@ -3184,24 +3184,26 @@ async function generateSignals(marketData = null, quick = false, force = false) 
                 currentPrice = Number(cq.price);
                 priceChange = cq.changePercent || 0;
                 volume = Number(cq.volume) || 0;
-                return; // fall through to accumulator below
+                nseResolved = true;
               }
             }
           } catch { /* mystocksAfricaApi may not be available */ }
-          try {
-            const ksMod = require('./kenyanStocksScraper');
-            const ksStocks = await ksMod.getStocksData();
-            const ks = Array.isArray(ksStocks) ? ksStocks.find(s => s.symbol === symbol) : null;
-            if (ks && Number(ks.close) > 0) {
-              currentPrice = Number(ks.close);
-              const prev = Number(ks.previous_price) || currentPrice;
-              priceChange = prev > 0 ? ((currentPrice - prev) / prev) * 100 : 0;
-              volume = Number(ks.volume) || 0;
-            } else {
+          if (!nseResolved) {
+            try {
+              const ksMod = require('./kenyanStocksScraper');
+              const ksStocks = await ksMod.getStocksData();
+              const ks = Array.isArray(ksStocks) ? ksStocks.find(s => s.symbol === symbol) : null;
+              if (ks && Number(ks.close) > 0) {
+                currentPrice = Number(ks.close);
+                const prev = Number(ks.previous_price) || currentPrice;
+                priceChange = prev > 0 ? ((currentPrice - prev) / prev) * 100 : 0;
+                volume = Number(ks.volume) || 0;
+              } else {
+                return null;
+              }
+            } catch (e) {
               return null;
             }
-          } catch (e) {
-            return null;
           }
         } else {
           return null;
