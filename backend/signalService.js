@@ -84,9 +84,13 @@ const RETENTION_DAYS = Math.max(90, parseInt(process.env.RETENTION_DAYS || '365'
 // Long-term types (Long Term / Long Term Value) are exempt: their whole thesis
 // is a months-long stop/target hold (score closes are disabled for them), so a
 // 72h restart cap would silently kill a position that had simply been running
-// for weeks. They are restored within the full SIGNAL_WINDOW_DAYS evaluation
-// window instead; short-term types keep the tight cap below.
-const OPEN_POSITION_MAX_AGE_HOURS = Math.max(1, parseInt(process.env.OPEN_POSITION_MAX_AGE_HOURS || '72', 10) || 72);
+// A short-term cap of 72h was silently dropping positions that hadn't reached
+// their stop or target yet — those signals became orphans in signal_history
+// with no monitor to ever resolve them. Now ALL trade types restore within the
+// full SIGNAL_WINDOW_DAYS evaluation window. The resolved-outcome check
+// (9c1ebea fix) already prevents re-monitoring resolved positions, so there
+// is no harm in restoring more — every open position gets its fair chance.
+const OPEN_POSITION_MAX_AGE_HOURS = Math.max(1, parseInt(process.env.OPEN_POSITION_MAX_AGE_HOURS || '2160', 10) || 2160); // default 90 days (2160h) = SIGNAL_WINDOW_DAYS
 // Restore performance stats and portfolio state from DB on startup
 restoreStateFromDb().catch(() => {});
 // Bootstrap durable NSE daily history (KenyanStocks seed + best-effort deep bootstrap) non-blocking
@@ -859,28 +863,18 @@ async function restoreStateFromDb() {
     }
 
     // Restore still-open (unresolved) live positions from signal_history so the
-    // monitor-first gate survives restarts. Without this every boot re-emitted a
-    // fresh signal for every tracked symbol because _signalOutcomes started empty.
-    // Only Buy-direction signals are ever monitored as positions. Sell/Strong Sell
-    // are exit/avoid ratings, not mirrored shorts — they carry no stop/target levels
-    // and there is nothing to track (any leveled Sell rows in history are legacy
-    // artifacts from before that rule and are deliberately ignored here).
-    // The restore window is trade-type aware: Long Term / Long Term Value positions
-    // (stop/target-only closes, no expiry by design) are brought back across the full
-    // SIGNAL_WINDOW_DAYS evaluation window so a weeks/months-old long-term hold
-    // survives a restart; short-term types are capped at OPEN_POSITION_MAX_AGE_HOURS
-    // so stale short-term buys don't pile up forever.
+    // monitor-first gate survives restarts. All trade types restore within the
+    // full SIGNAL_WINDOW_DAYS window — a position that hasn't reached its stop
+    // or target deserves its fair chance regardless of type. The resolved-outcome
+    // check below prevents re-monitoring any position that already resolved.
     const openRes = await pool.query(
       `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, trade_type, position_size, generated_at, reason, analysis_data, confidence, timeframe
        FROM signal_history
-       WHERE generated_at > NOW() - CASE
-           WHEN trade_type IN ('Long Term','Long Term Value') THEN $1::interval
-           ELSE $2::interval
-         END
+       WHERE generated_at > NOW() - $1::interval
          AND signal IN ('Strong Buy','Buy')
          AND entry_price > 0 AND stop_loss > 0 AND target1 > 0
        ORDER BY ticker, generated_at DESC`,
-      [`${SIGNAL_WINDOW_DAYS} days`, `${OPEN_POSITION_MAX_AGE_HOURS} hours`]
+      [`${SIGNAL_WINDOW_DAYS} days`]
     );
     for (const row of openRes.rows) {
       const sym = row.ticker;
