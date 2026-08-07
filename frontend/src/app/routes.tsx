@@ -11,9 +11,6 @@ import MarketPage from "./pages/MarketPage";
 import { StocksPage } from "./pages/StocksPage";
 import { NewsPage } from "./pages/NewsPage";
 import { FinancialsPage } from "./pages/FinancialsPage";
-import { ChatPage } from "./pages/ChatPage";
-import { GroupPage } from "./pages/GroupPage";
-import { PeoplePage } from "./pages/PeoplePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SectorsPage } from "./pages/SectorsPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
@@ -42,9 +39,6 @@ export const router = createBrowserRouter([
       { path: "signals", Component: SignalsPage },
       { path: "news", Component: NewsPage },
       { path: "financials", Component: FinancialsPage },
-      { path: "chat", Component: ChatPage },
-      { path: "groups", Component: GroupPage },
-      { path: "people", Component: PeoplePage },
       { path: "watchlist", Component: WatchlistPage },
       { path: "portfolio", Component: PortfolioPage },
       { path: "notifications", Component: NotificationsPage },
@@ -63,8 +57,6 @@ export const router = createBrowserRouter([
   { path: "/signals/engine", loader: () => redirect("/app/signals/engine") },
   { path: "/news", loader: () => redirect("/app/news") },
   { path: "/financials", loader: () => redirect("/app/financials") },
-  { path: "/chat", loader: () => redirect("/app/chat") },
-  { path: "/people", loader: () => redirect("/app/people") },
   { path: "/watchlist", loader: () => redirect("/app/watchlist") },
   { path: "/portfolio", loader: () => redirect("/app/portfolio") },
   { path: "/notifications", loader: () => redirect("/app/notifications") },
