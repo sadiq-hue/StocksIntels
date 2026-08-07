@@ -1688,7 +1688,7 @@ function flipCutReached(prevOutcome, currentPrice) {
   const stop = prevOutcome.stopLoss;
   if (prevOutcome.action === 'buy' && stop != null && stop > 0 && stop < entry) {
     const stopPctFromEntry = ((entry - stop) / entry) * 100;
-    return pctMove <= -(stopPctFromEntry * FLIP_CLOSE_CUT_FRACTION_OF_STOP / 100);
+    return pctMove <= -(stopPctFromEntry * FLIP_CLOSE_CUT_FRACTION_OF_STOP);
   }
   return false;
 }
@@ -1730,8 +1730,10 @@ function evaluateScoreClose(prevOutcome, freshAction, eligibilityOk, currentPric
     } else {
       prevOutcome.flipCount++;
     }
-    // Non-consecutive break: reading didn't flip this cycle
-  } else {
+  } else if (eligibilityOk) {
+    // Trustworthy data shows no flip — reset the streak. Skip reset when data
+    // is untrustworthy (eligibilityOk=false) so a transient data glitch doesn't
+    // kill a confirmed flip that started under good data.
     prevOutcome.flipCount = 0;
     prevOutcome.flipFirstSeen = null;
   }
