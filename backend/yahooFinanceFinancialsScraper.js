@@ -30,6 +30,20 @@ function flattenYahooObject(data) {
   return result;
 }
 
+function normalizeTxnDate(d) {
+  if (!d) return '';
+  if (d instanceof Date) return !Number.isNaN(d.getTime()) ? d.toISOString() : '';
+  if (typeof d === 'number') {
+    const dt = new Date(d);
+    return !Number.isNaN(dt.getTime()) ? dt.toISOString() : '';
+  }
+  if (typeof d === 'object' && d.raw !== undefined) {
+    return normalizeTxnDate(d.raw);
+  }
+  if (typeof d === 'string') return d.split('T')[0];
+  return '';
+}
+
 function cacheSet(key, data) {
   return yahooFinanceCache.set(key, data);
 }
@@ -867,7 +881,7 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
 }
 
 async function getOwnershipData(symbol) {
-  const cacheKey = `yh_ownership_v5_${symbol}`;
+  const cacheKey = `yh_ownership_v6_${symbol}`;
   const cached = cacheGet(cacheKey);
   if (cached) {
     console.log(`[Ownership] Cache hit for ${symbol}: inst=${cached.institutionalHolders?.length || 0}, insiders=${cached.insiderTransactions?.length || 0}, short=${cached.shortInterest || 0}`);
@@ -925,7 +939,7 @@ async function getOwnershipData(symbol) {
       shares: typeof t.shares === 'number' ? t.shares : (t.shares?.raw ?? 0),
       value: typeof t.value === 'number' ? t.value : (t.value?.raw ?? 0),
       text: t.transactionText || t.text || '',
-      startDate: t.startDate || t.startDatetOfInterval || '',
+      startDate: normalizeTxnDate(t.startDate || t.startDatetOfInterval),
     }));
 
     const shortInterest = (typeof dk.sharesShortPriorMonth === 'number' && dk.sharesShortPriorMonth > 0) ? dk.sharesShortPriorMonth : (typeof dk.sharesShort === 'number' && dk.sharesShort > 0 ? dk.sharesShort : 0);

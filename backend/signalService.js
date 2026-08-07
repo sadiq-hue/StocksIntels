@@ -3820,11 +3820,21 @@ function scoreInsiderActivity(ownership) {
   let latestDate = null, latestText = null, latestTs = 0;
   for (const t of txns) {
     let ts = 0;
-    if (t.startDate && typeof t.startDate === 'string') {
+    if (t.startDate instanceof Date) {
+      ts = t.startDate.getTime();
+    } else if (t.startDate && typeof t.startDate === 'object' && !Array.isArray(t.startDate)) {
+      // yahoo-finance2 v3 returns startDate as a Date, but flattened/cached
+      // copies may hold { raw, fmt } or an ISO epoch number.
+      const raw = t.startDate.raw ?? t.startDate.__raw ?? t.startDate.value ?? null;
+      const d = raw != null ? new Date(typeof raw === 'string' && /^\d{10,13}$/.test(raw) ? Number(raw) : raw) : null;
+      if (d && !Number.isNaN(d.getTime())) ts = d.getTime();
+    } else if (typeof t.startDate === 'string' || typeof t.startDate === 'number') {
       const raw = String(t.startDate);
-      const asNum = /^\d{10,13}$/.test(raw) ? Number(raw) : NaN;
-      const d = asNum ? new Date(asNum) : new Date(raw);
-      if (!Number.isNaN(d.getTime())) ts = d.getTime();
+      if (raw && raw !== '[object Object]') {
+        const asNum = /^\d{10,13}$/.test(raw) ? Number(raw) : NaN;
+        const d = asNum ? new Date(asNum) : new Date(raw);
+        if (!Number.isNaN(d.getTime())) ts = d.getTime();
+      }
     }
     const value = t.value ?? t.transactionValue ?? null;
     const shares = (t.shares ?? value ?? 0) || 0;

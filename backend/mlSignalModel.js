@@ -287,7 +287,9 @@ async function _runBackgroundTraining() {
              sh.ticker, sh.market, sh.sector, sh.trade_type, sh.generated_at,
              sh.analysis_data
       FROM signal_outcomes s
-      JOIN signal_history sh ON sh.id = s.signal_history_id
+      JOIN signal_history sh
+        ON sh.ticker = s.ticker
+       AND date_trunc('milliseconds', sh.generated_at) = s.signal_generated_at
       WHERE s.result IS NOT NULL
         AND s.entry_price > 0
       ORDER BY s.recorded_at DESC
