@@ -603,9 +603,9 @@ async function getStockQuote(symbol) {
   return null;
 }
 
-const CONCURRENCY = 15;
-const BATCH_DELAY_MS = 200;
-const BATCH_TIMEOUT_MS = 120000;
+const CONCURRENCY = 10;
+const BATCH_DELAY_MS = 400;
+const BATCH_TIMEOUT_MS = 240000;
 
 function withTimeout(promise, ms, label) {
   let timer;
@@ -661,9 +661,29 @@ async function getQuotesBatch(symbols) {
     console.warn(`[getQuotesBatch] global timeout after ${BATCH_TIMEOUT_MS}ms, partial results (${Object.keys(results).length}/${missing.length})`);
   }, BATCH_TIMEOUT_MS);
 
-  for (let i = 0; i < missing.length; i += CONCURRENCY) {
+  // Bulk spark warm-up: one Yahoo request covers up to 20 non-NSE symbols,
+  // cutting cold-cycle request volume ~20x vs. per-symbol fetches. Any symbols
+  // spark misses fall through to the per-symbol loop below.
+  const nonNse = missing.filter(s => !s.startsWith('NSE:'));
+  if (nonNse.length > 0) {
+    try {
+      const bulk = await yahooService.fetchQuotesBulk(nonNse);
+      for (const s of Object.keys(bulk)) {
+        const q = bulk[s];
+        if (q && Number(q.price) > 0) {
+          quoteCache.set(s, { ...q, symbol: s });
+          results[s] = quoteCache.get(s);
+        }
+      }
+    } catch (e) {
+      console.warn(`[getQuotesBatch] bulk spark failed: ${e.message}`);
+    }
+  }
+
+  const remaining = missing.filter(s => !results[s]);
+  for (let i = 0; i < remaining.length; i += CONCURRENCY) {
     if (timedOut) break;
-    const batch = missing.slice(i, i + CONCURRENCY);
+    const batch = remaining.slice(i, i + CONCURRENCY);
     const batchResults = await Promise.allSettled(batch.map(s => fetchQuoteForSymbol(s)));
 
     for (let j = 0; j < batch.length; j++) {
@@ -680,7 +700,7 @@ async function getQuotesBatch(symbols) {
       }
     }
 
-    if (i + CONCURRENCY < missing.length) {
+    if (i + CONCURRENCY < remaining.length) {
       await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
     }
   }

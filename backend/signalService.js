@@ -690,7 +690,7 @@ async function prefetchQuotes(symbols) {
     return !cached || Date.now() - cached.ts > QUOTE_CACHE_TTL;
   });
   if (toFetch.length === 0) return;
-  const batchSize = 30;
+  const batchSize = 100;
   for (let i = 0; i < toFetch.length; i += batchSize) {
     const batch = toFetch.slice(i, i + batchSize);
     try {

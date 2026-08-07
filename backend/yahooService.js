@@ -536,6 +536,52 @@ async function fetchQuotes(symbols) {
   return results;
 }
 
+// Yahoo "spark" endpoint returns quotes for many symbols in a single request.
+// Rate-limited per IP, so keep chunks small (20) and pace with a gap between
+// requests; alternate query1/query2 hosts (query3+ return 404 for spark).
+async function fetchQuotesBulk(symbols, { chunkSize = 20, gapMs = 400 } = {}) {
+  const results = {};
+  if (!symbols || symbols.length === 0) return results;
+  const cleaned = [...new Set(symbols
+    .map(s => String(s).replace(/^NSE:/, '').toUpperCase())
+    .filter(Boolean))];
+  const SPARK_HOSTS = ['query1', 'query2'];
+  for (let i = 0; i < cleaned.length; i += chunkSize) {
+    const chunk = cleaned.slice(i, i + chunkSize);
+    const sparkSymbols = chunk.map(s => s.includes('.') ? s.replace(/\./g, '-') : s);
+    const host = SPARK_HOSTS[Math.floor(i / chunkSize) % SPARK_HOSTS.length];
+    const url = `https://${host}.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(sparkSymbols.join(','))}&range=1d&interval=1d`;
+    let data = null;
+    try {
+      const resp = await limiters.v8.schedule(() =>
+        require('axios').get(url, { timeout: 12000, headers: { 'User-Agent': UA, 'Accept': 'application/json' } })
+      );
+      data = resp.data;
+    } catch {
+      // Cloud IPs are often blocked on the finance API — fall back to proxy path
+      try {
+        const { data: proxied } = await limiters.v8.schedule(() => proxyService.fetchWithProxyFallback(url));
+        data = proxied;
+      } catch {}
+    }
+    if (data?.spark?.result) {
+      for (const entry of data.spark.result) {
+        const meta = entry?.response?.[0]?.meta;
+        if (!meta || meta.regularMarketPrice == null) continue;
+        const key = (entry.symbol || '').toUpperCase().replace(/-/g, '.');
+        if (!key) continue;
+        const quote = formatQuote(meta, key, 'yahoo-spark');
+        if (quote && Number(quote.price) > 0) {
+          results[key] = quote;
+          cacheSet(quoteCache, key, quote, CACHE_TTL.quote, useRedis ? `yahoo:quote:${key}` : null);
+        }
+      }
+    }
+    if (i + chunkSize < cleaned.length) await new Promise(r => setTimeout(r, gapMs));
+  }
+  return results;
+}
+
 async function fetchHistorical(symbol, range = '6mo', interval = '1d') {
   const cacheKey = `${symbol}|${range}|${interval}`;
   const redisKey = useRedis ? `yahoo:hist:${symbol}:${range}:${interval}` : null;
@@ -709,6 +755,7 @@ function clearCache() {
 module.exports = {
   fetchQuote,
   fetchQuotes,
+  fetchQuotesBulk,
   fetchHistorical,
   fetchQuoteSummary,
   fetchPriceViaProxy,
