@@ -2,11 +2,19 @@ const { KENYAN_STOCKS } = require('./newsService');
 const yahooService = require('./yahooService');
 
 // Background NSE price cache from mystocks.co.ke
+// Only run the scraper as a fallback when the Partner API key is not configured.
+// When MYSTOCKS_AFRICA_API_KEY is set, the authoritative Partner API handles all
+// NSE quote requests and the scraper (which is currently failing across all
+// batches) would only waste HTTP connection capacity and starve signal generation.
 const mystocks = require('./mystocksScraper');
-setTimeout(() => {
-  mystocks.clearCache();
-  mystocks.startAutoRefresh();
-}, 1000);
+if (!process.env.MYSTOCKS_AFRICA_API_KEY) {
+  setTimeout(() => {
+    mystocks.clearCache();
+    mystocks.startAutoRefresh();
+  }, 1000);
+} else {
+  console.log('[marketService] MYSTOCKS_AFRICA_API_KEY set — skipping mystocks.co.ke scraper auto-refresh');
+}
 
 // NSE volume data from afx.kwayisi.org
 const nseAfx = require('./nseAfxScraper');
