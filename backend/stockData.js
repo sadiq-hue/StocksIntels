@@ -191,6 +191,26 @@ const US_SYMBOLS = [
   'TT','PH','ROK','AME','OTIS','CARR','JCI','IR','FANG','GWW','FAST','DOV','NDSN','SNA','SWK','MAS','XYL','WAB','IP','ALB','CF','MOS',
   'NUE','STLD','MHK','SEDG','ENPH','PLUG','CHPT','ACGL','CFG','CPRT','FDS','FITB','GPC','HBAN','HMC','KEY','MTB','NTRS','OMC','ON','QRVO','RF','SFM','STT','SWKS','TM',
   'SPCX','NOK','SMCI','RKLB','RDW','ASTS','SATS','IREN','GRAB','PATH','MRVL','CPNG','NU','TTD','ITUB','CCL','SOUN','HPE','VALE','NIO','ARM','MSTR','ROKU','IONQ','HIMS','STLA','CAG','ACHR','PL',
+  // S&P 500 / NASDAQ-100 additions (full index coverage)
+  'A','ADM','ADSK','AEE','AES','AIZ','AJG','AKAM','ALAB','ALLE','ALNY','AMCR',
+  'AMP','ANET','AON','AOS','APA','APO','APP','APTV','ARE','ARES','ASML','ATO',
+  'AVY','AWK','AXON','BALL','BAX','BEN','BF.B','BG','BKNG','BLDR','BMY','BNY',
+  'BR','BRO','BX','BXP','CAH','CASY','CBOE','CBRE','CCEP','CDW','CEG','CHRW',
+  'CIEN','CINF','CLX','CMS','CNC','CNP','COF','COHR','COO','COR','CPAY','CPT',
+  'CRH','CRL','CRWV','CSGP','CSX','CTSH','CTVA','CVNA','CVS','D','DECK','DELL',
+  'DGX','DOC','DPZ','DRI','DTE','DVA','ECHO','EFX','EG','EL','EME','EQT',
+  'ERIE','ES','ESS','ETR','EVRG','EXE','EXPD','EXPE','EXR','FDXF','FE','FER',
+  'FERG','FFIV','FICO','FISV','FIX','FLEX','FOX','FRT','FSLR','FTV','GDDY','GEHC',
+  'GEN','GEV','GL','GNRC','GOOG','GRMN','HAS','HIG','HII','HONA','HPQ','HRL',
+  'HSIC','HST','HUBB','HUM','HWM','IBKR','IEX','INCY','INTU','INVH','IQV','IRM',
+  'IT','IVZ','J','JBHT','JBL','JKHY','KDP','KIM','KKR','KVUE','L','LDOS',
+  'LH','LII','LIN','LITE','LNT','LYB','MA','MAA','MELI','MKC','MO','MRSH',
+  'MSI','MTD','NBIS','NCLH','NI','NRG','NSC','NTAP','NWS','ODFL','PAYX','PCG',
+  'PDD','PFG','PKG','PM','PNR','PNW','PODD','PPL','PSKY','Q','RCL','REG',
+  'RJF','RL','ROL','ROP','RVTY','SHOP','SJM','SNDK','SOLV','STE','SW','SYF',
+  'TAP','TDY','TECH','TKO','TMUS','TPL','TPR','TRGP','TRI','TROW','TSN','TXT',
+  'TYL','UDR','UHS','ULTA','UNP','URI','VEEV','VICI','VLTO','VRSK','VRSN','VRT',
+  'VST','VTR','VTRS','WAT','WEC','WRB','WSM','WTW','WY','XYZ','YUM','ZBH',
 ];
 
 const ALL_SYMBOLS = [...NSE_SYMBOLS, ...US_SYMBOLS];
