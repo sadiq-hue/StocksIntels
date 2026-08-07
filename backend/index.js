@@ -6629,9 +6629,12 @@ app.get('/api/screener', async (req, res) => {
     const monitoredEntries = getMonitoredSignals().map(m => ({
       ...m,
       signal: m.signal || 'Buy',
+      price: m.price != null ? m.price : 0,
+      change: m.change != null ? m.change : 0,
       score: m.analysis?.overall?.score || 50,
       volume: String(m.entryPrice || 0),
       rawVolume: 0,
+      name: m.name || m.ticker,
       fundamentalScore: m.analysis?.fundamental?.score || 50,
       technicalScore: m.analysis?.technical?.score || 50,
       financialScore: m.analysis?.financial?.score || 50,

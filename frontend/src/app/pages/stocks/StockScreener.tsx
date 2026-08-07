@@ -373,13 +373,13 @@ export function StockScreener() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="text-sm font-bold text-foreground font-mono">
-                          {stock.currency === "USD" ? "$" : "KES "}{stock.price.toFixed(2)}
+                          {stock.currency === "USD" ? "$" : "KES "}{(stock.price ?? 0).toFixed(2)}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold ${isPositive ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
                           {isPositive ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
-                          {isPositive ? "+" : ""}{stock.change.toFixed(2)}%
+                          {isPositive ? "+" : ""}{(stock.change ?? 0).toFixed(2)}%
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right hidden md:table-cell">
