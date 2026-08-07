@@ -16,11 +16,21 @@ const FETCH_TIMEOUT = 10000;
 const BATCH_SIZE = 5;
 const BATCH_DELAY = 500;
 
+// The live.mystocks.co.ke scraper has been non-functional for weeks
+// (all 70 tickers time out). Running the auto-refresh saturates HTTP
+// connection capacity and starves signal generation. Skip all work
+// when the Partner API key is available.
+const SCRAPER_DISABLED = !!process.env.MYSTOCKS_AFRICA_API_KEY;
+if (SCRAPER_DISABLED) {
+  console.log('[myStocks] Scraper DISABLED — Partner API key is set, all fetch calls will no-op');
+}
+
 let cache = null;
 let cacheTime = 0;
 let refreshTimer = null;
 
 async function scrapeStockPage(ticker) {
+  if (SCRAPER_DISABLED) return null;
   try {
     const resp = await axios.get(`https://live.mystocks.co.ke/stock=${ticker}`, {
       timeout: FETCH_TIMEOUT,
@@ -137,6 +147,7 @@ async function scrapeStockPage(ticker) {
 }
 
 async function fetchAllQuotes(force) {
+  if (SCRAPER_DISABLED) return {};
   const now = Date.now();
   if (!force && cache && (now - cacheTime) < CACHE_TTL) return cache;
 
@@ -212,6 +223,7 @@ function getCacheSize() {
 }
 
 function startAutoRefresh() {
+  if (SCRAPER_DISABLED) { console.log('[myStocks] Auto-refresh SKIPPED — scraper disabled'); return; }
   if (refreshTimer) clearInterval(refreshTimer);
   // First fetch runs inline (no await so module import doesn't block)
   fetchAllQuotes(true).catch(() => {});
