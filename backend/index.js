@@ -6623,26 +6623,23 @@ app.get('/api/screener/criteria', async (req, res) => {
 app.get('/api/screener', async (req, res) => {
   try {
     const signals = await generateSignals(null, true);
-    // Overlay currently monitored positions: if a ticker has an open Buy or Sell,
-    // promote its signal rating to the monitored action so the screener shows
-    // active positions rather than the current cycle's Hold rating.
-    const monitored = new Map();
-    // Debug: check specific known monitored tickers
-    for (const sym of ['ADC','TSN','NTR','CTSH','LDOS','WCC']) {
-      const a = getMonitoredAction(sym);
-      console.log(`[Screener] getMonitoredAction(${sym}) = ${a}`);
-    }
-    // Check if monitored tickers are in signals at all
-    const sigTickers = new Set(signals.map(s => s.ticker));
-    console.log(`[Screener] Signals tickers: ${sigTickers.size}, has CTSH=${sigTickers.has('CTSH')}, has ADC=${sigTickers.has('ADC')}, has LDOS=${sigTickers.has('LDOS')}`);
-    for (const s of signals) {
-      const action = getMonitoredAction(s.ticker);
-      if (action) monitored.set(s.ticker, action);
-    }
-    console.log(`[Screener] Overlay: ${monitored.size} monitored positions found across ${signals.length} signals`);
-    let filtered = monitored.size > 0
-      ? signals.map(s => monitored.has(s.ticker) ? { ...s, signal: monitored.get(s.ticker) } : s)
-      : [...signals];
+    // Merge monitored positions: the current cycle may rate everything Hold
+    // (sparse fundamentals), but the engine has live monitored Buy positions
+    // that must appear in the screener with their real ratings.
+    const monitoredEntries = getMonitoredSignals().map(m => ({
+      ...m,
+      signal: m.signal || 'Buy',
+      score: m.analysis?.overall?.score || 50,
+      volume: String(m.entryPrice || 0),
+      rawVolume: 0,
+      fundamentalScore: m.analysis?.fundamental?.score || 50,
+      technicalScore: m.analysis?.technical?.score || 50,
+      financialScore: m.analysis?.financial?.score || 50,
+      macroScore: m.analysis?.macro?.score || 50,
+      grade: m.analysis?.overall?.grade || 'C',
+    }));
+    const seen = new Set(monitoredEntries.map(m => m.ticker));
+    let filtered = [...monitoredEntries, ...signals.filter(s => !seen.has(s.ticker))];
 
     // Filters
     const {
