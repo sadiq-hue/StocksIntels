@@ -408,7 +408,7 @@ export function SignalsPage() {
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3" data-tour="signals-stats">
         <Card className="bg-card border-border p-3 flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-[#0D7490]/10 flex items-center justify-center shrink-0"><Signal className="w-4 h-4 text-[#0D7490]" /></div>
           <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Total Signals</p><p className="text-foreground text-xl font-bold leading-tight">{signals.length}</p></div>
@@ -451,7 +451,7 @@ export function SignalsPage() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3" data-tour="signals-filters">
         <div className="relative flex-1 min-w-[180px] max-w-[260px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search ticker or name..." className="pl-9 h-9 text-sm border-border" />
@@ -482,11 +482,11 @@ export function SignalsPage() {
 
       {/* Signal cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {paged.map(s => {
+        {paged.map((s, idx) => {
           const ss = SIGNAL_STYLES[s.signal];
           const Icon = ss.icon;
           return (
-            <Card key={s.id || s.ticker} className="bg-card border-border overflow-hidden hover:border-[#0D7490] hover:shadow-md transition-all cursor-pointer group flex flex-col" onClick={() => setSelected(s)}>
+            <Card key={s.id || s.ticker} className="bg-card border-border overflow-hidden hover:border-[#0D7490] hover:shadow-md transition-all cursor-pointer group flex flex-col" onClick={() => setSelected(s)} data-tour={idx === 0 ? "signal-card" : undefined}>
               {/* Signal accent bar */}
               <div className={`h-1 w-full ${ss.accent}`} />
               {/* Top: ticker, signal badge */}
@@ -540,7 +540,7 @@ export function SignalsPage() {
               </div>
 
               {/* Entry / Stop / Targets */}
-              <div className={`px-4 pb-3 grid grid-cols-2 gap-2 ${s.target3 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
+              <div className={`px-4 pb-3 grid grid-cols-2 gap-2 ${s.target3 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`} data-tour={idx === 0 ? "signal-levels" : undefined}>
                 <div className="bg-blue-50 rounded-md p-2 text-center border border-blue-100"><p className="text-[9px] font-medium text-blue-600 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 font-mono">{fmtPrice(s, s.entry)}</p></div>
                 <div className="bg-red-50 rounded-md p-2 text-center border border-red-100"><p className="text-[9px] font-medium text-red-600 uppercase">Stop</p><p className="text-xs font-bold text-red-900 font-mono">{fmtPrice(s, s.stopLoss)}</p></div>
                 <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">Target 1</p><p className="text-xs font-bold text-emerald-900 font-mono">{fmtPrice(s, s.target1)}</p></div>
@@ -592,7 +592,7 @@ export function SignalsPage() {
               )}
 
               {/* Confidence bar */}
-              <div className="px-4 pb-3 flex items-center gap-3">
+              <div className="px-4 pb-3 flex items-center gap-3" data-tour={idx === 0 ? "signal-confidence" : undefined}>
                 <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div className={`h-full rounded-full transition-all ${s.confidence >= 80 ? "bg-emerald-500" : s.confidence >= 70 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${s.confidence}%` }} />
                 </div>

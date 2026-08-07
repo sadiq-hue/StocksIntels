@@ -48,7 +48,7 @@ export function StocksPage() {
             <LineChart className="size-4 text-white" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-foreground leading-tight">Stock Intel</h2>
+            <h2 className="text-sm font-bold text-foreground leading-tight">StocksIntels</h2>
             <p className="text-[10px] text-muted-foreground">{activeLabel}</p>
           </div>
         </div>
@@ -65,7 +65,7 @@ export function StocksPage() {
               <LineChart className="size-4 text-white" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-foreground leading-tight">Stock Intel</h2>
+              <h2 className="text-sm font-bold text-foreground leading-tight">StocksIntels</h2>
               <p className="text-[10px] text-muted-foreground">Market Explorer</p>
             </div>
           </div>

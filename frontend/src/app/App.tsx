@@ -11,8 +11,8 @@ const MarketPage = React.lazy(() => import("./pages/MarketPage"));
 const WatchlistPage = React.lazy(() => import("./pages/WatchlistPage").then(m => ({ default: m.WatchlistPage })));
 const SignalsPage = React.lazy(() => import("./pages/SignalsPage").then(m => ({ default: m.SignalsPage })));
 const AIInsightsPage = React.lazy(() => import("./pages/AIInsightsPage").then(m => ({ default: m.AIInsightsPage })));
-const PeoplePage = React.lazy(() => import("./pages/PeoplePage").then(m => ({ default: m.PeoplePage })));
-const GroupPage = React.lazy(() => import("./pages/GroupPage").then(m => ({ default: m.GroupPage })));
+// const PeoplePage = React.lazy(() => import("./pages/PeoplePage").then(m => ({ default: m.PeoplePage })));
+// const GroupPage = React.lazy(() => import("./pages/GroupPage").then(m => ({ default: m.GroupPage })));
 const NewsPage = React.lazy(() => import("./pages/NewsPage").then(m => ({ default: m.NewsPage })));
 const FinancialsPage = React.lazy(() => import("./pages/FinancialsPage").then(m => ({ default: m.FinancialsPage })));
 const PortfolioPage = React.lazy(() => import("./pages/PortfolioPage").then(m => ({ default: m.PortfolioPage })));
@@ -22,7 +22,7 @@ const StockAnalysisPage = React.lazy(() => import("./pages/StockAnalysisPage").t
 const StocksPage = React.lazy(() => import("./pages/StocksPage").then(m => ({ default: m.StocksPage })));
 const SettingsPage = React.lazy(() => import("./pages/SettingsPage").then(m => ({ default: m.SettingsPage })));
 const SectorsPage = React.lazy(() => import("./pages/SectorsPage").then(m => ({ default: m.SectorsPage })));
-const ChatPage = React.lazy(() => import("./pages/ChatPage").then(m => ({ default: m.ChatPage })));
+// const ChatPage = React.lazy(() => import("./pages/ChatPage").then(m => ({ default: m.ChatPage })));
 const NotificationsPage = React.lazy(() => import("./pages/NotificationsPage").then(m => ({ default: m.NotificationsPage })));
 const BondsPage = React.lazy(() => import("./pages/BondsPage").then(m => ({ default: m.BondsPage })));
 const ETFsPage = React.lazy(() => import("./pages/ETFsPage").then(m => ({ default: m.ETFsPage })));
@@ -140,14 +140,14 @@ const router = createBrowserRouter([
       { path: "watchlist", element: <WatchlistPage /> },
       { path: "signals", element: <SignalsPage /> },
       { path: "ai-insights", element: <AIInsightsPage /> },
-      { path: "people", element: <PeoplePage /> },
-      { path: "groups", element: <GroupPage /> },
+      // { path: "people", element: <PeoplePage /> },
+      // { path: "groups", element: <GroupPage /> },
       { path: "news", element: <NewsPage /> },
       { path: "notifications", element: <NotificationsPage /> },
       { path: "financials", element: <FinancialsPage /> },
       { path: "portfolio", element: <PortfolioPage /> },
       { path: "stock/:ticker", element: <StockAnalysisPage /> },
-      { path: "chat", element: <ChatPage /> },
+      // { path: "chat", element: <ChatPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "sectors", element: <SectorsPage /> },
       { path: "bonds", element: <BondsPage /> },

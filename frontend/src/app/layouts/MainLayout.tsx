@@ -5,6 +5,10 @@ import { Sidebar } from "../components/Sidebar";
 import { Toaster } from "../components/ui/sonner";
 import { useAuth } from "../auth/AuthContext";
 import { BeginnerModeProvider } from "../contexts/BeginnerModeContext";
+import { GuidedTour } from "../components/GuidedTour";
+import "../pages/DashboardTour";
+import "../pages/SignalsTour";
+import "../pages/FinancialsTour";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -33,6 +37,7 @@ export function MainLayout() {
       </div>
       <Toaster position="top-right" />
     </div>
+    <GuidedTour />
     </BeginnerModeProvider>
   );
 }

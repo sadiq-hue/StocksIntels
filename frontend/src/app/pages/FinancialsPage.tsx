@@ -563,7 +563,7 @@ export function FinancialsPage() {
       </div>
 
       {/* ─── KPI Row ─── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" data-tour="fin-kpi">
         {(() => {
           const price = quote?.price || 0;
           const shares = quote?.sharesOutstanding || 0;
@@ -579,7 +579,7 @@ export function FinancialsPage() {
       </div>
 
       {/* ─── Search & Controls Toolbar ─── */}
-      <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
+      <div className="bg-card rounded-xl border border-border p-4 shadow-sm" data-tour="fin-search">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px] max-w-xs" ref={searchRef}>
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -624,7 +624,7 @@ export function FinancialsPage() {
 
           <div className="h-6 w-px bg-border mx-1 hidden md:block" />
 
-          <div className="flex bg-muted p-0.5 rounded-lg">
+          <div className="flex bg-muted p-0.5 rounded-lg" data-tour="fin-controls">
             <button onClick={() => setPeriod("annual")} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${period === 'annual' ? 'bg-card text-[#0D7490] shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Annual</button>
             <button onClick={() => setPeriod("quarter")} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${period === 'quarter' ? 'bg-card text-[#0D7490] shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Quarterly</button>
           </div>
@@ -709,7 +709,7 @@ export function FinancialsPage() {
           )}
         </div>
       ) : (
-        <Tabs defaultValue="summary" className="space-y-4">
+        <Tabs defaultValue="summary" className="space-y-4" data-tour="fin-tabs">
           <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
             <TabsList className="w-full h-auto bg-transparent p-0 rounded-none flex flex-wrap">
               {tabs.map((tab) => (
@@ -724,7 +724,7 @@ export function FinancialsPage() {
           {/* ═══ SUMMARY TAB ═══ */}
           <TabsContent value="summary" className="mt-0 outline-none space-y-5">
             {/* Performance & Capital Charts */}
-            <div className="grid gap-5 lg:grid-cols-2">
+            <div className="grid gap-5 lg:grid-cols-2" data-tour="fin-chart">
               <Card className="border-border bg-card p-5 shadow-sm rounded-xl">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
@@ -1039,7 +1039,7 @@ export function FinancialsPage() {
                   )}
 
                   {ownership && (ownership.institutionalHolders.length > 0 || ownership.insiderTransactions.length > 0) && (
-                    <div className="grid gap-5 lg:grid-cols-2">
+            <div className="grid gap-5 lg:grid-cols-2">
                       {ownership.institutionalHolders.length > 0 && (
                         <Card className="border-border bg-card p-5 shadow-sm rounded-xl">
                           <div className="flex items-center gap-2 mb-4">
