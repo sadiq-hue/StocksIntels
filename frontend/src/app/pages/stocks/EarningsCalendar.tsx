@@ -183,7 +183,6 @@ export function EarningsCalendar() {
         search: search || undefined,
         market: marketFilter || undefined,
         sector: sectorFilter || undefined,
-        from: new Date().toISOString(),
         limit: 2000,
       })
         .then(r => {
