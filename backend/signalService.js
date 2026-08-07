@@ -863,18 +863,17 @@ async function restoreStateFromDb() {
     }
 
     // Restore still-open (unresolved) live positions from signal_history so the
-    // monitor-first gate survives restarts. All trade types restore within the
-    // full SIGNAL_WINDOW_DAYS window — a position that hasn't reached its stop
-    // or target deserves its fair chance regardless of type. The resolved-outcome
-    // check below prevents re-monitoring any position that already resolved.
+    // monitor-first gate survives restarts. No time window — a position that
+    // hasn't reached its stop or target is restored regardless of age. Some
+    // targets take 3-6 months or more. The resolved-outcome check on the next
+    // line prevents re-monitoring any position that already resolved. Only the
+    // most recent signal per ticker is restored (DISTINCT ON + ORDER BY DESC).
     const openRes = await pool.query(
       `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, trade_type, position_size, generated_at, reason, analysis_data, confidence, timeframe
        FROM signal_history
-       WHERE generated_at > NOW() - $1::interval
-         AND signal IN ('Strong Buy','Buy')
+       WHERE signal IN ('Strong Buy','Buy')
          AND entry_price > 0 AND stop_loss > 0 AND target1 > 0
-       ORDER BY ticker, generated_at DESC`,
-      [`${SIGNAL_WINDOW_DAYS} days`]
+       ORDER BY ticker, generated_at DESC`
     );
     for (const row of openRes.rows) {
       const sym = row.ticker;
