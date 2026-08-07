@@ -221,6 +221,14 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
   // real positions under the 500-entry cap.
   const monitorable = newSignal.action === 'buy' && newSignal.stopLoss != null && newSignal.target1 != null;
 
+  // Minimum signal age before stop/target resolution can fire. A position that
+  // resolves within its first few minutes of life (or minutes after a restart
+  // restore) was almost certainly created with a stale/expired entry price that
+  // diverges from the fresh quote fetched during the current cycle. Without this
+  // gate, every stale-signal-on-restart becomes an instant ±10% / ±20% resolved
+  // outcome with zero real market participation.
+  const MIN_SIGNAL_AGE_MS = 5 * 60 * 1000; // 5 minutes
+
   if (previous && previous.action !== 'hold' && previous.stopLoss != null && previous.target1 != null && !previous.result) {
     const isPrevBuy = previous.action === 'buy';
     // Defensive guards: never resolve a position whose stop sits on the wrong side of
@@ -228,6 +236,14 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
     // level (stale/identical cached quote). Otherwise every broken position resolves
     // as an instant loss with entry == exit on the next cycle.
     const entry = previous.entryPrice;
+    const signalAge = Date.now() - (previous.timestamp || 0);
+    if (signalAge < MIN_SIGNAL_AGE_MS) {
+      // Young signals (freshly created this cycle or restored moments ago) cannot
+      // resolve via stop/target — their entry price may not yet reflect a
+      // confirmed live-market level. A defer here is a no-op; the position
+      // simply waits one more cycle.
+      console.warn(`[RiskManager] ${symbol} deferring resolution — signal only ${Math.round(signalAge / 1000)}s old (min ${MIN_SIGNAL_AGE_MS / 1000}s)`);
+    } else {
     const saneLevels = entry > 0 && isPrevBuy
       ? previous.stopLoss < entry && previous.target1 > entry
       : entry > 0 && previous.stopLoss > entry && previous.target1 < entry;
@@ -277,6 +293,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
       console.warn(`[RiskManager] ${symbol} deferring stop/target resolution - market closed (entry=${entry} stop=${previous.stopLoss} t1=${previous.target1} price=${currentPrice})`);
     } else {
       console.warn(`[RiskManager] Skipping resolution for ${symbol} ${previous.signal} (${previous.action}) entry=${entry} stop=${previous.stopLoss} t1=${previous.target1} price=${currentPrice} saneLevels=${saneLevels} moved=${moved}`);    }
+    } // end signal-age guard
     if (previous.result) {
       previous.resolvedAt = Date.now();
       // Record the level that actually resolved the trade (stop for a loss,
