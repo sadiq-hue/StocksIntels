@@ -275,6 +275,47 @@ async function syncEarnings() {
       }
     }
 
+    // 1b. Finnhub earnings calendar — fallback for upcoming global events
+    try {
+      const fromStr = new Date().toISOString().slice(0, 10);
+      const toDate = new Date();
+      toDate.setMonth(toDate.getMonth() + 6);
+      const toStr = toDate.toISOString().slice(0, 10);
+      const finnhubEvents = await fetchFinnhubEarningsCalendar(fromStr, toStr);
+      const existingIds = new Set(allEvents.map(e => e.id));
+      for (const fe of finnhubEvents) {
+        const id = `finnhub-${fe.ticker}-${fe.date}`;
+        if (existingIds.has(id)) continue;
+        const fund = signalService.getFundamentals(fe.ticker);
+        const reportDate = new Date(fe.date);
+        if (isNaN(reportDate.getTime())) continue;
+        const fiscalQ = Math.floor(reportDate.getMonth() / 3);
+        allEvents.push({
+          id,
+          ticker: fe.ticker,
+          name: fund?.name || fe.ticker,
+          date: reportDate.toISOString(),
+          dateStr: `${MONTHS[reportDate.getMonth()]} ${reportDate.getDate()}, ${reportDate.getFullYear()}`,
+          quarter: `Q${fiscalQ + 1}`,
+          fiscalYear: reportDate.getFullYear(),
+          estEPS: fe.epsEstimate || 0.01,
+          actualEPS: fe.epsActual || 0,
+          surprise: (fe.epsActual && fe.epsEstimate) ? +(((fe.epsActual - fe.epsEstimate) / Math.abs(fe.epsEstimate || 1)) * 100).toFixed(2) : 0,
+          isBeat: (fe.epsActual || 0) >= (fe.epsEstimate || 0),
+          market: 'global',
+          sector: fund?.sector || 'Other',
+          currency: 'USD',
+          marketCap: fund?.marketCap || 0,
+          revenue: fe.revenueEstimate || 0,
+          source: 'finnhub',
+        });
+        existingIds.add(id);
+      }
+      console.log(`[Earnings] Finnhub added ${finnhubEvents.length} upcoming global events`);
+    } catch (e) {
+      console.error('[Earnings] Finnhub calendar failed:', e.message);
+    }
+
     // 2. Historical earnings from per-ticker EARNINGS endpoint (cached once)
     const historicalTickers = [...trackedSet].filter(t => !signalService.NSE_SYMBOLS.includes(t));
     enqueueHistoricalFetch(historicalTickers);
