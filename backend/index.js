@@ -6627,6 +6627,11 @@ app.get('/api/screener', async (req, res) => {
     // promote its signal rating to the monitored action so the screener shows
     // active positions rather than the current cycle's Hold rating.
     const monitored = new Map();
+    // Debug: check specific known monitored tickers
+    for (const sym of ['ADC','TSN','NTR','CTSH','LDOS','WCC']) {
+      const a = getMonitoredAction(sym);
+      console.log(`[Screener] getMonitoredAction(${sym}) = ${a}`);
+    }
     for (const s of signals) {
       const action = getMonitoredAction(s.ticker);
       if (action) monitored.set(s.ticker, action);
