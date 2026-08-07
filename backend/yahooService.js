@@ -326,7 +326,10 @@ async function fetchV8Historical(symbol, range, interval) {
   }
   const buildUrl = (host) =>
     `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}`;
-  // Direct calls (proxyService hangs on the chart endpoint from this host)
+  // Direct calls (proxyService hangs on the chart endpoint from this host).
+  // Note: a 404 here is usually Yahoo's per-symbol throttle ("symbol may be
+  // delisted" for a live ticker) and is minutes-long, so retrying quickly is
+  // futile — the caller falls through to the yf2 fallback below instead.
   for (const host of ['query1', 'query2']) {
     try {
       const { data } = await limiters.v8.schedule(() =>
@@ -546,23 +549,31 @@ async function fetchQuotesBulk(symbols, { chunkSize = 20, gapMs = 400 } = {}) {
     .map(s => String(s).replace(/^NSE:/, '').toUpperCase())
     .filter(Boolean))];
   const SPARK_HOSTS = ['query1', 'query2'];
+  let chunkFails = 0;
   for (let i = 0; i < cleaned.length; i += chunkSize) {
     const chunk = cleaned.slice(i, i + chunkSize);
     const sparkSymbols = chunk.map(s => s.includes('.') ? s.replace(/\./g, '-') : s);
     const host = SPARK_HOSTS[Math.floor(i / chunkSize) % SPARK_HOSTS.length];
     const url = `https://${host}.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(sparkSymbols.join(','))}&range=1d&interval=1d`;
     let data = null;
-    try {
-      const resp = await limiters.v8.schedule(() =>
-        require('axios').get(url, { timeout: 12000, headers: { 'User-Agent': UA, 'Accept': 'application/json' } })
-      );
-      data = resp.data;
-    } catch {
-      // Cloud IPs are often blocked on the finance API — fall back to proxy path
+    for (let attempt = 0; attempt < 2 && data == null; attempt++) {
       try {
-        const { data: proxied } = await limiters.v8.schedule(() => proxyService.fetchWithProxyFallback(url));
-        data = proxied;
-      } catch {}
+        const resp = await limiters.v8.schedule(() =>
+          require('axios').get(url, { timeout: 12000, headers: { 'User-Agent': UA, 'Accept': 'application/json' } })
+        );
+        data = resp.data;
+      } catch {
+        // Cloud IPs are often blocked on the finance API — fall back to proxy path
+        try {
+          const { data: proxied } = await limiters.v8.schedule(() => proxyService.fetchWithProxyFallback(url));
+          data = proxied;
+        } catch {}
+      }
+      if (data == null && attempt === 0) await new Promise(r => setTimeout(r, 1000));
+    }
+    if (data == null) {
+      chunkFails++;
+      continue;
     }
     if (data?.spark?.result) {
       for (const entry of data.spark.result) {
@@ -578,6 +589,9 @@ async function fetchQuotesBulk(symbols, { chunkSize = 20, gapMs = 400 } = {}) {
       }
     }
     if (i + chunkSize < cleaned.length) await new Promise(r => setTimeout(r, gapMs));
+  }
+  if (chunkFails > 0) {
+    console.warn(`[fetchQuotesBulk] ${chunkFails}/${Math.ceil(cleaned.length / chunkSize)} spark chunks failed after retry (${cleaned.length} symbols requested, ${Object.keys(results).length} covered)`);
   }
   return results;
 }
@@ -606,9 +620,15 @@ async function fetchYf2Historical(symbol, range, interval) {
   try {
     const { default: YahooFinance } = await import('yahoo-finance2');
     const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+    // yahoo-finance2 chart() requires period1/period2 (range is not a valid
+    // option in its schema — passing it fails validation), so convert the
+    // range string to a period window.
+    const now = Math.floor(Date.now() / 1000);
+    const RANGE_DAYS = { '1d': 1, '5d': 5, '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 730, '5y': 1825, 'max': 15000 };
+    const days = RANGE_DAYS[range] || 180;
     const result = await limiters.yf2.schedule(() =>
       Promise.race([
-        yf.chart(symbol, { range, interval }),
+        yf.chart(symbol, { period1: now - days * 86400, period2: now, interval }),
         new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 12000)),
       ])
     );

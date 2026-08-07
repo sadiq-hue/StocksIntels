@@ -706,6 +706,32 @@ async function prefetchQuotes(symbols) {
     } catch { /* individual fallback handled in main loop */ }
     if (i + batchSize < toFetch.length) await new Promise(r => setTimeout(r, 50));
   }
+  // Final sweep: any symbols still missing a quote after the main loop get one
+  // more chance now that the concurrent prefetch burst has subsided. Their
+  // quotes were likely lost to transient rate limits, not bad symbols.
+  const stillMissing = toFetch.filter(s => {
+    const c = _quoteCache.get(s);
+    return !c || !Number(c.price) || c.price <= 0;
+  });
+  if (stillMissing.length > 0) {
+    try {
+      const marketSymbols = stillMissing.map(s => NSE_SYMBOLS.includes(s) ? `NSE:${s}` : s);
+      const quotes = await getQuotesBatch(marketSymbols);
+      for (const s of stillMissing) {
+        const q = quotes[NSE_SYMBOLS.includes(s) ? `NSE:${s}` : s];
+        if (q && q.price) {
+          _quoteCache.set(s, { price: q.price, changePercent: q.changePercent || 0, volume: q.volume || 0, ts: Date.now() });
+          _lastKnownPrices.set(s, q.price);
+        }
+      }
+    } catch { /* best effort */ }
+  }
+  let covered = 0;
+  for (const s of toFetch) {
+    const c = _quoteCache.get(s);
+    if (c && Number(c.price) > 0) covered++;
+  }
+  console.log(`[SignalService] prefetchQuotes final coverage ${covered}/${toFetch.length}`);
 }
 
 // ─── Market Regime Detection ────────────────────────────────────────────────
@@ -3064,9 +3090,13 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     await Promise.all([
       prefetchPriceHistories(symbols).catch(() => {}),
       prefetchFinancialReports(symbols).catch(() => {}),
-      prefetchQuotes(symbols).catch(() => {}),
       prefetchWeeklyData(symbols).catch(() => {}),
     ]);
+    // Quotes last: spark makes this fast, and keeping it out of the big
+    // concurrent prefetch burst means the quote cache is still fresh when the
+    // scoring loop reads it (QUOTE_CACHE_TTL is short). Otherwise every symbol
+    // re-fetches its quote mid-cycle, bursting the rate limit.
+    await prefetchQuotes(symbols).catch(() => {});
     flushNseDailyBars();
     regime = await detectMarketRegime();
   }
