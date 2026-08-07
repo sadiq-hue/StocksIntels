@@ -1498,13 +1498,16 @@ async function _getBenchmarkNow(symbol) {
 }
 
 // Dynamic expiry by trade type (in milliseconds)
-// Conviction-fade exit: an open position is closed when its fresh all-conditions
-// analysis degrades to neutral (buy -> hold / sell -> hold) instead of flipping.
+// Score-based closes: when enabled, a position may be closed before hitting
+// its stop or target if the fresh thesis flips direction (Buy->Sell) or
+// conviction fades for enough consecutive readings. When disabled, ALL
+// positions resolve ONLY via stop/target (trackSignalOutcomes) — no score
+// or fade-based exit. Set to 'false' to disable, 'true' to enable.
+const SCORE_CLOSE_ENABLED = (process.env.SCORE_CLOSE_ENABLED || 'false').toLowerCase() === 'true';
 // A fade is less decisive than a full flip, so it needs FADE_CLOSE_CONFIRMATIONS
 // consecutive trustworthy readings SPANNING at least two distinct days before it
 // can close — a cluster of readings inside a single session can all come from one
-// bad data spell, so the streak must survive a day boundary (see
-// assessConvictionFade).
+// bad data spell, so the streak must survive a day boundary.
 const FADE_CLOSE_CONFIRMATIONS = 3;
 // Fade strength: the fresh composite score sits in the Hold band (production
 // thresholds: buy starts at 55, hold band is 30..54). A DEEP fade has fallen to
@@ -1691,6 +1694,7 @@ function fadeCutReached(prevOutcome, currentPrice) {
 //   longTermHold  - long-term type (score closes permanently disabled)
 function evaluateScoreClose(prevOutcome, freshAction, eligibilityOk, currentPrice, now = Date.now(), minAgeMs = SCORE_CLOSE_MIN_AGE_MS, freshScore = null) {
   if (!prevOutcome) return { close: null, fadeCount: 0, fadeFirstSeen: null, required: FADE_CLOSE_CONFIRMATIONS, isFade: false, tooYoung: true, longTermHold: false };
+  if (!SCORE_CLOSE_ENABLED) return { close: null, fadeCount: 0, fadeFirstSeen: null, required: FADE_CLOSE_CONFIRMATIONS, isFade: false, tooYoung: true, longTermHold: false };
   const prevAction = prevOutcome.action;
   const longTermHold = isLongTermHold(prevOutcome.type);
   const allowScoreClose = !longTermHold;
