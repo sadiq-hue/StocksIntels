@@ -2325,6 +2325,15 @@ function getSignalProgress(symbol, currentPrice) {
   };
 }
 
+// Returns the current monitored action for a ticker (e.g. 'buy', 'sell')
+// or null if the ticker has no open monitored position. Used by the screener
+// and stock lists to overlay active positions on fresh-cycle signal ratings.
+function getMonitoredAction(symbol) {
+  const prev = _signalOutcomes.get(symbol);
+  if (!prev || prev.result || !prev.action || prev.action === 'hold') return null;
+  return prev.action === 'buy' ? 'Buy' : prev.action === 'sell' ? 'Sell' : null;
+}
+
 function getLiveTestSnapshot() {
   const now = Date.now();
   const maxAge = SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
@@ -4420,6 +4429,7 @@ module.exports = {
   getSignalsCacheTime: () => _signalsCacheTime,
   signalEventBus,
   getSignalProgress,
+  getMonitoredAction,
   getMonitoredSignals,
   refreshMonitoredQuotes,
   OPEN_POSITION_MAX_AGE_HOURS,

@@ -6623,7 +6623,17 @@ app.get('/api/screener/criteria', async (req, res) => {
 app.get('/api/screener', async (req, res) => {
   try {
     const signals = await generateSignals(null, true);
-    let filtered = [...signals];
+    // Overlay currently monitored positions: if a ticker has an open Buy or Sell,
+    // promote its signal rating to the monitored action so the screener shows
+    // active positions rather than the current cycle's Hold rating.
+    const monitored = new Map();
+    for (const s of signals) {
+      const action = signalService.getMonitoredAction(s.ticker);
+      if (action) monitored.set(s.ticker, action);
+    }
+    let filtered = monitored.size > 0
+      ? signals.map(s => monitored.has(s.ticker) ? { ...s, signal: monitored.get(s.ticker) } : s)
+      : [...signals];
 
     // Filters
     const {
