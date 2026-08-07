@@ -881,7 +881,7 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
 }
 
 async function getOwnershipData(symbol) {
-  const cacheKey = `yh_ownership_v6_${symbol}`;
+  const cacheKey = `yh_ownership_v5_${symbol}`;
   const cached = cacheGet(cacheKey);
   if (cached) {
     console.log(`[Ownership] Cache hit for ${symbol}: inst=${cached.institutionalHolders?.length || 0}, insiders=${cached.insiderTransactions?.length || 0}, short=${cached.shortInterest || 0}`);
