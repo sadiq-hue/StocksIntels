@@ -182,9 +182,15 @@ async function getQuote(symbol) {
   const td = tdResult.status === 'fulfilled' ? tdResult.value : null;
 
   if (mq || td) {
+    // Coerce + validate price: upstream feeds sometimes return a single
+    // garbled character (e.g. "r") instead of a number for NSE quotes. Never
+    // cache/serve garbage — treat non-numeric price as "no price resolved".
+    const rawPrice = mq?.price ?? td?.price ?? 0;
+    const priceNum = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[^0-9.\-]/g, ''));
+    const validPrice = Number.isFinite(priceNum) && priceNum > 0 ? priceNum : 0;
     const result = {
       symbol: symbol.toUpperCase(),
-      price: mq?.price || td?.price || 0,
+      price: validPrice,
       change: mq?.change || 0,
       changesPercentage: mq?.changesPercentage || mq?.changePercent || 0,
       dayLow: mq?.dayLow || td?.dayLow || 0,
