@@ -15,13 +15,10 @@ const NSE_LOOKBACK = {
 };
 
 async function fetchNseHistory(symbol, range) {
-  // 1) MyStocks Africa partner API (authoritative).
-  try {
-    const msa = require('./mystocksAfricaApi');
-    const bars = await msa.fetchHistorical(symbol, range);
-    if (Array.isArray(bars) && bars.length > 1) return bars;
-  } catch { /* fall through */ }
-  // 2) DB-backed NSE daily bars (seeded from KenyanStocks / Mystocks Africa).
+  // NSE history is read from the DB-backed daily bars (seeded from KenyanStocks /
+  // Mystocks Africa). The mystocksAfrica partner history endpoint is unreliable
+  // and rate-limited (429), so attempting it per-symbol just wastes time and
+  // trips the rate limiter. DB bars are the dependable source here.
   try {
     const nseHistory = require('./nseHistoryService');
     const ticker = String(symbol).replace(/^NSE:/i, '').replace(/\.NSE$/i, '').toUpperCase();
@@ -29,6 +26,12 @@ async function fetchNseHistory(symbol, range) {
     const bars = await nseHistory.getBars(ticker, need);
     if (Array.isArray(bars) && bars.length > 1) return bars;
   } catch { /* fall through */ }
+  // Fallback: mystocksAfrica partner API as a last resort.
+  try {
+    const msa = require('./mystocksAfricaApi');
+    const bars = await msa.fetchHistorical(symbol, range);
+    if (Array.isArray(bars) && bars.length > 1) return bars;
+  } catch { /* ignore */ }
   return null;
 }
 
