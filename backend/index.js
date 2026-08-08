@@ -12221,9 +12221,36 @@ server.listen(port, '0.0.0.0', async () => {
           });
         }
       });
-      signalEventBus.on('signal:resolved', (payload) => {
+      signalEventBus.on('signal:resolved', async (payload) => {
         io.emit('signal:resolved', payload);
         io.emit(`signal:resolved:${payload.ticker}`, payload);
+        // Notify all users when a monitored position hits its stop or target.
+        const ticker = payload.ticker;
+        const result = payload.result === 'win' ? 'target' : 'stop';
+        const isWin = payload.result === 'win';
+        const pct = payload.returnPct != null ? (payload.returnPct > 0 ? `+${payload.returnPct}` : `${payload.returnPct}`) : '—';
+        const title = isWin ? `🎯 Target Hit: ${ticker}` : `🛑 Stop Hit: ${ticker}`;
+        const body = `${ticker} ${isWin ? 'reached its target' : 'hit its stop loss'} — ${result} exit at ${payload.currentPrice != null ? payload.currentPrice : '—'} (${pct}%)`;
+        const link = `/app/stock/${ticker}`;
+        try {
+          const { rows: users } = await pool.query('SELECT id FROM users').catch(() => ({ rows: [] }));
+          for (const u of users) {
+            // Dedup: skip if the same ticker/result notification was sent in the last 24h.
+            const dup = await pool.query(
+              `SELECT 1 FROM notifications WHERE user_id = $1 AND title = $2 AND type = 'signal' AND created_at > NOW() - INTERVAL '24 hours' LIMIT 1`,
+              [u.id, title]
+            );
+            if (dup.rows.length > 0) continue;
+            const n = await pool.query(
+              `INSERT INTO notifications (user_id, title, body, type, link) VALUES ($1,$2,$3,'signal',$4)
+               RETURNING id, user_id, title, body, type, read, link, created_at`,
+              [u.id, title, body, link]
+            );
+            io.to(`user:${u.id}`).emit('notification', n.rows[0]);
+          }
+        } catch (e) {
+          console.error('[Notifications] signal:resolved create error:', e.message);
+        }
       });
       signalEventBus.on('signal:progress', (payload) => {
         io.emit('signal:progress', payload);
