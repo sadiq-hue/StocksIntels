@@ -5,6 +5,33 @@
 const { fetchHistoricalQuotes } = require('./globalScraper');
 const signalService = require('./signalService');
 
+// NSE bars map from period -> required lookback bars (approximate trading days).
+const NSE_LOOKBACK = {
+  '1d': 3,
+  '1w': 7,
+  '1mo': 24,
+  '3mo': 70,
+  '1y': 260,
+};
+
+async function fetchNseHistory(symbol, range) {
+  // 1) MyStocks Africa partner API (authoritative).
+  try {
+    const msa = require('./mystocksAfricaApi');
+    const bars = await msa.fetchHistorical(symbol, range);
+    if (Array.isArray(bars) && bars.length > 1) return bars;
+  } catch { /* fall through */ }
+  // 2) DB-backed NSE daily bars (seeded from KenyanStocks / Mystocks Africa).
+  try {
+    const nseHistory = require('./nseHistoryService');
+    const ticker = String(symbol).replace(/^NSE:/i, '').replace(/\.NSE$/i, '').toUpperCase();
+    const need = NSE_LOOKBACK[range] || 30;
+    const bars = await nseHistory.getBars(ticker, need);
+    if (Array.isArray(bars) && bars.length > 1) return bars;
+  } catch { /* fall through */ }
+  return null;
+}
+
 const PERIODS = {
   '1d':  { range: '1d',  interval: '1d', label: 'Daily' },
   '1w':  { range: '5d',  interval: '1d', label: 'Weekly' },
@@ -39,15 +66,6 @@ function periodAgoPrice(bars) {
 
 function normalizeSymbol(symbol) {
   return String(symbol || '').replace(/^(NSE|NYSE|NASDAQ|AMEX):/, '');
-}
-
-async function fetchNseHistory(symbol, range) {
-  try {
-    const msa = require('./mystocksAfricaApi');
-    return await msa.fetchHistorical(symbol, range);
-  } catch {
-    return null;
-  }
 }
 
 async function computePeriodReturns(period) {
