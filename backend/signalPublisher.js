@@ -37,7 +37,7 @@ async function generateAndPublish() {
   try {
     const skipMarketHours = process.env.SIGNAL_PUBLISHER_SKIP_MARKET_HOURS === 'true';
     if (!skipMarketHours && !isMarketOpenNow()) {
-      console.log(`[SignalPublisher] Markets closed (US hours only), skipping cycle. Set SIGNAL_PUBLISHER_SKIP_MARKET_HOURS=true to bypass.`);
+      console.log(`[SignalPublisher] All tracked exchanges closed (NSE 06:00-12:00 UTC, US 13:30-20:00 UTC), skipping cycle. Set SIGNAL_PUBLISHER_SKIP_MARKET_HOURS=true to bypass.`);
       return;
     }
 
