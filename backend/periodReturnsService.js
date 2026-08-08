@@ -75,7 +75,9 @@ async function computePeriodReturns(period) {
   const cfg = PERIODS[period];
   if (!cfg) return new Map();
 
-  // Use the current cached quote prices for the "now" value.
+  // Use the current cached quote prices for the "now" value. Include both the
+  // fresh-cycle signals AND open monitored positions (monitor-first gate keeps
+  // symbols like CGEN out of the fresh cache but they still trade and move).
   const currentPrices = new Map();
   const signals = await signalService.generateSignals(null, true);
   for (const s of signals) {
@@ -83,6 +85,13 @@ async function computePeriodReturns(period) {
       currentPrices.set(s.ticker, s.price);
     }
   }
+  try {
+    for (const m of signalService.getMonitoredSignals()) {
+      if (m && m.ticker && m.price != null && m.price > 0 && !currentPrices.has(m.ticker)) {
+        currentPrices.set(m.ticker, m.price);
+      }
+    }
+  } catch { /* monitored list may be empty */ }
 
   const symbols = [...currentPrices.keys()];
   const returns = new Map();
