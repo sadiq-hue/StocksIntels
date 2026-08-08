@@ -12,6 +12,9 @@ function isMarketOpenNow() {
   const day = now.getDay();
   if (day === 0 || day === 6) return false;
   const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  // NSE (Nairobi): 09:00-15:00 EAT = 06:00-12:00 UTC
+  if (utcMinutes >= 360 && utcMinutes < 720) return true;
+  // US markets: 09:30-16:00 ET
   const month = now.getMonth();
   const isDST = month >= 2 && month <= 9;
   const etOffset = isDST ? -4 : -5;
