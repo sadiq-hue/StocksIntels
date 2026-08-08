@@ -9,7 +9,7 @@ type TypeFilter = "all" | "signal" | "message" | "info" | "nse_report";
 type ReadFilter = "all" | "unread" | "read";
 
 const TYPE_LABELS: Record<string, string> = {
-  signal: "Signals",
+  signal: "Market Intelligence",
   message: "Messages",
   info: "Info",
   nse_report: "NSE Reports",

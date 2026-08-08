@@ -43,7 +43,7 @@ const CATEGORIES = [
   { value: "account", label: "Account" },
   { value: "trading", label: "Trading" },
   { value: "data", label: "Market Data" },
-  { value: "signals", label: "Signals" },
+  { value: "signals", label: "Market Intelligence" },
   { value: "social", label: "Groups & Chat" },
   { value: "billing", label: "Billing" },
   { value: "technical", label: "Technical Issue" },
@@ -719,7 +719,7 @@ export function SupportCenterPage() {
                 <option value="account">Account</option>
                 <option value="trading">Trading</option>
                 <option value="data">Market Data</option>
-                <option value="signals">Signals</option>
+                <option value="signals">Market Intelligence</option>
                 <option value="social">Groups & Chat</option>
                 <option value="markets">Markets</option>
               </select>

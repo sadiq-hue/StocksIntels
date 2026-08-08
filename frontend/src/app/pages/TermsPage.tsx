@@ -13,7 +13,7 @@ const sections = [
     content: "StocksIntels is a market intelligence and analytics platform. You may use it for personal or professional investment research. You may not resell, redistribute, or scrape data from the platform without written permission.",
   },
   {
-    title: "3. AI Signals and Market Data",
+    title: "3. Market Intelligence and Market Data",
     content: 'All AI signals, market data, and analytics provided by StocksIntels are for informational purposes only. They do not constitute financial advice, investment recommendations, or solicitations to buy or sell any security. You are solely responsible for your investment decisions.',
   },
   {

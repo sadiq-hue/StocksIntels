@@ -59,7 +59,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
       title: "Capital Markets",
       items: [
         { path: "/app/markets", icon: BarChart3, label: "Markets" },
-        { path: "/app/signals", icon: Signal, label: "Signals" },
+        { path: "/app/signals", icon: Signal, label: "Market Intelligence" },
         { path: "/app/stocks", icon: LineChart, label: "Stocks" },
         { path: "/app/financials", icon: FileText, label: "Financials" },
         { path: "/app/news", icon: Newspaper, label: "News" },

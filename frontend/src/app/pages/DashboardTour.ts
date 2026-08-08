@@ -4,7 +4,7 @@ registerTour("dashboard", [
   {
     target: "[data-tour='portfolio-cards']",
     title: "Your Portfolio at a Glance",
-    content: "These cards show your total investment value, split between the Nairobi Securities Exchange (NSE) and global markets. Holdings = how many different stocks you own. AI Signals = automated buy/sell suggestions from the engine.",
+    content: "These cards show your total investment value, split between the Nairobi Securities Exchange (NSE) and global markets. Holdings = how many different stocks you own. Market Intelligence = automated buy/sell suggestions from the engine.",
     position: "bottom",
   },
   {

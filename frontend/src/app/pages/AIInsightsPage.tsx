@@ -270,7 +270,7 @@ export function AIInsightsPage() {
                 <TrendingUp className="w-4 h-4 text-emerald-600" />
               </div>
               <div>
-                <span className="font-semibold text-sm text-foreground">Live Signals</span>
+                <span className="font-semibold text-sm text-foreground">Live Market Intelligence</span>
                 {!signalsLoading && (
                   <span className="text-[10px] text-muted-foreground ml-2 font-normal">{topSignals.length} buys</span>
                 )}

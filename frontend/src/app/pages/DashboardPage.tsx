@@ -446,7 +446,7 @@ export function DashboardPage() {
           { id: "overview", label: "Overview", icon: LayoutDashboard },
           { id: "markets", label: "Markets", icon: Globe },
           { id: "portfolio", label: "Portfolio", icon: PieChart },
-          { id: "signals", label: "AI Signals", icon: Sparkles },
+          { id: "signals", label: "Market Intelligence", icon: Sparkles },
           { id: "news", label: "News", icon: Newspaper },
         ].map((tab) => (
           <button
@@ -499,21 +499,38 @@ export function DashboardPage() {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" data-tour="portfolio-cards">
-        <Card className="border-0 bg-gradient-to-br from-[#0D7490] to-[#0A5F7A] p-5 text-white relative overflow-hidden shadow-sm">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-8 -mt-8" />
+        <Card className="border-0 bg-gradient-to-br from-[#0D7490] via-[#0B6A87] to-[#0A5F7A] p-5 text-white relative overflow-hidden shadow-lg shadow-[#0D7490]/20">
+          {/* Floating bubbles */}
+          <div className="absolute -top-6 -right-6 w-28 h-28 bg-white/10 rounded-full blur-[1px] animate-bubble-float" />
+          <div className="absolute top-2 right-16 w-10 h-10 bg-white/15 rounded-full animate-bubble-float" style={{ animationDelay: "1.5s" }} />
+          <div className="absolute -bottom-8 -right-2 w-24 h-24 bg-emerald-300/15 rounded-full animate-bubble-float" style={{ animationDelay: "3s" }} />
+          <div className="absolute bottom-0 left-8 w-6 h-6 bg-white/10 rounded-full animate-bubble-float" style={{ animationDelay: "2s" }} />
+          <div className="absolute -top-2 left-10 w-5 h-5 bg-white/10 rounded-full animate-bubble-float" style={{ animationDelay: "4s" }} />
+          <div className="absolute top-1/2 -left-4 w-14 h-14 bg-indigo-300/10 rounded-full animate-bubble-float" style={{ animationDelay: "5s" }} />
+          {/* Soft radial glow */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_60%)]" />
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-3">
-              <Wallet className="size-4 opacity-80" />
-              <span className="text-[11px] opacity-80 font-medium">Portfolio Value</span>
+              <div className="size-6 rounded-lg bg-white/15 backdrop-blur-sm flex items-center justify-center">
+                <Wallet className="size-3.5 text-white" />
+              </div>
+              <span className="text-[11px] font-medium text-white/90">Portfolio Value</span>
+              <span className="ml-auto flex items-center gap-1.5 text-[9px] font-semibold text-white/80 bg-white/10 rounded-full px-2 py-0.5">
+                <span className="size-1.5 rounded-full bg-emerald-300 animate-pulse-slow" /> Live
+              </span>
             </div>
-            <div className="text-xl font-bold">KES {enhancedTotals.totalValue.toLocaleString()}</div>
-            <div className="flex items-center gap-1 text-xs mt-2 ${enhancedTotals.pnlPercent >= 0 ? 'text-green-300' : 'text-red-300'}">
-              {enhancedTotals.pnlPercent >= 0 ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-              <span>{enhancedTotals.pnlPercent >= 0 ? '+' : ''}{enhancedTotals.pnlPercent}% today</span>
+            <div className="text-2xl font-black tracking-tight text-white drop-shadow-sm">
+              KES {enhancedTotals.totalValue.toLocaleString()}
             </div>
-            <div className="mt-2 pt-2 border-t border-white/20 flex justify-between text-[11px] text-white/70">
-              <span>NSE: KES {enhancedTotals.nseValue.toLocaleString()}</span>
-              <span>Global: ${enhancedTotals.globalValue.toLocaleString()}</span>
+            <div className={`flex items-center gap-1 text-xs mt-2 ${enhancedTotals.pnlPercent >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+              <div className={`size-4 rounded-full flex items-center justify-center ${enhancedTotals.pnlPercent >= 0 ? 'bg-emerald-400/20' : 'bg-red-400/20'}`}>
+                {enhancedTotals.pnlPercent >= 0 ? <ArrowUpRight className="size-2.5" /> : <ArrowDownRight className="size-2.5" />}
+              </div>
+              <span className="font-semibold">{enhancedTotals.pnlPercent >= 0 ? '+' : ''}{enhancedTotals.pnlPercent}% today</span>
+            </div>
+            <div className="mt-3 pt-2.5 border-t border-white/20 flex justify-between text-[11px] text-white/70">
+              <span className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-white/50" />NSE: KES {enhancedTotals.nseValue.toLocaleString()}</span>
+              <span className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-white/50" />Global: ${enhancedTotals.globalValue.toLocaleString()}</span>
             </div>
           </div>
         </Card>
@@ -522,7 +539,7 @@ export function DashboardPage() {
           { icon: TrendingUp, color: "bg-emerald-100 text-emerald-600", label: "NSE Portfolio", value: `KES ${enhancedTotals.nseValue.toLocaleString()}`, sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
           { icon: Globe, color: "bg-indigo-100 text-indigo-600", label: "Global Portfolio", value: `$${enhancedTotals.globalValue.toLocaleString()}`, sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${brokerTotals.posCount} pos)`, valColor: "text-foreground" },
           { icon: PieChart, color: "bg-purple-100 text-purple-600", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} NSE · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
-          { icon: Sparkles, color: "bg-yellow-100 text-yellow-600", label: "AI Signals", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: "text-foreground" },
+          { icon: Sparkles, color: "bg-yellow-100 text-yellow-600", label: "Market Intelligence", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: "text-foreground" },
           { icon: BarChart3, color: "bg-blue-100 text-blue-600", label: "vs Benchmarks", value: perfMeta.hasHistory ? `${benchmarkMetrics.alpha >= 0 ? '+' : ''}${benchmarkMetrics.alpha.toFixed(1)}%` : '—', sub: perfMeta.hasHistory ? `Portfolio ${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}% · NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%` : `NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%`, valColor: perfMeta.hasHistory ? (benchmarkMetrics.alpha >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
         ].map((m, i) => (
           <Card key={i} className="border shadow-sm p-5">
@@ -545,7 +562,7 @@ export function DashboardPage() {
             <div className="text-xs text-muted-foreground leading-relaxed">
               <span className="font-semibold text-amber-800">Beginner Mode Active.</span>{' '}
               <strong>Portfolio Value</strong> = total worth of your investments. <strong>NSE / Global</strong> = which market your stocks trade on.
-              <strong> Holdings</strong> = number of different stocks you own. <strong>AI Signals</strong> = automated buy/sell suggestions.
+              <strong> Holdings</strong> = number of different stocks you own. <strong>Market Intelligence</strong> = automated buy/sell suggestions.
               <strong>vs Benchmarks</strong> = how your portfolio compares to market indexes like the NSE 20 or S&P 500.
             </div>
           </div>
@@ -854,7 +871,7 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Watchlist & AI Signals */}
+      {/* Watchlist & Market Intelligence */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="border shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
@@ -912,9 +929,14 @@ export function DashboardPage() {
           </div>
         </Card>
 
-        <Card className="border-0 bg-gradient-to-br from-[#0D7490] to-[#0A5F7A] p-5 text-white relative overflow-hidden shadow-sm" data-tour="ai-signals-section">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -mr-20 -mt-20" />
-          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16" />
+        <Card className="border-0 bg-gradient-to-br from-[#0D7490] via-[#0B6A87] to-[#0A5F7A] p-5 text-white relative overflow-hidden shadow-lg shadow-[#0D7490]/20" data-tour="ai-signals-section">
+          {/* Floating bubbles */}
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/5 rounded-full animate-bubble-float" />
+          <div className="absolute top-4 right-20 w-8 h-8 bg-white/10 rounded-full animate-bubble-float" style={{ animationDelay: "2s" }} />
+          <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-emerald-300/10 rounded-full animate-bubble-float" style={{ animationDelay: "3.5s" }} />
+          <div className="absolute bottom-6 left-24 w-5 h-5 bg-white/10 rounded-full animate-bubble-float" style={{ animationDelay: "1s" }} />
+          {/* Soft radial glow */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_60%)]" />
 
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-4">
@@ -922,7 +944,7 @@ export function DashboardPage() {
                 <div className="size-8 rounded-lg bg-white/20 flex items-center justify-center">
                   <Sparkles className="size-4" />
                 </div>
-                <h3 className="text-sm font-semibold">Top AI Signals</h3>
+                <h3 className="text-sm font-semibold">Top Market Intelligence</h3>
               </div>
               <Link to="/app/signals" className="text-xs font-medium text-white/80 hover:text-white hover:underline flex items-center gap-0.5">
                 All signals <ChevronRight className="size-3.5" />
@@ -1235,7 +1257,7 @@ export function DashboardPage() {
                 Market Data
               </Link>
               <Link to="/app/signals" className="bg-white/10 hover:bg-white/20 transition-colors rounded-lg px-3 py-2.5 text-center text-xs font-medium">
-                AI Signals
+                Market Intelligence
               </Link>
             </div>
           </div>
