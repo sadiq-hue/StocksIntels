@@ -12252,6 +12252,33 @@ server.listen(port, '0.0.0.0', async () => {
           console.error('[Notifications] signal:resolved create error:', e.message);
         }
       });
+      signalEventBus.on('signal:movement', async (payload) => {
+        // Notify all users when a monitored position moves >5% from entry.
+        const ticker = payload.ticker;
+        const isUp = payload.isUp;
+        const movePct = payload.movePct;
+        const title = isUp ? `📈 ${ticker} up ${movePct}%` : `📉 ${ticker} down ${Math.abs(movePct)}%`;
+        const body = `${ticker} moved ${isUp ? 'up' : 'down'} ${Math.abs(movePct)}% from entry ${payload.entryPrice} — current ${payload.currentPrice}`;
+        const link = `/app/stock/${ticker}`;
+        try {
+          const { rows: users } = await pool.query('SELECT id FROM users').catch(() => ({ rows: [] }));
+          for (const u of users) {
+            const dup = await pool.query(
+              `SELECT 1 FROM notifications WHERE user_id = $1 AND title = $2 AND type = 'price_alert' AND created_at > NOW() - INTERVAL '24 hours' LIMIT 1`,
+              [u.id, title]
+            );
+            if (dup.rows.length > 0) continue;
+            const n = await pool.query(
+              `INSERT INTO notifications (user_id, title, body, type, link) VALUES ($1,$2,$3,'price_alert',$4)
+               RETURNING id, user_id, title, body, type, read, link, created_at`,
+              [u.id, title, body, link]
+            );
+            io.to(`user:${u.id}`).emit('notification', n.rows[0]);
+          }
+        } catch (e) {
+          console.error('[Notifications] signal:movement create error:', e.message);
+        }
+      });
       signalEventBus.on('signal:progress', (payload) => {
         io.emit('signal:progress', payload);
         io.emit(`signal:progress:${payload.ticker}`, payload);

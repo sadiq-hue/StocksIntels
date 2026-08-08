@@ -3414,6 +3414,28 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           });
         }
       });
+
+      // ±5% movement alert: notify when the live price moves more than 5% from
+      // entry (absolute), once per crossing. Uses lastMovementAlertPct to fire only
+      // when the magnitude crosses a fresh 5%-band boundary (5/10/15/...) so a
+      // position hovering around the threshold doesn't spam.
+      const movePct = ((currentPrice - currentActive.entryPrice) / currentActive.entryPrice) * 100;
+      const absMove = Math.abs(movePct);
+      if (absMove >= 5) {
+        const band = Math.floor(absMove / 5) * 5;
+        if ((currentActive.lastMovementAlertPct || 0) < band) {
+          currentActive.lastMovementAlertPct = band;
+          signalEventBus.emit('signal:movement', {
+            ticker: symbol,
+            entryPrice: currentActive.entryPrice,
+            currentPrice,
+            movePct: Math.round(movePct * 100) / 100,
+            band,
+            isUp: movePct > 0,
+            signal: currentActive.signal,
+          });
+        }
+      }
     }
     // Re-level open positions to current market behavior: while a long is being
     // monitored on trustworthy data during a live session, re-derive the hard stop
