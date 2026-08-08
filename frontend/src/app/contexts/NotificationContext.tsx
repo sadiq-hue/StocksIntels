@@ -17,6 +17,38 @@ export interface Notification {
   created_at: string;
 }
 
+export interface NotificationPrefs {
+  priceAlerts: boolean;
+  tradingSignals: boolean;
+  marketNews: boolean;
+  portfolioUpdates: boolean;
+  chatMessages: boolean;
+}
+
+// Read the user's notification preferences (set on the Settings page).
+// Mapping: signal -> tradingSignals, message -> chatMessages, news ->
+// marketNews, portfolio -> portfolioUpdates, price alert -> priceAlerts,
+// everything else (info/nse_report) is always shown.
+export function getNotificationPrefs(): NotificationPrefs {
+  try {
+    const saved = localStorage.getItem("notificationSettings");
+    if (saved) return JSON.parse(saved);
+  } catch { /* ignore */ }
+  return { priceAlerts: true, tradingSignals: true, marketNews: true, portfolioUpdates: true, chatMessages: false };
+}
+
+export function shouldShowNotification(n: { type: string }): boolean {
+  const prefs = getNotificationPrefs();
+  switch (n.type) {
+    case "signal": return prefs.tradingSignals;
+    case "message": return prefs.chatMessages;
+    case "news": return prefs.marketNews;
+    case "portfolio": return prefs.portfolioUpdates;
+    case "price_alert": return prefs.priceAlerts;
+    default: return true; // info, nse_report, unknown types always show
+  }
+}
+
 interface NotificationContextValue {
   notifications: Notification[];
   unread: number;
@@ -39,7 +71,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     try {
       const res = await authFetch(`${API_URL}/notifications?userId=${user.id}`);
       const data = await res.json();
-      setNotifications(data.notifications || []);
+      const all = data.notifications || [];
+      setNotifications(all.filter(shouldShowNotification));
       setUnread(data.unread || 0);
     } catch {
       // silent
@@ -72,6 +105,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     socket.on("connect", identify);
 
     const handler = (notification: Notification) => {
+      if (!shouldShowNotification(notification)) return; // respects Settings toggles
       setNotifications(prev => {
         if (prev.some(n => n.id === notification.id)) return prev; // dedup
         return [notification, ...prev].slice(0, 200);

@@ -1,4 +1,5 @@
 import { io, Socket } from "socket.io-client";
+import { getToken } from "../auth/tokenStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const BACKEND_URL = API_URL.replace(/\/api$/, '');
@@ -12,6 +13,7 @@ export function getSocket(): Socket {
     socket = io(BACKEND_URL, {
       autoConnect: false,
       transports,
+      auth: (cb) => cb({ token: getToken() }),
     });
   }
   return socket;

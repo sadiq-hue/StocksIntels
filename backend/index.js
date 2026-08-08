@@ -77,6 +77,23 @@ const io = new Server(server, {
   cors: { origin: corsOrigin, methods: ["GET", "POST", "PATCH"] }
 });
 
+// Socket authentication: verify the JWT presented at handshake and bind the
+// socket to its real userId. identify_user can then only join the caller's own
+// user:<id> room — closing the IDOR where any client could spoof another user's
+// id and receive their real-time notifications.
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('NO_TOKEN'));
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+    if (!decoded || decoded.userId == null) return next(new Error('INVALID_TOKEN'));
+    socket.user = { id: decoded.userId };
+    next();
+  } catch {
+    return next(new Error('INVALID_TOKEN'));
+  }
+});
+
 // ── Liveness & Readiness Probes ──────────────────────────────────
 // Used by Kubernetes, Docker health checks, and load balancers
 app.get('/healthz', async (_req, res) => {
@@ -1674,6 +1691,13 @@ io.on('connection', (socket) => {
   let currentUserId = null;
   socket.emit('online_users', Array.from(onlineUsers.keys()));
   socket.on('identify_user', (userId) => {
+    // Security: only allow the socket to join ITS OWN room (verified via JWT at
+    // handshake). This prevents a client from spoofing another user's id and
+    // receiving their notifications / appearing online as them.
+    const authedId = socket.user?.id;
+    if (authedId == null) return;
+    const claimedId = Number(userId);
+    if (Number(authedId) !== claimedId) return;
     currentUserId = userId;
     socket.data.userId = userId;
     socket.join(`user:${userId}`);

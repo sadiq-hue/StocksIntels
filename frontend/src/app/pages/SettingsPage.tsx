@@ -48,12 +48,12 @@ export function SettingsPage() {
 
   const hasProfileChanges = JSON.stringify(profile) !== JSON.stringify(originalProfile);
   
-  const [notifications, setNotifications] = useState<NotificationSettings>({
-    priceAlerts: true,
-    tradingSignals: true,
-    marketNews: true,
-    portfolioUpdates: true,
-    chatMessages: false,
+  const [notifications, setNotifications] = useState<NotificationSettings>(() => {
+    try {
+      const saved = localStorage.getItem("notificationSettings");
+      if (saved) return { ...{ priceAlerts: true, tradingSignals: true, marketNews: true, portfolioUpdates: true, chatMessages: false }, ...JSON.parse(saved) };
+    } catch { /* ignore */ }
+    return { priceAlerts: true, tradingSignals: true, marketNews: true, portfolioUpdates: true, chatMessages: false };
   });
   
   const [appearance, setAppearance] = useState<AppearanceSettings>({
