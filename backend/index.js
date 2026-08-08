@@ -6820,6 +6820,22 @@ app.get('/api/top-stocks', async (req, res) => {
         if (r == null) return s;
         return { ...s, change: Math.round(r * 100) / 100, periodReturn: Math.round(r * 100) / 100 };
       });
+      // Include NSE symbols that have a period return but are absent from the
+      // signals cache (monitor-first gate / eligibility drops, e.g. CGEN).
+      const { getFundamentals } = require('./signalService');
+      const present = new Set(filtered.map(s => s.ticker));
+      for (const [ticker, r] of returns) {
+        if (present.has(ticker) || r == null) continue;
+        const isNse = ALL_SYMBOLS.includes(ticker) || require('./signalService').NSE_SYMBOLS.includes(ticker);
+        if (!isNse) continue;
+        const fund = getFundamentals(ticker);
+        filtered.push({
+          ticker, symbol: ticker, name: fund?.name || ticker,
+          price: null, change: Math.round(r * 100) / 100, periodReturn: Math.round(r * 100) / 100,
+          market: 'NSE', currency: 'KES', sector: fund?.sector || null,
+          volume: 0, rawVolume: 0, overallScore: 0,
+        });
+      }
     }
 
     if (market === 'nse') filtered = filtered.filter(s => s.market === 'NSE');

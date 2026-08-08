@@ -161,22 +161,25 @@ async function getPeriodReturns(period) {
 async function getPeriodMovers(period = '1d') {
   const returns = await getPeriodReturns(period);
   const signals = await signalService.generateSignals(null, true);
+  const byTicker = new Map();
+  for (const s of signals) byTicker.set(s.ticker, s);
+
   const rows = [];
-  for (const s of signals) {
-    const r = returns.get(s.ticker);
+  for (const [ticker, r] of returns) {
     if (r == null) continue;
+    const s = byTicker.get(ticker);
     rows.push({
-      symbol: s.ticker,
-      ticker: s.ticker,
-      name: s.name,
-      price: s.price,
+      symbol: ticker,
+      ticker,
+      name: s?.name || ticker,
+      price: s?.price || null,
       changePercent: Math.round(r * 100) / 100,
       change: Math.round(r * 100) / 100,
-      volume: s.volume,
-      rawVolume: s.rawVolume || 0,
-      currency: s.currency,
-      market: s.market,
-      sector: s.sector,
+      volume: s?.volume || 0,
+      rawVolume: s?.rawVolume || 0,
+      currency: s?.currency || (signalService.NSE_SYMBOLS.includes(ticker) ? 'KES' : 'USD'),
+      market: s?.market || (signalService.NSE_SYMBOLS.includes(ticker) ? 'NSE' : 'Global'),
+      sector: s?.sector || null,
     });
   }
   const gainers = [...rows].filter(r => r.changePercent > 0).sort((a, b) => b.changePercent - a.changePercent);
