@@ -75,9 +75,10 @@ async function computePeriodReturns(period) {
   const cfg = PERIODS[period];
   if (!cfg) return new Map();
 
-  // Use the current cached quote prices for the "now" value. Include both the
-  // fresh-cycle signals AND open monitored positions (monitor-first gate keeps
-  // symbols like CGEN out of the fresh cache but they still trade and move).
+  // Use the current cached quote prices for the "now" value. Include the fresh
+  // signals, open monitored positions, AND every NSE symbol from the universe —
+  // the monitor-first gate and eligibility drops can keep valid NSE names (e.g.
+  // Car & General CGEN) out of the fresh cache even though they trade daily.
   const currentPrices = new Map();
   const signals = await signalService.generateSignals(null, true);
   for (const s of signals) {
@@ -92,6 +93,20 @@ async function computePeriodReturns(period) {
       }
     }
   } catch { /* monitored list may be empty */ }
+  // Pull current NSE prices from the quote cache so every tracked NSE name is
+  // in the universe even if the signal pipeline skipped it this cycle.
+  try {
+    const fr = require('./financialReportsService');
+    const nseSymbols = signalService.NSE_SYMBOLS || [];
+    for (const sym of nseSymbols) {
+      if (!currentPrices.has(sym)) {
+        try {
+          const q = await fr.getQuote(`NSE:${sym}`);
+          if (q && q.price && q.price > 0) currentPrices.set(sym, q.price);
+        } catch { /* skip */ }
+      }
+    }
+  } catch { /* quote service may be unavailable */ }
 
   const symbols = [...currentPrices.keys()];
   const returns = new Map();
