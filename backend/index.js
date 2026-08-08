@@ -6806,7 +6806,22 @@ app.get('/api/top-stocks', async (req, res) => {
     let market = req.query.market || 'all';
     let search = (req.query.search || '').toLowerCase();
     let limit = parseInt(req.query.limit, 10) || 50;
+    const period = req.query.period || '1d';
+
     let filtered = [...signals];
+
+    // Period-based returns: when a non-daily period is requested, override the
+    // change field with the period return so gainers/losers sort by that window.
+    if (period !== '1d' && (category === 'gainers' || category === 'losers')) {
+      const { getPeriodReturns } = require('./periodReturnsService');
+      const returns = await getPeriodReturns(period);
+      filtered = filtered.map(s => {
+        const r = returns.get(s.ticker);
+        if (r == null) return s;
+        return { ...s, change: Math.round(r * 100) / 100, periodReturn: Math.round(r * 100) / 100 };
+      });
+    }
+
     if (market === 'nse') filtered = filtered.filter(s => s.market === 'NSE');
     else if (market === 'global') filtered = filtered.filter(s => s.market === 'Global');
     if (search) filtered = filtered.filter(s => s.ticker.toLowerCase().includes(search) || s.name.toLowerCase().includes(search));
@@ -6822,7 +6837,7 @@ app.get('/api/top-stocks', async (req, res) => {
     else if (category === 'mcap') filtered.sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0));
     else if (category === 'value') filtered.sort((a, b) => (b.fundamentalScore || 0) - (a.fundamentalScore || 0));
     else if (category === 'growth') filtered.sort((a, b) => (b.financialScore || 0) - (a.financialScore || 0));
-    res.json({ success: true, category, market, total: filtered.length, stocks: filtered.slice(0, limit), lastUpdated: new Date(getSignalsCacheTime()).toISOString() });
+    res.json({ success: true, category, market, period, total: filtered.length, stocks: filtered.slice(0, limit), lastUpdated: new Date(getSignalsCacheTime()).toISOString() });
   } catch (error) {
     console.error('Error fetching top stocks:', error);
     res.status(500).json({ error: 'Failed to fetch top stocks' });
@@ -6831,8 +6846,23 @@ app.get('/api/top-stocks', async (req, res) => {
 
 app.get('/api/market/movers', async (req, res) => {
   try {
+    const period = req.query.period || '1d';
+    // For non-daily periods, compute period returns from historical bars.
+    if (period !== '1d') {
+      const { getPeriodMovers } = require('./periodReturnsService');
+      const { gainers, losers } = await getPeriodMovers(period);
+      const nse = {
+        gainers: gainers.filter(g => g.market === 'NSE').slice(0, 10),
+        losers: losers.filter(l => l.market === 'NSE').slice(0, 10),
+      };
+      const global = {
+        gainers: gainers.filter(g => g.market === 'Global').slice(0, 10),
+        losers: losers.filter(l => l.market === 'Global').slice(0, 10),
+      };
+      return res.json({ nse, global, combined: { gainers, losers }, active: [], period });
+    }
     const snapshot = await getMarketSnapshot();
-    res.json({ nse: snapshot.nse.movers, global: snapshot.global.movers, combined: snapshot.movers, active: snapshot.active });
+    res.json({ nse: snapshot.nse.movers, global: snapshot.global.movers, combined: snapshot.movers, active: snapshot.active, period });
   } catch (error) {
     console.error('Error fetching movers:', error);
     res.status(500).json({ error: 'Failed to fetch top movers' });

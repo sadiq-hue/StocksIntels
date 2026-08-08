@@ -8,7 +8,7 @@ import {
   Trophy, Flame, Zap, Star, Award,
   DollarSign, BarChart3,
 } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { parseVolume, formatVolume } from "../../utils/format";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -21,18 +21,37 @@ const signalColors: Record<string, string> = {
   "Strong Sell": "bg-red-100 text-red-800 border-red-200",
 };
 
+const periods = [
+  { id: "1d", label: "Daily" },
+  { id: "1w", label: "Weekly" },
+  { id: "1mo", label: "Monthly" },
+  { id: "3mo", label: "Quarterly" },
+  { id: "1y", label: "Yearly" },
+];
+
 export function TopStocks() {
   const [stocks, setStocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [marketFilter, setMarketFilter] = useState<string>("all");
   const [category, setCategory] = useState<string>("gainers");
+  const [period, setPeriod] = useState<string>("1d");
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const p = searchParams.get("period");
+    if (p) setPeriod(p);
+    const c = searchParams.get("category");
+    if (c && ["gainers", "losers"].includes(c)) setCategory(c);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams({ category, market: marketFilter, limit: "50" });
+    if (period !== "1d") params.set("period", period);
     fetch(`${API_BASE}/top-stocks?${params}`)
       .then(r => r.json())
       .then(data => {
@@ -41,7 +60,7 @@ export function TopStocks() {
       })
       .catch(() => setStocks([]))
       .finally(() => setLoading(false));
-  }, [category, marketFilter]);
+  }, [category, marketFilter, period]);
 
   const filtered = useMemo(() => {
     if (!search) return stocks;
@@ -109,6 +128,25 @@ export function TopStocks() {
           );
         })}
       </div>
+
+      {(category === "gainers" || category === "losers") && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mr-1">Period:</span>
+          {periods.map(p => (
+            <button
+              key={p.id}
+              onClick={() => setPeriod(p.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                period === p.id
+                  ? "border-[#0D7490] bg-[#0D7490]/10 text-[#0D7490]"
+                  : "border-border text-muted-foreground hover:border-[#0D7490] hover:text-[#0D7490]"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <Card>
         <div className="overflow-x-auto">

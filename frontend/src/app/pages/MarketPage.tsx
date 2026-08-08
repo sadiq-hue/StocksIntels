@@ -88,6 +88,7 @@ const MarketPage: React.FC = () => {
   });
   const [fetchingMovers, setFetchingMovers] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [moverPeriod, setMoverPeriod] = useState('1d');
 
   const [nseSearch, setNseSearch] = useState("");
   const [globalSearch, setGlobalSearch] = useState("");
@@ -240,7 +241,7 @@ const MarketPage: React.FC = () => {
     setFetchingMovers(true);
     try {
       const [moversRes, indicesRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/market/movers`),
+        fetch(`${API_BASE_URL}/market/movers?period=${moverPeriod}`),
         fetch(`${API_BASE_URL}/market/indices`),
       ]);
       const [movers, indicesRaw] = await Promise.all([
@@ -295,13 +296,18 @@ const MarketPage: React.FC = () => {
     fetchMarketStatus();
     fetch(`${API_BASE_URL}/market/turnover`).then(r => r.json()).then(setTurnoverData).catch(() => {});
     fetchClientPreMarket();
-    const userId = user?.id;
-    const aiUrl = userId ? `${API_BASE_URL}/ai/market-summary?userId=${userId}` : `${API_BASE_URL}/ai/market-summary`;
+    const userId = user?.id;    const aiUrl = userId ? `${API_BASE_URL}/ai/market-summary?userId=${userId}` : `${API_BASE_URL}/ai/market-summary`;
     fetch(aiUrl)
       .then(r => r.json())
       .then(setAiSummary)
       .catch(() => {});
   }, []);
+
+  // Refetch movers when the selected period changes (Daily/Weekly/Quarterly/Yearly)
+  useEffect(() => {
+    fetchMarketData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moverPeriod]);
 
   // Periodic refresh of market status, turnover, and client pre-market every 60s
   useEffect(() => {
@@ -727,11 +733,15 @@ const MarketPage: React.FC = () => {
             nse={marketData.movers?.nse?.gainers?.length ? marketData.movers.nse.gainers : localNseGainers}
             global={marketData.movers?.global?.gainers?.length ? marketData.movers.global.gainers : localGlobalGainers}
             pos={true} 
+            period={moverPeriod}
+            onPeriodChange={setMoverPeriod}
           />
           <MoverWindow title="Top Losers"
             nse={marketData.movers?.nse?.losers?.length ? marketData.movers.nse.losers : localNseLosers}
             global={marketData.movers?.global?.losers?.length ? marketData.movers.global.losers : localGlobalLosers}
             pos={false} 
+            period={moverPeriod}
+            onPeriodChange={setMoverPeriod}
           />
         </div>
       </div>
@@ -969,13 +979,23 @@ const MarketWindow = ({
 );
 };
 
-const MoverWindow = ({ title, nse, global, pos }: any) => {
+const MoverWindow = ({ title, nse, global, pos, period, onPeriodChange }: any) => {
   const [tab, setTab] = useState<'nse' | 'global'>('nse');
   const data = tab === 'nse' ? nse : global;
 
+  const periods = [
+    { id: '1d', label: 'Daily' },
+    { id: '1w', label: 'Weekly' },
+    { id: '1mo', label: 'Monthly' },
+    { id: '3mo', label: 'Quarterly' },
+    { id: '1y', label: 'Yearly' },
+  ];
+
+  const category = title.toLowerCase().includes('loser') ? 'losers' : 'gainers';
+
   return (
-    <SidebarWidget title={title}>
-      <div className="flex gap-1.5 mb-3">
+    <SidebarWidget title={title} link={`/app/stocks/top-stocks?category=${category}&period=${period || '1d'}`}>
+      <div className="flex gap-1.5 mb-2">
         <button 
           onClick={() => setTab('nse')}
           className={`flex-1 py-1.5 text-[10px] font-semibold rounded-md transition-all ${
@@ -989,6 +1009,23 @@ const MoverWindow = ({ title, nse, global, pos }: any) => {
           }`}
         >US / GLOBAL</button>
       </div>
+      {onPeriodChange && (
+        <div className="flex flex-wrap gap-1 mb-3">
+          {periods.map(p => (
+            <button
+              key={p.id}
+              onClick={() => onPeriodChange(p.id)}
+              className={`px-2 py-1 text-[9px] font-semibold rounded-full border transition-all ${
+                period === p.id
+                  ? 'border-[#0D7490] bg-[#0D7490]/10 text-[#0D7490]'
+                  : 'border-border text-muted-foreground hover:border-[#0D7490] hover:text-[#0D7490]'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="space-y-1">
         {data?.slice(0, 5).map((s: any) => (
           <TinyCard key={s.symbol} s={s.symbol?.replace(/^(NSE|NYSE|NASDAQ|AMEX):/, '')} p={s.price} c={s.changePercent} v={s.volume} pos={pos} />
