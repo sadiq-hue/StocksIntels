@@ -1,14 +1,39 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { Bell, Check, ArrowUp, ArrowDown, Loader2, X, ExternalLink, Clock } from "lucide-react";
 import { useNotifications, type Notification } from "../contexts/NotificationContext";
 import { formatNotificationTime } from "../utils/timeFormat";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
 
+type TypeFilter = "all" | "signal" | "message" | "info" | "nse_report";
+type ReadFilter = "all" | "unread" | "read";
+
+const TYPE_LABELS: Record<string, string> = {
+  signal: "Signals",
+  message: "Messages",
+  info: "Info",
+  nse_report: "NSE Reports",
+};
+
 export function NotificationsPage() {
   const { notifications, unread, loading, markRead, markAllRead } = useNotifications();
   const navigate = useNavigate();
   const [selected, setSelected] = useState<Notification | null>(null);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [readFilter, setReadFilter] = useState<ReadFilter>("all");
+
+  const filtered = useMemo(() => {
+    return notifications.filter(n =>
+      (typeFilter === "all" || n.type === typeFilter) &&
+      (readFilter === "all" || (readFilter === "unread" ? !n.read : n.read))
+    );
+  }, [notifications, typeFilter, readFilter]);
+
+  const types = useMemo(() => {
+    const seen = new Set<string>();
+    for (const n of notifications) if (n.type) seen.add(n.type);
+    return ["all", ...seen].filter(t => t in TYPE_LABELS || t === "all");
+  }, [notifications]);
 
   const handleNotificationClick = (n: Notification) => {
     if (!n.read) markRead(n.id);
@@ -42,19 +67,51 @@ export function NotificationsPage() {
         )}
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex bg-muted rounded-lg p-0.5">
+          {(["all", "unread", "read"] as ReadFilter[]).map(f => (
+            <button
+              key={f}
+              onClick={() => setReadFilter(f)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors capitalize ${
+                readFilter === f ? "bg-card text-[#0D7490] shadow-sm" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {types.map(t => (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t as TypeFilter)}
+              className={`px-2.5 py-1 text-[11px] font-semibold rounded-full border transition-colors capitalize ${
+                typeFilter === t ? "border-[#0D7490] bg-[#0D7490]/10 text-[#0D7490]" : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t === "all" ? "All types" : TYPE_LABELS[t] || t}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {loading && notifications.length === 0 ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 text-muted-foreground animate-spin" />
         </div>
-      ) : notifications.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="text-center py-20">
           <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-muted-foreground text-sm">No notifications yet</p>
-          <p className="text-muted-foreground text-xs mt-1">Signal alerts will appear here</p>
+          <p className="text-muted-foreground text-sm">
+            {notifications.length === 0 ? "No notifications yet" : "No notifications match this filter"}
+          </p>
+          <p className="text-muted-foreground text-xs mt-1">Signal and message alerts will appear here</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {notifications.map((n) => {
+          {filtered.map((n) => {
             const isSignal = n.type === "signal";
             const isMessage = n.type === "message";
             const isBullish = n.title?.includes("Buy");
@@ -81,6 +138,11 @@ export function NotificationsPage() {
                       {isMessage && (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800">
                           Message
+                        </span>
+                      )}
+                      {n.type === "nse_report" && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
+                          NSE Report
                         </span>
                       )}
                       <span className="text-[10px] text-muted-foreground">{formatNotificationTime(n.created_at)}</span>
@@ -146,7 +208,7 @@ export function NotificationsPage() {
                     className="flex items-center gap-1.5 px-4 py-2 bg-[#0D7490] text-white rounded-lg text-sm font-medium hover:bg-[#0A5F7A] transition-colors"
                   >
                     <ExternalLink className="w-4 h-4" />
-                    {selected.type === "message" ? "Open Chat" : "View Related Stock"}
+                    {selected.type === "message" ? "View" : "View Related Stock"}
                   </button>
                 )}
                 {!selected.read && (

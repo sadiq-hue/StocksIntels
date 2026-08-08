@@ -4,7 +4,6 @@ import { getSocket } from "../services/socketService";
 import { useAuth } from "../auth/AuthContext";
 import { formatNotificationTime } from "../utils/timeFormat";
 import { authFetch } from "../auth/tokenStore";
-
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 export interface Notification {
@@ -53,32 +52,51 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     fetchNotifications();
   }, [fetchNotifications]);
 
+  // Refetch when the tab regains focus so the list stays fresh even if
+  // real-time delivery is interrupted (sleep, background tab, etc.).
+  useEffect(() => {
+    const onFocus = () => fetchNotifications();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fetchNotifications]);
+
   useEffect(() => {
     if (!user?.id) return;
     const socket = getSocket();
     if (!socket.connected) socket.connect();
+    // Must join the user:<id> room to receive notification events. Re-emit
+    // on every connect so a reconnect that fires while the provider is already
+    // mounted still lands in the right room (the race that broke real-time).
+    const identify = () => socket.emit("identify_user", user.id);
+    identify();
+    socket.on("connect", identify);
 
     const handler = (notification: Notification) => {
-      setNotifications(prev => [notification, ...prev]);
+      setNotifications(prev => {
+        if (prev.some(n => n.id === notification.id)) return prev; // dedup
+        return [notification, ...prev].slice(0, 200);
+      });
       if (!notification.read) {
         setUnread(prev => prev + 1);
       }
       const isSignal = notification.type === "signal";
       const isMessage = notification.type === "message";
-      const isStrong = notification.title?.includes("Strong Buy") || notification.title?.includes("Strong Sell");
       if (isSignal || isMessage) {
         toast(isMessage ? `💬 ${notification.title}` : notification.title, {
           description: `${notification.body} — ${formatNotificationTime(notification.created_at)}`,
           action: notification.link ? {
             label: "View",
-            onClick: () => window.location.href = notification.link!,
+            onClick: () => { window.location.href = notification.link!; },
           } : undefined,
         });
       }
     };
 
     socket.on("notification", handler);
-    return () => { socket.off("notification", handler); };
+    return () => {
+      socket.off("notification", handler);
+      socket.off("connect", identify);
+    };
   }, [user?.id]);
 
   const markRead = useCallback(async (id: number) => {

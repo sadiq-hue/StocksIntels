@@ -4940,6 +4940,10 @@ app.post('/api/chat/send', async (req, res) => {
 // --- Notification Routes ---
 app.get('/api/notifications/:userId', async (req, res) => {
   try {
+    const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+    if (!isAdmin && String(req.user?.id) !== String(req.params.userId)) {
+      return res.status(403).json({ error: 'Access denied.', code: 'FORBIDDEN' });
+    }
     const userId = req.params.userId;
     const limit = parseInt(req.query.limit) || 50;
     const result = await pool.query(
@@ -4954,6 +4958,13 @@ app.get('/api/notifications/:userId', async (req, res) => {
 
 app.post('/api/notifications/:id/read', async (req, res) => {
   try {
+    // Only allow marking your own notification as read (admins may mark any).
+    const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+    const idRes = await pool.query('SELECT user_id FROM notifications WHERE id = $1', [req.params.id]);
+    if (idRes.rows.length === 0) return res.status(404).json({ error: 'Notification not found' });
+    if (!isAdmin && String(idRes.rows[0].user_id) !== String(req.user?.id)) {
+      return res.status(403).json({ error: 'Access denied.', code: 'FORBIDDEN' });
+    }
     await pool.query('UPDATE notifications SET read = true WHERE id = $1', [req.params.id]);
     res.json({ success: true });
   } catch (error) {
@@ -4963,9 +4974,12 @@ app.post('/api/notifications/:id/read', async (req, res) => {
 
 app.post('/api/notifications/read-all', async (req, res) => {
   try {
+    // Ownership: use the authenticated user unless an admin explicitly targets another.
+    const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
     const { userId } = req.body;
-    if (!userId) return res.status(400).json({ error: 'userId is required' });
-    await pool.query('UPDATE notifications SET read = true WHERE user_id = $1', [userId]);
+    const targetUserId = (isAdmin && userId) ? userId : req.user?.id;
+    if (!targetUserId) return res.status(400).json({ error: 'userId is required' });
+    await pool.query('UPDATE notifications SET read = true WHERE user_id = $1', [targetUserId]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
@@ -8412,7 +8426,13 @@ app.post('/api/holdings/bulk', async (req, res) => {
 
 app.get('/api/notifications', async (req, res) => {
   try {
-    const userId = req.query.userId;
+    // Ownership: resolve to the authenticated user (admins may query any id).
+    const requestedUserId = req.query.userId;
+    const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+    if (!isAdmin && requestedUserId && String(req.user?.id) !== String(requestedUserId)) {
+      return res.status(403).json({ error: 'Access denied.', code: 'FORBIDDEN' });
+    }
+    const userId = requestedUserId || req.user?.id;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
     const result = await pool.query(
       `SELECT id, title, body, type, read, link, created_at
@@ -8420,8 +8440,13 @@ app.get('/api/notifications', async (req, res) => {
        ORDER BY created_at DESC LIMIT 50`,
       [userId]
     );
-    const unread = result.rows.filter(n => !n.read).length;
-    res.json({ notifications: result.rows, unread });
+    // Unread must be a real COUNT over all rows, not just the first 50 —
+    // otherwise users with more than 50 notifications see an undercount.
+    const unreadRes = await pool.query(
+      'SELECT COUNT(*)::int AS cnt FROM notifications WHERE user_id = $1 AND read = false',
+      [userId]
+    );
+    res.json({ notifications: result.rows, unread: unreadRes.rows[0].cnt });
   } catch (err) {
     console.error('Error fetching notifications:', err.message);
     res.status(500).json({ error: 'Failed to fetch notifications' });

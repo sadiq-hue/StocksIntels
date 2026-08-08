@@ -117,6 +117,19 @@ async function createSignalNotifications(signals) {
         const body = `${sig.name} — ${sig.signal} with ${sig.confidence}% confidence. ${sig.sector} | ${sig.market} | Target: ${sig.currency} ${sig.target1}`;
         const link = `/app/stock/${sig.ticker}?market=${sig.market === 'NSE' ? 'nse' : 'us'}`;
 
+        // DB-level dedup: skip if an identical notification was already created
+        // for this user/ticker/rating within the last 24h. This protects against
+        // duplicate spam after a server restart (lastRatings resets to empty) and
+        // when the admin "Generate Signals" endpoint bypasses the in-memory check.
+        const dup = await pool.query(
+          `SELECT 1 FROM notifications
+           WHERE user_id = $1 AND title = $2 AND type = 'signal'
+             AND created_at > NOW() - INTERVAL '24 hours'
+           LIMIT 1`,
+          [user.id, title]
+        );
+        if (dup.rows.length > 0) continue;
+
         const { rows } = await pool.query(
           `INSERT INTO notifications (user_id, title, body, type, link)
            VALUES ($1, $2, $3, 'signal', $4)
