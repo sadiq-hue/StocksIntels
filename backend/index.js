@@ -1710,6 +1710,9 @@ io.on('connection', (socket) => {
     io.emit('online_users', Array.from(onlineUsers.keys()));
   });
   socket.on('join', (userId) => {
+    // Security: only allow joining your own user room (same guard as identify_user).
+    const authedId = socket.user?.id;
+    if (authedId == null || Number(authedId) !== Number(userId)) return;
     if (userId) socket.join(`user:${userId}`);
   });
   socket.on('disconnect', () => {
