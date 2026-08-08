@@ -12315,6 +12315,19 @@ server.listen(port, '0.0.0.0', async () => {
       });
       signalPublisher.start();
 
+      // Warm the period-returns cache in the background so the first dashboard
+      // visit shows Daily/Weekly/Quarterly/Yearly movers immediately instead of
+      // waiting for an on-demand computation across the universe.
+      (async () => {
+        try {
+          const { getPeriodReturns } = require('./periodReturnsService');
+          getPeriodReturns('1w').catch(() => {});
+          getPeriodReturns('1mo').catch(() => {});
+          getPeriodReturns('3mo').catch(() => {});
+          getPeriodReturns('1y').catch(() => {});
+        } catch {}
+      })();
+
       // Immediate initial indices/sector publish
       (async () => {
         try {

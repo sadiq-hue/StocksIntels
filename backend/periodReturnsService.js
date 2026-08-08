@@ -14,10 +14,18 @@ const PERIODS = {
 };
 
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 min
-const CONCURRENCY = 8;
+const CONCURRENCY = 16;
+const FETCH_TIMEOUT_MS = 6000;
 
 const periodCache = new Map(); // period -> { ts, returns: Map<symbol, number> }
 const computeInProgress = new Map();
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ]);
+}
 
 function periodAgoPrice(bars) {
   // bars: array of { date, close, ... } ascending by date. The first bar is the
@@ -67,8 +75,8 @@ async function computePeriodReturns(period) {
         const cur = currentPrices.get(symbol);
         if (!cur) continue;
         const bars = isNse
-          ? await fetchNseHistory(symbol, cfg.range)
-          : await fetchHistoricalQuotes(symbol, cfg.range, cfg.interval);
+          ? await withTimeout(fetchNseHistory(symbol, cfg.range), FETCH_TIMEOUT_MS)
+          : await withTimeout(fetchHistoricalQuotes(symbol, cfg.range, cfg.interval), FETCH_TIMEOUT_MS);
         const startPrice = periodAgoPrice(bars);
         if (startPrice && startPrice > 0) {
           returns.set(symbol, ((cur - startPrice) / startPrice) * 100);
