@@ -12,6 +12,7 @@ ALTER TABLE IF EXISTS forward_predictions ADD COLUMN IF NOT EXISTS action VARCHA
 ALTER TABLE IF EXISTS forward_predictions ADD COLUMN IF NOT EXISTS trade_type VARCHAR(30);
 CREATE INDEX IF NOT EXISTS idx_signal_history_analysis ON signal_history USING gin (analysis_data);
 ALTER TABLE IF EXISTS signal_outcomes ADD COLUMN IF NOT EXISTS signal_generated_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE IF EXISTS signal_outcomes ADD COLUMN IF NOT EXISTS close_reason TEXT;
 UPDATE signal_outcomes SET signal_generated_at = recorded_at WHERE signal_generated_at IS NULL;
 
 -- Signal history hygiene: keep only current-engine actionable signals, deduplicated.

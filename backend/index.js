@@ -1377,7 +1377,7 @@ app.get('/api/admin/signal-outcomes', async (req, res) => {
     const cond = src === 'all' ? '' : ' WHERE source = $1';
     const countResult = await pool.query(`SELECT COUNT(*)::int as cnt FROM signal_outcomes${cond}`, src === 'all' ? [] : [src]);
     const dataResult = await pool.query(
-      `SELECT id, ticker, signal, entry_price, exit_price, result, source, recorded_at
+      `SELECT id, ticker, signal, entry_price, exit_price, result, source, recorded_at, close_reason
        FROM signal_outcomes${cond}
        ORDER BY recorded_at DESC LIMIT $${src === 'all' ? 1 : 2} OFFSET $${src === 'all' ? 2 : 3}`,
       src === 'all' ? [limit, offset] : [src, limit, offset]
@@ -11118,6 +11118,7 @@ async function initDatabase() {
     );`);
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS position_size INTEGER DEFAULT 25`).catch(() => {});
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS close_reason TEXT`).catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_outcomes_ticker ON signal_outcomes(ticker)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_outcomes_result ON signal_outcomes(result)');
 

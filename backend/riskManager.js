@@ -260,7 +260,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
         // back the gain. It resolves as a win when the price pulls back into the
         // trailing stop (or the trade-type expiry closes it at the market).
         if (currentPrice <= previous.stopLoss) {
-          previous.result = 'loss'; performanceStats.losses++; performanceStats.total++;
+          previous.result = 'loss'; previous.closeReason = 'stop loss'; performanceStats.losses++; performanceStats.total++;
           portfolioState.consecutiveLosses++;
         } else if (!previous.trailing && currentPrice >= previous.target1) {
           const trailDist = Math.max(entry - previous.stopLoss, entry * 0.005);
@@ -272,16 +272,16 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
           const ratchet = currentPrice - trailDist;
           if (ratchet > previous.trailStop) previous.trailStop = ratchet;
           if (currentPrice <= previous.trailStop) {
-            previous.result = 'win'; performanceStats.wins++; performanceStats.total++;
+            previous.result = 'win'; previous.closeReason = 'trailing stop'; performanceStats.wins++; performanceStats.total++;
             portfolioState.consecutiveLosses = 0;
           }
         }
       } else {
         if (currentPrice >= previous.stopLoss) {
-          previous.result = 'loss'; performanceStats.losses++; performanceStats.total++;
+          previous.result = 'loss'; previous.closeReason = 'stop loss'; performanceStats.losses++; performanceStats.total++;
           portfolioState.consecutiveLosses++;
         } else if (currentPrice <= previous.target1) {
-          previous.result = 'win'; performanceStats.wins++; performanceStats.total++;
+          previous.result = 'win'; previous.closeReason = 'target reached'; performanceStats.wins++; performanceStats.total++;
           portfolioState.consecutiveLosses = 0;
         }
       }

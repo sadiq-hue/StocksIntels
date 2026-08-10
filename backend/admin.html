@@ -1255,7 +1255,7 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       </div>
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
         <table class="w-full">
-          <thead><tr><th>Ticker</th><th>Signal</th><th>Entry Price</th><th>Exit Price</th><th>Result</th><th>Source</th><th>Date</th></tr></thead>
+          <thead><tr><th>Ticker</th><th>Signal</th><th>Entry Price</th><th>Exit Price</th><th>Result</th><th>Close Reason</th><th>Source</th><th>Date</th></tr></thead>
           <tbody id="signalOutcomesTableBody"></tbody>
         </table>
       </div>
@@ -4349,7 +4349,7 @@ async function fetchSignalOutcomes() {
     document.getElementById('soStatWinRate').textContent = total > 0 ? Math.round((stats.wins / total) * 100) + '%' : '-';
     const tbody = document.getElementById('signalOutcomesTableBody');
     if (d.outcomes.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">No outcomes recorded yet</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-8">No outcomes recorded yet</td></tr>';
     } else {
       tbody.innerHTML = d.outcomes.map(o => `
         <tr>
@@ -4358,6 +4358,7 @@ async function fetchSignalOutcomes() {
           <td class="text-gray-700 text-xs">${o.entry_price != null ? Number(o.entry_price).toFixed(2) : '-'}</td>
           <td class="text-gray-700 text-xs">${o.exit_price != null ? Number(o.exit_price).toFixed(2) : '-'}</td>
           <td><span class="pill ${o.result === 'win' ? 'pill-verified' : 'pill-unverified'}">${esc(o.result)}</span></td>
+          <td class="text-gray-500 text-xs" title="Why this outcome closed">${esc(o.close_reason || '-')}</td>
           <td class="text-gray-500 text-xs"><span class="pill ${o.source === 'live' ? 'pill-free' : 'pill-unverified'}">${esc(o.source || '-')}</span></td>
           <td class="text-gray-500 text-xs">${formatDate(o.recorded_at)}</td>
         </tr>

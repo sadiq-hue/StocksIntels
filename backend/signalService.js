@@ -38,6 +38,13 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     // deploy that predates this column used to crash boot with
     // 'column "signal_generated_at" does not exist'. Idempotent ALTER fixes that.
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS signal_generated_at TIMESTAMP WITH TIME ZONE`);
+    // Audit trail: why each outcome was closed. Score-based closes persist the
+    // exact verdict ('score flipped' | 'profit fade' | 'stale thesis' |
+    // 'conviction faded'), stop/target closes record the level that fired
+    // ('stop loss' | 'trailing stop' | 'target reached'), so forensics like the
+    // MS Aug 7 premature close no longer have to be reverse-engineered from the
+    // exit price + code version.
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS close_reason TEXT`);
     // Dedupe and enforce one outcome per emitted signal. signal_outcomes had no
     // unique constraint, so the same (ticker, signal_generated_at) could be
     // inserted twice (e.g. double resolution or a backtest/live race) and the
@@ -833,7 +840,7 @@ async function restoreStateFromDb() {
   try {
     // Load all historical outcomes into memory so health/trade tracking works across restarts
     const outcomes = await pool.query(
-      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at FROM signal_outcomes WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - $1::interval AND result IS NOT NULL AND source = 'live' ORDER BY recorded_at DESC`,
+      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, close_reason FROM signal_outcomes WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - $1::interval AND result IS NOT NULL AND source = 'live' ORDER BY recorded_at DESC`,
       [`${SIGNAL_WINDOW_DAYS} days`]
     );
     _signalOutcomes.clear();
@@ -845,6 +852,7 @@ async function restoreStateFromDb() {
         exitPrice: row.exit_price != null ? parseFloat(row.exit_price) : null,
         result: row.result,
         recordedAt: row.recorded_at,
+        closeReason: row.close_reason || null,
       });
       // Populate live test store for time-bucket analysis
       const rAt = row.resolved_at ? new Date(row.resolved_at).getTime() : null;
@@ -858,6 +866,7 @@ async function restoreStateFromDb() {
         exitPrice: row.exit_price != null ? parseFloat(row.exit_price) : null,
         generatedAt: gAt,
         resolvedAt: rAt || gAt,
+        closeReason: row.close_reason || null,
       });
       if (store.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) store.outcomes = store.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
     }
@@ -993,8 +1002,8 @@ const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy';
        try {
          const now = new Date().toISOString();
          await pool.query(
-           `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, source)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'backfill')
+           `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, source, close_reason)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'backfill', 'mark-to-market')
             ON CONFLICT DO NOTHING`,
            [row.ticker, row.entry_price, row.signal, currentPrice, resultStr, now, now, row.generated_at]
          );
@@ -1108,6 +1117,7 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
 
           let exitPrice = null;
           let resultStr = null;
+          let closeReason = null;
           let exitDay = 0;
 
           // Evaluate from the NEXT bar after the signal date (exitDay >= 1).
@@ -1124,8 +1134,8 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
 
             // Sells are never evaluated here — the SELECT above restricts to
             // Buy/Strong Buy (sells are exit/avoid ratings, not positions).
-            if (dayLow <= stop) { exitPrice = stop; resultStr = 'loss'; break; }
-            if (dayHigh >= target) { exitPrice = target; resultStr = 'win'; break; }
+            if (dayLow <= stop) { exitPrice = stop; resultStr = 'loss'; closeReason = 'stop loss'; break; }
+            if (dayHigh >= target) { exitPrice = target; resultStr = 'win'; closeReason = 'target reached'; break; }
 
             if (i === startIdx + maxHoldDays || i === bars.length - 1) {
               exitPrice = dayClose;
@@ -1134,6 +1144,7 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
               // direction. No arbitrary %-of-target threshold (that mislabeled
               // profitable exits as losses).
               resultStr = (isBuy ? pnl > 0 : pnl < 0) ? 'win' : 'loss';
+              closeReason = 'expiry close';
               break;
             }
           }
@@ -1148,10 +1159,10 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
 
           const now = new Date().toISOString();
           await pool.query(
-            `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, source)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'backtest')
+            `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, source, close_reason)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'backtest', $9)
              ON CONFLICT DO NOTHING`,
-            [sig.ticker, entry, sig.signal, exitPrice, resultStr, now, now, sig.generated_at]
+            [sig.ticker, entry, sig.signal, exitPrice, resultStr, now, now, sig.generated_at, closeReason]
           );
           totalInserted++;
           if (resultStr === 'win') totalWins++; else totalLosses++;
@@ -2633,7 +2644,7 @@ function getConfidenceMultiplier() {
 
 // ─── Persist Signal Outcomes to DB ──────────────────────────────────────────
 // Stores signal performance outcomes in the database so state survives restarts.
-async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result, resolvedAt, signalGeneratedAt) {
+async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result, resolvedAt, signalGeneratedAt, closeReason = null) {
   try {
     const prevOutcome = _signalOutcomes.get(symbol);
     const signalGenAtMs = signalGeneratedAt || prevOutcome?.timestamp || Date.now();
@@ -2641,10 +2652,10 @@ async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPri
     const now = new Date().toISOString();
     const signalGenAt = new Date(signalGenAtMs).toISOString();
     await pool.query(
-      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at, signal_generated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at, signal_generated_at, close_reason)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT DO NOTHING`,
-      [symbol, entryPrice, signalAction, currentPrice, result, posSize, now, resolvedAt || now, signalGenAt]
+      [symbol, entryPrice, signalAction, currentPrice, result, posSize, now, resolvedAt || now, signalGenAt, closeReason]
     );
     // Push to live test store
     const store = _liveTestStore.get(symbol);
@@ -2652,6 +2663,7 @@ async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPri
       store.outcomes.push({
         result, signal: signalAction, entryPrice, exitPrice: currentPrice,
         generatedAt: signalGenAtMs, resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
+        closeReason,
       });
       if (store.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) store.outcomes = store.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
     } else {
@@ -2659,6 +2671,7 @@ async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPri
         outcomes: [{
           result, signal: signalAction, entryPrice, exitPrice: currentPrice,
           generatedAt: signalGenAtMs, resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
+          closeReason,
         }]
       });
     }
@@ -3340,6 +3353,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           prevOutcome.result = closedWin ? 'win' : 'loss';
           prevOutcome.resolvedAt = Date.now();
           prevOutcome.exitPrice = currentPrice;
+          prevOutcome.closeReason = closeReason;
           if (closedWin) { performanceStats.wins++; } else { performanceStats.losses++; }
           performanceStats.total++;
           portfolioState.totalTrades++;
@@ -3387,7 +3401,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       // Entries restored from DB / backfilled / backtest have result pre-set but no
       // timestamp — re-persisting them creates duplicate rows and a self-perpetuating
       // cascade (each re-persist becomes a "resolved prevOutcome" for the next cycle).
-      persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, prevOutcome.exitPrice != null ? prevOutcome.exitPrice : currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null, prevOutcome.timestamp);
+      persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, prevOutcome.exitPrice != null ? prevOutcome.exitPrice : currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null, prevOutcome.timestamp, prevOutcome.closeReason || null);
       signalEventBus.emit('signal:resolved', {
         ticker: symbol,
         entryPrice: prevOutcome.entryPrice,
