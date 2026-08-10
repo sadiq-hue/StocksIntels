@@ -1773,6 +1773,31 @@
       "parsed_at": "2026-07-16 12:00:00.000+03"
     },
     {
+      "ticker": "CTUM",
+      "period_type": "annual",
+      "period_end_date": "2026-03-31",
+      "file_name": "Centum-Investment-Company-Plc-Audited-Financial-Results-for-the-Year-Ended-31-March-2026.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": 2.02,
+        "net_income": 743914000,
+        "total_debt": 17087000000,
+        "total_assets": 79393000000,
+        "total_revenue": 3629000000,
+        "operating_income": 442970000,
+        "retained_earnings": 40420000000,
+        "total_liabilities": 35840000000,
+        "dividend_per_share": 0.78,
+        "shareholders_equity": 43553000000,
+        "cash_from_operations": 1398000000
+      },
+      "error_message": null,
+      "processed_by": "auto-nse",
+      "parsed_at": "2026-08-10 12:00:00.000+03"
+    },
+    {
       "ticker": "DTK",
       "period_type": "annual",
       "period_end_date": "2021-12-31",
@@ -4236,6 +4261,34 @@
       "error_message": null,
       "processed_by": "js:mistral",
       "parsed_at": "2026-07-14 19:02:51.801+03"
+    },
+    {
+      "ticker": "NBV",
+      "period_type": "annual",
+      "period_end_date": "2026-03-31",
+      "file_name": "Nairobi-Business-Ventures-Plc-Financial-Statements-for-the-Year-Ended-31-Mar-2026.pdf",
+      "file_size": null,
+      "mime_type": "application/pdf",
+      "status": "completed",
+      "parsed_data": {
+        "eps": null,
+        "net_income": -164733000,
+        "total_debt": 572436000,
+        "total_assets": 3305333000,
+        "total_revenue": 208291000,
+        "current_assets": 3305333000,
+        "cost_of_revenue": 95217000,
+        "operating_income": -165419000,
+        "retained_earnings": null,
+        "total_liabilities": 1566566000,
+        "dividend_per_share": 0,
+        "current_liabilities": 994130000,
+        "shareholders_equity": 1738767000,
+        "cash_from_operations": -79392
+      },
+      "error_message": null,
+      "processed_by": "auto-nse",
+      "parsed_at": "2026-08-10 12:00:00.000+03"
     },
     {
       "ticker": "NCBA",
