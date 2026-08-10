@@ -4237,7 +4237,7 @@
     {
       "ticker": "NBV",
       "period_type": "annual",
-      "period_end_date": "2025-12-31",
+      "period_end_date": "2025-03-31",
       "file_name": "Nairobi-Business-Ventures-PLC-Financial-Statements-31st-December-2025.pdf",
       "file_size": null,
       "mime_type": "application/pdf",
@@ -4279,6 +4279,7 @@
         "current_assets": 3305333000,
         "cost_of_revenue": 95217000,
         "operating_income": -165419000,
+        "operating_expenses": 278493000,
         "retained_earnings": null,
         "total_liabilities": 1566566000,
         "dividend_per_share": 0,
