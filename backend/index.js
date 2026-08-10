@@ -3461,7 +3461,7 @@ app.post('/api/support/chatbot', async (req, res) => {
     // Market overview
     if (q.includes('market') || q.includes('overview') || q.includes('summary') || q.includes('sentiment')) {
       try {
-        const signals = await generateSignals().catch(() => []);
+        const signals = await buildSignalsForSummary(true).catch(() => []);
         const buys = signals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
         const total = signals.length;
         if (total > 0) {
@@ -3475,7 +3475,7 @@ app.post('/api/support/chatbot', async (req, res) => {
 
     // NSE-specific
     if (q.includes('nse') || q.includes('nairobi') || q.includes('kenya')) {
-      const signals = await generateSignals().catch(() => []);
+      const signals = await buildSignalsForSummary(true).catch(() => []);
       const nseSignals = signals.filter(s => s.market === 'NSE' || s.currency === 'KES');
       if (nseSignals.length > 0) {
         const buys = nseSignals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
@@ -3491,7 +3491,7 @@ app.post('/api/support/chatbot', async (req, res) => {
 
     // Momentum/top stocks
     if (q.includes('momentum') || q.includes('gainers') || q.includes('hot') || q.includes('top stock') || q.includes('best stock')) {
-      const signals = await generateSignals().catch(() => []);
+      const signals = await buildSignalsForSummary(true).catch(() => []);
       const top = signals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').slice(0, 5);
       if (top.length > 0) {
         let ans = '**🔥 Top Stocks**\n\n';
@@ -7398,7 +7398,7 @@ app.get('/api/ai/market-summary', async (req, res) => {
   }
 });
 
-async function buildSignalsForSummary() {
+async function buildSignalsForSummary(skipRefresh = false) {
   const signals = await generateSignals(null, true);
   const merged = (Array.isArray(signals) ? signals : []).map(s => ({ ...s }));
   const byTicker = new Map(merged.map(s => [s.ticker, s]));
@@ -7406,7 +7406,11 @@ async function buildSignalsForSummary() {
     'Intraday': 'Intraday', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks',
     'Long Term': '3-6 months', 'Long Term Value': '3-6 months', 'Aggressive Buy': '1-3 weeks', 'Avoid': 'N/A',
   };
-  await refreshMonitoredQuotes();
+  // Quote refresh is bounded at 25s — the AI chat handlers run this inline, so they
+  // pass skipRefresh=true and rely on the cached quotes getMonitoredSignals() already
+  // falls back to. The /api/ai/market-summary endpoint keeps the live refresh so its
+  // numbers match the Market Intelligence page exactly.
+  if (!skipRefresh) await refreshMonitoredQuotes();
   for (const m of getMonitoredSignals()) {
     const existing = byTicker.get(m.ticker);
     const base = existing || {
@@ -7529,6 +7533,42 @@ app.post('/api/ai/insights', async (req, res) => {
       if ((word(key).test(q) || word(sym.toLowerCase()).test(q)) && !seen.has(sym)) {
         seen.add(sym);
         foundSymbols.push(sym);
+      }
+    }
+    // Fuzzy fallback for typos ("nvdia" → NVDA): only when no exact symbol matched,
+    // so it never shadows a clean lookup. Levenshtein distance ≤ 2 against ticker
+    // and company names, and must actually appear as a token in the question.
+    if (foundSymbols.length === 0) {
+      const levenshtein = (a, b) => {
+        const m = a.length, n = b.length;
+        if (!m) return n; if (!n) return m;
+        const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+        for (let j = 0; j <= n; j++) dp[0][j] = j;
+        for (let i = 1; i <= m; i++) {
+          for (let j = 1; j <= n; j++) {
+            dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+          }
+        }
+        return dp[m][n];
+      };
+      const qTokens = q.replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(t => t.length >= 4);
+      const qPlain = q.replace(/[^a-z]/g, '');
+      let best = null;
+      for (const [key, sym] of Object.entries(STOCK_NAMES)) {
+        const candidates = new Set([key.replace(/[^a-z]/g, ''), sym.toLowerCase().replace(/[^a-z]/g, ''), sym.toLowerCase()]);
+        for (const cand of candidates) {
+          if (!cand || cand.length < 4) continue;
+          const tokenHit = qTokens.some(t => levenshtein(t, cand) <= 2);
+          const plainHit = qPlain.length >= 4 && levenshtein(qPlain, cand) <= 2;
+          if (tokenHit || plainHit) {
+            const dist = Math.min(...qTokens.filter(t => levenshtein(t, cand) <= 2).map(t => levenshtein(t, cand)));
+            if (!best || dist < best.dist) best = { sym, dist };
+          }
+        }
+      }
+      if (best && best.dist <= 2 && !seen.has(best.sym)) {
+        seen.add(best.sym);
+        foundSymbols.push(best.sym);
       }
     }
     foundSymbols.sort((a, b) => {
@@ -7759,7 +7799,7 @@ app.post('/api/ai/insights', async (req, res) => {
     // ── Handler: market overview ──
     } else if (isMarket || (foundSymbols.length === 0 && !isMomentum && !isSector && !isNse && !isNews && !isBonds && !isETFs && !isFinancials)) {
       const [signals, indices, sectorPerf, turnoverRes, newsSum, analystData, bondSum, etfSum] = await Promise.all([
-        generateSignals().catch(() => null),
+        buildSignalsForSummary(true).catch(() => null),
         indicesService.getAllIndices().catch(() => null),
         indicesService.getSectorPerformance().catch(() => null),
         axios.get('http://localhost:' + port + '/api/market/turnover').then(r => r.data).catch(() => null),
@@ -7810,7 +7850,8 @@ app.post('/api/ai/insights', async (req, res) => {
       if (sectorPerf && sectorPerf.length > 0) {
         answer += `**🏭 Sector Performance**\n`;
         sectorPerf.slice(0, 6).forEach(s => {
-          answer += `• ${s.sector}: ${s.change >= 0 ? '+' : ''}${typeof s.change === 'number' ? s.change.toFixed(1) : '0'}% (${s.upCount || 0}/${s.count || 0} up)\n`;
+          const ch = typeof s.avgChange === 'number' ? s.avgChange : (typeof s.change === 'number' ? s.change : parseFloat(s.change) || 0);
+          answer += `• ${s.sector}: ${ch >= 0 ? '+' : ''}${ch.toFixed(1)}% (${s.upCount || 0}/${s.count || 0} up)\n`;
         });
         answer += '\n';
       }
@@ -7855,7 +7896,7 @@ app.post('/api/ai/insights', async (req, res) => {
     // ── Handler: momentum stocks ──
     } else if (isMomentum) {
       const [signals, sectorPerf] = await Promise.all([
-        generateSignals().catch(() => null),
+        buildSignalsForSummary(true).catch(() => null),
         indicesService.getSectorPerformance().catch(() => null),
       ]);
       if (signals) {
@@ -7884,7 +7925,7 @@ app.post('/api/ai/insights', async (req, res) => {
     // ── Handler: sector analysis ──
     } else if (isSector) {
       const [signals, sectorPerf] = await Promise.all([
-        generateSignals().catch(() => null),
+        buildSignalsForSummary(true).catch(() => null),
         indicesService.getSectorPerformance().catch(() => null),
       ]);
       if (signals) {
@@ -7894,7 +7935,8 @@ app.post('/api/ai/insights', async (req, res) => {
         if (sectorPerf && sectorPerf.length > 0) {
           answer += `**Performance**\n`;
           sectorPerf.slice(0, 8).forEach(s => {
-            answer += `• **${s.sector}:** ${s.avgChange >= 0 ? '+' : ''}${typeof s.avgChange === 'number' ? s.avgChange.toFixed(1) : '0'}%`;
+            const ch = typeof s.avgChange === 'number' ? s.avgChange : parseFloat(s.change) || 0;
+            answer += `• **${s.sector}:** ${ch >= 0 ? '+' : ''}${ch.toFixed(1)}%`;
             if (s.upCount != null) answer += ` (${s.upCount}/${s.count} up)`;
             answer += '\n';
           });
@@ -7916,7 +7958,7 @@ app.post('/api/ai/insights', async (req, res) => {
     // ── Handler: NSE focus ──
     } else if (isNse) {
       const [signals, indices, bondSum] = await Promise.all([
-        generateSignals().catch(() => null),
+        buildSignalsForSummary(true).catch(() => null),
         indicesService.getAllIndices().catch(() => null),
         getBondSummary().catch(() => null),
       ]);
