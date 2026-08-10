@@ -6822,12 +6822,11 @@ app.get('/api/top-stocks', async (req, res) => {
       });
       // Include NSE symbols that have a period return but are absent from the
       // signals cache (monitor-first gate / eligibility drops, e.g. CGEN).
-      const { getFundamentals } = require('./signalService');
+      const { NSE_SYMBOLS } = require('./signalService');
       const present = new Set(filtered.map(s => s.ticker));
       for (const [ticker, r] of returns) {
         if (present.has(ticker) || r == null) continue;
-        const isNse = ALL_SYMBOLS.includes(ticker) || require('./signalService').NSE_SYMBOLS.includes(ticker);
-        if (!isNse) continue;
+        if (!NSE_SYMBOLS.includes(ticker)) continue;
         const fund = getFundamentals(ticker);
         filtered.push({
           ticker, symbol: ticker, name: fund?.name || ticker,
