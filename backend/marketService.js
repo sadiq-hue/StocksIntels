@@ -370,22 +370,37 @@ async function enrichVolumeFromAfx(quote, symbol) {
 //   -> AFX (afx.kwayisi.org, free) -> Apify (needs key)
 // Lazy-requires each module so a missing/optional scraper never crashes boot.
 async function getNseBaseQuote(symbol) {
-  // 0c) NSE official portal ticker API — authoritative live feed (powers the
-  //     nse.co.ke widget). Its previous close / % change match the portal; the
-  //     KenyanStocks / MyStocks feeds below share a stale upstream reference.
-  try {
-    const nseTicker = require('./nseTickerScraper');
-    const tq = await nseTicker.getQuoteForSymbol(symbol);
-    if (tq && Number(tq.price) > 0) return tq;
-  } catch (e) { /* fall through to other sources */ }
+  const cleanTicker = symbol.replace('NSE:', '').toUpperCase();
 
-  // 0a) KenyanStocks.com API — fast, reliable, covers all NSE stocks
+  // KenyanStocks baseline (cached 1h) — authoritative EOD close. Used both as a
+  // fallback AND to sanity-check the live portal feed, which has known-bad rows
+  // (e.g. HFCK reported at 0.1 vs a real ~11.8; 52wk range 7.30-12.00).
+  let ks = null;
   try {
     const ksMod = require('./kenyanStocksScraper');
     const ksStocks = await ksMod.getStocksData();
-    const cleanTicker = symbol.replace('NSE:', '');
-    const ks = Array.isArray(ksStocks) ? ksStocks.find(s => s.symbol === cleanTicker) : null;
-    if (ks && Number(ks.close) > 0) {
+    ks = Array.isArray(ksStocks) ? ksStocks.find(s => s.symbol === cleanTicker) : null;
+  } catch (e) { /* baseline optional */ }
+
+  // 0c) NSE official portal ticker API — authoritative live feed (powers the
+  //     nse.co.ke widget). Its previous close / % change match the portal; the
+  //     KenyanStocks / MyStocks feeds below share a stale upstream reference.
+  //     Only trusted when its price is sane relative to the KenyanStocks close,
+  //     otherwise the portal row is garbage and we fall through.
+  try {
+    const nseTicker = require('./nseTickerScraper');
+    const tq = await nseTicker.getQuoteForSymbol(symbol);
+    const p = Number(tq && tq.price);
+    if (tq && p > 0) {
+      const ksClose = Number(ks && ks.close);
+      const ratio = ksClose > 0 ? p / ksClose : 0;
+      if (!ksClose || (ratio >= 0.5 && ratio <= 2)) return tq;
+      console.warn(`[marketService] NSE portal price suspect for ${cleanTicker} (${p} vs KenyanStocks ${ksClose}); using KenyanStocks`);
+    }
+  } catch (e) { /* fall through to other sources */ }
+
+  // 0a) KenyanStocks.com API — fast, reliable, covers all NSE stocks
+  if (ks && Number(ks.close) > 0) {
       const prevClose = Number(ks.previous_price) || Number(ks.close);
       const change = Number(ks.close) - prevClose;
       const pct = prevClose > 0 ? (change / prevClose) * 100 : 0;
@@ -406,8 +421,7 @@ async function getNseBaseQuote(symbol) {
         lastUpdated: new Date().toISOString(),
         provider: 'kenyanstocks',
       };
-    }
-  } catch (e) { /* fall through to other sources */ }
+  }
 
   // 0b) mystocks.africa Partner API — primary, authoritative live (delayed) quotes
   let msaQuote = null;

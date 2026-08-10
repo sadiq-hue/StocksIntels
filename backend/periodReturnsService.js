@@ -121,19 +121,27 @@ async function computePeriodReturns(period) {
       const symbol = symbols[idx++];
       try {
         const isNse = signalService.NSE_SYMBOLS.includes(symbol);
-        const cur = currentPrices.get(symbol);
-        if (!cur) continue;
         const bars = isNse
           ? await withTimeout(fetchNseHistory(symbol, cfg.range), FETCH_TIMEOUT_MS)
           : await withTimeout(fetchHistoricalQuotes(symbol, cfg.range, cfg.interval, { bulk: true }), FETCH_TIMEOUT_MS);
+        if (!bars || bars.length < 2) continue;
+        const lastBar = bars[bars.length - 1];
+        // For NSE, prefer the latest durable bar close as the "now" price so the
+        // return is computed against the same store as the history (the live
+        // quote chain has known-bad rows, e.g. HFCK at 0.1 vs a real 11.80).
+        let cur = currentPrices.get(symbol);
+        if (isNse && lastBar && typeof lastBar.close === 'number' && lastBar.close > 0) {
+          cur = lastBar.close;
+        }
+        if (!cur || !(cur > 0)) continue;
         const startPrice = periodAgoPrice(bars);
         if (startPrice && startPrice > 0) {
           returns.set(symbol, ((cur - startPrice) / startPrice) * 100);
         }
-        const lastBar = Array.isArray(bars) ? bars[bars.length - 1] : null;
         if (lastBar && typeof lastBar.volume === 'number' && lastBar.volume > 0) {
           volumes.set(symbol, lastBar.volume);
         }
+        if (isNse && cur) currentPrices.set(symbol, cur);
       } catch {
         // skip symbols we can't resolve
       }

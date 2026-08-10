@@ -56,6 +56,25 @@ async function upsertBar(ticker, bar, source = 'live') {
   const volume = num(bar && bar.volume) || 0;
   if (close == null || !(close > 0)) return false;
 
+  // Defense-in-depth: reject live bars that deviate wildly from the ticker's
+  // established EOD closes (e.g. the nse.co.ke portal once reported HFCK at 0.1
+  // vs a real ~11.80). Only applies when there is enough EOD history to judge.
+  if (source === 'live') {
+    try {
+      const { rows } = await pool.query(
+        `SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY close) AS med, COUNT(*)::int AS n
+         FROM nse_daily_history WHERE ticker=$1 AND source <> 'live'`,
+        [ticker]
+      );
+      const med = Number(rows[0] && rows[0].med);
+      const n = Number(rows[0] && rows[0].n) || 0;
+      if (n >= 3 && med > 0 && (close < 0.5 * med || close > 2 * med)) {
+        console.warn(`[NseHistory] Rejected suspect live bar ${ticker} ${date} close=${close} (EOD median ${med})`);
+        return false;
+      }
+    } catch (e) { /* guard is best-effort */ }
+  }
+
   const existing = await getBar(ticker, date);
   const merged = {
     open: existing && existing.open != null ? num(existing.open) : open,
