@@ -74,7 +74,7 @@ function normalizeSymbol(symbol) {
 
 async function computePeriodReturns(period) {
   const cfg = PERIODS[period];
-  if (!cfg) return new Map();
+  if (!cfg) return { returns: new Map(), prices: new Map(), volumes: new Map(), names: new Map() };
 
   // Use the current cached quote prices for the "now" value. Include the fresh
   // signals, open monitored positions, AND every NSE symbol from the universe —
@@ -111,6 +111,9 @@ async function computePeriodReturns(period) {
 
   const symbols = [...currentPrices.keys()];
   const returns = new Map();
+  const volumes = new Map();
+  const names = new Map();
+  for (const s of signals) if (s && s.name) names.set(s.ticker, s.name);
 
   let idx = 0;
   async function worker() {
@@ -127,6 +130,10 @@ async function computePeriodReturns(period) {
         if (startPrice && startPrice > 0) {
           returns.set(symbol, ((cur - startPrice) / startPrice) * 100);
         }
+        const lastBar = Array.isArray(bars) ? bars[bars.length - 1] : null;
+        if (lastBar && typeof lastBar.volume === 'number' && lastBar.volume > 0) {
+          volumes.set(symbol, lastBar.volume);
+        }
       } catch {
         // skip symbols we can't resolve
       }
@@ -137,34 +144,43 @@ async function computePeriodReturns(period) {
   for (let i = 0; i < CONCURRENCY; i++) workers.push(worker());
   await Promise.all(workers);
 
-  return returns;
+  return { returns, prices: currentPrices, volumes, names };
 }
 
 // Get period returns, computing + caching if stale. Returns Map<symbol, pct>.
 // Serves the last known result immediately and refreshes in the background so a
 // period switch on the dashboard never blocks behind a multi-minute recompute.
-async function getPeriodReturns(period) {
+// Get full period details (returns/prices/volumes/names), computing + caching
+// if stale. Serves the last known result immediately and refreshes in the
+// background so a period switch on the dashboard never blocks behind a
+// multi-minute recompute.
+async function getPeriodDetails(period) {
   const key = period || '1d';
   const cached = periodCache.get(key);
   if (cached) {
-    if (Date.now() - cached.ts < CACHE_TTL_MS) return cached.returns;
+    if (Date.now() - cached.ts < CACHE_TTL_MS) return cached;
     // Stale: kick off a background refresh but answer with what we have.
     if (!computeInProgress.has(key)) {
       const promise = computePeriodReturns(key)
-        .then(returns => { periodCache.set(key, { ts: Date.now(), returns }); return returns; })
+        .then(details => { periodCache.set(key, { ts: Date.now(), ...details }); return details; })
         .catch(() => {})
         .finally(() => computeInProgress.delete(key));
       computeInProgress.set(key, promise);
     }
-    return cached.returns;
+    return cached;
   }
   // No cache yet (cold start): block on the compute or share in-progress work.
   if (computeInProgress.has(key)) return computeInProgress.get(key);
   const promise = computePeriodReturns(key)
-    .then(returns => { periodCache.set(key, { ts: Date.now(), returns }); return returns; })
+    .then(details => { periodCache.set(key, { ts: Date.now(), ...details }); return details; })
     .finally(() => computeInProgress.delete(key));
   computeInProgress.set(key, promise);
   return promise;
+}
+
+async function getPeriodReturns(period) {
+  const details = await getPeriodDetails(period);
+  return details.returns;
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -183,7 +199,7 @@ async function warmPeriodCaches() {
 
 // Build a movers payload (gainers/losers) for a period, merged with quote data.
 async function getPeriodMovers(period = '1d') {
-  const returns = await getPeriodReturns(period);
+  const { returns, prices, volumes, names } = await getPeriodDetails(period);
   const signals = await signalService.generateSignals(null, true);
   const byTicker = new Map();
   for (const s of signals) byTicker.set(s.ticker, s);
@@ -192,17 +208,18 @@ async function getPeriodMovers(period = '1d') {
   for (const [ticker, r] of returns) {
     if (r == null) continue;
     const s = byTicker.get(ticker);
+    const isNse = signalService.NSE_SYMBOLS.includes(ticker);
     rows.push({
       symbol: ticker,
       ticker,
-      name: s?.name || ticker,
-      price: s?.price || null,
+      name: s?.name || names?.get(ticker) || ticker,
+      price: prices?.get(ticker) ?? s?.price ?? null,
       changePercent: Math.round(r * 100) / 100,
       change: Math.round(r * 100) / 100,
-      volume: s?.volume || 0,
-      rawVolume: s?.rawVolume || 0,
-      currency: s?.currency || (signalService.NSE_SYMBOLS.includes(ticker) ? 'KES' : 'USD'),
-      market: s?.market || (signalService.NSE_SYMBOLS.includes(ticker) ? 'NSE' : 'Global'),
+      volume: volumes?.get(ticker) ?? s?.rawVolume ?? s?.volume ?? 0,
+      rawVolume: volumes?.get(ticker) ?? s?.rawVolume ?? 0,
+      currency: s?.currency || (isNse ? 'KES' : 'USD'),
+      market: s?.market || (isNse ? 'NSE' : 'Global'),
       sector: s?.sector || null,
     });
   }
@@ -211,4 +228,4 @@ async function getPeriodMovers(period = '1d') {
   return { gainers, losers };
 }
 
-module.exports = { getPeriodReturns, getPeriodMovers, warmPeriodCaches, PERIODS, normalizeSymbol };
+module.exports = { getPeriodReturns, getPeriodDetails, getPeriodMovers, warmPeriodCaches, PERIODS, normalizeSymbol };

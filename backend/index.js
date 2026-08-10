@@ -6813,8 +6813,8 @@ app.get('/api/top-stocks', async (req, res) => {
     // Period-based returns: when a non-daily period is requested, override the
     // change field with the period return so gainers/losers sort by that window.
     if (period !== '1d' && (category === 'gainers' || category === 'losers')) {
-      const { getPeriodReturns } = require('./periodReturnsService');
-      const returns = await getPeriodReturns(period);
+      const { getPeriodDetails } = require('./periodReturnsService');
+      const { returns, prices, volumes, names } = await getPeriodDetails(period);
       filtered = filtered.map(s => {
         const r = returns.get(s.ticker);
         if (r == null) return s;
@@ -6829,10 +6829,10 @@ app.get('/api/top-stocks', async (req, res) => {
         if (!NSE_SYMBOLS.includes(ticker)) continue;
         const fund = getFundamentals(ticker);
         filtered.push({
-          ticker, symbol: ticker, name: fund?.name || ticker,
-          price: null, change: Math.round(r * 100) / 100, periodReturn: Math.round(r * 100) / 100,
+          ticker, symbol: ticker, name: fund?.name || names?.get(ticker) || ticker,
+          price: prices?.get(ticker) ?? null, change: Math.round(r * 100) / 100, periodReturn: Math.round(r * 100) / 100,
           market: 'NSE', currency: 'KES', sector: fund?.sector || null,
-          volume: 0, rawVolume: 0, overallScore: 0,
+          volume: volumes?.get(ticker) ?? 0, rawVolume: volumes?.get(ticker) ?? 0, overallScore: 0,
         });
       }
     }
