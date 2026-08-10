@@ -380,7 +380,9 @@ app.get('/api/admin/dashboard', async (req, res) => {
       pool.query(`SELECT COUNT(*)::int as total,
         COALESCE(SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END), 0)::int as wins,
         COALESCE(SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END), 0)::int as losses
-        FROM signal_outcomes`),
+        FROM signal_outcomes
+        WHERE source = 'live' AND result IS NOT NULL
+          AND COALESCE(signal_generated_at, recorded_at) > NOW() - INTERVAL '30 days'`),
       pool.query('SELECT COUNT(*)::int as cnt FROM signal_history'),
       pool.query('SELECT COUNT(*)::int as cnt FROM signal_outcomes'),
     ]);
