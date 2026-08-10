@@ -3562,10 +3562,32 @@ async function getSignalForStock(symbol) {
     // state instead of a fresh (suppressed) signal.
     const open = _signalOutcomes.get(upper);
     if (open && !open.result && open.timestamp) {
+      // Surface the full monitored position state (type, target2/3, riskReward,
+      // timeframe, position size, reason) — not just the bare levels — so the AI
+      // analyst and dashboard render a complete card instead of "N/A"/undefined
+      // fields. riskReward is derived from the stop/target ladder when it wasn't
+      // stored, matching calculateTradeLevels' (target1-entry)/(entry-stop) ratio.
+      const entry = open.entryPrice;
+      const stop = open.stopLoss;
+      const t1 = open.target1;
+      let riskReward = open.riskReward;
+      if (riskReward == null && entry != null && stop != null && t1 != null && entry !== stop) {
+        const risk = Math.abs(entry - stop);
+        const reward = Math.abs(t1 - entry);
+        riskReward = risk > 0 ? parseFloat((reward / risk).toFixed(1)) : null;
+      }
       return {
         ticker: upper, signal: open.signal, action: open.action,
-        entryPrice: open.entryPrice, stopLoss: open.stopLoss, target1: open.target1,
-        confidence: open.confidence || 0, status: 'monitoring',
+        entry: entry, entryPrice: entry, stopLoss: stop, target1: t1,
+        target2: open.target2 != null ? open.target2 : null,
+        target3: open.target3 != null ? open.target3 : null,
+        type: open.type || 'Swing Trade',
+        riskReward,
+        confidence: open.confidence || 0,
+        timeframe: open.timeframe || null,
+        positionSize: open.positionSize != null ? open.positionSize + '%' : null,
+        reason: open.reason || '',
+        status: 'monitoring',
       };
     }
     return null;

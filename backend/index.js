@@ -7529,8 +7529,15 @@ app.post('/api/ai/insights', async (req, res) => {
     // ── Comprehensive stock detection ──
     const foundSymbols = [];
     const seen = new Set();
+    // Stopwords that collide with real tickers (IT, US, GO, etc.) — a question
+    // like "should I buy it?" must never resolve to the IT ticker (Gartner).
+    // We still allow explicit phrasing like "IT stock" by only blocking the bare
+    // word; a token followed by "stock/share" is treated as intentional.
+    const STOPWORD_TICKERS = new Set(['it', 'us', 'go', 'am', 'be', 'at', 'in', 'on', 'is', 'as', 'so', 'or', 'no', 'up', 'by', 'we', 'do', 'if', 'an', 'of', 'to', 'me', 'my', 'his', 'her', 'and', 'not', 'are', 'was', 'for', 'the', 'you', 'all', 'can', 'its', 'into']);
     for (const [key, sym] of Object.entries(STOCK_NAMES)) {
-      if ((word(key).test(q) || word(sym.toLowerCase()).test(q)) && !seen.has(sym)) {
+      const keyHit = word(key).test(q) && !(STOPWORD_TICKERS.has(key.toLowerCase()) && !/\b(?:stock|shares?)\b/i.test(q));
+      const symHit = word(sym.toLowerCase()).test(q) && !(STOPWORD_TICKERS.has(sym.toLowerCase()) && !/\b(?:stock|shares?)\b/i.test(q));
+      if ((keyHit || symHit) && !seen.has(sym)) {
         seen.add(sym);
         foundSymbols.push(sym);
       }
@@ -7656,7 +7663,7 @@ app.post('/api/ai/insights', async (req, res) => {
           answer += `\n**Signal:** ${signal.signal} (${signal.confidence}% confidence)\n`;
           answer += `**Entry Zone:** ${curr} ${fmtPrice(signal.entry)} | **Targets:** ${curr} ${fmtPrice(signal.target1)} / ${curr} ${fmtPrice(signal.target2)} / ${curr} ${fmtPrice(signal.target3)}\n`;
           answer += `**Stop Loss:** ${curr} ${fmtPrice(signal.stopLoss)}\n`;
-          answer += `**Trade Type:** ${signal.type} | **Risk/Reward:** ${fmt(signal.riskReward)}\n`;
+          answer += `**Trade Type:** ${signal.type || 'N/A'} | **Risk/Reward:** ${fmt(signal.riskReward)}\n`;
           if (signal.weeklyTrend) answer += `**Weekly Trend:** ${signal.weeklyTrend}`;
           if (signal.mlWinProb) answer += ` | **ML Win Prob:** ${signal.mlWinProb}`;
           answer += '\n';
