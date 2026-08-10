@@ -84,14 +84,15 @@ async function upsertBar(ticker, bar, source = 'live') {
   return true;
 }
 
-// Daily bars ascending (oldest first). Returns [] if none.
+// Daily bars ascending (oldest first), limited to the most recent `limit` days.
+// Returns [] if none.
 async function getBars(ticker, limit = MAX_BARS) {
   const { rows } = await pool.query(
     `SELECT date, open, high, low, close, volume, source FROM nse_daily_history
-     WHERE ticker=$1 ORDER BY date ASC LIMIT $2`,
+     WHERE ticker=$1 ORDER BY date DESC LIMIT $2`,
     [ticker, limit]
   );
-  return rows.map((r) => ({
+  return rows.reverse().map((r) => ({
     date: r.date instanceof Date ? r.date.toISOString().slice(0, 10) : String(r.date).slice(0, 10),
     open: num(r.open),
     high: num(r.high),
