@@ -89,6 +89,7 @@ const breakers = {
 
 const limiters = {
   v8: new Bottleneck({ maxConcurrent: 5, minTime: 150 }),
+  v8bulk: new Bottleneck({ maxConcurrent: 10, minTime: 60 }),
   yf2: new Bottleneck({ maxConcurrent: 3, minTime: 500 }),
   rapidapi: new Bottleneck({ maxConcurrent: 1, minTime: 600 }),
 };
@@ -320,7 +321,7 @@ function extractDataArray(body, key) {
   try { return JSON.parse(body.substring(jsonStart, jsonEnd)); } catch (e) { console.warn(`[YahooService] extractDataArray JSON parse error`); return null; }
 }
 
-async function fetchV8Historical(symbol, range, interval) {
+async function fetchV8Historical(symbol, range, interval, opts = {}) {
   if (symbol.endsWith('.NR')) {
     // Nairobi (NSE) historical is only served by the v8 chart endpoint directly.
   }
@@ -330,14 +331,15 @@ async function fetchV8Historical(symbol, range, interval) {
   // Note: a 404 here is usually Yahoo's per-symbol throttle ("symbol may be
   // delisted" for a live ticker) and is minutes-long, so retrying quickly is
   // futile — the caller falls through to the yf2 fallback below instead.
+  const limiter = opts.bulk ? limiters.v8bulk : limiters.v8;
   for (const host of ['query1', 'query2']) {
     try {
-      const { data } = await limiters.v8.schedule(() =>
+      const { data } = await limiter.schedule(() =>
         require('axios').get(buildUrl(host), { timeout: 6000, headers: { 'User-Agent': UA } })
       );
       const bars = parseChartBars(data);
       if (bars?.length) return bars;
-    } catch (e) { console.warn(`[YahooService] V8 historical fetch failed for ${symbol}: ${e.message}`); }
+    } catch (e) { if (opts.bulk) break; console.warn(`[YahooService] V8 historical fetch failed for ${symbol}: ${e.message}`); }
   }
   return null;
 }
@@ -596,14 +598,14 @@ async function fetchQuotesBulk(symbols, { chunkSize = 20, gapMs = 400 } = {}) {
   return results;
 }
 
-async function fetchHistorical(symbol, range = '6mo', interval = '1d') {
+async function fetchHistorical(symbol, range = '6mo', interval = '1d', opts = {}) {
   const cacheKey = `${symbol}|${range}|${interval}`;
   const redisKey = useRedis ? `yahoo:hist:${symbol}:${range}:${interval}` : null;
   const cached = await cacheGet(histCache, cacheKey, CACHE_TTL.historical, redisKey);
   if (cached) return cached;
 
   const yahooSymbol = toYahooSymbol(symbol);
-  let bars = await fetchV8Historical(yahooSymbol, range, interval);
+  let bars = await fetchV8Historical(yahooSymbol, range, interval, opts);
   if (bars) return cacheSet(histCache, cacheKey, bars, CACHE_TTL.historical, redisKey);
 
   bars = await fetchRapidapiHistorical(yahooSymbol, range, interval);

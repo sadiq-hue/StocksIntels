@@ -44,7 +44,8 @@ const PERIODS = {
 };
 
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 min
-const CONCURRENCY = 16;
+const WARM_INTERVAL_MS = 7 * 60 * 1000; // refresh each period ~every 7 min
+const CONCURRENCY = 24;
 const FETCH_TIMEOUT_MS = 6000;
 
 const periodCache = new Map(); // period -> { ts, returns: Map<symbol, number> }
@@ -121,7 +122,7 @@ async function computePeriodReturns(period) {
         if (!cur) continue;
         const bars = isNse
           ? await withTimeout(fetchNseHistory(symbol, cfg.range), FETCH_TIMEOUT_MS)
-          : await withTimeout(fetchHistoricalQuotes(symbol, cfg.range, cfg.interval), FETCH_TIMEOUT_MS);
+          : await withTimeout(fetchHistoricalQuotes(symbol, cfg.range, cfg.interval, { bulk: true }), FETCH_TIMEOUT_MS);
         const startPrice = periodAgoPrice(bars);
         if (startPrice && startPrice > 0) {
           returns.set(symbol, ((cur - startPrice) / startPrice) * 100);
@@ -140,21 +141,44 @@ async function computePeriodReturns(period) {
 }
 
 // Get period returns, computing + caching if stale. Returns Map<symbol, pct>.
+// Serves the last known result immediately and refreshes in the background so a
+// period switch on the dashboard never blocks behind a multi-minute recompute.
 async function getPeriodReturns(period) {
   const key = period || '1d';
   const cached = periodCache.get(key);
-  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.returns;
-
-  // Avoid duplicate concurrent computations for the same period.
+  if (cached) {
+    if (Date.now() - cached.ts < CACHE_TTL_MS) return cached.returns;
+    // Stale: kick off a background refresh but answer with what we have.
+    if (!computeInProgress.has(key)) {
+      const promise = computePeriodReturns(key)
+        .then(returns => { periodCache.set(key, { ts: Date.now(), returns }); return returns; })
+        .catch(() => {})
+        .finally(() => computeInProgress.delete(key));
+      computeInProgress.set(key, promise);
+    }
+    return cached.returns;
+  }
+  // No cache yet (cold start): block on the compute or share in-progress work.
   if (computeInProgress.has(key)) return computeInProgress.get(key);
-  const promise = computePeriodReturns(key).then(returns => {
-    periodCache.set(key, { ts: Date.now(), returns });
-    return returns;
-  }).finally(() => {
-    computeInProgress.delete(key);
-  });
+  const promise = computePeriodReturns(key)
+    .then(returns => { periodCache.set(key, { ts: Date.now(), returns }); return returns; })
+    .finally(() => computeInProgress.delete(key));
   computeInProgress.set(key, promise);
   return promise;
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Background warmer: precomputes the non-daily periods on boot and refreshes
+// them on a loop so on-demand requests are almost always warm cache hits.
+async function warmPeriodCaches() {
+  const order = ['1w', '1mo', '3mo', '1y'];
+  while (true) {
+    for (const p of order) {
+      try { await getPeriodReturns(p); } catch { /* keep going */ }
+    }
+    try { await sleep(WARM_INTERVAL_MS); } catch { /* ignore */ }
+  }
 }
 
 // Build a movers payload (gainers/losers) for a period, merged with quote data.
@@ -187,4 +211,4 @@ async function getPeriodMovers(period = '1d') {
   return { gainers, losers };
 }
 
-module.exports = { getPeriodReturns, getPeriodMovers, PERIODS, normalizeSymbol };
+module.exports = { getPeriodReturns, getPeriodMovers, warmPeriodCaches, PERIODS, normalizeSymbol };

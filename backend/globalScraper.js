@@ -39,8 +39,8 @@ async function fetchGlobalQuotes(symbols) {
   return results;
 }
 
-async function fetchHistoricalQuotes(symbol, range = '6mo', interval = '1d') {
-  return yahooService.fetchHistorical(symbol, range, interval);
+async function fetchHistoricalQuotes(symbol, range = '6mo', interval = '1d', opts = {}) {
+  return yahooService.fetchHistorical(symbol, range, interval, opts);
 }
 
 module.exports = { fetchGlobalQuotes, fetchSingleStock, fetchHistoricalQuotes };

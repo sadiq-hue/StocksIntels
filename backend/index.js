@@ -12332,14 +12332,12 @@ server.listen(port, '0.0.0.0', async () => {
 
       // Warm the period-returns cache in the background so the first dashboard
       // visit shows Daily/Weekly/Quarterly/Yearly movers immediately instead of
-      // waiting for an on-demand computation across the universe.
+      // waiting for an on-demand computation across the universe. Keeps running
+      // on a loop so each period's cache is refreshed before its TTL expires.
       (async () => {
         try {
-          const { getPeriodReturns } = require('./periodReturnsService');
-          getPeriodReturns('1w').catch(() => {});
-          getPeriodReturns('1mo').catch(() => {});
-          getPeriodReturns('3mo').catch(() => {});
-          getPeriodReturns('1y').catch(() => {});
+          const { warmPeriodCaches } = require('./periodReturnsService');
+          warmPeriodCaches().catch(() => {});
         } catch {}
       })();
 
