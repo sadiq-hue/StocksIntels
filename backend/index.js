@@ -7512,6 +7512,12 @@ const STOCK_NAMES = {
 // Auto-map all known tickers so any symbol in the universe works directly
 ALL_SYMBOLS.forEach(t => { const l = t.toLowerCase().replace('.', ''); if (!STOCK_NAMES[l]) STOCK_NAMES[l] = t; });
 
+// Per-user follow-up context for the AI analyst: the most recent symbols a user
+// asked about, so pronoun/intent follow-ups ("should i buy") resolve against the
+// last stock discussed instead of falling through to a market overview.
+const aiContextStore = new Map();
+const AI_CONTEXT_TTL = 15 * 60 * 1000; // 15 minutes
+
 app.post('/api/ai/insights', async (req, res) => {
   try {
     const { question } = req.body;
@@ -7578,6 +7584,31 @@ app.post('/api/ai/insights', async (req, res) => {
         foundSymbols.push(best.sym);
       }
     }
+    // ── Follow-up context ──
+    // "analyze nvidia" then "should i buy" — the second question carries no
+    // ticker but clearly refers to the last stock discussed. Remember each
+    // user's most recent symbols and resolve pronoun/intent follow-ups against
+    // them, while still letting explicit market/top-picks/sector/news queries
+    // reach their dedicated handlers.
+    const ctxUser = req.user?.id != null ? String(req.user.id) : null;
+    const ctxNow = Date.now();
+    if (foundSymbols.length === 0 && ctxUser) {
+      const ctx = aiContextStore.get(ctxUser);
+      if (ctx && ctx.symbols.length && ctxNow - ctx.time < AI_CONTEXT_TTL) {
+        const ctxIntent = /\b(?:it|this|that|them|its|these|those)\b/.test(q)
+          || /\b(?:should i|can i|is it|what about|how about|tell me more|again|keep|sell|buy|hold|target|entry|exit|stop\s*loss|risk|worth|position|movement|trend|outlook)\b/.test(q);
+        const ctxMarket = /\b(?:market overview|top picks|sectors?|indices?|headlines?|news|turnover|volume|gainers|losers|momentum|stocks today|overview|sentiment|bonds?|etfs?)\b/.test(q);
+        if (ctxIntent && !ctxMarket) {
+          for (const sym of ctx.symbols) {
+            if (!seen.has(sym)) { seen.add(sym); foundSymbols.push(sym); }
+          }
+        }
+      }
+    }
+    if (foundSymbols.length > 0 && ctxUser) {
+      aiContextStore.set(ctxUser, { symbols: foundSymbols.slice(0, 3), time: ctxNow });
+    }
+
     foundSymbols.sort((a, b) => {
       const ka = Object.keys(STOCK_NAMES).find(k => STOCK_NAMES[k] === a) || '';
       const kb = Object.keys(STOCK_NAMES).find(k => STOCK_NAMES[k] === b) || '';
