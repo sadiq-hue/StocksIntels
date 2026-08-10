@@ -7329,37 +7329,117 @@ app.get('/api/ai/recommendations', async (req, res) => {
 
 app.get('/api/ai/market-summary', async (req, res) => {
   try {
-    const [signalsRes, moversRes] = await Promise.all([
-      generateSignals().catch(() => []),
-      axios.get('http://localhost:' + port + '/api/market/movers').then(r => r.data).catch(() => ({})),
-    ]);
-    const signals = Array.isArray(signalsRes) ? signalsRes : [];
+    // Build the same enriched signals list the Market Intelligence page shows
+    // (/api/signals): the live engine cache merged with open monitored
+    // positions so the summary reflects exactly what the user sees there.
+    const signals = await buildSignalsForSummary();
+    const total = signals.length;
     const strongBuys = signals.filter(s => s.signal === 'Strong Buy').length;
     const buys = signals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
     const sells = signals.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
-    const total = signals.length;
-    const bullishPct = total > 0 ? Math.round((buys / total) * 100) : 50;
+    const holds = signals.filter(s => s.signal === 'Hold').length;
+    const avgConfidence = total > 0 ? Math.round(signals.reduce((sum, s) => sum + (s.confidence || 0), 0) / total) : 0;
+
+    // Rank sectors by conviction (buy-weighted) so "leading" is real, not the
+    // first three rows the cache happened to return.
+    const sectorBuckets = {};
+    signals.forEach(s => {
+      const sec = s.sector || 'General';
+      if (!sectorBuckets[sec]) sectorBuckets[sec] = { total: 0, buys: 0, sells: 0, confidence: 0 };
+      sectorBuckets[sec].total++;
+      if (s.signal === 'Strong Buy' || s.signal === 'Buy') sectorBuckets[sec].buys++;
+      if (s.signal === 'Sell' || s.signal === 'Strong Sell') sectorBuckets[sec].sells++;
+      sectorBuckets[sec].confidence += (s.confidence || 0);
+    });
+    const rankedSectors = Object.entries(sectorBuckets)
+      .map(([name, v]) => ({ name, ...v, avgConf: v.total > 0 ? Math.round(v.confidence / v.total) : 0 }))
+      .sort((a, b) => (b.buys - b.sells) - (a.buys - a.sells) || b.avgConf - a.avgConf);
+
+    // Top conviction names (by confidence) and top gainers from real data.
+    const topPicks = signals
+      .filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy')
+      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+      .slice(0, 4);
+    const topGainers = [...signals].sort((a, b) => (b.change || 0) - (a.change || 0)).slice(0, 3);
+
+    const bullishPct = total > 0 ? Math.round((buys / total) * 100) : 0;
+    const bearishPct = total > 0 ? Math.round((sells / total) * 100) : 0;
     let sentiment = 'Neutral';
-    let confidence = '50';
-    if (bullishPct >= 65) { sentiment = 'Bullish'; confidence = String(70 + Math.floor(Math.random() * 15)); }
-    else if (bullishPct >= 50) { sentiment = 'Slightly Bullish'; confidence = String(55 + Math.floor(Math.random() * 10)); }
-    else if (bullishPct <= 35) { sentiment = 'Bearish'; confidence = String(60 + Math.floor(Math.random() * 15)); }
-    else { sentiment = 'Slightly Bearish'; confidence = String(50 + Math.floor(Math.random() * 10)); }
-    const sectors = [...new Set(signals.map(s => s.sector).filter(Boolean))];
-    const topSectors = sectors.slice(0, 3);
-    const sectorSummary = topSectors.length > 0
-      ? 'Leading sectors include ' + topSectors.join(', ') + '.'
-      : 'Mixed activity across sectors.';
-    const summary = 'Market analysis shows ' + bullishPct + '% buy-rated signals across ' + total + ' tracked stocks. ' +
-      strongBuys + ' strong buy signals detected. ' + sectorSummary + ' ' +
-      'Trading volume suggests ' + (bullishPct >= 60 ? 'increased institutional participation' : 'cautious positioning') + ' ' +
-      'ahead of the close.' + (sells > 0 ? ' ' + sells + ' sell signals warrant attention on overextended positions.' : '');
-    res.json({ summary, sentiment, confidence: confidence + '%', timestamp: new Date().toISOString(), signals: { total, strongBuys, buys, sells } });
+    if (bullishPct >= 65) sentiment = 'Bullish';
+    else if (bullishPct >= 50) sentiment = 'Slightly Bullish';
+    else if (bullishPct >= 36) sentiment = 'Slightly Bearish';
+    else sentiment = 'Bearish';
+
+    const leading = rankedSectors.filter(s => s.buys > 0).slice(0, 3);
+    const sectorSummary = leading.length > 0
+      ? 'Leading sectors by conviction: ' + leading.map(s => `${s.name} (${s.buys} buy)`).join(', ') + '.'
+      : 'No sectors currently show buy-rated setups; breadth is skewed to hold/sell.';
+
+    const picksSummary = topPicks.length > 0
+      ? 'Top conviction names: ' + topPicks.map(p => `${p.ticker} (${p.confidence}%)`).join(', ') + '.'
+      : 'No buy-rated setups in the current feed.';
+
+    const gainersSummary = topGainers.length > 0 && (topGainers[0].change || 0) > 0
+      ? ' Best movers: ' + topGainers.map(g => `${g.ticker} ${g.change > 0 ? '+' : ''}${g.change}%`).join(', ') + '.'
+      : '';
+
+    const summary = 'Market analysis shows ' + bullishPct + '% buy-rated signals across ' + total + ' tracked stocks (' +
+      buys + ' buy, ' + holds + ' hold, ' + sells + ' sell). ' +
+      strongBuys + ' strong buy signals detected. ' +
+      picksSummary + ' ' +
+      sectorSummary + ' ' +
+      'Average signal confidence is ' + avgConfidence + '%.' +
+      (bearishPct > 0 ? ' ' + sells + ' sell signals warrant attention on overextended positions.' : '') +
+      gainersSummary;
+    res.json({ summary, sentiment, confidence: avgConfidence + '%', timestamp: new Date().toISOString(), signals: { total, strongBuys, buys, sells } });
   } catch (err) {
     console.error('Error generating AI market summary:', err.message);
     res.json({ summary: 'Markets are showing mixed signals with selective opportunities in blue-chip stocks. Monitor key resistance levels for breakout confirmation.', sentiment: 'Neutral', confidence: '65%', timestamp: new Date().toISOString() });
   }
 });
+
+async function buildSignalsForSummary() {
+  const signals = await generateSignals(null, true);
+  const merged = (Array.isArray(signals) ? signals : []).map(s => ({ ...s }));
+  const byTicker = new Map(merged.map(s => [s.ticker, s]));
+  const TYPE_TIMEFRAME = {
+    'Intraday': 'Intraday', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks',
+    'Long Term': '3-6 months', 'Long Term Value': '3-6 months', 'Aggressive Buy': '1-3 weeks', 'Avoid': 'N/A',
+  };
+  await refreshMonitoredQuotes();
+  for (const m of getMonitoredSignals()) {
+    const existing = byTicker.get(m.ticker);
+    const base = existing || {
+      ticker: m.ticker,
+      name: m.name || '',
+      price: m.price,
+      change: m.change ?? 0,
+      type: m.type,
+      signal: m.signal,
+      action: 'buy',
+      confidence: m.confidence ?? 50,
+      timeframe: m.timeframe || TYPE_TIMEFRAME[m.type] || '2-4 weeks',
+      sector: m.sector || 'General',
+      currency: m.currency,
+      market: m.market,
+      country: m.market === 'NSE' ? 'KE' : 'US',
+      positionSize: m.positionSize + '%',
+      dataSource: 'monitor',
+      reason: m.reason || `Open ${m.type} position the engine is actively monitoring — held ${m.daysHeld} day(s) with stop/target levels live (no expiry; runs until stop/target).`,
+      analysis: m.analysis || null,
+    };
+    const stopDist = m.entryPrice - m.stopLoss;
+    base.signal = m.signal;
+    base.entry = m.entryPrice;
+    base.stopLoss = m.stopLoss;
+    base.target1 = m.target1;
+    base.target2 = m.target2;
+    base.target3 = m.target3;
+    base.riskReward = stopDist > 0 ? Math.round(((m.target1 - m.entryPrice) / stopDist) * 10) / 10 : null;
+    if (!existing) merged.push(base);
+  }
+  return merged;
+}
 
 // Pre-serialized JSON cache for the heavy /api/stocks endpoint
 let _stocksSerializedCache = null;
