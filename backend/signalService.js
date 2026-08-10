@@ -2867,6 +2867,20 @@ function sanitizeLiveFundamentals(stock, live) {
   if (deLive != null && (deLive < 0 || deLive > 5 || (deBase != null && deBase >= 0 && deBase <= 5 && Math.abs(deLive - deBase) > 2.5))) {
     out.debtToEquity = deBase != null && deBase >= 0 && deBase <= 5 ? deBase : null;
   }
+  // Altman Z guard: the Yahoo/Alpha Vantage income & balance statement feeds
+  // have shipped near-empty since late 2024, so the live Z is routinely computed
+  // from zeroed X1-X4 components (workingCapital, retainedEarnings, EBIT, market
+  // cap) — e.g. TM 0.69, JPM 0.19, CMCSA 0.97 vs their real 2-4 readings. Feeding
+  // those into the scorer flag-57%-of-the-market as "financial distress" and
+  // suppresses every buy (analysisEngine caps the fundamental score at 50). Only
+  // trust the live Z when it does NOT contradict the curated baseline: a live
+  // distress reading on a baseline that is healthy is a feed artifact — keep the
+  // baseline so the symbol scores neutrally instead of manufacturing a Sell.
+  const zBase = isNum(stock.altmanZ) ? Number(stock.altmanZ) : null;
+  const zLive = isNum(live.altmanZ) ? Number(live.altmanZ) : null;
+  if (zLive != null && zBase != null && zLive < 1.81 && zBase >= 1.81) {
+    out.altmanZ = zBase;
+  }
   return out;
 }
 
@@ -2877,8 +2891,14 @@ function getFundamentals(symbol) {
     base = { ...cached.data };
   } else {
     base = { name: resolveStockName(symbol), sector: guessSector(symbol) };
-    if (KNOWN_FUNDAMENTALS[symbol]) base = { name: KNOWN_FUNDAMENTALS[symbol].name, sector: KNOWN_FUNDAMENTALS[symbol].sector };
-    else if (NSE_FUNDAMENTALS[symbol]) base = { name: resolveStockName(symbol), sector: NSE_FUNDAMENTALS[symbol].sector };
+    // Seed the FULL curated baseline (PE, revenue growth, D/E, ROE, Altman Z,
+    // etc.), not just name+sector — sanitizeLiveFundamentals compares live feed
+    // values against this reference to reject artifacts (e.g. AAPL "revenue
+    // -38.7%" / TM Altman Z 0.69). A null baseline lets the garbage through.
+    if (KNOWN_FUNDAMENTALS[symbol]) base = { ...KNOWN_FUNDAMENTALS[symbol] };
+    else if (NSE_FUNDAMENTALS[symbol]) base = { ...NSE_FUNDAMENTALS[symbol] };
+    if (!base.name) base.name = resolveStockName(symbol);
+    if (!base.sector) base.sector = guessSector(symbol);
   }
   const result = {
     evEbitda: null, fcfYield: null, payoutRatio: 50, marginChange: 0,
