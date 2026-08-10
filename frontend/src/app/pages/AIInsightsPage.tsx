@@ -4,7 +4,7 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import {
-  Sparkles, Send, Loader2, TrendingUp, ChevronDown, ChevronUp,
+  Send, Loader2, TrendingUp, ChevronDown, ChevronUp,
   Brain, BarChart3, Zap, Target, Shield,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
@@ -251,7 +251,7 @@ export function AIInsightsPage() {
       <div className="mb-4 md:mb-6">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-lg shadow-[#0D7490]/20">
-            <Sparkles className="w-5 h-5 text-white" />
+            <Brain className="w-5 h-5 text-white" />
           </div>
           <div>
             <h2 className="text-foreground text-xl md:text-2xl font-bold tracking-tight">AI Insights</h2>
@@ -368,7 +368,7 @@ export function AIInsightsPage() {
                 {message.role === "assistant" && (
                   <div className="flex items-start gap-3 max-w-[85%]">
                     <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-sm mt-0.5 shrink-0">
-                      <Sparkles className="w-3.5 h-3.5 text-white" />
+                      <Brain className="w-3.5 h-3.5 text-white" />
                     </div>
                     <div className="bg-muted border border-border rounded-2xl rounded-tl-sm px-5 py-3.5 shadow-sm">
                       <MessageContent content={message.content} />
@@ -386,7 +386,7 @@ export function AIInsightsPage() {
               <div className="flex justify-start">
                 <div className="flex items-start gap-3 max-w-[85%]">
                   <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-sm mt-0.5 shrink-0">
-                    <Sparkles className="w-3.5 h-3.5 text-white" />
+                    <Brain className="w-3.5 h-3.5 text-white" />
                   </div>
                   <div className="bg-muted border border-border rounded-2xl rounded-tl-sm px-5 py-3.5 shadow-sm">
                     <div className="flex items-center gap-2.5">

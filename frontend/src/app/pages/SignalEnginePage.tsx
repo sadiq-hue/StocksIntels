@@ -9,8 +9,8 @@ import {
 } from "../components/ui/select";
 import {
   Activity, BarChart3, BookOpen, Settings, Shield, RefreshCw,
-  TrendingUp, TrendingDown, AlertTriangle, CheckCircle, XCircle,
-  Clock, Cpu, Zap, Server, Database, Play,
+  TrendingUp, CheckCircle, XCircle,
+  Clock, Cpu, Zap, Server, Play,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { authFetch } from "../auth/tokenStore";

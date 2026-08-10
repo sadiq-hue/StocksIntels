@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { TrendingUp, BookOpen, AlertTriangle, Info, GraduationCap, ArrowRight, BarChart3, Globe } from "lucide-react";
+import { TrendingUp, BookOpen, AlertTriangle, Info, GraduationCap, ArrowRight, BarChart3, Globe2 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -140,7 +140,7 @@ export function DerivativesPage() {
           NSE Events
         </button>
         <button onClick={() => setTab('global')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${tab === 'global' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-          <Globe className="size-3" /> Global Events
+          <Globe2 className="size-3" /> Global Events
         </button>
       </div>
 

@@ -3,7 +3,7 @@ import {
   TrendingUp, 
   ArrowLeft, 
   BarChart3, 
-  Globe, 
+  Globe2, 
   Landmark, 
   Search, 
   ChevronRight, 
@@ -183,7 +183,7 @@ export const SectorsPage: React.FC = () => {
           </div>
         </Card>
         <Card className="p-5 border-border flex items-center gap-4">
-          <div className="w-12 h-12 shrink-0 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center"><Globe size={24} /></div>
+          <div className="w-12 h-12 shrink-0 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center"><Globe2 size={24} /></div>
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase text-muted-foreground tracking-wider">Global Top Performer</p>
             <p className="text-lg font-bold text-foreground truncate">{globalLeader?.displayName || "N/A"} ({globalLeader ? (globalLeader.change >= 0 ? "+" : "") + globalLeader.change + "%" : "—"})</p>
@@ -215,7 +215,7 @@ export const SectorsPage: React.FC = () => {
           {[
             { id: "all", label: "All Markets", icon: Activity },
             { id: "NSE", label: "NSE Only", icon: Landmark },
-            { id: "Global", label: "Global Only", icon: Globe },
+            { id: "Global", label: "Global Only", icon: Globe2 },
           ].map((tab) => (
             <button
               key={tab.id}

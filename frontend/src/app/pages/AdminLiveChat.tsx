@@ -5,8 +5,8 @@ import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { ScrollArea } from "../components/ui/scroll-area";
 import {
-  MessageCircle, Send, User, Bot, ChevronRight, Loader2,
-  Clock, Search, LogOut
+  MessageCircle, Send, User, Bot, Loader2,
+  Search
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";

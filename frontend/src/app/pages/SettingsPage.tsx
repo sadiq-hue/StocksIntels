@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Card } from "../components/ui/card";
 import { 
   Bell, Shield, User, Palette, Database, Check, Loader2, Eye, EyeOff, 
-  Trash2, Download, Camera, MapPin, Briefcase, Globe, Info, Mail,
+  Trash2, Download, Globe2, Mail,
   TrendingUp, BarChart3, LineChart, Newspaper
 } from "lucide-react";
 import { Switch } from "../components/ui/switch";
@@ -648,7 +648,7 @@ export function SettingsPage() {
 
                 <div className="p-4 bg-muted rounded-lg border border-border md:col-span-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <Globe className="w-5 h-5 text-[#0D7490]" />
+                    <Globe2 className="w-5 h-5 text-[#0D7490]" />
                     <div className="text-foreground font-medium">Weekly Market Digest</div>
                   </div>
                   <div className="text-muted-foreground text-sm mb-3">

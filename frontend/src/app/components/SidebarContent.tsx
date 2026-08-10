@@ -1,9 +1,9 @@
 import { Link, useLocation } from "react-router";
 import { useState, useEffect } from "react";
 import {
-  LayoutDashboard, Signal, PieChart, Star,
+  LayoutGrid, Brain, PieChart, Star,
   LineChart, Newspaper, FileText, MessageSquare, Users,
-  BarChart3, Briefcase, Layers, User, LifeBuoy,
+  Briefcase, Layers, User, LifeBuoy, Landmark,
   DollarSign, TrendingUp, GraduationCap, Lightbulb,
   ChevronsLeft, ChevronsRight,
 } from "lucide-react";
@@ -48,8 +48,8 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
     {
       title: "Work Space",
       items: [
-        { path: "/app", icon: LayoutDashboard, label: "Dashboard" },
-        { path: "/app/portfolio", icon: PieChart, label: "Portfolio" },
+        { path: "/app", icon: LayoutGrid, label: "Dashboard" },
+        { path: "/app/portfolio", icon: Briefcase, label: "Portfolio" },
         { path: "/app/watchlist", icon: Star, label: "Watchlist" },
         // { path: "/app/chat", icon: MessageSquare, label: "Chat & Groups" },
         // { path: "/app/people", icon: Users, label: "People" },
@@ -58,12 +58,12 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
     {
       title: "Capital Markets",
       items: [
-        { path: "/app/markets", icon: BarChart3, label: "Markets" },
-        { path: "/app/signals", icon: Signal, label: "Market Intelligence" },
+        { path: "/app/markets", icon: TrendingUp, label: "Markets" },
+        { path: "/app/signals", icon: Brain, label: "Market Intelligence" },
         { path: "/app/stocks", icon: LineChart, label: "Stocks" },
         { path: "/app/financials", icon: FileText, label: "Financials" },
         { path: "/app/news", icon: Newspaper, label: "News" },
-        { path: "/app/bonds", icon: Briefcase, label: "Bonds" },
+        { path: "/app/bonds", icon: Landmark, label: "Bonds" },
         { path: "/app/etfs", icon: Layers, label: "ETFs" },
         { path: "/app/derivatives", icon: GraduationCap, label: "Derivatives" },
         { path: "/app/ipos", icon: TrendingUp, label: "IPOs" },
@@ -116,6 +116,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
             </div>
           )}
         </div>
+        {onToggle && (
         <button
           onClick={onToggle}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -129,6 +130,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
             <ChevronsLeft className="w-5 h-5" />
           )}
         </button>
+        )}
       </div>
 
       {!collapsed && marketStatus && (

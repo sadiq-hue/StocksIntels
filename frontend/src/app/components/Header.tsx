@@ -137,9 +137,7 @@ function ProfileDropdown({ marketStatus }: { marketStatus: { nse: { open: boolea
   return (
     <div className="flex items-center justify-between gap-4 w-full">
       <div className="flex items-center gap-4 flex-1 max-w-xl">
-        <div className="flex items-center gap-4 flex-1 max-w-xl">
-          <StockSearchBar />
-        </div>
+        <StockSearchBar />
       </div>
 
       <div className="flex items-center gap-2">
@@ -170,7 +168,7 @@ function ProfileDropdown({ marketStatus }: { marketStatus: { nse: { open: boolea
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-popover text-popover-foreground border border-border rounded-lg shadow-lg z-50">
+            <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-popover text-popover-foreground border border-border rounded-lg shadow-lg z-50">
               <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                 <h3 className="text-sm font-semibold text-foreground">Notifications</h3>
                 {unread > 0 && (

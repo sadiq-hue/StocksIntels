@@ -16,7 +16,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import {
   Search, Upload, Trash2, Download, Plus, Loader2, FileText,
-  TrendingUp, BarChart3, DollarSign, Building2, Activity,
+  TrendingUp, BarChart3, Banknote, Building2, Activity,
 } from "lucide-react";
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -313,7 +313,7 @@ export function AdminStocks() {
                                   <MetricCard icon={TrendingUp} label="P/E Ratio" value={fundamentals?.pe_ratio?.toFixed(2)} />
                                   <MetricCard icon={BarChart3} label="P/B Ratio" value={fundamentals?.pb_ratio?.toFixed(2)} />
                                   <MetricCard icon={Activity} label="ROE" value={fundamentals?.roe != null ? `${fundamentals.roe.toFixed(2)}%` : null} />
-                                  <MetricCard icon={DollarSign} label="Dividend Yield" value={fundamentals?.dividend_yield != null ? `${fundamentals.dividend_yield.toFixed(2)}%` : null} />
+                                  <MetricCard icon={Banknote} label="Dividend Yield" value={fundamentals?.dividend_yield != null ? `${fundamentals.dividend_yield.toFixed(2)}%` : null} />
                                   <MetricCard icon={TrendingUp} label="Revenue Growth" value={fundamentals?.revenue_growth != null ? `${fundamentals.revenue_growth.toFixed(2)}%` : null} />
                                   <MetricCard icon={TrendingUp} label="EPS Growth" value={fundamentals?.eps_growth != null ? `${fundamentals.eps_growth.toFixed(2)}%` : null} />
                                 </div>

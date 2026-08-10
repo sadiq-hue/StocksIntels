@@ -1531,4 +1531,28 @@ function sendAnnouncementEmail(email, announcement, name) {
 
 function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
-module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendViaTransport };
+async function sendContactNotification({ name, email, subject, message: msg }) {
+  const n = esc(name);
+  const e = esc(email);
+  const s = esc(subject);
+  const m = esc(msg).replace(/\n/g, '<br />');
+  const html = [
+    '<div style="font-family:Arial,Helvetica,sans-serif;max-width:540px;margin:0 auto;background:#f8fafc;padding:32px 24px;border-radius:12px">',
+    '<div style="font-size:22px;font-weight:700;color:#1e293b;margin-bottom:16px">New Contact Form Submission</div>',
+    '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:20px;margin-bottom:16px">',
+    '<div style="font-size:13px;color:#64748b;margin-bottom:4px">Name</div>',
+    '<div style="font-size:15px;font-weight:600;color:#1e293b;margin-bottom:12px">' + n + '</div>',
+    '<div style="font-size:13px;color:#64748b;margin-bottom:4px">Email</div>',
+    '<div style="font-size:15px;font-weight:600;color:#1e293b;margin-bottom:12px">' + e + '</div>',
+    '<div style="font-size:13px;color:#64748b;margin-bottom:4px">Subject</div>',
+    '<div style="font-size:15px;font-weight:600;color:#1e293b;margin-bottom:12px">' + s + '</div>',
+    '<div style="font-size:13px;color:#64748b;margin-bottom:4px">Message</div>',
+    '<div style="font-size:14px;color:#1e293b;line-height:1.7">' + m + '</div>',
+    '</div>',
+    '<div style="font-size:12px;color:#94a3b8;text-align:center">StocksIntels &bull; ' + new Date().toISOString() + '</div>',
+    '</div>',
+  ].join('');
+  return sendViaTransport({ to: 'support@stocksintels.com', subject: '[Contact] ' + s, html, label: 'Contact Form' });
+}
+
+module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendViaTransport };

@@ -7,7 +7,7 @@ import {
 } from "../components/ui/select";
 import { Button } from "../components/ui/button";
 import {
-  TrendingUp, TrendingDown, Signal, Search, Zap,
+  TrendingUp, TrendingDown, Search, Zap,
   Activity, Star, RefreshCw, Info, ChevronLeft, ChevronRight,
   ArrowUpRight, ArrowDownRight, BarChart3, Clock, Gauge, FilterX, ArrowUpDown,
 } from "lucide-react";
@@ -389,7 +389,7 @@ export function SignalsPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9]"><Signal className="w-5 h-5 text-white" /></div>
+            <div className="p-2 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9]"><Gauge className="w-5 h-5 text-white" /></div>
             <h1 className="text-2xl font-bold text-foreground">Quantitative Market Intelligence</h1>
           </div>
           <p className="text-muted-foreground text-sm">Data-driven market opportunities verified by core fundamental and advanced technical metrics.</p>
@@ -410,7 +410,7 @@ export function SignalsPage() {
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3" data-tour="signals-stats">
         <Card className="bg-card border-border p-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[#0D7490]/10 flex items-center justify-center shrink-0"><Signal className="w-4 h-4 text-[#0D7490]" /></div>
+          <div className="w-9 h-9 rounded-lg bg-[#0D7490]/10 flex items-center justify-center shrink-0"><Gauge className="w-4 h-4 text-[#0D7490]" /></div>
           <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Total Signals</p><p className="text-foreground text-xl font-bold leading-tight">{signals.length}</p></div>
         </Card>
         <Card className="bg-card border-border p-3 flex items-center gap-3">
@@ -634,7 +634,7 @@ export function SignalsPage() {
       {paged.length === 0 && (
         signals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <Signal className="w-8 h-8 mb-3 opacity-30" />
+            <Gauge className="w-8 h-8 mb-3 opacity-30" />
             <p className="text-sm font-medium text-muted-foreground">No signals available right now</p>
             <p className="text-xs mt-1 text-muted-foreground">Signals regenerate every few minutes — markets may be closed or the engine is still warming up.</p>
             <Button onClick={fetchSignals} disabled={loading} variant="outline" size="sm" className="border-border mt-4">
@@ -714,7 +714,7 @@ export function SignalsPage() {
                     <h3 className="text-sm font-semibold text-foreground">Risk & ML</h3>
                     <p className="text-[10px] text-muted-foreground italic">How risky this trade is, and how big a slice of your money it should be</p>
                   </div>
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
                     {selected.positionSize && parseInt(selected.positionSize) > 0 && <div className="bg-purple-50 rounded-lg p-2.5 border border-purple-100 text-center"><p className="text-[9px] font-medium text-purple-600 uppercase">Size</p><p className="text-sm font-bold text-purple-900">{selected.positionSize}</p></div>}
                     {selected.var95 && <div className="bg-orange-50 rounded-lg p-2.5 border border-orange-100 text-center"><p className="text-[9px] font-medium text-orange-600 uppercase">VaR 95%</p><p className="text-sm font-bold text-orange-900">{selected.var95}</p></div>}
                     {selected.var99 && <div className="bg-orange-50 rounded-lg p-2.5 border border-orange-100 text-center"><p className="text-[9px] font-medium text-orange-600 uppercase">VaR 99%</p><p className="text-sm font-bold text-orange-900">{selected.var99}</p></div>}
@@ -760,7 +760,7 @@ export function SignalsPage() {
                                   <div key={c.key} className="text-xs">
                                     <div className="flex items-start gap-2">
                                       <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${style}`}>{signal}</span>
-                                      <span className="font-medium text-foreground min-w-[7rem]">{c.name}</span>
+                                      <span className="font-medium text-foreground min-w-0 sm:min-w-[7rem]">{c.name}</span>
                                       <span className="text-muted-foreground leading-tight">{c.rating}</span>
                                     </div>
                                     <p className="pl-[4.25rem] text-[10px] text-muted-foreground/80 leading-snug mt-0.5">

@@ -151,7 +151,7 @@ function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () =
             onClick={() => { onClose(); navigate(`/app/stock/${event.ticker}?market=${event.market}`); }}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#0D7490] text-white font-semibold hover:bg-[#0A5F7A] transition-colors"
           >
-            <ExternalLink className="size-4" /> View Full Stock Analysis
+            <ExternalLink className="size-4" /> View Full Stocks Analysis
           </button>
         </div>
       </Card>

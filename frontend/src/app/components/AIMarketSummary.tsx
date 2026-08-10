@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card } from "./ui/card";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Brain, Loader2 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -40,7 +40,7 @@ export function AIMarketSummary() {
   return (
     <Card className="bg-gradient-to-br from-[#0D7490] to-[#0A5F7A] border-[#0D7490] p-6">
       <div className="flex items-center gap-2 mb-3">
-        <Sparkles className="w-5 h-5 text-white" />
+        <Brain className="w-5 h-5 text-white" />
         <h3 className="text-white">AI Market Summary</h3>
       </div>
       {loading ? (

@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "react-router";
 import {
-  ArrowRight, BarChart3, Menu, X, Star, Users, Award,
+  ArrowRight, Menu, X, Star,
   CheckCircle2, Phone, Mail, MapPin, Twitter, Linkedin, Github, ChevronUp,
-  ChevronRight, Clock, TrendingUp,
+  ChevronRight, TrendingUp,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 
@@ -62,13 +62,13 @@ function StockChartBg() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       <svg
-        className="absolute bottom-0 left-0 w-full h-[80%] opacity-[0.1]"
+        className="absolute bottom-0 left-0 w-full h-[80%] opacity-[0.05]"
         viewBox="0 0 100 80"
         preserveAspectRatio="none"
       >
         <defs>
           <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#0D7490" stopOpacity="0.25" />
+            <stop offset="0%" stopColor="#0D7490" stopOpacity="0.12" />
             <stop offset="100%" stopColor="#0D7490" stopOpacity="0" />
           </linearGradient>
         </defs>
@@ -77,18 +77,18 @@ function StockChartBg() {
           d={path}
           fill="none"
           stroke="#0D7490"
-          strokeWidth="0.6"
+          strokeWidth="0.4"
         />
       </svg>
       <svg
-        className="absolute bottom-0 right-0 w-[60%] h-[60%] opacity-[0.07]"
+        className="absolute bottom-0 right-0 w-[60%] h-[60%] opacity-[0.04]"
         viewBox="0 0 100 80"
         preserveAspectRatio="none"
       >
         <defs>
           <linearGradient id="chart-gradient-2" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stopColor="#0EA5E9" stopOpacity="0" />
-            <stop offset="50%" stopColor="#0EA5E9" stopOpacity="0.35" />
+            <stop offset="50%" stopColor="#0EA5E9" stopOpacity="0.15" />
             <stop offset="100%" stopColor="#0EA5E9" stopOpacity="0" />
           </linearGradient>
         </defs>
@@ -377,6 +377,10 @@ export function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [contactForm, setContactForm] = useState({ name: '', email: '', subject: '', message: '' });
+  const [contactSending, setContactSending] = useState(false);
+  const [contactStatus, setContactStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [userTestimonials, setUserTestimonials] = useState<any[]>([]);
   const heroRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [visibleSections, setVisibleSections] = useState<Set<number>>(new Set());
@@ -414,6 +418,15 @@ export function LandingPage() {
     return () => observers.forEach((obs) => obs?.disconnect());
   }, []);
 
+  useEffect(() => {
+    fetch('/api/testimonials')
+      .then(r => r.json())
+      .then(data => { if (data.testimonials) setUserTestimonials(data.testimonials); })
+      .catch(() => {});
+  }, []);
+
+  const allTestimonials = useMemo(() => [...testimonials, ...userTestimonials], [userTestimonials]);
+
   const setSectionRef = (i: number) => (el: HTMLDivElement | null) => {
     sectionRefs.current[i] = el;
   };
@@ -429,7 +442,7 @@ export function LandingPage() {
     return (
       <div
         key={i}
-        className="absolute rounded-full bg-[#0D7490]/[0.06]"
+        className="absolute rounded-full bg-[#0D7490]/[0.03]"
         style={{
           top: shape.top,
           left: shape.left ?? undefined,
@@ -454,7 +467,7 @@ export function LandingPage() {
 
       {/* HEADER */}
       <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-700 ${
-        scrolled ? "bg-white/80 backdrop-blur-xl shadow-lg border-b border-gray-100/80" : "bg-transparent"
+        scrolled ? "bg-white/70 dark:bg-black/40 backdrop-blur-2xl shadow-lg border-b border-white/20 dark:border-white/[0.04]" : "bg-transparent"
       }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap justify-between items-center gap-4 h-16 md:h-20">
@@ -478,7 +491,6 @@ export function LandingPage() {
                 { label: "Stocks", to: "/app/stocks" },
                 { label: "Bonds", to: "/app/bonds" },
                 { label: "News", to: "/app/news" },
-                { label: "Market Pulse", to: "/app/markets" },
               ].map((item) => (
                 <Link key={item.label} to={item.to}
                   className="text-sm font-medium text-muted-foreground hover:text-[#0D7490] transition-colors">
@@ -498,14 +510,14 @@ export function LandingPage() {
               </Link>
             </div>
 
-            <button className="md:hidden p-2.5 rounded-xl hover:bg-accent text-muted-foreground" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            <button className="lg:hidden p-2.5 rounded-xl hover:bg-accent text-muted-foreground" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
         </div>
 
         {mobileMenuOpen && (
-          <div className="md:hidden bg-card border-b border-border shadow-xl">
+          <div className="lg:hidden bg-card border-b border-border shadow-xl">
             <div className="px-4 py-6 space-y-1">
               {["Features", "Testimonials", "Pricing", "Contact"].map((item) => (
                 <a key={item} href={`#${item.toLowerCase()}`}
@@ -522,7 +534,6 @@ export function LandingPage() {
                 { label: "Stocks", to: "/app/stocks" },
                 { label: "Bonds", to: "/app/bonds" },
                 { label: "News", to: "/app/news" },
-                { label: "Market Pulse", to: "/app/markets" },
               ].map((item) => (
                 <Link key={item.label} to={item.to}
                   onClick={() => setMobileMenuOpen(false)}
@@ -584,7 +595,7 @@ export function LandingPage() {
                 <span className="text-xs font-semibold text-[#0D7490]">Live market data</span>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-[1.1] tracking-tight">
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-[1.1] tracking-tight">
                 Your edge in{" "}
                 <span className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] bg-clip-text text-transparent">African and global</span>{" "}
                 markets.
@@ -595,14 +606,14 @@ export function LandingPage() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link to="/login">
-                  <Button size="lg" className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-0.5 font-semibold">
+                <Link to="/login" className="w-full sm:w-auto">
+                  <Button size="lg" className="w-full sm:w-auto bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-0.5 font-semibold">
                     Start Free Trial
                     <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>
                 </Link>
-                <a href="#features">
-                  <Button variant="outline" size="lg" className="border-border text-foreground hover:bg-muted px-8 py-6 text-base font-medium">
+                <a href="#features" className="w-full sm:w-auto">
+                  <Button variant="outline" size="lg" className="w-full sm:w-auto border-border text-foreground hover:bg-muted px-8 py-6 text-base font-medium">
                     See How It Works
                   </Button>
                 </a>
@@ -627,18 +638,18 @@ export function LandingPage() {
           </div>
 
           {/* Quick stats */}
-          <div className="mt-16 grid grid-cols-3 gap-6 max-w-2xl mx-auto">
+          <div className="mt-16 grid grid-cols-3 gap-3 sm:gap-6 max-w-2xl mx-auto">
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-foreground">10,000+</p>
-              <p className="text-sm text-muted-foreground">stocks across 15+ African & global exchanges</p>
+              <p className="text-xl sm:text-3xl font-bold text-foreground">10,000+</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">stocks across 15+ African & global exchanges</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-foreground">7</p>
-              <p className="text-sm text-muted-foreground">days trial</p>
+              <p className="text-xl sm:text-3xl font-bold text-foreground">7</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">days trial</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-[#0D7490]">USD+</p>
-              <p className="text-sm text-muted-foreground">multi-currency support</p>
+              <p className="text-xl sm:text-3xl font-bold text-[#0D7490]">USD+</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">multi-currency support</p>
             </div>
           </div>
 
@@ -759,7 +770,7 @@ export function LandingPage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
-            {testimonials.map((t, i) => (
+            {allTestimonials.map((t, i) => (
                 <div key={i} className="group bg-card rounded-xl p-6 border border-border shadow-sm hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
                 style={{ animation: `fade-in-up 0.5s ease-out ${i * 0.15}s forwards`, opacity: 0 }}>
                 <div className="flex gap-1 mb-4">
@@ -778,7 +789,7 @@ export function LandingPage() {
                   </div>
                 </div>
               </div>
-            ))}
+              ))}
           </div>
         </div>
       </section>
@@ -792,7 +803,7 @@ export function LandingPage() {
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(6) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="text-center max-w-3xl mx-auto mb-14">
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Simple pricing. Start your trial today.</h2>
-            <p className="text-lg text-muted-foreground">Try any plan free for 7 days.</p>
+            <p className="text-lg text-muted-foreground">Less than a coffee a day. Try any plan free for 7 days.</p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
@@ -804,6 +815,7 @@ export function LandingPage() {
                 <div className="mb-4">
                   <span className="text-3xl font-bold text-foreground">$9.9</span>
                   <span className="text-muted-foreground text-sm">/mo</span>
+                  <p className="text-xs text-muted-foreground/50 mt-1">≈ $0.33/day</p>
                 </div>
                 <Link to="/pricing">
                   <Button variant="outline" className="w-full mb-4 border-border text-foreground hover:bg-muted cursor-pointer">
@@ -821,7 +833,7 @@ export function LandingPage() {
             </div>
 
             {/* Pro */}
-            <div className="bg-gray-900 text-white rounded-xl p-6 border border-gray-900 shadow-xl scale-[1.02] z-10 hover:shadow-2xl hover:shadow-[#0D7490]/10 transition-all duration-500"
+            <div className="bg-[#111827] dark:bg-[#1e293b] text-white rounded-xl p-6 border border-gray-800 dark:border-gray-700 shadow-xl lg:scale-[1.02] z-10 hover:shadow-2xl transition-all duration-500"
               style={{ animation: `fade-in-up 0.5s ease-out 0.1s forwards`, opacity: 0 }}>
               <div className="mb-2">
                 <span className="bg-[#0D7490] text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
@@ -829,13 +841,17 @@ export function LandingPage() {
                 </span>
               </div>
               <h3 className="text-xl font-bold mb-1">Pro</h3>
-              <p className="text-sm text-gray-400 mb-4">Active traders</p>
+              <p className="text-sm text-white/50 mb-4">Active traders</p>
               <div className="mb-4">
-                <span className="text-3xl font-bold">$19.9</span>
-                <span className="text-gray-400 text-sm">/mo</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold">$19.9</span>
+                  <span className="text-white/50 text-sm">/mo</span>
+                  <span className="text-xs font-semibold text-emerald-400 line-through decoration-white/30">$49.9</span>
+                </div>
+                <p className="text-xs text-white/50 mt-1">≈ $0.66/day &middot; <span className="text-emerald-400 font-semibold">Save 60% vs Premium</span></p>
               </div>
               <Link to="/pricing">
-                <Button className="w-full mb-4 bg-white text-gray-900 hover:bg-gray-100 shadow-xl font-semibold cursor-pointer">
+                <Button className="w-full mb-4 bg-[#0D7490] text-white hover:bg-[#0A5F7A] shadow-xl font-semibold cursor-pointer">
                   Start Trial
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
@@ -843,8 +859,8 @@ export function LandingPage() {
               <div className="space-y-2">
                 {["Unlimited AI insights", "African + global data", "Advanced charting", "Risk scoring"].map((f) => (
                   <div key={f} className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-white/70 flex-shrink-0" />
-                    <span className="text-xs text-gray-200">{f}</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <span className="text-xs text-white/70">{f}</span>
                   </div>
                 ))}
               </div>
@@ -858,6 +874,7 @@ export function LandingPage() {
                 <div className="mb-4">
                   <span className="text-3xl font-bold text-foreground">$49.9</span>
                   <span className="text-muted-foreground text-sm">/mo</span>
+                  <p className="text-xs text-muted-foreground/50 mt-1">≈ $1.66/day</p>
                 </div>
                 <Link to="/pricing">
                   <Button variant="outline" className="w-full mb-4 border-border text-foreground hover:bg-muted cursor-pointer">
@@ -959,15 +976,50 @@ export function LandingPage() {
             <div className="bg-card rounded-xl p-6 lg:p-8 shadow-lg border border-border hover:shadow-xl transition-shadow duration-300">
               <h3 className="text-xl font-bold text-foreground mb-2">Send us a message</h3>
               <p className="text-muted-foreground text-sm mb-6">We will get back to you within 24 hours.</p>
-              <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <input type="text" placeholder="Your name" className="w-full px-4 py-3 rounded-lg border border-border bg-muted focus:bg-background focus:border-[#0D7490] focus:ring-2 focus:ring-[#0D7490]/10 outline-none transition-all text-sm" />
-                  <input type="email" placeholder="Your email" className="w-full px-4 py-3 rounded-lg border border-border bg-muted focus:bg-background focus:border-[#0D7490] focus:ring-2 focus:ring-[#0D7490]/10 outline-none transition-all text-sm" />
+              {contactStatus && (
+                <div className={`mb-4 p-3 rounded-xl text-sm font-medium ${contactStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                  {contactStatus.message}
                 </div>
-                <input type="text" placeholder="Subject" className="w-full px-4 py-3 rounded-lg border border-border bg-muted focus:bg-background focus:border-[#0D7490] focus:ring-2 focus:ring-[#0D7490]/10 outline-none transition-all text-sm" />
-                <textarea rows={4} placeholder="Tell us more..." className="w-full px-4 py-3 rounded-lg border border-border bg-muted focus:bg-background focus:border-[#0D7490] focus:ring-2 focus:ring-[#0D7490]/10 outline-none transition-all text-sm resize-none" />
-                <Button className="w-full py-3 bg-[#0D7490] hover:bg-[#0A5F7A] text-white font-semibold shadow-lg transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
-                  Send Message
+              )}
+              <form className="space-y-4" onSubmit={async (e) => {
+                e.preventDefault();
+                if (!contactForm.name || !contactForm.email || !contactForm.subject || !contactForm.message) {
+                  setContactStatus({ type: 'error', message: 'Please fill in all fields.' });
+                  return;
+                }
+                setContactSending(true);
+                setContactStatus(null);
+                try {
+                  const res = await fetch('/api/contact', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(contactForm),
+                  });
+                  const data = await res.json();
+                  if (res.ok) {
+                    setContactStatus({ type: 'success', message: 'Message sent! We will get back to you soon.' });
+                    setContactForm({ name: '', email: '', subject: '', message: '' });
+                  } else {
+                    setContactStatus({ type: 'error', message: data.error || 'Something went wrong.' });
+                  }
+                } catch {
+                  setContactStatus({ type: 'error', message: 'Network error. Please try again.' });
+                }
+                setContactSending(false);
+              }}>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <input type="text" placeholder="Your name" value={contactForm.name} onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-white/20 dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.04] focus:bg-white/80 dark:focus:bg-white/[0.08] focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20 outline-none transition-all text-sm placeholder:text-muted-foreground/40" />
+                  <input type="email" placeholder="Your email" value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-white/20 dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.04] focus:bg-white/80 dark:focus:bg-white/[0.08] focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20 outline-none transition-all text-sm placeholder:text-muted-foreground/40" />
+                </div>
+                <input type="text" placeholder="Subject" value={contactForm.subject} onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border border-white/20 dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.04] focus:bg-white/80 dark:focus:bg-white/[0.08] focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20 outline-none transition-all text-sm placeholder:text-muted-foreground/40" />
+                <textarea rows={4} placeholder="Tell us more..." value={contactForm.message} onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border border-white/20 dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.04] focus:bg-white/80 dark:focus:bg-white/[0.08] focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20 outline-none transition-all text-sm placeholder:text-muted-foreground/40 resize-none" />
+                <Button type="submit" disabled={contactSending}
+                  className="w-full py-3 bg-[#0D7490] hover:bg-[#0A5F7A] text-white font-semibold shadow-lg transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+                  {contactSending ? 'Sending...' : 'Send Message'}
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </form>
@@ -978,7 +1030,7 @@ export function LandingPage() {
 
       {/* CTA BANNER */}
       <section className="py-16 lg:py-20 bg-gradient-to-r from-[#0D7490] to-[#0A5F7A] relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10" style={{
+        <div className="absolute inset-0 opacity-5" style={{
           backgroundImage: `radial-gradient(circle at 20px 20px, white 1px, transparent 1px)`,
           backgroundSize: "40px 40px",
         }} />
@@ -988,14 +1040,14 @@ export function LandingPage() {
             Try any plan free for 7 days. Cancel anytime. Join other African traders using AI-powered market intelligence for African and global stocks.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/login">
-              <Button size="lg" className="bg-white text-[#0D7490] hover:bg-gray-100 px-10 py-6 text-base font-bold shadow-2xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-3xl cursor-pointer">
+            <Link to="/login" className="w-full sm:w-auto">
+              <Button size="lg" className="w-full sm:w-auto bg-white text-[#0D7490] hover:bg-gray-100 px-10 py-6 text-base font-bold shadow-2xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-3xl cursor-pointer">
                 Start Trial
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
-            <a href="#contact">
-              <Button variant="outline" size="lg" className="border-white/30 text-white hover:bg-white/10 px-10 py-6 text-base font-medium backdrop-blur-sm cursor-pointer">
+            <a href="#contact" className="w-full sm:w-auto">
+              <Button variant="outline" size="lg" className="w-full sm:w-auto border-white/50 text-white bg-transparent hover:bg-white/10 px-10 py-6 text-base font-medium cursor-pointer">
                 Contact Us
               </Button>
             </a>
@@ -1004,7 +1056,7 @@ export function LandingPage() {
       </section>
 
       {/* FOOTER */}
-      <footer className="bg-gray-950 text-white pt-14 pb-8">
+      <footer className="bg-gray-950 dark:bg-[#0a0a0b] text-white pt-14 pb-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 lg:gap-12 mb-10">
             <div className="col-span-2 md:col-span-1">
@@ -1098,7 +1150,7 @@ export function LandingPage() {
       </footer>
 
       {/* DISCLAIMER */}
-      <div className="bg-gray-950 border-t border-gray-800/50">
+      <div className="bg-gray-950 dark:bg-[#0a0a0b] border-t border-gray-800/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <p className="text-[11px] text-gray-600 leading-relaxed">
             <strong className="text-gray-500">Risk Disclaimer:</strong> Trading stocks and other financial instruments involves substantial risk of loss. AI recommendations are for informational and educational purposes only and do not constitute financial advice. Past performance does not guarantee future results. StocksIntels is not a licensed broker or financial advisor. By using this platform, you acknowledge and accept these risks.{' '}

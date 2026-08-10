@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
-import { Star, TrendingUp, TrendingDown, MoreVertical, Loader2, PlusCircle } from "lucide-react";
+import { Star, TrendingUp, TrendingDown, Loader2, PlusCircle } from "lucide-react";
 import { Link } from "react-router";
 import { useAuth } from "../auth/AuthContext";
 import { authFetch } from "../auth/tokenStore";

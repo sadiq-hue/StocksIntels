@@ -123,11 +123,11 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
   const totalLiabilities = bal?.totalLiabilities ?? null;
 
   return (
-    <Card className="relative overflow-hidden border border-border shadow-sm h-full">
+    <Card className="relative overflow-hidden border border-border shadow-sm h-full flex flex-col">
       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
-      <div className="p-5">
+      <div className="flex flex-1 flex-col p-5">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4"><span className="flex size-6 items-center justify-center rounded-md bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white"><Activity className="size-3.5" /></span> Financial Health</h3>
-        <div className="space-y-4">
+        <div className="flex-1 space-y-4">
           {/* Profitability & Efficiency */}
           <div>
             <div className="text-[11px] font-semibold text-[#0D7490] uppercase tracking-wider mb-2.5">Profitability</div>

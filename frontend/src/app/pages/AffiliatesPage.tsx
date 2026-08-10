@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Copy, Check, Users, DollarSign, Link, BarChart3, Gift, ArrowRight, Loader2, Wallet, Banknote, Clock } from "lucide-react";
+import { Copy, Check, Users, Link, BarChart3, HandCoins, ArrowRight, Loader2, Wallet, Banknote, Clock } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { toast } from "sonner";
@@ -188,7 +188,7 @@ export function AffiliatesPage() {
         <div className="max-w-3xl mx-auto px-4">
           <Card className="p-6 sm:p-10 border-border text-center">
             <div className="w-20 h-20 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-[#0D7490]/20">
-              <Gift className="w-10 h-10 text-white" />
+              <HandCoins className="w-10 h-10 text-white" />
             </div>
             <h1 className="text-2xl md:text-3xl font-bold text-foreground mb-3">Earn Money by Referring Traders</h1>
             <p className="text-muted-foreground max-w-xl mx-auto mb-8 leading-relaxed">
@@ -286,7 +286,7 @@ export function AffiliatesPage() {
           <Card className="border shadow-sm p-5">
             <div className="flex items-center gap-2 mb-3">
               <div className="size-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <DollarSign className="size-4 text-emerald-600" />
+                <HandCoins className="size-4 text-emerald-600" />
               </div>
               <span className="text-[11px] font-medium text-muted-foreground">Total Earned</span>
             </div>
@@ -346,7 +346,7 @@ export function AffiliatesPage() {
                   : "text-muted-foreground hover:text-muted-foreground"
               }`}
             >
-              <DollarSign className="size-3.5 sm:size-4" />
+              <HandCoins className="size-3.5 sm:size-4" />
               Commissions
             </button>
             <button

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import { 
   Star, TrendingUp, TrendingDown, Trash2, Search, 
-  Plus, Loader2, AlertCircle, ArrowUpRight, BarChart2, BarChart3
+  Plus, Loader2, ArrowUpRight, BarChart2, BarChart3
 } from "lucide-react";
 import { Link } from "react-router";
 import { toast } from "sonner";

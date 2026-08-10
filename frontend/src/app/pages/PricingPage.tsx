@@ -5,7 +5,6 @@ import {
   X, 
   Zap, 
   Shield, 
-  Crown,
   ArrowRight,
   HelpCircle,
   Loader2
@@ -90,11 +89,11 @@ const faqs = [
   },
   {
     question: "What payment methods do you accept?",
-    answer: "We accept M-Pesa (KES) for African users and credit/debit cards (USD) for global users.",
+    answer: "We accept credit/debit cards and major digital wallets, billed in USD.",
   },
   {
     question: "How does M-Pesa pricing work?",
-    answer: "M-Pesa amounts are in KES: Starter 1,299 KES/mo, Pro 2,599 KES/mo, Premium 6,499 KES/mo. You'll receive an STK push on your phone to confirm.",
+    answer: "M-Pesa is no longer a pricing option. All plans are billed in USD for a simple, global experience.",
   },
   {
     question: "What's the difference between Premium and Pro?",
@@ -433,8 +432,7 @@ export function PricingPage() {
                     { name: "API access", starter: "—", pro: "—", premium: "✓" },
                     { name: "White-label analytics", starter: "—", pro: "—", premium: "✓" },
                     { name: "Support", starter: "Email", pro: "Priority", premium: "Dedicated" },
-                    { name: "Price (USD)", starter: "$9.9/mo", pro: "$19.9/mo", premium: "$49.9/mo" },
-                    { name: "Price (KES)", starter: "1,299/mo", pro: "2,599/mo", premium: "6,499/mo" },
+                    { name: "Price", starter: "$9.9/mo", pro: "$19.9/mo", premium: "$49.9/mo" },
                   ].map((row, idx) => (
                     <tr key={row.name} className={idx % 2 === 0 ? "bg-muted/50" : ""}>
                       <td className="py-4 px-6 text-sm text-muted-foreground">{row.name}</td>

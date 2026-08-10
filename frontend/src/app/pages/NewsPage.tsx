@@ -5,7 +5,7 @@ import { Input } from "../components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import {
   Newspaper, TrendingUp, Clock, ExternalLink, RefreshCw,
-  Globe, MapPin, Search, AlertCircle, BarChart3, Flame,
+  Globe2, MapPin, Search, AlertCircle, Flame,
 } from "lucide-react";
 import {
   fetchAllNews, fetchNewsSummary,
@@ -160,7 +160,7 @@ export function NewsPage() {
               )}
               <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${article.category === "nse" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-blue-100 text-blue-700 border-blue-200"}`}>
                 <span className="flex items-center gap-1">
-                  {article.category === "nse" ? <MapPin className="size-2.5" /> : <Globe className="size-2.5" />}
+                  {article.category === "nse" ? <MapPin className="size-2.5" /> : <Globe2 className="size-2.5" />}
                   {article.category === "nse" ? "NSE" : "Global"}
                 </span>
               </Badge>

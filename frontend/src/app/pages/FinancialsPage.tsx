@@ -3,7 +3,7 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  Activity, Banknote, BarChart3, Building2, ChartBar, ChartNoAxesCombined,
+  Activity, BarChart3, Building2, ChartBar, ChartNoAxesCombined,
   Database, ExternalLink, FileText, Globe, HandCoins, Loader2, RefreshCw, Scale, Search,
   Shield, TrendingUp, Users, Wallet, AlertTriangle,
 } from "lucide-react";

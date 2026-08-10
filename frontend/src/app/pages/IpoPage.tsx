@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { TrendingUp, Calendar, DollarSign, Users, BarChart3, Timer, Globe } from "lucide-react";
+import { Rocket, Calendar, DollarSign, Users, BarChart3, Timer, Globe2 } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -120,7 +120,7 @@ export function IpoPage() {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
         <div className="size-8 rounded-lg bg-blue-100 flex items-center justify-center">
-          <TrendingUp className="size-4 text-blue-600" />
+          <Rocket className="size-4 text-blue-600" />
         </div>
         <div>
           <h1 className="text-lg font-bold text-foreground">New Listings & IPOs</h1>
@@ -134,7 +134,7 @@ export function IpoPage() {
           NSE IPOs
         </button>
         <button onClick={() => setTab('global')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${tab === 'global' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-          <Globe className="size-3" /> Global IPOs
+          <Globe2 className="size-3" /> Global IPOs
         </button>
       </div>
 
@@ -167,7 +167,7 @@ export function IpoPage() {
           {listed.length > 0 && (
             <div className="mb-6">
               <h2 className="text-sm font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
-                <TrendingUp className="size-4" /> Recently Listed
+                <Rocket className="size-4" /> Recently Listed
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {listed.map(renderIpoCard)}

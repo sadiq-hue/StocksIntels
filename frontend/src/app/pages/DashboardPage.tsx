@@ -5,7 +5,8 @@ import { Link, useNavigate } from "react-router";
 import {
   TrendingUp, TrendingDown, Activity, ArrowUpRight, ArrowDownRight,
   DollarSign, PieChart, BarChart3, Newspaper, Star, Wallet,
-  LayoutDashboard, Globe, Sparkles, ChevronRight, ArrowUp, Layers, X, Lightbulb
+  Globe2, ChevronRight, ArrowUp, Layers, X, Lightbulb,
+  LayoutGrid, Briefcase, Brain, Scale, Banknote
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -443,10 +444,10 @@ export function DashboardPage() {
       {/* Tab Navigation */}
       <div className="flex items-center gap-1 p-1 bg-muted/50 border rounded-lg w-full sm:w-auto overflow-x-auto">
         {[
-          { id: "overview", label: "Overview", icon: LayoutDashboard },
-          { id: "markets", label: "Markets", icon: Globe },
-          { id: "portfolio", label: "Portfolio", icon: PieChart },
-          { id: "signals", label: "Market Intelligence", icon: Sparkles },
+          { id: "overview", label: "Overview", icon: LayoutGrid },
+          { id: "markets", label: "Markets", icon: TrendingUp },
+          { id: "portfolio", label: "Portfolio", icon: Briefcase },
+          { id: "signals", label: "Market Intelligence", icon: Brain },
           { id: "news", label: "News", icon: Newspaper },
         ].map((tab) => (
           <button
@@ -462,14 +463,19 @@ export function DashboardPage() {
             }`}
           >
             <tab.icon className="size-4" />
-            {tab.label}
+            <span className="hidden sm:inline">{tab.label}</span>
           </button>
         ))}
       </div>
 
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] rounded-xl p-6 text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/[0.15] rounded-full blur-xl animate-bubble-float" />
+        <div className="absolute top-4 right-20 w-12 h-12 bg-white/20 rounded-full animate-bubble-float" style={{ animationDelay: "1.5s" }} />
+        <div className="absolute -bottom-8 -right-2 w-32 h-32 bg-cyan-200/20 rounded-full animate-bubble-float" style={{ animationDelay: "3s" }} />
+        <div className="absolute bottom-0 left-8 w-8 h-8 bg-white/[0.15] rounded-full animate-bubble-float" style={{ animationDelay: "2s" }} />
+        <div className="absolute -top-4 left-12 w-6 h-6 bg-white/20 rounded-full animate-bubble-float" style={{ animationDelay: "4s" }} />
+        <div className="absolute top-1/3 -left-6 w-20 h-20 bg-white/[0.12] rounded-full animate-bubble-float" style={{ animationDelay: "5s" }} />
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <p className="text-white/80 text-sm mb-1">
@@ -489,7 +495,7 @@ export function DashboardPage() {
           <div className="flex items-center gap-3">
             <Link to="/app/markets" className="w-full sm:w-auto">
               <Button className="bg-card text-[#0D7490] hover:bg-muted shadow-sm w-full sm:w-auto">
-                <Globe className="size-4 mr-2" />
+                <Globe2 className="size-4 mr-2" />
                 View Markets
               </Button>
             </Link>
@@ -499,7 +505,7 @@ export function DashboardPage() {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4" data-tour="portfolio-cards">
-        <Card className="border-0 bg-gradient-to-br from-[#0D7490] via-[#0B6A87] to-[#0A5F7A] p-5 text-white relative overflow-hidden shadow-lg shadow-[#0D7490]/20">
+        <Card className="col-span-2 md:col-span-1 border-0 bg-gradient-to-br from-[#0D7490] via-[#0B6A87] to-[#0A5F7A] p-5 text-white relative overflow-hidden shadow-lg shadow-[#0D7490]/20">
           {/* Floating bubbles */}
           <div className="absolute -top-6 -right-6 w-28 h-28 bg-white/10 rounded-full blur-[1px] animate-bubble-float" />
           <div className="absolute top-2 right-16 w-10 h-10 bg-white/15 rounded-full animate-bubble-float" style={{ animationDelay: "1.5s" }} />
@@ -536,11 +542,11 @@ export function DashboardPage() {
         </Card>
 
         {[
-          { icon: TrendingUp, color: "bg-emerald-100 text-emerald-600", label: "NSE Portfolio", value: `KES ${enhancedTotals.nseValue.toLocaleString()}`, sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
-          { icon: Globe, color: "bg-indigo-100 text-indigo-600", label: "Global Portfolio", value: `$${enhancedTotals.globalValue.toLocaleString()}`, sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${brokerTotals.posCount} pos)`, valColor: "text-foreground" },
+          { icon: Banknote, color: "bg-emerald-100 text-emerald-600", label: "NSE Portfolio", value: `KES ${enhancedTotals.nseValue.toLocaleString()}`, sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
+          { icon: Globe2, color: "bg-indigo-100 text-indigo-600", label: "Global Portfolio", value: `$${enhancedTotals.globalValue.toLocaleString()}`, sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${brokerTotals.posCount} pos)`, valColor: "text-foreground" },
           { icon: PieChart, color: "bg-purple-100 text-purple-600", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} NSE · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
-          { icon: Sparkles, color: "bg-yellow-100 text-yellow-600", label: "Market Intelligence", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: "text-foreground" },
-          { icon: BarChart3, color: "bg-blue-100 text-blue-600", label: "vs Benchmarks", value: perfMeta.hasHistory ? `${benchmarkMetrics.alpha >= 0 ? '+' : ''}${benchmarkMetrics.alpha.toFixed(1)}%` : '—', sub: perfMeta.hasHistory ? `Portfolio ${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}% · NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%` : `NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%`, valColor: perfMeta.hasHistory ? (benchmarkMetrics.alpha >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
+          { icon: Brain, color: "bg-yellow-100 text-yellow-600", label: "Market Intelligence", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: "text-foreground" },
+          { icon: Scale, color: "bg-blue-100 text-blue-600", label: "vs Benchmarks", value: perfMeta.hasHistory ? `${benchmarkMetrics.alpha >= 0 ? '+' : ''}${benchmarkMetrics.alpha.toFixed(1)}%` : '—', sub: perfMeta.hasHistory ? `Portfolio ${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}% · NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%` : `NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%`, valColor: perfMeta.hasHistory ? (benchmarkMetrics.alpha >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
         ].map((m, i) => (
           <Card key={i} className="border shadow-sm p-5">
             <div className="flex items-center gap-2 mb-3">
@@ -608,7 +614,7 @@ export function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="size-8 rounded-lg bg-indigo-100 flex items-center justify-center">
-                <Globe className="size-4 text-indigo-600" />
+                <Globe2 className="size-4 text-indigo-600" />
               </div>
               <h3 className="text-sm font-semibold text-foreground">Global Indices</h3>
             </div>
@@ -671,7 +677,7 @@ export function DashboardPage() {
         <Card className="border shadow-sm p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <BarChart3 className="size-4 text-[#0D7490]" />
+              <Scale className="size-4 text-[#0D7490]" />
               <h3 className="text-sm font-semibold text-foreground">Portfolio vs NSE 20 &amp; S&P 500</h3>
             </div>
             <div className="flex flex-wrap items-center gap-1 bg-muted rounded-lg p-0.5">
@@ -775,7 +781,7 @@ export function DashboardPage() {
               <p className="text-xs text-muted-foreground">Loading market data...</p>
             )}
             <Link to="/app/markets" className="w-full py-2 bg-foreground text-background text-xs font-medium rounded-lg text-center hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-              <Globe size={14} />
+              <Globe2 size={14} />
               Full Market Overview
             </Link>
           </div>
@@ -942,7 +948,7 @@ export function DashboardPage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <div className="size-8 rounded-lg bg-white/20 flex items-center justify-center">
-                  <Sparkles className="size-4" />
+                  <Brain className="size-4" />
                 </div>
                 <h3 className="text-sm font-semibold">Top Market Intelligence</h3>
               </div>

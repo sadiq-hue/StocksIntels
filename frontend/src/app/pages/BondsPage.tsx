@@ -5,8 +5,8 @@ import { Input } from "../components/ui/input";
 import {
   TrendingUp, TrendingDown, Search, RefreshCcw, Landmark,
   BarChart3, Building2, Briefcase, CalendarDays, Percent,
-  DollarSign, LineChart, ChevronDown, ChevronUp, ExternalLink,
-  Info, Clock, TrendingUp as ArrowUpRight,
+  Banknote, LineChart, ChevronDown, ChevronUp, ExternalLink,
+  Info, Clock,
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
@@ -254,7 +254,7 @@ export function BondsPage() {
 
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 pt-3 border-t text-xs text-muted-foreground">
                     <span className="flex items-center gap-1"><CalendarDays className="size-3" /> {bond.maturity}</span>
-                    <span className="flex items-center gap-1"><DollarSign className="size-3" /> {formatAmount(bond.amountIssued, bond.currency)}</span>
+                    <span className="flex items-center gap-1"><Banknote className="size-3" /> {formatAmount(bond.amountIssued, bond.currency)}</span>
                     <span className="flex items-center gap-1"><Percent className="size-3" /> {bond.type}</span>
                   </div>
 

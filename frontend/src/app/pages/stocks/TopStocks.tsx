@@ -6,7 +6,7 @@ import { Badge } from "../../components/ui/badge";
 import {
   Search, TrendingUp, TrendingDown, Clock,
   Trophy, Flame, Zap, Star, Award,
-  DollarSign, BarChart3,
+  Banknote, BarChart3,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { parseVolume, formatVolume } from "../../utils/format";
@@ -75,7 +75,7 @@ export function TopStocks() {
     { id: "gainers", label: "Top Gainers", icon: TrendingUp, color: "text-emerald-600" },
     { id: "losers", label: "Top Losers", icon: TrendingDown, color: "text-red-600" },
     { id: "active", label: "Most Active", icon: Flame, color: "text-orange-500" },
-    { id: "mcap", label: "Largest MCap", icon: DollarSign, color: "text-purple-500" },
+    { id: "mcap", label: "Largest MCap", icon: Banknote, color: "text-purple-500" },
     { id: "rated", label: "Highest Rated", icon: Star, color: "text-yellow-500" },
     { id: "confident", label: "Highest Confidence", icon: Award, color: "text-blue-500" },
     { id: "value", label: "Best Value", icon: BarChart3, color: "text-cyan-500" },

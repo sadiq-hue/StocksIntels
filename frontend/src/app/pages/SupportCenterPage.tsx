@@ -15,7 +15,7 @@ import {
   LifeBuoy, MessageCircle, FileText, Mail, Send, Ticket,
   Search, Loader2, AlertCircle, CheckCircle2,
   Clock, ArrowLeft, X, BookOpen, ChevronRight,
-  ThumbsUp, Bot, User, Phone, Circle,
+  ThumbsUp, Bot, User, Circle, Star,
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
@@ -97,6 +97,38 @@ export function SupportCenterPage() {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // --- Testimonial form ---
+  const [testimonialForm, setTestimonialForm] = useState({ name: user?.full_name || "", role: "", content: "", rating: 5 });
+  const [testimonialSending, setTestimonialSending] = useState(false);
+  const [testimonialStatus, setTestimonialStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const handleTestimonialSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testimonialForm.name || !testimonialForm.role || !testimonialForm.content) {
+      setTestimonialStatus({ type: "error", message: "Please fill in all fields." });
+      return;
+    }
+    setTestimonialSending(true);
+    setTestimonialStatus(null);
+    try {
+      const res = await fetch(`${API_URL}/testimonials`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(testimonialForm),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTestimonialStatus({ type: "success", message: "Thank you! Your testimonial has been submitted for review." });
+        setTestimonialForm({ name: user?.full_name || "", role: "", content: "", rating: 5 });
+      } else {
+        setTestimonialStatus({ type: "error", message: data.error || "Something went wrong." });
+      }
+    } catch {
+      setTestimonialStatus({ type: "error", message: "Network error. Please try again." });
+    }
+    setTestimonialSending(false);
+  };
 
   // --- Tickets ---
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -417,6 +449,7 @@ export function SupportCenterPage() {
             )}
           </TabsTrigger>
           <TabsTrigger value="faq"><LifeBuoy className="size-4" /> FAQ</TabsTrigger>
+          <TabsTrigger value="testimonial"><ThumbsUp className="size-4" /> Testimonial</TabsTrigger>
         </TabsList>
 
         {/* ─────────────── Contact Us ─────────────── */}
@@ -798,6 +831,95 @@ export function SupportCenterPage() {
                 </div>
               </Card>
             )}
+          </div>
+        </TabsContent>
+
+        {/* ─────────────── Testimonial ─────────────── */}
+        <TabsContent value="testimonial">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            <Card className="bg-card border-border p-6">
+              <h3 className="text-foreground font-bold text-lg mb-2 flex items-center gap-2">
+                <ThumbsUp className="size-5 text-[#0D7490]" /> Share your experience
+              </h3>
+              <p className="text-muted-foreground text-sm mb-6">Help other traders discover StocksIntels.</p>
+              {testimonialStatus && (
+                <div className={`mb-5 p-4 rounded-xl text-sm font-medium ${
+                  testimonialStatus.type === "success"
+                    ? "bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                    : "bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800"
+                }`}>
+                  {testimonialStatus.message}
+                </div>
+              )}
+              <form onSubmit={handleTestimonialSubmit} className="space-y-4" noValidate>
+                <div>
+                  <label className="text-foreground text-sm font-semibold block mb-1.5">
+                    Your name <span className="text-red-400">*</span>
+                  </label>
+                  <Input type="text" placeholder="John Doe" value={testimonialForm.name}
+                    onChange={(e) => setTestimonialForm({ ...testimonialForm, name: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-foreground text-sm font-semibold block mb-1.5">
+                    Your role <span className="text-red-400">*</span>
+                  </label>
+                  <Input type="text" placeholder="Retail trader, Nairobi" value={testimonialForm.role}
+                    onChange={(e) => setTestimonialForm({ ...testimonialForm, role: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-foreground text-sm font-semibold block mb-1.5">
+                    Your experience <span className="text-red-400">*</span>
+                  </label>
+                  <Textarea rows={4} placeholder="Tell others what you like about StocksIntels..."
+                    value={testimonialForm.content}
+                    onChange={(e) => setTestimonialForm({ ...testimonialForm, content: e.target.value })} />
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-foreground text-sm font-semibold">Rating</span>
+                  {[1,2,3,4,5].map(s => (
+                    <button type="button" key={s} onClick={() => setTestimonialForm({ ...testimonialForm, rating: s })}
+                      className="p-0.5 transition-colors">
+                      <Star className={`size-5 ${s <= testimonialForm.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/20"}`} />
+                    </button>
+                  ))}
+                </div>
+                <Button type="submit" disabled={testimonialSending}
+                  className="w-full h-10 bg-[#0D7490] hover:bg-[#0A5F7A] text-white font-semibold text-sm rounded-xl">
+                  {testimonialSending ? "Submitting..." : "Submit Testimonial"}
+                </Button>
+              </form>
+            </Card>
+
+            <Card className="bg-card border-border p-6">
+              <h3 className="text-foreground font-bold text-lg mb-4 flex items-center gap-2">
+                <ThumbsUp className="size-5 text-[#0D7490]" /> What traders say
+              </h3>
+              <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+                {[
+                  { name: "Caleb Mwangi", role: "Retail trader, Nairobi, Kenya", content: "I was relying on tips from Twitter groups before. Now I get daily AI market intelligence on my watchlist stocks. It does not replace my own research but it saves hours of screen time.", rating: 5 },
+                  { name: "Joseph Okonkwo", role: "Part-time investor, Lagos, Nigeria", content: "The paper trading feature helped me learn without losing real money. After three months of practicing, I felt ready to open a live brokerage account.", rating: 5 },
+                  { name: "Palesa Dlamini", role: "Freelancer, Johannesburg, South Africa", content: "I check the insights on my phone during lunch breaks. The price alerts are what I use most — they ping me when Naspers or MTN hit my targets.", rating: 4 },
+                ].map((t, i) => (
+                  <div key={i} className="bg-muted/40 rounded-xl p-4 border border-border/50">
+                    <div className="flex gap-1 mb-2">
+                      {[...Array(t.rating)].map((_, j) => (
+                        <Star key={j} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                      ))}
+                    </div>
+                    <p className="text-muted-foreground text-sm leading-relaxed">{t.content}</p>
+                    <div className="flex items-center gap-2 mt-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-700 font-bold text-xs">
+                        {t.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground text-sm">{t.name}</p>
+                        <p className="text-muted-foreground text-xs">{t.role}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
           </div>
         </TabsContent>
       </Tabs>

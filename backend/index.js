@@ -19,7 +19,7 @@ const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
 const signalPublisher = require('./signalPublisher');
 const { createSignalNotifications } = require('./signalPublisher');
-const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail } = require('./mailer');
+const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification } = require('./mailer');
 const emailSequenceService = require('./emailSequenceService');
 const cron = require('node-cron');
 const {
@@ -285,6 +285,60 @@ app.use('/api/admin', (req, res, next) => {
   res.setHeader('Pragma', 'no-cache');
   next();
 });
+// Contact form endpoint (no auth required)
+app.post('/api/contact', async (req, res) => {
+  try {
+    const { name, email, subject, message } = req.body;
+    if (!name || !email || !subject || !message) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Valid email required' });
+    }
+    if (message.length < 10) {
+      return res.status(400).json({ error: 'Message must be at least 10 characters' });
+    }
+    await sendContactNotification({ name, email, subject, message });
+    res.json({ success: true, message: 'Message sent successfully' });
+  } catch (err) {
+    console.error('Contact form error:', err.message);
+    res.status(500).json({ error: 'Failed to send message. Please try again later.' });
+  }
+});
+
+// Testimonials — public GET approved, POST submit
+app.get('/api/testimonials', async (_req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name, role, content, rating, initials, created_at FROM testimonials WHERE approved = true ORDER BY created_at DESC LIMIT 50'
+    );
+    res.json({ testimonials: result.rows });
+  } catch (err) {
+    console.error('GET testimonials error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch testimonials' });
+  }
+});
+
+app.post('/api/testimonials', async (req, res) => {
+  try {
+    const { name, role, content, rating } = req.body;
+    if (!name || !role || !content) return res.status(400).json({ error: 'Name, role, and content are required' });
+    const safeName = String(name).trim().slice(0, 255);
+    const safeRole = String(role).trim().slice(0, 255);
+    const safeContent = String(content).trim().slice(0, 2000);
+    const safeRating = Math.min(5, Math.max(1, parseInt(String(rating || 5)) || 5));
+    const initials = safeName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    const result = await pool.query(
+      'INSERT INTO testimonials (name, role, content, rating, initials, approved) VALUES ($1,$2,$3,$4,$5,false) RETURNING id',
+      [safeName, safeRole, safeContent, safeRating, initials]
+    );
+    res.json({ success: true, id: result.rows[0].id, message: 'Testimonial submitted for review' });
+  } catch (err) {
+    console.error('POST testimonials error:', err.message);
+    res.status(500).json({ error: 'Failed to submit testimonial' });
+  }
+});
+
 // Admin OTP login routes (no auth required)
 app.post('/api/admin/send-otp', async (req, res) => {
   try {
@@ -11379,6 +11433,18 @@ async function initDatabase() {
     } catch (migErr) {
       console.error('[Migration] Super admin promotion error:', migErr.message);
     }
+
+    // ── Testimonials table ──
+    await pool.query(`CREATE TABLE IF NOT EXISTS testimonials (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      role VARCHAR(255) NOT NULL,
+      content TEXT NOT NULL,
+      rating INTEGER NOT NULL DEFAULT 5 CHECK (rating >= 1 AND rating <= 5),
+      initials VARCHAR(10) NOT NULL,
+      approved BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    )`);
 
     // Restore signal-engine in-memory state now that tables are guaranteed to exist
     try {

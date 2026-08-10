@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
-  Search, RefreshCcw, Loader2, Globe, Landmark, Settings, X, Mail,
+  Search, RefreshCcw, Loader2, Globe2, Landmark, Settings, X, Mail,
   TrendingUp, TrendingDown, ArrowUpDown, Star, Newspaper, BrainCircuit,
   ChevronLeft, ChevronRight, ExternalLink,
 } from 'lucide-react';
@@ -474,7 +474,7 @@ const MarketPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <div className="p-2 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9]">
-              <Globe className="size-5 text-white" />
+              <Globe2 className="size-5 text-white" />
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-foreground">Market Intelligence</h1>
           </div>
@@ -563,8 +563,11 @@ const MarketPage: React.FC = () => {
       </div>
 
       {/* Indices */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-        {indicesToDisplay.map(idx => (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        {/* Commented out: Hang Seng (^HSI), Euro Stoxx 50 (^STOXX50E), Nikkei 225 (^N225) */}
+        {indicesToDisplay
+          .filter(idx => !['^HSI', '^STOXX50E', '^N225'].includes(idx.symbol))
+          .map(idx => (
           <Card key={idx.symbol} className="bg-card border shadow-sm p-3">
             <div className="text-[10px] font-medium text-muted-foreground truncate mb-1">{idx.name}</div>
             <div className="text-base font-bold text-foreground mb-0.5 tabular-nums truncate">{idx.value}</div>
@@ -578,7 +581,7 @@ const MarketPage: React.FC = () => {
         ))}
       </div>
 
-      {/* Multi-Index Comparison (NSE-specific) */}
+      {/* Multi-Index Comparison (NSE-specific) — COMMENTED OUT
       {indicesToDisplay.filter(i => i.name?.toLowerCase().includes('nse') || i.symbol?.includes('NSE') || i.name?.includes('All Share') || i.name?.includes('NSE 20') || i.name?.includes('NSE 25')).length >= 2 && (
         <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-100 shadow-sm">
           <div className="p-4">
@@ -613,6 +616,7 @@ const MarketPage: React.FC = () => {
           </div>
         </Card>
       )}
+      */}
 
       {/* Market Legend */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1">
@@ -653,7 +657,7 @@ const MarketPage: React.FC = () => {
           />
         <MarketWindow
             title="US & Global Activity"
-            icon={Globe}
+            icon={Globe2}
             stocks={paginatedGlobal}
             search={globalSearch}
             setSearch={setGlobalSearch}

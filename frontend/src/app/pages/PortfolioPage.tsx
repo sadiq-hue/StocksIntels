@@ -6,9 +6,9 @@ import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import {
-  TrendingUp, TrendingDown, AlertTriangle, Activity, PieChart, BarChart3, Target, DollarSign,
+  TrendingUp, TrendingDown, AlertTriangle, Activity, PieChart, BarChart3, Target,
   ArrowUpRight, ArrowDownRight, Users, Building2, Wallet, Clock, Plus, X, Link2, Unlink,
-  RefreshCw,   Sparkles, Loader2, Landmark, Database, Check, Search, Filter, Edit3, Trash2,
+  RefreshCw,   Brain, Loader2, Landmark, Database, Check, Search, Filter, Edit3, Trash2,
   BarChartHorizontal, BrainCircuit, ExternalLink, SwitchCamera, Play, RotateCcw, History,
   ShoppingCart, DollarSign as DollarSignIcon, AlertCircle, Server, ArrowRight, Layers, Newspaper, Mail
 } from "lucide-react";
@@ -847,7 +847,7 @@ export function PortfolioPage() {
           <h2 className="text-foreground text-xl md:text-2xl font-semibold">Portfolio Intelligence</h2>
           <p className="text-muted-foreground text-sm md:text-base">{paperMode ? "Simulate trades with virtual cash" : "Track NSE & global investments, AI insights, and broker integrations"}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:w-auto">
           <div className="flex items-center rounded-lg border border-border p-0.5 bg-muted flex-1 sm:flex-none">
             <button
               onClick={() => { if (paperMode) { setPaperMode(false); } }}
@@ -1823,7 +1823,7 @@ export function PortfolioPage() {
         <Card className="bg-card border-border p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-[#0D7490]" />
+              <Brain className="w-5 h-5 text-[#0D7490]" />
               <h3 className="text-foreground font-semibold">AI Recommendations</h3>
             </div>
             <button onClick={handleRefresh} className="p-1.5 hover:bg-accent rounded-lg transition-colors" title="Refresh signals">
@@ -1834,7 +1834,7 @@ export function PortfolioPage() {
             <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
           ) : recommendations.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
-              <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <Brain className="w-8 h-8 mx-auto mb-2 opacity-50" />
               No AI recommendations available yet.
             </div>
           ) : (
@@ -1938,7 +1938,7 @@ export function PortfolioPage() {
               {/* Summary with gradient bg */}
               <div className="bg-gradient-to-r from-[#0D7490]/5 to-[#0EA5E9]/5 rounded-lg p-3 border border-[#0D7490]/10">
                 <div className="flex items-start gap-2">
-                  <Sparkles className="w-4 h-4 text-[#0D7490] mt-0.5 shrink-0" />
+                  <Brain className="w-4 h-4 text-[#0D7490] mt-0.5 shrink-0" />
                   <p className="text-sm text-foreground leading-relaxed">{portfolioAdvice.summary}</p>
                 </div>
               </div>
@@ -2355,7 +2355,7 @@ export function PortfolioPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-[#0D7490]" />
+              <Brain className="w-5 h-5 text-[#0D7490]" />
               {selectedRec?.symbol || selectedRec?.ticker} — {selectedRec?.name}
             </DialogTitle>
             <DialogDescription>AI-powered recommendation details</DialogDescription>
@@ -2523,7 +2523,7 @@ export function PortfolioPage() {
               <div className="bg-gradient-to-r from-[#0D7490]/5 to-[#0EA5E9]/5 rounded-xl p-4 border border-[#0D7490]/10">
                 <div className="flex items-start gap-2.5">
                   <div className="p-1 rounded-lg bg-[#0D7490]/10">
-                    <Sparkles className="w-4 h-4 text-[#0D7490]" />
+                    <Brain className="w-4 h-4 text-[#0D7490]" />
                   </div>
                   <p className="text-sm text-foreground leading-relaxed">{portfolioAdvice.summary}</p>
                 </div>
