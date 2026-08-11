@@ -1621,7 +1621,7 @@ export function PortfolioPage() {
           {dc !== "USD" && <div className="text-muted-foreground text-[10px] mt-0.5">${enhancedTotals.globalValue.toFixed(2)}</div>}
           <div className={`text-xs mt-1 flex items-center gap-1 ${enhancedTotals.globalPnLPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {enhancedTotals.globalPnLPercent >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-            {enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}{enhancedTotals.globalPnLPercent}% ({brokerTotals.posCount} pos)
+            {enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}{enhancedTotals.globalPnLPercent}% ({enhancedTotals.globalCount} pos)
           </div>
         </Card>
         <Card className="bg-card border-border p-4">

@@ -316,23 +316,31 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
     const pftUsd = Number(brokerTotals.profitUsd) || 0;
     const pCnt = Number(brokerTotals.posCount) || 0;
     const fx = Number(totals.fxRate) || 130;
+    // Manual global holdings (totals.*) + broker-synced accounts (brokerTotals.*)
+    const manualGlobalValue = Number(totals.globalValue) || 0;
+    const manualGlobalPnL = Number(totals.globalPnL) || 0;
+    const manualGlobalCost = Number(totals.globalCost) || 0;
+    const brokerGlobalCost = eqUsd - pftUsd;
+    const combinedGlobalValue = manualGlobalValue + eqUsd;
+    const combinedGlobalPnL = manualGlobalPnL + pftUsd;
+    const combinedGlobalCost = manualGlobalCost + brokerGlobalCost;
     const newCombinedKes = Number(totals.combinedKesValue) + eqUsd * fx;
-    const globalCost = eqUsd - pftUsd;
     const totalPnL = Number(totals.totalPnL) + pftUsd * fx;
-    const totalCost = Number(totals.totalCost) + Math.max(0, globalCost * fx);
+    const totalCost = Number(totals.totalCost) + Math.max(0, brokerGlobalCost * fx);
     return {
       ...totals,
       combinedKesValue: Math.round(newCombinedKes),
-      globalValue: Math.round(eqUsd * 100) / 100,
-      globalPnL: Math.round(pftUsd),
+      globalValue: Math.round(combinedGlobalValue * 100) / 100,
+      globalPnL: Math.round(combinedGlobalPnL),
+      globalCost: Math.round(combinedGlobalCost),
+      globalCount: Number(totals.globalCount) + pCnt,
       totalPnL: Math.round(totalPnL),
-      globalCount: Number(totals.globalCount),
       totalValue: Math.round(newCombinedKes),
       pnlPercent: totalCost > 0
         ? Math.round((totalPnL / totalCost) * 1000) / 10
         : Number(totals.pnlPercent) || 0,
-      globalPnLPercent: globalCost > 0
-        ? Math.round((pftUsd / globalCost) * 1000) / 10
+      globalPnLPercent: combinedGlobalCost > 0
+        ? Math.round((combinedGlobalPnL / combinedGlobalCost) * 1000) / 10
         : 0,
     };
   }, [totals, brokerTotals]);
