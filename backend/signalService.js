@@ -55,6 +55,23 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
         AND a.signal_generated_at IS NOT DISTINCT FROM b.signal_generated_at`).catch(() => {});
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_signal_outcomes_signal
       ON signal_outcomes (ticker, signal_generated_at)`).catch(() => {});
+    // Historical backtest previously force-closed signals at the last available
+    // bar even when the trade-type hold window hadn't elapsed (CGEN Aug 5 Long
+    // Term: entry 156.75, target1 208.34, force-closed at 194.75 four bars later,
+    // ~5 calendar days, as an 'expiry close'). Those rows are premature and
+    // pollute stats; delete them so the fixed backtest re-evaluates each signal
+    // honestly once available history covers its hold window (Long Term ~130 bars,
+    // short-term ~20 bars, approximated in calendar days below).
+    await pool.query(`DELETE FROM signal_outcomes o
+      USING signal_history h
+      WHERE o.ticker = h.ticker
+        AND o.signal_generated_at IS NOT DISTINCT FROM h.generated_at
+        AND o.source = 'backtest'
+        AND o.close_reason = 'expiry close'
+        AND o.resolved_at - o.signal_generated_at < CASE
+          WHEN h.trade_type ILIKE '%long term%' THEN INTERVAL '182 days'
+          ELSE INTERVAL '20 days'
+        END`).catch(() => {});
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS analysis_data JSONB`);
     // restoreStateFromDb SELECTs target3/reason from signal_history to re-seed
     // monitored positions across restarts; the idempotent ALTERs keep restores
@@ -1021,6 +1038,19 @@ const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy';
 // ─── Historical Backtest: evaluate signal_history against actual OHLC history ─
 // For each signal in signal_history, walks forward day-by-day using the signal's
 // own stop_loss / target1 levels to decide win/loss, then inserts the outcome.
+
+// Hold window (in trading bars) derived from the signal's own trade type, not a
+// fixed short cap. A Long Term 3-6mo thesis needs ~130 trading days to reach its
+// verdict; a fixed 20-bar window force-closed it at the last available close —
+// because the fetched history simply ends at today — manufacturing a premature
+// 'expiry close' (e.g. CGEN Aug 5: closed at 194.75 with target1 208.34 untouched,
+// then a fresh position was opened at the same price).
+function backtestHoldBarsFor(tradeType, fallback = 20) {
+  const tt = (tradeType || '').toLowerCase();
+  if (tt.includes('long term')) return 130; // 3-6 months ≈ 130 trading days
+  if (tt.includes('aggressive') || tt.includes('momentum') || tt.includes('swing')) return 20; // 1-4 weeks
+  return fallback;
+}
 async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals = 1000, force = false } = {}) {
   try {
     // Dedupe by (ticker, signal_generated_at) so a signal is evaluated once no
@@ -1032,7 +1062,7 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
           WHERE so.ticker = sh.ticker AND so.signal_generated_at = date_trunc('milliseconds', sh.generated_at)
         ) AND `;
     const result = await pool.query(`
-      SELECT sh.id, sh.ticker, sh.signal, sh.entry_price, sh.stop_loss, sh.target1, sh.target2, sh.generated_at
+      SELECT sh.id, sh.ticker, sh.signal, sh.entry_price, sh.stop_loss, sh.target1, sh.target2, sh.generated_at, sh.trade_type
       FROM signal_history sh
       WHERE ${dedupeClause}
         sh.generated_at > NOW() - $1::interval
@@ -1120,10 +1150,24 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
           let closeReason = null;
           let exitDay = 0;
 
+          // Hold horizon from the signal's own trade type (Long Term ≈ 130 bars,
+          // short-term ≈ 20). Stop/target hits are evaluated against every bar we
+          // have; the 'expiry close' branch only fires once the FULL hold window
+          // elapses. When the fetched history ends before the hold window (bars
+          // run out with no stop/target hit), NO close condition has been met, so
+          // the signal must NOT be force-closed at the last bar — that manufactured
+          // premature 'expiry close' outcomes (e.g. CGEN Aug 5 Long Term, target1
+          // 208.34 — force-closed at 194.75 four bars later). The signal stays
+          // unresolved and a later run (once history extends) or the live monitor
+          // resolves it.
+          const holdBars = backtestHoldBarsFor(sig.trade_type, maxHoldDays);
+          const holdEnd = startIdx + holdBars;
+          const lastEval = Math.min(holdEnd, bars.length - 1);
+
           // Evaluate from the NEXT bar after the signal date (exitDay >= 1).
           // A signal generated mid-day must never be resolved against the same
           // day's partial bar; that is what manufactured the day-0 close noise.
-          for (let i = startIdx + 1; i < Math.min(startIdx + 1 + maxHoldDays, bars.length); i++) {
+          for (let i = startIdx + 1; i <= lastEval; i++) {
             const bar = bars[i];
             const dayHigh = parseFloat(bar.high);
             const dayLow = parseFloat(bar.low);
@@ -1137,7 +1181,7 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
             if (dayLow <= stop) { exitPrice = stop; resultStr = 'loss'; closeReason = 'stop loss'; break; }
             if (dayHigh >= target) { exitPrice = target; resultStr = 'win'; closeReason = 'target reached'; break; }
 
-            if (i === startIdx + maxHoldDays || i === bars.length - 1) {
+            if (i === holdEnd) {
               exitPrice = dayClose;
               const pnl = (dayClose - entry) / entry * 100;
               // Honest evaluation: a trade wins when it exits in the profitable
@@ -1826,14 +1870,26 @@ async function _loadForwardPredictionsFromDb() {
 }
 
 async function recordForwardPrediction(symbol, signalAction, confidence, price, stopLoss, target1, signalObjAction, tradeType, sector) {
-  // Dedup: one live prediction per symbol+action. A persistent sell that never
-  // triggers a decisive move must NOT re-emit a fresh prediction every signal
-  // cycle — the audit would count the same call N times (same ref price, same
-  // outcome). The old prediction stays until it resolves (decisive move or
-  // benchmark lag), then a new one may be created.
+  // Dedup: one live prediction per symbol+action+THESIS. A persistent signal that
+  // never triggers a decisive move must NOT re-emit a fresh prediction every
+  // signal cycle — the audit would count the same call N times (same ref price,
+  // same outcome). The old prediction stays until it resolves (decisive move or
+  // benchmark lag), then a new one may be created. Keying on the thesis (entry
+  // price + target1) instead of symbol+action alone lets a GENUINELY NEW signal
+  // with fresh levels be recorded even while an older prediction for the same
+  // symbol is still open — the CGEN Aug 5 Long Term signal (entry 156.75,
+  // target1 208.34) was swallowed because the Aug 2 prediction (target1 172.52)
+  // was still pending, so it never reached the forward test at all.
   const existing = _forwardTestStore.get(symbol);
   if (existing) {
-    const open = existing.predictions.find(p => !p.resolved && p.action === signalObjAction);
+    const open = existing.predictions.find(p =>
+      !p.resolved && p.action === signalObjAction &&
+      (() => {
+        if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price >= 0.02) return false; // materially new entry → distinct thesis
+        if (signalObjAction === 'sell') return true; // sells carry no target levels
+        return p.target1 != null && target1 != null && Math.abs(p.target1 - target1) / target1 < 0.05;
+      })()
+    );
     if (open) return;
   }
   // Benchmark snapshot for sell predictions so the exit thesis can be judged
