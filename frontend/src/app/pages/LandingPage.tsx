@@ -987,6 +987,10 @@ export function LandingPage() {
                   setContactStatus({ type: 'error', message: 'Please fill in all fields.' });
                   return;
                 }
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactForm.email)) {
+                  setContactStatus({ type: 'error', message: 'Please provide a valid email address.' });
+                  return;
+                }
                 setContactSending(true);
                 setContactStatus(null);
                 try {

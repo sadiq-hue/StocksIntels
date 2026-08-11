@@ -1561,6 +1561,27 @@ async function sendContactNotification({ name, email, subject, message: msg }) {
   return sendViaTransport({ to: 'support@stocksintels.com', subject: '[Contact] ' + s, html, label: 'Contact Form' });
 }
 
+async function sendContactAcknowledgmentEmail(email, { name, subject }) {
+  const n = esc(name || '');
+  const s = esc(subject || '');
+  const appUrl = process.env.APP_URL || 'https://stocksintels.com';
+  const html = baseWrapper(`
+    <div style="text-align:center">
+      <div style="font-size:20px;font-weight:700;color:${TEXT_DARK};margin-bottom:4px">We received your message</div>
+      <div style="font-size:13px;color:${TEXT_MED};line-height:1.5;margin-bottom:20px">Hi ${n}, thanks for reaching out to StocksIntels.</div>
+    </div>
+    <div style="background:${BG_LIGHT};border:1px solid ${BORDER};border-radius:10px;padding:20px;margin-bottom:20px">
+      <div style="font-size:13px;color:${TEXT_MED};margin-bottom:4px">Subject</div>
+      <div style="font-size:15px;font-weight:600;color:${TEXT_DARK};margin-bottom:12px">${s}</div>
+      <div style="font-size:13px;color:${TEXT_MED};line-height:1.6">Our support team has received your message and will get back to you within 24 hours. We appreciate your patience.</div>
+    </div>
+    <div style="text-align:center">
+      <a href="${appUrl}" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Visit StocksIntels</a>
+    </div>
+  `);
+  return sendViaTransport({ to: email, subject: 'We received your message - StocksIntels', html, label: 'Contact acknowledgment' });
+}
+
 async function sendTestimonialPublishedEmail(email, data) {
   const n = esc(data.name || '');
   const r = esc(data.role || '');
@@ -1592,4 +1613,4 @@ async function sendTestimonialPublishedEmail(email, data) {
   return sendViaTransport({ to: email, subject, html, label: 'Testimonial published' });
 }
 
-module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendTestimonialPublishedEmail, sendViaTransport };
+module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendContactAcknowledgmentEmail, sendTestimonialPublishedEmail, sendViaTransport };

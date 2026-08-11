@@ -298,8 +298,22 @@ app.post('/api/contact', async (req, res) => {
     if (message.length < 10) {
       return res.status(400).json({ error: 'Message must be at least 10 characters' });
     }
-    await sendContactNotification({ name, email, subject, message });
-    res.json({ success: true, message: 'Message sent successfully' });
+    const saved = await pool.query(
+      `INSERT INTO contact_messages (name, email, subject, message) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [name.trim(), email.trim().toLowerCase(), subject.trim(), message.trim()]
+    );
+    try {
+      await sendContactNotification({ name, email, subject, message });
+    } catch (e) {
+      console.error('Contact notification email failed:', e.message);
+    }
+    try {
+      const { sendContactAcknowledgmentEmail } = require('./mailer');
+      await sendContactAcknowledgmentEmail(email, { name, subject });
+    } catch (e) {
+      console.error('Contact acknowledgment email failed:', e.message);
+    }
+    res.json({ success: true, message: 'Message sent successfully', id: saved.rows[0].id });
   } catch (err) {
     console.error('Contact form error:', err.message);
     res.status(500).json({ error: 'Failed to send message. Please try again later.' });
@@ -1496,6 +1510,52 @@ app.delete('/api/admin/testimonials/:id', async (req, res) => {
     if (!result.rows.length) return res.status(404).json({ error: 'Testimonial not found' });
     res.json({ success: true, message: 'Testimonial deleted' });
   } catch (err) { console.error('Admin delete testimonial error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+// ── Admin Contact Messages ──
+app.get('/api/admin/contact-messages', async (req, res) => {
+  try {
+    const status = (req.query.status || 'all').trim();
+    const conditions = [];
+    if (status === 'new') conditions.push('status = \'new\'');
+    if (status === 'handled') conditions.push('status = \'handled\'');
+    const whereClause = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    const [newRes, handledRes, listRes] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int as cnt FROM contact_messages WHERE status = 'new'`),
+      pool.query(`SELECT COUNT(*)::int as cnt FROM contact_messages WHERE status = 'handled'`),
+      pool.query(`SELECT id, name, email, subject, message, status, handled_at, created_at
+                  FROM contact_messages ${whereClause} ORDER BY created_at DESC LIMIT 100`),
+    ]);
+    res.json({
+      messages: listRes.rows,
+      counts: { new: newRes.rows[0].cnt, handled: handledRes.rows[0].cnt },
+    });
+  } catch (err) { console.error('Admin contact messages error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+// Mark a contact message as handled.
+app.post('/api/admin/contact-messages/:id/handle', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid message id' });
+    const result = await pool.query(
+      `UPDATE contact_messages SET status = 'handled', handled_at = COALESCE(handled_at, NOW()) WHERE id = $1 AND status = 'new' RETURNING id`,
+      [id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Message not found or already handled' });
+    res.json({ success: true, message: 'Message marked as handled' });
+  } catch (err) { console.error('Admin handle contact message error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+// Delete a contact message permanently.
+app.delete('/api/admin/contact-messages/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid message id' });
+    const result = await pool.query(`DELETE FROM contact_messages WHERE id = $1 RETURNING id`, [id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Message not found' });
+    res.json({ success: true, message: 'Message deleted' });
+  } catch (err) { console.error('Admin delete contact message error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Signal Outcomes ──
@@ -11535,6 +11595,19 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS rejected BOOLEAN NOT NULL DEFAULT false`).catch(() => {});
     await pool.query(`ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS published_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
     await pool.query(`ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS contact_messages (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      subject VARCHAR(255) NOT NULL,
+      message TEXT NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'new',
+      handled_at TIMESTAMP WITH TIME ZONE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    )`);
+    await pool.query(`ALTER TABLE contact_messages ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'new'`).catch(() => {});
+    await pool.query(`ALTER TABLE contact_messages ADD COLUMN IF NOT EXISTS handled_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
 
     // Restore signal-engine in-memory state now that tables are guaranteed to exist
     try {

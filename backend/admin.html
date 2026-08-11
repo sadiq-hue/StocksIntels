@@ -295,6 +295,11 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         Testimonials
         <span id="testimonialBadge" class="ml-auto text-xs text-gray-400"></span>
       </div>
+      <div class="nav-item" data-tab="contact-messages" onclick="switchTab('contact-messages')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        Contact Messages
+        <span id="contactMsgBadge" class="ml-auto text-xs text-gray-400"></span>
+      </div>
       <div class="nav-item" data-tab="engine" onclick="switchTab('engine')">
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         Engine
@@ -1321,6 +1326,30 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         </table>
       </div>
     </div>
+    <!-- Tab: Contact Messages -->
+    <div id="tab-contact-messages" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-900">Contact Messages</h1>
+        <div class="flex items-center gap-2">
+          <select id="contactMsgStatusFilter" class="input-field text-sm py-1.5" onchange="fetchContactMessages()">
+            <option value="new">New</option>
+            <option value="handled">Handled</option>
+            <option value="all">All</option>
+          </select>
+          <button class="btn btn-secondary text-sm" onclick="fetchContactMessages()">Refresh</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="stat-card text-center"><div class="stat-value text-amber-600" id="contactMsgStatNew">-</div><div class="stat-label">New</div></div>
+        <div class="stat-card text-center"><div class="stat-value text-emerald-600" id="contactMsgStatHandled">-</div><div class="stat-label">Handled</div></div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
+        <table class="w-full" style="min-width:900px">
+          <thead><tr><th>Name</th><th>Email</th><th>Subject</th><th>Message</th><th>Status</th><th>Submitted</th><th>Actions</th></tr></thead>
+          <tbody id="contactMessagesTableBody"></tbody>
+        </table>
+      </div>
+    </div>
     <!-- Tab: User Activity -->
     <div id="tab-user-activity" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
       <div class="flex items-center justify-between mb-2">
@@ -1942,6 +1971,7 @@ function switchTab(tab) {
   if (tab === 'notifications') fetchNotifications();
   if (tab === 'followers') fetchFollowers();
   if (tab === 'testimonials') fetchTestimonials();
+  if (tab === 'contact-messages') fetchContactMessages();
   if (tab === 'user-activity') { fetchUserActivity(); }
   if (tab === 'affiliates') { fetchAffiliateStats(); fetchAffiliates(); }
   if (tab === 'engine') { fetchEngineHealth(); fetchForwardTest(); }
@@ -3634,6 +3664,21 @@ async function pollPendingCount() {
       }
     }
   } catch {}
+  try {
+    const cRes = await fetch('/api/admin/contact-messages?status=new');
+    if (cRes.ok) {
+      const cData = await cRes.json();
+      const cCount = (cData.counts && cData.counts.new) || 0;
+      const cBadge = document.getElementById('contactMsgBadge');
+      if (cCount > 0) {
+        cBadge.textContent = cCount;
+        cBadge.className = 'ml-auto text-xs font-semibold bg-red-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center';
+      } else {
+        cBadge.textContent = '';
+        cBadge.className = 'ml-auto text-xs';
+      }
+    }
+  } catch {}
 }
 
 async function triggerDetection() {
@@ -4560,6 +4605,66 @@ async function deleteTestimonial(id) {
   } catch { toast('Network error', 'error'); }
 }
 
+// ── Contact Messages ──
+let _contactMsgFilter = 'new';
+
+async function fetchContactMessages() {
+  try {
+    _contactMsgFilter = document.getElementById('contactMsgStatusFilter').value || 'new';
+    const res = await fetch('/api/admin/contact-messages?status=' + encodeURIComponent(_contactMsgFilter));
+    if (!res.ok) return;
+    const d = await res.json();
+    const c = d.counts || {};
+    document.getElementById('contactMsgStatNew').textContent = c.new || 0;
+    document.getElementById('contactMsgStatHandled').textContent = c.handled || 0;
+    document.getElementById('contactMsgBadge').textContent = (c.new || 0) > 0 ? c.new + ' new' : '';
+    const tbody = document.getElementById('contactMessagesTableBody');
+    const list = d.messages || [];
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-gray-400 py-8">No messages found</td></tr>';
+    } else {
+      tbody.innerHTML = list.map(m => {
+        const status = m.status === 'handled'
+          ? '<span class="pill pill-verified">Handled</span>'
+          : '<span class="pill pill-unverified">New</span>';
+        const actions = m.status === 'handled'
+          ? `<button class="btn btn-secondary" onclick="deleteContactMessage(${m.id})" style="font-size:11px;padding:4px 10px">Delete</button>`
+          : `<button class="btn btn-primary" onclick="handleContactMessage(${m.id})" style="font-size:11px;padding:4px 10px">Mark Handled</button>
+             <button class="btn btn-secondary" onclick="deleteContactMessage(${m.id})" style="font-size:11px;padding:4px 10px">Delete</button>`;
+        return `<tr>
+          <td class="font-medium text-gray-900 text-xs">${esc(m.name)}</td>
+          <td class="text-gray-500 text-xs"><a href="mailto:${esc(m.email)}" class="text-[#0D7490] hover:underline">${esc(m.email)}</a></td>
+          <td class="text-gray-900 text-xs font-medium">${esc(m.subject)}</td>
+          <td class="text-gray-600 text-xs max-w-md"><div style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m.message)}">${esc(m.message)}</div></td>
+          <td>${status}</td>
+          <td class="text-gray-500 text-xs">${formatDate(m.created_at)}</td>
+          <td style="white-space:nowrap">${actions}</td>
+        </tr>`;
+      }).join('');
+    }
+  } catch {}
+}
+
+async function handleContactMessage(id) {
+  if (!confirm('Mark this message as handled?')) return;
+  try {
+    const res = await fetch('/api/admin/contact-messages/' + id + '/handle', { method: 'POST' });
+    const d = await res.json();
+    if (res.ok) { toast(d.message || 'Message marked as handled', 'success'); fetchContactMessages(); }
+    else toast(d.error || 'Failed to mark as handled', 'error');
+  } catch { toast('Network error', 'error'); }
+}
+
+async function deleteContactMessage(id) {
+  if (!confirm('Delete this message permanently?')) return;
+  try {
+    const res = await fetch('/api/admin/contact-messages/' + id, { method: 'DELETE' });
+    const d = await res.json();
+    if (res.ok) { toast(d.message || 'Message deleted', 'success'); fetchContactMessages(); }
+    else toast(d.error || 'Failed to delete', 'error');
+  } catch { toast('Network error', 'error'); }
+}
+
 // ── Settings ──
 let _isSuperAdmin = false;
 
@@ -5058,7 +5163,7 @@ async function handleVerifyOtp() {
     toast('Welcome back, ' + (data.user.full_name || 'Admin'), 'success');
     // Restore tab from URL path
     const pathTab = location.pathname.replace('/admin/', '') || 'dashboard';
-    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','testimonials','user-activity','audit','settings'];
+    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','testimonials','contact-messages','user-activity','audit','settings'];
     switchTab(validTabs.includes(pathTab) ? pathTab : 'dashboard');
     initSocket();
     setInterval(function(){ updateGreeting(); fetchDashboard(); }, 30000);
@@ -5232,7 +5337,7 @@ async function fetchUserActivity(page) {
     initSocket();
     // Restore tab from URL path
     const pathTab = location.pathname.replace('/admin/', '') || 'dashboard';
-    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','testimonials','user-activity','audit','settings'];
+    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','testimonials','contact-messages','user-activity','audit','settings'];
     const initialTab = validTabs.includes(pathTab) ? pathTab : 'dashboard';
     switchTab(initialTab);
     setInterval(function(){ updateGreeting(); fetchDashboard(); }, 30000);
