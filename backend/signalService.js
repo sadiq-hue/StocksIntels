@@ -70,7 +70,7 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     await pool.query(`DELETE FROM signal_outcomes o
       USING signal_history h
       WHERE o.ticker = h.ticker
-        AND o.signal_generated_at IS NOT DISTINCT FROM h.generated_at
+        AND o.signal_generated_at IS NOT DISTINCT FROM date_trunc('milliseconds', h.generated_at)
         AND o.source = 'backtest'
         AND o.resolved_at - o.signal_generated_at < CASE
           WHEN h.trade_type ILIKE '%long term%' THEN INTERVAL '182 days'
