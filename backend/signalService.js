@@ -58,20 +58,32 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     // Historical backtest previously force-closed signals at the last available
     // bar even when the trade-type hold window hadn't elapsed (CGEN Aug 5 Long
     // Term: entry 156.75, target1 208.34, force-closed at 194.75 four bars later,
-    // ~5 calendar days, as an 'expiry close'). Those rows are premature and
-    // pollute stats; delete them so the fixed backtest re-evaluates each signal
-    // honestly once available history covers its hold window (Long Term ~130 bars,
-    // short-term ~20 bars, approximated in calendar days below).
+    // ~5 calendar days, as an 'expiry close'; same for the Aug 2 signal closed
+    // at 158.00 — matched neither stop 146.11 nor target1 172.52). Those rows are
+    // premature and pollute stats; delete them so the fixed backtest re-evaluates
+    // each signal honestly once available history covers its hold window (Long
+    // Term ~130 bars, short-term ~20 bars, approximated in calendar days below).
+    // A row is premature when it resolved before its hold window elapsed AND its
+    // exit price matches neither the stop nor target1 (the ONLY legitimate
+    // short-history closes); close_reason may be empty on rows recorded before
+    // that column existed.
     await pool.query(`DELETE FROM signal_outcomes o
       USING signal_history h
       WHERE o.ticker = h.ticker
         AND o.signal_generated_at IS NOT DISTINCT FROM h.generated_at
         AND o.source = 'backtest'
-        AND o.close_reason = 'expiry close'
         AND o.resolved_at - o.signal_generated_at < CASE
           WHEN h.trade_type ILIKE '%long term%' THEN INTERVAL '182 days'
           ELSE INTERVAL '20 days'
-        END`).catch(() => {});
+        END
+        AND (
+          o.close_reason = 'expiry close'
+          OR (
+            (o.close_reason IS NULL OR o.close_reason = '')
+            AND NOT (o.exit_price BETWEEN h.stop_loss - 0.001 AND h.stop_loss + 0.001)
+            AND NOT (o.exit_price BETWEEN h.target1 - 0.001 AND h.target1 + 0.001)
+          )
+        )`).catch(() => {});
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS analysis_data JSONB`);
     // restoreStateFromDb SELECTs target3/reason from signal_history to re-seed
     // monitored positions across restarts; the idempotent ALTERs keep restores
