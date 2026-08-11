@@ -214,9 +214,7 @@ function buildNseGlobalConnection(nse20, sp500, nseSent, globalSent) {
 // ── Daily Brief Content ──
 
 async function generateDailyBriefContent() {
-  const [moversRes, summary, allIndices, sectors, signals] = await Promise.all([
-    axios.get(`${BASE}/api/market/movers`, { timeout: 30000 }).then(r => r.data)
-      .catch(() => ({ nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] }, combined: { gainers: [], losers: [] } })),
+  const [summary, allIndices, sectors, signals] = await Promise.all([
     fetchJson(`${BASE}/api/ai/market-summary`, { sentiment: 'Neutral', signals: { total: 0, strongBuys: 0, buys: 0, sells: 0 } }),
     fetchJson(`${BASE}/api/indices/all`, {}),
     getSectorPerformance().catch(() => []),
@@ -231,6 +229,7 @@ async function generateDailyBriefContent() {
       existing.signal = m.signal;
       existing.action = 'buy';
       existing.confidence = m.confidence ?? existing.confidence ?? 50;
+      if (existing.change == null) existing.change = m.change ?? 0;
     } else {
       byTicker.set(m.ticker, {
         ticker: m.ticker, name: m.name || m.ticker,
@@ -238,6 +237,7 @@ async function generateDailyBriefContent() {
         confidence: m.confidence ?? 50,
         entry: m.entryPrice, sector: m.sector || 'General',
         reason: m.reason || '', type: m.type,
+        change: m.change ?? 0,
       });
     }
   }
@@ -270,11 +270,14 @@ async function generateDailyBriefContent() {
     { label: 'USD/KES', value: usdKesStr, change: '--', signal: '--' },
   ];
 
-  const combinedMovers = [...(moversRes?.combined?.gainers || []), ...(moversRes?.combined?.losers || [])];
-  const yesterdayTopMovers = combinedMovers.slice(0, 6).map(m => ({
-    symbol: m.symbol || '--',
-    company: m.company || m.company_name || m.name || '',
-    change: m.change || (m.changePercent ? (m.isPositive ? '+' : '') + m.changePercent.toFixed(2) + '%' : '--'),
+  const combinedMovers = enrichedSignals
+    .filter(s => s.change != null && s.change !== 0)
+    .sort((a, b) => Math.abs(b.change || 0) - Math.abs(a.change || 0))
+    .slice(0, 6);
+  const yesterdayTopMovers = combinedMovers.map(m => ({
+    symbol: m.ticker || '--',
+    company: m.name || '',
+    change: (m.change > 0 ? '+' : '') + (m.change || 0) + '%',
     volume: m.volume && m.volume !== '0' && m.volume !== '--' ? m.volume : '--',
   }));
 
