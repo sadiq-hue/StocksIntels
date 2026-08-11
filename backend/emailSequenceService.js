@@ -100,6 +100,29 @@ const TEMPLATES = {
     `),
   }),
 
+  onboarding_day3_watchlist: (name) => ({
+    subject: "Set up your watchlist — the fastest way to get value from StocksIntels",
+    html: baseWrapper(`
+      <p style="font-size:15px;color:${TEXT_DARK};line-height:1.7;margin:0 0 16px">Hi ${name || 'there'},</p>
+      <p style="font-size:14px;color:${TEXT_MED};line-height:1.7;margin:0 0 16px">By now you've had a few days to explore the platform. Here's the single most useful thing you can do this week: <strong>set up your watchlist</strong>.</p>
+      <p style="font-size:14px;color:${TEXT_MED};line-height:1.7;margin:0 0 16px">Your watchlist is your personal market dashboard — the stocks you care about, in one place, with updates every time you log in. No hunting through exchanges. No forgetting which company you meant to check.</p>
+      <div style="background:${BG_LIGHT};border-radius:10px;padding:20px;margin:0 0 20px">
+        <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Add stocks across any exchange:</div>
+        <div style="font-size:13px;color:${TEXT_MED};line-height:1.9">
+          <div>NSE — Safaricom, Equity, KCB, EABL</div>
+          <div>NYSE & NASDAQ — Apple, Tesla, Nvidia, Microsoft</div>
+          <div>NGX — Dangote, GTCO, Zenith</div>
+        </div>
+      </div>
+      <p style="font-size:14px;color:${TEXT_MED};line-height:1.7;margin:0 0 16px">Once a stock is on your watchlist, jumping into its full analysis is one click. Real-time signals, AI sentiment, technical indicators — all there when you need them.</p>
+      <div style="text-align:center;margin:0 0 20px">${ctaButton('BUILD YOUR WATCHLIST \u2192', APP_URL + '/app/dashboard')}</div>
+      <div style="border-top:1px solid ${BORDER};padding-top:16px;margin-top:20px">
+        <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:0">See you on the platform,</p>
+        <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:4px 0 0"><strong>StocksIntels Team</strong></p>
+      </div>
+    `),
+  }),
+
   onboarding_day5_features: (name) => ({
     subject: '3 things StocksIntels Pro users do differently',
     html: baseWrapper(`
@@ -128,6 +151,31 @@ const TEMPLATES = {
     `),
   }),
 
+  onboarding_day6_signals: (name) => ({
+    subject: 'How to read StocksIntels signals — and why they matter',
+    html: baseWrapper(`
+      <p style="font-size:15px;color:${TEXT_DARK};line-height:1.7;margin:0 0 16px">Hi ${name || 'there'},</p>
+      <p style="font-size:14px;color:${TEXT_MED};line-height:1.7;margin:0 0 16px">You've probably seen the Buy/Strong Buy/Sell badges on the platform. Here's what they actually mean — and more importantly, <strong>how to use them</strong>.</p>
+      <div style="background:${BG_LIGHT};border-radius:10px;padding:20px;margin:0 0 16px">
+        <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:12px">A StocksIntels signal is a composite of:</div>
+        <div style="font-size:13px;color:${TEXT_MED};line-height:1.9">
+          <div style="margin-bottom:4px">→ <strong>Technical analysis</strong> — trend direction, momentum, support/resistance</div>
+          <div style="margin-bottom:4px">→ <strong>Fundamental health</strong> — PE ratio, revenue growth, Altman Z-score, debt</div>
+          <div style="margin-bottom:4px">→ <strong>Market sentiment</strong> — news coverage, social signals, insider activity</div>
+          <div style="margin-bottom:4px">→ <strong>Macro regime</strong> — whether the overall market is risk-on or risk-off</div>
+          <div style="margin-bottom:4px">→ <strong>ML prediction</strong> — a machine learning model trained on past outcomes</div>
+        </div>
+      </div>
+      <p style="font-size:14px;color:${TEXT_MED};line-height:1.7;margin:0 0 16px">Each signal comes with an <strong>entry price, stop loss, and target</strong> — a complete trade plan, not just a rating. Strong Buy means the engine sees high conviction across multiple dimensions. Buy means moderate conviction. Sell means the analysis points away from entry right now.</p>
+      <p style="font-size:14px;color:${TEXT_MED};line-height:1.7;margin:0 0 16px">Signals are not a crystal ball. They're a <strong>decision-support tool</strong> — they flag opportunities you might otherwise miss and warn you when the data doesn't support a trade.</p>
+      <div style="text-align:center;margin:0 0 20px">${ctaButton('CHECK TODAY\'S SIGNALS \u2192', APP_URL + '/app/stocks')}</div>
+      <div style="border-top:1px solid ${BORDER};padding-top:16px;margin-top:20px">
+        <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:0">Trade smart,</p>
+        <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:4px 0 0"><strong>StocksIntels Team</strong></p>
+      </div>
+    `),
+  }),
+
   onboarding_day9_story: (name) => ({
     subject: 'Why I built StocksIntels (the real reason)',
     html: baseWrapper(`
@@ -143,6 +191,28 @@ const TEMPLATES = {
       <div style="text-align:center;margin:0 0 24px">${ctaButton('EXPLORE THE PLATFORM \u2192', APP_URL + '/app/dashboard')}</div>
       <div style="border-top:1px solid ${BORDER};padding-top:16px;margin-top:20px">
         <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:0">Thank you for being here,</p>
+        <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:4px 0 0"><strong>StocksIntels Team</strong></p>
+      </div>
+    `),
+  }),
+
+  onboarding_day10_pro: (name) => ({
+    subject: 'Pro features you haven\'t tried yet',
+    html: baseWrapper(`
+      <p style="font-size:15px;color:${TEXT_DARK};line-height:1.7;margin:0 0 16px">Hi ${name || 'there'},</p>
+      <p style="font-size:14px;color:${TEXT_MED};line-height:1.7;margin:0 0 16px">You're ten days into StocksIntels. By now you've likely explored signals, run some analysis, and built a watchlist. Here's what Pro users get that you may not have seen yet:</p>
+      <div style="background:${BG_LIGHT};border-radius:10px;padding:20px;margin:0 0 16px">
+        <div style="font-size:13px;color:${TEXT_MED};line-height:1.9">
+          <div style="margin-bottom:6px"><strong style="color:${TEXT_DARK}">→ Real-time data</strong> — while free tier data is delayed, Pro gives you live quotes across NSE, NYSE, NGX, and more</div>
+          <div style="margin-bottom:6px"><strong style="color:${TEXT_DARK}">→ Full AI analysis</strong> — detailed sentiment breakdowns, risk flags, and earnings analysis for every stock</div>
+          <div style="margin-bottom:6px"><strong style="color:${TEXT_DARK}">→ Unlimited watchlists</strong> — track as many stocks as you need across any exchange</div>
+          <div style="margin-bottom:6px"><strong style="color:${TEXT_DARK}">→ Multi-exchange comparison</strong> — compare stocks across the NSE, NGX, NYSE, and more side by side</div>
+        </div>
+      </div>
+      <p style="font-size:14px;color:${TEXT_MED};line-height:1.7;margin:0 0 16px">Pro is <strong>KES 2,599/month ($19.90/mo)</strong> — less than a single brokerage commission for a month of institutional-grade market intelligence.</p>
+      <div style="text-align:center;margin:0 0 20px">${ctaButton('UPGRADE TO PRO \u2192', APP_URL + '/pricing')}</div>
+      <div style="border-top:1px solid ${BORDER};padding-top:16px;margin-top:20px">
+        <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:0">Here for your investing journey,</p>
         <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:4px 0 0"><strong>StocksIntels Team</strong></p>
       </div>
     `),

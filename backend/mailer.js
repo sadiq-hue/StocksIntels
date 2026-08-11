@@ -386,7 +386,7 @@ async function sendDailySentimentEmail(email, data) {
   const buyPct = totalSignals > 0 ? Math.round((buys / totalSignals) * 100) : 0;
   const sellPct = totalSignals > 0 ? Math.round((sells / totalSignals) * 100) : 0;
 
-  const confNum = parseInt(String(confidence).replace(/[^0-9]/g, '')) || 65;
+  const confNum = confidence ? parseInt(String(confidence).replace(/[^0-9]/g, '')) || 0 : 0;
 
   function chgColor(val) {
     if (!val) return TEXT_LIGHT;
@@ -516,14 +516,15 @@ async function sendDailySentimentEmail(email, data) {
   <div style="padding:28px 32px;border-bottom:3px solid ${BRAND_COLOR};background:${sentimentHeroClass}">
     <div style="font-size:11px;font-weight:700;color:${TEXT_LIGHT};text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px">Overall Market Sentiment</div>
     <div style="font-size:42px;font-weight:700;color:${sentimentColor};line-height:1">${sentiment || 'NEUTRAL'}</div>
-    <div style="font-size:14px;color:${TEXT_LIGHT};margin-top:8px">Confidence: ${confidence || '65%'} &nbsp;&middot;&nbsp; Based on price, volume, sentiment &amp; macro signals</div>
+    <div style="font-size:14px;color:${TEXT_LIGHT};margin-top:8px">Confidence: ${confidence || 'unavailable'} &nbsp;&middot;&nbsp; Based on price, volume, sentiment &amp; macro signals</div>
     <div style="font-size:14px;color:${TEXT_MED};margin-top:6px;line-height:1.5">${summary || 'Markets showing mixed activity today.'}</div>
+    ${confNum > 0 ? `
     <div style="margin-top:14px">
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:${TEXT_LIGHT};margin-bottom:4px"><span>Bearish</span><span>${confidence || '65%'} Confidence</span><span>Bullish</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:${TEXT_LIGHT};margin-bottom:4px"><span>Bearish</span><span>${confidence || 'N/A'} Confidence</span><span>Bullish</span></div>
       <div style="background:rgba(255,255,255,0.1);border-radius:4px;height:6px">
         <div style="height:6px;border-radius:4px;background:${AMBER};width:${confNum}%"></div>
       </div>
-    </div>
+    </div>` : ''}
   </div>
 
   <!-- KPI STRIP -->
@@ -575,10 +576,6 @@ async function sendDailySentimentEmail(email, data) {
         <div style="font-size:11px;color:${BRAND_COLOR};margin-top:2px">${strongBuys > 0 ? 'Active' : 'Awaiting'}</div>
       </div>
     </div>
-    ${totalSignals === 0 ? `
-    <div style="border-radius:6px;padding:12px 16px;margin-top:12px;font-size:13px;line-height:1.6;background:${AMBER}15;border-left:3px solid ${AMBER};color:${AMBER}">
-      <strong>Signal Note:</strong> No AI signals have been generated yet. This typically means the data pipeline is still populating or market activity is below the signal threshold.
-    </div>` : ''}
   </div>
 
   <!-- NSE MARKET INTELLIGENCE -->
