@@ -138,11 +138,11 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
           {["nse", "global"].map((m) => {
             const s = marketStatus[m as "nse" | "global"];
             return (
-              <div key={m} className={`flex flex-col items-center px-2 py-2 rounded-xl border ${s.open ? "bg-emerald-50 border-emerald-200" : "bg-sidebar-accent border-sidebar-border"}`}>
-                <span className={`text-[10px] font-semibold uppercase tracking-wide ${s.open ? "text-emerald-700" : "text-muted-foreground"}`}>
+              <div key={m} className={`flex flex-col items-center px-2 py-2 rounded-xl border ${s.open ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50" : "bg-sidebar-accent border-sidebar-border"}`}>
+                <span className={`text-[10px] font-semibold uppercase tracking-wide ${s.open ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}>
                   {m}
                 </span>
-                <span className={`text-[11px] font-medium ${s.open ? "text-emerald-600" : "text-muted-foreground"}`}>
+                <span className={`text-[11px] font-medium ${s.open ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                   {s.label}
                 </span>
               </div>
@@ -173,7 +173,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
             collapsed ? "justify-center" : ""
           } ${
             beginnerMode
-              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+              ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50'
               : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
           }`}
         >
@@ -198,7 +198,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
                     <div key={m} className="flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full ${s.open ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
                       <span className="text-sidebar-foreground text-sm font-medium capitalize">{m}</span>
-                      <span className={`text-xs ml-auto ${s.open ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+                      <span className={`text-xs ml-auto ${s.open ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
                         {s.label}
                       </span>
                     </div>

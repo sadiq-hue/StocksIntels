@@ -90,8 +90,8 @@ export function DerivativesPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <div className="size-8 rounded-lg bg-purple-100 flex items-center justify-center">
-          <TrendingUp className="size-4 text-purple-600" />
+        <div className="size-8 rounded-lg bg-purple-100 dark:bg-purple-950/40 flex items-center justify-center">
+          <TrendingUp className="size-4 text-purple-600 dark:text-purple-400" />
         </div>
         <div>
           <h1 className="text-lg font-bold text-foreground">Derivatives & Corporate Actions</h1>
@@ -101,24 +101,24 @@ export function DerivativesPage() {
 
       {/* Educational Cards */}
       <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
-        <GraduationCap className="size-4 text-purple-600" /> Derivatives Education
+        <GraduationCap className="size-4 text-purple-600 dark:text-purple-400" /> Derivatives Education
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-8">
         {concepts.map((concept) => {
           const Icon = concept.icon;
           const colorMap: Record<string, string> = {
-            blue: "border-blue-200 bg-blue-50/50",
-            emerald: "border-emerald-200 bg-emerald-50/50",
-            purple: "border-purple-200 bg-purple-50/50",
-            amber: "border-amber-200 bg-amber-50/50",
-            indigo: "border-indigo-200 bg-indigo-50/50",
+            blue: "border-blue-200 dark:border-blue-800/50 bg-blue-50/50 dark:bg-blue-950/20",
+            emerald: "border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/50 dark:bg-emerald-950/20",
+            purple: "border-purple-200 dark:border-purple-800/50 bg-purple-50/50 dark:bg-purple-950/20",
+            amber: "border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/20",
+            indigo: "border-indigo-200 dark:border-indigo-800/50 bg-indigo-50/50 dark:bg-indigo-950/20",
           };
           const iconColorMap: Record<string, string> = {
-            blue: "text-blue-600 bg-blue-100",
-            emerald: "text-emerald-600 bg-emerald-100",
-            purple: "text-purple-600 bg-purple-100",
-            amber: "text-amber-600 bg-amber-100",
-            indigo: "text-indigo-600 bg-indigo-100",
+            blue: "text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-950/40",
+            emerald: "text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/40",
+            purple: "text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-950/40",
+            amber: "text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/40",
+            indigo: "text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950/40",
           };
           return (
             <Card key={concept.title} className={`p-4 border ${colorMap[concept.color] || ''} shadow-sm`}>
@@ -146,7 +146,7 @@ export function DerivativesPage() {
 
       {/* Upcoming Corporate Actions */}
       <div className="flex items-center gap-2 mb-3">
-        <Info className="size-4 text-purple-600" />
+        <Info className="size-4 text-purple-600 dark:text-purple-400" />
         <h2 className="text-sm font-semibold text-foreground">
           {tab === 'nse' ? 'NSE' : 'Global'} Corporate Events
         </h2>
@@ -168,7 +168,7 @@ export function DerivativesPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-semibold text-foreground">{action.ticker}</span>
                   {action.exchange && <span className="text-[10px] text-muted-foreground">({action.exchange})</span>}
-                  <Badge className="text-[10px] px-1.5 py-0 font-medium bg-purple-100 text-purple-700 border-purple-200">
+                  <Badge className="text-[10px] px-1.5 py-0 font-medium bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/50">
                     {action.action_type}
                   </Badge>
                   <span className="text-[11px] text-muted-foreground">{action.title}</span>
@@ -199,11 +199,11 @@ export function DerivativesPage() {
       )}
 
       {/* Disclaimer */}
-      <Card className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
+      <Card className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 border-amber-200 dark:border-amber-800/50">
         <div className="flex items-start gap-2">
-          <AlertTriangle className="size-4 text-amber-600 mt-0.5 shrink-0" />
+          <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
           <div>
-            <h3 className="text-xs font-semibold text-amber-800 mb-1">Derivatives Risk Warning</h3>
+            <h3 className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">Derivatives Risk Warning</h3>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Derivatives trading involves substantial risk of loss and is not suitable for all investors. The NSE derivatives market
               may have limited liquidity. Always ensure you understand the terms of each contract before trading. Consider consulting

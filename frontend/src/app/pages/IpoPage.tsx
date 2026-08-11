@@ -22,10 +22,10 @@ interface Ipo {
 }
 
 const statusColors: Record<string, string> = {
-  upcoming: "bg-blue-100 text-blue-700 border-blue-200",
-  current: "bg-amber-100 text-amber-700 border-amber-200",
-  listed: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  withdrawn: "bg-red-100 text-red-700 border-red-200",
+  upcoming: "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50",
+  current: "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50",
+  listed: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50",
+  withdrawn: "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50",
   info: "bg-muted text-muted-foreground border-border",
 };
 
@@ -88,7 +88,7 @@ export function IpoPage() {
             <BarChart3 className="size-3" />
             <span>Current: ${ipo.current_price.toLocaleString()}</span>
             {ipo.price_change_pct != null && (
-              <span className={`text-[10px] font-medium ${ipo.price_change_pct >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              <span className={`text-[10px] font-medium ${ipo.price_change_pct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
                 {ipo.price_change_pct >= 0 ? '+' : ''}{ipo.price_change_pct.toFixed(2)}%
               </span>
             )}
@@ -119,8 +119,8 @@ export function IpoPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <div className="size-8 rounded-lg bg-blue-100 flex items-center justify-center">
-          <Rocket className="size-4 text-blue-600" />
+        <div className="size-8 rounded-lg bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center">
+          <Rocket className="size-4 text-blue-600 dark:text-blue-400" />
         </div>
         <div>
           <h1 className="text-lg font-bold text-foreground">New Listings & IPOs</h1>
@@ -144,7 +144,7 @@ export function IpoPage() {
         <>
           {current.length > 0 && (
             <div className="mb-6">
-              <h2 className="text-sm font-semibold text-amber-700 mb-2 flex items-center gap-1.5">
+              <h2 className="text-sm font-semibold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
                 <Timer className="size-4" /> Current / Ongoing
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -155,7 +155,7 @@ export function IpoPage() {
 
           {upcoming.length > 0 && (
             <div className="mb-6">
-              <h2 className="text-sm font-semibold text-blue-700 mb-2 flex items-center gap-1.5">
+              <h2 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1.5">
                 <Calendar className="size-4" /> Upcoming
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -166,7 +166,7 @@ export function IpoPage() {
 
           {listed.length > 0 && (
             <div className="mb-6">
-              <h2 className="text-sm font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
+              <h2 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 mb-2 flex items-center gap-1.5">
                 <Rocket className="size-4" /> Recently Listed
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -192,8 +192,8 @@ export function IpoPage() {
         </>
       )}
 
-      <Card className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100">
-        <h3 className="text-xs font-semibold text-blue-800 uppercase tracking-wider mb-2">
+      <Card className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-100 dark:border-blue-800/50">
+        <h3 className="text-xs font-semibold text-blue-800 dark:text-blue-300 uppercase tracking-wider mb-2">
           {tab === 'nse' ? 'About NSE IPOs' : 'About Global IPOs'}
         </h3>
         {tab === 'nse' ? (

@@ -302,7 +302,7 @@ export function PricingPage() {
                   key={plan.name}
                   className={`relative rounded-2xl p-6 sm:p-8 transition-all duration-300 ${
                     plan.popular
-                      ? "bg-gray-900 text-white shadow-2xl shadow-gray-900/20 scale-105 z-10"
+                      ? "bg-gray-900 dark:bg-[#0a0a0b] text-white shadow-2xl shadow-gray-900/20 scale-105 z-10"
                       : "bg-card border border-border hover:border-[#0D7490]/20 hover:shadow-xl hover:shadow-[#0D7490]/5"
                   }`}
                 >
@@ -345,7 +345,7 @@ export function PricingPage() {
                     disabled={plan.name !== "Free" && startingTrial === plan.name}
                     className={`w-full py-6 text-base font-semibold mb-8 transition-all hover:-translate-y-0.5 ${
                       plan.popular
-                        ? "bg-white text-gray-900 hover:bg-gray-100 shadow-xl"
+                        ? "bg-white dark:bg-white/[0.04] text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 dark:hover:bg-white/10 shadow-xl"
                         : plan.ctaVariant === "default"
                         ? "bg-[#0D7490] hover:bg-[#0A5F7A] text-white shadow-lg shadow-[#0D7490]/25"
                         : "border-border text-muted-foreground hover:bg-muted"
@@ -493,7 +493,7 @@ export function PricingPage() {
                 Our team is here to help you find the perfect plan for your trading needs.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button size="lg" className="bg-white text-[#0D7490] hover:bg-gray-100 px-8 py-6 text-base font-semibold shadow-xl"
+                <Button size="lg" className="bg-white text-[#0D7490] hover:bg-gray-100 dark:hover:bg-white/10 px-8 py-6 text-base font-semibold shadow-xl"
                   onClick={() => {
                     const planName = "Pro";
                     if (user) {
@@ -523,7 +523,7 @@ export function PricingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
+      <footer className="bg-gray-900 dark:bg-[#0a0a0b] text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2">

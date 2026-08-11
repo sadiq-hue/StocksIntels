@@ -246,9 +246,9 @@ export function AIInsightsPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-[1400px] mx-auto h-[calc(100vh-160px)] md:h-[calc(100vh-200px)] flex flex-col">
+    <div className="p-4 md:p-6 max-w-[1400px] mx-auto flex flex-col min-h-[calc(100vh-10rem)]">
       {/* Header */}
-      <div className="mb-4 md:mb-6">
+      <div className="mb-3 md:mb-6 shrink-0">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-lg shadow-[#0D7490]/20">
             <Brain className="w-5 h-5 text-white" />
@@ -260,11 +260,11 @@ export function AIInsightsPage() {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0">
-        {/* Live Signals Panel */}
-        <Card className="w-full md:w-80 bg-card border-border flex flex-col overflow-hidden shrink-0 shadow-sm max-h-[240px] md:max-h-none">
+          <div className="flex flex-col md:flex-row gap-3 md:gap-4 flex-1 min-h-0">
+            {/* Live Signals Panel */}
+            <Card className="w-full md:w-80 bg-card border-border flex flex-col overflow-hidden shrink-0 shadow-sm max-h-[200px] md:max-h-none">
           <button onClick={() => setShowSignals(!showSignals)}
-            className="flex items-center justify-between px-4 py-3.5 border-b border-border hover:bg-muted/80 transition-colors group">
+            className="flex items-center justify-between px-3 py-2.5 md:px-4 md:py-3.5 border-b border-border hover:bg-muted/80 transition-colors group">
             <div className="flex items-center gap-2.5">
               <div className="p-1.5 rounded-lg bg-gradient-to-br from-emerald-500/10 to-green-500/10">
                 <TrendingUp className="w-4 h-4 text-emerald-600" />
@@ -281,7 +281,7 @@ export function AIInsightsPage() {
             </div>
           </button>
           {showSignals && (
-            <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+              <div className="flex-1 overflow-y-auto p-2.5 md:p-3 space-y-2">
               {signalsLoading ? (
                 <div className="flex flex-col items-center justify-center py-10 gap-3">
                   <div className="relative">
@@ -351,7 +351,7 @@ export function AIInsightsPage() {
         {/* Chat Panel */}
         <Card className="flex-1 bg-card border-border p-0 flex flex-col overflow-hidden shadow-sm">
           {/* Chat header */}
-          <div className="px-4 py-3 md:px-6 md:py-4 border-b border-border bg-gradient-to-r from-muted to-card flex items-center gap-3 shrink-0">
+          <div className="px-4 py-2.5 md:px-6 md:py-4 border-b border-border bg-gradient-to-r from-muted to-card flex items-center gap-2.5 shrink-0">
             <div className="p-2 rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10">
               <Brain className="w-4 h-4 text-[#0D7490]" />
             </div>
@@ -362,7 +362,7 @@ export function AIInsightsPage() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-5 space-y-4">
+          <div className="flex-1 overflow-y-auto px-3 py-3 md:px-6 md:py-5 space-y-3 md:space-y-4">
             {messages.map((message, index) => (
               <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                 {message.role === "assistant" && (
@@ -370,13 +370,13 @@ export function AIInsightsPage() {
                     <div className="p-1.5 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-sm mt-0.5 shrink-0">
                       <Brain className="w-3.5 h-3.5 text-white" />
                     </div>
-                    <div className="bg-muted border border-border rounded-2xl rounded-tl-sm px-5 py-3.5 shadow-sm">
+                    <div className="bg-muted border border-border rounded-2xl rounded-tl-sm px-4 md:px-5 py-3 md:py-3.5 shadow-sm overflow-hidden break-words">
                       <MessageContent content={message.content} />
                     </div>
                   </div>
                 )}
                 {message.role === "user" && (
-                  <div className="max-w-[75%] bg-gradient-to-r from-[#0D7490] to-[#0A5F7A] rounded-2xl rounded-tr-sm px-5 py-3.5 shadow-md shadow-[#0D7490]/10">
+                  <div className="max-w-[75%] bg-gradient-to-r from-[#0D7490] to-[#0A5F7A] rounded-2xl rounded-tr-sm px-4 py-3 shadow-md shadow-[#0D7490]/10 break-words">
                     <p className="whitespace-pre-line leading-relaxed text-sm text-white">{message.content}</p>
                   </div>
                 )}
@@ -405,30 +405,30 @@ export function AIInsightsPage() {
           </div>
 
           {/* Sample Questions & Input */}
-          <div className="border-t border-border bg-card px-4 py-3 md:px-6 md:py-4 space-y-3 shrink-0">
+          <div className="border-t border-border bg-card px-3 py-3 md:px-6 md:py-4 space-y-2.5 shrink-0">
             {messages.length === 1 && (
               <div className="flex flex-wrap gap-2">
                 {sampleQuestions.map((q, i) => {
                   const Icon = q.icon;
                   return (
                     <button key={i} onClick={() => handleSubmit(q.text)} disabled={loading}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-muted hover:bg-accent text-muted-foreground hover:text-foreground rounded-xl transition-all text-xs font-medium border border-border hover:border-[#0D7490]/30 hover:shadow-sm disabled:opacity-50">
-                      <Icon className="w-3.5 h-3.5" />
-                      {q.text}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-muted hover:bg-accent text-muted-foreground hover:text-foreground rounded-xl transition-all text-xs font-medium border border-border hover:border-[#0D7490]/30 hover:shadow-sm disabled:opacity-50 flex-1 min-w-0 truncate">
+                      <Icon className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{q.text}</span>
                     </button>
                   );
                 })}
               </div>
             )}
 
-            <form onSubmit={handleSend} className="flex gap-2.5">
-              <div className="relative flex-1">
+            <form onSubmit={handleSend} className="flex gap-2">
+              <div className="relative flex-1 min-w-0">
                 <Input value={input} onChange={(e) => setInput(e.target.value)} disabled={loading}
-                  placeholder="Ask about stocks, trends, or strategies..."
-                  className="w-full bg-muted border-border text-foreground pr-4 pl-4 h-11 rounded-xl focus:bg-card focus:border-[#0D7490]/40 focus:ring-2 focus:ring-[#0D7490]/10 transition-all placeholder:text-muted-foreground" />
+                  placeholder="Ask about stocks..."
+                  className="w-full bg-muted border-border text-foreground px-4 h-11 rounded-xl focus:bg-card focus:border-[#0D7490]/40 focus:ring-2 focus:ring-[#0D7490]/10 transition-all placeholder:text-muted-foreground text-sm" />
               </div>
               <Button type="submit" disabled={loading || !input.trim()}
-                className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] hover:from-[#0A5F7A] hover:to-[#0D7490] text-white px-5 h-11 rounded-xl shadow-md shadow-[#0D7490]/20 hover:shadow-lg hover:shadow-[#0D7490]/30 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed">
+                className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] hover:from-[#0A5F7A] hover:to-[#0D7490] text-white px-5 h-11 rounded-xl shadow-md shadow-[#0D7490]/20 hover:shadow-lg hover:shadow-[#0D7490]/30 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
             </form>

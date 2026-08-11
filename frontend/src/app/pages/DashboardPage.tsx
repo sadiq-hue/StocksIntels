@@ -442,7 +442,7 @@ export function DashboardPage() {
     <div className="mx-auto max-w-[1600px] p-4 md:p-6 space-y-6">
 
       {/* Tab Navigation */}
-      <div className="flex items-center gap-1 p-1 bg-muted/50 border rounded-lg w-full sm:w-auto overflow-x-auto">
+      <div className="flex items-center gap-1 p-1 bg-muted/50 dark:bg-muted/20 border rounded-lg w-full sm:w-auto overflow-x-auto">
         {[
           { id: "overview", label: "Overview", icon: LayoutGrid },
           { id: "markets", label: "Markets", icon: TrendingUp },
@@ -542,11 +542,11 @@ export function DashboardPage() {
         </Card>
 
         {[
-          { icon: Banknote, color: "bg-emerald-100 text-emerald-600", label: "NSE Portfolio", value: `KES ${enhancedTotals.nseValue.toLocaleString()}`, sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
-          { icon: Globe2, color: "bg-indigo-100 text-indigo-600", label: "Global Portfolio", value: `$${enhancedTotals.globalValue.toLocaleString()}`, sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${brokerTotals.posCount} pos)`, valColor: "text-foreground" },
-          { icon: PieChart, color: "bg-purple-100 text-purple-600", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} NSE · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
-          { icon: Brain, color: "bg-yellow-100 text-yellow-600", label: "Market Intelligence", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: "text-foreground" },
-          { icon: Scale, color: "bg-blue-100 text-blue-600", label: "vs Benchmarks", value: perfMeta.hasHistory ? `${benchmarkMetrics.alpha >= 0 ? '+' : ''}${benchmarkMetrics.alpha.toFixed(1)}%` : '—', sub: perfMeta.hasHistory ? `Portfolio ${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}% · NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%` : `NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%`, valColor: perfMeta.hasHistory ? (benchmarkMetrics.alpha >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
+          { icon: Banknote, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400", label: "NSE Portfolio", value: `KES ${enhancedTotals.nseValue.toLocaleString()}`, sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
+          { icon: Globe2, color: "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400", label: "Global Portfolio", value: `$${enhancedTotals.globalValue.toLocaleString()}`, sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${brokerTotals.posCount} pos)`, valColor: "text-foreground" },
+          { icon: PieChart, color: "bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} NSE · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
+          { icon: Brain, color: "bg-yellow-100 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400", label: "Market Intelligence", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: "text-foreground" },
+          { icon: Scale, color: "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400", label: "vs Benchmarks", value: perfMeta.hasHistory ? `${benchmarkMetrics.alpha >= 0 ? '+' : ''}${benchmarkMetrics.alpha.toFixed(1)}%` : '—', sub: perfMeta.hasHistory ? `Portfolio ${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}% · NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%` : `NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%`, valColor: perfMeta.hasHistory ? (benchmarkMetrics.alpha >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
         ].map((m, i) => (
           <Card key={i} className="border shadow-sm p-5">
             <div className="flex items-center gap-2 mb-3">
@@ -562,11 +562,11 @@ export function DashboardPage() {
       </div>
 
       {beginnerMode && (
-        <Card className="mt-4 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-200">
+        <Card className="mt-4 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/20 border-amber-200 dark:border-amber-800/50">
           <div className="flex items-start gap-3">
             <Lightbulb className="size-4 text-amber-600 mt-0.5 shrink-0" />
             <div className="text-xs text-muted-foreground leading-relaxed">
-              <span className="font-semibold text-amber-800">Beginner Mode Active.</span>{' '}
+              <span className="font-semibold text-amber-800 dark:text-amber-200">Beginner Mode Active.</span>{' '}
               <strong>Portfolio Value</strong> = total worth of your investments. <strong>NSE / Global</strong> = which market your stocks trade on.
               <strong> Holdings</strong> = number of different stocks you own. <strong>Market Intelligence</strong> = automated buy/sell suggestions.
               <strong>vs Benchmarks</strong> = how your portfolio compares to market indexes like the NSE 20 or S&P 500.
@@ -591,7 +591,7 @@ export function DashboardPage() {
           </div>
           <div className="space-y-3">
             {nseIndices.map((index) => (
-              <div key={index.name} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted/80 transition-colors">
+              <div key={index.name} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 dark:bg-muted/30 hover:bg-muted/80 dark:hover:bg-muted/50 transition-colors">
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-foreground">{index.name}</span>
@@ -613,8 +613,8 @@ export function DashboardPage() {
         <Card className="border shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="size-8 rounded-lg bg-indigo-100 flex items-center justify-center">
-                <Globe2 className="size-4 text-indigo-600" />
+              <div className="size-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center">
+                <Globe2 className="size-4 text-indigo-600 dark:text-indigo-400" />
               </div>
               <h3 className="text-sm font-semibold text-foreground">Global Indices</h3>
             </div>
@@ -624,7 +624,7 @@ export function DashboardPage() {
           </div>
           <div className="space-y-3">
             {globalIndices.map((index) => (
-              <div key={index.name} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted/80 transition-colors">
+              <div key={index.name} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 dark:bg-muted/30 hover:bg-muted/80 dark:hover:bg-muted/50 transition-colors">
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-foreground">{index.name}</span>
@@ -793,8 +793,8 @@ export function DashboardPage() {
         <Card className="border shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="size-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <TrendingUp className="size-4 text-emerald-600" />
+              <div className="size-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
+                <TrendingUp className="size-4 text-emerald-600 dark:text-emerald-400" />
               </div>
               <h3 className="text-sm font-semibold text-foreground">Top Gainers</h3>
             </div>
@@ -811,7 +811,7 @@ export function DashboardPage() {
                     change: stock.change, volume: stock.volume,
                     market: stock.market === 'nse' ? 'nse' : 'global',
                     currency: stock.currency || 'KES', signal: sig,
-                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-emerald-50/50 transition-all border border-transparent hover:border-emerald-200 cursor-pointer gap-3">
+                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 transition-all border border-transparent hover:border-emerald-200 dark:hover:border-emerald-800/50 cursor-pointer gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="size-9 rounded-lg bg-gradient-to-br from-emerald-100 to-green-100 flex items-center justify-center shrink-0">
                         <span className="text-emerald-700 font-bold text-xs">{stock.ticker}</span>
@@ -836,8 +836,8 @@ export function DashboardPage() {
         <Card className="border shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="size-8 rounded-lg bg-red-100 flex items-center justify-center">
-                <TrendingDown className="size-4 text-red-600" />
+              <div className="size-8 rounded-lg bg-red-100 dark:bg-red-950/40 flex items-center justify-center">
+                <TrendingDown className="size-4 text-red-600 dark:text-red-400" />
               </div>
               <h3 className="text-sm font-semibold text-foreground">Top Losers</h3>
             </div>
@@ -854,7 +854,7 @@ export function DashboardPage() {
                   change: stock.change, volume: stock.volume,
                   market: stock.market === 'nse' ? 'nse' : 'global',
                   currency: stock.currency || 'KES', signal: sig,
-                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-red-50/50 transition-all border border-transparent hover:border-red-200 cursor-pointer gap-3">
+                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-red-50/50 dark:hover:bg-red-950/30 transition-all border border-transparent hover:border-red-200 dark:hover:border-red-800/50 cursor-pointer gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="size-9 rounded-lg bg-gradient-to-br from-red-100 to-rose-100 flex items-center justify-center shrink-0">
                         <span className="text-red-700 font-bold text-xs">{stock.ticker}</span>
@@ -922,7 +922,7 @@ export function DashboardPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={`px-2 py-1 rounded-md text-xs font-semibold ${stock.isPositive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                      <span className={`px-2 py-1 rounded-md text-xs font-semibold ${stock.isPositive ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400'}`}>
                         {stock.change}
                       </span>
                       <span className={`text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
@@ -1048,8 +1048,8 @@ export function DashboardPage() {
         <Card className="border shadow-sm p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="size-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                <Layers className="size-4 text-purple-600" />
+              <div className="size-8 rounded-lg bg-purple-100 dark:bg-purple-950/40 flex items-center justify-center">
+                <Layers className="size-4 text-purple-600 dark:text-purple-400" />
               </div>
               <h3 className="text-sm font-semibold text-foreground">Portfolio Holdings</h3>
             </div>
@@ -1145,8 +1145,8 @@ export function DashboardPage() {
         <Card className="border shadow-sm p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="size-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                <Newspaper className="size-4 text-amber-600" />
+              <div className="size-8 rounded-lg bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center">
+                <Newspaper className="size-4 text-amber-600 dark:text-amber-400" />
               </div>
               <h3 className="text-sm font-semibold text-foreground">Market News</h3>
             </div>
@@ -1202,7 +1202,7 @@ export function DashboardPage() {
           )}
         </Card>
 
-        <Card className="border-0 bg-gradient-to-br from-gray-900 to-gray-800 p-5 text-white shadow-sm">
+        <Card className="border-0 bg-gradient-to-br from-gray-900 to-gray-800 dark:from-[#0a0a0b] dark:to-[#141518] p-5 text-white shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <div className="size-8 rounded-lg bg-white/10 flex items-center justify-center">
               <Activity className="size-4" />
@@ -1341,7 +1341,7 @@ export function DashboardPage() {
                   <Link to={`/app/stock/${s.ticker}`} onClick={() => setSelectedStock(null)} className="flex-1 bg-[#0D7490] hover:bg-[#0A5F7A] text-white text-sm font-medium text-center py-2 px-4 rounded-lg transition-colors">
                     Full Analysis
                   </Link>
-                  <Link to={`/app/signals?ticker=${s.ticker}`} onClick={() => setSelectedStock(null)} className="flex-1 bg-muted hover:bg-gray-200 text-muted-foreground text-sm font-medium text-center py-2 px-4 rounded-lg transition-colors border border-border">
+                  <Link to={`/app/signals?ticker=${s.ticker}`} onClick={() => setSelectedStock(null)} className="flex-1 bg-muted hover:bg-muted/80 dark:hover:bg-muted/50 text-muted-foreground text-sm font-medium text-center py-2 px-4 rounded-lg transition-colors border border-border">
                     View Signal
                   </Link>
                 </div>

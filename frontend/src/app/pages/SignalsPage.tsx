@@ -9,7 +9,7 @@ import { Button } from "../components/ui/button";
 import {
   TrendingUp, TrendingDown, Search, Zap,
   Activity, Star, RefreshCw, Info, ChevronLeft, ChevronRight,
-  ArrowUpRight, ArrowDownRight, BarChart3, Clock, Gauge, FilterX, ArrowUpDown,
+  ArrowUpRight, ArrowDownRight, BarChart3, Clock, Gauge, FilterX, ArrowUpDown, X, Target,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../auth/AuthContext";
@@ -306,6 +306,7 @@ export function SignalsPage() {
   const [filterType, setFilterType] = useState("all");
   const [filterSignal, setFilterSignal] = useState("All");
   const [filterSector, setFilterSector] = useState("All");
+  const [filterMarket, setFilterMarket] = useState("all");
   const [sortBy, setSortBy] = useState<"confidence" | "change" | "ticker">("confidence");
   const [page, setPage] = useState(1);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -339,7 +340,8 @@ export function SignalsPage() {
       (s.ticker.toLowerCase().includes(search.toLowerCase()) || s.name.toLowerCase().includes(search.toLowerCase())) &&
       (filterType === "all" || s.type === filterType) &&
       (filterSignal === "All" || s.signal === filterSignal) &&
-      (filterSector === "All" || s.sector === filterSector)
+      (filterSector === "All" || s.sector === filterSector) &&
+      (filterMarket === "all" || (filterMarket === "nse" ? s.market === "NSE" : s.market !== "NSE"))
     );
     const sorted = [...list];
     if (sortBy === "confidence") sorted.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
@@ -348,10 +350,10 @@ export function SignalsPage() {
     return sorted;
   }, [signals, search, filterType, filterSignal, filterSector, sortBy]);
 
-  const hasActiveFilters = search !== "" || filterType !== "all" || filterSignal !== "All" || filterSector !== "All";
+  const hasActiveFilters = search !== "" || filterType !== "all" || filterSignal !== "All" || filterSector !== "All" || filterMarket !== "all";
 
   const clearFilters = () => {
-    setSearch(""); setFilterType("all"); setFilterSignal("All"); setFilterSector("All"); setSortBy("confidence");
+    setSearch(""); setFilterType("all"); setFilterSignal("All"); setFilterSector("All"); setFilterMarket("all"); setSortBy("confidence");
   };
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
@@ -389,10 +391,14 @@ export function SignalsPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9]"><Gauge className="w-5 h-5 text-white" /></div>
-            <h1 className="text-2xl font-bold text-foreground">Quantitative Market Intelligence</h1>
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-lg shadow-[#0D7490]/20">
+              <Gauge className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground tracking-tight">Market Intelligence</h1>
+              <p className="text-muted-foreground/70 text-sm">Data-driven signals verified by fundamental and technical metrics.</p>
+            </div>
           </div>
-          <p className="text-muted-foreground text-sm">Data-driven market opportunities verified by core fundamental and advanced technical metrics.</p>
         </div>
         <div className="flex items-center gap-3">
           {lastUpdated && <span className="text-muted-foreground text-xs hidden sm:flex items-center gap-1"><Clock className="w-3 h-3" /> {lastUpdated}</span>}
@@ -409,42 +415,42 @@ export function SignalsPage() {
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3" data-tour="signals-stats">
-        <Card className="bg-card border-border p-3 flex items-center gap-3">
+        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl">
           <div className="w-9 h-9 rounded-lg bg-[#0D7490]/10 flex items-center justify-center shrink-0"><Gauge className="w-4 h-4 text-[#0D7490]" /></div>
-          <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Total Signals</p><p className="text-foreground text-xl font-bold leading-tight">{signals.length}</p></div>
+          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Total Signals</p><p className="text-foreground text-xl font-bold leading-tight">{signals.length}</p></div>
         </Card>
-        <Card className="bg-card border-border p-3 flex items-center gap-3">
+        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl">
           <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0"><TrendingUp className="w-4 h-4 text-emerald-600" /></div>
-          <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Strong Buy/Buy</p><p className="text-emerald-600 text-xl font-bold leading-tight">{strongBuy}</p></div>
+          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Strong Buy/Buy</p><p className="text-emerald-600 text-xl font-bold leading-tight">{strongBuy}</p></div>
         </Card>
-        <Card className="bg-card border-border p-3 flex items-center gap-3">
+        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl">
           <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center shrink-0"><TrendingDown className="w-4 h-4 text-red-600" /></div>
-          <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Sell/Strong Sell</p><p className="text-red-600 text-xl font-bold leading-tight">{strongSell}</p></div>
+          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Sell/Strong Sell</p><p className="text-red-600 text-xl font-bold leading-tight">{strongSell}</p></div>
         </Card>
-        <Card className="bg-card border-border p-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-yellow-100 flex items-center justify-center shrink-0"><Zap className="w-4 h-4 text-yellow-600" /></div>
-          <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Peak Confidence</p><p className="text-[#0D7490] text-xl font-bold leading-tight">{peakConf}%</p></div>
+        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl">
+          <div className="w-9 h-9 rounded-lg bg-yellow-100 flex items-center justify-center shrink-0"><Target className="w-4 h-4 text-yellow-600" /></div>
+          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Peak Confidence</p><p className="text-[#0D7490] text-xl font-bold leading-tight">{peakConf}%</p></div>
         </Card>
-        <Card className="bg-card border-border p-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0"><Gauge className="w-4 h-4 text-blue-600" /></div>
-          <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Avg Confidence</p><p className="text-foreground text-xl font-bold leading-tight">{signals.length ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / signals.length) : 0}%</p></div>
+        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl">
+          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0"><BarChart3 className="w-4 h-4 text-blue-600" /></div>
+          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Avg Confidence</p><p className="text-foreground text-xl font-bold leading-tight">{signals.length ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / signals.length) : 0}%</p></div>
         </Card>
-        <Card className="bg-card border-border p-3 flex items-center gap-3">
+        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl">
           <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0"><Star className="w-4 h-4 text-amber-500" /></div>
-          <div><p className="text-muted-foreground text-[10px] uppercase tracking-wider">Favorites</p><p className="text-amber-500 text-xl font-bold leading-tight">{favorites.length}</p></div>
+          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Favorites</p><p className="text-amber-500 text-xl font-bold leading-tight">{favorites.length}</p></div>
         </Card>
       </div>
 
       {/* Top signals by confidence */}
       {topConf.length > 0 && (
-        <div className="bg-gradient-to-r from-emerald-50 to-emerald-100/50 border border-emerald-200 rounded-lg p-4 flex items-center justify-between flex-wrap gap-3">
+        <div className="bg-gradient-to-r from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-950/10 border border-emerald-200 dark:border-emerald-800/50 rounded-lg p-4 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <Zap className="w-5 h-5 text-emerald-600" />
-            <div><p className="text-emerald-900 text-sm font-semibold">Top signals by confidence</p><p className="text-emerald-700 text-xs">Highest-conviction setups in the feed right now</p></div>
+            <div><p className="text-emerald-900 dark:text-emerald-300 text-sm font-semibold">Top signals by confidence</p><p className="text-emerald-700 dark:text-emerald-400 text-xs">Highest-conviction setups in the feed right now</p></div>
           </div>
           <div className="flex flex-wrap gap-2">
             {topConf.map(s => (
-              <button key={s.ticker} onClick={() => { setSelected(s); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="px-2.5 py-1 bg-card border border-emerald-200 rounded-md text-xs font-medium text-emerald-700 hover:bg-emerald-50">{s.ticker} <span className="text-emerald-500">{s.confidence}%</span></button>
+              <button key={s.ticker} onClick={() => { setSelected(s); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="px-2.5 py-1 bg-card dark:bg-white/[0.04] border border-emerald-200 dark:border-emerald-800/50 rounded-md text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30">{s.ticker} <span className="text-emerald-500 dark:text-emerald-400">{s.confidence}%</span></button>
             ))}
           </div>
         </div>
@@ -468,6 +474,10 @@ export function SignalsPage() {
           <SelectTrigger className="w-[140px] h-9 text-sm border-border"><SelectValue placeholder="Sector" /></SelectTrigger>
           <SelectContent><SelectItem value="All">All Sectors</SelectItem>{sectors.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
         </Select>
+        <Select value={filterMarket} onValueChange={setFilterMarket}>
+          <SelectTrigger className="w-[120px] h-9 text-sm border-border"><SelectValue placeholder="Market" /></SelectTrigger>
+          <SelectContent><SelectItem value="all">All Markets</SelectItem><SelectItem value="nse">NSE</SelectItem><SelectItem value="global">Global</SelectItem></SelectContent>
+        </Select>
         <Select value={sortBy} onValueChange={v => setSortBy(v as "confidence" | "change" | "ticker")}>
           <SelectTrigger className="w-[160px] h-9 text-sm border-border"><ArrowUpDown className="w-3.5 h-3.5 mr-2" /><SelectValue placeholder="Sort" /></SelectTrigger>
           <SelectContent><SelectItem value="confidence">Confidence ↓</SelectItem><SelectItem value="change">Change ↓</SelectItem><SelectItem value="ticker">Ticker A–Z</SelectItem></SelectContent>
@@ -486,7 +496,7 @@ export function SignalsPage() {
           const ss = SIGNAL_STYLES[s.signal];
           const Icon = ss.icon;
           return (
-            <Card key={s.id || s.ticker} className="bg-card border-border overflow-hidden hover:border-[#0D7490] hover:shadow-md transition-all cursor-pointer group flex flex-col" onClick={() => setSelected(s)} data-tour={idx === 0 ? "signal-card" : undefined}>
+            <Card key={s.id || s.ticker} className="bg-white/40 dark:bg-white/[0.04] border border-white/20 dark:border-white/[0.06] rounded-xl overflow-hidden hover:border-[#0D7490]/40 hover:shadow-md transition-all cursor-pointer group flex flex-col backdrop-blur-sm" onClick={() => setSelected(s)} data-tour={idx === 0 ? "signal-card" : undefined}>
               {/* Signal accent bar */}
               <div className={`h-1 w-full ${ss.accent}`} />
               {/* Top: ticker, signal badge */}
@@ -526,7 +536,7 @@ export function SignalsPage() {
                   <p className="text-[10px] text-muted-foreground font-medium">Price</p>
                   <p className="text-sm font-bold text-foreground">{fmtPrice(s, s.price)}</p>
                 </div>
-                <div className={`flex-1 rounded-lg p-2.5 border ${s.change >= 0 ? "bg-emerald-50 border-emerald-100" : "bg-red-50 border-red-100"}`}>
+                <div className={`flex-1 rounded-lg p-2.5 border ${s.change >= 0 ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-800/50" : "bg-red-50 dark:bg-red-950/30 border-red-100 dark:border-red-800/50"}`}>
                   <p className="text-[10px] text-muted-foreground font-medium">Change</p>
                   <p className={`text-sm font-bold flex items-center gap-1 ${s.change >= 0 ? "text-emerald-700" : "text-red-700"}`}>
                     {s.change >= 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
@@ -541,11 +551,11 @@ export function SignalsPage() {
 
               {/* Entry / Stop / Targets */}
               <div className={`px-4 pb-3 grid grid-cols-2 gap-2 ${s.target3 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`} data-tour={idx === 0 ? "signal-levels" : undefined}>
-                <div className="bg-blue-50 rounded-md p-2 text-center border border-blue-100"><p className="text-[9px] font-medium text-blue-600 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 font-mono">{fmtPrice(s, s.entry)}</p></div>
-                <div className="bg-red-50 rounded-md p-2 text-center border border-red-100"><p className="text-[9px] font-medium text-red-600 uppercase">Stop</p><p className="text-xs font-bold text-red-900 font-mono">{fmtPrice(s, s.stopLoss)}</p></div>
-                <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">Target 1</p><p className="text-xs font-bold text-emerald-900 font-mono">{fmtPrice(s, s.target1)}</p></div>
-                <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">Target 2</p><p className="text-xs font-bold text-emerald-900 font-mono">{fmtPrice(s, s.target2)}</p></div>
-                {s.target3 && <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">Target 3</p><p className="text-xs font-bold text-emerald-900 font-mono">{fmtPrice(s, s.target3)}</p></div>}
+                <div className="bg-blue-50 dark:bg-blue-950/30 rounded-md p-2 text-center border border-blue-100 dark:border-blue-800/50"><p className="text-[9px] font-medium text-blue-600 dark:text-blue-400 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 dark:text-blue-200 font-mono">{fmtPrice(s, s.entry)}</p></div>
+                <div className="bg-red-50 dark:bg-red-950/30 rounded-md p-2 text-center border border-red-100 dark:border-red-800/50"><p className="text-[9px] font-medium text-red-600 dark:text-red-400 uppercase">Stop</p><p className="text-xs font-bold text-red-900 dark:text-red-200 font-mono">{fmtPrice(s, s.stopLoss)}</p></div>
+                <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Target 1</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target1)}</p></div>
+                <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Target 2</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target2)}</p></div>
+                {s.target3 && <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Target 3</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target3)}</p></div>}
               </div>
 
               {/* Risk / ML badges */}
@@ -662,8 +672,8 @@ export function SignalsPage() {
 
       {/* Detail modal */}
       {selected && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelected(null)}>
-          <div className="bg-popover text-popover-foreground rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl border border-border" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelected(null)}>
+          <div className="bg-white/70 dark:bg-white/[0.08] backdrop-blur-xl rounded-[24px] max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 dark:border-white/[0.08]" onClick={e => e.stopPropagation()}>
             <div className="p-6 space-y-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -674,7 +684,7 @@ export function SignalsPage() {
                   <p className="text-sm text-muted-foreground truncate">{selected.name}</p>
                   <p className="text-xs text-muted-foreground leading-relaxed mt-1.5 max-w-md">{plainSummary(selected)}</p>
                 </div>
-                <button onClick={() => setSelected(null)} className="p-1.5 hover:bg-accent rounded-md transition-colors shrink-0"><span className="text-muted-foreground text-lg font-bold">&times;</span></button>
+                <button onClick={() => setSelected(null)} className="p-1.5 hover:bg-black/10 dark:hover:bg-white/10 rounded-full transition-colors shrink-0"><X className="w-5 h-5 text-muted-foreground" /></button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

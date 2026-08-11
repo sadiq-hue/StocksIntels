@@ -697,16 +697,21 @@ const MarketPage: React.FC = () => {
 
         <SidebarWidget title="AI Market Summary">
           <div className="flex flex-col gap-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">{aiSummary?.summary || 'Loading market analysis...'}</p>
-            <div className="flex gap-2 flex-wrap">
-              <Badge variant="secondary" className={`text-[10px] font-medium ${
-                aiSummary?.sentiment?.includes('Bullish') ? 'bg-emerald-50 text-emerald-700' :
-                aiSummary?.sentiment?.includes('Bearish') ? 'bg-red-50 text-red-700' :
+            <div className="flex items-start gap-2.5">
+              <div className="w-8 h-8 shrink-0 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-lg flex items-center justify-center mt-0.5">
+                <BrainCircuit size={16} className="text-white" />
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">{aiSummary?.summary || 'Loading market analysis...'}</p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <Badge variant="secondary" className={`text-[10px] font-medium px-2 py-0.5 ${
+                aiSummary?.sentiment?.includes('Bullish') ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400' :
+                aiSummary?.sentiment?.includes('Bearish') ? 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400' :
                 'bg-muted text-muted-foreground'
               }`}>Sentiment: {aiSummary?.sentiment || '--'}</Badge>
-              <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px] font-medium">Confidence: {aiSummary?.confidence || '--'}</Badge>
+              <Badge variant="secondary" className="bg-muted text-muted-foreground text-[10px] font-medium px-2 py-0.5">Confidence: {aiSummary?.confidence || '--'}</Badge>
             </div>
-            <Link to="/app/ai-insights" className="w-full py-2 bg-foreground text-background text-xs font-medium rounded-lg text-center hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+            <Link to="/app/ai-insights" className="w-full py-2.5 bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] text-white text-xs font-semibold rounded-lg text-center hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
               <BrainCircuit size={14} />
               View Full Analysis
             </Link>
@@ -873,7 +878,7 @@ const MarketWindow = ({
     {/* Table */}
     <div className="flex-1 min-w-0 overflow-auto">
       {isShowingYahoo && (
-        <div className="px-4 py-2 bg-[#0D7490]/5 border-b border-[#0D7490]/20 flex items-center gap-2">
+          <div className="px-4 py-2 bg-[#0D7490]/5 dark:bg-[#0D7490]/20 border-b border-[#0D7490]/20 dark:border-[#0D7490]/30 flex items-center gap-2">
           <ExternalLink size={12} className="text-[#0D7490]" />
           <span className="text-[11px] font-medium text-[#0D7490]">Yahoo Finance results for &ldquo;{search}&rdquo;</span>
         </div>
@@ -914,10 +919,10 @@ const MarketWindow = ({
                   <div className="flex items-center justify-end gap-0.5 min-w-0">
                     <span className="text-sm font-semibold text-foreground font-mono tabular-nums truncate max-w-[88px]">{isPending ? '--' : stock.price}</span>
                     {stock.isPreMarket && (
-                      <span className="text-[8px] sm:text-[9px] px-0.5 sm:px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">PRE</span>
+                      <span className="text-[8px] sm:text-[9px] px-0.5 sm:px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-semibold">PRE</span>
                     )}
                     {stock.provider === 'pending' && (
-                      <span className="text-[8px] sm:text-[9px] px-0.5 sm:px-1 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">load</span>
+                      <span className="text-[8px] sm:text-[9px] px-0.5 sm:px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 font-medium">load</span>
                     )}
                   </div>
                 </td>
@@ -925,7 +930,7 @@ const MarketWindow = ({
                   {isPending ? (
                     <span className="text-xs text-muted-foreground font-mono">--</span>
                   ) : (
-                  <span className={`inline-flex items-center gap-0.5 sm:gap-1 px-1 sm:px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold max-w-full truncate ${isPositive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                  <span className={`inline-flex items-center gap-0.5 sm:gap-1 px-1 sm:px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold max-w-full truncate ${isPositive ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400'}`}>
                     {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                     {isPositive ? '+' : ''}{(stock.changePercent ?? 0).toFixed(2)}%
                     {stock.isPreMarket && <span className="hidden sm:inline text-[9px] opacity-70">pre</span>}

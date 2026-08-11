@@ -1,5 +1,6 @@
 import { Bell, User, Activity, Settings, LogOut, UserCircle, Check, ArrowUp, ArrowDown, Clock, Menu, X } from "lucide-react";
 import { StockSearchBar } from "./StockSearchBar";
+import { ThemeToggle } from "./ThemeToggle";
 import { Link, useNavigate } from "react-router";
 import { useState, useRef, useEffect } from "react";
 import { useAuth, getTrialInfo } from "../auth/AuthContext";
@@ -141,6 +142,7 @@ function ProfileDropdown({ marketStatus }: { marketStatus: { nse: { open: boolea
       </div>
 
       <div className="flex items-center gap-2">
+        <ThemeToggle />
         {(marketStatus?.nse.open || marketStatus?.global?.open) ? (
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg border border-green-200">
             <span className="relative flex h-2 w-2">

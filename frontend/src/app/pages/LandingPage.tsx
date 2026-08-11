@@ -209,7 +209,7 @@ function LiveTickerItem({ sym, fallback, fallbackChange, up: fallbackUp, isNse, 
   }, [price, up]);
 
   return (
-    <div className={`flex items-center gap-2 px-5 py-1.5 bg-white/60 backdrop-blur-sm border border-gray-100 rounded-lg mx-1.5 shrink-0 transition-colors duration-500 ${
+    <div className={`flex items-center gap-2 px-5 py-1.5 bg-white/60 dark:bg-white/[0.04] backdrop-blur-sm border border-gray-100 dark:border-white/[0.06] rounded-lg mx-1.5 shrink-0 transition-colors duration-500 ${
       flash === "up" ? "bg-emerald-100 border-emerald-200" : flash === "down" ? "bg-red-100 border-red-200" : ""
     }`}>
       <span className="font-bold text-xs text-foreground">{sym}</span>
@@ -780,7 +780,7 @@ export function LandingPage() {
                 </div>
                 <p className="text-muted-foreground mb-6 leading-relaxed text-sm group-hover:text-foreground transition-colors duration-300">{t.content}</p>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-700 font-bold text-sm">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center text-gray-700 dark:text-gray-300 font-bold text-sm">
                     {t.initials}
                   </div>
                   <div>
@@ -917,7 +917,7 @@ export function LandingPage() {
                   className="w-full flex items-center justify-between gap-4 p-5 text-left cursor-pointer"
                 >
                   <span className="font-semibold text-foreground text-sm">{faq.q}</span>
-                  <div className={`w-6 h-6 rounded-full bg-accent flex items-center justify-center flex-shrink-0 transition-all duration-300 ${openFaq === i ? "bg-[#0D7490] rotate-90" : ""}`}>
+                  <div className={`w-6 h-6 rounded-full bg-accent dark:bg-muted flex items-center justify-center flex-shrink-0 transition-all duration-300 ${openFaq === i ? "bg-[#0D7490] rotate-90" : ""}`}>
                     <ChevronRight className={`w-3.5 h-3.5 transition-colors duration-300 ${openFaq === i ? "text-white" : "text-muted-foreground"}`} />
                   </div>
                 </button>
@@ -1041,7 +1041,7 @@ export function LandingPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/login" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full sm:w-auto bg-white text-[#0D7490] hover:bg-gray-100 px-10 py-6 text-base font-bold shadow-2xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-3xl cursor-pointer">
+              <Button size="lg" className="w-full sm:w-auto bg-white text-[#0D7490] hover:bg-gray-100 dark:hover:bg-white/10 px-10 py-6 text-base font-bold shadow-2xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-3xl cursor-pointer">
                 Start Trial
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Button>

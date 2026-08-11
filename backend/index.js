@@ -2200,6 +2200,7 @@ app.post('/api/auth/send-verification-code', verifyTurnstile, async (req, res) =
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'email_verify']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'email_verify', expiresAt]);
+    if (process.env.NODE_ENV !== 'production') console.log(`[DEV-OTP] ${email} verification code: ${code}`);
     await sendVerificationEmail(email, code).catch(e => console.error('[MAILER] send-verification-code failed:', e.message));
     res.json({ message: 'Verification code sent to email', expiresIn: 600 });
   } catch (error) {
@@ -2472,6 +2473,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'login']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'login', expiresAt]);
+    if (process.env.NODE_ENV !== 'production') console.log(`[DEV-OTP] ${email} login code: ${code}`);
     // Send email in the background so the UI responds immediately even if the mailer is slow/fails
     sendOtpEmail(email, code).catch(e => console.error('[MAILER] send-otp failed:', e.message));
     res.json({ message: 'OTP sent to email', expiresIn: 600 });
@@ -2539,6 +2541,7 @@ app.post('/api/auth/login-request-otp', verifyTurnstile, async (req, res) => {
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'login_password']);
     await pool.query('INSERT INTO otp_codes (email, code, type, expires_at) VALUES ($1, $2, $3, $4)', [email, code, 'login_password', expiresAt]);
+    if (process.env.NODE_ENV !== 'production') console.log(`[DEV-OTP] ${email} login code: ${code}`);
     // Send email in the background so the UI responds immediately even if the mailer is slow/fails
     sendOtpEmail(email, code).catch(e => console.error('[MAILER] login-request-otp failed:', e.message));
     res.json({ message: 'OTP sent to email', expiresIn: 600 });

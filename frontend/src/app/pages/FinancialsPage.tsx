@@ -232,7 +232,7 @@ function FilingCard({ filing }: { filing: EdgarFiling }) {
         <div className="flex-1 min-w-0 space-y-3">
           <div>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded ${is10K ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>{filing.form}</span>
+              <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded ${is10K ? 'bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300' : 'bg-purple-100 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300'}`}>{filing.form}</span>
               {quarterLabel && <span className="text-[10px] font-bold text-muted-foreground uppercase">{quarterLabel}</span>}
               {reportYear && <span className="text-[10px] font-bold text-muted-foreground">FY {reportYear}</span>}
             </div>
@@ -262,8 +262,8 @@ function FilingCard({ filing }: { filing: EdgarFiling }) {
               <div className="md:col-span-2"><span className="text-muted-foreground">Doc:</span> <span className="font-mono font-medium text-foreground text-[10px]">{filing.primaryDocument || 'N/A'}</span></div>
               <div><span className="text-muted-foreground">Size:</span> <span className="font-medium text-foreground">{formatFileSize(filing.size) || 'N/A'}</span></div>
               <div className="flex items-center gap-2">
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${filing.isXBRL === 1 ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>XBRL</span>
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${filing.isInlineXBRL === 1 ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'}`}>Inline</span>
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${filing.isXBRL === 1 ? 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}>XBRL</span>
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${filing.isInlineXBRL === 1 ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>Inline</span>
               </div>
             </div>
           </div>
@@ -279,7 +279,7 @@ function FilingCard({ filing }: { filing: EdgarFiling }) {
           </a>
           {filing.isXBRL === 1 && (
             <a href={`https://www.sec.gov/cgi-bin/viewer?action=view&cik=${cik}&accession_number=${filing.accessionNumber}&xbrl=1`} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 hover:border-emerald-300 px-3 py-1.5 rounded-lg transition-colors">
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 hover:border-emerald-300 dark:hover:border-emerald-700/50 px-3 py-1.5 rounded-lg transition-colors">
               <Database className="w-3 h-3" /> XBRL Viewer
             </a>
           )}
@@ -581,7 +581,7 @@ export function FinancialsPage() {
       {/* ─── Search & Controls Toolbar ─── */}
       <div className="bg-card rounded-xl border border-border p-4 shadow-sm" data-tour="fin-search">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px] max-w-xs" ref={searchRef}>
+          <div className="relative flex-1 min-w-[160px] sm:min-w-[200px] sm:max-w-xs" ref={searchRef}>
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input value={symbolInput} onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
               onKeyDown={(e) => { if (e.key === "Enter") { handleSubmit(); setShowSuggestions(false); } }}
@@ -698,7 +698,7 @@ export function FinancialsPage() {
           </div>
         </div>
       ) : error ? (
-        <div className="bg-card rounded-xl border border-rose-200 p-12 text-center">
+        <div className="bg-card rounded-xl border border-rose-200 dark:border-rose-800/50 p-12 text-center">
           <div className="text-rose-500 font-black text-4xl mb-3">!</div>
           <p className="text-sm font-bold text-foreground mb-1">Failed to load data</p>
           <p className="text-xs text-muted-foreground mb-4">{error}</p>
@@ -710,12 +710,12 @@ export function FinancialsPage() {
         </div>
       ) : (
         <Tabs defaultValue="summary" className="space-y-4" data-tour="fin-tabs">
-          <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-            <TabsList className="w-full h-auto bg-transparent p-0 rounded-none flex flex-wrap">
+          <div className="bg-card rounded-xl border border-border shadow-sm">
+            <TabsList className="w-full h-auto bg-muted/50 p-1 rounded-lg flex flex-wrap gap-0.5">
               {tabs.map((tab) => (
                 <TabsTrigger key={tab} value={tab}
-                  className="flex-1 min-w-0 px-3 py-3.5 capitalize rounded-none border-b-2 border-transparent data-[state=active]:border-[#0D7490] data-[state=active]:bg-[#0D7490]/5 data-[state=active]:text-[#0D7490] text-muted-foreground font-bold text-xs md:text-sm hover:text-foreground transition-all">
-                  {tab === "summary" ? <><ChartNoAxesCombined className="w-3.5 h-3.5 mr-1.5 hidden md:inline-block" /> Summary</> : tab === "income" ? "Income" : tab === "balance" ? "Balance" : tab === "cashflow" ? "Cash Flow" : tab === "metrics" ? "Ratios" : tab === "supply" ? "Supply" : "Filings"}
+                  className="flex-1 min-w-[60px] px-2.5 py-2.5 rounded-md text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-[#0D7490] data-[state=active]:text-white data-[state=active]:shadow-sm text-muted-foreground hover:text-foreground hover:bg-muted">
+                  {tab === "summary" ? "Summary" : tab === "income" ? "Income" : tab === "balance" ? "Balance" : tab === "cashflow" ? "Cash" : tab === "metrics" ? "Ratios" : tab === "supply" ? "Supply" : "Filings"}
                 </TabsTrigger>
               ))}
             </TabsList>

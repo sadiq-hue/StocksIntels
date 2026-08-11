@@ -88,7 +88,7 @@ function CompactHero() {
         <img src="/logo1.jpg" alt="StocksIntels" className="size-10 rounded-xl shadow-lg shadow-black/10 ring-1 ring-white/20" />
         <h1 className="text-foreground text-xl font-bold tracking-tight">StocksIntels</h1>
       </div>
-      <p className="text-muted-foreground/60 text-xs mt-2">African &amp; Global Markets Intelligence</p>
+      <p className="text-muted-foreground/70 text-xs mt-2">African &amp; Global Markets Intelligence</p>
     </div>
   );
 }
@@ -349,7 +349,7 @@ export function LoginPage() {
                 <h2 className="text-foreground text-xl font-bold tracking-tight mb-1.5">
                   {mode === "login" ? "Sign in" : mode === "register" ? "Create account" : mode === "forgot" ? "Reset Password" : mode === "otp-login" ? "Sign in with OTP" : "Set New Password"}
                 </h2>
-                <p className="text-muted-foreground/50 text-sm leading-relaxed">
+                <p className="text-muted-foreground/70 text-sm leading-relaxed">
                   {mode === "login"
                     ? (loginStage === "password" ? "Enter your credentials to request a one-time password" : "Enter the OTP sent to your email")
                     : mode === "register"
@@ -388,7 +388,7 @@ export function LoginPage() {
                 {(mode === "login" || mode === "register") && (
                   <>
                     <div className="space-y-1.5">
-                      <label className="text-muted-foreground/50 text-xs font-medium block ml-1">Email Address</label>
+                      <label className="text-muted-foreground/70 text-xs font-medium block ml-1">Email Address</label>
                       <div className="relative">
                         <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                         <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
@@ -431,20 +431,30 @@ export function LoginPage() {
                     {mode === "login" && loginStage === "otp" && (
                       <>
                         <div className="space-y-1.5">
-                          <label className="text-muted-foreground/50 text-xs font-medium block ml-1">One-Time Password</label>
+                          <label className="text-muted-foreground/70 text-xs font-medium block ml-1">One-Time Password</label>
                           <div className="relative">
                             <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                             <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                               onFocus={() => setFocusedField("otpCode")} onBlur={() => setFocusedField(null)}
                               className={cn(inputClasses("otpCode"), "text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
                           </div>
-                          {countdown > 0 && <p className="text-xs text-muted-foreground text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
-                          {countdown === 0 && (
-                            <button type="button" onClick={handleResendLoginOtp} disabled={isLoading}
-                              className="w-full text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold text-center disabled:opacity-50">
-                              {isLoading ? "Resending..." : "Didn't receive it? Resend OTP"}
-                            </button>
-                          )}
+                          <div className="flex flex-col items-center gap-1 mt-1">
+                            {countdown > 0 && (
+                              <p className="text-xs text-muted-foreground/70 inline-flex items-center gap-1.5">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                Code expires in
+                                <span className="font-mono font-semibold text-foreground tabular-nums">
+                                  {String(Math.floor(countdown / 60)).padStart(2, "0")}:{String(countdown % 60).padStart(2, "0")}
+                                </span>
+                              </p>
+                            )}
+                            {countdown === 0 && (
+                              <button type="button" onClick={handleResendLoginOtp} disabled={isLoading}
+                                className="w-full text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold text-center disabled:opacity-50">
+                                {isLoading ? "Resending..." : "Didn't receive it? Resend OTP"}
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <Button type="submit" disabled={isLoading || otpCode.length < 6}
                           className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
@@ -452,7 +462,7 @@ export function LoginPage() {
                             : <span className="flex items-center gap-2">Verify & Sign In <ArrowRight className="w-4 h-4" /></span>}
                         </Button>
                         <button type="button" onClick={() => { setLoginStage("password"); setOtpCode(""); clear(); }}
-                          className="w-full text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold text-center">
+                          className="w-full text-xs text-muted-foreground/60 hover:text-[#0D7490] font-semibold text-center transition-colors">
                           Back to password
                         </button>
                       </>
@@ -467,7 +477,7 @@ export function LoginPage() {
                     {mode === "register" && regStage === "verify" && (
                       <>
                         <div className="space-y-1.5">
-                          <label className="text-muted-foreground/50 text-xs font-medium block ml-1">Verification Code</label>
+                          <label className="text-muted-foreground/70 text-xs font-medium block ml-1">Verification Code</label>
                           <div className="relative">
                             <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "vcode" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                             <Input type="text" placeholder="000000" value={verifyCode} onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -477,7 +487,7 @@ export function LoginPage() {
                           {countdown > 0 && <p className="text-xs text-muted-foreground text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-muted-foreground/50 text-xs font-medium block ml-1">Full Name</label>
+                          <label className="text-muted-foreground/70 text-xs font-medium block ml-1">Full Name</label>
                           <div className="relative">
                             <User className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "name" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                             <Input type="text" placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)}
@@ -486,7 +496,7 @@ export function LoginPage() {
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-muted-foreground/50 text-xs font-medium block ml-1">Country</label>
+                          <label className="text-muted-foreground/70 text-xs font-medium block ml-1">Country</label>
                           <div className="relative" data-country-dropdown>
                             <button type="button" onClick={() => { setCountryOpen(!countryOpen); setCountrySearch(""); }}
                               className={cn(inputClasses("country"), "h-10 w-full text-left flex items-center gap-2 pr-3 cursor-pointer")}>
@@ -522,7 +532,7 @@ export function LoginPage() {
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-muted-foreground/50 text-xs font-medium block ml-1">Password</label>
+                          <label className="text-muted-foreground/70 text-xs font-medium block ml-1">Password</label>
                           <div className="relative">
                             <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                             <Input type={showPassword ? "text" : "password"} placeholder="********" value={password} onChange={(e) => setPassword(e.target.value)}
@@ -535,7 +545,7 @@ export function LoginPage() {
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-muted-foreground/50 text-xs font-medium block ml-1">Confirm Password</label>
+                          <label className="text-muted-foreground/70 text-xs font-medium block ml-1">Confirm Password</label>
                           <div className="relative">
                             <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "cpw" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                             <Input type={showConfirmPw ? "text" : "password"} placeholder="********" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
@@ -569,7 +579,7 @@ export function LoginPage() {
                 {mode === "otp-login" && (
                   <>
                     <div className="space-y-1.5">
-                      <label className="text-muted-foreground/50 text-xs font-medium block ml-1">Email Address</label>
+                      <label className="text-muted-foreground/70 text-xs font-medium block ml-1">Email Address</label>
                       <div className="relative">
                         <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                         <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
@@ -579,7 +589,7 @@ export function LoginPage() {
                     </div>
                     {otpStage === "verify" && (
                       <div className="space-y-1.5">
-                        <label className="text-muted-foreground/50 text-xs font-medium block ml-1">One-Time Password</label>
+                        <label className="text-muted-foreground/70 text-xs font-medium block ml-1">One-Time Password</label>
                         <div className="relative">
                           <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                           <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -600,7 +610,7 @@ export function LoginPage() {
 
                 {(mode === "forgot") && (
                   <div className="space-y-1.5">
-                    <label className="text-muted-foreground/50 text-xs font-medium block ml-1">Email Address</label>
+                    <label className="text-muted-foreground/70 text-xs font-medium block ml-1">Email Address</label>
                     <div className="relative">
                       <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#AEB7C2]" : "text-muted-foreground"}`} />
                       <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
@@ -622,7 +632,7 @@ export function LoginPage() {
                 {(mode === "reset") && (
                   <>
                     <div className="space-y-1.5">
-                      <label className="text-muted-foreground/50 text-xs font-medium block ml-1">Reset Code</label>
+                      <label className="text-muted-foreground/70 text-xs font-medium block ml-1">Reset Code</label>
                       <div className="relative">
                         <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "code" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                         <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -631,7 +641,7 @@ export function LoginPage() {
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-muted-foreground/50 text-xs font-medium block ml-1">New Password</label>
+                      <label className="text-muted-foreground/70 text-xs font-medium block ml-1">New Password</label>
                       <div className="relative">
                         <Lock className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "pw" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                           <Input type={showPassword ? "text" : "password"} placeholder="********" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
