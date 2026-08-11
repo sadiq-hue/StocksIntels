@@ -5,6 +5,7 @@ const { generateSignals, getMonitoredSignals } = require('./signalService');
 const { fetchFinnhubEarningsCalendar, fetchFinnhubEarningsSurprises } = require('./earningsService');
 const fxService = require('./fxService');
 const llm = require('./llmService');
+const { pool } = require('./db');
 
 const PORT = process.env.PORT || 3001;
 const BASE = `http://localhost:${PORT}`;
@@ -55,8 +56,9 @@ async function generateWeeklyDigestContent() {
   const nseSentiment = (nse20?.isPositive ? 'positive' : nse20?.changeRaw < -0.5 ? 'negative' : 'mixed');
   const globalSentiment = sp500?.isPositive ? 'positive' : sp500?.changeRaw < -0.5 ? 'negative' : 'mixed';
 
-  const topSector = sectors.length > 0 ? sectors[0] : null;
-  const worstSector = sectors.length > 1 ? sectors[sectors.length - 1] : null;
+  const cleanSectors = meaningfulSectors(sectors);
+  const topSector = cleanSectors.length > 0 ? cleanSectors[0] : null;
+  const worstSector = cleanSectors.length > 1 ? cleanSectors[cleanSectors.length - 1] : null;
 
   const hotNews = news?.hotNews || [];
   const trending = news?.trending || [];
@@ -170,9 +172,10 @@ function buildWhatToWatch(summary, nse20, sectors) {
   if (nse20?.value) {
     parts.push(`Watch the NSE 20 at ${nse20.value} (${nse20.change || '--'}) as a key support/resistance zone for the week ahead.`);
   }
-  if (sectors && sectors.length > 0) {
-    const top = sectors[0];
-    const bottom = sectors[sectors.length - 1];
+  const cleanSectors = meaningfulSectors(sectors);
+  if (cleanSectors.length > 0) {
+    const top = cleanSectors[0];
+    const bottom = cleanSectors[cleanSectors.length - 1];
     if (top) parts.push(`${top.sector} leads sector performance at ${top.avgChange}% — keep on your radar.`);
     if (bottom && bottom.avgChange < 0) parts.push(`${bottom.sector} is lagging at ${bottom.avgChange}% — watch for further weakness.`);
   }
@@ -184,9 +187,10 @@ function buildMacroBackdrop(sectors, summary, sp500, fxRate) {
   const totalSignals = summary?.signals?.total || 0;
   const sentiment = summary?.sentiment || 'Neutral';
   parts.push(`AI market sentiment is ${sentiment} with ${totalSignals} active signals across NSE and NYSE.`);
-  if (sectors && sectors.length > 0) {
-    const upSectors = sectors.filter(s => parseFloat(s.avgChange) > 0);
-    const downSectors = sectors.filter(s => parseFloat(s.avgChange) < 0);
+  const cleanSectors = meaningfulSectors(sectors);
+  if (cleanSectors.length > 0) {
+    const upSectors = cleanSectors.filter(s => parseFloat(s.avgChange) > 0);
+    const downSectors = cleanSectors.filter(s => parseFloat(s.avgChange) < 0);
     if (upSectors.length > 0) {
       parts.push(`${upSectors.length} sector${upSectors.length > 1 ? 's' : ''} positive (${upSectors.slice(0, 2).map(s => `${s.sector} ${s.avgChange}%`).join(', ')}).`);
     }
@@ -212,6 +216,42 @@ function buildNseGlobalConnection(nse20, sp500, nseSent, globalSent) {
 }
 
 // ── Daily Brief Content ──
+
+// Canonical company-name lookup from the stocks table. Signals coming from the
+// live cache sometimes only carry the ticker as `name` (or no name at all, e.g.
+// DDOG, COHR, CGEN), which made the movers table render "DDOG DDOG". Load the
+// map once and reuse it across brief generations.
+let stockNameCache = null;
+async function getStockNameMap() {
+  if (!stockNameCache) {
+    try {
+      const { rows } = await pool.query('SELECT ticker, name FROM stocks');
+      stockNameCache = new Map(rows.map(r => [r.ticker, r.name]));
+    } catch { stockNameCache = new Map(); }
+  }
+  return stockNameCache;
+}
+
+// Sectors like "Other" (the catch-all bucket for names outside the static
+// ticker maps) are noise in reader-facing copy — never headline them.
+const JUNK_SECTORS = new Set(['Other', 'General', 'Unknown', 'Miscellaneous', '', 'N/A']);
+function meaningfulSectors(sectors) {
+  return (Array.isArray(sectors) ? sectors : [])
+    .filter(s => s && s.sector && !JUNK_SECTORS.has(String(s.sector).trim()));
+}
+
+// Truncate long signal reasons at a word boundary so we never render "hig..."
+// or clip mid-phrase. Only falls back to a hard cut when the boundary is too
+// far back, and strips trailing punctuation before the ellipsis.
+function truncateReason(text, limit) {
+  if (!text) return '';
+  const str = String(text).trim();
+  if (str.length <= limit) return str;
+  let cut = str.slice(0, limit);
+  const lastSpace = cut.lastIndexOf(' ');
+  if (lastSpace > limit * 0.6) cut = cut.slice(0, lastSpace);
+  return cut.replace(/[,\s;:.]+$/, '') + '...';
+}
 
 async function generateDailyBriefContent() {
   const [summary, allIndices, sectors, signals] = await Promise.all([
@@ -242,6 +282,15 @@ async function generateDailyBriefContent() {
     }
   }
   const enrichedSignals = [...byTicker.values()];
+
+  // Fill missing / ticker-only company names from the canonical stocks table.
+  const stockNames = await getStockNameMap().catch(() => null);
+  for (const s of enrichedSignals) {
+    if (s && (!s.name || s.name === s.ticker)) {
+      const n = stockNames && stockNames.get(s.ticker);
+      if (n) s.name = n;
+    }
+  }
 
   // allIndices comes back as an object keyed by symbol — normalize to array
   const indicesArr = allIndices && typeof allIndices === 'object' && !Array.isArray(allIndices)
@@ -275,7 +324,7 @@ async function generateDailyBriefContent() {
   const yesterdayTopMovers = combinedMovers.map(m => ({
     symbol: m.ticker || '--',
     company: m.name || '',
-    change: (m.change > 0 ? '+' : '') + (m.change || 0) + '%',
+    change: (m.change > 0 ? '+' : '') + (Math.round((m.change || 0) * 100) / 100) + '%',
     volume: m.volume && m.volume !== '0' && m.volume !== '--' ? m.volume : '--',
   }));
 
@@ -337,8 +386,9 @@ function buildAiSignalContext(summary, topSignals, sp500) {
   }
   if (topSignals.length > 0) {
     const top = topSignals[0];
-    const shortReason = top.reason ? (top.reason.length > 140 ? top.reason.slice(0, 140) + '...' : top.reason) : '';
-    parts.push(`Top pick: ${top.name || top.ticker} (${top.signal}, ${top.confidence}% confidence)${shortReason ? ` — ${shortReason}` : ''}.`);
+    const shortReason = truncateReason(top.reason, 140);
+    const reasonEnd = shortReason && /[.!?]$/.test(shortReason) ? '' : '.';
+    parts.push(`Top pick: ${top.name || top.ticker} (${top.signal}, ${top.confidence}% confidence)${shortReason ? ` — ${shortReason}${reasonEnd}` : '.'}`);
   }
   if (sp500?.changeRaw) {
     parts.push(`S&P 500 futures ${sp500.changeRaw > 0 ? 'pointing higher' : 'under pressure'} (${sp500.change}).`);
@@ -391,11 +441,12 @@ function buildAnalystTake(topSignals, sectors, summary) {
   let text = `Across ${total} rated stocks, ${buys} buy${buys !== 1 ? 's' : ''} (${strongBuys} strong) vs ${sells} sell${sells !== 1 ? 's' : ''} — ${sent.toLowerCase()} bias. `;
   if (topSignals.length > 0) {
     const s = topSignals[0];
-    const shortReason = s.reason ? (s.reason.length > 120 ? s.reason.slice(0, 120) + '...' : s.reason) : '';
+    const shortReason = truncateReason(s.reason, 120);
     text += `${s.name || s.ticker} leads with a ${s.signal} pick (${s.confidence}% confidence)${s.entry ? ` at ${s.entry}` : ''}. ${shortReason} `;
   }
-  if (sectors.length > 0) {
-    const leading = sectors.filter(s => parseFloat(s.avgChange) > 0).slice(0, 2);
+  const cleanSectors = meaningfulSectors(sectors);
+  if (cleanSectors.length > 0) {
+    const leading = cleanSectors.filter(s => parseFloat(s.avgChange) > 0).slice(0, 2);
     if (leading.length > 0) {
       text += `Leading sectors: ${leading.map(s => `${s.sector} (${s.avgChange}%)`).join(', ')}. `;
     }
