@@ -125,6 +125,7 @@ const KNOWN_NAMES = {
   'MU': 'Micron Technology', 'NOW': 'ServiceNow Inc.', 'UBER': 'Uber Technologies',
   'ABNB': 'Airbnb Inc.', 'SPOT': 'Spotify Technology', 'SNAP': 'Snap Inc.',
   'PLTR': 'Palantir Technologies', 'SNOW': 'Snowflake Inc.', 'DDOG': 'Datadog Inc.',
+  'COHR': 'Coherent Corp.', 'LULU': 'Lululemon Athletica Inc.',
   'CRWD': 'CrowdStrike Holdings', 'PANW': 'Palo Alto Networks', 'FTNT': 'Fortinet Inc.',
   'SQ': 'Block Inc.', 'PYPL': 'PayPal Holdings', 'COIN': 'Coinbase Global',
   'GME': 'GameStop Corp.', 'AMC': 'AMC Entertainment', 'MRNA': 'Moderna Inc.',

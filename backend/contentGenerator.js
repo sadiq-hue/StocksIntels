@@ -2,6 +2,7 @@ const axios = require('axios');
 const { getNewsSummary } = require('./newsService');
 const { getSectorPerformance } = require('./indicesService');
 const { generateSignals, getMonitoredSignals, NSE_SYMBOLS } = require('./signalService');
+const { resolveStockName } = require('./stockData');
 const { fetchFinnhubEarningsCalendar, fetchFinnhubEarningsSurprises } = require('./earningsService');
 const fxService = require('./fxService');
 const llm = require('./llmService');
@@ -29,13 +30,18 @@ async function generateWeeklyDigestContent() {
 
   const signalArr = Array.isArray(signals) ? signals : [];
 
-  // Fill missing / ticker-only company names from the canonical stocks table so
-  // mover tables show real names (e.g. DDOG -> Datadog Inc.).
+  // Fill company names from canonical sources (stockData curated maps, then the
+  // stocks table) so mangled cache names like "Lulul" never reach the email.
   const stockNames = await getStockNameMap().catch(() => null);
   for (const s of signalArr) {
-    if (s && (!s.name || s.name === s.ticker)) {
-      const n = stockNames && stockNames.get(s.ticker);
-      if (n) s.name = n;
+    if (!s) continue;
+    const ticker = s.ticker || s.symbol;
+    const curated = resolveStockName(ticker);
+    if (curated && curated !== ticker) {
+      s.name = curated;
+    } else {
+      const tableName = stockNames && stockNames.get(ticker);
+      s.name = isJunkName(tableName, ticker) ? (isJunkName(s.name, ticker) ? ticker : String(s.name).trim()) : tableName;
     }
   }
   const derivedMovers = deriveMovers(signalArr);
@@ -243,6 +249,25 @@ function buildNseGlobalConnection(nse20, sp500, nseSent, globalSent) {
 
 // ── Daily Brief Content ──
 
+// Junk / ticker-only company names are noise in reader-facing copy — never
+// surface "LULU", "lulu", "Unknown" or placeholder-y names in mover tables.
+function isJunkName(name, ticker) {
+  if (!name) return true;
+  const n = String(name).trim();
+  if (!n || n.length <= 4) return true;
+  if (ticker && n.toUpperCase() === String(ticker).toUpperCase()) return true;
+  return /^(unknown|unavailable|n\/a|none|-+|\.+)$/i.test(n);
+}
+
+// Canonical display name: curated maps (stockData) first, then a non-junk
+// stocks-table name, else the bare ticker.
+function resolveDisplayName(ticker, tableName) {
+  if (!ticker) return tableName || '';
+  const curated = resolveStockName(ticker);
+  if (curated && curated !== ticker) return curated;
+  return isJunkName(tableName, ticker) ? ticker : String(tableName).trim();
+}
+
 // Canonical company-name lookup from the stocks table. Signals coming from the
 // live cache sometimes only carry the ticker as `name` (or no name at all, e.g.
 // DDOG, COHR, CGEN), which made the movers table render "DDOG DDOG". Load the
@@ -252,7 +277,10 @@ async function getStockNameMap() {
   if (!stockNameCache) {
     try {
       const { rows } = await pool.query('SELECT ticker, name FROM stocks');
-      stockNameCache = new Map(rows.map(r => [r.ticker, r.name]));
+      stockNameCache = new Map();
+      for (const r of rows) {
+        if (!isJunkName(r.name, r.ticker)) stockNameCache.set(r.ticker, String(r.name).trim());
+      }
     } catch { stockNameCache = new Map(); }
   }
   return stockNameCache;
@@ -335,12 +363,18 @@ async function generateDailyBriefContent() {
   }
   const enrichedSignals = [...byTicker.values()];
 
-  // Fill missing / ticker-only company names from the canonical stocks table.
+  // Fill company names from canonical sources so mangled cache names never leak
+  // into the email mover tables.
   const stockNames = await getStockNameMap().catch(() => null);
   for (const s of enrichedSignals) {
-    if (s && (!s.name || s.name === s.ticker)) {
-      const n = stockNames && stockNames.get(s.ticker);
-      if (n) s.name = n;
+    if (!s) continue;
+    const ticker = s.ticker || s.symbol;
+    const curated = resolveStockName(ticker);
+    if (curated && curated !== ticker) {
+      s.name = curated;
+    } else {
+      const tableName = stockNames && stockNames.get(ticker);
+      s.name = isJunkName(tableName, ticker) ? (isJunkName(s.name, ticker) ? ticker : String(s.name).trim()) : tableName;
     }
   }
 
