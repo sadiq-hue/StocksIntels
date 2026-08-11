@@ -1048,7 +1048,7 @@ async function sendDailyBriefEmail(email, data) {
       </table>
     </div>
 
-    ${section('AI Signal of the Day', aiSignal ? `<div style="font-size:14px;color:${TEXT_DARK};margin-bottom:8px">${aiSignal}</div>${aiSignalContext ? `<div style="font-size:12px;color:${TEXT_LIGHT};border-top:1px solid ${BORDER};padding-top:8px;margin-top:8px"><strong>WHY IT MATTERS:</strong> ${aiSignalContext}</div>` : ''}` : '')}
+    ${section('Market Intelligence', aiSignal ? `<div style="font-size:14px;color:${TEXT_DARK};margin-bottom:8px">${aiSignal}</div>${aiSignalContext ? `<div style="font-size:12px;color:${TEXT_LIGHT};border-top:1px solid ${BORDER};padding-top:8px;margin-top:8px"><strong>WHY IT MATTERS:</strong> ${aiSignalContext}</div>` : ''}` : '')}
 
     <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px;margin-top:4px">Global Overnight</div>
     <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">

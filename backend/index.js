@@ -12189,35 +12189,17 @@ function withTimeout(promise, ms, label = 'operation') {
 
 async function sendDailyBriefToUser(userId, email, fullName) {
   try {
-    const [moversRes, editorial] = await Promise.all([
-      withTimeout(
-        axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({})),
-        15000, 'movers'
-      ).catch(() => ({})),
-      withTimeout(
-        generateDailyBriefContent().catch(() => ({})),
-        45000, 'brief content'
-      ).catch(() => ({})),
-    ]);
+    const editorial = await withTimeout(
+      generateDailyBriefContent().catch(() => ({})),
+      60000, 'brief content'
+    ).catch(() => ({}));
+
     const dateStr = new Date().toLocaleDateString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
 
-    const indices = editorial?.indices?.length ? editorial.indices : [
-      { label: 'NSE 20', value: '--', change: '--', signal: '--' },
-      { label: 'NASI', value: '--', change: '--', signal: '--' },
-      { label: 'NGX ASI', value: '--', change: '--', signal: '--' },
-      { label: 'S&P 500', value: '--', change: '--', signal: '--' },
-      { label: 'USD/KES', value: '--', change: '--', signal: '--' },
-    ];
-
-    const combinedMovers = [...(moversRes?.combined?.gainers || []), ...(moversRes?.combined?.losers || [])];
-    const yesterdayTopMovers = editorial?.yesterdayTopMovers?.length ? editorial.yesterdayTopMovers : (Array.isArray(combinedMovers) ? combinedMovers.slice(0, 6).map(m => ({
-      symbol: m.symbol || '--',
-      company: m.company || m.company_name || m.name || '',
-      change: m.change || (m.changePercent ? (m.isPositive ? '+' : '') + m.changePercent.toFixed(2) + '%' : '--'),
-      volume: m.volume && m.volume !== '0' && m.volume !== '--' ? m.volume : '--',
-    })) : []);
+    const indices = editorial?.indices || [];
+    const yesterdayTopMovers = editorial?.yesterdayTopMovers || [];
 
     console.log(`[BRIEF] Data gathered for ${email}, sending email...`);
     await withTimeout(
@@ -12228,12 +12210,7 @@ async function sendDailyBriefToUser(userId, email, fullName) {
         yesterdayTopMovers,
         aiSignal: editorial.aiSignal || null,
         aiSignalContext: editorial.aiSignalContext || '',
-        globalIndices: editorial?.globalIndices?.length ? editorial.globalIndices : [
-          { label: 'S&P 500', value: '--', change: '--', keyDriver: 'Overnight data pending' },
-          { label: 'Nasdaq 100', value: '--', change: '--', keyDriver: 'Overnight data pending' },
-          { label: 'Dow Jones', value: '--', change: '--', keyDriver: 'Overnight data pending' },
-          { label: 'Russell 2000', value: '--', change: '--', keyDriver: 'Overnight data pending' },
-        ],
+        globalIndices: editorial?.globalIndices || [],
         globalToNseConnection: editorial.globalToNseConnection || 'Global market movements overnight can set the tone for NSE open. Watch for any significant gap-ups or gap-downs in the first 30 minutes of trading.',
         calendar: editorial.calendar || [],
         analystTake: editorial.analystTake || '',

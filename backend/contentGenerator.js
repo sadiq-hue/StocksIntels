@@ -1,7 +1,7 @@
 const axios = require('axios');
 const { getNewsSummary } = require('./newsService');
 const { getSectorPerformance } = require('./indicesService');
-const { generateSignals } = require('./signalService');
+const { generateSignals, getMonitoredSignals } = require('./signalService');
 const { fetchFinnhubEarningsCalendar, fetchFinnhubEarningsSurprises } = require('./earningsService');
 const fxService = require('./fxService');
 const llm = require('./llmService');
@@ -215,12 +215,33 @@ function buildNseGlobalConnection(nse20, sp500, nseSent, globalSent) {
 
 async function generateDailyBriefContent() {
   const [moversRes, summary, allIndices, sectors, signals] = await Promise.all([
-    fetchJson(`${BASE}/api/market/movers`, { nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] }, combined: { gainers: [], losers: [] }, active: [] }),
+    axios.get(`${BASE}/api/market/movers`, { timeout: 30000 }).then(r => r.data)
+      .catch(() => ({ nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] }, combined: { gainers: [], losers: [] } })),
     fetchJson(`${BASE}/api/ai/market-summary`, { sentiment: 'Neutral', signals: { total: 0, strongBuys: 0, buys: 0, sells: 0 } }),
     fetchJson(`${BASE}/api/indices/all`, {}),
     getSectorPerformance().catch(() => []),
     generateSignals(null, true).catch(() => []),
   ]);
+
+  const byTicker = new Map();
+  (Array.isArray(signals) ? signals : []).forEach(s => byTicker.set(s.ticker, s));
+  for (const m of getMonitoredSignals()) {
+    if (byTicker.has(m.ticker)) {
+      const existing = byTicker.get(m.ticker);
+      existing.signal = m.signal;
+      existing.action = 'buy';
+      existing.confidence = m.confidence ?? existing.confidence ?? 50;
+    } else {
+      byTicker.set(m.ticker, {
+        ticker: m.ticker, name: m.name || m.ticker,
+        signal: m.signal, action: 'buy',
+        confidence: m.confidence ?? 50,
+        entry: m.entryPrice, sector: m.sector || 'General',
+        reason: m.reason || '', type: m.type,
+      });
+    }
+  }
+  const enrichedSignals = [...byTicker.values()];
 
   // allIndices comes back as an object keyed by symbol — normalize to array
   const indicesArr = allIndices && typeof allIndices === 'object' && !Array.isArray(allIndices)
@@ -257,17 +278,20 @@ async function generateDailyBriefContent() {
     volume: m.volume && m.volume !== '0' && m.volume !== '--' ? m.volume : '--',
   }));
 
-  const signalOfDay = Array.isArray(signals) ? signals.sort((a, b) => (b.confidence || 0) - (a.confidence || 0)).slice(0, 3) : [];
+  const signalOfDay = enrichedSignals
+    .filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy')
+    .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
+    .slice(0, 3);
 
-  const totalSignals = Array.isArray(signals) ? signals.length : 0;
-  const strongBuys = Array.isArray(signals) ? signals.filter(s => s.signal === 'Strong Buy').length : 0;
-  const buys = Array.isArray(signals) ? signals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length : 0;
-  const sells = Array.isArray(signals) ? signals.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length : 0;
+  const totalSignals = enrichedSignals.length;
+  const strongBuys = enrichedSignals.filter(s => s.signal === 'Strong Buy').length;
+  const buys = enrichedSignals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
+  const sells = enrichedSignals.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
   const effectiveSentiment = totalSignals > 0
-    ? (buys / totalSignals >= 0.65 ? 'Bullish' : buys / totalSignals >= 0.5 ? 'Slightly Bullish' : sells / totalSignals >= 0.35 ? 'Bearish' : sells / totalSignals >= 0.5 ? 'Slightly Bearish' : 'Neutral')
+    ? (buys > sells * 2 ? 'Bullish' : buys > sells ? 'Slightly Bullish' : sells > buys * 2 ? 'Bearish' : sells > buys ? 'Slightly Bearish' : 'Neutral')
     : (summary?.sentiment || 'neutral');
 
-  const aiSignal = `StocksIntels AI indicates ${effectiveSentiment} market conditions — ${totalSignals} active signals across exchanges.`;
+  const aiSignal = `StocksIntels AI indicates ${effectiveSentiment} market conditions — ${totalSignals} active ratings across exchanges.`;
 
   let aiSignalContext, globalToNseConnection, analystTake;
   if (USE_LLM) {
@@ -295,10 +319,9 @@ async function generateDailyBriefContent() {
     { label: 'S&P 500', value: sp500?.value || '--', change: sp500?.change || '--', keyDriver: spDriver },
     { label: 'Nasdaq', value: ndx?.value || '--', change: ndx?.change || '--', keyDriver: ndxDriver },
     { label: 'Dow Jones', value: dji?.value || '--', change: dji?.change || '--', keyDriver: djiDriver },
-    { label: 'Russell 2000', value: '--', change: '--', keyDriver: 'Overnight data pending' },
   ];
 
-  return { indices, yesterdayTopMovers, aiSignal, aiSignalContext, globalIndices, globalToNseConnection, calendar: buildDailyCalendar(), analystTake };
+  return { indices, yesterdayTopMovers, aiSignal, aiSignalContext, globalIndices, globalToNseConnection, calendar: [], analystTake };
 }
 
 function buildAiSignalContext(summary, topSignals, sp500) {
@@ -313,7 +336,8 @@ function buildAiSignalContext(summary, topSignals, sp500) {
   }
   if (topSignals.length > 0) {
     const top = topSignals[0];
-    parts.push(`Top signal: ${top.name || top.ticker} (${top.signal}, ${top.confidence}% confidence)${top.reason ? ` — ${top.reason}` : ''}.`);
+    const shortReason = top.reason ? (top.reason.length > 140 ? top.reason.slice(0, 140) + '...' : top.reason) : '';
+    parts.push(`Top pick: ${top.name || top.ticker} (${top.signal}, ${top.confidence}% confidence)${shortReason ? ` — ${shortReason}` : ''}.`);
   }
   if (sp500?.changeRaw) {
     parts.push(`S&P 500 futures ${sp500.changeRaw > 0 ? 'pointing higher' : 'under pressure'} (${sp500.change}).`);
@@ -359,19 +383,24 @@ function buildDailyCalendar() {
 
 function buildAnalystTake(topSignals, sectors, summary) {
   const sent = summary?.sentiment || 'neutral';
-  let text = `Markets open with a ${sent.toLowerCase()} bias today. `;
+  const total = summary?.signals?.total || 0;
+  const buys = summary?.signals?.buys || 0;
+  const sells = summary?.signals?.sells || 0;
+  const strongBuys = summary?.signals?.strongBuys || 0;
+  let text = `Across ${total} rated stocks, ${buys} buy${buys !== 1 ? 's' : ''} (${strongBuys} strong) vs ${sells} sell${sells !== 1 ? 's' : ''} — ${sent.toLowerCase()} bias. `;
   if (topSignals.length > 0) {
     const s = topSignals[0];
-    text += `${s.name || s.ticker} carries a ${s.signal} rating (${s.confidence}% confidence)${s.entry ? ` with entry at ${s.entry}` : ''}. ${s.reason || ''} `;
+    const shortReason = s.reason ? (s.reason.length > 120 ? s.reason.slice(0, 120) + '...' : s.reason) : '';
+    text += `${s.name || s.ticker} leads with a ${s.signal} pick (${s.confidence}% confidence)${s.entry ? ` at ${s.entry}` : ''}. ${shortReason} `;
   }
   if (sectors.length > 0) {
-    const leading = sectors.filter(s => s.avgChange > 0).slice(0, 2);
+    const leading = sectors.filter(s => parseFloat(s.avgChange) > 0).slice(0, 2);
     if (leading.length > 0) {
       text += `Leading sectors: ${leading.map(s => `${s.sector} (${s.avgChange}%)`).join(', ')}. `;
     }
   }
-  if (summary?.signals?.sells > 0) {
-    text += `${summary.signals.sells} sell signal${summary.signals.sells > 1 ? 's' : ''} flagged — monitor for downside risk.`;
+  if (sells > 0) {
+    text += `${sells} sell rating${sells > 1 ? 's' : ''} flagged — monitor for downside risk.`;
   }
   return text;
 }
