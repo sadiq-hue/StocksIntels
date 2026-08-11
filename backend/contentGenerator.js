@@ -28,7 +28,7 @@ async function generateWeeklyDigestContent() {
     fxService.getRate('USDKES').catch(() => null),
   ]);
 
-  const signalArr = Array.isArray(signals) ? signals : [];
+  const signalArr = mergeMonitoredSignals(Array.isArray(signals) ? signals : []);
 
   // Fill company names from canonical sources (stockData curated maps, then the
   // stocks table) so mangled cache names like "Lulul" never reach the email.
@@ -46,13 +46,15 @@ async function generateWeeklyDigestContent() {
   }
   const derivedMovers = deriveMovers(signalArr);
 
-  const totalSignals = signalArr.length;
-  const strongBuys = signalArr.filter(s => s.signal === 'Strong Buy').length;
-  const buys = signalArr.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
-  const sells = signalArr.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
-  const effectiveSentiment = totalSignals > 0
-    ? (buys / totalSignals >= 0.65 ? 'Bullish' : buys / totalSignals >= 0.5 ? 'Slightly Bullish' : sells / totalSignals >= 0.35 ? 'Bearish' : 'Neutral')
-    : (summary?.sentiment || 'Neutral');
+  // Prefer the Market Intelligence page's numbers (/api/ai/market-summary) — the
+  // same merge of live cache + monitored positions — so the email count and
+  // sentiment always match what the app shows. Fall back to the locally merged
+  // universe when the endpoint is unavailable.
+  const totalSignals = summary?.signals?.total || signalArr.length;
+  const strongBuys = summary?.signals?.strongBuys ?? signalArr.filter(s => s.signal === 'Strong Buy').length;
+  const buys = summary?.signals?.buys ?? signalArr.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
+  const sells = summary?.signals?.sells ?? signalArr.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
+  const effectiveSentiment = (summary?.signals?.total ? summary.sentiment : null) || deriveSentimentFromRatings(buys, sells, totalSignals);
   const effectiveSummary = { ...summary, sentiment: effectiveSentiment, signals: { total: totalSignals, strongBuys, buys, sells } };
 
   // allIndices comes back as an object keyed by symbol — normalize to array
@@ -121,11 +123,12 @@ function buildNseSummary(nse20, gainers, losers, active, sentiment, topSector, w
 
   if (gainers.length > 0) {
     const top = gainers[0];
-    text += `${top.name || top.symbol} led the gainers, up ${top.change || top.changePercent || '--'}%. `;
+    text += `${top.name || top.symbol} led the gainers, up ${stripPct(top.change || top.changePercent || '--')}%. `;
   }
   if (losers.length > 0) {
     const bot = losers[0];
-    text += `${bot.name || bot.symbol} declined ${(bot.change || bot.changePercent || '--')}%. `;
+    const botPct = Math.abs(parseFloat(stripPct(bot.change || bot.changePercent || '--')) || 0);
+    text += `${bot.name || bot.symbol} declined ${botPct}%. `;
   }
   if (active.length > 0) {
     text += `Most active: ${active.map(a => a.name || a.symbol).join(', ')}. `;
@@ -149,9 +152,9 @@ function buildStoryOfWeek(topStory, gainers, losers) {
     return text;
   }
   if (gainers.length > 0) {
-    return `${gainers[0].name || gainers[0].symbol} was the week's standout performer, gaining ${gainers[0].change || gainers[0].changePercent || '--'}% on strong volume. This move reflects growing investor confidence in the ${gainers[0].sector || 'sector'} space.`;
+    return `${gainers[0].name || gainers[0].symbol} was the week's standout performer, gaining ${stripPct(gainers[0].change || gainers[0].changePercent || '--')}% on strong volume. This move reflects growing investor confidence in the ${gainers[0].sector || 'sector'} space.`;
   }
-  return 'Markets navigated a week of mixed signals with selective opportunities in blue-chip stocks.';
+  return 'Markets navigated a week of mixed conditions with selective opportunities in blue-chip stocks.';
 }
 
 function buildMilestone(nse20, sp500, gainers, movers) {
@@ -159,9 +162,9 @@ function buildMilestone(nse20, sp500, gainers, movers) {
     return `The NSE 20 traded at ${nse20.value} (${nse20.change}) this week. ${sp500 ? `Globally, the S&P 500 stood at ${sp500.value} (${sp500.change}).` : ''}`;
   }
   if (gainers.length > 0) {
-    return `${gainers[0].name || gainers[0].symbol} recorded notable gains of ${gainers[0].change || gainers[0].changePercent || '--'}%, standing out as a top weekly performer.`;
+    return `${gainers[0].name || gainers[0].symbol} recorded notable gains of ${stripPct(gainers[0].change || gainers[0].changePercent || '--')}%, standing out as a top weekly performer.`;
   }
-  return 'Markets continue to reflect cautious optimism as investors digest the latest economic signals.';
+  return 'Markets continue to reflect cautious optimism as investors digest the latest economic data.';
 }
 
 function buildGlobalTheme(indices, gainers, sentiment, topSector, sectors) {
@@ -178,7 +181,7 @@ function buildGlobalTheme(indices, gainers, sentiment, topSector, sectors) {
     text += `${topSector.sector} led global sector performance (${topSector.avgChange}%), with ${topSector.upCount} of ${topSector.count} stocks positive. `;
   }
   if (gainers.length > 0) {
-    text += `Top global stock: ${gainers[0].name || gainers[0].symbol} (${gainers[0].change || gainers[0].changePercent || '--'}%).`;
+    text += `Top global stock: ${gainers[0].name || gainers[0].symbol} (${stripPct(gainers[0].change || gainers[0].changePercent || '--')}%).`;
   }
   return text;
 }
@@ -190,14 +193,13 @@ function buildWhatToWatch(summary, nse20, sectors) {
   const sells = summary?.signals?.sells || 0;
   const parts = [];
   if (totalSignals > 0) {
-    parts.push(`StocksIntels AI is tracking ${totalSignals} active signals across NSE and NYSE.`);
+    parts.push(`StocksIntels AI is tracking ${totalSignals} stocks across NSE and NYSE.`);
   }
-  if (strongBuys > 0 || buys > 0) {
-    const buyTotal = (strongBuys || 0) + (buys || 0);
-    parts.push(`${buyTotal} stock${buyTotal > 1 ? 's' : ''} showing buy-side momentum — potential breakout candidates.`);
+  if (buys > 0) {
+    parts.push(`${buys} buy-rated stock${buys > 1 ? 's' : ''}${strongBuys > 0 ? ` (${strongBuys} strong buy)` : ''} — potential breakout candidates.`);
   }
   if (sells > 0) {
-    parts.push(`${sells} sell signal${sells > 1 ? 's' : ''} suggest${sells === 1 ? 's' : ''} caution on overextended positions.`);
+    parts.push(`${sells} sell rating${sells > 1 ? 's' : ''} warrant${sells === 1 ? 's' : ''} caution on overextended positions.`);
   }
   if (nse20?.value) {
     parts.push(`Watch the NSE 20 at ${nse20.value} (${nse20.change || '--'}) as a key support/resistance zone for the week ahead.`);
@@ -216,7 +218,7 @@ function buildMacroBackdrop(sectors, summary, sp500, fxRate) {
   const parts = [];
   const totalSignals = summary?.signals?.total || 0;
   const sentiment = summary?.sentiment || 'Neutral';
-  parts.push(`AI market sentiment is ${sentiment} with ${totalSignals} active signals across NSE and NYSE.`);
+  parts.push(`AI market sentiment is ${sentiment} across ${totalSignals} tracked stocks on NSE and NYSE.`);
   const cleanSectors = meaningfulSectors(sectors);
   if (cleanSectors.length > 0) {
     const upSectors = cleanSectors.filter(s => parseFloat(s.avgChange) > 0);
@@ -316,6 +318,35 @@ function toMoverRow(s) {
     name: s.name || '',
     change: (change > 0 ? '+' : '') + change + '%',
   };
+}
+
+// Strip a trailing '%' from a change string so prose can re-append it without
+// producing "8.11%%".
+function stripPct(v) {
+  if (v == null) return '';
+  return String(v).replace('%', '');
+}
+
+// Mirror the /api/ai/market-summary sentiment buckets exactly, so the email
+// never disagrees with the Market Intelligence page.
+function deriveSentimentFromRatings(buys, sells, total) {
+  const bullishPct = total > 0 ? (buys / total) * 100 : 0;
+  if (bullishPct >= 65) return 'Bullish';
+  if (bullishPct >= 50) return 'Slightly Bullish';
+  if (bullishPct >= 36) return 'Slightly Bearish';
+  return 'Bearish';
+}
+
+// Merge the live engine cache with open monitored positions so the digest's
+// numbers match the Market Intelligence page (/api/ai/market-summary).
+function mergeMonitoredSignals(signals) {
+  const arr = Array.isArray(signals) ? signals : [];
+  const byTicker = new Map(arr.map(s => [s.ticker, s]));
+  const merged = [...arr];
+  for (const m of getMonitoredSignals()) {
+    if (m && m.ticker && !byTicker.has(m.ticker)) merged.push({ ...m });
+  }
+  return merged;
 }
 
 // Split the signal universe into per-market gainers/losers so the weekly
@@ -419,15 +450,18 @@ async function generateDailyBriefContent() {
     .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
     .slice(0, 3);
 
-  const totalSignals = enrichedSignals.length;
-  const strongBuys = enrichedSignals.filter(s => s.signal === 'Strong Buy').length;
-  const buys = enrichedSignals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
-  const sells = enrichedSignals.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
-  const effectiveSentiment = totalSignals > 0
-    ? (buys > sells * 2 ? 'Bullish' : buys > sells ? 'Slightly Bullish' : sells > buys * 2 ? 'Bearish' : sells > buys ? 'Slightly Bearish' : 'Neutral')
-    : (summary?.sentiment || 'neutral');
+  // Prefer the Market Intelligence page's numbers (/api/ai/market-summary) so the
+  // brief always matches the app; fall back to the locally merged universe.
+  const totalSignals = summary?.signals?.total || enrichedSignals.length;
+  const strongBuys = summary?.signals?.strongBuys ?? enrichedSignals.filter(s => s.signal === 'Strong Buy').length;
+  const buys = summary?.signals?.buys ?? enrichedSignals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
+  const sells = summary?.signals?.sells ?? enrichedSignals.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
+  const effectiveSentiment = (summary?.signals?.total ? summary.sentiment : null)
+    || (totalSignals > 0
+      ? (buys > sells * 2 ? 'Bullish' : buys > sells ? 'Slightly Bullish' : sells > buys * 2 ? 'Bearish' : sells > buys ? 'Slightly Bearish' : 'Neutral')
+      : 'Neutral');
 
-  const aiSignal = `StocksIntels AI indicates ${effectiveSentiment} market conditions — ${totalSignals} active ratings across exchanges.`;
+  const aiSignal = `StocksIntels AI indicates ${effectiveSentiment} market conditions — ${totalSignals} tracked stocks across NSE and NYSE.`;
 
   let aiSignalContext, globalToNseConnection, analystTake;
   if (USE_LLM) {
