@@ -290,6 +290,11 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
         Followers
       </div>
+      <div class="nav-item" data-tab="testimonials" onclick="switchTab('testimonials')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+        Testimonials
+        <span id="testimonialBadge" class="ml-auto text-xs text-gray-400"></span>
+      </div>
       <div class="nav-item" data-tab="engine" onclick="switchTab('engine')">
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         Engine
@@ -1290,6 +1295,32 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         </table>
       </div>
     </div>
+    <!-- Tab: Testimonials -->
+    <div id="tab-testimonials" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div class="flex items-center justify-between mb-2">
+        <h1 class="text-xl font-bold text-gray-900">Testimonials</h1>
+        <div class="flex items-center gap-2">
+          <select id="testimonialStatusFilter" class="input-field text-sm py-1.5" onchange="fetchTestimonials()">
+            <option value="pending">Pending Review</option>
+            <option value="published">Published</option>
+            <option value="rejected">Rejected</option>
+            <option value="all">All</option>
+          </select>
+          <button class="btn btn-secondary text-sm" onclick="fetchTestimonials()">Refresh</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div class="stat-card text-center"><div class="stat-value text-amber-600" id="testimonialStatPending">-</div><div class="stat-label">Pending</div></div>
+        <div class="stat-card text-center"><div class="stat-value text-emerald-600" id="testimonialStatPublished">-</div><div class="stat-label">Published</div></div>
+        <div class="stat-card text-center"><div class="stat-value text-red-600" id="testimonialStatRejected">-</div><div class="stat-label">Rejected</div></div>
+      </div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow-x:auto">
+        <table class="w-full" style="min-width:900px">
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Rating</th><th>Testimonial</th><th>Status</th><th>Submitted</th><th>Actions</th></tr></thead>
+          <tbody id="testimonialsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
     <!-- Tab: User Activity -->
     <div id="tab-user-activity" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
       <div class="flex items-center justify-between mb-2">
@@ -1910,6 +1941,7 @@ function switchTab(tab) {
   if (tab === 'signal-outcomes') fetchSignalOutcomes();
   if (tab === 'notifications') fetchNotifications();
   if (tab === 'followers') fetchFollowers();
+  if (tab === 'testimonials') fetchTestimonials();
   if (tab === 'user-activity') { fetchUserActivity(); }
   if (tab === 'affiliates') { fetchAffiliateStats(); fetchAffiliates(); }
   if (tab === 'engine') { fetchEngineHealth(); fetchForwardTest(); }
@@ -3587,6 +3619,21 @@ async function pollPendingCount() {
       }
     }
   } catch {}
+  try {
+    const tRes = await fetch('/api/admin/testimonials?status=pending');
+    if (tRes.ok) {
+      const tData = await tRes.json();
+      const tCount = (tData.counts && tData.counts.pending) || 0;
+      const tBadge = document.getElementById('testimonialBadge');
+      if (tCount > 0) {
+        tBadge.textContent = tCount;
+        tBadge.className = 'ml-auto text-xs font-semibold bg-red-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center';
+      } else {
+        tBadge.textContent = '';
+        tBadge.className = 'ml-auto text-xs';
+      }
+    }
+  } catch {}
 }
 
 async function triggerDetection() {
@@ -4436,6 +4483,83 @@ async function fetchFollowers() {
   } catch {}
 }
 
+// ── Testimonials ──
+let _testimonialFilter = 'pending';
+
+async function fetchTestimonials() {
+  try {
+    _testimonialFilter = document.getElementById('testimonialStatusFilter').value || 'pending';
+    const res = await fetch('/api/admin/testimonials?status=' + encodeURIComponent(_testimonialFilter));
+    if (!res.ok) return;
+    const d = await res.json();
+    const c = d.counts || {};
+    document.getElementById('testimonialStatPending').textContent = c.pending || 0;
+    document.getElementById('testimonialStatPublished').textContent = c.published || 0;
+    document.getElementById('testimonialStatRejected').textContent = c.rejected || 0;
+    document.getElementById('testimonialBadge').textContent = (c.pending || 0) > 0 ? c.pending + ' pending' : '';
+    const tbody = document.getElementById('testimonialsTableBody');
+    const list = d.testimonials || [];
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-8">No testimonials found</td></tr>';
+    } else {
+      tbody.innerHTML = list.map(t => {
+        const status = t.approved ? '<span class="pill pill-verified">Published</span>'
+          : t.rejected ? '<span class="pill pill-free">Rejected</span>'
+          : '<span class="pill pill-unverified">Pending</span>';
+        const stars = '★'.repeat(Math.max(1, Math.min(5, t.rating || 5))) + '<span style="color:#d1d5db">' + '★'.repeat(5 - Math.max(1, Math.min(5, t.rating || 5))) + '</span>';
+        const actions = t.approved
+          ? `<button class="btn btn-secondary" onclick="deleteTestimonial(${t.id})" style="font-size:11px;padding:4px 10px">Delete</button>`
+          : t.rejected
+            ? `<button class="btn btn-primary" onclick="publishTestimonial(${t.id})" style="font-size:11px;padding:4px 10px">Publish</button>
+               <button class="btn btn-secondary" onclick="deleteTestimonial(${t.id})" style="font-size:11px;padding:4px 10px">Delete</button>`
+            : `<button class="btn btn-primary" onclick="publishTestimonial(${t.id})" style="font-size:11px;padding:4px 10px">Publish</button>
+               <button class="btn btn-secondary" onclick="rejectTestimonial(${t.id})" style="font-size:11px;padding:4px 10px">Reject</button>
+               <button class="btn btn-secondary" onclick="deleteTestimonial(${t.id})" style="font-size:11px;padding:4px 10px">Delete</button>`;
+        return `<tr>
+          <td class="font-medium text-gray-900 text-xs">${esc(t.name)}</td>
+          <td class="text-gray-500 text-xs">${esc(t.email || '—')}</td>
+          <td class="text-gray-500 text-xs">${esc(t.role || '')}</td>
+          <td class="text-xs text-amber-500" style="letter-spacing:1px">${stars}</td>
+          <td class="text-gray-600 text-xs max-w-md"><div style="max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.content)}">${esc(t.content)}</div></td>
+          <td>${status}</td>
+          <td class="text-gray-500 text-xs">${formatDate(t.created_at)}</td>
+          <td style="white-space:nowrap">${actions}</td>
+        </tr>`;
+      }).join('');
+    }
+  } catch {}
+}
+
+async function publishTestimonial(id) {
+  if (!confirm('Publish this testimonial? The author will receive a copy email.')) return;
+  try {
+    const res = await fetch('/api/admin/testimonials/' + id + '/publish', { method: 'POST' });
+    const d = await res.json();
+    if (res.ok) { toast(d.message || 'Testimonial published', 'success'); fetchTestimonials(); }
+    else toast(d.error || 'Failed to publish', 'error');
+  } catch { toast('Network error', 'error'); }
+}
+
+async function rejectTestimonial(id) {
+  if (!confirm('Reject this testimonial?')) return;
+  try {
+    const res = await fetch('/api/admin/testimonials/' + id + '/reject', { method: 'POST' });
+    const d = await res.json();
+    if (res.ok) { toast(d.message || 'Testimonial rejected', 'success'); fetchTestimonials(); }
+    else toast(d.error || 'Failed to reject', 'error');
+  } catch { toast('Network error', 'error'); }
+}
+
+async function deleteTestimonial(id) {
+  if (!confirm('Delete this testimonial permanently?')) return;
+  try {
+    const res = await fetch('/api/admin/testimonials/' + id, { method: 'DELETE' });
+    const d = await res.json();
+    if (res.ok) { toast(d.message || 'Testimonial deleted', 'success'); fetchTestimonials(); }
+    else toast(d.error || 'Failed to delete', 'error');
+  } catch { toast('Network error', 'error'); }
+}
+
 // ── Settings ──
 let _isSuperAdmin = false;
 
@@ -4934,7 +5058,7 @@ async function handleVerifyOtp() {
     toast('Welcome back, ' + (data.user.full_name || 'Admin'), 'success');
     // Restore tab from URL path
     const pathTab = location.pathname.replace('/admin/', '') || 'dashboard';
-    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','user-activity','audit','settings'];
+    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','testimonials','user-activity','audit','settings'];
     switchTab(validTabs.includes(pathTab) ? pathTab : 'dashboard');
     initSocket();
     setInterval(function(){ updateGreeting(); fetchDashboard(); }, 30000);
@@ -5108,7 +5232,7 @@ async function fetchUserActivity(page) {
     initSocket();
     // Restore tab from URL path
     const pathTab = location.pathname.replace('/admin/', '') || 'dashboard';
-    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','user-activity','audit','settings'];
+    const validTabs = ['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','testimonials','user-activity','audit','settings'];
     const initialTab = validTabs.includes(pathTab) ? pathTab : 'dashboard';
     switchTab(initialTab);
     setInterval(function(){ updateGreeting(); fetchDashboard(); }, 30000);

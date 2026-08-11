@@ -321,16 +321,20 @@ app.get('/api/testimonials', async (_req, res) => {
 
 app.post('/api/testimonials', async (req, res) => {
   try {
-    const { name, role, content, rating } = req.body;
+    const { name, role, content, rating, email } = req.body;
     if (!name || !role || !content) return res.status(400).json({ error: 'Name, role, and content are required' });
     const safeName = String(name).trim().slice(0, 255);
     const safeRole = String(role).trim().slice(0, 255);
     const safeContent = String(content).trim().slice(0, 2000);
     const safeRating = Math.min(5, Math.max(1, parseInt(String(rating || 5)) || 5));
+    const safeEmail = email ? String(email).trim().slice(0, 255) : null;
+    if (safeEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
+      return res.status(400).json({ error: 'A valid email address is required' });
+    }
     const initials = safeName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
     const result = await pool.query(
-      'INSERT INTO testimonials (name, role, content, rating, initials, approved) VALUES ($1,$2,$3,$4,$5,false) RETURNING id',
-      [safeName, safeRole, safeContent, safeRating, initials]
+      'INSERT INTO testimonials (name, role, content, rating, initials, email, approved) VALUES ($1,$2,$3,$4,$5,$6,false) RETURNING id',
+      [safeName, safeRole, safeContent, safeRating, initials, safeEmail]
     );
     res.json({ success: true, id: result.rows[0].id, message: 'Testimonial submitted for review' });
   } catch (err) {
@@ -1417,6 +1421,81 @@ app.get('/api/admin/notifications', async (req, res) => {
     `, [limit, offset]);
     res.json({ notifications: dataResult.rows, total: countResult.rows[0].cnt, page, limit });
   } catch (err) { console.error('Admin notifications error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+// ── Admin Testimonials review ──
+// List all testimonials with review state. ?status=pending|published|rejected|all (default all).
+app.get('/api/admin/testimonials', async (req, res) => {
+  try {
+    const status = (req.query.status || 'all').trim();
+    const conditions = [];
+    if (status === 'pending') conditions.push('approved = false AND rejected = false');
+    if (status === 'published') conditions.push('approved = true');
+    if (status === 'rejected') conditions.push('rejected = true');
+    const whereClause = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    const [pendingRes, publishedRes, rejectedRes, listRes] = await Promise.all([
+      pool.query(`SELECT COUNT(*)::int as cnt FROM testimonials WHERE approved = false AND rejected = false`),
+      pool.query(`SELECT COUNT(*)::int as cnt FROM testimonials WHERE approved = true`),
+      pool.query(`SELECT COUNT(*)::int as cnt FROM testimonials WHERE rejected = true`),
+      pool.query(`SELECT id, name, role, content, rating, initials, email, approved, rejected, published_at, reviewed_at, created_at
+                  FROM testimonials ${whereClause} ORDER BY created_at DESC LIMIT 100`),
+    ]);
+    res.json({
+      testimonials: listRes.rows,
+      counts: { pending: pendingRes.rows[0].cnt, published: publishedRes.rows[0].cnt, rejected: rejectedRes.rows[0].cnt },
+    });
+  } catch (err) { console.error('Admin testimonials error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+// Publish (approve) a testimonial and email the author a copy of the published entry.
+app.post('/api/admin/testimonials/:id/publish', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid testimonial id' });
+    const result = await pool.query(
+      `UPDATE testimonials
+       SET approved = true, rejected = false, published_at = COALESCE(published_at, NOW()), reviewed_at = NOW()
+       WHERE id = $1 AND NOT approved
+       RETURNING id, name, role, content, rating, email`,
+      [id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Testimonial not found or already published' });
+    const row = result.rows[0];
+    if (row.email) {
+      try {
+        const { sendTestimonialPublishedEmail } = require('./mailer');
+        await sendTestimonialPublishedEmail(row.email, row);
+      } catch (e) {
+        console.error('Testimonial publish email failed:', e.message);
+      }
+    }
+    res.json({ success: true, message: 'Testimonial published', testimonial: row });
+  } catch (err) { console.error('Admin publish testimonial error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+// Reject a testimonial (stays stored, flagged rejected so it can be revisited).
+app.post('/api/admin/testimonials/:id/reject', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid testimonial id' });
+    const result = await pool.query(
+      `UPDATE testimonials SET approved = false, rejected = true, reviewed_at = NOW() WHERE id = $1 RETURNING id`,
+      [id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Testimonial not found' });
+    res.json({ success: true, message: 'Testimonial rejected' });
+  } catch (err) { console.error('Admin reject testimonial error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+// Delete a testimonial permanently.
+app.delete('/api/admin/testimonials/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Invalid testimonial id' });
+    const result = await pool.query(`DELETE FROM testimonials WHERE id = $1 RETURNING id`, [id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Testimonial not found' });
+    res.json({ success: true, message: 'Testimonial deleted' });
+  } catch (err) { console.error('Admin delete testimonial error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
 // ── Admin Signal Outcomes ──
@@ -11445,9 +11524,17 @@ async function initDatabase() {
       content TEXT NOT NULL,
       rating INTEGER NOT NULL DEFAULT 5 CHECK (rating >= 1 AND rating <= 5),
       initials VARCHAR(10) NOT NULL,
+      email VARCHAR(255),
       approved BOOLEAN NOT NULL DEFAULT false,
+      rejected BOOLEAN NOT NULL DEFAULT false,
+      published_at TIMESTAMP WITH TIME ZONE,
+      reviewed_at TIMESTAMP WITH TIME ZONE,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     )`);
+    await pool.query(`ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS email VARCHAR(255)`).catch(() => {});
+    await pool.query(`ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS rejected BOOLEAN NOT NULL DEFAULT false`).catch(() => {});
+    await pool.query(`ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS published_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
+    await pool.query(`ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
 
     // Restore signal-engine in-memory state now that tables are guaranteed to exist
     try {

@@ -99,7 +99,7 @@ export function SupportCenterPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // --- Testimonial form ---
-  const [testimonialForm, setTestimonialForm] = useState({ name: user?.full_name || "", role: "", content: "", rating: 5 });
+  const [testimonialForm, setTestimonialForm] = useState({ name: user?.full_name || "", role: "", content: "", rating: 5, email: user?.email || "" });
   const [testimonialSending, setTestimonialSending] = useState(false);
   const [testimonialStatus, setTestimonialStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -107,6 +107,10 @@ export function SupportCenterPage() {
     e.preventDefault();
     if (!testimonialForm.name || !testimonialForm.role || !testimonialForm.content) {
       setTestimonialStatus({ type: "error", message: "Please fill in all fields." });
+      return;
+    }
+    if (!validateEmail(testimonialForm.email)) {
+      setTestimonialStatus({ type: "error", message: "Please provide a valid email so we can send you a copy once published." });
       return;
     }
     setTestimonialSending(true);
@@ -120,7 +124,7 @@ export function SupportCenterPage() {
       const data = await res.json();
       if (res.ok) {
         setTestimonialStatus({ type: "success", message: "Thank you! Your testimonial has been submitted for review." });
-        setTestimonialForm({ name: user?.full_name || "", role: "", content: "", rating: 5 });
+        setTestimonialForm({ name: user?.full_name || "", role: "", content: "", rating: 5, email: user?.email || "" });
       } else {
         setTestimonialStatus({ type: "error", message: data.error || "Something went wrong." });
       }
@@ -865,6 +869,14 @@ export function SupportCenterPage() {
                   </label>
                   <Input type="text" placeholder="Retail trader, Nairobi" value={testimonialForm.role}
                     onChange={(e) => setTestimonialForm({ ...testimonialForm, role: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-foreground text-sm font-semibold block mb-1.5">
+                    Your email <span className="text-red-400">*</span>
+                  </label>
+                  <Input type="email" placeholder="you@example.com" value={testimonialForm.email}
+                    onChange={(e) => setTestimonialForm({ ...testimonialForm, email: e.target.value })} />
+                  <p className="text-muted-foreground text-xs mt-1.5">We'll email you a copy of your testimonial once it's published.</p>
                 </div>
                 <div>
                   <label className="text-foreground text-sm font-semibold block mb-1.5">

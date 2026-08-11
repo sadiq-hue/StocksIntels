@@ -1561,4 +1561,35 @@ async function sendContactNotification({ name, email, subject, message: msg }) {
   return sendViaTransport({ to: 'support@stocksintels.com', subject: '[Contact] ' + s, html, label: 'Contact Form' });
 }
 
-module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendViaTransport };
+async function sendTestimonialPublishedEmail(email, data) {
+  const n = esc(data.name || '');
+  const r = esc(data.role || '');
+  const c = esc(data.content || '').replace(/\n/g, '<br />');
+  const rating = data.rating != null ? parseInt(data.rating) : 5;
+  const stars = '&#9733;'.repeat(Math.max(1, Math.min(5, rating))) + '<span style="color:#d1d5db">' + '&#9733;'.repeat(5 - Math.max(1, Math.min(5, rating))) + '</span>';
+  const appUrl = process.env.APP_URL || 'https://stocksintels.com';
+  const subject = 'Your testimonial is live on StocksIntels';
+  const html = baseWrapper(`
+    <div style="text-align:center">
+      <div style="font-size:20px;font-weight:700;color:${TEXT_DARK};margin-bottom:4px">Your testimonial is now live</div>
+      <div style="font-size:13px;color:${TEXT_MED};line-height:1.5;margin-bottom:20px">Thanks ${n} — your review has been reviewed and published on the StocksIntels website.</div>
+    </div>
+    <div style="background:${BG_LIGHT};border:1px solid ${BORDER};border-radius:10px;padding:20px;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="width:36px;height:36px;border-radius:50%;background:${BRAND_COLOR};color:#ffffff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">${esc((data.initials || n).slice(0,2).toUpperCase())}</div>
+        <div>
+          <div style="font-size:14px;font-weight:600;color:${TEXT_DARK}">${n}</div>
+          <div style="font-size:12px;color:${TEXT_MED}">${r}</div>
+        </div>
+        <div style="margin-left:auto;font-size:14px;color:#f59e0b;letter-spacing:1px">${stars}</div>
+      </div>
+      <div style="font-size:14px;color:${TEXT_DARK};line-height:1.6;font-style:italic">"${c}"</div>
+    </div>
+    <div style="text-align:center">
+      <a href="${appUrl}" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Visit StocksIntels</a>
+    </div>
+  `);
+  return sendViaTransport({ to: email, subject, html, label: 'Testimonial published' });
+}
+
+module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendTestimonialPublishedEmail, sendViaTransport };
