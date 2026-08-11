@@ -255,7 +255,6 @@ async function generateDailyBriefContent() {
 
   const nse20 = nseIndices.find(i => i.symbol?.includes('NSE20'));
   const nasi = nseIndices.find(i => i.symbol?.includes('NSEASI'));
-  const ngx = nseIndices.find(i => i.symbol?.includes('NGX'));
   const sp500 = globalIdx.find(i => i.symbol?.includes('GSPC'));
   const ndx = globalIdx.find(i => i.symbol?.includes('IXIC'));
   const dji = globalIdx.find(i => i.symbol?.includes('DJI'));
@@ -263,11 +262,10 @@ async function generateDailyBriefContent() {
   const usdKesStr = typeof usdToKes === 'number' ? usdToKes.toFixed(2) : (usdToKes || '--');
 
   const indices = [
-    { label: 'NSE 20', value: nse20?.value || '--', change: nse20?.change || '--', signal: summary?.sentiment === 'Bullish' ? 'BULLISH' : summary?.sentiment === 'Bearish' ? 'BEARISH' : 'NEUTRAL' },
-    { label: 'NASI', value: nasi?.value || '--', change: nasi?.change || '--', signal: '--' },
-    { label: 'NGX ASI', value: ngx?.value || '--', change: ngx?.change || '--', signal: '--' },
-    { label: 'S&P 500', value: sp500?.value || '--', change: sp500?.change || '--', signal: '--' },
-    { label: 'USD/KES', value: usdKesStr, change: '--', signal: '--' },
+    { label: 'NSE 20', value: nse20?.value || '--', change: nse20?.change || '--' },
+    { label: 'NASI', value: nasi?.value || '--', change: nasi?.change || '--' },
+    { label: 'S&P 500', value: sp500?.value || '--', change: sp500?.change || '--' },
+    { label: 'USD/KES', value: usdKesStr, change: '--' },
   ];
 
   const combinedMovers = enrichedSignals

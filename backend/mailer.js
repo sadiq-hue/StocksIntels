@@ -1006,13 +1006,12 @@ async function sendDailyBriefEmail(email, data) {
 
   const subject = `Daily Market Brief — ${dateStr}`;
 
-  function indexRow(label, value, change, signal) {
-    const sigColor = signal === 'BULLISH' ? GREEN : signal === 'BEARISH' ? RED : AMBER;
+  function indexRow(label, value, change) {
     const chgColor = change && change.startsWith('+') ? GREEN : change && change.startsWith('-') ? RED : TEXT_MED;
-    return `<tr><td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:13px;font-weight:600;color:${TEXT_DARK}">${label}</td><td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:right;color:${TEXT_DARK}">${value || '--'}</td><td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:right;color:${chgColor}">${change || '--'}</td><td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:11px;text-align:center;color:#ffffff;background:${sigColor};border-radius:4px;font-weight:600">${signal || '--'}</td></tr>`;
+    return `<tr><td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:13px;font-weight:600;color:${TEXT_DARK}">${label}</td><td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:right;color:${TEXT_DARK}">${value || '--'}</td><td style="padding:6px 10px;border-bottom:1px solid ${BORDER};font-size:13px;text-align:right;color:${chgColor}">${change || '--'}</td></tr>`;
   }
 
-  const indexRows = ((indices || []).slice(0, 5)).map(i => indexRow(i.label, i.value, i.change, i.signal)).join('');
+  const indexRows = ((indices || []).slice(0, 5)).map(i => indexRow(i.label, i.value, i.change)).join('');
 
   const moverRows = (yesterdayTopMovers || []).slice(0, 6).map(m =>
     `<tr><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${m.symbol}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${m.company}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${m.change?.startsWith('+') ? GREEN : RED}">${m.change || '--'}</td><td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${TEXT_MED}">${m.volume || '--'}</td></tr>`
@@ -1036,8 +1035,8 @@ async function sendDailyBriefEmail(email, data) {
 
     <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Today\u2019s Market Snapshot</div>
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin-bottom:20px;font-size:12px;border:1px solid ${BORDER};border-radius:8px;overflow:hidden">
-      <thead><tr style="background:${BG_LIGHT}"><th style="padding:6px 10px;text-align:left;color:${TEXT_MED}">Market</th><th style="padding:6px 10px;text-align:right;color:${TEXT_MED}">Close</th><th style="padding:6px 10px;text-align:right;color:${TEXT_MED}">Chg</th><th style="padding:6px 10px;text-align:center;color:${TEXT_MED}">Signal</th></tr></thead>
-      <tbody>${indexRows || '<tr><td colspan="4" style="padding:12px;text-align:center;color:#94a3b8">Index data loading...</td></tr>'}</tbody>
+      <thead><tr style="background:${BG_LIGHT}"><th style="padding:6px 10px;text-align:left;color:${TEXT_MED}">Market</th><th style="padding:6px 10px;text-align:right;color:${TEXT_MED}">Close</th><th style="padding:6px 10px;text-align:right;color:${TEXT_MED}">Chg</th></tr></thead>
+      <tbody>${indexRows || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8">Index data loading...</td></tr>'}</tbody>
     </table>
 
     <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:10px">Yesterday\u2019s Top Movers</div>
