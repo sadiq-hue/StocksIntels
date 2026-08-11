@@ -915,6 +915,15 @@ function cleanTicker(s) {
   return t;
 }
 
+// Convert lightweight markdown (**bold** / *italic*) into HTML so editorial
+// text never renders literal asterisks in emails.
+function mdToHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+}
+
 function gainerTable(title, rows) {
   const r = (rows || []).slice(0, 6).map(s => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${cleanTicker(s)}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || s.name || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${GREEN}">${s.change || (s.changePercent ? '+' + s.changePercent.toFixed(2) + '%' : '0.00%')}</td></tr>`).join('');
   return `<div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden"><div style="background:${GREEN};color:#ffffff;padding:8px 12px;font-size:12px;font-weight:600">${title}</div><table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px"><thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Name</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Chg</th></tr></thead><tbody>${r || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No data</td></tr>'}</tbody></table></div>`;
@@ -956,9 +965,9 @@ async function sendWeeklyDigestEmail(email, data) {
       <div style="font-size:12px;color:${TEXT_MED}">Active AI Signals This Week</div>
     </div>` : ''}
 
-    ${section('NSE — What Happened Last Week', nseSummary || '' )}
-    ${section('Story of the Week', storyOfWeek || '')}
-    ${section('Milestone to Note', milestone || '')}
+    ${section('NSE — What Happened Last Week', mdToHtml(nseSummary || ''))}
+    ${section('Story of the Week', mdToHtml(storyOfWeek || ''))}
+    ${section('Milestone to Note', mdToHtml(milestone || ''))}
 
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:16px">
       <tr>
@@ -967,9 +976,9 @@ async function sendWeeklyDigestEmail(email, data) {
       </tr>
     </table>
 
-    ${section('Global Markets — Key Themes This Week', globalTheme || '')}
-    ${section('Macro Backdrop', macroBackdrop || '')}
-    ${section('What to Watch This Week', whatToWatch || '')}
+    ${section('Global Markets — Key Themes This Week', mdToHtml(globalTheme || ''))}
+    ${section('Macro Backdrop', mdToHtml(macroBackdrop || ''))}
+    ${section('What to Watch This Week', mdToHtml(whatToWatch || ''))}
 
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:16px">
       <tr>
@@ -978,14 +987,15 @@ async function sendWeeklyDigestEmail(email, data) {
       </tr>
     </table>
 
-    ${section('NSE — Global Connection', nseGlobalConnection || '')}
+    ${section('NSE — Global Connection', mdToHtml(nseGlobalConnection || ''))}
 
+    ${newsRows ? `
     <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
       <div style="background:${BRAND_COLOR};color:#ffffff;padding:10px 14px;font-size:13px;font-weight:600">Top Market News</div>
       <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
-        ${newsRows || '<tr><td style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No recent news</td></tr>'}
+        ${newsRows}
       </table>
-    </div>
+    </div>` : ''}
 
     <div style="text-align:center;margin-top:8px">
       <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:700">EXPLORE FULL PLATFORM \u2192</a>

@@ -12126,18 +12126,21 @@ async function sendWeeklyDigestToUser(userId, email, fullName) {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
     const newsArr = Array.isArray(newsRes) ? newsRes : (newsRes?.news || newsRes?.articles || []);
-    const newsHeadlines = newsArr.slice(0, 8).map(a => ({
+    let newsHeadlines = newsArr.slice(0, 8).map(a => ({
       headline: a.headline || a.title || '',
       source: a.source || a.sourceName || '',
     }));
+    if (newsHeadlines.length === 0 && editorial?.hotNews?.length) {
+      newsHeadlines = editorial.hotNews;
+    }
     await withTimeout(
       sendWeeklyDigestEmail(email, {
         userName: fullName || 'Trader',
         dateStr,
-        nseGainers: moversRes?.nse?.gainers?.slice(0, 6) || [],
-        nseLosers: moversRes?.nse?.losers?.slice(0, 6) || [],
-        globalGainers: moversRes?.global?.gainers?.slice(0, 6) || [],
-        globalLosers: moversRes?.global?.losers?.slice(0, 6) || [],
+        nseGainers: editorial?.nseGainers?.length ? editorial.nseGainers : (moversRes?.nse?.gainers?.slice(0, 6) || []),
+        nseLosers: editorial?.nseLosers?.length ? editorial.nseLosers : (moversRes?.nse?.losers?.slice(0, 6) || []),
+        globalGainers: editorial?.globalGainers?.length ? editorial.globalGainers : (moversRes?.global?.gainers?.slice(0, 6) || []),
+        globalLosers: editorial?.globalLosers?.length ? editorial.globalLosers : (moversRes?.global?.losers?.slice(0, 6) || []),
         newsHeadlines,
         totalSignals: editorial.totalSignals || summaryRes?.signals?.total || 0,
         nseSummary: editorial.nseSummary || '',

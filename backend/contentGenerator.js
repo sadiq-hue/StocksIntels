@@ -1,7 +1,7 @@
 const axios = require('axios');
 const { getNewsSummary } = require('./newsService');
 const { getSectorPerformance } = require('./indicesService');
-const { generateSignals, getMonitoredSignals } = require('./signalService');
+const { generateSignals, getMonitoredSignals, NSE_SYMBOLS } = require('./signalService');
 const { fetchFinnhubEarningsCalendar, fetchFinnhubEarningsSurprises } = require('./earningsService');
 const fxService = require('./fxService');
 const llm = require('./llmService');
@@ -28,6 +28,18 @@ async function generateWeeklyDigestContent() {
   ]);
 
   const signalArr = Array.isArray(signals) ? signals : [];
+
+  // Fill missing / ticker-only company names from the canonical stocks table so
+  // mover tables show real names (e.g. DDOG -> Datadog Inc.).
+  const stockNames = await getStockNameMap().catch(() => null);
+  for (const s of signalArr) {
+    if (s && (!s.name || s.name === s.ticker)) {
+      const n = stockNames && stockNames.get(s.ticker);
+      if (n) s.name = n;
+    }
+  }
+  const derivedMovers = deriveMovers(signalArr);
+
   const totalSignals = signalArr.length;
   const strongBuys = signalArr.filter(s => s.signal === 'Strong Buy').length;
   const buys = signalArr.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
@@ -48,9 +60,11 @@ async function generateWeeklyDigestContent() {
   const nasi = nseIndices.find(i => i.symbol?.includes('NSEASI'));
   const sp500 = globalIdx.find(i => i.symbol?.includes('GSPC'));
 
-  const nseGainers = movers?.nse?.gainers?.slice(0, 3) || [];
-  const nseLosers = movers?.nse?.losers?.slice(0, 3) || [];
-  const globalGainers = movers?.global?.gainers?.slice(0, 3) || [];
+  // Prefer movers derived from the signal universe (guaranteed non-empty when
+  // signals carry change data); fall back to the /api/market/movers snapshot.
+  const nseGainers = derivedMovers.nseGainers.length ? derivedMovers.nseGainers : (movers?.nse?.gainers?.slice(0, 3) || []);
+  const nseLosers = derivedMovers.nseLosers.length ? derivedMovers.nseLosers : (movers?.nse?.losers?.slice(0, 3) || []);
+  const globalGainers = derivedMovers.globalGainers.length ? derivedMovers.globalGainers : (movers?.global?.gainers?.slice(0, 3) || []);
   const active = movers?.active?.slice(0, 3) || [];
 
   const nseSentiment = (nse20?.isPositive ? 'positive' : nse20?.changeRaw < -0.5 ? 'negative' : 'mixed');
@@ -81,7 +95,17 @@ async function generateWeeklyDigestContent() {
   whatToWatch = whatToWatch || buildWhatToWatch(effectiveSummary, nse20, sectors);
   nseGlobalConnection = nseGlobalConnection || buildNseGlobalConnection(nse20, sp500, nseSentiment, globalSentiment);
 
-  return { nseSummary, storyOfWeek, milestone, globalTheme, macroBackdrop, whatToWatch, nseGlobalConnection, totalSignals };
+  const newsForEmail = hotNews.slice(0, 8).map(a => ({
+    headline: a.headline || a.title || '',
+    source: a.source || a.sourceName || '',
+  }));
+
+  return {
+    nseSummary, storyOfWeek, milestone, globalTheme, macroBackdrop, whatToWatch, nseGlobalConnection,
+    totalSignals,
+    nseGainers, nseLosers, globalGainers, globalLosers: derivedMovers.globalLosers,
+    hotNews: newsForEmail,
+  };
 }
 
 function buildNseSummary(nse20, gainers, losers, active, sentiment, topSector, worstSector) {
@@ -111,7 +135,7 @@ function buildNseSummary(nse20, gainers, losers, active, sentiment, topSector, w
 
 function buildStoryOfWeek(topStory, gainers, losers) {
   if (topStory?.headline) {
-    let text = `**${topStory.headline}** — `;
+    let text = `${topStory.headline} — `;
     text += topStory.excerpt || 'This story dominated market conversation this week.';
     if (topStory.relatedStocks?.length) {
       text += ` Related stock${topStory.relatedStocks.length > 1 ? 's' : ''}: ${topStory.relatedStocks.join(', ')}.`;
@@ -119,7 +143,7 @@ function buildStoryOfWeek(topStory, gainers, losers) {
     return text;
   }
   if (gainers.length > 0) {
-    return `**${gainers[0].name || gainers[0].symbol}** was the week's standout performer, gaining ${gainers[0].change || gainers[0].changePercent || '--'}% on strong volume. This move reflects growing investor confidence in the ${gainers[0].sector || 'sector'} space.`;
+    return `${gainers[0].name || gainers[0].symbol} was the week's standout performer, gaining ${gainers[0].change || gainers[0].changePercent || '--'}% on strong volume. This move reflects growing investor confidence in the ${gainers[0].sector || 'sector'} space.`;
   }
   return 'Markets navigated a week of mixed signals with selective opportunities in blue-chip stocks.';
 }
@@ -209,8 +233,10 @@ function buildMacroBackdrop(sectors, summary, sp500, fxRate) {
 
 function buildNseGlobalConnection(nse20, sp500, nseSent, globalSent) {
   if (sp500 && nse20) {
-    const direction = sp500.isPositive ? 'positive' : 'negative';
-    return `Global markets closed ${direction} (S&P 500 ${sp500.change || '--'}). Historically, a ${direction} Wall Street session tends to set a ${globalSent === nseSent ? 'supportive' : 'mixed'} tone for the NSE open. The NSE 20 at ${nse20.value || '--'} will be tested against global sentiment early in the week.`;
+    const raw = sp500.changeRaw || 0;
+    const direction = raw > 0.1 ? 'higher' : (raw < -0.1 ? 'lower' : 'mixed');
+    const tone = raw > 0.1 ? 'supportive' : (raw < -0.1 ? 'cautious' : 'neutral');
+    return `Global markets closed ${direction} (S&P 500 ${sp500.change || '--'}). Historically, a ${direction} Wall Street session tends to set a ${tone} tone for the NSE open. The NSE 20 at ${nse20.value || '--'} will be tested against global sentiment early in the week.`;
   }
   return 'Global market movements overnight can set the tone for NSE open. Watch for significant gap-ups or gap-downs in the first 30 minutes of trading, especially in large-cap banking and telecom names.';
 }
@@ -251,6 +277,32 @@ function truncateReason(text, limit) {
   const lastSpace = cut.lastIndexOf(' ');
   if (lastSpace > limit * 0.6) cut = cut.slice(0, lastSpace);
   return cut.replace(/[,\s;:.]+$/, '') + '...';
+}
+
+// Build a daily mover row from a signal, matching the shape the email mover
+// tables expect (symbol / name / change as a signed, rounded percentage).
+function toMoverRow(s) {
+  const change = Math.round((s.change || 0) * 100) / 100;
+  return {
+    symbol: s.ticker || s.symbol || '--',
+    name: s.name || '',
+    change: (change > 0 ? '+' : '') + change + '%',
+  };
+}
+
+// Split the signal universe into per-market gainers/losers so the weekly
+// digest's four mover tables never render empty even when the /api/market/movers
+// snapshot has no fresh quotes.
+function deriveMovers(signals) {
+  const withMove = (signals || []).filter(s => s && s.change != null && s.change !== 0);
+  const nse = withMove.filter(s => s.currency === 'KES' || isNseTicker(s.ticker));
+  const global = withMove.filter(s => s.currency !== 'KES' && !isNseTicker(s.ticker));
+  return {
+    nseGainers: nse.filter(s => s.change > 0).sort((a, b) => b.change - a.change).slice(0, 6).map(toMoverRow),
+    nseLosers: nse.filter(s => s.change < 0).sort((a, b) => a.change - b.change).slice(0, 6).map(toMoverRow),
+    globalGainers: global.filter(s => s.change > 0).sort((a, b) => b.change - a.change).slice(0, 6).map(toMoverRow),
+    globalLosers: global.filter(s => s.change < 0).sort((a, b) => a.change - b.change).slice(0, 6).map(toMoverRow),
+  };
 }
 
 async function generateDailyBriefContent() {
@@ -696,7 +748,7 @@ function getSignalFundamentals(ticker, signals) {
 
 function isNseTicker(ticker) {
   try {
-    return signalService.NSE_SYMBOLS && signalService.NSE_SYMBOLS.includes(ticker);
+    return NSE_SYMBOLS && NSE_SYMBOLS.includes(ticker);
   } catch { return false; }
 }
 
