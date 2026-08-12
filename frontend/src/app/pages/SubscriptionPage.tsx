@@ -61,7 +61,8 @@ export function SubscriptionPage() {
   useEffect(() => {
     const paypalStatus = searchParams.get("paypal");
     const cryptoStatus = searchParams.get("crypto");
-    if (paypalStatus === "success" || cryptoStatus === "success") {
+    const stripeStatus = searchParams.get("stripe");
+    if (paypalStatus === "success" || cryptoStatus === "success" || stripeStatus === "success") {
       setIsSuccess(true);
       toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
       let attempts = 0;
@@ -69,8 +70,8 @@ export function SubscriptionPage() {
         refreshUser();
         if (++attempts >= 10) clearInterval(poll);
       }, 2000);
-    } else if (paypalStatus === "failed" || paypalStatus === "cancelled" || cryptoStatus === "cancelled") {
-      toast.error(paypalStatus === "cancelled" || cryptoStatus === "cancelled" ? "Checkout was cancelled." : "Payment failed. Please try again.");
+    } else if (paypalStatus === "failed" || paypalStatus === "cancelled" || cryptoStatus === "cancelled" || stripeStatus === "cancelled") {
+      toast.error(paypalStatus === "cancelled" || cryptoStatus === "cancelled" || stripeStatus === "cancelled" ? "Checkout was cancelled." : "Payment failed. Please try again.");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -176,7 +177,7 @@ export function SubscriptionPage() {
 
         window.location.href = data.checkoutUrl;
       } else if (paymentMethod === "card") {
-        const res = await fetch(`${API_URL}/payments/crypto`, {
+        const res = await fetch(`${API_URL}/payments/stripe`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -185,7 +186,6 @@ export function SubscriptionPage() {
             plan: selectedPlan.name,
             userId: user?.id,
             durationMonths,
-            cryptoTicker: "card",
           }),
         });
 
@@ -417,8 +417,8 @@ export function SubscriptionPage() {
                   <div className="space-y-4 animate-in fade-in duration-300">
                     <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
                       <p className="text-[11px] text-indigo-800 leading-relaxed font-medium">
-                        1. You will be redirected to the NowPayments secure card checkout.<br />
-                        2. Enter your debit/credit card details — processed via NowPayments, no business license required.<br />
+                        1. You will be redirected to the Stripe secure card checkout.<br />
+                        2. Enter your debit/credit card details — processed via Stripe as an individual, no business license required.<br />
                         3. Your subscription activates instantly upon confirmation.
                       </p>
                     </div>
