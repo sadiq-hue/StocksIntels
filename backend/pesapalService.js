@@ -65,7 +65,7 @@ async function createOrder({ amount, currency = 'USD', reference, plan, duration
     description: `StocksIntels ${plan || 'Subscription'} ${period}`,
     callback_url: `${FRONTEND_URL}/subscribe/${planSlug}?pesapal=success&ref=${reference}`,
     notification_id: ipnId,
-    merchant_reference: reference,
+    id: reference,
     billing_address: { email_address: '', phone_number: '', country_code: 'KE', first_name: 'Customer', last_name: 'Customer' },
   };
   const res = await axios.post(`${BASE}/Transactions/SubmitOrderRequest`, body, {
