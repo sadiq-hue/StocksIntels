@@ -13,7 +13,7 @@ async function createInvoice({ amount, currency = 'USD', reference, plan, durati
   }
   const period = durationMonths === 12 ? 'Yearly' : 'Monthly';
   const planSlug = (plan || 'starter').toLowerCase();
-  const body = {
+  const baseBody = {
     price_amount: Number(amount),
     price_currency: (currency || 'USD').toLowerCase(),
     order_id: reference,
@@ -22,28 +22,42 @@ async function createInvoice({ amount, currency = 'USD', reference, plan, durati
     success_url: `${FRONTEND_URL}/subscribe/${planSlug}?crypto=success&ref=${reference}`,
     cancel_url: `${FRONTEND_URL}/subscribe/${planSlug}?crypto=cancelled`,
   };
-  if (cryptoTicker) body.pay_currency = String(cryptoTicker).toUpperCase();
 
-  console.log('[NowPayments] Creating invoice:', JSON.stringify({ ...body, ipn_callback_url: '***' }));
-
-  let res;
-  try {
-    res = await axios.post(`${NOWPAYMENTS_API}/invoice`, body, {
+  const postInvoice = async (body) => {
+    console.log('[NowPayments] Creating invoice:', JSON.stringify({ ...body, ipn_callback_url: '***' }));
+    const res = await axios.post(`${NOWPAYMENTS_API}/invoice`, body, {
       headers: { 'x-api-key': NOWPAYMENTS_API_KEY, 'Content-Type': 'application/json' },
       timeout: 15000,
     });
+    return res.data;
+  };
+
+  const mapResult = (data) => ({
+    invoiceUrl: data.invoice_url || data.payment_url || data.url,
+    id: data.id,
+    reference: data.order_id || reference,
+  });
+
+  const body = { ...baseBody };
+  if (cryptoTicker) body.pay_currency = String(cryptoTicker).toUpperCase();
+
+  try {
+    return mapResult(await postInvoice(body));
   } catch (err) {
+    const data = err.response?.data;
+    const msg = (data?.message || '') + ' ' + (data?.code || '');
+    const currencyUnavailable = /unavailable/i.test(msg) || /currency/i.test(msg) || data?.code === 'INVALID_REQUEST_PARAMS';
+    // Some coins (e.g. USDT) may be disabled on new/unverified accounts — fall back
+    // to letting the payer choose any available coin on the hosted invoice page.
+    if (cryptoTicker && currencyUnavailable) {
+      console.warn(`[NowPayments] pay_currency ${cryptoTicker} unavailable — retrying without it`);
+      return mapResult(await postInvoice(baseBody));
+    }
     if (err.response) {
       console.error('[NowPayments] Invoice error:', err.response.status, JSON.stringify(err.response.data));
     }
     throw err;
   }
-
-  return {
-    invoiceUrl: res.data.invoice_url || res.data.payment_url || res.data.url,
-    id: res.data.id,
-    reference: res.data.order_id || reference,
-  };
 }
 
 // NowPayments signs each IPN with an HMAC-SHA512 of the raw request body,
