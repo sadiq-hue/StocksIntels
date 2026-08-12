@@ -2,7 +2,7 @@ const axios = require('axios');
 
 const PESAPAL_ENV = process.env.PESAPAL_ENV === 'production' ? 'production' : 'sandbox';
 const BASE = PESAPAL_ENV === 'production'
-  ? 'https://pay.pesapal.com/pesapalv3/api'
+  ? 'https://pay.pesapal.com/v3/api'
   : 'https://cybqa.pesapal.com/pesapalv3/api';
 const CONSUMER_KEY = process.env.PESAPAL_CONSUMER_KEY;
 const CONSUMER_SECRET = process.env.PESAPAL_CONSUMER_SECRET;
