@@ -366,6 +366,7 @@ function filterEarnings(events, options) {
     filtered = filtered.filter(e => new Date(e.date) <= td);
   }
   filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+  return filtered;
 }
 
 async function getUpcomingEarnings(options = {}) {
