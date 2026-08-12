@@ -2437,7 +2437,7 @@ export function PortfolioPage() {
 
       {/* AI Advice Full Dialog */}
       <Dialog open={showAdvice} onOpenChange={(v) => { setShowAdvice(v); if (!v) { setAdviceError(null); } }}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <BrainCircuit className="w-5 h-5 text-[#0D7490]" />
@@ -2465,7 +2465,7 @@ export function PortfolioPage() {
               {/* Market Conditions Bar */}
               {portfolioAdvice.marketContext && (
                 <div className="bg-gradient-to-r from-muted to-card rounded-xl p-4 border">
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
                     <div className="p-1 rounded bg-indigo-100">
                       <Activity className="w-3.5 h-3.5 text-indigo-600" />
                     </div>
@@ -2479,7 +2479,7 @@ export function PortfolioPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex gap-4 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">Volatility <span className="font-semibold text-foreground">{portfolioAdvice.marketContext.nseVolatility}</span></span>
                     <span className="w-px bg-muted" />
                     <span className="flex items-center gap-1">FX <span className="font-semibold text-foreground">KES {portfolioAdvice.marketContext.fxRate.toFixed(2)}</span></span>
@@ -2575,24 +2575,24 @@ export function PortfolioPage() {
                     const allocNum = parseInt(rec.allocation);
                     return (
                       <div key={i} className={`p-3.5 rounded-xl border-l-[5px] ${isBuy ? 'border-l-emerald-500 bg-gradient-to-r from-emerald-50/60 to-white border-emerald-100 border-t border-r border-b' : isSell ? 'border-l-red-500 bg-gradient-to-r from-red-50/60 to-white border-red-100 border-t border-r border-b' : 'border-l-gray-400 bg-gradient-to-r from-muted to-card border-border border-t border-r border-b'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => { setShowAdvice(false); navigate(`/app/stock/${rec.ticker}`); }} className="font-semibold text-foreground hover:text-[#0D7490] text-sm">
+                        <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <button onClick={() => { setShowAdvice(false); navigate(`/app/stock/${rec.ticker}`); }} className="font-semibold text-foreground hover:text-[#0D7490] text-sm break-words">
                               {rec.ticker}
                             </button>
                             <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold text-white ${isBuy ? 'bg-emerald-600' : isSell ? 'bg-red-600' : 'bg-muted0'}`}>
                               {rec.action}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 text-xs">
+                          <div className="flex items-center gap-2 text-xs shrink-0">
                             <span className="text-muted-foreground">{rec.allocation}</span>
                             <ArrowRight className="w-3 h-3 text-muted-foreground" />
                             <span className="font-semibold text-foreground">{rec.targetAllocation}</span>
                           </div>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed">{rec.reason}</p>
-                        <div className="flex items-center gap-3 mt-2">
-                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
+                          <div className="flex-1 min-w-0 h-1.5 bg-muted rounded-full overflow-hidden">
                             <div className={`h-full rounded-full ${isBuy ? 'bg-emerald-500' : isSell ? 'bg-red-500' : 'bg-gray-400'}`}
                               style={{ width: `${Math.min(100, allocNum)}%` }} />
                           </div>

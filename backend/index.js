@@ -8477,6 +8477,12 @@ app.post('/api/ai/portfolio-advice', async (req, res) => {
       const pct = (v / totalValue) * 100;
       if (pct > maxSectorPct) { maxSectorPct = pct; maxSectorName = name; }
     });
+    let maxHoldingPct = 0, maxHoldingName = '';
+    holdings.forEach((h) => {
+      const val = (parseFloat(h.shares) || 0) * (parseFloat(h.currentPrice) || parseFloat(h.avgCost) || 0);
+      const pct = totalValue > 0 ? (val / totalValue) * 100 : 0;
+      if (pct > maxHoldingPct) { maxHoldingPct = pct; maxHoldingName = h.ticker; }
+    });
 
     // ── Mean-variance optimization (if 2+ holdings) ──
     let optWeights = null;
@@ -8514,6 +8520,10 @@ app.post('/api/ai/portfolio-advice', async (req, res) => {
       divScore -= 10;
       divMessage += '. High market volatility increases concentration risk.';
     }
+    if (maxHoldingPct > 40 && divScore > 55) {
+      divScore = 55;
+      divMessage += ` Note: ${maxHoldingName} alone is ${Math.round(maxHoldingPct)}% of the portfolio — consider trimming to reduce single-stock risk.`;
+    }
 
     // ── Per-holding recommendations ──
     const recommendations = holdings.map((h) => {
@@ -8526,7 +8536,7 @@ app.post('/api/ai/portfolio-advice', async (req, res) => {
       const pnlPct = cost > 0 ? ((currentPrice - cost) / cost * 100) : 0;
       const valuePct = totalValue > 0 ? (value / totalValue * 100) : 0;
       let action = 'Hold', reason = 'In-line with portfolio targets';
-      const sectorInfo = topSectors.find((s) => s.sector === h.sector) || bottomSectors.find((s) => s.sector === h.sector);
+      const sectorInfo = sectorPerf.find((s) => s.sector === h.sector);
 
       // Optimal target allocation from optimizer (or estimate)
       const optTarget = optWeights ? optWeights.get(h.ticker) : null;
@@ -8568,11 +8578,12 @@ app.post('/api/ai/portfolio-advice', async (req, res) => {
 
         // Sector momentum override
         if (action === 'Hold' && sectorInfo) {
-          const isTop = topSectors.includes(sectorInfo);
+          const isTop = topSectors.some((s) => s.sector === sectorInfo.sector);
+          const isBottom = bottomSectors.some((s) => s.sector === sectorInfo.sector);
           if (isTop && pnlPct < 0) {
             action = 'Accumulate';
             reason = `${sectorInfo.sector} sector is up ${sectorInfo.avgChange}% today. Your position is underwater — consider averaging down with sector momentum.`;
-          } else if (!isTop && bottomSectors.includes(sectorInfo) && pnlPct > 15) {
+          } else if (isBottom && pnlPct > 15) {
             action = 'Take Partial Profits';
             reason = `${sectorInfo.sector} sector is down ${Math.abs(sectorInfo.avgChange)}% today. Lock in gains before sector weakness spreads.`;
           }
