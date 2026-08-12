@@ -9875,7 +9875,7 @@ app.get('/api/payments/paypal-capture', async (req, res) => {
       );
       if (tx.rows.length > 0 && tx.rows[0].user_id) {
         const { id: txId, user_id: targetUserId, plan_name, duration_months } = tx.rows[0];
-        const tier = (plan_name || 'pro').toLowerCase();
+        tier = (plan_name || 'pro').toLowerCase();
         const months = parseInt(duration_months) || 1;
         const planRes = await pool.query(
           'SELECT id FROM subscription_plans WHERE LOWER(name) = $1 LIMIT 1',
