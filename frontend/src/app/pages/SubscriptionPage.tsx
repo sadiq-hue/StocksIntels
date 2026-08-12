@@ -62,7 +62,8 @@ export function SubscriptionPage() {
     const paypalStatus = searchParams.get("paypal");
     const cryptoStatus = searchParams.get("crypto");
     const stripeStatus = searchParams.get("stripe");
-    if (paypalStatus === "success" || cryptoStatus === "success" || stripeStatus === "success") {
+    const pesapalStatus = searchParams.get("pesapal");
+    if (paypalStatus === "success" || cryptoStatus === "success" || stripeStatus === "success" || pesapalStatus === "success") {
       setIsSuccess(true);
       toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
       let attempts = 0;
@@ -70,8 +71,8 @@ export function SubscriptionPage() {
         refreshUser();
         if (++attempts >= 10) clearInterval(poll);
       }, 2000);
-    } else if (paypalStatus === "failed" || paypalStatus === "cancelled" || cryptoStatus === "cancelled" || stripeStatus === "cancelled") {
-      toast.error(paypalStatus === "cancelled" || cryptoStatus === "cancelled" || stripeStatus === "cancelled" ? "Checkout was cancelled." : "Payment failed. Please try again.");
+    } else if (paypalStatus === "failed" || paypalStatus === "cancelled" || cryptoStatus === "cancelled" || stripeStatus === "cancelled" || pesapalStatus === "cancelled") {
+      toast.error(paypalStatus === "cancelled" || cryptoStatus === "cancelled" || stripeStatus === "cancelled" || pesapalStatus === "cancelled" ? "Checkout was cancelled." : "Payment failed. Please try again.");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -177,7 +178,7 @@ export function SubscriptionPage() {
 
         window.location.href = data.checkoutUrl;
       } else if (paymentMethod === "card") {
-        const res = await fetch(`${API_URL}/payments/stripe`, {
+        const res = await fetch(`${API_URL}/payments/pesapal`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -417,9 +418,9 @@ export function SubscriptionPage() {
                   <div className="space-y-4 animate-in fade-in duration-300">
                     <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
                       <p className="text-[11px] text-indigo-800 leading-relaxed font-medium">
-                        1. You will be redirected to the Stripe secure card checkout.<br />
-                        2. Enter your debit/credit card details — processed via Stripe as an individual, no business license required.<br />
-                        3. Your subscription activates instantly upon confirmation.
+                        1. You will be redirected to the Pesapal secure checkout (a Kenyan gateway — cards &amp; M-Pesa, no business license required).<br />
+                        2. Enter your debit/credit card details to pay.<br />
+                        3. Your subscription activates automatically once the payment is confirmed.
                       </p>
                     </div>
                   </div>
