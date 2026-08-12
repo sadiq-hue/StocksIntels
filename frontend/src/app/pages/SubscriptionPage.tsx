@@ -49,7 +49,7 @@ export function SubscriptionPage() {
   const { planId } = useParams<{ planId: string }>();
   const [searchParams] = useSearchParams();
   const period = searchParams.get("period") === "yearly" ? "yearly" : "monthly";
-  const [paymentMethod, setPaymentMethod] = useState<"paypal" | "mpesa" | "crypto">("paypal");
+  const [paymentMethod, setPaymentMethod] = useState<"paypal" | "mpesa" | "crypto" | "card">("paypal");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -172,6 +172,26 @@ export function SubscriptionPage() {
         const data = await res.json();
         if (!res.ok || !data.success) {
           throw new Error(data.error || "Failed to create crypto checkout");
+        }
+
+        window.location.href = data.checkoutUrl;
+      } else if (paymentMethod === "card") {
+        const res = await fetch(`${API_URL}/payments/crypto`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: price,
+            currency: "USD",
+            plan: selectedPlan.name,
+            userId: user?.id,
+            durationMonths,
+            cryptoTicker: "card",
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Failed to create card checkout");
         }
 
         window.location.href = data.checkoutUrl;
@@ -323,7 +343,7 @@ export function SubscriptionPage() {
                 Payment Method
               </h2>
               
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                 <button
                   onClick={() => setPaymentMethod("paypal")}
                   className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
@@ -350,6 +370,15 @@ export function SubscriptionPage() {
                 >
                   <Bitcoin className={`w-6 h-6 ${paymentMethod === "crypto" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                   <span className={`text-sm font-bold ${paymentMethod === "crypto" ? "text-[#0D7490]" : "text-muted-foreground"}`}>Crypto</span>
+                </button>
+                <button
+                  onClick={() => setPaymentMethod("card")}
+                  className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
+                    paymentMethod === "card" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-muted hover:border-border"
+                  }`}
+                >
+                  <CreditCard className={`w-6 h-6 ${paymentMethod === "card" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
+                  <span className={`text-sm font-bold ${paymentMethod === "card" ? "text-[#0D7490]" : "text-muted-foreground"}`}>Card</span>
                 </button>
               </div>
 
@@ -381,6 +410,16 @@ export function SubscriptionPage() {
                         1. You will receive an M-Pesa STK push on your phone.<br />
                         2. Enter your M-Pesa PIN to authorize the payment.<br />
                         3. Your subscription will be activated instantly upon confirmation.
+                      </p>
+                    </div>
+                  </div>
+                ) : paymentMethod === "card" ? (
+                  <div className="space-y-4 animate-in fade-in duration-300">
+                    <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+                      <p className="text-[11px] text-indigo-800 leading-relaxed font-medium">
+                        1. You will be redirected to the NowPayments secure card checkout.<br />
+                        2. Enter your debit/credit card details — processed via NowPayments, no business license required.<br />
+                        3. Your subscription activates instantly upon confirmation.
                       </p>
                     </div>
                   </div>
