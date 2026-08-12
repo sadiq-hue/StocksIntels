@@ -21,7 +21,8 @@ import { fetchAllNews, type NewsArticle } from "../services/newsService";
 import { connectSocket } from "../services/socketService";
 import type { Signal } from "../types/signals";
 import { authFetch } from "../auth/tokenStore";
-import { toDisplayCurrency, formatCurrencyValue, PORTFOLIO_CURRENCY_KEY } from "../utils/currency";
+import { CURRENCIES, toDisplayCurrency, formatCurrencyValue, PORTFOLIO_CURRENCY_KEY } from "../utils/currency";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -505,10 +506,16 @@ export function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => handleCurrencyChange(dc === "USD" ? "KES" : "USD")} className="flex items-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-semibold text-white transition-all cursor-pointer">
-              <DollarSign className="size-3.5" />
-              {dc === "USD" ? "USD" : "KES"}
-            </button>
+            <Select value={dc} onValueChange={handleCurrencyChange}>
+              <SelectTrigger className="w-[110px] bg-white/20 border-white/30 text-white h-9 text-xs font-semibold">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map(c => (
+                  <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Link to="/app/markets" className="w-full sm:w-auto">
               <Button className="bg-card text-[#0D7490] hover:bg-muted shadow-sm w-full sm:w-auto">
                 <Globe2 className="size-4 mr-2" />
