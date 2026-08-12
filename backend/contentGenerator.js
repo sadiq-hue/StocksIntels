@@ -453,9 +453,9 @@ async function generateDailyBriefContent() {
   // Prefer the Market Intelligence page's numbers (/api/ai/market-summary) so the
   // brief always matches the app; fall back to the locally merged universe.
   const totalSignals = summary?.signals?.total || enrichedSignals.length;
-  const strongBuys = summary?.signals?.strongBuys ?? enrichedSignals.filter(s => s.signal === 'Strong Buy').length;
-  const buys = summary?.signals?.buys ?? enrichedSignals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
-  const sells = summary?.signals?.sells ?? enrichedSignals.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
+  const strongBuys = summary?.signals?.strongBuys || enrichedSignals.filter(s => s.signal === 'Strong Buy').length;
+  const buys = summary?.signals?.buys || enrichedSignals.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
+  const sells = summary?.signals?.sells || enrichedSignals.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
   const effectiveSentiment = (summary?.signals?.total ? summary.sentiment : null)
     || (totalSignals > 0
       ? (buys > sells * 2 ? 'Bullish' : buys > sells ? 'Slightly Bullish' : sells > buys * 2 ? 'Bearish' : sells > buys ? 'Slightly Bearish' : 'Neutral')
