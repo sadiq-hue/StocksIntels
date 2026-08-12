@@ -925,12 +925,12 @@ function mdToHtml(text) {
 }
 
 function gainerTable(title, rows) {
-  const r = (rows || []).slice(0, 6).map(s => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${cleanTicker(s)}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || s.name || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${GREEN}">${s.change || (s.changePercent ? '+' + s.changePercent.toFixed(2) + '%' : '0.00%')}</td></tr>`).join('');
+  const r = (rows || []).slice(0, 10).map(s => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${cleanTicker(s)}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || s.name || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${GREEN}">${s.change || (s.changePercent ? '+' + s.changePercent.toFixed(2) + '%' : '0.00%')}</td></tr>`).join('');
   return `<div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden"><div style="background:${GREEN};color:#ffffff;padding:8px 12px;font-size:12px;font-weight:600">${title}</div><table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px"><thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Name</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Chg</th></tr></thead><tbody>${r || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No data</td></tr>'}</tbody></table></div>`;
 }
 
 function loserTable(title, rows) {
-  const r = (rows || []).slice(0, 6).map(s => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${cleanTicker(s)}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || s.name || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${RED}">${s.change || (s.changePercent ? s.changePercent.toFixed(2) + '%' : '0.00%')}</td></tr>`).join('');
+  const r = (rows || []).slice(0, 10).map(s => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${cleanTicker(s)}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || s.name || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${RED}">${s.change || (s.changePercent ? s.changePercent.toFixed(2) + '%' : '0.00%')}</td></tr>`).join('');
   return `<div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden"><div style="background:${RED};color:#ffffff;padding:8px 12px;font-size:12px;font-weight:600">${title}</div><table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px"><thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Name</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Chg</th></tr></thead><tbody>${r || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No data</td></tr>'}</tbody></table></div>`;
 }
 
@@ -1613,4 +1613,104 @@ async function sendTestimonialPublishedEmail(email, data) {
   return sendViaTransport({ to: email, subject, html, label: 'Testimonial published' });
 }
 
-module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendContactAcknowledgmentEmail, sendTestimonialPublishedEmail, sendViaTransport };
+function moversTable(title, rows, type) {
+  const isGainer = type === 'gainer';
+  const color = isGainer ? GREEN : RED;
+  const headerBg = isGainer ? GREEN : RED;
+  const r = (rows || []).slice(0, 10).map((s, i) => {
+    const ticker = esc(cleanTicker(s));
+    const name = esc(s.company_name || s.name || '');
+    const chg = isGainer
+      ? (s.change != null ? '+' + Number(s.change).toFixed(2) + '%' : (s.changePercent != null ? '+' + Number(s.changePercent).toFixed(2) + '%' : '--'))
+      : (s.change != null ? Number(s.change).toFixed(2) + '%' : (s.changePercent != null ? Number(s.changePercent).toFixed(2) + '%' : '--'));
+    const price = s.price != null ? (s.currency === 'KES' ? 'KES ' + Number(s.price).toLocaleString() : '$' + Number(s.price).toLocaleString()) : '--';
+    const vol = s.rawVolume ? (s.rawVolume >= 1e6 ? (s.rawVolume / 1e6).toFixed(1) + 'M' : s.rawVolume >= 1e3 ? (s.rawVolume / 1e3).toFixed(0) + 'K' : String(s.rawVolume)) : '--';
+    return `<tr>
+      <td style="padding:6px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${i + 1}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${ticker}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${name}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${TEXT_DARK}">${price}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;font-weight:600;color:${color}">${chg}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid ${BORDER};font-size:11px;text-align:right;color:${TEXT_MED}">${vol}</td>
+    </tr>`;
+  }).join('');
+  return `<div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:${headerBg};color:#ffffff;padding:10px 14px;font-size:13px;font-weight:600">${title}</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px">
+      <thead><tr style="background:${BG_LIGHT}">
+        <th style="padding:5px 8px;text-align:left;color:${TEXT_MED};font-weight:500">#</th>
+        <th style="padding:5px 8px;text-align:left;color:${TEXT_MED};font-weight:500">Symbol</th>
+        <th style="padding:5px 8px;text-align:left;color:${TEXT_MED};font-weight:500">Name</th>
+        <th style="padding:5px 8px;text-align:right;color:${TEXT_MED};font-weight:500">Price</th>
+        <th style="padding:5px 8px;text-align:right;color:${TEXT_MED};font-weight:500">Chg</th>
+        <th style="padding:5px 8px;text-align:right;color:${TEXT_MED};font-weight:500">Vol</th>
+      </tr></thead>
+      <tbody>${r || '<tr><td colspan="6" style="padding:16px;text-align:center;color:#94a3b8;font-size:12px">No data available</td></tr>'}</tbody>
+    </table>
+  </div>`;
+}
+
+async function sendTopMoversEmail(email, data) {
+  const {
+    userName, periodLabel, dateRange, period,
+    nseGainers, nseLosers, globalGainers, globalLosers,
+    sentiment, buys, sells, totalSignals,
+    topSectors, worstSectors,
+  } = data;
+
+  const unsubType = period === '1w' ? 'weekly-digest' : period === '1mo' ? 'monthly-top-movers' : 'quarterly-top-movers';
+  const subject = `StocksIntels ${periodLabel} Top Movers — ${dateRange}`;
+
+  const sectorBar = (topSectors || []).map(s => {
+    const pct = s.avgChange >= 0 ? '+' + s.avgChange.toFixed(1) + '%' : s.avgChange.toFixed(1) + '%';
+    const clr = s.avgChange >= 0 ? GREEN : RED;
+    return `<span style="display:inline-block;background:${BG_LIGHT};border:1px solid ${BORDER};border-radius:6px;padding:4px 10px;font-size:11px;margin:2px"><span style="font-weight:600;color:${TEXT_DARK}">${esc(s.name)}</span> <span style="color:${clr};font-weight:600">${pct}</span></span>`;
+  }).join('');
+
+  const html = baseWrapper(`
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:22px;font-weight:700;color:${TEXT_DARK}">${periodLabel} Top Movers</div>
+      <div style="font-size:13px;color:${TEXT_MED};margin-top:4px">${dateRange}</div>
+      ${userName ? `<div style="font-size:14px;color:${TEXT_MED};margin-top:8px">Hello ${userName}</div>` : ''}
+    </div>
+
+    <div style="background:linear-gradient(135deg,${BRAND_COLOR}10,${BRAND_COLOR}05);border:1px solid ${BRAND_COLOR}30;border-radius:10px;padding:16px;margin-bottom:20px">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+        <tr>
+          <td style="text-align:center;width:33%">
+            <div style="font-size:22px;font-weight:800;color:${BRAND_COLOR}">${totalSignals || 0}</div>
+            <div style="font-size:11px;color:${TEXT_MED}">Stocks Tracked</div>
+          </td>
+          <td style="text-align:center;width:33%">
+            <div style="font-size:22px;font-weight:800;color:${GREEN}">${buys || 0}</div>
+            <div style="font-size:11px;color:${TEXT_MED}">Buy Signals</div>
+          </td>
+          <td style="text-align:center;width:33%">
+            <div style="font-size:22px;font-weight:800;color:${RED}">${sells || 0}</div>
+            <div style="font-size:11px;color:${TEXT_MED}">Sell Signals</div>
+          </td>
+        </tr>
+      </table>
+      <div style="text-align:center;margin-top:8px;font-size:12px;color:${TEXT_MED}">Market Sentiment: <span style="font-weight:700;color:${sentiment === 'Bullish' ? GREEN : sentiment === 'Bearish' ? RED : AMBER}">${esc(sentiment || 'Neutral')}</span></div>
+    </div>
+
+    ${moversTable('NSE Top Gainers', nseGainers, 'gainer')}
+    ${moversTable('NSE Top Losers', nseLosers, 'loser')}
+    ${moversTable('Global Top Gainers', globalGainers, 'gainer')}
+    ${moversTable('Global Top Losers', globalLosers, 'loser')}
+
+    ${sectorBar ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
+      <div style="background:${BRAND_COLOR};color:#ffffff;padding:10px 14px;font-size:13px;font-weight:600">Sector Performance</div>
+      <div style="padding:14px;text-align:center">${sectorBar}</div>
+    </div>` : ''}
+
+    <div style="text-align:center;margin-top:8px">
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/dashboard" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:700">VIEW FULL REPORT →</a>
+    </div>
+  `, `<meta name="referrer" content="no-referrer" />`, buildUnsubUrl(email, unsubType));
+
+  return sendViaTransport({ to: email, subject, html, label: `${periodLabel} top movers` });
+}
+
+module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendContactAcknowledgmentEmail, sendTestimonialPublishedEmail, sendTopMoversEmail, sendViaTransport };

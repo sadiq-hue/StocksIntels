@@ -5,6 +5,7 @@ const { generateSignals, getMonitoredSignals, NSE_SYMBOLS } = require('./signalS
 const { resolveStockName } = require('./stockData');
 const { fetchFinnhubEarningsCalendar, fetchFinnhubEarningsSurprises } = require('./earningsService');
 const fxService = require('./fxService');
+const periodReturnsService = require('./periodReturnsService');
 const llm = require('./llmService');
 const { pool } = require('./db');
 
@@ -836,4 +837,64 @@ function formatMarketCap(val) {
   return '$' + val.toLocaleString();
 }
 
-module.exports = { generateWeeklyDigestContent, generateDailyBriefContent, generateEarningsContent };
+const PERIOD_LABELS = { '1w': 'Weekly', '1mo': 'Monthly', '3mo': 'Quarterly' };
+
+async function generateTopMoversContent(period = '1w') {
+  const [movers, summary, signals, sectors] = await Promise.all([
+    periodReturnsService.getPeriodMovers(period).catch(() => ({ gainers: [], losers: [] })),
+    fetchJson(`${BASE}/api/ai/market-summary`, { sentiment: 'Neutral', signals: { total: 0, strongBuys: 0, buys: 0, sells: 0 } }),
+    generateSignals(null, true).catch(() => []),
+    getSectorPerformance().catch(() => []),
+  ]);
+
+  const signalArr = Array.isArray(signals) ? signals : [];
+  const totalSignals = summary?.signals?.total || signalArr.length;
+  const buys = summary?.signals?.buys ?? signalArr.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
+  const sells = summary?.signals?.sells ?? signalArr.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
+  const sentiment = summary?.sentiment || (buys > sells * 2 ? 'Bullish' : sells > buys * 2 ? 'Bearish' : 'Neutral');
+
+  const nseGainers = movers.gainers.filter(r => r.currency === 'KES' || r.market === 'NSE').slice(0, 10);
+  const nseLosers = movers.losers.filter(r => r.currency === 'KES' || r.market === 'NSE').slice(0, 10);
+  const globalGainers = movers.gainers.filter(r => r.currency !== 'KES' && r.market !== 'NSE').slice(0, 10);
+  const globalLosers = movers.losers.filter(r => r.currency !== 'KES' && r.market !== 'NSE').slice(0, 10);
+
+  const cleanSectors = (sectors || [])
+    .filter(s => s && s.name && s.name !== 'Other' && typeof s.avgChange === 'number')
+    .sort((a, b) => b.avgChange - a.avgChange);
+  const topSectors = cleanSectors.slice(0, 5);
+  const worstSectors = cleanSectors.slice(-3).reverse();
+
+  const now = new Date();
+  let dateRange;
+  if (period === '1w') {
+    const weekAgo = new Date(now);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    dateRange = `${weekAgo.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  } else if (period === '1mo') {
+    const monthAgo = new Date(now);
+    monthAgo.setMonth(monthAgo.getMonth() - 1);
+    dateRange = `${monthAgo.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  } else {
+    const qAgo = new Date(now);
+    qAgo.setMonth(qAgo.getMonth() - 3);
+    dateRange = `${qAgo.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  }
+
+  return {
+    period,
+    periodLabel: PERIOD_LABELS[period] || 'Weekly',
+    dateRange,
+    totalSignals,
+    sentiment,
+    buys,
+    sells,
+    nseGainers,
+    nseLosers,
+    globalGainers,
+    globalLosers,
+    topSectors,
+    worstSectors,
+  };
+}
+
+module.exports = { generateWeeklyDigestContent, generateDailyBriefContent, generateEarningsContent, generateTopMoversContent };

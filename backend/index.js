@@ -9,7 +9,7 @@ const axios = require('axios');
 const bcrypt = require('bcryptjs');
 const { Server } = require('socket.io');
 const { getAllNews, getNewsSummary, getAggregatedSentiment, KENYAN_STOCKS, STOCK_SYMBOLS } = require('./newsService');
-const { generateWeeklyDigestContent, generateDailyBriefContent, generateEarningsContent } = require('./contentGenerator');
+const { generateWeeklyDigestContent, generateDailyBriefContent, generateEarningsContent, generateTopMoversContent } = require('./contentGenerator');
 const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, computeBacktestStats, getForwardTestStats,
@@ -19,7 +19,7 @@ const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
 const signalPublisher = require('./signalPublisher');
 const { createSignalNotifications } = require('./signalPublisher');
-const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification } = require('./mailer');
+const { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendTopMoversEmail } = require('./mailer');
 const emailSequenceService = require('./emailSequenceService');
 const cron = require('node-cron');
 const {
@@ -28,6 +28,7 @@ const {
   ensureTTMValues, clearCache: clearFinancialCache
 } = require('./financialReportsService');
 const brokerService = require('./services/brokerService');
+const periodReturnsService = require('./periodReturnsService');
 const { fetchAnalystData } = require('./analystService');
 const fxService = require('./fxService');
 const payheroService = require('./payheroService');
@@ -5747,6 +5748,8 @@ app.get('/api/unsubscribe', async (req, res) => {
       'weekly-digest': { column: 'weekly_digest_opt_in', label: 'Weekly Market Digest' },
       'earnings-report': { column: 'earnings_report_opt_in', label: 'Earnings & Corporate Actions' },
       'daily-sentiment': { column: 'sentiment_opt_in', label: 'Daily Market Sentiment' },
+      'monthly-top-movers': { column: 'monthly_top_movers_opt_in', label: 'Monthly Top Movers' },
+      'quarterly-top-movers': { column: 'quarterly_top_movers_opt_in', label: 'Quarterly Top Movers' },
     };
     const mapping = typeMap[type] || typeMap['hot-news'];
     await pool.query(`UPDATE users SET ${mapping.column} = false WHERE email = $1`, [email]);
@@ -5807,6 +5810,54 @@ app.post('/api/user/earnings-report-preference', async (req, res) => {
     const { userId, optedIn } = req.body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
     await pool.query('UPDATE users SET earnings_report_opt_in = $1 WHERE id = $2', [optedIn, userId]);
+    res.json({ success: true, optedIn: !!optedIn });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// ── Monthly Top Movers Preference ──
+app.get('/api/user/monthly-top-movers-preference', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const result = await pool.query('SELECT monthly_top_movers_opt_in FROM users WHERE id = $1', [userId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ optedIn: result.rows[0].monthly_top_movers_opt_in !== false });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+app.post('/api/user/monthly-top-movers-preference', async (req, res) => {
+  try {
+    const { userId, optedIn } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    await pool.query('UPDATE users SET monthly_top_movers_opt_in = $1 WHERE id = $2', [optedIn, userId]);
+    res.json({ success: true, optedIn: !!optedIn });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// ── Quarterly Top Movers Preference ──
+app.get('/api/user/quarterly-top-movers-preference', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const result = await pool.query('SELECT quarterly_top_movers_opt_in FROM users WHERE id = $1', [userId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ optedIn: result.rows[0].quarterly_top_movers_opt_in !== false });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+app.post('/api/user/quarterly-top-movers-preference', async (req, res) => {
+  try {
+    const { userId, optedIn } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    await pool.query('UPDATE users SET quarterly_top_movers_opt_in = $1 WHERE id = $2', [optedIn, userId]);
     res.json({ success: true, optedIn: !!optedIn });
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
@@ -5898,6 +5949,52 @@ app.post('/api/user/send-test-digest', async (req, res) => {
     }
   } catch (error) {
     console.error('send-test-digest error:', error.message);
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// --- Monthly Top Movers "Send Now" ---
+app.post('/api/user/send-test-monthly-movers', async (req, res) => {
+  try {
+    let { userId, email, fullName } = req.body;
+    if (userId) {
+      const result = await pool.query('SELECT id, full_name, email FROM users WHERE id = $1', [userId]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      email = result.rows[0].email;
+      fullName = result.rows[0].full_name;
+    }
+    if (!email) return res.status(400).json({ error: 'email or userId required' });
+    const sent = await sendTopMoversToUser(userId ? parseInt(userId) : null, email, fullName, '1mo', 'monthly');
+    if (sent) {
+      res.json({ success: true, message: 'Monthly top movers sent to ' + email });
+    } else {
+      res.json({ success: false, message: 'Could not send monthly top movers' });
+    }
+  } catch (error) {
+    console.error('send-test-monthly-movers error:', error.message);
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// --- Quarterly Top Movers "Send Now" ---
+app.post('/api/user/send-test-quarterly-movers', async (req, res) => {
+  try {
+    let { userId, email, fullName } = req.body;
+    if (userId) {
+      const result = await pool.query('SELECT id, full_name, email FROM users WHERE id = $1', [userId]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+      email = result.rows[0].email;
+      fullName = result.rows[0].full_name;
+    }
+    if (!email) return res.status(400).json({ error: 'email or userId required' });
+    const sent = await sendTopMoversToUser(userId ? parseInt(userId) : null, email, fullName, '3mo', 'quarterly');
+    if (sent) {
+      res.json({ success: true, message: 'Quarterly top movers sent to ' + email });
+    } else {
+      res.json({ success: false, message: 'Could not send quarterly top movers' });
+    }
+  } catch (error) {
+    console.error('send-test-quarterly-movers error:', error.message);
     res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
@@ -10398,6 +10495,8 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_digest_opt_in BOOLEAN DEFAULT true`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_brief_opt_in BOOLEAN DEFAULT true`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS earnings_report_opt_in BOOLEAN DEFAULT true`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_top_movers_opt_in BOOLEAN DEFAULT true`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS quarterly_top_movers_opt_in BOOLEAN DEFAULT true`);
 
     await pool.query(`CREATE TABLE IF NOT EXISTS watchlist_items (
       id SERIAL PRIMARY KEY, symbol VARCHAR(20) NOT NULL,
@@ -12276,11 +12375,12 @@ async function sendDailySentimentReports() {
 
 async function sendWeeklyDigestToUser(userId, email, fullName) {
   try {
-    const [summaryRes, moversRes, newsRes, editorial] = await Promise.all([
+    const [summaryRes, moversRes, newsRes, editorial, periodMovers] = await Promise.all([
       withTimeout(axios.get(`http://localhost:${port}/api/ai/market-summary`).then(r => r.data).catch(() => null), 15000, 'digest summary').catch(() => null),
       withTimeout(axios.get(`http://localhost:${port}/api/market/movers`).then(r => r.data).catch(() => ({})), 15000, 'digest movers').catch(() => ({})),
       withTimeout(axios.get(`http://localhost:${port}/api/news?limit=15`).then(r => r.data).catch(() => ({})), 15000, 'digest news').catch(() => ({})),
       withTimeout(generateWeeklyDigestContent().catch(() => ({})), 45000, 'digest content').catch(() => ({})),
+      withTimeout(periodReturnsService.getPeriodMovers('1w').catch(() => ({ gainers: [], losers: [] })), 30000, 'weekly period movers').catch(() => ({ gainers: [], losers: [] })),
     ]);
     const dateStr = new Date().toLocaleDateString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -12293,14 +12393,18 @@ async function sendWeeklyDigestToUser(userId, email, fullName) {
     if (newsHeadlines.length === 0 && editorial?.hotNews?.length) {
       newsHeadlines = editorial.hotNews;
     }
+    const nseGainers10 = editorial?.nseGainers?.length ? editorial.nseGainers.slice(0, 10) : (periodMovers?.gainers?.filter(r => r.currency === 'KES' || r.market === 'NSE').slice(0, 10) || moversRes?.nse?.gainers?.slice(0, 10) || []);
+    const nseLosers10 = editorial?.nseLosers?.length ? editorial.nseLosers.slice(0, 10) : (periodMovers?.losers?.filter(r => r.currency === 'KES' || r.market === 'NSE').slice(0, 10) || moversRes?.nse?.losers?.slice(0, 10) || []);
+    const globalGainers10 = editorial?.globalGainers?.length ? editorial.globalGainers.slice(0, 10) : (periodMovers?.gainers?.filter(r => r.currency !== 'KES' && r.market !== 'NSE').slice(0, 10) || moversRes?.global?.gainers?.slice(0, 10) || []);
+    const globalLosers10 = editorial?.globalLosers?.length ? editorial.globalLosers.slice(0, 10) : (periodMovers?.losers?.filter(r => r.currency !== 'KES' && r.market !== 'NSE').slice(0, 10) || moversRes?.global?.losers?.slice(0, 10) || []);
     await withTimeout(
       sendWeeklyDigestEmail(email, {
         userName: fullName || 'Trader',
         dateStr,
-        nseGainers: editorial?.nseGainers?.length ? editorial.nseGainers : (moversRes?.nse?.gainers?.slice(0, 6) || []),
-        nseLosers: editorial?.nseLosers?.length ? editorial.nseLosers : (moversRes?.nse?.losers?.slice(0, 6) || []),
-        globalGainers: editorial?.globalGainers?.length ? editorial.globalGainers : (moversRes?.global?.gainers?.slice(0, 6) || []),
-        globalLosers: editorial?.globalLosers?.length ? editorial.globalLosers : (moversRes?.global?.losers?.slice(0, 6) || []),
+        nseGainers: nseGainers10,
+        nseLosers: nseLosers10,
+        globalGainers: globalGainers10,
+        globalLosers: globalLosers10,
         newsHeadlines,
         totalSignals: editorial.totalSignals || summaryRes?.signals?.total || 0,
         nseSummary: editorial.nseSummary || '',
@@ -12339,6 +12443,91 @@ async function sendWeeklyDigestReports() {
   } catch (e) {
     console.error('[DIGEST] Error:', e.message);
   }
+}
+
+// ── TOP MOVERS (Weekly/Monthly/Quarterly) ──
+
+async function sendTopMoversToUser(userId, email, fullName, period, type) {
+  try {
+    const editorial = await withTimeout(
+      generateTopMoversContent(period).catch(() => ({})),
+      60000, `top movers content (${period})`
+    ).catch(() => ({}));
+
+    const dateStr = new Date().toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    await withTimeout(
+      sendTopMoversEmail(email, {
+        userName: fullName || 'Trader',
+        periodLabel: editorial.periodLabel || (period === '1w' ? 'Weekly' : period === '1mo' ? 'Monthly' : 'Quarterly'),
+        dateRange: editorial.dateRange || dateStr,
+        period,
+        nseGainers: editorial.nseGainers || [],
+        nseLosers: editorial.nseLosers || [],
+        globalGainers: editorial.globalGainers || [],
+        globalLosers: editorial.globalLosers || [],
+        sentiment: editorial.sentiment || 'Neutral',
+        buys: editorial.buys || 0,
+        sells: editorial.sells || 0,
+        totalSignals: editorial.totalSignals || 0,
+        topSectors: editorial.topSectors || [],
+        worstSectors: editorial.worstSectors || [],
+      }),
+      30000, `top movers email send (${period})`
+    );
+    console.log(`[TOP MOVERS] ${type} top movers sent to ${email}`);
+    return true;
+  } catch (e) {
+    console.error(`[TOP MOVERS] Error for ${email} (${type}):`, e.message);
+    return false;
+  }
+}
+
+async function sendWeeklyTopMoversReports() {
+  try {
+    const { rows: users } = await pool.query(
+      `SELECT id, full_name, email FROM users WHERE weekly_digest_opt_in = true`
+    );
+    if (users.length === 0) { console.log('[TOP MOVERS] No opted-in users for weekly'); return; }
+    console.log(`[TOP MOVERS] Sending weekly top movers to ${users.length} users...`);
+    for (const user of users) {
+      try { await sendTopMoversToUser(user.id, user.email, user.full_name, '1w', 'weekly'); }
+      catch (e) { console.error(`[TOP MOVERS] Error for user ${user.id}:`, e.message); }
+    }
+    console.log('[TOP MOVERS] Weekly top movers round finished');
+  } catch (e) { console.error('[TOP MOVERS] Error:', e.message); }
+}
+
+async function sendMonthlyTopMoversReports() {
+  try {
+    const { rows: users } = await pool.query(
+      `SELECT id, full_name, email FROM users WHERE monthly_top_movers_opt_in = true`
+    );
+    if (users.length === 0) { console.log('[TOP MOVERS] No opted-in users for monthly'); return; }
+    console.log(`[TOP MOVERS] Sending monthly top movers to ${users.length} users...`);
+    for (const user of users) {
+      try { await sendTopMoversToUser(user.id, user.email, user.full_name, '1mo', 'monthly'); }
+      catch (e) { console.error(`[TOP MOVERS] Error for user ${user.id}:`, e.message); }
+    }
+    console.log('[TOP MOVERS] Monthly top movers round finished');
+  } catch (e) { console.error('[TOP MOVERS] Error:', e.message); }
+}
+
+async function sendQuarterlyTopMoversReports() {
+  try {
+    const { rows: users } = await pool.query(
+      `SELECT id, full_name, email FROM users WHERE quarterly_top_movers_opt_in = true`
+    );
+    if (users.length === 0) { console.log('[TOP MOVERS] No opted-in users for quarterly'); return; }
+    console.log(`[TOP MOVERS] Sending quarterly top movers to ${users.length} users...`);
+    for (const user of users) {
+      try { await sendTopMoversToUser(user.id, user.email, user.full_name, '3mo', 'quarterly'); }
+      catch (e) { console.error(`[TOP MOVERS] Error for user ${user.id}:`, e.message); }
+    }
+    console.log('[TOP MOVERS] Quarterly top movers round finished');
+  } catch (e) { console.error('[TOP MOVERS] Error:', e.message); }
 }
 
 // ── 2. DAILY MARKET BRIEF ──
@@ -12985,12 +13174,26 @@ server.listen(port, '0.0.0.0', async () => {
     });
     console.log('[EMAIL SEQ CRON] Onboarding email processing scheduled every 6 hours');
 
-    // Schedule weekly market digest every Sunday at 8 AM EAT (05:00 UTC)
-    cron.schedule('0 5 * * 0', () => {
+    // Schedule weekly market digest every Friday at 10 PM EAT (19:00 UTC)
+    cron.schedule('0 19 * * 5', () => {
       console.log('[DIGEST CRON] Running weekly market digest...');
       sendWeeklyDigestReports();
     });
-    console.log('[DIGEST CRON] Weekly market digest scheduled for Sunday at 8 AM EAT');
+    console.log('[DIGEST CRON] Weekly market digest scheduled for Friday at 10 PM EAT');
+
+    // Schedule monthly top movers on 1st of month at 8 AM EAT (05:00 UTC)
+    cron.schedule('0 5 1 * *', () => {
+      console.log('[TOP MOVERS CRON] Running monthly top movers...');
+      sendMonthlyTopMoversReports();
+    });
+    console.log('[TOP MOVERS CRON] Monthly top movers scheduled for 1st of month at 8 AM EAT');
+
+    // Schedule quarterly top movers on 1st of quarter at 8 AM EAT (05:00 UTC)
+    cron.schedule('0 5 1 1,4,7,10 *', () => {
+      console.log('[TOP MOVERS CRON] Running quarterly top movers...');
+      sendQuarterlyTopMoversReports();
+    });
+    console.log('[TOP MOVERS CRON] Quarterly top movers scheduled for 1st of quarter at 8 AM EAT');
 
     // Schedule daily market brief every weekday at 7 AM EAT (04:00 UTC)
     cron.schedule('0 4 * * 1-5', () => {

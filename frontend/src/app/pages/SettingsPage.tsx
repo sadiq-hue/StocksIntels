@@ -77,6 +77,8 @@ export function SettingsPage() {
   const [weeklyDigestOptedIn, setWeeklyDigestOptedIn] = useState(true);
   const [dailyBriefOptedIn, setDailyBriefOptedIn] = useState(true);
   const [earningsReportOptedIn, setEarningsReportOptedIn] = useState(true);
+  const [monthlyTopMoversOptedIn, setMonthlyTopMoversOptedIn] = useState(true);
+  const [quarterlyTopMoversOptedIn, setQuarterlyTopMoversOptedIn] = useState(true);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [sendingReport, setSendingReport] = useState<string | null>(null);
@@ -123,6 +125,14 @@ export function SettingsPage() {
       fetch(`${API_BASE_URL}/user/earnings-report-preference?userId=${user.id}`)
         .then(r => r.json())
         .then(d => { if (d.optedIn !== undefined) setEarningsReportOptedIn(d.optedIn); })
+        .catch(() => {});
+      fetch(`${API_BASE_URL}/user/monthly-top-movers-preference?userId=${user.id}`)
+        .then(r => r.json())
+        .then(d => { if (d.optedIn !== undefined) setMonthlyTopMoversOptedIn(d.optedIn); })
+        .catch(() => {});
+      fetch(`${API_BASE_URL}/user/quarterly-top-movers-preference?userId=${user.id}`)
+        .then(r => r.json())
+        .then(d => { if (d.optedIn !== undefined) setQuarterlyTopMoversOptedIn(d.optedIn); })
         .catch(() => {});
     }
   }, [user?.id]);
@@ -264,6 +274,10 @@ export function SettingsPage() {
         ? `${API_BASE_URL}/user/send-test-brief`
         : reportType === 'earnings'
         ? `${API_BASE_URL}/user/send-test-earnings`
+        : reportType === 'monthly-movers'
+        ? `${API_BASE_URL}/user/send-test-monthly-movers`
+        : reportType === 'quarterly-movers'
+        ? `${API_BASE_URL}/user/send-test-quarterly-movers`
         : `${API_BASE_URL}/user/send-test-hot-news`;
       
       const body = {
@@ -336,6 +350,38 @@ export function SettingsPage() {
       toast.success(checked ? "Earnings report subscribed" : "Earnings report unsubscribed");
     } catch {
       setEarningsReportOptedIn(!checked);
+      toast.error("Failed to update preference");
+    }
+  };
+
+  const handleMonthlyTopMoversToggle = async (checked: boolean) => {
+    setMonthlyTopMoversOptedIn(checked);
+    try {
+      const res = await fetch(`${API_BASE_URL}/user/monthly-top-movers-preference`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user?.id, optedIn: checked }),
+      });
+      if (!res.ok) throw new Error("Failed to update preference");
+      toast.success(checked ? "Monthly top movers subscribed" : "Monthly top movers unsubscribed");
+    } catch {
+      setMonthlyTopMoversOptedIn(!checked);
+      toast.error("Failed to update preference");
+    }
+  };
+
+  const handleQuarterlyTopMoversToggle = async (checked: boolean) => {
+    setQuarterlyTopMoversOptedIn(checked);
+    try {
+      const res = await fetch(`${API_BASE_URL}/user/quarterly-top-movers-preference`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user?.id, optedIn: checked }),
+      });
+      if (!res.ok) throw new Error("Failed to update preference");
+      toast.success(checked ? "Quarterly top movers subscribed" : "Quarterly top movers unsubscribed");
+    } catch {
+      setQuarterlyTopMoversOptedIn(!checked);
       toast.error("Failed to update preference");
     }
   };
@@ -734,6 +780,72 @@ export function SettingsPage() {
                       className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
                     >
                       {sendingReport === "earnings" ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        "Send Now"
+                       )}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-muted rounded-lg border border-border md:col-span-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-5 h-5 text-[#0D7490]" />
+                    <div className="text-foreground font-medium">Monthly Top Movers</div>
+                  </div>
+                  <div className="text-muted-foreground text-sm mb-3">
+                    Top 10 NSE and Global gainers and losers for the past month, sector performance, and market sentiment. Sent on the 1st of each month.
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={monthlyTopMoversOptedIn}
+                        onCheckedChange={handleMonthlyTopMoversToggle}
+                      />
+                      <span className="text-sm text-muted-foreground">{monthlyTopMoversOptedIn ? 'Subscribed' : 'Unsubscribed'}</span>
+                    </div>
+                    <Button
+                      onClick={() => handleSendReport("monthly-movers")}
+                      disabled={sendingReport !== null}
+                      className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
+                    >
+                      {sendingReport === "monthly-movers" ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        "Send Now"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-muted rounded-lg border border-border md:col-span-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-5 h-5 text-[#0D7490]" />
+                    <div className="text-foreground font-medium">Quarterly Top Movers</div>
+                  </div>
+                  <div className="text-muted-foreground text-sm mb-3">
+                    Top 10 NSE and Global gainers and losers for the past quarter, sector performance, and market sentiment. Sent on the 1st of each quarter.
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={quarterlyTopMoversOptedIn}
+                        onCheckedChange={handleQuarterlyTopMoversToggle}
+                      />
+                      <span className="text-sm text-muted-foreground">{quarterlyTopMoversOptedIn ? 'Subscribed' : 'Unsubscribed'}</span>
+                    </div>
+                    <Button
+                      onClick={() => handleSendReport("quarterly-movers")}
+                      disabled={sendingReport !== null}
+                      className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white"
+                    >
+                      {sendingReport === "quarterly-movers" ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                           Sending...
