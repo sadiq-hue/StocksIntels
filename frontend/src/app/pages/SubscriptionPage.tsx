@@ -464,7 +464,7 @@ export function SubscriptionPage() {
                     </div>
                     <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
                       <p className="text-[11px] text-purple-800 leading-relaxed font-medium">
-                        You'll be redirected to Triple-A to complete your purchase with <strong>{selectedCrypto.ticker}</strong> on <strong>{selectedCrypto.network}</strong>.
+                        You'll be redirected to NowPayments to complete your purchase with <strong>{selectedCrypto.ticker}</strong> on <strong>{selectedCrypto.network}</strong>.
                       </p>
                     </div>
                   </div>

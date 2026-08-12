@@ -33,7 +33,7 @@ const { fetchAnalystData } = require('./analystService');
 const fxService = require('./fxService');
 const payheroService = require('./payheroService');
 const paypalService = require('./paypalService');
-const tripleAService = require('./tripleAService');
+const nowPaymentsService = require('./nowPaymentsService');
 const indicesService = require('./indicesService');
 const { kellyFraction, computeCovarianceMatrix, monteCarloVaR, meanVarianceOptimize } = require('./portfolioOptimizer');
 const { generalLimiter, authLimiter, marketDataLimiter, aiLimiter } = require('./rateLimiter');
@@ -149,7 +149,7 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 }));
-app.use(express.json());
+app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(generalLimiter);
@@ -9975,7 +9975,7 @@ app.post('/api/payments/paypal-webhook', async (req, res) => {
   }
 });
 
-// --- Crypto (Triple-A) Checkout ---
+// --- Crypto (NowPayments) Checkout ---
 app.post('/api/payments/crypto', async (req, res) => {
   try {
     const { amount, currency, plan, userId, durationMonths, cryptoTicker, cryptoNetwork } = req.body;
@@ -9985,14 +9985,13 @@ app.post('/api/payments/crypto', async (req, res) => {
     const planName = plan || 'Subscription';
     const externalRef = `CRYPTO-${Date.now()}-${String(Math.random()).slice(2, 8)}`;
 
-    const result = await tripleAService.createCheckoutSession({
+    const result = await nowPaymentsService.createInvoice({
       amount,
       currency: currency || 'USD',
       reference: externalRef,
       plan: planName,
       durationMonths: durationMonths || 1,
       cryptoTicker,
-      cryptoNetwork,
     });
 
     await pool.query(
@@ -10002,25 +10001,31 @@ app.post('/api/payments/crypto', async (req, res) => {
       [userId || null, amount, currency || 'USD', externalRef, planName, durationMonths || 1]
     );
 
-    res.json({ success: true, checkoutUrl: result.checkoutUrl, reference: externalRef });
+    res.json({ success: true, checkoutUrl: result.invoiceUrl, reference: externalRef });
   } catch (error) {
     console.error('Crypto checkout error:', error.message);
     res.status(500).json({ error: error.message || 'Failed to create crypto checkout' });
   }
 });
 
-// --- Triple-A Webhook ---
+// --- NowPayments Webhook (IPN) ---
 app.post('/api/payments/crypto-webhook', async (req, res) => {
   try {
+    const raw = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body);
+    const sig = req.headers['x-nowpayments-sig'] || req.headers['x-nowpayments-sig'.toLowerCase()];
+    const valid = nowPaymentsService.verifyIpn(raw, sig);
+    if (!valid) {
+      console.warn('[CRYPTO] NowPayments IPN signature verification failed');
+      return res.status(400).json({ error: 'Invalid signature' });
+    }
+
     const event = req.body;
-    const sessionId = event.session_id || event.data?.session_id;
-    const status = event.status || event.data?.status;
-    const reference = event.reference || event.data?.reference;
-    const eventType = event.event || event.event_type || '';
+    const reference = event.order_id || event.orderId;
+    const status = (event.payment_status || event.status || '').toLowerCase();
 
-    console.log(`[CRYPTO WEBHOOK] event=${eventType} session=${sessionId} status=${status} ref=${reference}`);
+    console.log(`[CRYPTO WEBHOOK] status=${status} ref=${reference}`);
 
-    if (['payment.completed', 'checkout.completed', 'success'].includes(status?.toLowerCase()) && reference) {
+    if (status === 'finished' && reference) {
       const txResult = await pool.query(
         `UPDATE payment_transactions SET status = 'success', callback_data = $1, updated_at = NOW()
          WHERE external_reference = $2 AND status = 'pending'
@@ -10069,7 +10074,7 @@ app.post('/api/payments/crypto-webhook', async (req, res) => {
               currency: 'USD',
               period: months === 12 ? 'yearly' : 'monthly',
               durationMonths: months,
-              paymentMethod: 'Crypto (Triple-A)',
+              paymentMethod: 'Crypto (NowPayments)',
               transactionRef: reference,
               paidAt: new Date(),
               startDate,
@@ -10082,7 +10087,7 @@ app.post('/api/payments/crypto-webhook', async (req, res) => {
       } else {
         console.log(`[CRYPTO] Payment confirmed but no user_id on transaction: ref=${reference}`);
       }
-    } else if (['payment.failed', 'payment.cancelled', 'failed', 'cancelled'].includes(status?.toLowerCase()) && reference) {
+    } else if (['failed', 'refunded', 'expired'].includes(status) && reference) {
       await pool.query(
         `UPDATE payment_transactions SET status = 'failed', callback_data = $1, updated_at = NOW()
          WHERE external_reference = $2 AND status = 'pending'`,
