@@ -61,9 +61,8 @@ export function SubscriptionPage() {
   useEffect(() => {
     const paypalStatus = searchParams.get("paypal");
     const cryptoStatus = searchParams.get("crypto");
-    const stripeStatus = searchParams.get("stripe");
     const pesapalStatus = searchParams.get("pesapal");
-    if (paypalStatus === "success" || cryptoStatus === "success" || stripeStatus === "success" || pesapalStatus === "success") {
+    if (paypalStatus === "success" || cryptoStatus === "success" || pesapalStatus === "success") {
       setIsSuccess(true);
       toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
       let attempts = 0;
@@ -71,8 +70,8 @@ export function SubscriptionPage() {
         refreshUser();
         if (++attempts >= 10) clearInterval(poll);
       }, 2000);
-    } else if (paypalStatus === "failed" || paypalStatus === "cancelled" || cryptoStatus === "cancelled" || stripeStatus === "cancelled" || pesapalStatus === "cancelled") {
-      toast.error(paypalStatus === "cancelled" || cryptoStatus === "cancelled" || stripeStatus === "cancelled" || pesapalStatus === "cancelled" ? "Checkout was cancelled." : "Payment failed. Please try again.");
+    } else if (paypalStatus === "failed" || paypalStatus === "cancelled" || cryptoStatus === "cancelled" || pesapalStatus === "cancelled") {
+      toast.error(paypalStatus === "cancelled" || cryptoStatus === "cancelled" || pesapalStatus === "cancelled" ? "Checkout was cancelled." : "Payment failed. Please try again.");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -34,7 +34,6 @@ const fxService = require('./fxService');
 const payheroService = require('./payheroService');
 const paypalService = require('./paypalService');
 const nowPaymentsService = require('./nowPaymentsService');
-const stripeService = require('./stripeService');
 const pesapalService = require('./pesapalService');
 const indicesService = require('./indicesService');
 const { kellyFraction, computeCovarianceMatrix, monteCarloVaR, meanVarianceOptimize } = require('./portfolioOptimizer');
@@ -10105,110 +10104,9 @@ app.post('/api/payments/crypto-webhook', async (req, res) => {
   }
 });
 
-// --- Stripe Checkout (card, sole proprietor — no business license) ---
-app.post('/api/payments/stripe', async (req, res) => {
-  try {
-    const { amount, currency = 'USD', plan, userId, durationMonths } = req.body;
-    if (!amount) return res.status(400).json({ error: 'Amount is required' });
-    const planName = plan || 'Subscription';
-    const externalRef = `STRIPE-${Date.now()}-${String(Math.random()).slice(2, 8)}`;
-    const result = await stripeService.createCheckoutSession({
-      amount,
-      currency,
-      reference: externalRef,
-      plan: planName,
-      durationMonths: durationMonths || 1,
-    });
-    await pool.query(
-      `INSERT INTO payment_transactions (user_id, amount, currency, provider, external_reference, status, plan_name, duration_months)
-       VALUES ($1, $2, $3, 'stripe', $4, 'pending', $5, $6)
-       ON CONFLICT (external_reference) DO NOTHING`,
-      [userId || null, amount, currency || 'USD', externalRef, planName, durationMonths || 1]
-    );
-    res.json({ success: true, checkoutUrl: result.url, reference: externalRef });
-  } catch (error) {
-    console.error('[STRIPE] Checkout error:', error.message);
-    res.status(500).json({ error: error.message || 'Failed to create Stripe checkout' });
-  }
-});
 
-// --- Stripe Webhook ---
-app.post('/api/payments/stripe-webhook', async (req, res) => {
-  try {
-    const sig = req.headers['stripe-signature'];
-    const raw = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body);
-    const event = stripeService.verifyWebhook(raw, sig);
-    if (!event) {
-      console.warn('[STRIPE] Webhook signature verification failed');
-      return res.status(400).json({ error: 'Invalid signature' });
-    }
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      const reference = session.client_reference_id;
-      const paid = session.payment_status === 'paid';
-      if (reference && paid) {
-        const txResult = await pool.query(
-          `UPDATE payment_transactions SET status = 'success', callback_data = $1, updated_at = NOW()
-           WHERE external_reference = $2 AND status = 'pending'
-           RETURNING id, user_id, plan_name, duration_months, provider, amount, currency`,
-          [JSON.stringify(event), reference]
-        );
-        const tx = txResult.rows[0];
-        if (tx && tx.user_id) {
-          const tier = (tx.plan_name || 'pro').toLowerCase();
-          const months = parseInt(tx.duration_months) || 1;
-          const startDate = new Date();
-          const endDate = new Date(startDate);
-          endDate.setMonth(endDate.getMonth() + months);
-          const planRes = await pool.query('SELECT id FROM subscription_plans WHERE LOWER(name) = $1 LIMIT 1', [tier]);
-          const planId = planRes.rows[0]?.id || null;
-          const subRes = await pool.query(
-            `INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)
-             VALUES ($1, $2, 'active', $3, $4) RETURNING id`,
-            [tx.user_id, planId, startDate, endDate]
-          );
-          const subscriptionId = subRes.rows[0]?.id || null;
-          await pool.query(
-            `UPDATE users SET subscription_tier = $1, subscription_status = 'active', subscription_start_date = $2, subscription_end_date = $3 WHERE id = $4`,
-            [tier, startDate, endDate, tx.user_id]
-          );
-          if (subscriptionId) {
-            await pool.query('UPDATE payment_transactions SET subscription_id = $1 WHERE id = $2', [subscriptionId, tx.id]);
-          }
-          console.log(`[STRIPE] Subscription activated: user=${tx.user_id} tier=${tier} months=${months}`);
-          await awardCommission(tx.user_id, tier);
-          try {
-            const userRes = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [tx.user_id]);
-            const { full_name: uName, email: uEmail } = userRes.rows[0] || {};
-            if (uEmail) {
-              await sendPaymentReceiptEmail(uEmail, {
-                userName: uName,
-                planName: tx.plan_name || 'Pro',
-                amount: tx.amount,
-                currency: tx.currency || 'USD',
-                period: months === 12 ? 'yearly' : 'monthly',
-                durationMonths: months,
-                paymentMethod: 'Card (Stripe)',
-                transactionRef: reference,
-                paidAt: new Date(),
-                startDate,
-                endDate,
-              });
-            }
-          } catch (mailErr) {
-            console.error('[RECEIPT] Failed to send receipt email:', mailErr.message);
-          }
-        } else {
-          console.log(`[STRIPE] Payment confirmed but no user_id on transaction: ref=${reference}`);
-        }
-      }
-    }
-    res.json({ received: true });
-  } catch (error) {
-    console.error('[STRIPE] Webhook error:', error.message);
-    res.json({ received: true });
-  }
-});
+
+
 
 // --- Pesapal Checkout (cards + M-Pesa, Kenya, no business license) ---
 app.post('/api/payments/pesapal', async (req, res) => {
