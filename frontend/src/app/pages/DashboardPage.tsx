@@ -21,6 +21,7 @@ import { fetchAllNews, type NewsArticle } from "../services/newsService";
 import { connectSocket } from "../services/socketService";
 import type { Signal } from "../types/signals";
 import { authFetch } from "../auth/tokenStore";
+import { toDisplayCurrency, formatCurrencyValue, PORTFOLIO_CURRENCY_KEY } from "../utils/currency";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -158,6 +159,17 @@ export function DashboardPage() {
   const [movers, setMovers] = useState<{ gainers: any[]; losers: any[] }>({ gainers: [], losers: [] });
   const [activeStocks, setActiveStocks] = useState<any[]>([]);
   const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
+  const [displayCurrency, setDisplayCurrency] = useState<string>(() => localStorage.getItem(PORTFOLIO_CURRENCY_KEY) || "USD");
+
+  const fxRate = enhancedTotals.fxRate || 130;
+  const dc = displayCurrency;
+  const fmtKes = (kesAmount: number) => formatCurrencyValue(toDisplayCurrency(kesAmount, "KES", dc, fxRate), dc);
+  const fmtUsd = (usdAmount: number) => formatCurrencyValue(toDisplayCurrency(usdAmount, "USD", dc, fxRate), dc);
+
+  const handleCurrencyChange = (code: string) => {
+    setDisplayCurrency(code);
+    localStorage.setItem(PORTFOLIO_CURRENCY_KEY, code);
+  };
 
   const fetchPerformance = useCallback(async (period: string) => {
     if (!user?.id) return;
@@ -493,6 +505,10 @@ export function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <button onClick={() => handleCurrencyChange(dc === "USD" ? "KES" : "USD")} className="flex items-center gap-1.5 px-3 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-semibold text-white transition-all cursor-pointer">
+              <DollarSign className="size-3.5" />
+              {dc === "USD" ? "USD" : "KES"}
+            </button>
             <Link to="/app/markets" className="w-full sm:w-auto">
               <Button className="bg-card text-[#0D7490] hover:bg-muted shadow-sm w-full sm:w-auto">
                 <Globe2 className="size-4 mr-2" />
@@ -526,7 +542,7 @@ export function DashboardPage() {
               </span>
             </div>
             <div className="text-2xl font-black tracking-tight text-white drop-shadow-sm">
-              KES {enhancedTotals.totalValue.toLocaleString()}
+              {fmtKes(enhancedTotals.totalValue)}
             </div>
             <div className={`flex items-center gap-1 text-xs mt-2 ${enhancedTotals.pnlPercent >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
               <div className={`size-4 rounded-full flex items-center justify-center ${enhancedTotals.pnlPercent >= 0 ? 'bg-emerald-400/20' : 'bg-red-400/20'}`}>
@@ -535,15 +551,15 @@ export function DashboardPage() {
               <span className="font-semibold">{enhancedTotals.pnlPercent >= 0 ? '+' : ''}{enhancedTotals.pnlPercent}% today</span>
             </div>
             <div className="mt-3 pt-2.5 border-t border-white/20 flex justify-between text-[11px] text-white/70">
-              <span className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-white/50" />NSE: KES {enhancedTotals.nseValue.toLocaleString()}</span>
-              <span className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-white/50" />Global: ${enhancedTotals.globalValue.toLocaleString()}</span>
+              <span className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-white/50" />NSE: {fmtKes(enhancedTotals.nseValue)}</span>
+              <span className="flex items-center gap-1.5"><span className="size-1.5 rounded-full bg-white/50" />Global: {fmtUsd(enhancedTotals.globalValue)}</span>
             </div>
           </div>
         </Card>
 
         {[
-          { icon: Banknote, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400", label: "NSE Portfolio", value: `KES ${enhancedTotals.nseValue.toLocaleString()}`, sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
-          { icon: Globe2, color: "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400", label: "Global Portfolio", value: `$${enhancedTotals.globalValue.toLocaleString()}`, sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${enhancedTotals.globalCount} pos)`, valColor: "text-foreground" },
+          { icon: Banknote, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400", label: "NSE Portfolio", value: fmtKes(enhancedTotals.nseValue), sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
+          { icon: Globe2, color: "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400", label: "Global Portfolio", value: fmtUsd(enhancedTotals.globalValue), sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${enhancedTotals.globalCount} pos)`, valColor: "text-foreground" },
           { icon: PieChart, color: "bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} NSE · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
           { icon: Brain, color: "bg-yellow-100 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400", label: "Market Intelligence", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: "text-foreground" },
           { icon: Scale, color: "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400", label: "vs Benchmarks", value: perfMeta.hasHistory ? `${benchmarkMetrics.alpha >= 0 ? '+' : ''}${benchmarkMetrics.alpha.toFixed(1)}%` : '—', sub: perfMeta.hasHistory ? `Portfolio ${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}% · NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%` : `NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%`, valColor: perfMeta.hasHistory ? (benchmarkMetrics.alpha >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
@@ -1070,7 +1086,7 @@ export function DashboardPage() {
                       <div>
                         <div className="text-sm font-semibold text-foreground">{holding.name}</div>
                         <div className="text-[11px] text-muted-foreground">
-                          {isNse ? "KES" : "$"} {holding.value}
+                          {isNse ? fmtKes(parseFloat(holding.value.replace(",", ""))) : fmtUsd(parseFloat(holding.value.replace(",", "")))}
                           <span className={`ml-1.5 text-[10px] font-medium uppercase ${isNse ? "text-[#0D7490]" : "text-indigo-500"}`}>
                             {isNse ? "NSE" : "Global"}
                           </span>
@@ -1219,15 +1235,15 @@ export function DashboardPage() {
               <div className="text-white/80 text-sm leading-relaxed">
                 <div className="flex justify-between py-1">
                   <span>Total Value</span>
-                  <span className="font-medium">KES {enhancedTotals.totalValue.toLocaleString()}</span>
+                  <span className="font-medium">{fmtKes(enhancedTotals.totalValue)}</span>
                 </div>
                 <div className="flex justify-between py-1">
                   <span>NSE Value</span>
-                  <span className="font-medium">KES {enhancedTotals.nseValue.toLocaleString()} ({enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}{enhancedTotals.nsePnLPercent}%)</span>
+                  <span className="font-medium">{fmtKes(enhancedTotals.nseValue)} ({enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}{enhancedTotals.nsePnLPercent}%)</span>
                 </div>
                 <div className="flex justify-between py-1">
                   <span>Linked Accounts</span>
-                  <span className="font-medium">${enhancedTotals.globalValue.toLocaleString()} ({enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}{enhancedTotals.globalPnLPercent}%)</span>
+                  <span className="font-medium">{fmtUsd(enhancedTotals.globalValue)} ({enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}{enhancedTotals.globalPnLPercent}%)</span>
                 </div>
                 <div className="flex justify-between py-1">
                   <span>Total P&amp;L</span>
