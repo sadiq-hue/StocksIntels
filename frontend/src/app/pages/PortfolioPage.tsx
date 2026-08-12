@@ -848,7 +848,7 @@ export function PortfolioPage() {
           <p className="text-muted-foreground text-sm md:text-base">{paperMode ? "Simulate trades with virtual cash" : "Track NSE & global investments, AI insights, and broker integrations"}</p>
         </div>
         <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:w-auto">
-          <div className="flex items-center rounded-lg border border-border p-0.5 bg-muted flex-1 sm:flex-none">
+          <div className="flex items-center rounded-lg border border-border p-0.5 bg-muted col-span-2 sm:col-span-1 sm:flex-none">
             <button
               onClick={() => { if (paperMode) { setPaperMode(false); } }}
               className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-2 ${!paperMode ? "bg-[#0D7490] text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
@@ -862,9 +862,9 @@ export function PortfolioPage() {
               <SwitchCamera className="w-4 h-4" /> Paper Trading
             </button>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0 min-w-0">
             <Select value={displayCurrency} onValueChange={handleCurrencyChange}>
-              <SelectTrigger className="w-[120px] bg-card border-border h-9 text-sm">
+              <SelectTrigger className="w-[110px] sm:w-[120px] bg-card border-border h-9 text-xs sm:text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -874,25 +874,25 @@ export function PortfolioPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" onClick={() => navigate('/app/stocks')} className="border-border gap-2 flex-1 sm:flex-none justify-center">
+          <Button variant="outline" onClick={() => navigate('/app/stocks')} className="border-border gap-1.5 flex-1 sm:flex-none justify-center text-xs sm:text-sm px-2 sm:px-4 min-w-0">
             <BarChart3 className="w-4 h-4" /> Screener
           </Button>
           {!paperMode && (
             <>
-              <Button variant="outline" onClick={handleRefresh} disabled={refreshing} className="border-border gap-2 flex-1 sm:flex-none justify-center">
+              <Button variant="outline" onClick={handleRefresh} disabled={refreshing} className="border-border gap-1.5 flex-1 sm:flex-none justify-center text-xs sm:text-sm px-2 sm:px-4 min-w-0">
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
-              <Button variant="outline" onClick={handleGetAdvice} className="border-border gap-2 flex-1 sm:flex-none justify-center">
+              <Button variant="outline" onClick={handleGetAdvice} className="border-border gap-1.5 flex-1 sm:flex-none justify-center text-xs sm:text-sm px-2 sm:px-4 min-w-0">
                 <BrainCircuit className="w-4 h-4" /> AI Advice
               </Button>
-              <Button variant="outline" onClick={openStatement} disabled={realStatementLoading} className="border-border gap-2 flex-1 sm:flex-none justify-center">
+              <Button variant="outline" onClick={openStatement} disabled={realStatementLoading} className="border-border gap-1.5 flex-1 sm:flex-none justify-center text-xs sm:text-sm px-2 sm:px-4 min-w-0">
                 <BarChartHorizontal className="w-4 h-4" /> Statement
               </Button>
-              <Button onClick={() => setShowAddHolding(true)} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2 flex-1 sm:flex-none justify-center">
+              <Button onClick={() => setShowAddHolding(true)} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-1.5 flex-1 sm:flex-none justify-center text-xs sm:text-sm px-2 sm:px-4 min-w-0">
                 <Plus className="w-4 h-4" /> Add Position
               </Button>
-              <Button onClick={() => setShowConnect(true)} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2 flex-1 sm:flex-none justify-center">
+              <Button onClick={() => setShowConnect(true)} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-1.5 flex-1 sm:flex-none justify-center text-xs sm:text-sm px-2 sm:px-4 min-w-0">
                 <Link2 className="w-4 h-4" /> Connect Account
               </Button>
             </>
@@ -935,7 +935,7 @@ export function PortfolioPage() {
               <Play className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
               <h3 className="text-lg font-semibold text-foreground mb-1">Start Paper Trading</h3>
               <p className="text-muted-foreground text-sm mb-4">Practice trading with virtual cash. No real money involved.</p>
-              <div className="flex items-center justify-center gap-2 mb-4">
+              <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
                 <label className="text-sm text-muted-foreground">Starting Balance:</label>
                 <select
                   value={paperStartingUsd}
@@ -946,7 +946,7 @@ export function PortfolioPage() {
                     <option key={amt} value={amt}>${amt.toLocaleString()}</option>
                   ))}
                 </select>
-                <span className="text-xs text-muted-foreground">(${paperStartingUsd.toLocaleString()} / KES {(paperStartingUsd * 130).toLocaleString()})</span>
+                <span className="text-xs text-muted-foreground w-full sm:w-auto">(${paperStartingUsd.toLocaleString()} / KES {(paperStartingUsd * 130).toLocaleString()})</span>
               </div>
               <Button onClick={async () => { const ok = await initAccount(paperStartingUsd); if (ok) refreshPaper(); }} className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white gap-2">
                 <Play className="w-4 h-4" /> Start with ${paperStartingUsd.toLocaleString()}
