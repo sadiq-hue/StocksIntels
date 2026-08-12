@@ -1691,7 +1691,7 @@ async function sendTopMoversEmail(email, data) {
           </td>
         </tr>
       </table>
-      <div style="text-align:center;margin-top:8px;font-size:12px;color:${TEXT_MED}">Market Sentiment: <span style="font-weight:700;color:${sentiment === 'Bullish' ? GREEN : sentiment === 'Bearish' ? RED : AMBER}">${esc(sentiment || 'Neutral')}</span></div>
+      <div style="text-align:center;margin-top:8px;font-size:12px;color:${TEXT_MED}">Market Sentiment: <span style="font-weight:700;color:${sentiment?.includes('Bullish') ? GREEN : sentiment?.includes('Bearish') ? RED : AMBER}">${esc(sentiment || 'Neutral')}</span></div>
     </div>
 
     ${moversTable('NSE Top Gainers', nseGainers, 'gainer')}

@@ -851,7 +851,7 @@ async function generateTopMoversContent(period = '1w') {
   const totalSignals = summary?.signals?.total || signalArr.length;
   const buys = summary?.signals?.buys || signalArr.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
   const sells = summary?.signals?.sells || signalArr.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
-  const sentiment = summary?.sentiment || (buys > sells * 2 ? 'Bullish' : sells > buys * 2 ? 'Bearish' : 'Neutral');
+  const sentiment = (totalSignals > 0 ? summary?.sentiment : null) || deriveSentimentFromRatings(buys, sells, totalSignals);
 
   const nseGainers = movers.gainers.filter(r => r.currency === 'KES' || r.market === 'NSE').slice(0, 10);
   const nseLosers = movers.losers.filter(r => r.currency === 'KES' || r.market === 'NSE').slice(0, 10);
