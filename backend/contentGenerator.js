@@ -840,18 +840,39 @@ function formatMarketCap(val) {
 const PERIOD_LABELS = { '1w': 'Weekly', '1mo': 'Monthly', '3mo': 'Quarterly' };
 
 async function generateTopMoversContent(period = '1w') {
-  const [movers, summary, signals, sectors] = await Promise.all([
+  const [movers, signals, sectors] = await Promise.all([
     periodReturnsService.getPeriodMovers(period).catch(() => ({ gainers: [], losers: [] })),
-    fetchJson(`${BASE}/api/ai/market-summary`, { sentiment: 'Neutral', signals: { total: 0, strongBuys: 0, buys: 0, sells: 0 } }),
     generateSignals(null, true).catch(() => []),
     getSectorPerformance().catch(() => []),
   ]);
 
-  const signalArr = Array.isArray(signals) ? signals : [];
-  const totalSignals = summary?.signals?.total || signalArr.length;
-  const buys = summary?.signals?.buys || signalArr.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
-  const sells = summary?.signals?.sells || signalArr.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
-  const sentiment = (totalSignals > 0 ? summary?.sentiment : null) || deriveSentimentFromRatings(buys, sells, totalSignals);
+  const byTicker = new Map();
+  (Array.isArray(signals) ? signals : []).forEach(s => byTicker.set(s.ticker, s));
+  for (const m of getMonitoredSignals()) {
+    if (byTicker.has(m.ticker)) {
+      const existing = byTicker.get(m.ticker);
+      existing.signal = m.signal;
+      existing.action = 'buy';
+      existing.confidence = m.confidence ?? existing.confidence ?? 50;
+      if (existing.change == null) existing.change = m.change ?? 0;
+    } else {
+      byTicker.set(m.ticker, {
+        ticker: m.ticker, name: m.name || m.ticker,
+        signal: m.signal, action: 'buy',
+        confidence: m.confidence ?? 50,
+        entry: m.entryPrice, sector: m.sector || 'General',
+        reason: m.reason || '', type: m.type,
+        change: m.change ?? 0,
+      });
+    }
+  }
+  const signalArr = [...byTicker.values()];
+  const totalSignals = signalArr.length;
+  const buys = signalArr.filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy').length;
+  const sells = signalArr.filter(s => s.signal === 'Sell' || s.signal === 'Strong Sell').length;
+  const sentiment = totalSignals > 0
+    ? (buys > sells * 2 ? 'Bullish' : buys > sells ? 'Slightly Bullish' : sells > buys * 2 ? 'Bearish' : sells > buys ? 'Slightly Bearish' : 'Neutral')
+    : 'Neutral';
 
   const nseGainers = movers.gainers.filter(r => r.currency === 'KES' || r.market === 'NSE').slice(0, 10);
   const nseLosers = movers.losers.filter(r => r.currency === 'KES' || r.market === 'NSE').slice(0, 10);
