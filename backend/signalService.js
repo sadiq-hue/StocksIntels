@@ -2202,8 +2202,44 @@ async function getForwardTestStats() {
       returnPct: entry && exit ? Math.round(((exit - entry) / entry) * 1000) / 10 : null,
       generatedAt: gAt ? new Date(gAt).toISOString() : null,
       resolvedAt: rAt ? new Date(rAt).toISOString() : null,
+      currency: NSE_SYMBOLS.includes(sym) ? 'KES' : 'USD',
     });
   }
+
+  // Merge resolved forward-test predictions into the LOG so symbols that are
+  // only ever forward-tested (NSE/KES stocks like CGEN, which never get a
+  // live-monitored signal_outcomes row) show their outcomes here too. These
+  // rows feed the log ONLY — the win-rate stats above stay live-outcomes-only.
+  try {
+    const fw = await pool.query(
+      `SELECT symbol, signal, confidence, price, actual_return, correct, generated_at, resolved_at
+       FROM forward_predictions
+       WHERE resolved = TRUE AND correct IS NOT NULL
+         AND COALESCE(resolved_at, generated_at) > NOW() - $1::interval`,
+      [`${SIGNAL_WINDOW_DAYS} days`]
+    );
+    for (const p of fw.rows) {
+      const entry = p.price != null ? parseFloat(p.price) : null;
+      const ret = p.actual_return != null ? parseFloat(p.actual_return) : null;
+      log.push({
+        symbol: p.symbol,
+        signal: p.signal,
+        confidence: p.confidence != null ? Math.round(Number(p.confidence)) : null,
+        action: /buy|strong buy/i.test(p.signal) ? 'buy' : /sell|strong sell/i.test(p.signal) ? 'sell' : null,
+        entryPrice: entry,
+        exitPrice: entry && ret != null ? Math.round(entry * (1 + ret / 100) * 100) / 100 : null,
+        result: p.correct === true ? 'win' : 'loss',
+        returnPct: ret,
+        generatedAt: p.generated_at ? new Date(p.generated_at).toISOString() : null,
+        resolvedAt: p.resolved_at ? new Date(p.resolved_at).toISOString() : null,
+        currency: NSE_SYMBOLS.includes(p.symbol) ? 'KES' : 'USD',
+      });
+    }
+  } catch (e) {
+    console.warn('[SignalService] forward-test log query failed:', e.message);
+  }
+
+  log.sort((a, b) => new Date(b.resolvedAt || b.generatedAt || 0) - new Date(a.resolvedAt || a.generatedAt || 0));
 
   const winRate = total > 0 ? Math.round((wins / total) * 1000) / 10 : 0;
   for (const k of Object.keys(bySymbol)) {

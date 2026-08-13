@@ -5944,12 +5944,13 @@ async function fetchForwardTest() {
               </tr></thead>
               <tbody>${s.log.map(p => {
                 const sigColor = { 'Strong Buy': 'bg-emerald-100 text-emerald-700', 'Buy': 'bg-green-100 text-green-700', 'Hold': 'bg-gray-100 text-gray-600', 'Sell': 'bg-red-100 text-red-700', 'Strong Sell': 'bg-rose-100 text-rose-700' }[p.signal] || 'bg-gray-100 text-gray-600';
+                const cSym = p.currency === 'KES' ? 'KES ' : '$';
                 return `<tr style="border-bottom:1px solid #f3f4f6">
                   <td style="padding:4px 8px;font-weight:500">${esc(p.symbol)}</td>
                   <td style="padding:4px 8px"><span class="pill ${sigColor}">${esc(p.signal)}</span></td>
                   <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.confidence != null ? p.confidence + '%' : '—'}</td>
-                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.entryPrice != null ? '$' + Number(p.entryPrice).toFixed(2) : '—'}</td>
-                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.exitPrice != null ? '$' + Number(p.exitPrice).toFixed(2) : '—'}</td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.entryPrice != null ? cSym + Number(p.entryPrice).toFixed(2) : '—'}</td>
+                  <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.exitPrice != null ? cSym + Number(p.exitPrice).toFixed(2) : '—'}</td>
                   <td style="padding:4px 8px;text-align:right;font-weight:500;color:${p.returnPct != null ? (p.returnPct > 0 ? '#059669' : '#dc2626') : '#6b7280'}">${p.returnPct != null ? (p.returnPct > 0 ? '+' : '') + Number(p.returnPct).toFixed(1) + '%' : '—'}</td>
                   <td style="padding:4px 8px;text-align:center">${resultBadge(p.result)}</td>
                   <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${p.generatedAt ? formatDate(p.generatedAt) : '—'}</td>
