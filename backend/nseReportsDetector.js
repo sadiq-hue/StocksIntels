@@ -512,11 +512,6 @@ async function ensureTable() {
   `);
 }
 
-async function isSeen(key) {
-  const r = await pool.query('SELECT 1 FROM nse_report_filings WHERE filing_key = $1', [key]);
-  return r.rows.length > 0;
-}
-
 async function recordFiling({ key, company, ticker, url, filename, periodEnd, audited, parsed, parseStatus, source = 'nse' }) {
   await pool.query(
     `INSERT INTO nse_report_filings (filing_key, company_name, ticker, pdf_url, filename, period_end_date, audited, parsed, parse_status, source)
@@ -609,7 +604,12 @@ async function processPdfBatch(pdfs, suppressAlert, sourceLabel) {
   let newCount = 0, parsedCount = 0;
   for (const pdf of pdfs) {
     const key = crypto.createHash('sha256').update(pdf.url).digest('hex');
-    if (await isSeen(key)) continue;
+    // Skip filings already handled — EXCEPT previously-failed ones. A filing
+    // recorded as 'failed' may only have hit a transient provider outage
+    // (OCR/LLM timeout or rate limit), so retry it on the next cycle instead
+    // of leaving it stuck. This mirrors the backfill path's retry rule.
+    const ex = await pool.query('SELECT parse_status FROM nse_report_filings WHERE filing_key = $1', [key]);
+    if (ex.rows.length && ex.rows[0].parse_status !== 'failed') continue;
     const res = await processFiling(pdf, suppressAlert);
     if (res && (res.matched || res.unmatched)) newCount++;
     if (res && res.parsed) parsedCount++;
