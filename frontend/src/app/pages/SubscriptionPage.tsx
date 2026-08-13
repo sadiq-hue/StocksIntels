@@ -49,7 +49,7 @@ export function SubscriptionPage() {
   const { planId } = useParams<{ planId: string }>();
   const [searchParams] = useSearchParams();
   const period = searchParams.get("period") === "yearly" ? "yearly" : "monthly";
-  const [paymentMethod, setPaymentMethod] = useState<"paypal" | "mpesa" | "crypto" | "card">("paypal");
+  const [paymentMethod, setPaymentMethod] = useState<"mpesa" | "crypto" | "card">("card");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -57,12 +57,11 @@ export function SubscriptionPage() {
   const [pollStatus, setPollStatus] = useState<"idle" | "waiting" | "success" | "failed">("idle");
   const [selectedCrypto, setSelectedCrypto] = useState<{ ticker: string; network: string }>({ ticker: "USDT", network: "ERC20" });
 
-  // Handle PayPal & Crypto return redirects
+  // Handle Crypto & Pesapal return redirects
   useEffect(() => {
-    const paypalStatus = searchParams.get("paypal");
     const cryptoStatus = searchParams.get("crypto");
     const pesapalStatus = searchParams.get("pesapal");
-    if (paypalStatus === "success" || cryptoStatus === "success" || pesapalStatus === "success") {
+    if (cryptoStatus === "success" || pesapalStatus === "success") {
       setIsSuccess(true);
       toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
       let attempts = 0;
@@ -70,8 +69,8 @@ export function SubscriptionPage() {
         refreshUser();
         if (++attempts >= 10) clearInterval(poll);
       }, 2000);
-    } else if (paypalStatus === "failed" || paypalStatus === "cancelled" || cryptoStatus === "cancelled" || pesapalStatus === "cancelled") {
-      toast.error(paypalStatus === "cancelled" || cryptoStatus === "cancelled" || pesapalStatus === "cancelled" ? "Checkout was cancelled." : "Payment failed. Please try again.");
+    } else if (cryptoStatus === "cancelled" || pesapalStatus === "cancelled") {
+      toast.error("Checkout was cancelled.");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -192,24 +191,6 @@ export function SubscriptionPage() {
         const data = await res.json();
         if (!res.ok || !data.success) {
           throw new Error(data.error || "Failed to create card checkout");
-        }
-
-        window.location.href = data.checkoutUrl;
-      } else {
-        const res = await fetch(`${API_URL}/payments/paypal`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: price * 130,
-            plan: selectedPlan.name,
-            userId: user?.id,
-            durationMonths,
-          }),
-        });
-
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || "Failed to create PayPal checkout");
         }
 
         window.location.href = data.checkoutUrl;
@@ -343,16 +324,7 @@ export function SubscriptionPage() {
                 Payment Method
               </h2>
               
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-                <button
-                  onClick={() => setPaymentMethod("paypal")}
-                  className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
-                    paymentMethod === "paypal" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-muted hover:border-border"
-                  }`}
-                >
-                  <CreditCard className={`w-6 h-6 ${paymentMethod === "paypal" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
-                  <span className={`text-sm font-bold ${paymentMethod === "paypal" ? "text-[#0D7490]" : "text-muted-foreground"}`}>PayPal</span>
-                </button>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
                 <button
                   onClick={() => setPaymentMethod("mpesa")}
                   className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
@@ -383,17 +355,7 @@ export function SubscriptionPage() {
               </div>
 
               <div className="space-y-4">
-                {paymentMethod === "paypal" ? (
-                  <div className="space-y-4 animate-in fade-in duration-300">
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                      <p className="text-[11px] text-blue-800 leading-relaxed font-medium">
-                        1. You will be redirected to PayPal&apos;s secure checkout.<br />
-                        2. Log in or pay with your card via PayPal.<br />
-                        3. Your subscription activates instantly upon confirmation.
-                      </p>
-                    </div>
-                  </div>
-                ) : paymentMethod === "mpesa" ? (
+                {paymentMethod === "mpesa" ? (
                   <div className="space-y-4 animate-in fade-in duration-300">
                     <div>
                       <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">M-Pesa Phone Number</label>

@@ -9817,8 +9817,10 @@ app.get('/api/payments/plans', async (req, res) => {
 });
 
 // --- PayPal Payment Routes ---
-// Convert USD to KES for display, but charge in USD via PayPal
-
+// DISABLED: PayPal removed from the subscription flow.
+// The routes below are wrapped in a block comment; re-enable by removing the
+// closing `*/` marker placed after the paypal-webhook route.
+/*
 app.post('/api/payments/paypal', async (req, res) => {
   try {
     const { amount, plan, userId, durationMonths } = req.body;
@@ -9979,12 +9981,14 @@ app.post('/api/payments/paypal-webhook', async (req, res) => {
         );
       }
     }
-    res.json({ received: true });
-  } catch (error) {
-    console.error('PayPal webhook error:', error.message);
-    res.json({ received: true });
+      res.json({ received: true });
+    } catch (error) {
+      console.error('PayPal webhook error:', error.message);
+      res.json({ received: true });
+    }
   }
 });
+*/
 
 // --- Crypto (NowPayments) Checkout ---
 app.post('/api/payments/crypto', async (req, res) => {
