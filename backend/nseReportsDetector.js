@@ -152,7 +152,9 @@ function isAudited(filename) {
 // the filename/slug (e.g. AfricanFinancials "ir-q3" or NSE "Q3").
 function inferPeriodType(filename) {
   const f = filename.toLowerCase();
-  if (/\bq[1-4]\b/.test(f) || /\b(interim|half|hy|h1|h2)\b/.test(f)) return 'quarterly';
+  // Interim cues: quarter labels, half-year, and X-month periods (NSE filenames
+  // often hyphenate, e.g. "Six-Months", "Six-Month", "three-months", "9-months").
+  if (/\bq[1-4]\b|\b(interim|half|hy|h1|h2)\b|(?:three|six|nine|3|6|9)[-\s]?months?/.test(f)) return 'quarterly';
   return 'annual';
 }
 
@@ -555,11 +557,19 @@ async function processFiling(pdf, suppressAlert) {
   // awaiting admin approval). Rows left in a 'completed' state with an error_message or empty
   // parsed_data (e.g. transient LLM-quota failures during a bulk seed) are re-processed so the
   // detector self-heals broken periods on each cycle.
+  // Matching is period-type-agnostic and tolerant of ±15 day date drift: the detector derives
+  // period_end_date/period_type from the filename (e.g. 2023-06-30 + 'annual') while seed rows
+  // may hold 2023-06-29 + 'quarterly' for the SAME report — an exact match would miss those and
+  // create duplicate statements.
+  const coveredMatch =
+    `SELECT 1 FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id
+     WHERE s.ticker = $1 AND fs.status IN ('completed','pending_review')
+       AND (fs.error_message IS NULL OR fs.error_message = '') AND fs.parsed_data IS NOT NULL
+       AND (($2::date IS NULL AND fs.period_end_date IS NULL)
+            OR (fs.period_end_date IS NOT NULL AND $2::date IS NOT NULL AND ABS(fs.period_end_date - $2::date) <= 15))
+     LIMIT 1`;
   try {
-    const ex = await pool.query(
-      `SELECT 1 FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE s.ticker = $1 AND fs.period_end_date IS NOT DISTINCT FROM $2 AND fs.period_type IS NOT DISTINCT FROM $3 AND fs.status IN ('completed','pending_review') AND (fs.error_message IS NULL OR fs.error_message = '') AND fs.parsed_data IS NOT NULL LIMIT 1`,
-      [ticker, periodEnd, inferPeriodType(pdf.filename)]
-    );
+    const ex = await pool.query(coveredMatch, [ticker, periodEnd]);
     if (ex.rowCount) {
       console.log(`[NSE-Detector] Skip ${ticker} ${periodEnd || ''} (already completed/pending_review with data)`);
       await recordFiling({ key, company, ticker, url: pdf.url, filename: pdf.filename, periodEnd, audited, parsed: true, parseStatus: 'skipped-completed', source: pdf.source || 'nse' });
@@ -567,8 +577,8 @@ async function processFiling(pdf, suppressAlert) {
     }
     // Log (but still re-process) if a broken 'completed' row exists for this period
     const broken = await pool.query(
-      `SELECT 1 FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE s.ticker = $1 AND fs.period_end_date IS NOT DISTINCT FROM $2 AND fs.period_type IS NOT DISTINCT FROM $3 AND fs.status = 'completed' AND (fs.error_message IS NOT NULL AND fs.error_message <> '') AND fs.parsed_data IS NULL LIMIT 1`,
-      [ticker, periodEnd, inferPeriodType(pdf.filename)]
+      `SELECT 1 FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE s.ticker = $1 AND fs.status = 'completed' AND (fs.error_message IS NOT NULL AND fs.error_message <> '') AND fs.parsed_data IS NULL AND (($2::date IS NULL AND fs.period_end_date IS NULL) OR (fs.period_end_date IS NOT NULL AND $2::date IS NOT NULL AND ABS(fs.period_end_date - $2::date) <= 15)) LIMIT 1`,
+      [ticker, periodEnd]
     );
     if (broken.rowCount) console.log(`[NSE-Detector] Re-processing broken ${ticker} ${periodEnd || ''} (prior parse failed, retrying)`);
   } catch (_) { /* fall through and process */ }
