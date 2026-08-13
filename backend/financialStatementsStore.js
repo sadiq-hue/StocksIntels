@@ -115,10 +115,24 @@ async function storePdfReport({ ticker, period_type, period_end_date, file_name,
   const sid = s.rows[0].id;
   const tickerVal = ticker.toUpperCase();
 
-  // Reuse an existing row for the same period (upsert on stock_id+period_end_date+period_type)
-  // so re-parsing a previously failed/broken period self-heals instead of creating duplicates.
+  // If the same period already has a live row (completed, or pending_review with data),
+  // do not re-open it. Concurrent detection runs (e.g. during a rolling redeploy) can
+  // otherwise flip an approved statement back to 'processing'/'pending_review'.
+  const done = await pool.query(
+    `SELECT id, status, parsed_data FROM financial_statements
+     WHERE stock_id = $1 AND period_end_date IS NOT DISTINCT FROM $2 AND period_type IS NOT DISTINCT FROM $3
+       AND status IN ('completed','pending_review') AND parsed_data IS NOT NULL
+     ORDER BY id LIMIT 1`,
+    [sid, period_end_date || null, period_type || 'annual']
+  );
+  if (done.rows.length > 0) {
+    return { docId: done.rows[0].id, parsed: done.rows[0].parsed_data, status: done.rows[0].status };
+  }
+
+  // Reuse only a previously-failed/processing row for the same period (self-heal) so a
+  // broken parse is re-attempted without ever overwriting a live statement.
   const existing = await pool.query(
-    `SELECT id FROM financial_statements WHERE stock_id = $1 AND period_end_date IS NOT DISTINCT FROM $2 AND period_type IS NOT DISTINCT FROM $3 LIMIT 1`,
+    `SELECT id FROM financial_statements WHERE stock_id = $1 AND period_end_date IS NOT DISTINCT FROM $2 AND period_type IS NOT DISTINCT FROM $3 AND status IN ('failed','processing') LIMIT 1`,
     [sid, period_end_date || null, period_type || 'annual']
   );
   let docId;
