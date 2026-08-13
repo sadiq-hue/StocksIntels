@@ -216,33 +216,45 @@ async function verifyTurnstile(req, res, next) {
     console.warn('[TURNSTILE] No challenge token in request; failing OPEN (set VITE_TURNSTILE_SITE_KEY + TURNSTILE_ENFORCE=1 to enforce)');
     return next();
   }
-  try {
-    const params = new URLSearchParams();
-    params.append('secret', TURNSTILE_SECRET);
-    params.append('response', token);
-    const remoteip = getClientIp(req);
-    if (remoteip) params.append('remoteip', remoteip);
-    const { data } = await axios.post('https://challenges.cloudflare.com/turnstile/v0/siteverify', params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      timeout: 10000,
-    });
-    if (!data.success) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const params = new URLSearchParams();
+      params.append('secret', TURNSTILE_SECRET);
+      params.append('response', token);
+      const remoteip = getClientIp(req);
+      if (remoteip) params.append('remoteip', remoteip);
+      const { data } = await axios.post('https://challenges.cloudflare.com/turnstile/v0/siteverify', params, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 15000,
+      });
+      if (data.success) return next();
+      // Cloudflare reached and rejected the token (invalid/expired/duplicate).
       if (enforce) {
         console.error('[TURNSTILE] Verification failed:', JSON.stringify(data['error-codes'] || data));
         return res.status(403).json({ error: 'Turnstile verification failed' });
       }
       console.warn('[TURNSTILE] Verification failed, failing OPEN:', JSON.stringify(data['error-codes'] || data));
       return next();
+    } catch (err) {
+      if (err.response) {
+        // Cloudflare responded with an HTTP error (4xx/5xx) — treat as rejected.
+        if (enforce) {
+          console.error('[TURNSTILE] Verification HTTP error:', err.response.status, JSON.stringify(err.response.data));
+          return res.status(403).json({ error: 'Turnstile verification failed' });
+        }
+        console.warn('[TURNSTILE] Verification HTTP error, failing OPEN:', err.response.status);
+        return next();
+      }
+      lastErr = err;
+      if (attempt < 2) await new Promise(r => setTimeout(r, 250));
     }
-    next();
-  } catch (err) {
-    if (enforce) {
-      console.error('[TURNSTILE] Verification error:', err.message);
-      return res.status(403).json({ error: 'Turnstile verification unavailable' });
-    }
-    console.warn('[TURNSTILE] Verification error, failing OPEN:', err.message);
-    return next();
   }
+  // Network-level failure (DNS/TLS/timeout/egress) even after a retry: the
+  // CAPTCHA service being unreachable must not lock every user out of login —
+  // fail open and alert loudly (real token rejections above still block).
+  console.error('[TURNSTILE] siteverify unreachable (retried), failing OPEN:', lastErr && lastErr.message);
+  return next();
 }
 
 // ── Admin subdomain: serve admin.html BEFORE static/SPA fallback ──
