@@ -123,11 +123,11 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com", "https://s3.tradingview.com", "https://*.tradingview.com", "https://challenges.cloudflare.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://cdnjs.cloudflare.com", "https://s3.tradingview.com", "https://*.tradingview.com", "https://challenges.cloudflare.com", "https://static.cloudflareinsights.com"],
       scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://s3.tradingview.com"],
       imgSrc: ["'self'", "data:", "https:", "https://*.tradingview.com"],
-      connectSrc: ["'self'", "https:", "wss://*.tradingview.com", "https://*.tradingview.com", "https://challenges.cloudflare.com"],
+      connectSrc: ["'self'", "https:", "wss://*.tradingview.com", "https://*.tradingview.com", "https://challenges.cloudflare.com", "https://static.cloudflareinsights.com"],
       frameSrc: ["'self'", "https://*.tradingview.com", "https://challenges.cloudflare.com"],
       workerSrc: ["'self'", "https://*.tradingview.com", "blob:"],
       mediaSrc: ["'self'", "https://*.tradingview.com"],
@@ -203,8 +203,19 @@ try {
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET_KEY;
 async function verifyTurnstile(req, res, next) {
   if (!TURNSTILE_SECRET) return next();
+  // Turnstile is an anti-bot gate, NOT the authentication itself. If it is not
+  // wired end-to-end (secret set but the frontend build missing
+  // VITE_TURNSTILE_SITE_KEY -> no widget -> no token, or the challenge service
+  // unreachable), hard-blocking locks EVERY user out of login/registration.
+  // So enforcement is opt-in via TURNSTILE_ENFORCE=1; until the site key and
+  // secret are wired together we log loudly and fail open instead of 403ing.
+  const enforce = process.env.TURNSTILE_ENFORCE === '1';
   const token = req.body?.['cf-turnstile-response'];
-  if (!token) return res.status(403).json({ error: 'Turnstile challenge required' });
+  if (!token) {
+    if (enforce) return res.status(403).json({ error: 'Turnstile challenge required' });
+    console.warn('[TURNSTILE] No challenge token in request; failing OPEN (set VITE_TURNSTILE_SITE_KEY + TURNSTILE_ENFORCE=1 to enforce)');
+    return next();
+  }
   try {
     const params = new URLSearchParams();
     params.append('secret', TURNSTILE_SECRET);
@@ -216,13 +227,21 @@ async function verifyTurnstile(req, res, next) {
       timeout: 10000,
     });
     if (!data.success) {
-      console.error('[TURNSTILE] Verification failed:', JSON.stringify(data['error-codes'] || data));
-      return res.status(403).json({ error: 'Turnstile verification failed' });
+      if (enforce) {
+        console.error('[TURNSTILE] Verification failed:', JSON.stringify(data['error-codes'] || data));
+        return res.status(403).json({ error: 'Turnstile verification failed' });
+      }
+      console.warn('[TURNSTILE] Verification failed, failing OPEN:', JSON.stringify(data['error-codes'] || data));
+      return next();
     }
     next();
   } catch (err) {
-    console.error('[TURNSTILE] Verification error:', err.message);
-    return res.status(403).json({ error: 'Turnstile verification unavailable' });
+    if (enforce) {
+      console.error('[TURNSTILE] Verification error:', err.message);
+      return res.status(403).json({ error: 'Turnstile verification unavailable' });
+    }
+    console.warn('[TURNSTILE] Verification error, failing OPEN:', err.message);
+    return next();
   }
 }
 
