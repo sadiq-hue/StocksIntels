@@ -4783,9 +4783,26 @@ app.get('/api/trades/:userId', async (req, res) => {
   }
 });
 
+// Verify the authenticated user owns a row in the given table (admins bypass).
+function requireResourceOwner(table, idParam = 'id') {
+  return async (req, res, next) => {
+    try {
+      const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
+      const { rows } = await pool.query(`SELECT user_id FROM ${table} WHERE id = $1`, [req.params[idParam]]);
+      if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+      if (!isAdmin && String(rows[0].user_id) !== String(req.user?.id)) {
+        return res.status(403).json({ error: 'Access denied.', code: 'FORBIDDEN' });
+      }
+      next();
+    } catch (error) {
+      res.status(500).json({ error: 'An unexpected error occurred' });
+    }
+  };
+}
+
 // --- Broker Routes ---
 // Unified broker-connections API (used by frontend)
-app.get('/api/broker-connections', async (req, res) => {
+app.get('/api/broker-connections', authenticateToken, requireOwnership, async (req, res) => {
   try {
     const userId = req.query.userId;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
@@ -4797,7 +4814,7 @@ app.get('/api/broker-connections', async (req, res) => {
   }
 });
 
-app.post('/api/broker-connections', async (req, res) => {
+app.post('/api/broker-connections', authenticateToken, requireOwnership, async (req, res) => {
   try {
     const { userId, brokerType, accountName, apiKey, apiSecret, config } = req.body;
     if (!userId || !brokerType || !accountName) {
@@ -4875,7 +4892,7 @@ function parseBrokerEmail(emailText) {
   return result;
 }
 
-app.post('/api/broker-connections/parse-email', async (req, res) => {
+app.post('/api/broker-connections/parse-email', authenticateToken, async (req, res) => {
   try {
     const { emailText } = req.body;
     if (!emailText || typeof emailText !== 'string' || emailText.trim().length < 20) {
@@ -4888,7 +4905,7 @@ app.post('/api/broker-connections/parse-email', async (req, res) => {
   }
 });
 
-app.post('/api/broker-connections/validate', async (req, res) => {
+app.post('/api/broker-connections/validate', authenticateToken, async (req, res) => {
   try {
     const { brokerType, apiKey, apiSecret, config } = req.body;
     if (!brokerType) return res.status(400).json({ error: 'brokerType is required' });
@@ -4900,7 +4917,7 @@ app.post('/api/broker-connections/validate', async (req, res) => {
   }
 });
 
-app.post('/api/broker-connections/:id/sync', async (req, res) => {
+app.post('/api/broker-connections/:id/sync', authenticateToken, requireResourceOwner('broker_connections'), async (req, res) => {
   try {
     const result = await brokerService.syncConnection(req.params.id);
     // Emit real-time update to the owning user
@@ -4918,7 +4935,7 @@ app.post('/api/broker-connections/:id/sync', async (req, res) => {
   }
 });
 
-app.get('/api/broker-connections/:id/snapshots', async (req, res) => {
+app.get('/api/broker-connections/:id/snapshots', authenticateToken, requireResourceOwner('broker_connections'), async (req, res) => {
   try {
     const { pool } = require('./db');
     const limit = parseInt(req.query.limit) || 10;
@@ -4943,7 +4960,7 @@ app.get('/api/broker-connections/:id/snapshots', async (req, res) => {
   }
 });
 
-app.delete('/api/broker-connections/:id', async (req, res) => {
+app.delete('/api/broker-connections/:id', authenticateToken, requireOwnership, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.query.userId;
@@ -5165,12 +5182,8 @@ app.post('/api/chat/send', async (req, res) => {
 });
 
 // --- Notification Routes ---
-app.get('/api/notifications/:userId', async (req, res) => {
+app.get('/api/notifications/:userId', authenticateToken, requireOwnership, async (req, res) => {
   try {
-    const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
-    if (!isAdmin && String(req.user?.id) !== String(req.params.userId)) {
-      return res.status(403).json({ error: 'Access denied.', code: 'FORBIDDEN' });
-    }
     const userId = req.params.userId;
     const limit = parseInt(req.query.limit) || 50;
     const result = await pool.query(
@@ -5183,7 +5196,7 @@ app.get('/api/notifications/:userId', async (req, res) => {
   }
 });
 
-app.post('/api/notifications/:id/read', async (req, res) => {
+app.post('/api/notifications/:id/read', authenticateToken, async (req, res) => {
   try {
     // Only allow marking your own notification as read (admins may mark any).
     const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
@@ -5199,7 +5212,7 @@ app.post('/api/notifications/:id/read', async (req, res) => {
   }
 });
 
-app.post('/api/notifications/read-all', async (req, res) => {
+app.post('/api/notifications/read-all', authenticateToken, requireOwnership, async (req, res) => {
   try {
     // Ownership: use the authenticated user unless an admin explicitly targets another.
     const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
@@ -8827,7 +8840,7 @@ app.get('/api/market/pulse', async (req, res) => {
 
 
 
-app.get('/api/holdings', async (req, res) => {
+app.get('/api/holdings', authenticateToken, requireOwnership, async (req, res) => {
   try {
     const userId = req.query.userId;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
@@ -8889,7 +8902,7 @@ app.get('/api/holdings', async (req, res) => {
   }
 });
 
-app.post('/api/holdings', async (req, res) => {
+app.post('/api/holdings', authenticateToken, requireOwnership, async (req, res) => {
   try {
     const { userId, ticker, name, shares, avgCost, sector, market } = req.body;
     if (!userId || !ticker || !shares || !avgCost) {
@@ -8910,7 +8923,7 @@ app.post('/api/holdings', async (req, res) => {
   }
 });
 
-app.put('/api/holdings/:id', async (req, res) => {
+app.put('/api/holdings/:id', authenticateToken, requireResourceOwner('portfolio_holdings'), async (req, res) => {
   try {
     const { ticker, name, shares, avgCost, sector, market } = req.body;
     const result = await pool.query(
@@ -8926,7 +8939,7 @@ app.put('/api/holdings/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/holdings/:id', async (req, res) => {
+app.delete('/api/holdings/:id', authenticateToken, requireResourceOwner('portfolio_holdings'), async (req, res) => {
   try {
     const result = await pool.query('DELETE FROM portfolio_holdings WHERE id = $1 RETURNING id', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Holding not found' });
@@ -8937,7 +8950,7 @@ app.delete('/api/holdings/:id', async (req, res) => {
   }
 });
 
-app.post('/api/holdings/bulk', async (req, res) => {
+app.post('/api/holdings/bulk', authenticateToken, requireOwnership, async (req, res) => {
   try {
     const { userId, holdings } = req.body;
     if (!userId || !holdings || !Array.isArray(holdings) || holdings.length === 0) {
@@ -8963,14 +8976,11 @@ app.post('/api/holdings/bulk', async (req, res) => {
   }
 });
 
-app.get('/api/notifications', async (req, res) => {
+app.get('/api/notifications', authenticateToken, requireOwnership, async (req, res) => {
   try {
     // Ownership: resolve to the authenticated user (admins may query any id).
     const requestedUserId = req.query.userId;
     const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
-    if (!isAdmin && requestedUserId && String(req.user?.id) !== String(requestedUserId)) {
-      return res.status(403).json({ error: 'Access denied.', code: 'FORBIDDEN' });
-    }
     const userId = requestedUserId || req.user?.id;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
     const result = await pool.query(
