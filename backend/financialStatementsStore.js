@@ -129,10 +129,13 @@ async function storePdfReport({ ticker, period_type, period_end_date, file_name,
     return { docId: done.rows[0].id, parsed: done.rows[0].parsed_data, status: done.rows[0].status };
   }
 
-  // Reuse only a previously-failed/processing row for the same period (self-heal) so a
-  // broken parse is re-attempted without ever overwriting a live statement.
+  // Reuse only rows that are NOT live: previously-failed/processing rows AND broken
+  // 'completed' rows (error_message set / no parsed_data), so a failed parse is
+  // re-attempted without ever overwriting a live statement.
   const existing = await pool.query(
-    `SELECT id FROM financial_statements WHERE stock_id = $1 AND period_end_date IS NOT DISTINCT FROM $2 AND period_type IS NOT DISTINCT FROM $3 AND status IN ('failed','processing') LIMIT 1`,
+    `SELECT id FROM financial_statements WHERE stock_id = $1 AND period_end_date IS NOT DISTINCT FROM $2 AND period_type IS NOT DISTINCT FROM $3
+       AND NOT (status IN ('completed','pending_review') AND parsed_data IS NOT NULL)
+     LIMIT 1`,
     [sid, period_end_date || null, period_type || 'annual']
   );
   let docId;
