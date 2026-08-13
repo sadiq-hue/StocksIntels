@@ -16,8 +16,10 @@ const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
 export function useTurnstile() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [token, setToken] = useState('');
   const [loaded, setLoaded] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
     if (!SITE_KEY) return;
@@ -29,8 +31,24 @@ export function useTurnstile() {
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
     script.async = true;
     script.onload = () => setLoaded(true);
+    script.onerror = () => setUnavailable(true);
     document.head.appendChild(script);
   }, []);
+
+  // Best-effort: if no token within 10s, stop gating the submit button so the
+  // CAPTCHA being unavailable never blocks login (backend fails open too).
+  useEffect(() => {
+    if (!SITE_KEY) return;
+    watchdogRef.current = setTimeout(() => setUnavailable(true), 10000);
+    return () => { if (watchdogRef.current) clearTimeout(watchdogRef.current); };
+  }, []);
+
+  useEffect(() => {
+    if (token) {
+      setUnavailable(false);
+      if (watchdogRef.current) { clearTimeout(watchdogRef.current); watchdogRef.current = null; }
+    }
+  }, [token]);
 
   const renderWidget = useCallback(() => {
     if (!SITE_KEY || !loaded || !containerRef.current || !window.turnstile) return;
@@ -72,5 +90,5 @@ export function useTurnstile() {
     }
   }, []);
 
-  return { containerRef, token, reset, enabled: !!SITE_KEY };
+  return { containerRef, token, reset, enabled: !!SITE_KEY, unavailable };
 }

@@ -203,17 +203,18 @@ try {
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET_KEY;
 async function verifyTurnstile(req, res, next) {
   if (!TURNSTILE_SECRET) return next();
-  // Turnstile is an anti-bot gate, NOT the authentication itself. If it is not
-  // wired end-to-end (secret set but the frontend build missing
-  // VITE_TURNSTILE_SITE_KEY -> no widget -> no token, or the challenge service
-  // unreachable), hard-blocking locks EVERY user out of login/registration.
-  // So enforcement is opt-in via TURNSTILE_ENFORCE=1; until the site key and
-  // secret are wired together we log loudly and fail open instead of 403ing.
+  // Turnstile is best-effort anti-bot friction, NOT the authentication itself.
+  // The client may legitimately submit without a token when the widget cannot
+  // load (Cloudflare unreachable from the user's network), and Railway egress
+  // to Cloudflare's siteverify API is intermittently unavailable. So we never
+  // hard-lock login on CAPTCHA availability: missing token and siteverify
+  // outages fail OPEN (logged loudly); only a token that Cloudflare actively
+  // rejects is blocked (invalid/expired/duplicate) when the service is up.
   const enforce = process.env.TURNSTILE_ENFORCE === '1';
   const token = req.body?.['cf-turnstile-response'];
   if (!token) {
-    if (enforce) return res.status(403).json({ error: 'Turnstile challenge required' });
-    console.warn('[TURNSTILE] No challenge token in request; failing OPEN (set VITE_TURNSTILE_SITE_KEY + TURNSTILE_ENFORCE=1 to enforce)');
+    if (enforce) console.warn('[TURNSTILE] No challenge token (enforce=1) but failing OPEN to keep login available');
+    else console.warn('[TURNSTILE] No challenge token in request; failing OPEN');
     return next();
   }
   let lastErr = null;

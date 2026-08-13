@@ -128,7 +128,7 @@ export function LoginPage() {
   const [countries, setCountries] = useState<{ code: string; name: string; flag: string }[]>([]);
   const [countryOpen, setCountryOpen] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
-  const { containerRef: turnstileRef, token: turnstileToken, reset: resetTurnstile, enabled: turnstileEnabled } = useTurnstile();
+  const { containerRef: turnstileRef, token: turnstileToken, reset: resetTurnstile, enabled: turnstileEnabled, unavailable: turnstileUnavailable } = useTurnstile();
 
   useEffect(() => {
     fetch("/api/countries")
@@ -384,7 +384,9 @@ export function LoginPage() {
                   <div className="flex flex-col items-center gap-1">
                     <div ref={turnstileRef} />
                     {!turnstileToken && (
-                      <p className="text-[11px] text-muted-foreground/70">Complete the security check to enable Sign In</p>
+                      <p className="text-[11px] text-muted-foreground/70">
+                        {turnstileUnavailable ? "Security check unavailable — continuing without it" : "Complete the security check to enable Sign In"}
+                      </p>
                     )}
                   </div>
                 )}
@@ -420,7 +422,7 @@ export function LoginPage() {
                             </button>
                           </div>
                         </div>
-                        <Button type="submit" disabled={isLoading || !email || !password || (turnstileEnabled && !turnstileToken)}
+                        <Button type="submit" disabled={isLoading || !email || !password || (turnstileEnabled && !turnstileToken && !turnstileUnavailable)}
                           className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                           {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending OTP...</span>
                             : <span className="flex items-center gap-2">Sign In <ArrowRight className="w-4 h-4" /></span>}
@@ -471,7 +473,7 @@ export function LoginPage() {
                       </>
                     )}
                     {mode === "register" && regStage === "form" && (
-                      <Button type="submit" disabled={isLoading || !email || (turnstileEnabled && !turnstileToken)}
+                      <Button type="submit" disabled={isLoading || !email || (turnstileEnabled && !turnstileToken && !turnstileUnavailable)}
                         className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                         {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
                           : <span className="flex items-center gap-2">Send Verification Code <ArrowRight className="w-4 h-4" /></span>}
@@ -602,7 +604,7 @@ export function LoginPage() {
                         {countdown > 0 && <p className="text-xs text-muted-foreground text-center mt-1">Code expires in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}</p>}
                       </div>
                     )}
-                    <Button type="submit" disabled={isLoading || (otpStage === "send" ? !email || (turnstileEnabled && !turnstileToken) : otpCode.length < 6)}
+                    <Button type="submit" disabled={isLoading || (otpStage === "send" ? !email || (turnstileEnabled && !turnstileToken && !turnstileUnavailable) : otpCode.length < 6)}
                       className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
                       {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
                         : otpStage === "send" ? <span className="flex items-center gap-2">Send OTP <ArrowRight className="w-4 h-4" /></span>
