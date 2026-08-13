@@ -10108,38 +10108,6 @@ app.post('/api/payments/crypto-webhook', async (req, res) => {
 
 
 
-// --- TEMP DEBUG: raw Pesapal request from this environment ---
-app.get('/api/debug/pesapal-test', async (req, res) => {
-  try {
-    const axios = require('axios');
-    const key = process.env.PESAPAL_CONSUMER_KEY;
-    const secret = process.env.PESAPAL_CONSUMER_SECRET;
-    const base = 'https://pay.pesapal.com/v3/api';
-    const t = await axios.post(base + '/Auth/RequestToken', { consumer_key: key, consumer_secret: secret });
-    const tok = t.data.token;
-    const ref = 'DEBUG-' + Date.now();
-    const body = {
-      amount: '9.90',
-      currency: 'USD',
-      description: 'StocksIntels Starter Monthly',
-      callback_url: 'https://stocksintels.com/subscribe/starter?pesapal=success&ref=' + ref,
-      notification_id: '3bc64785-6723-4efc-9a1b-da08ca117519',
-      id: ref,
-      billing_address: { email_address: '', phone_number: '', country_code: 'KE', first_name: 'Customer', last_name: 'Customer' },
-    };
-    try {
-      const r = await axios.post(base + '/Transactions/SubmitOrderRequest', body, {
-        headers: { Authorization: 'Bearer ' + tok, Accept: 'application/json', 'Content-Type': 'application/json' },
-      });
-      res.json({ ok: true, data: r.data });
-    } catch (e) {
-      res.status(500).json({ ok: false, error: e.response?.data || e.message });
-    }
-  } catch (e) {
-    res.status(500).json({ ok: false, authError: e.message });
-  }
-});
-
 // --- Pesapal Checkout (cards + M-Pesa, Kenya, no business license) ---
 app.post('/api/payments/pesapal', async (req, res) => {
   try {

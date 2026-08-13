@@ -68,7 +68,6 @@ async function createOrder({ amount, currency = 'USD', reference, plan, duration
     id: reference,
     billing_address: { email_address: '', phone_number: '', country_code: 'KE', first_name: 'Customer', last_name: 'Customer' },
   };
-  console.log('[PESAPAL-DEBUG] BASE=' + BASE + ' FRONTEND_URL=' + process.env.FRONTEND_URL + ' BODY=' + JSON.stringify(body) + ' TOKENHEAD=' + String(token).slice(0, 20));
   const res = await axios.post(`${BASE}/Transactions/SubmitOrderRequest`, body, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
   });
