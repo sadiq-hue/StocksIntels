@@ -1850,15 +1850,20 @@ window.fetch = async (input, init) => {
     }
   }
   const res = await _origFetch(input, init);
-  // Auto-redirect to login on 401 for admin API calls
+  // Auto-redirect to login on 401 for admin API calls, but only for genuine
+  // auth failures. Transient DB unavailability returns 503 AUTH_DB_UNAVAILABLE
+  // and must NOT log the admin out.
   if (res.status === 401 && typeof input === 'string' && input.includes('/api/admin/')) {
-    localStorage.removeItem('stockintel_token');
-    localStorage.removeItem('stockintel_user');
-    const loginScreen = document.getElementById('loginScreen');
-    if (loginScreen) {
-      loginScreen.classList.remove('hidden');
-      document.getElementById('loadingScreen')?.classList.add('hidden');
-      showAdminLayout(false);
+    const authCode = await res.clone().json().then(d => d.code).catch(() => '');
+    if (['NO_TOKEN', 'TOKEN_EXPIRED', 'INVALID_TOKEN', 'USER_NOT_FOUND'].includes(authCode)) {
+      localStorage.removeItem('stockintel_token');
+      localStorage.removeItem('stockintel_user');
+      const loginScreen = document.getElementById('loginScreen');
+      if (loginScreen) {
+        loginScreen.classList.remove('hidden');
+        document.getElementById('loadingScreen')?.classList.add('hidden');
+        showAdminLayout(false);
+      }
     }
   }
   return res;
@@ -5150,11 +5155,15 @@ async function handleVerifyOtp() {
   btn.disabled = true; btn.textContent = 'Verifying...';
   errorEl.classList.add('hidden');
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     const res = await fetch('/api/admin/verify-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: _loginOtpEmail, code })
+      body: JSON.stringify({ email: _loginOtpEmail, code }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     const data = await res.json();
     if (!res.ok) {
       showLoginError(data.error || 'Verification failed');

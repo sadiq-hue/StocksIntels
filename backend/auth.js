@@ -69,15 +69,23 @@ function clearRefreshCookie(res) {
 }
 
 async function authenticateToken(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1] || req.headers['x-auth-token'] || req.cookies?.access_token;
+  if (!token) {
+    return res.status(401).json({ error: 'Access denied. No token provided.', code: 'NO_TOKEN' });
+  }
+  if (!JWT_SECRET) {
+    return res.status(500).json({ error: 'Server authentication misconfigured.', code: 'NO_JWT_SECRET' });
+  }
+  let decoded;
   try {
-    const token = req.headers.authorization?.split(' ')[1] || req.headers['x-auth-token'] || req.cookies?.access_token;
-    if (!token) {
-      return res.status(401).json({ error: 'Access denied. No token provided.', code: 'NO_TOKEN' });
+    decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expired.', code: 'TOKEN_EXPIRED' });
     }
-    if (!JWT_SECRET) {
-      return res.status(500).json({ error: 'Server authentication misconfigured.', code: 'NO_JWT_SECRET' });
-    }
-    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+    return res.status(401).json({ error: 'Invalid token.', code: 'INVALID_TOKEN' });
+  }
+  try {
     const userResult = await pool.query(
       'SELECT id, full_name, email, role, trader_type, is_verified, subscription_tier, subscription_status, trial_start_date, subscription_end_date FROM users WHERE id = $1',
       [decoded.userId]
@@ -88,14 +96,8 @@ async function authenticateToken(req, res, next) {
     req.user = userResult.rows[0];
     next();
   } catch (err) {
-    if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: 'Token expired.', code: 'TOKEN_EXPIRED' });
-    }
-    if (err.name === 'JsonWebTokenError') {
-      return res.status(401).json({ error: 'Invalid token.', code: 'INVALID_TOKEN' });
-    }
-    console.error('[AUTH] Token verification error:', err.message);
-    return res.status(401).json({ error: 'Authentication failed.', code: 'AUTH_FAILED' });
+    console.error('[AUTH] DB error during user lookup:', err.message);
+    return res.status(503).json({ error: 'Database temporarily unavailable. Please retry.', code: 'AUTH_DB_UNAVAILABLE' });
   }
 }
 
