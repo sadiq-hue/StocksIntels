@@ -1691,6 +1691,22 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         </div>
       </div>
 
+      <!-- Engine: Stock / ticker search -->
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="position:relative;flex:1;min-width:220px">
+            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:#9ca3af" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input id="engineStockSearch" class="input-field" placeholder="Search stock or ticker (e.g. AAPL, KCB, SAF)..."
+                   style="width:100%;padding-left:32px;font-size:13px" autocomplete="off"
+                   onkeydown="if(event.key==='Enter')searchEngineStock()" oninput="engineStockSuggest()">
+            <div id="engineStockSuggestions" style="position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.08);z-index:50;display:none;max-height:280px;overflow-y:auto"></div>
+          </div>
+          <button class="btn btn-primary" style="font-size:12px;padding:7px 16px" onclick="searchEngineStock()">Search</button>
+          <button class="btn btn-secondary" style="font-size:12px;padding:7px 12px" onclick="document.getElementById('engineStockSearch').value='';document.getElementById('engineStockResults').innerHTML='';document.getElementById('engineStockSuggestions').style.display='none'">Clear</button>
+        </div>
+        <div id="engineStockResults" style="margin-top:12px"></div>
+      </div>
+
       <!-- Engine sub-tab buttons -->
       <div style="display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid #e5e7eb;padding-bottom:8px">
         <button class="tab-btn active" data-engtab="health" onclick="switchEngTab('health')">Health</button>
@@ -5538,6 +5554,130 @@ function switchEngTab(tab) {
   if (tab === 'config') fetchEngineConfig();
   if (tab === 'audit') { engAuditPage = 0; fetchEngineAudit(); }
   if (tab === 'diagnostics') fetchDiagnostics();
+}
+
+// ── Engine: Stock / ticker search ──
+let _engineStockSuggestTimer = null;
+function engineStockSuggest() {
+  clearTimeout(_engineStockSuggestTimer);
+  _engineStockSuggestTimer = setTimeout(async () => {
+    const q = document.getElementById('engineStockSearch').value.trim();
+    const box = document.getElementById('engineStockSuggestions');
+    if (q.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    try {
+      const res = await fetch('/api/stocks/search?q=' + encodeURIComponent(q));
+      const rows = await res.json();
+      if (!Array.isArray(rows) || rows.length === 0) { box.style.display = 'none'; box.innerHTML = ''; return; }
+      box.innerHTML = rows.map(r => `
+        <div onclick="document.getElementById('engineStockSearch').value='${esc(r.ticker)}';document.getElementById('engineStockSuggestions').style.display='none';searchEngineStock()"
+             style="padding:8px 12px;font-size:12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid #f3f4f6">
+          <span style="font-weight:600;color:#111827">${esc(r.ticker)}</span>
+          <span style="color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.name || '')}</span>
+          <span style="color:#9ca3af;flex-shrink:0">${esc(r.market || '')}</span>
+        </div>`).join('');
+      box.style.display = 'block';
+    } catch { box.style.display = 'none'; }
+  }, 250);
+}
+document.addEventListener('click', (e) => {
+  const box = document.getElementById('engineStockSuggestions');
+  if (box && !e.target.closest('#engineStockSearch') && !e.target.closest('#engineStockSuggestions')) box.style.display = 'none';
+});
+
+async function searchEngineStock() {
+  const raw = document.getElementById('engineStockSearch').value.trim().toUpperCase();
+  if (!raw) return;
+  const el = document.getElementById('engineStockResults');
+  el.innerHTML = '<div style="text-align:center;padding:24px;color:#6b7280;font-size:13px">Searching...</div>';
+  try {
+    const [sigRes, fwRes] = await Promise.all([
+      fetch('/api/signal/' + encodeURIComponent(raw)),
+      fetch('/api/signals/forward-test?symbol=' + encodeURIComponent(raw) + '&limit=50'),
+    ]);
+    const sig = await sigRes.json();
+    const fw = await fwRes.json();
+    renderEngineStockResult(el, raw, sig, fw);
+  } catch {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:#dc2626;font-size:13px">Error searching stock</div>';
+  }
+}
+
+function renderEngineStockResult(el, raw, sig, fw) {
+  const s = sig && sig.found ? sig : null;
+  const preds = (fw && fw.success && Array.isArray(fw.predictions)) ? fw.predictions : [];
+  const currency = s && s.currency ? s.currency : (preds.length && preds[0].currency) ? preds[0].currency : 'USD';
+  const cSym = currency === 'KES' ? 'KES ' : '$';
+  const sigColor = s ? ({ 'Strong Buy': 'bg-emerald-100 text-emerald-700', 'Buy': 'bg-green-100 text-green-700', 'Hold': 'bg-gray-100 text-gray-600', 'Sell': 'bg-red-100 text-red-700', 'Strong Sell': 'bg-rose-100 text-rose-700' }[s.signal] || 'bg-gray-100 text-gray-600') : 'bg-gray-100 text-gray-600';
+  const monitoring = !!(s && (s.status === 'monitoring' || (s.action === 'buy' && s.entryPrice != null && s.stopLoss != null && s.target1 != null)));
+  const amt = v => (v != null && isFinite(Number(v))) ? cSym + Number(v).toFixed(2) : '—';
+
+  let html = '';
+  html += `
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <span style="font-size:16px;font-weight:700;color:#111827">${esc(raw)}</span>
+        ${s && s.name ? `<span style="font-size:12px;color:#6b7280">${esc(s.name)}</span>` : ''}
+        ${s && s.market ? `<span class="pill bg-gray-100 text-gray-600">${esc(s.market)}</span>` : ''}
+        ${s ? `<span class="pill ${sigColor}">${esc(s.signal)}</span>` : ''}
+        ${s && s.action ? `<span class="pill ${s.action === 'buy' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}">${esc(s.action).toUpperCase()}</span>` : ''}
+        ${s && s.confidence != null ? `<span style="font-size:12px;color:#6b7280">Conf ${Math.round(Number(s.confidence))}%</span>` : ''}
+        ${monitoring ? `<span class="pill bg-amber-100 text-amber-700">MONITORING</span>` : ''}
+      </div>
+      ${s ? `
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3" style="margin-bottom:10px">
+        ${s.price != null ? `<div class="stat-card"><div class="stat-value" style="color:#111827;font-size:16px">${amt(s.price)}</div><div class="stat-label">Last Price</div></div>` : ''}
+        ${s.entryPrice != null ? `<div class="stat-card"><div class="stat-value" style="color:#0d7490;font-size:16px">${amt(s.entryPrice)}</div><div class="stat-label">Entry</div></div>` : ''}
+        ${s.stopLoss != null ? `<div class="stat-card"><div class="stat-value" style="color:#dc2626;font-size:16px">${amt(s.stopLoss)}</div><div class="stat-label">Stop Loss</div></div>` : ''}
+        ${s.target1 != null ? `<div class="stat-card"><div class="stat-value" style="color:#059669;font-size:16px">${amt(s.target1)}</div><div class="stat-label">Target 1</div></div>` : ''}
+        ${s.target2 != null ? `<div class="stat-card"><div class="stat-value" style="color:#059669;font-size:16px">${amt(s.target2)}</div><div class="stat-label">Target 2</div></div>` : ''}
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:#6b7280">
+        ${s.type ? `<span>Type: ${esc(s.type)}</span>` : ''}
+        ${s.timeframe ? `<span>Timeframe: ${esc(s.timeframe)}</span>` : ''}
+        ${s.riskReward != null ? `<span>Risk/Reward: ${Number(s.riskReward).toFixed(1)}</span>` : ''}
+        ${s.positionSize ? `<span>Position Size: ${esc(String(s.positionSize))}</span>` : ''}
+        ${s.sector ? `<span>Sector: ${esc(s.sector)}</span>` : ''}
+        ${s.status === 'monitoring' ? `<span>Open Position</span>` : ''}
+      </div>
+      ${s.reason ? `<p style="font-size:12px;color:#374151;margin-top:10px;line-height:1.55;border-top:1px solid #f3f4f6;padding-top:10px">${esc(s.reason)}</p>` : ''}
+      ` : `<p style="font-size:13px;color:#6b7280">No current signal in the engine cache for ${esc(raw)}.</p>`}
+    </div>`;
+
+  html += `
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
+      <p style="font-size:13px;font-weight:600;margin-bottom:8px">Forward Test History <span style="color:#6b7280;font-weight:400">(${preds.length} shown${fw && fw.total ? ' of ' + fw.total : ''})</span></p>
+      <div style="overflow-x:auto;max-height:360px;overflow-y:auto">
+        <table style="width:100%;font-size:11px">
+          <thead><tr style="border-bottom:1px solid #e5e7eb">
+            <th style="text-align:left;padding:4px 8px;color:#6b7280">Generated</th>
+            <th style="text-align:left;padding:4px 8px;color:#6b7280">Signal</th>
+            <th style="text-align:right;padding:4px 8px;color:#6b7280">Conf</th>
+            <th style="text-align:right;padding:4px 8px;color:#6b7280">Price</th>
+            <th style="text-align:right;padding:4px 8px;color:#6b7280">Return</th>
+            <th style="text-align:center;padding:4px 8px;color:#6b7280">Result</th>
+            <th style="text-align:right;padding:4px 8px;color:#6b7280">Resolved</th>
+          </tr></thead>
+          <tbody>
+            ${preds.length === 0 ? '<tr><td colspan="7" style="text-align:center;padding:24px;color:#6b7280">No forward test predictions for this ticker</td></tr>' : preds.map(p => {
+              const pSig = p.signal;
+              const pColor = ({ 'Strong Buy': 'bg-emerald-100 text-emerald-700', 'Buy': 'bg-green-100 text-green-700', 'Hold': 'bg-gray-100 text-gray-600', 'Sell': 'bg-red-100 text-red-700', 'Strong Sell': 'bg-rose-100 text-rose-700' }[pSig] || 'bg-gray-100 text-gray-600');
+              const pSym = p.currency === 'KES' ? 'KES ' : '$';
+              return `<tr style="border-bottom:1px solid #f3f4f6">
+                <td style="padding:4px 8px;color:#6b7280;white-space:nowrap">${formatDate(p.generatedAt)}</td>
+                <td style="padding:4px 8px"><span class="pill ${pColor}">${esc(pSig)}</span></td>
+                <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.confidence != null ? Math.round(Number(p.confidence)) + '%' : '—'}</td>
+                <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.price != null ? pSym + Number(p.price).toFixed(2) : '—'}</td>
+                <td style="padding:4px 8px;text-align:right;font-weight:500;color:${p.actualReturn != null ? (p.actualReturn > 0 ? '#059669' : '#dc2626') : '#6b7280'}">${p.actualReturn != null ? (p.actualReturn > 0 ? '+' : '') + Number(p.actualReturn).toFixed(1) + '%' : '—'}</td>
+                <td style="padding:4px 8px;text-align:center">${p.resolved ? (p.correct === true ? '✓' : p.correct === false ? '✗' : '•') : '⏳'}</td>
+                <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${p.resolvedAt ? formatDate(p.resolvedAt) : '—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  el.innerHTML = html;
 }
 
 async function fetchEngineHealth() {
