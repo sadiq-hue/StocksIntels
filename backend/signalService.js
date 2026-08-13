@@ -1859,7 +1859,7 @@ function computeRelevelStop(position, currentPrice, freshStopLoss) {
 async function _loadForwardPredictionsFromDb() {
   try {
     const result = await pool.query(
-      `SELECT id, symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, bench_price, generated_at, resolved, actual_return, correct
+      `SELECT id, symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, bench_price, generated_at, resolved, actual_return, correct, resolved_at
        FROM forward_predictions WHERE generated_at > NOW() - $1::interval ORDER BY generated_at`,
       [`${SIGNAL_WINDOW_DAYS} days`]
     );
@@ -1876,6 +1876,7 @@ async function _loadForwardPredictionsFromDb() {
         benchPrice: row.bench_price != null ? Number(row.bench_price) : null,
         generatedAt: new Date(row.generated_at).getTime(),
         resolved: !!row.resolved, actualReturn: Number(row.actual_return), correct: row.correct,
+        resolvedAt: row.resolved_at ? new Date(row.resolved_at).getTime() : null,
       });
     }
   } catch (e) { /* table may not exist yet */ }
@@ -1904,6 +1905,26 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
     );
     if (open) return;
   }
+  // DB-backed dedup backstop: the in-memory store above can be empty during a
+  // startup race (it loads asynchronously while the first signal cycle already
+  // runs at +100ms), so also guard against an unresolved row with the same
+  // thesis still in forward_predictions. Without this, a restart between two
+  // hourly cycles re-emits the same prediction and creates a duplicate (e.g.
+  // CGEN Aug 10: identical rows id 12422/12428).
+  try {
+    const dup = await pool.query(
+      `SELECT id FROM forward_predictions
+       WHERE symbol = $1 AND action = $2 AND resolved = FALSE
+         AND generated_at > NOW() - $3::interval
+         AND ($2 = 'sell' OR (price > 0 AND $4 > 0
+              AND ABS(price - $4) / $4 < 0.02
+              AND target1 IS NOT NULL AND $5 IS NOT NULL
+              AND ABS(target1 - $5) / $5 < 0.05))
+       LIMIT 1`,
+      [symbol, signalObjAction, `${SIGNAL_WINDOW_DAYS} days`, price, target1]
+    );
+    if (dup.rows.length) return;
+  } catch (e) { /* persistence best-effort */ }
   // Benchmark snapshot for sell predictions so the exit thesis can be judged
   // relative to the market later (best-effort; null → absolute evaluation).
   let benchPrice = null;
