@@ -43,12 +43,21 @@ export function useTurnstile() {
       'expired-callback': () => setToken(''),
       'error-callback': () => setToken(''),
       theme: 'auto',
-      appearance: 'interaction-only',
+      appearance: 'always',
     });
   }, [loaded]);
 
   useEffect(() => {
-    renderWidget();
+    // window.turnstile can lag the script's onload event; retry briefly so the
+    // widget always renders. Without it the submit button (gated on the token)
+    // stays disabled forever when the challenge never appears.
+    let attempts = 0;
+    const mount = () => {
+      if (!containerRef.current) return;
+      if (window.turnstile) { renderWidget(); return; }
+      if (attempts++ < 20) setTimeout(mount, 250);
+    };
+    mount();
     return () => {
       if (widgetIdRef.current && window.turnstile) {
         try { window.turnstile.remove(widgetIdRef.current); } catch {}

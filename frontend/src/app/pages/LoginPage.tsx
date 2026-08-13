@@ -381,8 +381,11 @@ export function LoginPage() {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 {turnstileEnabled && (
-                  <div className="flex justify-center">
+                  <div className="flex flex-col items-center gap-1">
                     <div ref={turnstileRef} />
+                    {!turnstileToken && (
+                      <p className="text-[11px] text-muted-foreground/70">Complete the security check to enable Sign In</p>
+                    )}
                   </div>
                 )}
                 {(mode === "login" || mode === "register") && (
