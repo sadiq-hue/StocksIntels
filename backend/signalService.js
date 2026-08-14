@@ -1836,7 +1836,9 @@ function computeRelevelStop(position, currentPrice, freshStopLoss) {
   // RELEVEL_BREAKEVEN_BUFFER_ATR_FRACTION of the fresh ATR stop distance, and it
   // also respects the MIN_STOP_PCT floor — a calm stock's stop is never tightened
   // closer to entry than the floor, so monitoring can't undo the initial stop
-  // width that gave it a fair chance.
+  // width that gave it a fair chance. (The floor exists because a pre-floor
+  // build once ratcheted PAAS's stop from -10% to -1.2% and a routine pullback
+  // stopped out a 6-day Long Term Value position at 47.47 on 2026-08-13.)
   const freshStopDistancePct = freshStopLoss != null && currentPrice > 0 && freshStopLoss < currentPrice
     ? ((currentPrice - freshStopLoss) / currentPrice) * 100
     : 0;

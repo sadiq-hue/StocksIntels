@@ -27,8 +27,9 @@ export interface NotificationPrefs {
 
 // Read the user's notification preferences (set on the Settings page).
 // Mapping: signal -> tradingSignals, message -> chatMessages, news ->
-// marketNews, portfolio -> portfolioUpdates, price alert -> priceAlerts,
-// everything else (info/nse_report) is always shown.
+// marketNews, portfolio -> portfolioUpdates, price alert -> priceAlerts.
+// nse_report is admin-operational (detector approve/manual-upload alerts) and is
+// always filtered out of the user bell; info/unknown types always show.
 export function getNotificationPrefs(): NotificationPrefs {
   try {
     const saved = localStorage.getItem("notificationSettings");
@@ -45,7 +46,8 @@ export function shouldShowNotification(n: { type: string }): boolean {
     case "news": return prefs.marketNews;
     case "portfolio": return prefs.portfolioUpdates;
     case "price_alert": return prefs.priceAlerts;
-    default: return true; // info, nse_report, unknown types always show
+    case "nse_report": return false; // admin-use-only; hidden from user bell
+    default: return true; // info, unknown types always show
   }
 }
 

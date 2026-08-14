@@ -9015,16 +9015,19 @@ app.get('/api/notifications', authenticateToken, requireOwnership, async (req, r
     const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
     const userId = requestedUserId || req.user?.id;
     if (!userId) return res.status(400).json({ error: 'userId is required' });
+    // 'nse_report' notifications are detector output for admin operations
+    // (approve/reject auto-parsed filings, manual upload of unparseable PDFs).
+    // They are admin-use-only, so they are excluded from the user-facing bell.
     const result = await pool.query(
       `SELECT id, title, body, type, read, link, created_at
-       FROM notifications WHERE user_id = $1
+       FROM notifications WHERE user_id = $1 AND type <> 'nse_report'
        ORDER BY created_at DESC LIMIT 50`,
       [userId]
     );
     // Unread must be a real COUNT over all rows, not just the first 50 —
     // otherwise users with more than 50 notifications see an undercount.
     const unreadRes = await pool.query(
-      'SELECT COUNT(*)::int AS cnt FROM notifications WHERE user_id = $1 AND read = false',
+      'SELECT COUNT(*)::int AS cnt FROM notifications WHERE user_id = $1 AND read = false AND type <> \'nse_report\'',
       [userId]
     );
     res.json({ notifications: result.rows, unread: unreadRes.rows[0].cnt });
