@@ -78,6 +78,7 @@ const DEFAULTS = {
     bin_size_pct: 5,
     min_samples_per_bin: 50,
     adjust_signal_strength: true,
+    blend_ratio: 0.3,
   },
 
   indicator_params: {

@@ -254,29 +254,28 @@ async function predictWinProbability(fundamental, technical, macro, priceHistory
 let _plattA = null;
 let _plattB = null;
 
-// Calibrate confidence based on historical accuracy
+// Calibrate confidence based on historical accuracy — blend toward the measured
+// accuracy instead of flat-replacing so a confidence band never collapses to one
+// identical number for every stock in it.
 function calibrateConfidence(rawConfidence, mlProb) {
   const cfg = engineConfig.getConfig().calibration;
   if (!cfg || !cfg.enabled) return rawConfidence;
 
   const binSize = cfg.bin_size_pct || 5;
+  const blend = cfg.blend_ratio ?? 0.3;
+  const minSamples = cfg.min_samples_per_bin ?? 50;
+  let target = null;
+
   const binKey = Math.floor(rawConfidence / binSize) * binSize;
   const bin = _calibrationBins[binKey];
+  if (bin && bin.total >= minSamples) target = bin.accuracy * 100;
 
-  // Per-bin calibration: accurate when the bin has enough resolved outcomes
-  if (bin && bin.total >= (cfg.min_samples_per_bin || 10)) {
-    const calibrated = bin.accuracy * 100;
-    return Math.round(calibrated);
+  if (target == null && _plattA != null && _plattB != null) {
+    target = 100 / (1 + Math.exp(-(_plattA * (rawConfidence / 100) + _plattB)));
   }
 
-  // Platt scaling fallback: fit a single sigmoid over ALL predictions when
-  // individual bins are sparse. This gives a rough calibration even with
-  // limited data — better than returning raw confidence uncorrected.
-  if (_plattA != null && _plattB != null) {
-    return Math.round(100 / (1 + Math.exp(-(_plattA * (rawConfidence / 100) + _plattB))));
-  }
-
-  return rawConfidence;
+  if (target == null) return rawConfidence;
+  return Math.round(rawConfidence * (1 - blend) + target * blend);
 }
 
 // Update calibration bins from resolved predictions
