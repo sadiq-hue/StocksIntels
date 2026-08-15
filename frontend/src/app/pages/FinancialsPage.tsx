@@ -321,6 +321,7 @@ export function FinancialsPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [yahooSuggestions, setYahooSuggestions] = useState<{ ticker: string; name: string }[]>([]);
   const [yahooSuggesting, setYahooSuggesting] = useState(false);
+  const [yahooPremarket, setYahooPremarket] = useState<Record<string, any> | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const yahooSuggestRef = useRef<ReturnType<typeof setTimeout>>();
   const lastFetchedSymbol = useRef<string>(selectedSymbol);
@@ -387,6 +388,25 @@ export function FinancialsPage() {
 
   useEffect(() => { fetchFinancialsStatus().then(setStatus).catch(() => setStatus(null)); }, []);
 
+  // Yahoo Finance pre-market data — real pre/after-hours prints (same source as the quote header)
+  useEffect(() => {
+    if (selectedMarket === "nse") return;
+    let active = true;
+    const fetchPremarket = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || "/api"}/market/premarket?symbols=${encodeURIComponent(selectedSymbol)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (active && data && data[selectedSymbol]) {
+          setYahooPremarket(data);
+        }
+      } catch { /* silent */ }
+    };
+    fetchPremarket();
+    const id = setInterval(fetchPremarket, 60000);
+    return () => { active = false; clearInterval(id); };
+  }, [selectedSymbol, selectedMarket]);
+
   useEffect(() => {
     let active = true;
     // Clear the previously-viewed stock's report so we never display stale
@@ -436,6 +456,26 @@ export function FinancialsPage() {
   const quote = liveQuote
     ? { ...baseQuote, symbol: liveQuote.symbol, price: liveQuote.price, change: liveQuote.change, changesPercentage: liveQuote.changePercent, volume: liveQuote.volume, dayHigh: liveQuote.dayHigh, dayLow: liveQuote.dayLow, previousClose: liveQuote.previousClose, lastUpdated: new Date(liveQuote.timestamp * 1000).toISOString() }
     : (reportQuote || (staticStock ? { ...baseQuote, symbol: contextSymbol, price: Number(staticStock.price) || 0, change: Number(staticStock.change) || 0, changesPercentage: 0, marketCap: 0, volume: 0, lastUpdated: "" } : undefined));
+  const yahooData = (yahooPremarket && selectedSymbol ? yahooPremarket[selectedSymbol] : null) || null;
+  const prePrice = yahooData?.preMarketPrice ?? null;
+  const postPrice = yahooData?.postMarketPrice ?? null;
+  const usePre = prePrice != null && postPrice == null;
+  const altPrice = usePre ? prePrice : postPrice;
+  const altChange = usePre ? yahooData?.preMarketChange : yahooData?.postMarketChange;
+  const altChangePct = usePre ? yahooData?.preMarketChangePercent : yahooData?.postMarketChangePercent;
+  const altTime = usePre ? yahooData?.preMarketTime : yahooData?.postMarketTime;
+  const altSessionLabel = altPrice != null ? (usePre ? "Pre-Market" : "After Hours") : null;
+  const yahooTradingPeriod = yahooData?.currentTradingPeriod;
+  function formatAltTime(unixSeconds?: number | null): string {
+    if (!unixSeconds) return "";
+    const d = new Date(unixSeconds * 1000);
+    const hours = d.getHours();
+    const minutes = d.getMinutes();
+    const ampm = hours >= 12 ? "PM" : "AM";
+    const h12 = hours % 12 || 12;
+    const tz = yahooTradingPeriod?.pre?.timezone || yahooTradingPeriod?.post?.timezone || "EDT";
+    return `${h12}:${minutes.toString().padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")} ${ampm} ${tz}`;
+  }
   const income = report?.data.incomeStatement as IncomeStatement | null | undefined;
   const balance = report?.data.balanceSheet as BalanceSheet | null | undefined;
   const cashFlow = report?.data.cashFlowStatement as CashFlowStatement | null | undefined;
@@ -558,6 +598,25 @@ export function FinancialsPage() {
               </span>
             </div>
             <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1">Close: {formatDateTime(quote?.lastUpdated)}</p>
+            {altPrice != null && altSessionLabel && (
+              <div className="mt-1.5 flex flex-col items-end">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground">{altSessionLabel}:</span>
+                  <span className={`text-sm font-bold ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    {formatCurrency(altPrice, profile?.currency || "USD")}
+                  </span>
+                  {altChange != null && (
+                    <span className={`text-[11px] font-semibold ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {altChange > 0 ? "+" : ""}{altChange.toFixed(2)}
+                    </span>
+                  )}
+                  <span className={`text-[11px] font-semibold ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                    ({altChangePct != null ? `${altChangePct > 0 ? "+" : ""}${altChangePct.toFixed(2)}%` : ""})
+                  </span>
+                </div>
+                <div className="mt-0.5 text-[10px] font-medium text-muted-foreground uppercase">{formatAltTime(altTime)}</div>
+              </div>
+            )}
           </div>
         </div>
       </div>
