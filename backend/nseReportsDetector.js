@@ -614,12 +614,31 @@ async function processPdfBatch(pdfs, suppressAlert, sourceLabel) {
   let newCount = 0, parsedCount = 0;
   for (const pdf of pdfs) {
     const key = crypto.createHash('sha256').update(pdf.url).digest('hex');
-    // Skip filings already handled — EXCEPT previously-failed ones. A filing
-    // recorded as 'failed' may only have hit a transient provider outage
-    // (OCR/LLM timeout or rate limit), so retry it on the next cycle instead
-    // of leaving it stuck. This mirrors the backfill path's retry rule.
-    const ex = await pool.query('SELECT parse_status FROM nse_report_filings WHERE filing_key = $1', [key]);
-    if (ex.rows.length && ex.rows[0].parse_status !== 'failed') continue;
+    // Skip filings already handled — EXCEPT previously-failed ones, and EXCEPT
+    // ones that claim success (skipped-completed/pending_review/completed) but
+    // whose statement row is actually missing. A prior cycle can record success
+    // via coveredMatch against a row that is later deleted/reverted (or a
+    // transient OCR/LLM failure leaves the filing marked done with no row), so
+    // re-checking keeps the detector self-healing instead of stuck.
+    const ex = await pool.query('SELECT parse_status, ticker, period_end_date FROM nse_report_filings WHERE filing_key = $1', [key]);
+    if (ex.rows.length && ex.rows[0].parse_status !== 'failed') {
+      const ps = ex.rows[0].parse_status || '';
+      if (!['skipped-completed', 'pending_review', 'completed'].includes(ps)) continue;
+      // If it claims success, confirm a live statement row actually exists.
+      try {
+        const live = await pool.query(
+          `SELECT 1 FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id
+           WHERE s.ticker = $1 AND fs.status IN ('completed','pending_review')
+             AND fs.parsed_data IS NOT NULL AND (fs.error_message IS NULL OR fs.error_message = '')
+             AND (($2::date IS NULL AND fs.period_end_date IS NULL)
+                  OR (fs.period_end_date IS NOT NULL AND $2::date IS NOT NULL AND ABS(fs.period_end_date - $2::date) <= 15))
+           LIMIT 1`,
+          [ex.rows[0].ticker, ex.rows[0].period_end_date]
+        );
+        if (live.rowCount) continue;
+        console.log(`[NSE-Detector] Re-processing ${ex.rows[0].ticker} ${ex.rows[0].period_end_date || ''} (marked ${ps} but no live statement row)`);
+      } catch { /* fall through and process */ }
+    }
     const res = await processFiling(pdf, suppressAlert);
     if (res && (res.matched || res.unmatched)) newCount++;
     if (res && res.parsed) parsedCount++;
