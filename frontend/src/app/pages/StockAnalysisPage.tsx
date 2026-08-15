@@ -67,6 +67,7 @@ function formatPrice(value: number) {
 
 interface LiveQuote {
   symbol: string;
+  company_name?: string;
   price: number;
   change: number;
   changePercent: number;
@@ -391,21 +392,6 @@ export function StockAnalysisPage() {
   const altTime = isPreMarket ? (yahooData?.preMarketTime ?? liveQuote?.preMarketTime) : isPostMarket ? (yahooData?.postMarketTime ?? liveQuote?.postMarketTime) : null;
   const yahooTradingPeriod = yahooData?.currentTradingPeriod;
 
-  function formatSessionTime(unixSeconds?: number | null): string {
-    if (!unixSeconds) return '';
-    const d = new Date(unixSeconds * 1000);
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const month = months[d.getMonth()];
-    const day = d.getDate();
-    const hours = d.getHours();
-    const minutes = d.getMinutes();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const h12 = hours % 12 || 12;
-    const min = minutes.toString().padStart(2, '0');
-    const tz = yahooTradingPeriod?.regular?.timezone || liveQuote?.currentTradingPeriod?.regular?.timezone || 'EDT';
-    return `${month} ${day} at ${h12}:${min}:${String(d.getSeconds()).padStart(2, '0')} ${ampm} ${tz}`;
-  }
-
   function formatAltTime(unixSeconds?: number | null): string {
     if (!unixSeconds) return '';
     const d = new Date(unixSeconds * 1000);
@@ -418,13 +404,56 @@ export function StockAnalysisPage() {
     return `${h12}:${min}:${String(d.getSeconds()).padStart(2, '0')} ${ampm} ${tz}`;
   }
 
-  const sessionLabel = isPreMarket
-    ? 'At close'
-    : isPostMarket
-    ? 'At close'
-    : isRegular
-    ? 'Real-time'
-    : 'Previous close';
+  // Yahoo exchange codes -> display names (chart meta uses short codes like NMS/NYQ)
+  const EXCHANGE_LABELS: Record<string, string> = {
+    NMS: 'NASDAQ', NGM: 'NASDAQ', NGS: 'NASDAQ', NCM: 'NASDAQ', NASDAQ: 'NASDAQ',
+    NYQ: 'NYSE', NYS: 'NYSE', NYE: 'NYSE', NYSE: 'NYSE',
+    ASE: 'NYSE AMEX', AMEX: 'NYSE AMEX', PCX: 'NYSE Arca', BATS: 'Cboe BZX',
+    XNAS: 'NASDAQ', XNYS: 'NYSE', XNSE: 'NSE', LSE: 'LSE', JSE: 'JSE',
+  };
+  function exchangeLabelFor(raw?: string | null): string | null {
+    if (!raw) return null;
+    const key = raw.toUpperCase();
+    return EXCHANGE_LABELS[key] || (key.length <= 4 ? raw : null);
+  }
+
+  // GMT offset (seconds) -> "GMT-4" / "GMT+3"
+  function formatGmtOffset(offsetSeconds?: number | null): string {
+    if (offsetSeconds == null || Number.isNaN(offsetSeconds)) return '';
+    const sign = offsetSeconds >= 0 ? '+' : '-';
+    const abs = Math.abs(offsetSeconds) / 3600;
+    const hh = Math.floor(abs);
+    const mm = Math.round((abs - hh) * 60);
+    return `GMT${sign}${hh}${mm ? ':' + String(mm).padStart(2, '0') : ''}`;
+  }
+
+  // Render a unix timestamp in the exchange's local wall-clock (offset-corrected)
+  // as "14 Aug, 19:59 GMT-4" — matching the reference quote header.
+  function formatQuoteTime(unixSeconds?: number | null, offsetSeconds?: number | null): string {
+    if (!unixSeconds) return '';
+    const d = new Date(unixSeconds * 1000);
+    const shifted = new Date(d.getTime() + (offsetSeconds || 0) * 1000);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const day = shifted.getUTCDate();
+    const hh = shifted.getUTCHours().toString().padStart(2, '0');
+    const min = shifted.getUTCMinutes().toString().padStart(2, '0');
+    const tz = formatGmtOffset(offsetSeconds) || yahooTradingPeriod?.regular?.timezone || liveQuote?.currentTradingPeriod?.regular?.timezone || '';
+    return `${day} ${months[shifted.getUTCMonth()]}, ${hh}:${min}${tz ? ' ' + tz : ''}`;
+  }
+
+  const exchangeOffset = yahooTradingPeriod?.regular?.gmtoffset ?? liveQuote?.currentTradingPeriod?.regular?.gmtoffset;
+  const regularEnd = yahooTradingPeriod?.regular?.end ?? liveQuote?.currentTradingPeriod?.regular?.end;
+  const regularStart = yahooTradingPeriod?.regular?.start ?? liveQuote?.currentTradingPeriod?.regular?.start;
+  const quoteTime = isRegular ? regularStart : regularEnd;
+  const quoteStatusLabel = isRegular ? 'Open' : isPreMarket ? 'Pre-Market' : isPostMarket ? 'After Hours' : 'Closed';
+  const quoteStatusLine = quoteTime ? `${quoteStatusLabel}: ${formatQuoteTime(quoteTime, exchangeOffset)}` : quoteStatusLabel;
+
+  const rawExchange = yahooData?.exchange || liveQuote?.exchange || null;
+  const exchangeLabel = isNse ? 'NSE' : exchangeLabelFor(rawExchange) || (activeSelection.market === 'global' ? 'Global' : null);
+  const tickerLine = exchangeLabel ? `${exchangeLabel}: ${activeSelection.ticker}` : activeSelection.ticker;
+  const displayName = liveQuote?.company_name?.trim() || activeSelection.name || activeSelection.ticker;
+  const currencyLabel = liveQuote?.currency || activeSelection.currency || (isNse ? 'KES' : 'USD');
+
   const altSessionLabel = isPreMarket ? 'Overnight' : isPostMarket ? 'After Hours' : null;
 
   // Fetch signal and profile
@@ -876,7 +905,7 @@ export function StockAnalysisPage() {
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">{activeSelection.ticker}</h2>
+                      <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">{displayName}</h2>
                       <button
                         onClick={() => toggleFavorite(activeSelection.ticker)}
                         className="transition-transform hover:scale-110"
@@ -887,9 +916,6 @@ export function StockAnalysisPage() {
                             : "text-muted-foreground"
                         }`} />
                       </button>
-                      <Badge variant="secondary" className="rounded-full text-xs">
-                        {activeSelection.market === "nse" ? "NSE" : "Global"}
-                      </Badge>
                       <Badge className={`rounded-full text-xs border ${
                         isRegular
                           ? "bg-emerald-100 text-emerald-700 border-emerald-200"
@@ -905,7 +931,7 @@ export function StockAnalysisPage() {
                         {isRegular ? "Market Open" : isPreMarket ? "Pre-Market" : isPostMarket ? "After Hours" : "Closed"}
                       </Badge>
                     </div>
-                    <p className="mt-1 truncate text-sm text-muted-foreground">{activeSelection.name}</p>
+                    <p className="mt-1 truncate text-sm font-medium text-muted-foreground">{tickerLine}</p>
                   </div>
                 </div>
 
@@ -913,7 +939,7 @@ export function StockAnalysisPage() {
                 <div className="flex flex-col items-end gap-3">
                   <div className="text-left lg:text-right">
                     <div className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl tabular-nums">
-                      {formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(regularPrice)}
+                      {formatPrice(regularPrice)} <span className="text-lg sm:text-xl font-semibold text-muted-foreground">{currencyLabel}</span>
                     </div>
                     <div className="flex items-center justify-start gap-1.5 mt-1.5 lg:justify-end">
                       {isPositive ? <ChevronUp className="size-4 text-emerald-600" /> : <ChevronDown className="size-4 text-red-500" />}
@@ -925,17 +951,30 @@ export function StockAnalysisPage() {
                       }`}>
                         {displayChange > 0 ? "+" : ""}{displayChange.toFixed(2)}%
                       </span>
+                      <span className="text-[11px] text-muted-foreground">today</span>
                     </div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">
-                      {sessionLabel}: {formatSessionTime(liveQuote?.currentTradingPeriod?.regular?.end)}
+                    <div className="mt-1.5 text-[11px] text-muted-foreground">
+                      {quoteStatusLine}
+                      {" • "}
+                      <Link
+                        to="/disclaimer"
+                        className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
+                      >
+                        Disclaimer
+                      </Link>
                     </div>
                     {altPrice != null && altSessionLabel && (
                       <div className="mt-2 border-t border-border pt-2">
                         <div className="flex items-center justify-start gap-1.5 lg:justify-end">
-                          <span className="text-[11px] text-muted-foreground">{altSessionLabel}:</span>
+                          <span className="text-[11px] text-muted-foreground">After hours:</span>
                           <span className={`text-sm font-semibold ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                            {formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(altPrice)}
+                            {formatPrice(altPrice)}
                           </span>
+                          {altChange != null && (
+                            <span className={`text-[11px] font-medium ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                              {altChange > 0 ? "+" : ""}{altChange.toFixed(2)}
+                            </span>
+                          )}
                           <span className={`text-[11px] font-medium ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
                             ({altChangePct != null ? `${altChangePct > 0 ? "+" : ""}${altChangePct.toFixed(2)}%` : ""})
                           </span>
