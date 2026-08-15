@@ -433,8 +433,24 @@ function anyTrackedExchangeOpen(now = new Date()) {
   return nseOpen || usOpen;
 }
 
+// NSE trades Mon-Fri 09:00-15:00 Nairobi (UTC+3). Return the current Nairobi
+// trading date (YYYY-MM-DD) or null on weekends, so the live accumulator never
+// stamps Saturday/Sunday bars into nse_daily_history.
+function nseTradingDate() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Nairobi', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const get = (t) => (parts.find(p => p.type === t) || {}).value;
+  const y = get('year'), m = get('month'), d = get('day');
+  if (!y || !m || !d) return null;
+  const dow = new Date(`${y}-${m}-${d}T00:00:00Z`).getUTCDay();
+  return dow >= 1 && dow <= 5 ? `${y}-${m}-${d}` : null;
+}
+
 function accumulateNseQuote(symbol, price, volume) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = nseTradingDate();
+  if (!today) return; // weekend — no NSE session, don't write spurious bars
   if (!_nseIntradayBuffer.has(symbol)) _nseIntradayBuffer.set(symbol, {});
   const buf = _nseIntradayBuffer.get(symbol);
   if (!buf[today]) buf[today] = { open: price, high: price, low: price, close: price, volume: 0 };
@@ -450,7 +466,8 @@ function accumulateNseQuote(symbol, price, volume) {
 }
 
 function flushNseDailyBars() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = nseTradingDate();
+  if (!today) return; // weekend — nothing to flush
   for (const [symbol, buf] of _nseIntradayBuffer) {
     if (buf[today]) {
       if (!_nseDailyHistory.has(symbol)) _nseDailyHistory.set(symbol, []);

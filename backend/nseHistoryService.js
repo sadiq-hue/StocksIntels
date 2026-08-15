@@ -62,6 +62,12 @@ async function upsertBar(ticker, bar, source = 'live') {
   const volume = num(bar && bar.volume) || 0;
   if (close == null || !(close > 0)) return false;
 
+  // Defense-in-depth: NSE never trades on weekends, so reject any bar stamped
+  // on a Saturday/Sunday (live accumulator weekend rows and date-shifted MyStocks
+  // Africa seeds both pollute the store this way).
+  const wk = new Date(`${date}T00:00:00Z`).getUTCDay();
+  if (wk === 0 || wk === 6) return false;
+
   // Defense-in-depth: reject live bars that deviate wildly from the ticker's
   // established EOD closes (e.g. the nse.co.ke portal once reported HFCK at 0.1
   // vs a real ~11.80). Only applies when there is enough EOD history to judge.
