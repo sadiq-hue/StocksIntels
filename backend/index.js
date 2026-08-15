@@ -6384,7 +6384,7 @@ app.get('/api/stock/:symbol', async (req, res) => {
     const quote = await getStockQuote(lookup);
     if (!quote) return res.status(404).json({ error: 'Stock not found' });
     const isNse = lookup.startsWith('NSE:');
-    const marketOpen = isMarketOpen(isNse ? 'NSE' : 'Global');
+    const marketOpen = isMarketOpen(isNse ? 'NSE' : 'Global').open;
     res.json({
       symbol: quote.symbol || upper,
       company_name: quote.company_name || upper,
@@ -7225,21 +7225,6 @@ app.get('/api/market/movers', async (req, res) => {
   }
 });
 
-// Pre-market / after-hours data for global stocks via Yahoo chart API with includePreMarket=true
-app.get('/api/market/premarket', async (req, res) => {
-  try {
-    const { symbols } = req.query;
-    if (!symbols) return res.status(400).json({ error: 'symbols query param required (comma-separated)' });
-    const list = symbols.split(',').map(s => s.trim()).filter(Boolean);
-    const { fetchPreMarketBatch } = require('./yahooFinanceFinancialsScraper');
-    const data = await fetchPreMarketBatch(list);
-    res.json({ quotes: data });
-  } catch (error) {
-    console.error('Error fetching pre-market data:', error);
-    res.status(500).json({ error: 'Failed to fetch pre-market data' });
-  }
-});
-
 // Real-time total turnover by market (price * volume) — uses direct Yahoo chart API for global, BASE_QUOTES for NSE
 let turnoverCache = { nse: 0, global: 0, nseVolume: 0, globalVolume: 0, nse: { turnover: 0, volume: 0, count: 0 }, global: { turnover: 0, volume: 0, count: 0 } };
 let turnoverCacheTime = 0;
@@ -7427,6 +7412,8 @@ app.get('/api/market/premarket', async (req, res) => {
         const meta = data?.chart?.result?.[0]?.meta;
         if (meta) {
           results[sym] = {
+            symbol: meta.symbol || sym,
+            company_name: meta.longName || meta.shortName || sym,
             preMarketPrice: meta.preMarketPrice ?? null,
             preMarketChange: meta.preMarketChange ?? null,
             preMarketChangePercent: meta.preMarketChangePercent ?? null,
@@ -7437,8 +7424,14 @@ app.get('/api/market/premarket', async (req, res) => {
             postMarketTime: meta.postMarketTime ?? null,
             regularMarketPrice: meta.regularMarketPrice ?? null,
             regularMarketPreviousClose: meta.chartPreviousClose ?? meta.previousClose ?? null,
-            marketState: isMarketOpen(sym.startsWith('NSE:') ? 'NSE' : 'Global') ? 'REGULAR' : 'CLOSED',
-            currentTradingPeriod: data?.chart?.result?.[0]?.meta?.currentTradingPeriod || null,
+            regularMarketChange: meta.regularMarketChange ?? null,
+            regularMarketChangePercent: meta.regularMarketChangePercent ?? null,
+            regularMarketTime: meta.regularMarketTime ?? null,
+            regularMarketDayHigh: meta.regularMarketDayHigh ?? null,
+            regularMarketDayLow: meta.regularMarketDayLow ?? null,
+            regularMarketVolume: meta.regularMarketVolume ?? null,
+            marketState: meta.marketState || 'CLOSED',
+            currentTradingPeriod: meta.currentTradingPeriod || null,
             exchange: meta.exchangeName || '',
             currency: meta.currency || 'USD',
           };
@@ -9050,7 +9043,12 @@ app.post('/api/market/quotes', marketDataLimiter, async (req, res) => {
       const q = quotes[sym];
       if (!q) continue;
       const market = sym.startsWith('NSE:') ? 'NSE' : 'Global';
-      enriched[sym] = { ...q, marketState: isMarketOpen(market) ? 'REGULAR' : 'CLOSED' };
+      // NSE: derive from exchange hours (provider marketState is unreliable for NSE).
+      // Global: trust the provider (Yahoo) marketState which handles holidays & extended sessions.
+      const marketState = market === 'NSE'
+        ? (isMarketOpen('NSE').open ? 'REGULAR' : 'CLOSED')
+        : (q.marketState || 'CLOSED');
+      enriched[sym] = { ...q, marketState };
     }
     res.json({ quotes: enriched });
   } catch (error) {

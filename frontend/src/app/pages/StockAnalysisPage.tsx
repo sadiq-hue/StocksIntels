@@ -384,12 +384,16 @@ export function StockAnalysisPage() {
   const isPreMarket = !isNse && marketState === 'PRE';
   const isPostMarket = !isNse && marketState === 'POST';
   const regularPrice = yahooRegularPrice ?? liveQuote?.regularMarketPrice ?? liveQuote?.price ?? liveQuote?.previousClose ?? activeSelection.price;
-  const prePrice = yahooData?.preMarketPrice ?? liveQuote?.preMarketPrice;
-  const postPrice = yahooData?.postMarketPrice ?? liveQuote?.postMarketPrice;
-  const altPrice = prePrice ?? postPrice ?? null;
-  const altChange = isPreMarket ? (yahooData?.preMarketChange ?? liveQuote?.preMarketChange) : isPostMarket ? (yahooData?.postMarketChange ?? liveQuote?.postMarketChange) : null;
-  const altChangePct = isPreMarket ? (yahooData?.preMarketChangePercent ?? liveQuote?.preMarketChangePercent) : isPostMarket ? (yahooData?.postMarketChangePercent ?? liveQuote?.postMarketChangePercent) : null;
-  const altTime = isPreMarket ? (yahooData?.preMarketTime ?? liveQuote?.preMarketTime) : isPostMarket ? (yahooData?.postMarketTime ?? liveQuote?.postMarketTime) : null;
+  const prePrice = yahooData?.preMarketPrice ?? liveQuote?.preMarketPrice ?? null;
+  const postPrice = yahooData?.postMarketPrice ?? liveQuote?.postMarketPrice ?? null;
+  // Show the extended-hours session from the latest available data — even when the
+  // market is CLOSED (e.g. weekend) Yahoo still reports the last session's post-market print.
+  const usePre = isPreMarket || (prePrice != null && postPrice == null);
+  const altPrice = usePre ? prePrice : postPrice;
+  const altChange = usePre ? (yahooData?.preMarketChange ?? liveQuote?.preMarketChange) : (yahooData?.postMarketChange ?? liveQuote?.postMarketChange);
+  const altChangePct = usePre ? (yahooData?.preMarketChangePercent ?? liveQuote?.preMarketChangePercent) : (yahooData?.postMarketChangePercent ?? liveQuote?.postMarketChangePercent);
+  const altTime = usePre ? (yahooData?.preMarketTime ?? liveQuote?.preMarketTime) : (yahooData?.postMarketTime ?? liveQuote?.postMarketTime);
+  const altSessionLabel = altPrice != null ? (usePre ? 'Pre-Market' : 'After Hours') : null;
   const yahooTradingPeriod = yahooData?.currentTradingPeriod;
 
   function formatAltTime(unixSeconds?: number | null): string {
@@ -451,10 +455,8 @@ export function StockAnalysisPage() {
   const rawExchange = yahooData?.exchange || liveQuote?.exchange || null;
   const exchangeLabel = isNse ? 'NSE' : exchangeLabelFor(rawExchange) || (activeSelection.market === 'global' ? 'Global' : null);
   const tickerLine = exchangeLabel ? `${exchangeLabel}: ${activeSelection.ticker}` : activeSelection.ticker;
-  const displayName = liveQuote?.company_name?.trim() || activeSelection.name || activeSelection.ticker;
-  const currencyLabel = liveQuote?.currency || activeSelection.currency || (isNse ? 'KES' : 'USD');
-
-  const altSessionLabel = isPreMarket ? 'Overnight' : isPostMarket ? 'After Hours' : null;
+  const displayName = yahooData?.company_name?.trim() || liveQuote?.company_name?.trim() || activeSelection.name || activeSelection.ticker;
+  const currencyLabel = yahooData?.currency || liveQuote?.currency || activeSelection.currency || (isNse ? 'KES' : 'USD');
 
   // Fetch signal and profile
   useEffect(() => {
@@ -966,7 +968,7 @@ export function StockAnalysisPage() {
                     {altPrice != null && altSessionLabel && (
                       <div className="mt-2 border-t border-border pt-2">
                         <div className="flex items-center justify-start gap-1.5 lg:justify-end">
-                          <span className="text-[11px] text-muted-foreground">After hours:</span>
+                          <span className="text-[11px] text-muted-foreground">{altSessionLabel}:</span>
                           <span className={`text-sm font-semibold ${(altChangePct ?? 0) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
                             {formatPrice(altPrice)}
                           </span>
