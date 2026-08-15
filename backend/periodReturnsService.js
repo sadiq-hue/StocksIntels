@@ -6,23 +6,28 @@ const { fetchHistoricalQuotes } = require('./globalScraper');
 const signalService = require('./signalService');
 
 // NSE bars map from period -> required lookback bars (approximate trading days).
+// Note: weekly = 6 bars so the start close is exactly 5 sessions ago (one trading
+// week); anything larger spans more than a week of history.
 const NSE_LOOKBACK = {
   '1d': 3,
-  '1w': 7,
+  '1w': 6,
   '1mo': 24,
   '3mo': 70,
   '1y': 260,
 };
 
-async function fetchNseHistory(symbol, range) {
+async function fetchNseHistory(symbol, range, period) {
   // NSE history is read from the DB-backed daily bars (seeded from KenyanStocks /
   // Mystocks Africa). The mystocksAfrica partner history endpoint is unreliable
   // and rate-limited (429), so attempting it per-symbol just wastes time and
   // trips the rate limiter. DB bars are the dependable source here.
+  // NOTE: the lookback must be keyed by *period* ('1w'), NOT by range ('5d' for
+  // weekly). Looking up by range silently fell back to the 30-bar default, which
+  // measured the return over ~6 weeks of history instead of one.
   try {
     const nseHistory = require('./nseHistoryService');
     const ticker = String(symbol).replace(/^NSE:/i, '').replace(/\.NSE$/i, '').toUpperCase();
-    const need = NSE_LOOKBACK[range] || 30;
+    const need = NSE_LOOKBACK[period] || 30;
     const bars = await nseHistory.getBars(ticker, need);
     if (Array.isArray(bars) && bars.length > 1) return bars;
   } catch { /* fall through */ }
@@ -122,7 +127,7 @@ async function computePeriodReturns(period) {
       try {
         const isNse = signalService.NSE_SYMBOLS.includes(symbol);
         const bars = isNse
-          ? await withTimeout(fetchNseHistory(symbol, cfg.range), FETCH_TIMEOUT_MS)
+          ? await withTimeout(fetchNseHistory(symbol, cfg.range, period), FETCH_TIMEOUT_MS)
           : await withTimeout(fetchHistoricalQuotes(symbol, cfg.range, cfg.interval, { bulk: true }), FETCH_TIMEOUT_MS);
         if (!bars || bars.length < 2) continue;
         const lastBar = bars[bars.length - 1];
