@@ -411,6 +411,7 @@ export function StockAnalysisPage() {
   // Yahoo exchange codes -> display names (chart meta uses short codes like NMS/NYQ)
   const EXCHANGE_LABELS: Record<string, string> = {
     NMS: 'NASDAQ', NGM: 'NASDAQ', NGS: 'NASDAQ', NCM: 'NASDAQ', NASDAQ: 'NASDAQ',
+    NASDAQGM: 'NASDAQ', NASDAQGS: 'NASDAQ', NASDAQCM: 'NASDAQ',
     NYQ: 'NYSE', NYS: 'NYSE', NYE: 'NYSE', NYSE: 'NYSE',
     ASE: 'NYSE AMEX', AMEX: 'NYSE AMEX', PCX: 'NYSE Arca', BATS: 'Cboe BZX',
     XNAS: 'NASDAQ', XNYS: 'NYSE', XNSE: 'NSE', LSE: 'LSE', JSE: 'JSE',

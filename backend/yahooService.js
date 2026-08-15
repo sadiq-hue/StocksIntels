@@ -774,6 +774,103 @@ function clearCache() {
   histCache.clear();
 }
 
+// ─── Yahoo v7 quote API (crumb-authenticated) — real pre/post-market prints ───
+// The unauthenticated v7/v10 endpoints 401 on cloud IPs; the v8 chart API does
+// not carry pre/post-market prices outside extended sessions. The website's own
+// flow (A3 cookie + crumb) restores v7 access, so we mirror it here.
+let yahooSessionCookie = null;
+let yahooSessionCookieAt = 0;
+let yahooSessionCrumb = null;
+let yahooSessionCrumbAt = 0;
+const YAHOO_COOKIE_TTL = 6 * 60 * 60 * 1000;
+const YAHOO_CRUMB_TTL = 30 * 60 * 1000;
+const yahooV7Cache = new Map();
+
+async function fetchYahooSessionToken() {
+  const now = Date.now();
+  if (yahooSessionCookie && yahooSessionCrumb && now - yahooSessionCrumbAt < YAHOO_CRUMB_TTL) {
+    return { cookie: yahooSessionCookie, crumb: yahooSessionCrumb };
+  }
+  try {
+    let cookie = (yahooSessionCookie && now - yahooSessionCookieAt < YAHOO_COOKIE_TTL) ? yahooSessionCookie : '';
+    if (!cookie) {
+      for (const host of ['https://fc.yahoo.com', 'https://query1.finance.yahoo.com/']) {
+        try {
+          const resp = await require('axios').get(host, {
+            timeout: 8000,
+            headers: { 'User-Agent': UA },
+            maxRedirects: 0,
+            validateStatus: () => true,
+          });
+          const sc = (resp.headers['set-cookie'] || []).map(x => x.split(';')[0]).join('; ');
+          if (sc) {
+            cookie = sc;
+            yahooSessionCookie = sc;
+            yahooSessionCookieAt = now;
+            break;
+          }
+        } catch {}
+      }
+    }
+    if (!cookie) return null;
+    const crumbResp = await require('axios').get('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+      timeout: 8000,
+      headers: { 'User-Agent': UA, 'Cookie': cookie },
+    });
+    const crumb = String(crumbResp.data || '').trim();
+    if (!crumb) return null;
+    yahooSessionCrumb = crumb;
+    yahooSessionCrumbAt = now;
+    return { cookie, crumb };
+  } catch {
+    return (yahooSessionCookie && yahooSessionCrumb) ? { cookie: yahooSessionCookie, crumb: yahooSessionCrumb } : null;
+  }
+}
+
+async function fetchV7Quotes(symbols) {
+  if (!symbols || symbols.length === 0) return {};
+  const key = [...symbols].sort().join(',');
+  const cached = yahooV7Cache.get(key);
+  if (cached && Date.now() - cached.ts < 30000) return cached.data;
+  const token = await fetchYahooSessionToken();
+  if (!token) return {};
+  try {
+    const { data } = await require('axios').get('https://query1.finance.yahoo.com/v7/finance/quote', {
+      params: { symbols: symbols.join(','), crumb: token.crumb },
+      timeout: 10000,
+      headers: { 'User-Agent': UA, 'Cookie': token.cookie },
+    });
+    const results = {};
+    for (const q of data?.quoteResponse?.result || []) {
+      results[q.symbol.toUpperCase()] = {
+        preMarketPrice: q.preMarketPrice ?? null,
+        preMarketChange: q.preMarketChange ?? null,
+        preMarketChangePercent: q.preMarketChangePercent ?? null,
+        preMarketTime: q.preMarketTime ?? null,
+        postMarketPrice: q.postMarketPrice ?? null,
+        postMarketChange: q.postMarketChange ?? null,
+        postMarketChangePercent: q.postMarketChangePercent ?? null,
+        postMarketTime: q.postMarketTime ?? null,
+        marketState: q.marketState || 'CLOSED',
+        company_name: q.shortName || q.longName || q.symbol,
+        exchange: q.fullExchangeName || '',
+        currency: q.currency || 'USD',
+        regularMarketPrice: q.regularMarketPrice ?? null,
+        regularMarketChange: q.regularMarketChange ?? null,
+        regularMarketChangePercent: q.regularMarketChangePercent ?? null,
+        regularMarketTime: q.regularMarketTime ?? null,
+        regularMarketDayHigh: q.regularMarketDayHigh ?? null,
+        regularMarketDayLow: q.regularMarketDayLow ?? null,
+        regularMarketVolume: q.regularMarketVolume ?? null,
+      };
+    }
+    yahooV7Cache.set(key, { data: results, ts: Date.now() });
+    return results;
+  } catch {
+    return {};
+  }
+}
+
 module.exports = {
   fetchQuote,
   fetchQuotes,
@@ -782,5 +879,6 @@ module.exports = {
   fetchQuoteSummary,
   fetchPriceViaProxy,
   fetchPreMarketBatch,
+  fetchV7Quotes,
   clearCache,
 };

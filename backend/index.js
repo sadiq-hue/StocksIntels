@@ -7438,6 +7438,29 @@ app.get('/api/market/premarket', async (req, res) => {
         }
       } catch {}
     }));
+    // Merge real pre/post-market prints from the crumb-authenticated v7 quote API.
+    // The v8 chart endpoint carries these only during/right after extended sessions;
+    // v7 reports the last session's after-hours/pre-market trade regardless.
+    try {
+      const { fetchV7Quotes } = require('./yahooService');
+      const v7 = await fetchV7Quotes(symbols);
+      for (const sym of symbols) {
+        const v = v7[sym.toUpperCase()];
+        if (!v || !results[sym]) continue;
+        results[sym] = {
+          ...results[sym],
+          preMarketPrice: results[sym].preMarketPrice ?? v.preMarketPrice ?? null,
+          preMarketChange: results[sym].preMarketChange ?? v.preMarketChange ?? null,
+          preMarketChangePercent: results[sym].preMarketChangePercent ?? v.preMarketChangePercent ?? null,
+          preMarketTime: results[sym].preMarketTime ?? v.preMarketTime ?? null,
+          postMarketPrice: results[sym].postMarketPrice ?? v.postMarketPrice ?? null,
+          postMarketChange: results[sym].postMarketChange ?? v.postMarketChange ?? null,
+          postMarketChangePercent: results[sym].postMarketChangePercent ?? v.postMarketChangePercent ?? null,
+          postMarketTime: results[sym].postMarketTime ?? v.postMarketTime ?? null,
+          marketState: results[sym].marketState || v.marketState || 'CLOSED',
+        };
+      }
+    } catch {}
     res.json(results);
   } catch (error) {
     console.error('Error fetching premarket:', error.message);
