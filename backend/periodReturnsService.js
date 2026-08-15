@@ -16,6 +16,20 @@ const NSE_LOOKBACK = {
   '1y': 260,
 };
 
+// NSE only trades Monday-Friday. The bar store accumulates weekend bars (live
+// accumulations and date-shifted MyStocks Africa seeds), which would otherwise
+// shift the lookback window and land the weekly anchor on a non-trading day.
+function filterTradingBars(bars) {
+  if (!Array.isArray(bars)) return bars;
+  return bars.filter((b) => {
+    if (!b || !b.date) return false;
+    const d = new Date(b.date);
+    if (isNaN(d.getTime())) return false;
+    const day = d.getUTCDay();
+    return day >= 1 && day <= 5; // Mon-Fri
+  });
+}
+
 async function fetchNseHistory(symbol, range, period) {
   // NSE history is read from the DB-backed daily bars (seeded from KenyanStocks /
   // Mystocks Africa). The mystocksAfrica partner history endpoint is unreliable
@@ -24,17 +38,26 @@ async function fetchNseHistory(symbol, range, period) {
   // NOTE: the lookback must be keyed by *period* ('1w'), NOT by range ('5d' for
   // weekly). Looking up by range silently fell back to the 30-bar default, which
   // measured the return over ~6 weeks of history instead of one.
+  const need = NSE_LOOKBACK[period] || 30;
+  // Fetch ~2x so weekend bars in the store (live accumulations / date-shifted
+  // MyStocks Africa seeds) can be dropped and we still end up with `need`
+  // TRADING bars. Then keep the trailing `need` bars so the period anchor is the
+  // bar exactly `need` sessions back (for weekly: the prior Friday).
+  const trimTradingBars = (bars) => {
+    if (!Array.isArray(bars)) return bars;
+    const filtered = filterTradingBars(bars);
+    return filtered.slice(-need);
+  };
   try {
     const nseHistory = require('./nseHistoryService');
     const ticker = String(symbol).replace(/^NSE:/i, '').replace(/\.NSE$/i, '').toUpperCase();
-    const need = NSE_LOOKBACK[period] || 30;
-    const bars = await nseHistory.getBars(ticker, need);
+    const bars = trimTradingBars(await nseHistory.getBars(ticker, need * 2));
     if (Array.isArray(bars) && bars.length > 1) return bars;
   } catch { /* fall through */ }
   // Fallback: mystocksAfrica partner API as a last resort.
   try {
     const msa = require('./mystocksAfricaApi');
-    const bars = await msa.fetchHistorical(symbol, range);
+    const bars = trimTradingBars(await msa.fetchHistorical(symbol, range));
     if (Array.isArray(bars) && bars.length > 1) return bars;
   } catch { /* ignore */ }
   return null;
@@ -131,11 +154,14 @@ async function computePeriodReturns(period) {
           : await withTimeout(fetchHistoricalQuotes(symbol, cfg.range, cfg.interval, { bulk: true }), FETCH_TIMEOUT_MS);
         if (!bars || bars.length < 2) continue;
         const lastBar = bars[bars.length - 1];
-        // For NSE, prefer the latest durable bar close as the "now" price so the
-        // return is computed against the same store as the history (the live
-        // quote chain has known-bad rows, e.g. HFCK at 0.1 vs a real 11.80).
+        // For NSE, prefer the authoritative quote close (portal / KenyanStocks —
+        // the getQuote chain already guards against bad portal rows like HFCK 0.1)
+        // over the last DB bar. DB bars are seeded from MyStocks Africa, whose
+        // close for recent sessions equals the day HIGH (e.g. CGEN 266.25 vs the
+        // real EOD 262.00) and whose dates can be shifted a day. Fall back to the
+        // durable bar close only when no valid quote resolved.
         let cur = currentPrices.get(symbol);
-        if (isNse && lastBar && typeof lastBar.close === 'number' && lastBar.close > 0) {
+        if (isNse && !(cur && cur > 0) && lastBar && typeof lastBar.close === 'number' && lastBar.close > 0) {
           cur = lastBar.close;
         }
         if (!cur || !(cur > 0)) continue;

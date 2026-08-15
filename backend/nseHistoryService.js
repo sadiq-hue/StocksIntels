@@ -43,9 +43,15 @@ async function getBar(ticker, date) {
 // Merge a daily bar into the store. For the same ticker+date:
 //   - open  keeps the earliest recorded open (live intraday open wins over late seed)
 //   - high/low expand to cover both sources
-//   - close uses the newest value (EOD seed supersedes intraday)
+//   - close/source go to the HIGHEST-RELIABILITY source present (authoritative
+//     KenyanStocks EOD outranks live, which outranks best-effort MyStocks
+//     Africa / Alpha Vantage). This stops the date-shifted / close=high MyStocks
+//     Africa seed from clobbering a real KenyanStocks close for the same day.
 //   - volume uses the max (avoids double-counting running intraday volume)
 // Returns true if a row now exists.
+const SOURCE_PRIORITY = { kenyanstocks: 3, nseportal: 3, live: 2, mystocksafrica: 1, alphavantage: 1 };
+function sourcePriority(s) { return SOURCE_PRIORITY[String(s || '').toLowerCase()] || 1; }
+
 async function upsertBar(ticker, bar, source = 'live') {
   if (!ticker) return false;
   const date = (bar && bar.date) ? String(bar.date).slice(0, 10) : new Date().toISOString().split('T')[0];
@@ -76,6 +82,10 @@ async function upsertBar(ticker, bar, source = 'live') {
   }
 
   const existing = await getBar(ticker, date);
+  const existingPrio = existing ? sourcePriority(existing.source) : 0;
+  const newPrio = sourcePriority(source || 'live');
+  // Higher-reliability source (or a tie -> newest) wins close + source label.
+  const closeWins = !existing || newPrio >= existingPrio;
   const merged = {
     open: existing && existing.open != null ? num(existing.open) : open,
     high: Math.max(existing && existing.high != null ? num(existing.high) : 0, high != null ? high : 0),
@@ -83,9 +93,9 @@ async function upsertBar(ticker, bar, source = 'live') {
       existing && existing.low != null ? num(existing.low) : (low != null ? low : high != null ? high : close),
       low != null ? low : (existing && existing.low != null ? num(existing.low) : close)
     ),
-    close,
+    close: closeWins ? close : num(existing.close),
     volume: Math.max(existing ? num(existing.volume) || 0 : 0, volume || 0),
-    source: source || 'live',
+    source: closeWins ? (source || 'live') : existing.source,
   };
 
   await pool.query(
