@@ -568,35 +568,22 @@ async function processFiling(pdf, suppressAlert) {
     return { matched: false };
   }
 
-  // Idempotency: skip filings already handled (avoids duplicate rows + re-spend on OCR).
-  // A row is "done" if it is 'completed' WITH parsed_data, OR 'pending_review' (auto-detected,
-  // awaiting admin approval). Rows left in a 'completed' state with an error_message or empty
-  // parsed_data (e.g. transient LLM-quota failures during a bulk seed) are re-processed so the
-  // detector self-heals broken periods on each cycle.
-  // Matching is period-type-agnostic and tolerant of ±15 day date drift: the detector derives
-  // period_end_date/period_type from the filename (e.g. 2023-06-30 + 'annual') while seed rows
-  // may hold 2023-06-29 + 'quarterly' for the SAME report — an exact match would miss those and
-  // create duplicate statements.
+  // Deduplication: if ANY row exists for this ticker within ±15 days, skip
+  // re-processing. This prevents duplicate rows from slightly different
+  // period_end_date parses across detection cycles.
   const coveredMatch =
     `SELECT 1 FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id
-     WHERE s.ticker = $1 AND fs.status IN ('completed','pending_review')
-       AND (fs.error_message IS NULL OR fs.error_message = '') AND fs.parsed_data IS NOT NULL
+     WHERE s.ticker = $1
        AND (($2::date IS NULL AND fs.period_end_date IS NULL)
             OR (fs.period_end_date IS NOT NULL AND $2::date IS NOT NULL AND ABS(fs.period_end_date - $2::date) <= 15))
      LIMIT 1`;
   try {
     const ex = await pool.query(coveredMatch, [ticker, periodEnd]);
     if (ex.rowCount) {
-      console.log(`[NSE-Detector] Skip ${ticker} ${periodEnd || ''} (already completed/pending_review with data)`);
+      console.log(`[NSE-Detector] Skip ${ticker} ${periodEnd || ''} (row already exists in financial_statements)`);
       await recordFiling({ key, company, ticker, url: pdf.url, filename: pdf.filename, periodEnd, audited, parsed: true, parseStatus: 'skipped-completed', source: pdf.source || 'nse' });
       return { matched: true, parsed: true, skipped: true };
     }
-    // Log (but still re-process) if a broken 'completed' row exists for this period
-    const broken = await pool.query(
-      `SELECT 1 FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id WHERE s.ticker = $1 AND fs.status = 'completed' AND (fs.error_message IS NOT NULL AND fs.error_message <> '') AND fs.parsed_data IS NULL AND (($2::date IS NULL AND fs.period_end_date IS NULL) OR (fs.period_end_date IS NOT NULL AND $2::date IS NOT NULL AND ABS(fs.period_end_date - $2::date) <= 15)) LIMIT 1`,
-      [ticker, periodEnd]
-    );
-    if (broken.rowCount) console.log(`[NSE-Detector] Re-processing broken ${ticker} ${periodEnd || ''} (prior parse failed, retrying)`);
   } catch (_) { /* fall through and process */ }
 
   try {
