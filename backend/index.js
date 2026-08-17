@@ -7228,7 +7228,7 @@ app.get('/api/market/movers', async (req, res) => {
 // Real-time total turnover by market (price * volume) — uses direct Yahoo chart API for global, BASE_QUOTES for NSE
 let turnoverCache = { nse: 0, global: 0, nseVolume: 0, globalVolume: 0, nse: { turnover: 0, volume: 0, count: 0 }, global: { turnover: 0, volume: 0, count: 0 } };
 let turnoverCacheTime = 0;
-const TURNOVER_CACHE_TTL = 30000; // 30s
+const TURNOVER_CACHE_TTL = 300000; // 5 min
 
 const NSE_TURNOVER_TICKERS = ['SCOM', 'EQTY', 'KCB', 'EABL', 'ABSA', 'SBIC', 'KLG', 'BAMB', 'UMEM', 'KPLC', 'NMG', 'TOTL', 'STAN', 'COOP', 'JUB', 'KNRE', 'LKL', 'CIC', 'HFCK', 'IMH', 'NCBA', 'BAT', 'BOC', 'CARB', 'SCBK', 'DTK', 'BKG', 'KUKZ', 'KAPC', 'WTK', 'SASN', 'KEGN', 'UMME', 'BRIT', 'LBTY', 'SLAM', 'CTUM', 'NSE', 'EVRD', 'FTGH', 'UNGA', 'ARM', 'PORT', 'CRWN', 'TPSE', 'SCAN', 'SGL', 'CGEN', 'AMAC', 'ALP', 'CABL', 'DCON', 'GLD', 'HBE', 'KPC', 'KURV', 'LAPR', 'SKL', 'SMWF', 'TCL'];
 const GLOBAL_TURNOVER_TICKERS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'JPM', 'V', 'LLY', 'AVGO', 'WMT', 'XOM', 'UNH', 'PG', 'COST', 'KO', 'PEP', 'AMD', 'CRM', 'ADBE', 'PLTR', 'SNOW', 'UBER', 'ORCL', 'NFLX', 'DIS', 'BAC', 'INTC', 'CSCO', 'QCOM', 'TXN', 'IBM', 'GS', 'MS', 'GE', 'BA', 'CAT', 'MCD', 'NKE', 'SBUX', 'PYPL', 'GME', 'AMC'];
@@ -7253,57 +7253,66 @@ async function fetchYahooStockQuote(symbol) {
   }
 }
 
+async function computeTurnover() {
+  let nseTurnover = 0, nseVolume = 0, nseCount = 0;
+  const { getBatchQuotes } = require('./mystocksAfricaApi');
+  let nseQuotes = {};
+  try {
+    nseQuotes = await getBatchQuotes(NSE_TURNOVER_TICKERS);
+  } catch (e) {
+    console.warn('[turnover] MyStocks Africa batch failed:', e.message);
+  }
+  for (const t of NSE_TURNOVER_TICKERS) {
+    const q = nseQuotes[t];
+    if (q && q.price != null) {
+      nseTurnover += (q.price || 0) * (q.volume || 0);
+      nseVolume += q.volume || 0;
+      nseCount++;
+    }
+  }
+  const globalResults = await Promise.allSettled(
+    GLOBAL_TURNOVER_TICKERS.map(s =>
+      Promise.race([
+        fetchYahooStockQuote(s),
+        new Promise(resolve => setTimeout(() => resolve(null), 4000)),
+      ])
+    )
+  );
+  let globalTurnover = 0, globalVolume = 0;
+  for (let i = 0; i < GLOBAL_TURNOVER_TICKERS.length; i++) {
+    const r = globalResults[i];
+    if (r.status === 'fulfilled' && r.value) {
+      globalTurnover += (r.value.price || 0) * (r.value.volume || 0);
+      globalVolume += r.value.volume || 0;
+    }
+  }
+  return {
+    nse: { turnover: nseTurnover, volume: nseVolume, count: nseCount },
+    global: { turnover: globalTurnover, volume: globalVolume, count: GLOBAL_TURNOVER_TICKERS.length },
+  };
+}
+
+async function computeTurnoverInBackground() {
+  const result = await computeTurnover();
+  if (result.nse.volume > 0) {
+    turnoverCache = result;
+    turnoverCacheTime = Date.now();
+  }
+}
+
 app.get('/api/market/turnover', async (req, res) => {
   const now = Date.now();
   if (turnoverCacheTime && now - turnoverCacheTime < TURNOVER_CACHE_TTL) {
     return res.json(turnoverCache);
   }
+  // Stale-while-revalidate: serve stale data immediately, refresh in background
+  if (turnoverCacheTime && turnoverCache) {
+    computeTurnoverInBackground().catch(() => {});
+    return res.json(turnoverCache);
+  }
   try {
-    // NSE: from the MyStocks Africa Partner API (authoritative delayed live quotes,
-    // includes price + volume + change). Batched in a single call for efficiency.
-    let nseTurnover = 0, nseVolume = 0, nseCount = 0;
-    const { getBatchQuotes } = require('./mystocksAfricaApi');
-    let nseQuotes = {};
-    try {
-      nseQuotes = await getBatchQuotes(NSE_TURNOVER_TICKERS);
-    } catch (e) {
-      console.warn('[turnover] MyStocks Africa batch failed:', e.message);
-    }
-    for (const t of NSE_TURNOVER_TICKERS) {
-      const q = nseQuotes[t];
-      if (q && q.price != null) {
-        nseTurnover += (q.price || 0) * (q.volume || 0);
-        nseVolume += q.volume || 0;
-        nseCount++;
-      }
-    }
-
-    // Global: parallel Yahoo chart API calls
-    const globalResults = await Promise.allSettled(
-      GLOBAL_TURNOVER_TICKERS.map(s =>
-        Promise.race([
-          fetchYahooStockQuote(s),
-          new Promise(resolve => setTimeout(() => resolve(null), 4000)),
-        ])
-      )
-    );
-    let globalTurnover = 0, globalVolume = 0;
-    for (let i = 0; i < GLOBAL_TURNOVER_TICKERS.length; i++) {
-      const r = globalResults[i];
-      if (r.status === 'fulfilled' && r.value) {
-        globalTurnover += (r.value.price || 0) * (r.value.volume || 0);
-        globalVolume += r.value.volume || 0;
-      }
-    }
-
-    const result = {
-      nse: { turnover: nseTurnover, volume: nseVolume, count: nseCount },
-      global: { turnover: globalTurnover, volume: globalVolume, count: GLOBAL_TURNOVER_TICKERS.length },
-    };
-    // Only cache once NSE data is actually available (the quote cache may still
-    // be warming on a fresh deploy); otherwise retry on the next request instead of
-    // serving a stale zero for 30s.
-    if (nseVolume > 0) {
+    const result = await computeTurnover();
+    if (result.nse.volume > 0) {
       turnoverCache = result;
       turnoverCacheTime = now;
     }

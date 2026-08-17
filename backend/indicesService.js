@@ -2,7 +2,7 @@ const { getQuotesBatch } = require('./marketService');
 const axios = require('axios');
 const { fetchNseIndicesFromSite } = require('./nseIndexScraper');
 
-const CACHE_TTL_MS = 60 * 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min — indices don't change sub-minute
 const cache = { indices: {}, sectors: {}, lastFetch: 0 };
 
 const NSE_INDICES = {
@@ -155,10 +155,19 @@ async function fetchIndexLive(symbol) {
 
 async function getAllIndices() {
   const now = Date.now();
-  if (cache.indices && cache.lastFetch && (now - cache.lastFetch) < CACHE_TTL_MS) {
+  if (cache.indices && Object.keys(cache.indices).length > 0 && cache.lastFetch && (now - cache.lastFetch) < CACHE_TTL_MS) {
     return cache.indices;
   }
 
+  // Stale-while-revalidate: if stale data exists, return it immediately and
+  // refresh in background so the page never blocks on a cold external fetch.
+  const hasStale = cache.indices && Object.keys(cache.indices).length > 0;
+  if (hasStale) {
+    refreshIndicesInBackground().catch(() => {});
+    return cache.indices;
+  }
+
+  // No cached data at all (cold start) — block and fetch
   const symbols = Object.keys(ALL_INDICES);
   const results = {};
   await Promise.all(symbols.map(async (sym) => {
@@ -169,6 +178,17 @@ async function getAllIndices() {
   cache.indices = results;
   cache.lastFetch = now;
   return results;
+}
+
+async function refreshIndicesInBackground() {
+  const symbols = Object.keys(ALL_INDICES);
+  const results = {};
+  await Promise.all(symbols.map(async (sym) => {
+    const data = await fetchIndexLive(sym);
+    results[sym] = formatIndexForResponse(sym, data);
+  }));
+  cache.indices = results;
+  cache.lastFetch = Date.now();
 }
 
 async function getNseIndices() {

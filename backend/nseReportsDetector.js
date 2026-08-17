@@ -476,7 +476,7 @@ async function scrapeNseFinancialResults() {
   // so historical periods are captured for free (no ScrapingBee needed).
   const currentYear = new Date().getFullYear();
   const years = [];
-  for (let y = 2022; y <= currentYear; y++) years.push(String(y));
+  for (let y = 2026; y <= currentYear; y++) years.push(String(y));
   const [a, b, c] = await Promise.allSettled([
     scrapePdfLinksFromPage(NSE_FINANCIALS_URL),
     scrapePdfLinksFromPage(NSE_ANNOUNCEMENTS_URL),
@@ -542,6 +542,22 @@ async function processFiling(pdf, suppressAlert) {
   const company = extractCompanyName(pdf.filename);
   const periodEnd = parsePeriodEnd(pdf.filename);
   const audited = isAudited(pdf.filename);
+
+  // Pre-2026 reports: we already have ~5 years of data in the DB. Skip
+  // downloading/parsing/notifying for any report whose period ends before 2026.
+  if (periodEnd && new Date(periodEnd).getFullYear() < 2026) {
+    await recordFiling({ key, company, ticker, url: pdf.url, filename: pdf.filename, periodEnd, audited, parsed: true, parseStatus: 'skipped-pre-2026', source: pdf.source || 'nse' });
+    console.log(`[NSE-Detector] Skip ${ticker || company} ${periodEnd} (pre-2026, already in DB)`);
+    return { matched: !!ticker, parsed: true, skipped: true };
+  }
+
+  // Can't determine period from filename — skip download/parse. The filing is
+  // recorded so the detector doesn't re-attempt it each cycle.
+  if (!periodEnd) {
+    await recordFiling({ key, company, ticker, url: pdf.url, filename: pdf.filename, periodEnd: null, audited, parsed: false, parseStatus: 'skipped-no-period', source: pdf.source || 'nse' });
+    console.log(`[NSE-Detector] Skip ${ticker || company} (could not determine period from filename)`);
+    return { matched: !!ticker, parsed: false, skipped: true };
+  }
 
   if (!ticker) {
     // Not a tracked ticker — record + alert only (no auto-parse)
@@ -650,6 +666,25 @@ async function runDetection() {
   try {
     if (!process.env.DATABASE_URL) { console.log('[NSE-Detector] No DATABASE_URL — skipping'); return; }
     await ensureTable();
+
+    // One-shot cleanup: reject any pending_review rows whose period is pre-2026.
+    // We have ~5 years of data already; only 2026+ reports need admin attention.
+    try {
+      const stale = await pool.query(
+        `UPDATE financial_statements SET status = 'failed', error_message = 'Auto-rejected: pre-2026 report'
+         WHERE status = 'pending_review' AND period_end_date < '2026-01-01' AND period_end_date IS NOT NULL`
+      );
+      if (stale.rowCount > 0) console.log(`[NSE-Detector] Auto-rejected ${stale.rowCount} pre-2026 pending statement(s)`);
+      // Also reject pre-2026 pending_review filings so they aren't re-processed each cycle
+      const staleFilings = await pool.query(
+        `UPDATE nse_report_filings SET parse_status = 'skipped-pre-2026'
+         WHERE parse_status = 'pending_review' AND (
+           (period_end_date IS NOT NULL AND period_end_date < '2026-01-01')
+           OR period_end_date IS NULL
+         )`
+      );
+      if (staleFilings.rowCount > 0) console.log(`[NSE-Detector] Auto-rejected ${staleFilings.rowCount} stale pending filing(s)`);
+    } catch { /* table may not exist */ }
 
     // On a fresh deploy the filings table is empty, so every currently-published
     // PDF would look "new". Backfill + parse them, but suppress the alert storm.
