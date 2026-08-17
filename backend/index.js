@@ -11657,6 +11657,27 @@ async function initDatabase() {
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );`);
 
+    await pool.query(`CREATE TABLE IF NOT EXISTS engine_health (
+      id SERIAL PRIMARY KEY,
+      status VARCHAR(20),
+      win_rate NUMERIC(5,2),
+      total_trades INTEGER,
+      consecutive_losses INTEGER,
+      regime VARCHAR(20),
+      signal_count INTEGER,
+      confidence NUMERIC(5,2),
+      recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_engine_health_recorded_at ON engine_health(recorded_at)');
+
+    await pool.query(`CREATE TABLE IF NOT EXISTS portfolio_state (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      consecutive_losses INTEGER DEFAULT 0,
+      total_trades INTEGER DEFAULT 0,
+      peak_value NUMERIC(15,2) DEFAULT 1,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );`);
+
     await pool.query(`CREATE TABLE IF NOT EXISTS nse_ipos (
       id SERIAL PRIMARY KEY,
       company_name VARCHAR(255) NOT NULL,

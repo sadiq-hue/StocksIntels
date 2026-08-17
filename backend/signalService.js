@@ -1598,15 +1598,14 @@ const FADE_DEEP_SCORE = 42;      // <= this: deep fade; 43..54: marginal fade
 // re-scoring pass can flicker Buy<->Hold/Sell within minutes of entry; closing at
 // market then books entry==exit — the ~0% coin-flip churn. During the guard the
 // position resolves ONLY by stop/target (trackSignalOutcomes). A genuine target1
-// touch is still handled there via the trailing stop, so no realized gain is lost.
+// touch is still handled there as a win, so no realized gain is lost.
 // The guard also gives a fresh thesis room to develop: a 4-hour-old swing position
 // (EABL Aug 5) was fade-closed at +1.2% before it ever approached its +14% target.
 const SCORE_CLOSE_MIN_AGE_MS = (Math.max(1, parseInt(process.env.SCORE_CLOSE_MIN_AGE_HOURS || '6', 10) || 6)) * 3600000; // 6 hours by default
 // A fade (buy -> hold) is a WEAK signal — the composite sits on the buy/hold
 // boundary and stocks take time to reach their targets — so a fading position is
-// NEVER closed while it is winning or flat: it rides to target1 (the trailing
-// stop books the exit once target is touched), the stale-thesis cleanup, a full
-// flip, or its hard stop. The ONLY fade exit is the loss-side cut below: a loser
+// NEVER closed while it is winning or flat: it rides to target1 (which banks
+// the win), the stale-thesis cleanup, a full flip, or its hard stop. The ONLY fade exit is the loss-side cut below: a loser
 // that has meaningfully failed toward its stop while conviction is gone is cut
 // early; the stop itself stays the final risk cap. The cut fires only once the
 // position has traveled 75% of the way to its hard stop (default
