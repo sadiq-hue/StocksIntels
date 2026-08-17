@@ -7439,7 +7439,7 @@ app.get('/api/market/premarket', async (req, res) => {
             regularMarketDayHigh: meta.regularMarketDayHigh ?? null,
             regularMarketDayLow: meta.regularMarketDayLow ?? null,
             regularMarketVolume: meta.regularMarketVolume ?? null,
-            marketState: meta.marketState || 'CLOSED',
+            marketState: meta.marketState || (isMarketOpen('Global').open ? 'REGULAR' : 'CLOSED'),
             currentTradingPeriod: meta.currentTradingPeriod || null,
             exchange: meta.exchangeName || '',
             currency: meta.currency || 'USD',

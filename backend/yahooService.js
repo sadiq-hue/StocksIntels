@@ -447,16 +447,18 @@ async function fetchQuote(symbol) {
       if (proxyResult?.price && Number(proxyResult.price) > 0) {
         const price = Number(proxyResult.price);
         const previousClose = Number(proxyResult.regularMarketPreviousClose) || Number(proxyResult.previousClose);
-        // Reject stale chartPreviousClose values that collapsed to the
-        // current price (v8 chart's chartPreviousClose is frequently
-        // stale/wrong — e.g. BLK returned prev≈price with a real change%).
-        // Fall through to Yahoo-finance2 which carries a reliable
-        // regularMarketPreviousClose + regularMarketChangePercent.
-        if (previousClose > 0 && Math.abs(price - previousClose) / previousClose > 0.005) {
+        // Trust Yahoo's explicit regularMarketChangePercent when available — it is
+        // authoritative even for small moves. Only reject if the change is both
+        // computed as near-zero AND Yahoo reports no change either (true stale data
+        // where chartPreviousClose collapsed to current price).
+        const reportedPct = (proxyResult.regularMarketChangePercent != null && !isNaN(Number(proxyResult.regularMarketChangePercent)))
+          ? Number(proxyResult.regularMarketChangePercent) : null;
+        const computedPct = previousClose > 0 ? ((price - previousClose) / previousClose) * 100 : 0;
+        const hasRealChange = (reportedPct != null && Math.abs(reportedPct) > 0.001)
+          || (previousClose > 0 && Math.abs(price - previousClose) / previousClose > 0.001);
+        if (previousClose > 0 && hasRealChange) {
           const change = price - previousClose;
-          const changePercent = (proxyResult.regularMarketChangePercent != null && !isNaN(Number(proxyResult.regularMarketChangePercent)))
-            ? Number(proxyResult.regularMarketChangePercent)
-            : (change / previousClose) * 100;
+          const changePercent = reportedPct != null ? reportedPct : computedPct;
           return cacheSet(quoteCache, cacheKey, {
             symbol: symbol.toUpperCase(),
             company_name: proxyResult.companyName || symbol.toUpperCase(),
@@ -500,8 +502,13 @@ async function fetchQuote(symbol) {
 
   // 3. Yahoo V8 direct (works from local dev, usually blocked on cloud)
   let quote = await fetchV8Quote(yahooSymbol);
-  if (quote && Number(quote.previousClose) > 0 && Math.abs(Number(quote.price) - Number(quote.previousClose)) / Number(quote.previousClose) > 0.005) {
-    return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
+  if (quote && Number(quote.previousClose) > 0) {
+    // Trust Yahoo's changePercent if available; only reject if both the reported
+    // and computed change are truly zero (stale chartPreviousClose == price).
+    const reportedPct = Number(quote.changePercent) || 0;
+    const computedPct = (Number(quote.price) - Number(quote.previousClose)) / Number(quote.previousClose) * 100;
+    const hasRealChange = Math.abs(reportedPct) > 0.001 || Math.abs(computedPct) > 0.001;
+    if (hasRealChange) return cacheSet(quoteCache, cacheKey, quote, CACHE_TTL.quote, redisKey);
   }
   // v8 gave a price but no reliable previous close (stale chartPreviousClose
   // collapsed to the current price, or missing entirely) — keep as price-only
