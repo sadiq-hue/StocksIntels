@@ -3514,17 +3514,19 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       }
     }
     trackSignalOutcomes(_portfolioState, _performanceStats, _signalOutcomes, symbol, currentPrice, sigObj, marketOpen);
-    // Sell emission gate: one sell rating per symbol until it resolves. A
-    // persistent sell must not re-emit a fresh rating every cycle — the audit
-    // counts every persisted Sell (signal_history AND forward_predictions), so
-    // the same call would be counted N times. The existing unresolved rating
-    // stays until its resolution horizon, then a fresh sell may be emitted.
+    // Sell persistence gate: one sell forward-prediction per symbol until it
+    // resolves. A persistent sell must not create a new prediction every cycle
+    // — the audit counts every persisted row, so duplicates inflate the totals.
+    // The signal itself is still returned to the frontend (so the Market
+    // Intelligence page shows active sell ratings), only the forward-prediction
+    // insert is suppressed.
+    let suppressSellPersist = false;
     if (emitSignal && sigObj.action === 'sell') {
       const sellStore = _forwardTestStore.get(symbol);
       const openSell = sellStore && sellStore.predictions.find(p => !p.resolved && p.action === 'sell');
       if (openSell) {
-        emitSignal = false;
-        console.log(`[SignalService] ${symbol} sell rating already pending (entry=${openSell.price}) - monitoring, not emitting a fresh sell`);
+        suppressSellPersist = true;
+        console.log(`[SignalService] ${symbol} sell rating already pending (entry=${openSell.price}) - monitoring, not re-persisting`);
       }
     }
     // Confidence floor: a signal below the emission threshold is not a real
@@ -3536,7 +3538,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       emitSignal = false;
       console.log(`[SignalService] ${symbol} ${sigObj.signal} confidence ${sigObj.confidence} below emission floor ${cfg.minConfidence || 40} - not persisting`);
     }
-    if (emitSignal && sigObj.signal !== 'Hold') {
+    if (emitSignal && !suppressSellPersist && sigObj.signal !== 'Hold') {
       recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.action, sigObj.type, sigObj.sector).catch(() => {});
     }
     if (prevOutcome && prevOutcome.result && prevOutcome.timestamp) {
