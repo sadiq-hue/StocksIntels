@@ -5650,6 +5650,21 @@ app.get('/api/market/status', async (req, res) => {
   });
 });
 
+// Market intelligence feed from MyStocks Africa — curated editorial articles
+// across African exchanges (macro, sector reports, earnings, announcements).
+app.get('/api/market-intel', async (req, res) => {
+  try {
+    const { fetchMarketIntel } = require('./mystocksAfricaApi');
+    const limit = Math.min(parseInt(req.query.limit) || 10, 30);
+    const exchange = req.query.exchange || undefined;
+    const articles = await fetchMarketIntel(exchange, limit);
+    res.json(articles || []);
+  } catch (error) {
+    console.error('Error fetching market intel:', error.message);
+    res.json([]);
+  }
+});
+
 // --- NSE Market Data Routes ---
 app.get('/api/market/nse', async (req, res) => {
   try {

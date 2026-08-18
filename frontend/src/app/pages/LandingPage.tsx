@@ -425,6 +425,15 @@ export function LandingPage() {
       .catch(() => {});
   }, []);
 
+  const [marketArticles, setMarketArticles] = useState<Array<{ id: string; title: string; summary?: string; source?: string; publishedAt?: string; slug?: string; url?: string }>>([]);
+
+  useEffect(() => {
+    fetch('/api/market-intel?limit=6')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setMarketArticles(data.slice(0, 6)); })
+      .catch(() => {});
+  }, []);
+
   const allTestimonials = useMemo(() => [...testimonials, ...userTestimonials], [userTestimonials]);
 
   const setSectionRef = (i: number) => (el: HTMLDivElement | null) => {
@@ -794,13 +803,68 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* PRICING */}
-      <section id="pricing" className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(6)}>
+      {/* MARKET INSIGHTS */}
+      <section className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(6)}>
         <div className="absolute inset-0 opacity-[0.015]" style={{
           backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
           backgroundSize: "30px 30px",
         }} />
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(6) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+          <div className="text-center max-w-3xl mx-auto mb-14">
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Latest market insights</h2>
+            <p className="text-lg text-muted-foreground">Curated editorial coverage from MyStocks across African exchanges — macro analysis, sector reports, and earnings commentary.</p>
+          </div>
+
+          {marketArticles.length > 0 && (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {marketArticles.map((article, i) => {
+                const href = article.url || (article.slug ? `https://mystocks.africa/market-intel/${article.slug}` : '#');
+                const dateLabel = article.publishedAt
+                  ? new Date(article.publishedAt).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })
+                  : '';
+                return (
+                  <a key={article.id || i} href={href} target="_blank" rel="noopener noreferrer"
+                    className="group bg-card rounded-xl p-6 border border-border shadow-sm hover:shadow-xl hover:shadow-[#0D7490]/10 hover:-translate-y-1 transition-all duration-500 block"
+                    style={{ animation: `fade-in-up 0.5s ease-out ${i * 0.1}s forwards`, opacity: 0 }}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <TrendingUp className="w-4 h-4 text-[#0D7490]" />
+                      <span className="text-xs font-medium text-[#0D7490] uppercase tracking-wide">{article.source || 'Market Intel'}</span>
+                    </div>
+                    <h3 className="font-bold text-foreground mb-2 group-hover:text-[#0D7490] transition-colors duration-300 leading-snug">{article.title}</h3>
+                    {article.summary && (
+                      <p className="text-muted-foreground text-sm leading-relaxed line-clamp-3">{article.summary}</p>
+                    )}
+                    {dateLabel && (
+                      <p className="text-muted-foreground text-xs mt-3">{dateLabel}</p>
+                    )}
+                  </a>
+                );
+              })}
+            </div>
+          )}
+
+          {marketArticles.length > 0 && (
+            <div className="text-center mt-10">
+              <a href="https://mystocks.africa/market-intel" target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-[#0D7490] font-medium hover:underline">
+                View all market intelligence <ChevronRight className="w-4 h-4" />
+              </a>
+            </div>
+          )}
+
+          {marketArticles.length === 0 && (
+            <p className="text-center text-muted-foreground">Market insights are refreshed throughout the trading day.</p>
+          )}
+        </div>
+      </section>
+
+      {/* PRICING */}
+      <section id="pricing" className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(7)}>
+        <div className="absolute inset-0 opacity-[0.015]" style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
+          backgroundSize: "30px 30px",
+        }} />
+        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(7) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="text-center max-w-3xl mx-auto mb-14">
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Simple pricing. Start your trial today.</h2>
             <p className="text-lg text-muted-foreground">Less than a coffee a day. Try any plan free for 7 days.</p>
@@ -901,8 +965,8 @@ export function LandingPage() {
       </section>
 
       {/* FAQ */}
-      <section id="faq" className="py-20 lg:py-28 bg-card" ref={setSectionRef(7)}>
-        <div className={`max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(7) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+      <section id="faq" className="py-20 lg:py-28 bg-card" ref={setSectionRef(8)}>
+        <div className={`max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(8) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="text-center mb-14">
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Common questions</h2>
             <p className="text-lg text-muted-foreground">Honest answers about what StocksIntels does and does not do.</p>
@@ -931,8 +995,8 @@ export function LandingPage() {
       </section>
 
       {/* CONTACT */}
-      <section id="contact" className="py-20 lg:py-28 bg-muted" ref={setSectionRef(8)}>
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(8) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
+      <section id="contact" className="py-20 lg:py-28 bg-muted" ref={setSectionRef(9)}>
+        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(9) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
             <div>
               <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Get in touch</h2>

@@ -157,4 +157,34 @@ async function fetchHistorical(rawSymbol, range = '6mo') {
   }
 }
 
-module.exports = { getQuoteForSymbol, getBatchQuotes, toApiSymbol, fetchHistorical };
+// ── Market Intelligence Feed ──────────────────────────────────────────────────
+// Curated editorial articles across African exchanges (macro analysis, sector
+// reports, earnings commentary, exchange announcements). Updated throughout
+// the trading day.
+
+const intelCache = { data: null, time: 0 };
+const INTEL_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
+
+async function fetchMarketIntel(exchange, limit = 10) {
+  if (!API_KEY) return null;
+  const now = Date.now();
+  if (intelCache.data && now - intelCache.time < INTEL_CACHE_TTL_MS) return intelCache.data;
+
+  try {
+    const resp = await axios.get(`${API_BASE}/market-intel`, {
+      timeout: FETCH_TIMEOUT,
+      headers: { Authorization: `Bearer ${API_KEY}`, Accept: 'application/json' },
+      params: { limit, ...(exchange ? { exchange } : {}) },
+    });
+    const articles = resp.data?.articles || resp.data?.data || resp.data;
+    const result = Array.isArray(articles) ? articles : [];
+    intelCache.data = result;
+    intelCache.time = now;
+    return result;
+  } catch (e) {
+    console.warn(`[myStocksAfrica] market-intel failed: ${e.message}`);
+    return null;
+  }
+}
+
+module.exports = { getQuoteForSymbol, getBatchQuotes, toApiSymbol, fetchHistorical, fetchMarketIntel };
