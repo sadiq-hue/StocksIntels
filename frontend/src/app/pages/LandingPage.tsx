@@ -488,7 +488,7 @@ export function LandingPage() {
             </Link>
 
             <nav className="hidden lg:flex items-center gap-6">
-              {["Features", "Testimonials", "Pricing", "Contact"].map((item) => (
+              {["Features", "Insights", "Testimonials", "Pricing", "Contact"].map((item) => (
                 <a key={item} href={`#${item.toLowerCase()}`}
                   className="text-sm font-medium text-muted-foreground hover:text-[#0D7490] transition-colors">
                   {item}
@@ -528,7 +528,7 @@ export function LandingPage() {
         {mobileMenuOpen && (
           <div className="lg:hidden bg-card border-b border-border shadow-xl">
             <div className="px-4 py-6 space-y-1">
-              {["Features", "Testimonials", "Pricing", "Contact"].map((item) => (
+              {["Features", "Insights", "Testimonials", "Pricing", "Contact"].map((item) => (
                 <a key={item} href={`#${item.toLowerCase()}`}
                   onClick={() => setMobileMenuOpen(false)}
                   className="block px-4 py-3 rounded-xl text-base font-medium text-muted-foreground hover:text-[#0D7490] hover:bg-muted">
@@ -804,7 +804,7 @@ export function LandingPage() {
       </section>
 
       {/* MARKET INSIGHTS */}
-      <section className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(6)}>
+      <section id="insights" className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(6)}>
         <div className="absolute inset-0 opacity-[0.015]" style={{
           backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
           backgroundSize: "30px 30px",
