@@ -29,7 +29,7 @@ const NSE_NAMES = {
   CGEN: 'Car and General (K)', CFCI: 'CFC Insurance Holdings Ltd', CIC: 'CIC Insurance Group', COOP: 'Co-operative Bank of Kenya', CRWN: 'Crown Paints Kenya Plc',
   CTUM: 'Centum Investment Company Plc', DCON: 'Deacons (East Africa) Plc', DTK: 'Diamond Trust Bank Kenya',
   EABL: 'East African Breweries', EGAD: 'Eaagads', EQTY: 'Equity Group Holdings Plc', EVRD: 'Eveready East Africa',
-  FTGH: 'Flame Tree Group Holdings', GLD: 'ABSA NewGold ETF',   HAFC: 'HF Group PLC', HAFR: 'Home Afrika', HBE: 'Homeboyz Entertainment Plc',
+  FTGH: 'Flame Tree Group Holdings', FABL: 'Family Bank Limited', GLD: 'ABSA NewGold ETF',   HAFC: 'HF Group PLC', HAFR: 'Home Afrika', HBE: 'Homeboyz Entertainment Plc',
   HFCK: 'HFCB Group Plc', IMH: 'I & M Holdings Plc', JUB: 'Jubilee Holdings', KAPC: 'Kapchorua Tea Kenya Plc',
   KCB: 'KCB Group Plc', KEGN: 'Kenya Electricity Generating Company Plc', KNRE: 'Kenya Re-Insurance Corporation',
   KPC: 'Kenya Pipeline Company Plc', KPLC: 'Kenya Power and Lighting Company Plc', KQ: 'Kenya Airways Plc',
