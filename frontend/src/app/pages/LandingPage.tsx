@@ -845,10 +845,10 @@ export function LandingPage() {
 
           {marketArticles.length > 0 && (
             <div className="text-center mt-10">
-              <a href="https://mystocks.africa/market-intel" target="_blank" rel="noopener noreferrer"
+              <Link to="/blog"
                 className="inline-flex items-center gap-2 text-[#0D7490] font-medium hover:underline">
-                View all market intelligence <ChevronRight className="w-4 h-4" />
-              </a>
+                View all articles <ChevronRight className="w-4 h-4" />
+              </Link>
             </div>
           )}
 
@@ -1149,6 +1149,7 @@ export function LandingPage() {
               <ul className="space-y-3">
                 <li><Link to="/pricing" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Pricing</Link></li>
                 <li><a href="#features" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Features</a></li>
+                <li><Link to="/blog" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Blog</Link></li>
                 <li><a href="#testimonials" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Testimonials</a></li>
                 <li><a href="#faq" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">FAQ</a></li>
               </ul>

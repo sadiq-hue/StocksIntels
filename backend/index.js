@@ -5665,6 +5665,79 @@ app.get('/api/market-intel', async (req, res) => {
   }
 });
 
+// --- Blog Routes ---
+app.get('/api/blog', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const offset = (page - 1) * limit;
+    const category = req.query.category || null;
+    const search = req.query.search || null;
+
+    let where = "WHERE status = 'published'";
+    const params = [];
+    let paramIdx = 1;
+
+    if (category) {
+      where += ` AND category = $${paramIdx++}`;
+      params.push(category);
+    }
+    if (search) {
+      where += ` AND (title ILIKE $${paramIdx} OR excerpt ILIKE $${paramIdx})`;
+      params.push(`%${search}%`);
+      paramIdx++;
+    }
+
+    const countResult = await pool.query(`SELECT COUNT(*) FROM blog_posts ${where}`, params);
+    const total = parseInt(countResult.rows[0].count);
+
+    params.push(limit);
+    params.push(offset);
+    const { rows } = await pool.query(
+      `SELECT id, title, slug, excerpt, source, source_url, category, author, published_at, featured_image
+       FROM blog_posts ${where}
+       ORDER BY published_at DESC
+       LIMIT $${paramIdx++} OFFSET $${paramIdx}`,
+      params
+    );
+
+    res.json({ posts: rows, total, page, totalPages: Math.ceil(total / limit) });
+  } catch (error) {
+    console.error('Error fetching blog posts:', error.message);
+    res.json({ posts: [], total: 0, page: 1, totalPages: 0 });
+  }
+});
+
+app.get('/api/blog/categories', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT category, COUNT(*) as count FROM blog_posts WHERE status='published' GROUP BY category ORDER BY count DESC"
+    );
+    res.json(rows);
+  } catch (error) {
+    res.json([]);
+  }
+});
+
+app.get('/api/blog/:slug', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT * FROM blog_posts WHERE slug = $1 AND status = 'published'",
+      [req.params.slug]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Post not found' });
+    const post = rows[0];
+    // Get related posts from same category
+    const { rows: related } = await pool.query(
+      "SELECT id, title, slug, excerpt, source, published_at, featured_image FROM blog_posts WHERE category = $1 AND id != $2 AND status = 'published' ORDER BY published_at DESC LIMIT 4",
+      [post.category, post.id]
+    );
+    res.json({ ...post, related });
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching post' });
+  }
+});
+
 // --- NSE Market Data Routes ---
 app.get('/api/market/nse', async (req, res) => {
   try {
@@ -13510,4 +13583,13 @@ server.listen(port, '0.0.0.0', async () => {
     console.log('[NSE-Reports] Automated NSE report detector started (daily 7:05 AM)');
   } catch (err) {
     console.error('[NSE-Reports] Failed to start detector:', err.message);
+  }
+
+  // Blog auto-ingestion from all sources (MyStocks, newsService, NSE)
+  try {
+    const { startBlogIngestion } = require('./blogIngestionService');
+    startBlogIngestion();
+    console.log('[BlogIngest] Auto-ingestion started (hourly)');
+  } catch (err) {
+    console.error('[BlogIngest] Failed to start ingestion:', err.message);
   }

@@ -29,7 +29,8 @@ const ETFsPage = React.lazy(() => import("./pages/ETFsPage").then(m => ({ defaul
 const ProfilePage = React.lazy(() => import("./pages/ProfilePage").then(m => ({ default: m.ProfilePage })));
 const SupportCenterPage = React.lazy(() => import("./pages/SupportCenterPage").then(m => ({ default: m.SupportCenterPage })));
 const AboutPage = React.lazy(() => import("./pages/AboutPage").then(m => ({ default: m.AboutPage })));
-const BlogPage = React.lazy(() => import("./pages/BlogPage").then(m => ({ default: m.BlogPage })));
+const BlogPage = React.lazy(() => import("./pages/BlogPage").then(m => ({ default: m.BlogList })));
+const BlogArticlePage = React.lazy(() => import("./pages/BlogPage").then(m => ({ default: m.BlogArticle })));
 const CareersPage = React.lazy(() => import("./pages/CareersPage").then(m => ({ default: m.CareersPage })));
 const PrivacyPage = React.lazy(() => import("./pages/PrivacyPage").then(m => ({ default: m.PrivacyPage })));
 const TermsPage = React.lazy(() => import("./pages/TermsPage").then(m => ({ default: m.TermsPage })));
@@ -120,6 +121,7 @@ const router = createBrowserRouter([
   },
   { path: "/about", element: <AboutPage />, errorElement: <NotFoundPage /> },
   { path: "/blog", element: <BlogPage />, errorElement: <NotFoundPage /> },
+  { path: "/blog/:slug", element: <BlogArticlePage />, errorElement: <NotFoundPage /> },
   { path: "/careers", element: <CareersPage />, errorElement: <NotFoundPage /> },
   { path: "/privacy", element: <PrivacyPage />, errorElement: <NotFoundPage /> },
   { path: "/terms", element: <TermsPage />, errorElement: <NotFoundPage /> },
