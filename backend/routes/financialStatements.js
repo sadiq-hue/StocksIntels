@@ -9,6 +9,27 @@ const { spawn } = require('child_process');
 const { storeParsedFinancials } = require('../financialStatementsStore');
 const { backfillAfricanFinancials, runDetection } = require('../nseReportsDetector');
 
+async function syncFilingStatus(statementId, newStatus) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.ticker, fs.period_end_date, fs.file_name
+       FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id
+       WHERE fs.id = $1`, [statementId]
+    );
+    if (!rows.length) return;
+    const { ticker, period_end_date: ped, file_name: fn } = rows[0];
+    const filingStatus = newStatus === 'completed' ? 'skipped-completed' : 'failed';
+    await pool.query(
+      `UPDATE nse_report_filings SET parse_status = $1
+       WHERE ticker = $2
+         AND (($3::date IS NULL AND period_end_date IS NULL)
+              OR (period_end_date IS NOT NULL AND $3::date IS NOT NULL
+                  AND ABS(period_end_date - $3::date) <= 15))`,
+      [filingStatus, ticker, ped]
+    );
+  } catch (_) { /* non-fatal */ }
+}
+
 const STOCKS_UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'stocks');
 if (!fs.existsSync(STOCKS_UPLOAD_DIR)) {
   fs.mkdirSync(STOCKS_UPLOAD_DIR, { recursive: true });
@@ -360,6 +381,7 @@ router.get('/financial-statements/:id/pdf', async (req, res) => {
 
 router.delete('/financial-statements/:id', async (req, res) => {
   try {
+    await syncFilingStatus(req.params.id, 'failed');
     const result = await pool.query(
       'DELETE FROM financial_statements WHERE id = $1 RETURNING id', [req.params.id]
     );
@@ -719,6 +741,7 @@ router.post('/financial-statements/:id/approve', async (req, res) => {
     if (rows[0].status !== 'pending_review') return res.status(409).json({ error: 'Statement is not pending review (status: ' + rows[0].status + ')' });
     if (!rows[0].parsed_data) return res.status(400).json({ error: 'No parsed data to approve' });
     await pool.query(`UPDATE financial_statements SET status = 'completed', error_message = NULL WHERE id = $1`, [id]);
+    await syncFilingStatus(id, 'completed');
     res.json({ id, status: 'completed', message: 'Approved and published' });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -733,6 +756,7 @@ router.post('/financial-statements/:id/reject', async (req, res) => {
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
     if (rows[0].status !== 'pending_review') return res.status(409).json({ error: 'Statement is not pending review (status: ' + rows[0].status + ')' });
     await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`, [reason, id]);
+    await syncFilingStatus(id, 'failed');
     res.json({ id, status: 'failed', message: 'Rejected — will not be re-parsed by the detector' });
   } catch (e) {
     res.status(500).json({ error: e.message });
