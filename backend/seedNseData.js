@@ -128,39 +128,21 @@ async function seedNseData({ force = false } = {}) {
     inserted++;
   }
 
-  const seedKeys = new Set(
-    statements
-      .filter((st) => st.period_end_date)
-      .map((st) => `${st.ticker}|${st.period_end_date}|${st.period_type}`)
-  );
-  // The seed file is a static snapshot of historical NSE statements. The orphan
-  // cleanup below is meant to remove stale/renamed seed rows — NOT freshly
-  // auto-detected reports. Guard with the seed's own max period so post-seed
-  // periods (e.g. H1 2026, which the NSE detector adds at runtime) are never
-  // wiped on redeploy, which would otherwise trigger a re-parse + email loop.
-  let maxSeedDate = null;
-  for (const st of statements) {
-    if (st.period_end_date && (!maxSeedDate || st.period_end_date > maxSeedDate)) maxSeedDate = st.period_end_date;
-  }
-
+  const seedTickers = new Set(stocks.map((s) => s.ticker));
+  // Only delete statements for stocks that are no longer in the seed at all
+  // (delisted/renamed). For stocks still in the seed, the UPSERT handles known
+  // periods and the detector owns new periods — never delete those.
   const exist = await pool.query(
-    `SELECT fs.id, s.ticker,
-            (fs.period_end_date AT TIME ZONE 'Africa/Nairobi')::date::text AS nb_date,
-            fs.period_type
+    `SELECT fs.id, s.ticker
      FROM financial_statements fs
      JOIN stocks s ON s.id = fs.stock_id
      WHERE s.market = 'NSE'
-       -- Never delete rows the auto-detector is holding for admin review; they
-       -- are in-flight and not part of the static seed by design.
        AND fs.status <> 'pending_review'
-       -- Only consider periods the seed itself covers; anything newer is the
-       -- detector's territory and must be preserved.
-       AND ($1::date IS NULL OR (fs.period_end_date AT TIME ZONE 'Africa/Nairobi')::date <= $1::date)`,
-    [maxSeedDate]
+       -- Only consider stocks NOT in the seed's stock list (removed/delisted)
+       AND s.ticker <> ALL($1::text[])`,
+    [[...seedTickers]]
   );
-  const orphanIds = exist.rows
-    .filter((r) => !seedKeys.has(`${r.ticker}|${String(r.nb_date).slice(0, 10)}|${r.period_type}`))
-    .map((r) => r.id);
+  const orphanIds = exist.rows.map((r) => r.id);
   let orphanDeleted = 0;
   if (orphanIds.length > 0) {
     const del = await pool.query('DELETE FROM financial_statements WHERE id = ANY($1)', [orphanIds]);
