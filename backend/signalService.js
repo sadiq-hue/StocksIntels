@@ -2549,6 +2549,45 @@ async function resolveAllForwardPredictions() {
   for (const [symbol, store] of _forwardTestStore) {
     const unresolved = store.predictions.filter(p => !p.resolved);
     if (!unresolved.length) continue;
+
+    // Sync with live signal outcomes: when the live engine resolves a position
+    // via score-based close (profit fade, score flipped, stale thesis) or
+    // stop/target hit, the corresponding forward prediction should reflect the
+    // same outcome instead of staying pending.
+    for (const pred of unresolved) {
+      if (pred.action !== 'buy') continue;
+      try {
+        // Match by symbol + entry price proximity (±2%) since both the forward
+        // prediction and the live signal outcome share the same entry from the
+        // same generation cycle.
+        const outcomeRes = await pool.query(
+          `SELECT exit_price, result, close_reason FROM signal_outcomes
+           WHERE ticker = $1 AND source = 'live' AND result IS NOT NULL
+             AND ABS(entry_price - $2) / NULLIF($2, 0) < 0.02
+           ORDER BY resolved_at DESC LIMIT 1`,
+          [symbol, pred.price]
+        );
+        if (outcomeRes.rows.length > 0) {
+          const o = outcomeRes.rows[0];
+          const exitPrice = parseFloat(o.exit_price);
+          const actualReturn = Math.round(((exitPrice - pred.price) / pred.price) * 1000) / 10;
+          pred.correct = o.result === 'win';
+          pred.resolved = true;
+          pred.actualReturn = actualReturn;
+          pred.resolvedAt = Date.now();
+          if (pred.id) {
+            pool.query(
+              `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = $2, resolved_at = NOW() WHERE id = $3`,
+              [actualReturn, pred.correct, pred.id]
+            ).catch(() => {});
+          }
+          resolved++;
+        }
+      } catch { /* sync best-effort */ }
+    }
+
+    const stillUnresolved = store.predictions.filter(p => !p.resolved);
+    if (!stillUnresolved.length) continue;
     try {
       const quote = await getStockQuote(_marketQuoteSymbol(symbol));
       if (!quote || !quote.price) { failed += unresolved.length; continue; }
