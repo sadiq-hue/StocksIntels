@@ -152,9 +152,10 @@ function isAudited(filename) {
 // the filename/slug (e.g. AfricanFinancials "ir-q3" or NSE "Q3").
 function inferPeriodType(filename) {
   const f = filename.toLowerCase();
-  // Interim cues: quarter labels, half-year, and X-month periods (NSE filenames
-  // often hyphenate, e.g. "Six-Months", "Six-Month", "three-months", "9-months").
-  if (/\bq[1-4]\b|\b(interim|half|hy|h1|h2)\b|(?:three|six|nine|3|6|9)[-\s]?months?/.test(f)) return 'quarterly';
+  // Quarterly cues: Q1-Q4 labels or 3/9-month periods.
+  // Half-year / H1 / H2 are 6-month reports — tag as 'annual' so they appear in the
+  // history grids alongside full-year data (matching KCB convention).
+  if (/\bq[1-4]\b|(?:three|nine|3|9)[-\s]?months?/.test(f)) return 'quarterly';
   return 'annual';
 }
 
