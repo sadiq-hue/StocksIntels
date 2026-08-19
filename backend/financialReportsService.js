@@ -673,12 +673,27 @@ async function buildLocalNseReport(symbol) {
 
     if (!fundamentals && !parsed) return null;
 
-    // When annual records exist, use only annual for the main history grids to
+    // When annual records exist, prefer annual for the main history grids to
     // prevent mixed quarterly/annual columns from corrupting YoY comparisons.
+    // However, always include the latest period even if it's quarterly (e.g. Q1
+    // reports published before the next full-year) so the grid always shows
+    // the most recent data instead of silently dropping it.
     const hasAnnual = validParsed.some(v => (v.periodType || '').toLowerCase() === 'annual');
-    const gridParsed = hasAnnual
-      ? validParsed.filter(v => (v.periodType || '').toLowerCase() === 'annual')
-      : validParsed;
+    let gridParsed;
+    if (hasAnnual) {
+      const annualRows = validParsed.filter(v => (v.periodType || '').toLowerCase() === 'annual');
+      const latest = validParsed[0]; // already sorted DESC by period_end_date
+      const latestIsAnnual = (latest?.periodType || '').toLowerCase() === 'annual';
+      // Include the latest period even if quarterly, so Q1/interim data newer
+      // than the latest annual isn't silently hidden from the grid.
+      if (latestIsAnnual || !annualRows.length) {
+        gridParsed = annualRows;
+      } else {
+        gridParsed = [latest, ...annualRows];
+      }
+    } else {
+      gridParsed = validParsed;
+    }
 
     // Build history arrays from filtered periods
     function buildIncItem(p, d, pt) { return p ? { date: d, periodType: pt, revenue: p.revenue || p.total_revenue, totalRevenue: p.total_revenue || null, netIncome: p.net_income, netIncomeRatio: p.total_revenue > 0 ? p.net_income / p.total_revenue : 0, grossProfit: p.total_revenue != null && p.cost_of_revenue != null ? p.total_revenue - p.cost_of_revenue : null, ebitda: null, eps: p.eps, costOfRevenue: p.cost_of_revenue, operatingExpenses: p.operating_expenses ?? null, operatingIncome: p.operating_income, netInterestIncome: p.net_interest_income || null } : null; }
