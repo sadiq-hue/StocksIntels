@@ -1048,9 +1048,9 @@ const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy';
        try {
          const now = new Date().toISOString();
          await pool.query(
-           `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, source, close_reason)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'backfill', 'mark-to-market')
-            ON CONFLICT DO NOTHING`,
+            `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, source, close_reason)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'backfill', 'mark-to-market')
+             ON CONFLICT (source, ticker, entry_price) DO NOTHING`,
            [row.ticker, row.entry_price, row.signal, currentPrice, resultStr, now, now, row.generated_at]
          );
         inserted++;
@@ -1234,7 +1234,7 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
           await pool.query(
             `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, source, close_reason)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'backtest', $9)
-             ON CONFLICT DO NOTHING`,
+             ON CONFLICT (source, ticker, entry_price) DO NOTHING`,
             [sig.ticker, entry, sig.signal, exitPrice, resultStr, now, now, sig.generated_at, closeReason]
           );
           totalInserted++;
@@ -2835,9 +2835,9 @@ async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPri
     const now = new Date().toISOString();
     const signalGenAt = new Date(signalGenAtMs).toISOString();
     await pool.query(
-      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at, signal_generated_at, close_reason)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       ON CONFLICT DO NOTHING`,
+      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at, signal_generated_at, close_reason, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'live')
+       ON CONFLICT (source, ticker, entry_price) DO NOTHING`,
       [symbol, entryPrice, signalAction, currentPrice, result, posSize, now, resolvedAt || now, signalGenAt, closeReason]
     );
     // Push to live test store
