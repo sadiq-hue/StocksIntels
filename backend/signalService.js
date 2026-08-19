@@ -2557,13 +2557,14 @@ async function resolveAllForwardPredictions() {
     for (const pred of unresolved) {
       if (pred.action !== 'buy') continue;
       try {
-        // Match by symbol + entry price proximity (±2%) since both the forward
+        // Match by symbol + entry price proximity (±0.5%) since both the forward
         // prediction and the live signal outcome share the same entry from the
-        // same generation cycle.
+        // same generation cycle. Tight tolerance prevents mismatching when a
+        // symbol has multiple outcomes at similar prices.
         const outcomeRes = await pool.query(
           `SELECT exit_price, result, close_reason FROM signal_outcomes
            WHERE ticker = $1 AND source = 'live' AND result IS NOT NULL
-             AND ABS(entry_price - $2) / NULLIF($2, 0) < 0.02
+             AND ABS(entry_price - $2) / NULLIF($2, 0) < 0.005
            ORDER BY resolved_at DESC LIMIT 1`,
           [symbol, pred.price]
         );
@@ -2571,7 +2572,7 @@ async function resolveAllForwardPredictions() {
           const o = outcomeRes.rows[0];
           const exitPrice = parseFloat(o.exit_price);
           const actualReturn = Math.round(((exitPrice - pred.price) / pred.price) * 1000) / 10;
-          pred.correct = o.result === 'win';
+          pred.correct = actualReturn > 0;
           pred.resolved = true;
           pred.actualReturn = actualReturn;
           pred.resolvedAt = Date.now();
