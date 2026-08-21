@@ -2565,16 +2565,22 @@ async function resolveAllForwardPredictions() {
     for (const pred of unresolved) {
       if (pred.action !== 'buy') continue;
       try {
-        // Match by symbol + entry price proximity (±0.5%) since both the forward
-        // prediction and the live signal outcome share the same entry from the
-        // same generation cycle. Tight tolerance prevents mismatching when a
-        // symbol has multiple outcomes at similar prices.
+        // Match by symbol + entry price proximity (±0.5%) AND time proximity: the
+        // live outcome must have been generated within a short window of the
+        // forward prediction's own generation cycle. Without the time constraint a
+        // fresh prediction silently matched a stale outcome from weeks earlier at a
+        // similar price (e.g. MSFT Aug 21 @ 481.15 resolved against an Aug 3
+        // outcome @ 482.89, booking a bogus +1.1% win minutes after generation).
+        const genAtIso = pred.generatedAt ? new Date(pred.generatedAt).toISOString() : null;
         const outcomeRes = await pool.query(
           `SELECT exit_price, result, close_reason FROM signal_outcomes
            WHERE ticker = $1 AND source = 'live' AND result IS NOT NULL
              AND ABS(entry_price - $2) / NULLIF($2, 0) < 0.005
+             AND ($3::timestamptz IS NULL
+               OR COALESCE(signal_generated_at, recorded_at) >= $3::timestamptz - interval '5 minutes'
+               AND COALESCE(signal_generated_at, recorded_at) <= $3::timestamptz + interval '5 minutes')
            ORDER BY resolved_at DESC LIMIT 1`,
-          [symbol, pred.price]
+          [symbol, pred.price, genAtIso]
         );
         if (outcomeRes.rows.length > 0) {
           const o = outcomeRes.rows[0];
