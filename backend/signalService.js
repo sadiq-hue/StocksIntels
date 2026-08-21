@@ -948,7 +948,12 @@ async function restoreStateFromDb() {
       const stop = parseFloat(row.stop_loss);
       const target = parseFloat(row.target1);
       const action = /buy/i.test(row.signal) ? 'buy' : 'sell';
-      const saneLevels = action === 'buy' ? (stop < entry && target > entry) : (stop > entry && target < entry);
+      // For buys: target must be above entry. Stop can be below entry (initial) or
+      // above entry (re-leveled locked-profit stop) — but always below target.
+      // For sells: stop must be above entry and target below entry.
+      const saneLevels = action === 'buy'
+        ? (target > entry && stop < target && stop > 0)
+        : (stop > entry && target < entry);
       if (!saneLevels) continue;
       _signalOutcomes.set(sym, {
         entryPrice: entry, signal: row.signal, action, type: row.trade_type || 'Swing Trade',
