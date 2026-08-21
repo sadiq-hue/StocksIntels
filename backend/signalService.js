@@ -1611,7 +1611,7 @@ const SCORE_CLOSE_MIN_AGE_MS = (Math.max(1, parseInt(process.env.SCORE_CLOSE_MIN
 // position has traveled 75% of the way to its hard stop (default
 // SCORE_CLOSE_CUT_FRACTION_OF_STOP) so a fading loser is given almost its full
 // risk budget before being yanked — the close is a failure exit, not a jitter.
-const SCORE_CLOSE_CUT_FRACTION_OF_STOP = Math.max(0, Math.min(1, parseFloat(process.env.SCORE_CLOSE_CUT_FRACTION_OF_STOP || '0.75')));
+const SCORE_CLOSE_CUT_FRACTION_OF_STOP = Math.max(0, Math.min(1, parseFloat(process.env.SCORE_CLOSE_CUT_FRACTION_OF_STOP || '0.80')));
 // A fade cut also requires the position to be at least this far past entry in the
 // loss direction — a sub-noise move near entry is consolidation, not failure, so a
 // fading position inside this envelope rides instead of being yanked at ~breakeven.
