@@ -244,8 +244,12 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
       // simply waits one more cycle.
       console.warn(`[RiskManager] ${symbol} deferring resolution — signal only ${Math.round(signalAge / 1000)}s old (min ${MIN_SIGNAL_AGE_MS / 1000}s)`);
     } else {
+    // For buys: target above entry; stop may be below entry (initial) or above
+    // entry (re-leveled locked-profit stop), but always below target. For sells:
+    // stop above entry, target below entry. This mirrors restoreStateFromDb so a
+    // re-leveled position is never treated as broken after a restart.
     const saneLevels = entry > 0 && isPrevBuy
-      ? previous.stopLoss < entry && previous.target1 > entry
+      ? previous.target1 > entry && previous.stopLoss < previous.target1 && previous.stopLoss > 0
       : entry > 0 && previous.stopLoss > entry && previous.target1 < entry;
     const pctMove = entry > 0 ? Math.abs(currentPrice - entry) / entry : 0;
     // Require a real move past the level but reject impossible single-cycle moves
@@ -254,16 +258,28 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
     if (marketOpen && saneLevels && moved) {
       if (isPrevBuy) {
         if (currentPrice <= previous.stopLoss) {
-          previous.result = 'loss'; previous.closeReason = 'stop loss'; performanceStats.losses++; performanceStats.total++;
-          portfolioState.consecutiveLosses++;
+          // A stop at/above entry is a locked-profit level (re-leveled): hitting it
+          // books a win, not a loss. A stop below entry is a real stop-out.
+          const lockedProfit = previous.stopLoss >= entry;
+          previous.result = lockedProfit ? 'win' : 'loss';
+          previous.closeReason = 'stop loss';
+          if (lockedProfit) { performanceStats.wins++; portfolioState.consecutiveLosses = 0; }
+          else { performanceStats.losses++; portfolioState.consecutiveLosses++; }
+          performanceStats.total++;
         } else if (currentPrice >= previous.target1) {
           previous.result = 'win'; previous.closeReason = 'target reached'; performanceStats.wins++; performanceStats.total++;
           portfolioState.consecutiveLosses = 0;
         }
       } else {
         if (currentPrice >= previous.stopLoss) {
-          previous.result = 'loss'; previous.closeReason = 'stop loss'; performanceStats.losses++; performanceStats.total++;
-          portfolioState.consecutiveLosses++;
+          // A stop at/below entry is a locked-profit level (re-leveled): hitting it
+          // books a win, not a loss.
+          const lockedProfit = previous.stopLoss <= entry;
+          previous.result = lockedProfit ? 'win' : 'loss';
+          previous.closeReason = 'stop loss';
+          if (lockedProfit) { performanceStats.wins++; portfolioState.consecutiveLosses = 0; }
+          else { performanceStats.losses++; portfolioState.consecutiveLosses++; }
+          performanceStats.total++;
         } else if (currentPrice <= previous.target1) {
           previous.result = 'win'; previous.closeReason = 'target reached'; performanceStats.wins++; performanceStats.total++;
           portfolioState.consecutiveLosses = 0;
