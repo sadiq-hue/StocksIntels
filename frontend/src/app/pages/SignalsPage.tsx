@@ -707,7 +707,11 @@ export function SignalsPage() {
                 </div>
                 <div className="mt-2 space-y-1 text-[11px] text-muted-foreground leading-relaxed">
                   <p><span className="font-semibold text-blue-700">Entry {fmtPrice(selected, selected.entry)}</span> — the market price when the signal was generated, used as the reference to size the stop and targets. Buy at the current market price — you don't need to wait for this exact level.</p>
-                  <p><span className="font-semibold text-red-700">Stop {fmtPrice(selected, selected.stopLoss)}</span> — the safety-net price. If the stock drops to this level, sell immediately to prevent further losses.</p>
+                  {selected.stopLoss != null && selected.entry != null && selected.stopLoss >= selected.entry ? (
+                    <p><span className="font-semibold text-emerald-700">Stop {fmtPrice(selected, selected.stopLoss)}</span> — the stop has moved above your entry price to lock in profit. If the stock pulls back to this level, you exit with a guaranteed gain.</p>
+                  ) : (
+                    <p><span className="font-semibold text-red-700">Stop {fmtPrice(selected, selected.stopLoss)}</span> — the safety-net price. If the stock drops to this level, sell immediately to prevent further losses.</p>
+                  )}
                   {selected.target1 && <p><span className="font-semibold text-emerald-700">Price Target 1 {fmtPrice(selected, selected.target1)}</span> — first profit goal. Many investors take some profit here.</p>}
                   {selected.target2 && <p><span className="font-semibold text-emerald-700">Price Target 2 {fmtPrice(selected, selected.target2)}</span> — middle profit goal — take more profit if it reaches here.</p>}
                   {selected.target3 && <p><span className="font-semibold text-emerald-700">Price Target 3 {fmtPrice(selected, selected.target3)}</span> — ultimate profit goal — the full win.</p>}
