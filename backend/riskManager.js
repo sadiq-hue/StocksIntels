@@ -46,11 +46,11 @@ const TRADE_TYPE_STOP_MULT = {
 // distance from entry. 5% proved too tight in production: a normal 2-4% daily
 // range is barely 1-2 ATRs under a 5% stop, so ordinary intraday swings stopped
 // out names before a move could play out (e.g. PINS stopped at -5.6% on noise).
-// 10% is ~2.5-5 ATRs of room for typical US names — enough to breathe through a
-// pullback while still capping a stop-out loss at a bounded 10%. The re-level
+// 15% is ~3-7 ATRs of room for typical US names — enough to breathe through a
+// pullback while still capping a stop-out loss at a bounded 15%. The re-level
 // pre-lock cap respects the same floor so live monitoring never tightens a calm
 // stock's stop back into the noise.
-const MIN_STOP_PCT = 0.10;
+const MIN_STOP_PCT = 0.15;
 // Absolute stop ceiling (fraction of price). calculateATR clamps daily range at
 // 15%, so the widest legitimate ATR-scaled stop is 2x that (30%) for a swing
 // trade — a stop must always leave a high-volatility name at least ~2 daily
@@ -103,7 +103,7 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
   // price so an extreme name can't produce an absurd 60%+ stop. The 30% ceiling
   // still covers the full ATR-scaled range (ATR is clamped at 15%, so a swing
   // stop is at most 2 x 15% = 30%) — it only bites for genuinely pathological
-  // cases. Sizing the cap off the floored base distance keeps the 10% minimum
+  // cases. Sizing the cap off the floored base distance keeps the 15% minimum
   // stop intact for calm names.
   const maxStopDistance = Math.min(currentPrice * baseDistancePct * 2, currentPrice * MAX_STOP_PCT);
   if (signal.action === 'buy') {
