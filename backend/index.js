@@ -1,6 +1,6 @@
 // StocksIntels Backend Server
 // Rewritten clean version with all routes from original
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
@@ -6964,8 +6964,8 @@ app.get('/api/alpha/ipos', async (req, res) => {
   try {
     const alphaKey = process.env.ALPHA_VANTAGE_API_KEY;
 
-    // Serve cached data if still fresh
-    if (_alphaIpoCache && (Date.now() - _alphaIpoCacheTime) < ALPHA_IPO_CACHE_TTL) {
+    // Serve cached data if still fresh (skip cache with ?refresh=1)
+    if (!req.query.refresh && _alphaIpoCache && (Date.now() - _alphaIpoCacheTime) < ALPHA_IPO_CACHE_TTL) {
       return res.json(_alphaIpoCache);
     }
 
@@ -6995,12 +6995,34 @@ app.get('/api/alpha/ipos', async (req, res) => {
 
     // Fetch Alpha Vantage IPO Calendar if key is available
     let alphaIpos = [];
+    let alphaAvStatus = 'ok';
     if (alphaKey) {
       try {
         const url = `https://www.alphavantage.co/query?function=IPO_CALENDAR&apikey=${alphaKey}`;
-        const response = await axios.get(url, { timeout: 25000 });
-        const csv = response.data;
-        if (typeof csv === 'string' && csv.trim().split('\n').length >= 2) {
+        const response = await axios.get(url, { timeout: 25000, responseType: 'text', transformResponse: [(d) => d], proxy: false });
+        const csv = typeof response.data === 'string' ? response.data
+          : Buffer.isBuffer(response.data) ? response.data.toString('utf-8')
+          : String(response.data || '');
+        console.log(`[AlphaVantage] IPO Calendar response: ${csv.length} bytes, first 80: ${csv.substring(0, 80).replace(/\n/g, '\\n')}`);
+        // Detect rate-limit / error responses (Alpha Vantage returns truncated "I,n,f,o,r,m,a" etc.)
+        // Valid IPO CSV has many rows; rate-limit responses have <=2 non-empty lines and no valid data
+        const nonEmptyLines = csv.split('\n').filter(l => l.trim()).length;
+        const dataLines = csv.split('\n').slice(1).filter(l => l.trim());
+        const hasValidIpos = dataLines.some(l => {
+          const cols = l.split(',');
+          const sym = (cols[0] || '').trim();
+          const dateStr = (cols[2] || '').trim();
+          const isValidDate = /^\d{4}-\d{2}-\d{2}/.test(dateStr);
+          return sym && sym.length >= 2 && /^[A-Z0-9.-]+$/.test(sym) && isValidDate;
+        });
+        const isRateLimited = nonEmptyLines <= 2 || !hasValidIpos
+          || csv.includes('Thank you for using Alpha Vantage')
+          || csv.includes('API key')
+          || csv.includes('premium');
+        if (isRateLimited) {
+          console.warn('[AlphaVantage] IPO Calendar: rate-limited or error response, using cached/static data');
+          alphaAvStatus = 'rate_limited';
+        } else if (csv.trim().split('\n').length >= 2) {
           const lines = csv.trim().split('\n');
           const header = lines[0].split(',').map(h => h.trim());
           const symbolIdx = header.indexOf('symbol');
@@ -7050,9 +7072,11 @@ app.get('/api/alpha/ipos', async (req, res) => {
               source: 'alpha_vantage',
             });
           }
+          console.log(`[AlphaVantage] IPO Calendar: parsed ${alphaIpos.length} IPOs`);
         }
       } catch (avErr) {
         console.error('[AlphaVantage] IPO Calendar fetch failed:', avErr.message);
+        alphaAvStatus = 'error';
       }
     }
 
@@ -7111,10 +7135,13 @@ app.get('/api/alpha/ipos', async (req, res) => {
       return new Date(b.listing_date || 0) - new Date(a.listing_date || 0);
     });
 
-    _alphaIpoCache = merged;
-    _alphaIpoCacheTime = Date.now();
+    // Only cache successful responses — don't overwrite good cache with rate-limited/empty data
+    if (alphaAvStatus === 'ok' || !_alphaIpoCache) {
+      _alphaIpoCache = merged;
+      _alphaIpoCacheTime = Date.now();
+    }
 
-    res.json(merged);
+    res.json({ ipos: merged, alphaStatus: alphaAvStatus });
   } catch (err) {
     console.error('Error fetching Alpha Vantage IPO calendar:', err.message);
     res.status(500).json({ error: 'Failed to fetch Alpha Vantage IPO calendar' });
@@ -12006,6 +12033,30 @@ async function initDatabase() {
       console.log('[Seed] Inserted extra global IPOs');
     } catch (seedErr) {
       console.error('[Seed] Extra global IPO migration error:', seedErr.message);
+    }
+
+    // ── Seed upcoming global IPOs (widely-reported expected listings) ──
+    try {
+      const upcomingGlobal = [
+        { company_name: 'Stripe', ticker: 'STRIPE', exchange: 'NYSE', status: 'upcoming', listing_date: '2026-12-01', offer_price: null, description: 'Stripe is one of the most valuable private fintech companies, processing hundreds of billions in payments annually. A long-awaited IPO has been rumored for years.', sector: 'Financial Technology' },
+        { company_name: 'Databricks', ticker: 'DBRX', exchange: 'NASDAQ', status: 'upcoming', listing_date: '2026-11-01', offer_price: null, description: 'Databricks is a leading data and AI company valued at over $43 billion. The company has been widely expected to IPO since 2024.', sector: 'Software' },
+        { company_name: 'Klarna', ticker: 'KLAR', exchange: 'NYSE', status: 'upcoming', listing_date: '2026-10-01', offer_price: null, description: 'Klarna, the Swedish buy-now-pay-later giant, filed for a US IPO and is expected to list in late 2026 after recovering from a steep valuation cut.', sector: 'Financial Technology' },
+        { company_name: 'Revolut', ticker: 'REV', exchange: 'NYSE', status: 'upcoming', listing_date: '2026-09-15', offer_price: null, description: 'Revolut is a UK-based super-app offering banking, crypto, and stock trading. Valued at $45 billion, the company has announced IPO plans.', sector: 'Financial Technology' },
+        { company_name: 'CoreWeave', ticker: 'CRWV', exchange: 'NASDAQ', status: 'upcoming', listing_date: '2026-09-01', offer_price: null, description: 'CoreWeave is a GPU cloud infrastructure company critical to the AI boom. Filed for IPO in 2025 with a target valuation of $35B+.', sector: 'Technology' },
+      ];
+      for (const ipo of upcomingGlobal) {
+        const exists = await pool.query('SELECT id FROM global_ipos WHERE ticker = $1', [ipo.ticker]);
+        if (exists.rows.length === 0) {
+          await pool.query(
+            'INSERT INTO global_ipos (company_name, ticker, exchange, status, listing_date, offer_price, oversubscription_pct, description, sector) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+            [ipo.company_name, ipo.ticker, ipo.exchange, ipo.status, ipo.listing_date, ipo.offer_price, null, ipo.description, ipo.sector]
+          );
+        }
+      }
+      const uc = await pool.query("SELECT COUNT(*) FROM global_ipos WHERE status = 'upcoming'");
+      console.log('[Seed] Upcoming global IPOs in DB:', uc.rows[0].count);
+    } catch (seedErr) {
+      console.error('[Seed] Upcoming global IPO migration error:', seedErr.message);
     }
 
     // ── Seed global_corporate_actions with notable upcoming/pending events ──

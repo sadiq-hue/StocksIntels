@@ -38,20 +38,31 @@ export function IpoPage() {
   const [loading, setLoading] = useState(true);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [alphaStatus, setAlphaStatus] = useState<string | null>(null);
 
   const fetchGlobalIpos = useCallback(async (showSpinner = true) => {
     if (showSpinner) setGlobalLoading(true);
     setGlobalError(null);
+    setAlphaStatus(null);
     try {
-      const res = await fetch(`${API_BASE}/alpha/ipos`);
+      const res = await fetch(`${API_BASE}/alpha/ipos?refresh=1`);
       if (!res.ok) {
         const fb = await fetch(`${API_BASE}/global/ipos`);
         const data = await fb.json();
         if (Array.isArray(data)) setGlobalIpos(data);
         return;
       }
-      const data = await res.json();
-      if (Array.isArray(data)) setGlobalIpos(data);
+      const body = await res.json();
+      if (Array.isArray(body)) {
+        setGlobalIpos(body);
+      } else if (body && Array.isArray(body.ipos)) {
+        setGlobalIpos(body.ipos);
+        if (body.alphaStatus === 'rate_limited') {
+          setAlphaStatus('rate_limited');
+        } else if (body.alphaStatus === 'error') {
+          setAlphaStatus('error');
+        }
+      }
     } catch {
       try {
         const fb = await fetch(`${API_BASE}/global/ipos`);
@@ -198,6 +209,18 @@ export function IpoPage() {
               <div className="flex items-start gap-2">
                 <Info className="size-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                 <p className="text-xs text-amber-700 dark:text-amber-300">{globalError}</p>
+              </div>
+            </Card>
+          )}
+
+          {alphaStatus === 'rate_limited' && tab === 'global' && (
+            <Card className="p-4 mb-6 border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-950/20">
+              <div className="flex items-start gap-2">
+                <Info className="size-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-medium text-blue-700 dark:text-blue-300">Alpha Vantage rate-limited</p>
+                  <p className="text-xs text-blue-600/70 dark:text-blue-400/70 mt-0.5">Showing historic IPOs with live prices. New upcoming listings will appear when the API quota resets (typically within a few minutes).</p>
+                </div>
               </div>
             </Card>
           )}
