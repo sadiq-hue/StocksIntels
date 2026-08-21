@@ -1931,6 +1931,8 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
       !p.resolved && p.action === signalObjAction &&
       (() => {
         if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price >= 0.02) return false; // materially new entry → distinct thesis
+        // Same price within 0.5% is a duplicate thesis regardless of target levels
+        if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price < 0.005) return true;
         if (signalObjAction === 'sell') return true; // sells carry no target levels
         return p.target1 != null && target1 != null && Math.abs(p.target1 - target1) / target1 < 0.05;
       })()
@@ -1957,12 +1959,10 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
       `SELECT id FROM forward_predictions
        WHERE symbol = $1 AND action = $2
          AND generated_at > NOW() - $3::interval
-         AND ($2 = 'sell' OR (price > 0 AND $4 > 0
-              AND ABS(price - $4) / $4 < 0.005
-              AND target1 IS NOT NULL AND $5 IS NOT NULL
-              AND ABS(target1 - $5) / $5 < 0.05))
+         AND price > 0 AND $4 > 0
+         AND ABS(price - $4) / $4 < 0.005
        LIMIT 1`,
-      [symbol, signalObjAction, `${SIGNAL_WINDOW_DAYS} days`, price, target1]
+      [symbol, signalObjAction, `${SIGNAL_WINDOW_DAYS} days`, price]
     );
     if (dup.rows.length) return;
   } catch (e) { /* persistence best-effort */ }
