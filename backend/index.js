@@ -6955,70 +6955,166 @@ app.get('/api/global/ipos', async (req, res) => {
 });
 
 // --- Alpha Vantage IPO Calendar (Global) ---
+// Cache Alpha Vantage IPO data for 1 hour to avoid rate-limit burn (free tier: 5 calls/min)
+let _alphaIpoCache = null;
+let _alphaIpoCacheTime = 0;
+const ALPHA_IPO_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
 app.get('/api/alpha/ipos', async (req, res) => {
   try {
     const alphaKey = process.env.ALPHA_VANTAGE_API_KEY;
-    if (!alphaKey) return res.status(503).json({ error: 'Alpha Vantage not configured' });
 
-    const url = `https://www.alphavantage.co/query?function=IPO_CALENDAR&apikey=${alphaKey}`;
-    const response = await axios.get(url, { timeout: 20000 });
-    const csv = response.data;
-    if (typeof csv !== 'string') return res.status(502).json({ error: 'Unexpected Alpha Vantage response' });
-
-    const lines = csv.trim().split('\n');
-    if (lines.length < 2) return res.json([]);
-
-    const header = lines[0].split(',').map(h => h.trim());
-    const symbolIdx = header.indexOf('symbol');
-    const nameIdx = header.indexOf('name');
-    const dateIdx = header.indexOf('ipoDate');
-    const lowIdx = header.indexOf('priceRangeLow');
-    const highIdx = header.indexOf('priceRangeHigh');
-    const currencyIdx = header.indexOf('currency');
-    const exchangeIdx = header.indexOf('exchange');
-
-    const ipos = [];
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(',');
-      const symbol = (cols[symbolIdx] || '').trim();
-      if (!symbol || symbol.length > 12) continue;
-      const name = (cols[nameIdx] || symbol).trim();
-      const dateStr = (cols[dateIdx] || '').trim();
-      const listingDate = dateStr ? new Date(dateStr) : null;
-      if (listingDate && isNaN(listingDate.getTime())) continue;
-
-      const low = parseFloat((cols[lowIdx] || '').replace(/[^0-9.]/g, ''));
-      const high = parseFloat((cols[highIdx] || '').replace(/[^0-9.]/g, ''));
-      let offerPrice = null;
-      if (!isNaN(low) && !isNaN(high)) offerPrice = (low + high) / 2;
-      else if (!isNaN(low)) offerPrice = low;
-      else if (!isNaN(high)) offerPrice = high;
-
-      const currency = (cols[currencyIdx] || 'USD').trim();
-      const exchange = (cols[exchangeIdx] || '').trim() || null;
-      const status = listingDate && listingDate < new Date() ? 'listed' : 'upcoming';
-
-      ipos.push({
-        id: symbol,
-        company_name: name,
-        ticker: symbol,
-        exchange,
-        status,
-        listing_date: listingDate ? listingDate.toISOString().split('T')[0] : null,
-        offer_price: offerPrice,
-        current_price: null,
-        price_change_pct: null,
-        price_change: null,
-        oversubscription_pct: null,
-        description: (low && high && !isNaN(low) && !isNaN(high))
-          ? `Expected price range: ${currency} ${low}–${high}`
-          : null,
-        sector: null,
-      });
+    // Serve cached data if still fresh
+    if (_alphaIpoCache && (Date.now() - _alphaIpoCacheTime) < ALPHA_IPO_CACHE_TTL) {
+      return res.json(_alphaIpoCache);
     }
 
-    ipos.sort((a, b) => new Date(a.listing_date || 0).getTime() - new Date(b.listing_date || 0).getTime());
-    res.json(ipos);
+    // Always load the static seed data first (historic IPOs with descriptions)
+    const staticIpos = [];
+    try {
+      const seedResult = await pool.query('SELECT * FROM global_ipos ORDER BY listing_date DESC NULLS LAST');
+      for (const r of seedResult.rows) {
+        staticIpos.push({
+          id: r.id,
+          company_name: r.company_name,
+          ticker: r.ticker,
+          exchange: r.exchange,
+          status: r.status,
+          listing_date: r.listing_date?.toISOString().split('T')[0],
+          offer_price: r.offer_price,
+          current_price: r.current_price,
+          price_change_pct: null,
+          price_change: null,
+          oversubscription_pct: r.oversubscription_pct,
+          description: r.description,
+          sector: r.sector,
+          source: 'static',
+        });
+      }
+    } catch {}
+
+    // Fetch Alpha Vantage IPO Calendar if key is available
+    let alphaIpos = [];
+    if (alphaKey) {
+      try {
+        const url = `https://www.alphavantage.co/query?function=IPO_CALENDAR&apikey=${alphaKey}`;
+        const response = await axios.get(url, { timeout: 25000 });
+        const csv = response.data;
+        if (typeof csv === 'string' && csv.trim().split('\n').length >= 2) {
+          const lines = csv.trim().split('\n');
+          const header = lines[0].split(',').map(h => h.trim());
+          const symbolIdx = header.indexOf('symbol');
+          const nameIdx = header.indexOf('name');
+          const dateIdx = header.indexOf('ipoDate');
+          const lowIdx = header.indexOf('priceRangeLow');
+          const highIdx = header.indexOf('priceRangeHigh');
+          const currencyIdx = header.indexOf('currency');
+          const exchangeIdx = header.indexOf('exchange');
+
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(',');
+            const symbol = (cols[symbolIdx] || '').trim();
+            if (!symbol || symbol.length > 12) continue;
+            const name = (cols[nameIdx] || symbol).trim();
+            const dateStr = (cols[dateIdx] || '').trim();
+            const listingDate = dateStr ? new Date(dateStr) : null;
+            if (listingDate && isNaN(listingDate.getTime())) continue;
+
+            const low = parseFloat((cols[lowIdx] || '').replace(/[^0-9.]/g, ''));
+            const high = parseFloat((cols[highIdx] || '').replace(/[^0-9.]/g, ''));
+            let offerPrice = null;
+            if (!isNaN(low) && !isNaN(high)) offerPrice = (low + high) / 2;
+            else if (!isNaN(low)) offerPrice = low;
+            else if (!isNaN(high)) offerPrice = high;
+
+            const currency = (cols[currencyIdx] || 'USD').trim();
+            const exchange = (cols[exchangeIdx] || '').trim() || null;
+            const status = listingDate && listingDate < new Date() ? 'listed' : 'upcoming';
+
+            alphaIpos.push({
+              id: symbol,
+              company_name: name,
+              ticker: symbol,
+              exchange,
+              status,
+              listing_date: listingDate ? listingDate.toISOString().split('T')[0] : null,
+              offer_price: offerPrice,
+              current_price: null,
+              price_change_pct: null,
+              price_change: null,
+              oversubscription_pct: null,
+              description: (low && high && !isNaN(low) && !isNaN(high))
+                ? `Expected price range: ${currency} ${low}–${high}`
+                : null,
+              sector: null,
+              source: 'alpha_vantage',
+            });
+          }
+        }
+      } catch (avErr) {
+        console.error('[AlphaVantage] IPO Calendar fetch failed:', avErr.message);
+      }
+    }
+
+    // Merge: Alpha Vantage data supplements static data.
+    // Static IPOs keep their rich descriptions; Alpha Vantage fills gaps for new listings.
+    const tickerSet = new Set(staticIpos.filter(i => i.ticker).map(i => i.ticker));
+    const merged = [...staticIpos];
+    for (const av of alphaIpos) {
+      if (!tickerSet.has(av.ticker)) {
+        merged.push(av);
+        tickerSet.add(av.ticker);
+      } else {
+        // Update existing static entry with Alpha Vantage price range if missing offer_price
+        const existing = merged.find(m => m.ticker === av.ticker);
+        if (existing && !existing.offer_price && av.offer_price) {
+          existing.offer_price = av.offer_price;
+          existing.description = av.description || existing.description;
+        }
+      }
+    }
+
+    // Fetch current prices for all listed IPOs with tickers (batch, rate-limited)
+    const listedTickers = merged
+      .filter(i => i.status === 'listed' && i.ticker)
+      .map(i => i.ticker);
+
+    if (listedTickers.length > 0) {
+      try {
+        const marketService = require('./marketService');
+        const batchSize = 10;
+        for (let b = 0; b < listedTickers.length; b += batchSize) {
+          const batch = listedTickers.slice(b, b + batchSize);
+          const quotes = await marketService.getQuotesBatch(batch);
+          for (const ipo of merged) {
+            if (ipo.ticker && quotes[ipo.ticker]) {
+              const q = quotes[ipo.ticker];
+              ipo.current_price = q.price;
+              ipo.price_change_pct = q.changePercent != null ? parseFloat(q.changePercent) : null;
+              ipo.price_change = q.change != null ? parseFloat(q.change) : null;
+            }
+          }
+          if (b + batchSize < listedTickers.length) {
+            await new Promise(r => setTimeout(r, 500));
+          }
+        }
+      } catch (qErr) {
+        console.warn('[AlphaIPOs] Batch quote fetch failed:', qErr.message);
+      }
+    }
+
+    // Sort: upcoming first (by date asc), then listed (by date desc)
+    merged.sort((a, b) => {
+      if (a.status === 'upcoming' && b.status !== 'upcoming') return -1;
+      if (a.status !== 'upcoming' && b.status === 'upcoming') return 1;
+      if (a.status === 'upcoming') return new Date(a.listing_date || 0) - new Date(b.listing_date || 0);
+      return new Date(b.listing_date || 0) - new Date(a.listing_date || 0);
+    });
+
+    _alphaIpoCache = merged;
+    _alphaIpoCacheTime = Date.now();
+
+    res.json(merged);
   } catch (err) {
     console.error('Error fetching Alpha Vantage IPO calendar:', err.message);
     res.status(500).json({ error: 'Failed to fetch Alpha Vantage IPO calendar' });

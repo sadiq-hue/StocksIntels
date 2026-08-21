@@ -1884,7 +1884,21 @@ async function _loadForwardPredictionsFromDb() {
     const resolved = result.rows.filter(r => r.resolved).length;
     const unresolved = result.rows.length - resolved;
     if (result.rows.length) console.log(`[SignalService] Loaded ${result.rows.length} forward predictions from DB (${unresolved} unresolved, ${resolved} resolved)`);
+    // Deduplicate DB rows on load: keep latest per (symbol, price, action)
+    const seenFp = new Map();
+    const dedupedRows = [];
     for (const row of result.rows) {
+      const key = `${row.symbol}:${row.price}:${row.action}`;
+      const existing = seenFp.get(key);
+      if (!existing || row.generated_at > existing.generated_at) {
+        if (existing) { const idx = dedupedRows.indexOf(existing); if (idx >= 0) dedupedRows.splice(idx, 1); }
+        dedupedRows.push(row);
+        seenFp.set(key, row);
+      }
+    }
+    const dropped = result.rows.length - dedupedRows.length;
+    if (dropped > 0) console.log(`[SignalService] Deduped ${dropped} duplicate forward predictions from DB`);
+    for (const row of dedupedRows) {
       if (!_forwardTestStore.has(row.symbol)) _forwardTestStore.set(row.symbol, { predictions: [] });
       const tradeType = row.trade_type || 'Swing Trade';
       _forwardTestStore.get(row.symbol).predictions.push({
@@ -1922,20 +1936,29 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
       })()
     );
     if (open) return;
+    // Also block re-creation of a prediction with the same thesis that was
+    // recently resolved — without this, a restart between two hourly cycles
+    // re-records the same prediction (DB loads the resolved row, next cycle
+    // sees it resolved and creates a duplicate in-memory).
+    const recentResolved = existing.predictions.find(p =>
+      p.resolved && p.action === signalObjAction && p.price > 0 && price > 0 &&
+      Math.abs(p.price - price) / price < 0.005
+    );
+    if (recentResolved) return;
   }
   // DB-backed dedup backstop: the in-memory store above can be empty during a
   // startup race (it loads asynchronously while the first signal cycle already
-  // runs at +100ms), so also guard against an unresolved row with the same
-  // thesis still in forward_predictions. Without this, a restart between two
-  // hourly cycles re-emits the same prediction and creates a duplicate (e.g.
-  // CGEN Aug 10: identical rows id 12422/12428).
+  // runs at +100ms), so also guard against any row (resolved or not) with the
+  // same thesis still in forward_predictions. Without this, a restart between
+  // two hourly cycles re-emits the same prediction and creates a duplicate (e.g.
+  // CGEN Aug 10: identical rows id 12422/12428, COMP Aug 11: twin entries).
   try {
     const dup = await pool.query(
       `SELECT id FROM forward_predictions
-       WHERE symbol = $1 AND action = $2 AND resolved = FALSE
+       WHERE symbol = $1 AND action = $2
          AND generated_at > NOW() - $3::interval
          AND ($2 = 'sell' OR (price > 0 AND $4 > 0
-              AND ABS(price - $4) / $4 < 0.02
+              AND ABS(price - $4) / $4 < 0.005
               AND target1 IS NOT NULL AND $5 IS NOT NULL
               AND ABS(target1 - $5) / $5 < 0.05))
        LIMIT 1`,
@@ -2011,58 +2034,24 @@ function evaluateForwardPrediction(pred, currentPrice, th = DEFAULT_SELL_THRESHO
   return { status: 'neutral' };
 }
 
-// Benchmark-relative refinement for sells that the absolute evaluator left
-// pending (stock moved less than ±th.exitMove). The exit thesis is judged
-// against holding the market: a stock that underperformed its benchmark by
-// th.relMove validates the exit, one that outperformed it while rising
-// refutes it. Missing benchmark data falls back to absolute evaluation.
-//
-// Benchmark-first: a decisive rise is only "incorrect" when the stock also
-// beat the market by th.relMove — a knife-edge +2-3% pop on a flat tape is NOT
-// a verdict, so it stays pending and defers to the horizon (evaluateSellAtHorizon)
-// instead of manufacturing a wrong rating on day one. When a benchmark was
-// captured at rating time but the live benchmark feed hiccups, hold rather than
-// guess with the absolute path.
+// Refinement for sells that the absolute evaluator left pending (stock moved
+// less than ±th.exitMove). Uses absolute direction: stock fell = sell was
+// correct, stock rose = sell was wrong.
 function evaluateSellRelative(pred, currentPrice, benchReturn, th = DEFAULT_SELL_THRESHOLDS) {
   const stockReturn = (currentPrice - pred.price) / pred.price;
   const actualReturn = Math.round(stockReturn * 1000) / 10;
-  const benchCaptured = pred.benchPrice != null && pred.benchPrice > 0;
-  const hasBench = benchReturn != null && benchCaptured;
-  if (stockReturn <= -th.exitMove) return { resolved: true, correct: true, actualReturn };
-  if (stockReturn >= th.exitMove) {
-    if (!benchCaptured) return { resolved: true, correct: false, actualReturn };
-    if (!hasBench) return { resolved: false }; // bench captured but the live feed hiccuped — hold
-    const lag = benchReturn - stockReturn;
-    if (lag >= th.relMove) return { resolved: true, correct: true, actualReturn }; // rose but lagged the market decisively
-    if (lag <= -th.relMove) return { resolved: true, correct: false, actualReturn }; // rose AND beat the market decisively
-    return { resolved: false }; // knife-edge rise vs a flat/similar market — defer to the horizon
-  }
-  if (!hasBench) return { resolved: false };
-  const lag = benchReturn - stockReturn;
-  if (lag >= th.relMove) return { resolved: true, correct: true, actualReturn };
-  if (lag <= -th.relMove) return { resolved: true, correct: false, actualReturn };
-  return { resolved: false };
+  if (stockReturn < 0) return { resolved: true, correct: true, actualReturn };
+  if (stockReturn > 0) return { resolved: true, correct: false, actualReturn };
+  return { resolved: true, correct: null, actualReturn };
 }
 
-// Horizon fallback for sells that never crossed a decisive move (±th.exitMove)
-// or a decisive benchmark lag (±th.relMove): after SELL_RESOLVE_MAX_AGE the
-// exit/avoid thesis is judged by the total relative performance. A stock that
-// under- or outperformed its benchmark by more than th.horizonTolerance over
-// the horizon resolves the rating (avoid was right / wrong); within tolerance
-// on both legs it's a neutral (the exit neither helped nor hurt — nothing
-// moved). Missing benchmark data falls back to the absolute return; a captured
-// benchmark with no live value at the horizon resolves neutral (cannot judge).
+// Horizon fallback for sells that never crossed a decisive move (±th.exitMove).
+// Uses absolute direction: stock fell = sell was correct, stock rose = sell was wrong.
 function evaluateSellAtHorizon(pred, currentPrice, benchReturn, th = DEFAULT_SELL_THRESHOLDS) {
   const stockReturn = (currentPrice - pred.price) / pred.price;
   const actualReturn = Math.round(stockReturn * 1000) / 10;
-  const benchCaptured = pred.benchPrice != null && pred.benchPrice > 0;
-  const hasBench = benchReturn != null && benchCaptured;
-  if (stockReturn <= -th.exitMove) return { resolved: true, correct: true, actualReturn };
-  if (stockReturn >= th.exitMove && !benchCaptured) return { resolved: true, correct: false, actualReturn };
-  if (!hasBench) return { resolved: true, correct: null, actualReturn };
-  const lag = benchReturn - stockReturn;
-  if (lag >= th.horizonTolerance) return { resolved: true, correct: true, actualReturn };
-  if (lag <= -th.horizonTolerance) return { resolved: true, correct: false, actualReturn };
+  if (stockReturn < 0) return { resolved: true, correct: true, actualReturn };
+  if (stockReturn > 0) return { resolved: true, correct: false, actualReturn };
   return { resolved: true, correct: null, actualReturn };
 }
 
@@ -2532,8 +2521,22 @@ function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0 } 
       all.push({ symbol: sym, ...p, currency: NSE_SYMBOLS.includes(sym) ? 'KES' : 'USD', generatedAt: new Date(p.generatedAt).toISOString(), resolvedAt: p.resolvedAt ? new Date(p.resolvedAt).toISOString() : null });
     }
   }
-  all.sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt));
-  return { predictions: all.slice(offset, offset + limit), total: all.length };
+  // Deduplicate: the in-memory store can accumulate duplicate entries for the
+  // same (symbol, price, action) after restarts (loaded from DB + re-recorded
+  // by the next signal cycle). Keep the latest per group.
+  const deduped = [];
+  const seen = new Map();
+  for (const p of all) {
+    const key = `${p.symbol}:${p.price}:${p.action}`;
+    const existing = seen.get(key);
+    if (!existing || new Date(p.generatedAt) > new Date(existing.generatedAt)) {
+      if (existing) { const idx = deduped.indexOf(existing); if (idx >= 0) deduped.splice(idx, 1); }
+      deduped.push(p);
+      seen.set(key, p);
+    }
+  }
+  deduped.sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt));
+  return { predictions: deduped.slice(offset, offset + limit), total: deduped.length };
 }
 
 async function resolveAllForwardPredictions() {

@@ -1,12 +1,13 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { Rocket, Calendar, DollarSign, Users, BarChart3, Timer, Globe2 } from "lucide-react";
+import { Button } from "../components/ui/button";
+import { Rocket, Calendar, DollarSign, Users, BarChart3, Timer, Globe2, RefreshCw, TrendingUp, TrendingDown, Info } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 interface Ipo {
-  id: number;
+  id: number | string;
   company_name: string;
   ticker: string | null;
   exchange?: string | null;
@@ -19,6 +20,7 @@ interface Ipo {
   sector: string | null;
   price_change_pct: number | null;
   price_change: number | null;
+  source?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -34,19 +36,42 @@ export function IpoPage() {
   const [nseIpos, setNseIpos] = useState<Ipo[]>([]);
   const [globalIpos, setGlobalIpos] = useState<Ipo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [globalError, setGlobalError] = useState<string | null>(null);
+
+  const fetchGlobalIpos = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setGlobalLoading(true);
+    setGlobalError(null);
+    try {
+      const res = await fetch(`${API_BASE}/alpha/ipos`);
+      if (!res.ok) {
+        const fb = await fetch(`${API_BASE}/global/ipos`);
+        const data = await fb.json();
+        if (Array.isArray(data)) setGlobalIpos(data);
+        return;
+      }
+      const data = await res.json();
+      if (Array.isArray(data)) setGlobalIpos(data);
+    } catch {
+      try {
+        const fb = await fetch(`${API_BASE}/global/ipos`);
+        const data = await fb.json();
+        if (Array.isArray(data)) setGlobalIpos(data);
+      } catch {
+        setGlobalError("Failed to load global IPO data. Alpha Vantage may not be configured.");
+      }
+    } finally {
+      setGlobalLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     Promise.all([
       fetch(`${API_BASE}/nse/ipos`).then(r => r.json()).then(d => { if (Array.isArray(d)) setNseIpos(d); }).catch(() => {}),
-      fetch(`${API_BASE}/alpha/ipos`).then(r => r.json()).then(d => {
-        if (Array.isArray(d) && d.length) setGlobalIpos(d);
-        else return fetch(`${API_BASE}/global/ipos`).then(r => r.json()).then(fb => { if (Array.isArray(fb)) setGlobalIpos(fb); });
-      }).catch(() => {
-        fetch(`${API_BASE}/global/ipos`).then(r => r.json()).then(fb => { if (Array.isArray(fb)) setGlobalIpos(fb); }).catch(() => {});
-      }),
+      fetchGlobalIpos(false),
     ]).finally(() => setLoading(false));
-  }, []);
+  }, [fetchGlobalIpos]);
 
   const ipos = tab === 'nse' ? nseIpos : globalIpos;
 
@@ -61,60 +86,72 @@ export function IpoPage() {
     return { upcoming: u, current: c, listed: l, past: p };
   }, [ipos]);
 
-  const renderIpoCard = (ipo: Ipo) => (
-    <Card key={ipo.id} className="p-4 border shadow-sm">
-      <div className="flex items-start justify-between mb-2">
-        <div>
-          <h3 className="font-semibold text-sm text-foreground">{ipo.company_name}</h3>
-          <div className="flex items-center gap-1.5">
-            {ipo.ticker && <span className="text-xs text-muted-foreground">{ipo.ticker}</span>}
-            {ipo.exchange && <span className="text-[10px] text-muted-foreground">({ipo.exchange})</span>}
+  const renderIpoCard = (ipo: Ipo, market: 'nse' | 'global') => {
+    const cur = market === 'nse' ? 'KES ' : '$';
+    return (
+      <Card key={ipo.id} className="p-4 border shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex items-start justify-between mb-2">
+          <div>
+            <h3 className="font-semibold text-sm text-foreground">{ipo.company_name}</h3>
+            <div className="flex items-center gap-1.5">
+              {ipo.ticker && <span className="text-xs font-mono text-muted-foreground bg-muted px-1 py-0.5 rounded">{ipo.ticker}</span>}
+              {ipo.exchange && <span className="text-[10px] text-muted-foreground">({ipo.exchange})</span>}
+            </div>
           </div>
+          <Badge className={`text-[10px] px-2 py-0.5 font-medium border ${statusColors[ipo.status] || ''}`}>
+            {ipo.status === 'info' ? '' : ipo.status.charAt(0).toUpperCase() + ipo.status.slice(1)}
+          </Badge>
         </div>
-        <Badge className={`text-[10px] px-2 py-0.5 font-medium border ${statusColors[ipo.status] || ''}`}>
-          {ipo.status === 'info' ? '' : ipo.status.charAt(0).toUpperCase() + ipo.status.slice(1)}
-        </Badge>
-      </div>
-      {ipo.description && <p className="text-xs text-muted-foreground mb-3">{ipo.description}</p>}
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        {ipo.offer_price && (
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <DollarSign className="size-3" />
-            <span>Offer: ${ipo.offer_price.toLocaleString()}</span>
-          </div>
-        )}
-        {ipo.current_price != null && (
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <BarChart3 className="size-3" />
-            <span>Current: ${ipo.current_price.toLocaleString()}</span>
-            {ipo.price_change_pct != null && (
-              <span className={`text-[10px] font-medium ${ipo.price_change_pct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-                {ipo.price_change_pct >= 0 ? '+' : ''}{ipo.price_change_pct.toFixed(2)}%
+        {ipo.description && <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{ipo.description}</p>}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          {ipo.offer_price != null && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <DollarSign className="size-3 shrink-0" />
+              <span>Offer: {cur}{ipo.offer_price.toLocaleString()}</span>
+            </div>
+          )}
+          {ipo.current_price != null && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <BarChart3 className="size-3 shrink-0" />
+              <span>Current: {cur}{ipo.current_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</span>
+              {ipo.price_change_pct != null && (
+                <span className={`text-[10px] font-semibold flex items-center gap-0.5 ${ipo.price_change_pct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                  {ipo.price_change_pct >= 0 ? <TrendingUp className="size-2.5" /> : <TrendingDown className="size-2.5" />}
+                  {ipo.price_change_pct >= 0 ? '+' : ''}{ipo.price_change_pct.toFixed(2)}%
+                </span>
+              )}
+            </div>
+          )}
+          {ipo.offer_price != null && ipo.current_price != null && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <TrendingUp className="size-3 shrink-0" />
+              <span className={`font-medium ${((ipo.current_price - ipo.offer_price) / ipo.offer_price * 100) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                Since IPO: {((ipo.current_price - ipo.offer_price) / ipo.offer_price * 100) >= 0 ? '+' : ''}{((ipo.current_price - ipo.offer_price) / ipo.offer_price * 100).toFixed(1)}%
               </span>
-            )}
-          </div>
-        )}
-        {ipo.oversubscription_pct != null && (
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Users className="size-3" />
-            <span>{ipo.oversubscription_pct}x oversubscribed</span>
-          </div>
-        )}
-        {ipo.listing_date && (
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Calendar className="size-3" />
-            <span>{ipo.listing_date}</span>
-          </div>
-        )}
-        {ipo.sector && (
-          <div className="flex items-center gap-1.5 text-muted-foreground col-span-2">
-            <Timer className="size-3" />
-            <span>Sector: {ipo.sector}</span>
-          </div>
-        )}
-      </div>
-    </Card>
-  );
+            </div>
+          )}
+          {ipo.oversubscription_pct != null && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Users className="size-3 shrink-0" />
+              <span>{ipo.oversubscription_pct}x oversubscribed</span>
+            </div>
+          )}
+          {ipo.listing_date && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Calendar className="size-3 shrink-0" />
+              <span>{ipo.listing_date}</span>
+            </div>
+          )}
+          {ipo.sector && (
+            <div className="flex items-center gap-1.5 text-muted-foreground col-span-2">
+              <Timer className="size-3 shrink-0" />
+              <span>Sector: {ipo.sector}</span>
+            </div>
+          )}
+        </div>
+      </Card>
+    );
+  };
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -129,26 +166,49 @@ export function IpoPage() {
       </div>
 
       {/* Tab Toggle */}
-      <div className="flex gap-1 bg-muted rounded-lg p-1 mb-6 w-fit">
-        <button onClick={() => setTab('nse')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${tab === 'nse' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-          NSE IPOs
-        </button>
-        <button onClick={() => setTab('global')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${tab === 'global' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-          <Globe2 className="size-3" /> Global IPOs
-        </button>
+      <div className="flex items-center gap-2 mb-6">
+        <div className="flex gap-1 bg-muted rounded-lg p-1 w-fit">
+          <button onClick={() => setTab('nse')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${tab === 'nse' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            NSE IPOs
+          </button>
+          <button onClick={() => setTab('global')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${tab === 'global' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Globe2 className="size-3" /> Global IPOs
+          </button>
+        </div>
+        {tab === 'global' && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchGlobalIpos(true)}
+            disabled={globalLoading}
+            className="h-7 text-xs gap-1.5"
+          >
+            <RefreshCw className={`size-3 ${globalLoading ? 'animate-spin' : ''}`} />
+            {globalLoading ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        )}
       </div>
 
       {loading ? (
         <div className="text-sm text-muted-foreground">Loading IPO data...</div>
       ) : (
         <>
+          {globalError && tab === 'global' && (
+            <Card className="p-4 mb-6 border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20">
+              <div className="flex items-start gap-2">
+                <Info className="size-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                <p className="text-xs text-amber-700 dark:text-amber-300">{globalError}</p>
+              </div>
+            </Card>
+          )}
+
           {current.length > 0 && (
             <div className="mb-6">
               <h2 className="text-sm font-semibold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
                 <Timer className="size-4" /> Current / Ongoing
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {current.map(renderIpoCard)}
+                {current.map(i => renderIpoCard(i, tab))}
               </div>
             </div>
           )}
@@ -156,10 +216,10 @@ export function IpoPage() {
           {upcoming.length > 0 && (
             <div className="mb-6">
               <h2 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1.5">
-                <Calendar className="size-4" /> Upcoming
+                <Calendar className="size-4" /> Upcoming ({upcoming.length})
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {upcoming.map(renderIpoCard)}
+                {upcoming.map(i => renderIpoCard(i, tab))}
               </div>
             </div>
           )}
@@ -167,10 +227,10 @@ export function IpoPage() {
           {listed.length > 0 && (
             <div className="mb-6">
               <h2 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 mb-2 flex items-center gap-1.5">
-                <Rocket className="size-4" /> Recently Listed
+                <Rocket className="size-4" /> Recently Listed ({listed.length})
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {listed.map(renderIpoCard)}
+                {listed.map(i => renderIpoCard(i, tab))}
               </div>
             </div>
           )}
@@ -179,12 +239,12 @@ export function IpoPage() {
             <div>
               <h2 className="text-sm font-semibold text-muted-foreground mb-2">Other</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {past.map(renderIpoCard)}
+                {past.map(i => renderIpoCard(i, tab))}
               </div>
             </div>
           )}
 
-          {ipos.length === 0 && (
+          {ipos.length === 0 && !globalError && (
             <Card className="p-6 text-center border-dashed">
               <p className="text-sm text-muted-foreground">No IPO data available for this market.</p>
             </Card>
@@ -204,9 +264,8 @@ export function IpoPage() {
           </p>
         ) : (
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Global IPOs span major exchanges including the NYSE, NASDAQ, and international bourses. Notable offerings include Saudi Aramco
-            (largest in history at $29.4B), Alibaba ($25B), and Arm Holdings (largest tech IPO of 2023). Oversubscription rates indicate
-            investor demand — rates above 100% signal strong interest.
+            Global IPO data sourced from Alpha Vantage and enriched with current market prices. Includes upcoming listings and historical
+            IPOs across NYSE, NASDAQ, and international exchanges. Current prices update in real-time where market data is available.
           </p>
         )}
       </Card>
