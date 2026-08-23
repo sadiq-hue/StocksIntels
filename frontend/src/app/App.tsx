@@ -2,11 +2,13 @@ import React, { Suspense, useEffect } from "react";
 import { createBrowserRouter, RouterProvider, Link, Navigate, Outlet, useLocation } from "react-router";
 import { useAuth, getTrialInfo } from "./auth/AuthContext";
 import { trackPageView } from "./utils/metaPixel";
+import { trackXPageView } from "./utils/xPixel";
 
 function MetaPixelPageViewTracker() {
   const location = useLocation();
   useEffect(() => {
     trackPageView();
+    trackXPageView();
   }, [location.pathname]);
   return null;
 }

@@ -7,6 +7,7 @@ import { ThemeToggle } from "../components/ThemeToggle";
 import { toast } from "sonner";
 import { useAuth } from "../auth/AuthContext";
 import { trackEvent, MetaEvents } from "../utils/metaPixel";
+import { trackXEvent, XEvents } from "../utils/xPixel";
 
 const cryptoOptions = [
   { ticker: "BTC", name: "Bitcoin", networks: ["Bitcoin", "Lightning network"] },
@@ -71,6 +72,11 @@ export function SubscriptionPage() {
         content_type: "product",
         billing_period: period,
         payment_method: cryptoStatus ? "crypto" : "card",
+      });
+      trackXEvent(XEvents.Purchase, {
+        value: (period === "yearly" ? selectedPlan.yearlyPrice : selectedPlan.monthlyPrice).toString(),
+        currency: "USD",
+        content_name: selectedPlan.name,
       });
       toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
       let attempts = 0;
@@ -173,6 +179,11 @@ export function SubscriptionPage() {
                   content_type: "product",
                   billing_period: period,
                   payment_method: "mpesa",
+                });
+                trackXEvent(XEvents.Purchase, {
+                  value: price.toString(),
+                  currency: "USD",
+                  content_name: selectedPlan.name,
                 });
                 toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
                 return;
