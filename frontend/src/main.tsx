@@ -1,8 +1,10 @@
-
-  import { createRoot } from "react-dom/client";
+import { createRoot } from "react-dom/client";
 import { AuthProvider } from "./app/auth/AuthContext";
 import { ThemeProvider } from "next-themes";
 import { ErrorBoundary } from "./app/components/ErrorBoundary";
+import { initMetaPixel } from "./app/utils/metaPixel";
+
+initMetaPixel();
 
 // Global fetch interceptor: adds JWT Authorization header to all API requests
 const originalFetch = window.fetch;

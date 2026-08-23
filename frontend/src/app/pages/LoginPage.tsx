@@ -15,6 +15,7 @@ import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { useSEO } from "../hooks/useSEO";
 import { useTurnstile } from "../hooks/useTurnstile";
+import { trackEvent, MetaEvents } from "../utils/metaPixel";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -221,6 +222,7 @@ export function LoginPage() {
         const coords = await getBrowserCoords();
         try {
           await verifyEmailAndRegister(fullName.trim(), email, password, verifyCode, refParam, coords?.lat, coords?.lng, country || undefined, turnstileToken);
+          trackEvent(MetaEvents.CompleteRegistration, { method: "email" });
           navigate(redirectTo);
         } catch (err) { setError(err instanceof Error ? err.message : "Verification or registration failed"); }
         finally { setIsLoading(false); }
@@ -288,7 +290,7 @@ export function LoginPage() {
       try { setIsLoading(true); await login(decoded.email, "google_oauth_" + decoded.sub); }
       catch {
         const coords = await getBrowserCoords();
-        try { await register(decoded.name, decoded.email, "google_oauth_" + decoded.sub, refParam, coords?.lat, coords?.lng); }
+        try { await register(decoded.name, decoded.email, "google_oauth_" + decoded.sub, refParam, coords?.lat, coords?.lng); trackEvent(MetaEvents.CompleteRegistration, { method: "google" }); }
         catch { setError("Account exists. Try logging in with email/password."); setIsLoading(false); return; }
       }
       setIsLoading(false); navigate(redirectTo);

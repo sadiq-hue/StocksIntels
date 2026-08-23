@@ -6,6 +6,7 @@ import { Card } from "../components/ui/card";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { toast } from "sonner";
 import { useAuth } from "../auth/AuthContext";
+import { trackEvent, MetaEvents } from "../utils/metaPixel";
 
 const cryptoOptions = [
   { ticker: "BTC", name: "Bitcoin", networks: ["Bitcoin", "Lightning network"] },
@@ -63,6 +64,14 @@ export function SubscriptionPage() {
     const pesapalStatus = searchParams.get("pesapal");
     if (cryptoStatus === "success" || pesapalStatus === "success") {
       setIsSuccess(true);
+      trackEvent(MetaEvents.Purchase, {
+        value: period === "yearly" ? selectedPlan.yearlyPrice : selectedPlan.monthlyPrice,
+        currency: "USD",
+        content_name: selectedPlan.name,
+        content_type: "product",
+        billing_period: period,
+        payment_method: cryptoStatus ? "crypto" : "card",
+      });
       toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
       let attempts = 0;
       const poll = setInterval(() => {
@@ -74,6 +83,17 @@ export function SubscriptionPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Fire ViewContent when checkout page loads
+  useEffect(() => {
+    trackEvent(MetaEvents.ViewContent, {
+      content_name: selectedPlan.name,
+      content_type: "product",
+      value: period === "yearly" ? selectedPlan.yearlyPrice : selectedPlan.monthlyPrice,
+      currency: "USD",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planId]);
   
   const selectedPlan = planDetails[planId?.toLowerCase() as keyof typeof planDetails] || planDetails.starter;
   const PlanIcon = selectedPlan.icon;
@@ -90,6 +110,13 @@ export function SubscriptionPage() {
 
   const handleSubscribe = async () => {
     setIsLoading(true);
+    trackEvent(MetaEvents.InitiateCheckout, {
+      content_name: selectedPlan.name,
+      content_type: "product",
+      value: price,
+      currency: "USD",
+      billing_period: period,
+    });
 
     try {
       if (paymentMethod === "mpesa") {
@@ -139,6 +166,14 @@ export function SubscriptionPage() {
               if (currentStatus === "success") {
                 setPollStatus("success");
                 setIsSuccess(true);
+                trackEvent(MetaEvents.Purchase, {
+                  value: price,
+                  currency: "USD",
+                  content_name: selectedPlan.name,
+                  content_type: "product",
+                  billing_period: period,
+                  payment_method: "mpesa",
+                });
                 toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
                 return;
               }

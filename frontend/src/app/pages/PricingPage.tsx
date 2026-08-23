@@ -14,6 +14,7 @@ import { ThemeToggle } from "../components/ThemeToggle";
 import { useAuth, getTrialInfo } from "../auth/AuthContext";
 import { toast } from "sonner";
 import { useSEO } from "../hooks/useSEO";
+import { trackEvent, MetaEvents } from "../utils/metaPixel";
 
 const plans = [
   {
@@ -145,6 +146,10 @@ export function PricingPage() {
     return () => els.forEach(el => el.remove());
   }, []);
 
+  useEffect(() => {
+    trackEvent(MetaEvents.ViewContent, { content_name: "Pricing" });
+  }, []);
+
   const navigate = useNavigate();
   const { user, apiFetch, updateUser, isLoading } = useAuth();
   const [isYearly, setIsYearly] = useState(false);
@@ -204,6 +209,7 @@ export function PricingPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to start trial");
       updateUser(data.user);
+      trackEvent(MetaEvents.StartTrial, { plan: planName });
       toast.success(`7-day trial started!`);
       navigate("/app/dashboard");
     } catch (error) {
@@ -219,6 +225,7 @@ export function PricingPage() {
       return;
     }
     if (trialInfo.isWithinTrial || !trialInfo.canStartTrial) {
+      trackEvent(MetaEvents.InitiateCheckout, { content_name: planName });
       navigate(`/subscribe/${planName.toLowerCase()}`);
       return;
     }

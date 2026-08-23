@@ -1,6 +1,15 @@
-import React, { Suspense } from "react";
-import { createBrowserRouter, RouterProvider, Link, Navigate, Outlet } from "react-router";
+import React, { Suspense, useEffect } from "react";
+import { createBrowserRouter, RouterProvider, Link, Navigate, Outlet, useLocation } from "react-router";
 import { useAuth, getTrialInfo } from "./auth/AuthContext";
+import { trackPageView } from "./utils/metaPixel";
+
+function MetaPixelPageViewTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    trackPageView();
+  }, [location.pathname]);
+  return null;
+}
 
 const MainLayout = React.lazy(() => import("./layouts/MainLayout").then(m => ({ default: m.MainLayout })));
 
@@ -100,6 +109,14 @@ function NotFoundPage() {
 
 const router = createBrowserRouter([
   {
+    element: (
+      <>
+        <MetaPixelPageViewTracker />
+        <Outlet />
+      </>
+    ),
+    children: [
+  {
     path: "/",
     element: <LandingPage />,
     errorElement: <NotFoundPage />,
@@ -168,6 +185,8 @@ const router = createBrowserRouter([
   {
     path: "*",
     element: <NotFoundPage />,
+  },
+    ],
   },
 ]);
 
