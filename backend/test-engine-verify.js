@@ -58,7 +58,7 @@ async function main() {
   if (lvl) {
     check('T1 < T2 < T3', lvl.target1 < lvl.target2 && lvl.target2 < lvl.target3, `${lvl.target1}/${lvl.target2}/${lvl.target3}`);
     check('T1 above entry', lvl.target1 > lvl.entry, `${lvl.target1} vs ${lvl.entry}`);
-    check('riskReward widened (~3:1)', lvl.riskReward >= 2.5 && lvl.riskReward <= 3.5, `${lvl.riskReward}:1`);
+    check('riskReward floor (~2:1)', lvl.riskReward >= 1.8 && lvl.riskReward <= 2.2, `${lvl.riskReward}:1`);
   }
   console.log();
 

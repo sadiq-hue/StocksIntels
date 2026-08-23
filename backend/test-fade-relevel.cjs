@@ -83,24 +83,24 @@ check('fade without a fresh score defaults to the harder marginal count (4)',
 
 // ─── computeRelevelStop ────────────────────────────────────────────────────
 section('computeRelevelStop');
-// position: entry 100, stop 88 (a 12% stop — typical ATR-scaled width above the
-// new 10% floor), target1 110  => targetDist 10. The pre-lock cap sits at
-// entry - max(2%, MIN_STOP_PCT*100=10%, freshStopDist*0.5) = 90 in these cases,
-// so pre-lock re-leveling can ratchet the stop up to (but never above) the 10%
+// position: entry 100, stop 82 (an 18% stop — typical ATR-scaled width above the
+// 15% floor), target1 110  => targetDist 10. The pre-lock cap sits at
+// entry - max(2%, MIN_STOP_PCT*100=15%, freshStopDist*0.5) = 85 in these cases,
+// so pre-lock re-leveling can ratchet the stop up to (but never above) the 15%
 // floor, and the lock phase (>= 75% progress) starts banking half the gain.
-const pos = { entryPrice: 100, stopLoss: 88, target1: 110 };
+const pos = { entryPrice: 100, stopLoss: 82, target1: 110 };
 
-check('tighter ATR stop ratchets up (88 -> 90), capped at the 10% floor, changed, progress 20',
+check('tighter ATR stop ratchets up (82 -> 85), capped at the 15% floor, changed, progress 20',
   computeRelevelStop(pos, 102, 95),
-  { newStop: 90, changed: true, progress: 20 });
+  { newStop: 85, changed: true, progress: 20 });
 
-check('looser ATR stop never loosens (88 kept), unchanged',
+check('looser ATR stop never loosens (82 kept), unchanged',
   computeRelevelStop(pos, 102, 80),
-  { newStop: 88, changed: false, progress: 20 });
+  { newStop: 82, changed: false, progress: 20 });
 
-check('progress 50 (pre-lock) tightens to the floor (90) but stays BELOW entry (no breakeven ratchet)',
+check('progress 50 (pre-lock) tightens to the floor (85) but stays BELOW entry (no breakeven ratchet)',
   computeRelevelStop(pos, 105, 94),
-  { newStop: 90, changed: true, progress: 50 });
+  { newStop: 85, changed: true, progress: 50 });
 
 check('progress >= 75 locks 50% of open gain (entry + 4 = 104)',
   computeRelevelStop(pos, 108, 97),
@@ -111,52 +111,52 @@ check('progress beyond target keeps the fresher ATR stop (106.4) over the 106 lo
   { newStop: 106.4, changed: true, progress: 120 });
 
 check('price at/below stop -> not a change',
-  computeRelevelStop(pos, 87, 85),
-  { newStop: 88, changed: false, progress: -130 });
+  computeRelevelStop(pos, 80, 75),
+  { newStop: 82, changed: false, progress: -200 });
 
 check('null fresh stop -> no change',
   computeRelevelStop(pos, 102, null),
-  { newStop: 88, changed: false, progress: 0 });
+  { newStop: 82, changed: false, progress: 0 });
 
 check('invalid geometry (target1 <= entry) -> no change',
-  computeRelevelStop({ entryPrice: 100, stopLoss: 88, target1: 95 }, 102, 95),
-  { newStop: 88, changed: false, progress: 0 });
+  computeRelevelStop({ entryPrice: 100, stopLoss: 82, target1: 95 }, 102, 95),
+  { newStop: 82, changed: false, progress: 0 });
 
 check('undefined position -> no change',
   computeRelevelStop(undefined, 102, 95),
   { newStop: undefined, changed: false, progress: 0 });
 
 check('fresh stop equal to current stop -> no change',
-  computeRelevelStop(pos, 102, 88),
-  { newStop: 88, changed: false, progress: 20 });
+  computeRelevelStop(pos, 102, 82),
+  { newStop: 82, changed: false, progress: 20 });
 
-check('result is rounded to 2 decimals',
-  computeRelevelStop(pos, 102.5, 94.444),
-  { newStop: 90, changed: true, progress: 25 });
+check('lock result is rounded to 2 decimals (104.25)',
+  computeRelevelStop(pos, 108.5, 97),
+  { newStop: 104.25, changed: true, progress: 85 });
 
 check('entry <= 0 guard -> no change',
-  computeRelevelStop({ entryPrice: 0, stopLoss: 88, target1: 110 }, 102, 95),
-  { newStop: 88, changed: false, progress: 0 });
+  computeRelevelStop({ entryPrice: 0, stopLoss: 82, target1: 110 }, 102, 95),
+  { newStop: 82, changed: false, progress: 0 });
 
-check('pre-lock stop never ratchets above entry minus the 10% floor (fresh 99 capped at 90)',
+check('pre-lock stop never ratchets above entry minus the 15% floor (fresh 99 capped at 85)',
   computeRelevelStop(pos, 106, 99),
-  { newStop: 90, changed: true, progress: 60 });
+  { newStop: 85, changed: true, progress: 60 });
 
-check('extreme-volatility fresh stop is still held at the 10% floor pre-lock (fresh 95 -> cap 90)',
+check('extreme-volatility fresh stop is still held at the 15% floor pre-lock (fresh 95 -> cap 85)',
   computeRelevelStop(pos, 107, 95),
-  { newStop: 90, changed: true, progress: 70 });
+  { newStop: 85, changed: true, progress: 70 });
 
-check('calm name with a nearly-breakeven fresh stop is held at the 10% floor (cap 90)',
+check('calm name with a nearly-breakeven fresh stop is held at the 15% floor (cap 85)',
   computeRelevelStop(pos, 102, 99.5),
-  { newStop: 90, changed: true, progress: 20 });
+  { newStop: 85, changed: true, progress: 20 });
 
-check('the +10% rally then dip-to-entry scenario keeps the stop below entry (90), position alive',
+check('the +10% rally then dip-to-entry scenario keeps the stop below entry (85), position alive',
   computeRelevelStop(pos, 100, 98),
-  { newStop: 90, changed: true, progress: 0 });
+  { newStop: 85, changed: true, progress: 0 });
 
 check('stop already at the floor does not churn when price retraces to entry',
-  computeRelevelStop({ entryPrice: 100, stopLoss: 90, target1: 110 }, 100, 97),
-  { newStop: 90, changed: false, progress: 0 });
+  computeRelevelStop({ entryPrice: 100, stopLoss: 85, target1: 110 }, 100, 97),
+  { newStop: 85, changed: false, progress: 0 });
 
 check('lock at exactly 75% progress banks half the open gain (entry + 3.75 = 103.75)',
   computeRelevelStop(pos, 107.5, 97),
@@ -166,9 +166,9 @@ check('a stop raised past the cap by a prior lock is never loosened on retrace',
   computeRelevelStop({ entryPrice: 100, stopLoss: 104, target1: 110 }, 101, 96),
   { newStop: 104, changed: false, progress: 10 });
 
-check('new stop must stay below the market price (90 < 93 ok, tightened)',
+check('new stop must stay below the market price (85 < 93 ok, tightened)',
   computeRelevelStop(pos, 93, 92.5),
-  { newStop: 90, changed: true, progress: -70 });
+  { newStop: 85, changed: true, progress: -70 });
 
 // ─── gate interaction invariants ───────────────────────────────────────────
 section('gate interaction invariants');
@@ -302,11 +302,19 @@ check('5-min-old hold at/above target1 does NOT profit-fade (guard wins)',
 
 check('exactly at the guard boundary is old enough (>= min age)',
   evaluateScoreClose(freshPos, 'sell', true, 102, T0 + HOUR, HOUR),
+  { close: null, fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
+
+check('2d-old single flip reading does NOT close (needs 2 confirmations)',
+  evaluateScoreClose(freshPos, 'sell', true, 102, now2d, HOUR),
+  { close: null, fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
+
+check('2d-old 2nd consecutive flip reading at a loss closes (score flipped)',
+  evaluateScoreClose({ ...freshPos, flipCount: 1, flipFirstSeen: T0 }, 'sell', true, 93, now2d, HOUR),
   { close: 'score flipped', fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
 
-check('2d-old flip reading closes immediately',
-  evaluateScoreClose(freshPos, 'sell', true, 102, now2d, HOUR),
-  { close: 'score flipped', fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
+check('2d-old 2nd flip reading but still a winner (+2%) does NOT close',
+  evaluateScoreClose({ ...freshPos, flipCount: 1, flipFirstSeen: T0 }, 'sell', true, 102, now2d, HOUR),
+  { close: null, fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
 
 check('2d-old first DEEP fade reading waits for confirmation (1/3)',
   evaluateScoreClose(freshPos, 'hold', true, 102, now2d, HOUR, DEEP),
@@ -320,24 +328,24 @@ check('2d-old 2nd fade on a WINNER (+2%) does NOT close (winners ride)',
   evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 102, now2d, HOUR, DEEP),
   { close: null, fadeCount: 2, fadeFirstSeen: now2d, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('deep fade confirmed across days on a LOSER past 75%-of-stop (-6%) closes',
-  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 94, now2d, HOUR, DEEP),
+check('deep fade confirmed across days on a LOSER past 80%-of-stop (-7%) closes',
+  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 93, now2d, HOUR, DEEP),
   { close: 'conviction faded', fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('deep fade confirmed but only -4% (below the 6% cut) does NOT close',
+check('deep fade confirmed but only -4% (below the 6.4% cut) does NOT close',
   evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 96, now2d, HOUR, DEEP),
   { close: null, fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('same-day 3rd deep reading never closes, even at -6% (must span days)',
-  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: now2d }, 'hold', true, 94, now2d, HOUR, DEEP),
+check('same-day 3rd deep reading never closes, even at -7% (must span days)',
+  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: now2d }, 'hold', true, 93, now2d, HOUR, DEEP),
   { close: null, fadeCount: 3, fadeFirstSeen: now2d, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
 check('MARGINAL fade at count 3 across days still not confirmed (needs 4)',
-  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 94, now2d, HOUR, MARGINAL),
+  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 93, now2d, HOUR, MARGINAL),
   { close: null, fadeCount: 3, fadeFirstSeen: T0, required: 4, isFade: true, tooYoung: false, longTermHold: false });
 
-check('MARGINAL fade at count 4 across days on a -6% loser closes',
-  evaluateScoreClose({ ...freshPos, fadeCount: 3, fadeFirstSeen: T0 }, 'hold', true, 94, now2d, HOUR, MARGINAL),
+check('MARGINAL fade at count 4 across days on a -7% loser closes',
+  evaluateScoreClose({ ...freshPos, fadeCount: 3, fadeFirstSeen: T0 }, 'hold', true, 93, now2d, HOUR, MARGINAL),
   { close: 'conviction faded', fadeCount: 4, fadeFirstSeen: T0, required: 4, isFade: true, tooYoung: false, longTermHold: false });
 
 check('2d-old hold at/above target1 profit-fades on first reading',
@@ -368,14 +376,14 @@ check('default min-age (6h): 7h-old 3rd reading same-day does NOT close (day spa
   evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 96, T0 + 7 * HOUR, undefined, DEEP),
   { close: null, fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('default min-age (6h): 2d-old confirmed fade on a -6% loser closes',
-  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 94, now2d, undefined, DEEP),
+check('default min-age (6h): 2d-old confirmed fade on a -7% loser closes (past 80% of 8% stop)',
+  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 93, now2d, undefined, DEEP),
   { close: 'conviction faded', fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-// ─── fadeCutReached (fair fade cut: losers only, 75%-of-stop + 3% floor) ────
+// ─── fadeCutReached (fair fade cut: losers only, 80%-of-stop + 3% floor) ────
 section('fadeCutReached (fair fade cut - losers only)');
-const bandPos = { action: 'buy', entryPrice: 100, stopLoss: 92, target1: 110 };
-const bandSell = { action: 'sell', entryPrice: 100, stopLoss: 108, target1: 90 };
+const bandPos = { action: 'buy', entryPrice: 100, stopLoss: 90, target1: 110 };
+const bandSell = { action: 'sell', entryPrice: 100, stopLoss: 110, target1: 90 };
 
 check('buy WINNER +2% -> NO fade cut (winners always ride)',
   fadeCutReached(bandPos, 102), false);
@@ -389,23 +397,23 @@ check('buy flat 0% -> NO fade cut',
 check('buy -1% loss (inside band) -> NO cut',
   fadeCutReached(bandPos, 99), false);
 
-check('buy -4% (half of the 8% stop, below the 6% threshold) -> NO cut',
+check('buy -4% (below the 8% threshold) -> NO cut',
   fadeCutReached(bandPos, 96), false);
 
-check('buy -5% -> NO cut (still under 75% of the 8% stop = -6%)',
+check('buy -5% -> NO cut (still under 80% of the 10% stop = -8%)',
   fadeCutReached(bandPos, 95), false);
 
-check('buy exactly at 75% of the stop distance (-6%) -> cut',
-  fadeCutReached(bandPos, 94), true);
+check('buy exactly at 80% of the stop distance (-8%) -> cut',
+  fadeCutReached(bandPos, 92), true);
 
 check('sell WINNER -4% -> NO fade cut (winners always ride)',
   fadeCutReached(bandSell, 96), false);
 
-check('sell +4% (half the +8% stop, below the +6% threshold) -> NO cut',
+check('sell +4% (below the +8% threshold) -> NO cut',
   fadeCutReached(bandSell, 104), false);
 
-check('sell exactly at +6% (75% of the +8% stop) -> cut',
-  fadeCutReached(bandSell, 106), true);
+check('sell exactly at +8% (80% of the +10% stop) -> cut',
+  fadeCutReached(bandSell, 108), true);
 
 check('sell +2% -> NO cut',
   fadeCutReached(bandSell, 102), false);
