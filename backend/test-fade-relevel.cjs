@@ -279,7 +279,7 @@ check('single fade reading at target1 immediately closes (no multi-reading wait)
 // ─── evaluateScoreClose (monitor-gate verdict + min-age guard) ────────────────
 section('evaluateScoreClose (min-age guard)');
 const now2d = T0 + 2 * DAY + 2 * HOUR; // 2 days + 2h after entry
-const freshPos = { action: 'buy', entryPrice: 100, stopLoss: 92, target1: 110, timestamp: T0, type: 'Swing Trade', fadeCount: 0, fadeFirstSeen: null };
+const freshPos = { action: 'buy', entryPrice: 100, stopLoss: 85, target1: 110, timestamp: T0, type: 'Swing Trade', fadeCount: 0, fadeFirstSeen: null };
 
 // The min-age section pins the boundary to a 1h guard explicitly so the
 // mechanism is tested time-agnostically; the production default (6h) is covered
@@ -309,7 +309,7 @@ check('2d-old single flip reading does NOT close (needs 2 confirmations)',
   { close: null, fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
 
 check('2d-old 2nd consecutive flip reading at a loss closes (score flipped)',
-  evaluateScoreClose({ ...freshPos, flipCount: 1, flipFirstSeen: T0 }, 'sell', true, 93, now2d, HOUR),
+  evaluateScoreClose({ ...freshPos, flipCount: 1, flipFirstSeen: T0 }, 'sell', true, 92, now2d, HOUR),
   { close: 'score flipped', fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
 
 check('2d-old 2nd flip reading but still a winner (+2%) does NOT close',
@@ -328,24 +328,24 @@ check('2d-old 2nd fade on a WINNER (+2%) does NOT close (winners ride)',
   evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 102, now2d, HOUR, DEEP),
   { close: null, fadeCount: 2, fadeFirstSeen: now2d, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('deep fade confirmed across days on a LOSER past 80%-of-stop (-7%) closes',
-  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 93, now2d, HOUR, DEEP),
+check('deep fade confirmed across days on a LOSER past 80%-of-stop (-13% vs 15% stop) closes',
+  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 87, now2d, HOUR, DEEP),
   { close: 'conviction faded', fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('deep fade confirmed but only -4% (below the 6.4% cut) does NOT close',
+check('deep fade confirmed but only -4% (below the 12% cut for 15% stop) does NOT close',
   evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 96, now2d, HOUR, DEEP),
   { close: null, fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('same-day 3rd deep reading never closes, even at -7% (must span days)',
-  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: now2d }, 'hold', true, 93, now2d, HOUR, DEEP),
+check('same-day 3rd deep reading never closes, even at -13% (must span days)',
+  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: now2d }, 'hold', true, 87, now2d, HOUR, DEEP),
   { close: null, fadeCount: 3, fadeFirstSeen: now2d, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
 check('MARGINAL fade at count 3 across days still not confirmed (needs 4)',
-  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 93, now2d, HOUR, MARGINAL),
+  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 87, now2d, HOUR, MARGINAL),
   { close: null, fadeCount: 3, fadeFirstSeen: T0, required: 4, isFade: true, tooYoung: false, longTermHold: false });
 
-check('MARGINAL fade at count 4 across days on a -7% loser closes',
-  evaluateScoreClose({ ...freshPos, fadeCount: 3, fadeFirstSeen: T0 }, 'hold', true, 93, now2d, HOUR, MARGINAL),
+check('MARGINAL fade at count 4 across days on a -13% loser closes',
+  evaluateScoreClose({ ...freshPos, fadeCount: 3, fadeFirstSeen: T0 }, 'hold', true, 87, now2d, HOUR, MARGINAL),
   { close: 'conviction faded', fadeCount: 4, fadeFirstSeen: T0, required: 4, isFade: true, tooYoung: false, longTermHold: false });
 
 check('2d-old hold at/above target1 profit-fades on first reading',
@@ -376,14 +376,14 @@ check('default min-age (6h): 7h-old 3rd reading same-day does NOT close (day spa
   evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 96, T0 + 7 * HOUR, undefined, DEEP),
   { close: null, fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('default min-age (6h): 2d-old confirmed fade on a -7% loser closes (past 80% of 8% stop)',
-  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 93, now2d, undefined, DEEP),
+check('default min-age (6h): 2d-old confirmed fade on a -13% loser closes (past 80% of 15% stop)',
+  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 87, now2d, undefined, DEEP),
   { close: 'conviction faded', fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
 // ─── fadeCutReached (fair fade cut: losers only, 80%-of-stop + 3% floor) ────
 section('fadeCutReached (fair fade cut - losers only)');
-const bandPos = { action: 'buy', entryPrice: 100, stopLoss: 90, target1: 110 };
-const bandSell = { action: 'sell', entryPrice: 100, stopLoss: 110, target1: 90 };
+const bandPos = { action: 'buy', entryPrice: 100, stopLoss: 85, target1: 110 };
+const bandSell = { action: 'sell', entryPrice: 100, stopLoss: 115, target1: 90 };
 
 check('buy WINNER +2% -> NO fade cut (winners always ride)',
   fadeCutReached(bandPos, 102), false);
@@ -397,23 +397,23 @@ check('buy flat 0% -> NO fade cut',
 check('buy -1% loss (inside band) -> NO cut',
   fadeCutReached(bandPos, 99), false);
 
-check('buy -4% (below the 8% threshold) -> NO cut',
+check('buy -4% (below the 12% threshold for 15% stop) -> NO cut',
   fadeCutReached(bandPos, 96), false);
 
-check('buy -5% -> NO cut (still under 80% of the 10% stop = -8%)',
+check('buy -5% -> NO cut (still under 80% of the 15% stop = -12%)',
   fadeCutReached(bandPos, 95), false);
 
-check('buy exactly at 80% of the stop distance (-8%) -> cut',
-  fadeCutReached(bandPos, 92), true);
+check('buy exactly at 80% of the stop distance (-12%) -> cut',
+  fadeCutReached(bandPos, 88), true);
 
 check('sell WINNER -4% -> NO fade cut (winners always ride)',
   fadeCutReached(bandSell, 96), false);
 
-check('sell +4% (below the +8% threshold) -> NO cut',
+check('sell +4% (below the +12% threshold) -> NO cut',
   fadeCutReached(bandSell, 104), false);
 
-check('sell exactly at +8% (80% of the +10% stop) -> cut',
-  fadeCutReached(bandSell, 108), true);
+check('sell exactly at +12% (80% of the +15% stop) -> cut',
+  fadeCutReached(bandSell, 112), true);
 
 check('sell +2% -> NO cut',
   fadeCutReached(bandSell, 102), false);
@@ -425,6 +425,9 @@ check('no position / zero prices -> false',
 // The re-leveled pre-lock stop sits at least 2% below entry (volatility-scaled
 // buffer); SCORE_CLOSE_CUT_MIN_PCT (3%) must keep a confirmed fade from yanking
 // a position near breakeven — the hard stop is what books those exits.
+// With the MIN_STOP_PCT floor, stops below 15% never trigger fade cut — the
+// hard stop is the binding exit. This prevents premature closes on legacy or
+// tight-stop positions.
 const tightBand = { action: 'buy', entryPrice: 100, stopLoss: 98, target1: 110 };
 
 check('tight re-leveled stop (-2%): fade cut does NOT fire at -1% (noise floor)',
@@ -433,17 +436,29 @@ check('tight re-leveled stop (-2%): fade cut does NOT fire at -1% (noise floor)'
 check('tight re-leveled stop (-2%): fade cut does NOT fire at -1.5% (3% floor wins)',
   fadeCutReached(tightBand, 98.5), false);
 
-check('tight re-leveled stop (-2%): fade cut fires only at the 3% floor',
+check('tight re-leveled stop (-2%): fade cut does NOT fire at -3% (below 15% floor)',
   [fadeCutReached(tightBand, 97), fadeCutReached(tightBand, 99.5)],
-  [true, false]);
+  [false, false]);
+
+// MIN_STOP_PCT floor: stops below 15% are protected from fade-cut — only the
+// hard stop books those exits. This prevents legacy tight stops from causing
+// premature closes (e.g. GE at -7.2% with an 8.5% stop).
+const floorPos = { action: 'buy', entryPrice: 100, stopLoss: 92, target1: 110 };
+check('8% stop: fade cut does NOT fire at -7% (below 15% floor, hard stop binds)',
+  fadeCutReached(floorPos, 93), false);
+
+check('8% stop: fade cut does NOT fire at -12% (below 15% floor)',
+  fadeCutReached(floorPos, 88), false);
 
 // Real-world regressions: BOC was fade-closed at -1.1% and EABL at +1.2% by the
 // older logic — neither may be cut under the fair rules.
+// With the MIN_STOP_PCT floor, BOC's 3.44% stop is below the floor, so fade cut
+// never fires — the hard stop binds first.
 check('BOC-like tight stop (-3.44%): -1.1% loss is NOT fade-cut (rides)',
   fadeCutReached({ action: 'buy', entryPrice: 180, stopLoss: 173.81, target1: 198.57 }, 178), false);
 
-check('BOC-like tight stop: only cut once past the 3% floor (>= -3%)',
-  fadeCutReached({ action: 'buy', entryPrice: 180, stopLoss: 173.81, target1: 198.57 }, 174.5), true);
+check('BOC-like tight stop: NOT cut even at -3% (below 15% floor, hard stop binds)',
+  fadeCutReached({ action: 'buy', entryPrice: 180, stopLoss: 173.81, target1: 198.57 }, 174.5), false);
 
 check('EABL-like winner +1.2% is never fade-cut',
   fadeCutReached({ action: 'buy', entryPrice: 281.5, stopLoss: 274.99, target1: 320.76 }, 285), false);

@@ -1748,12 +1748,16 @@ function fadeCutReached(prevOutcome, currentPrice) {
   const stop = prevOutcome.stopLoss;
   if (prevOutcome.action !== 'buy') {
     if (stop != null && stop > 0 && stop > entry) {
-      return pctMove >= Math.max(((stop - entry) / entry) * 100 * SCORE_CLOSE_CUT_FRACTION_OF_STOP, SCORE_CLOSE_CUT_MIN_PCT);
+      const stopDistPct = ((stop - entry) / entry) * 100;
+      if (stopDistPct < MIN_STOP_PCT * 100) return false;
+      return pctMove >= Math.max(stopDistPct * SCORE_CLOSE_CUT_FRACTION_OF_STOP, SCORE_CLOSE_CUT_MIN_PCT);
     }
     return false;
   }
   if (stop != null && stop > 0 && stop < entry) {
-    return pctMove <= -Math.max(((entry - stop) / entry) * 100 * SCORE_CLOSE_CUT_FRACTION_OF_STOP, SCORE_CLOSE_CUT_MIN_PCT);
+    const stopDistPct = ((entry - stop) / entry) * 100;
+    if (stopDistPct < MIN_STOP_PCT * 100) return false;
+    return pctMove <= -Math.max(stopDistPct * SCORE_CLOSE_CUT_FRACTION_OF_STOP, SCORE_CLOSE_CUT_MIN_PCT);
   }
   return false;
 }
@@ -1869,9 +1873,11 @@ function computeRelevelStop(position, currentPrice, freshStopLoss) {
   newStop = Math.max(newStop, freshStopLoss);
   if (progress >= RELEVEL_LOCK_PROGRESS) {
     newStop = Math.max(newStop, entryPrice + (currentPrice - entryPrice) * RELEVEL_LOCK_RATIO);
-  } else if (stopLoss != null && stopLoss <= breakevenCap) {
+  } else if (stopLoss != null && stopLoss < entryPrice) {
     // Pre-lock: tighten toward entry but never above entry minus the buffer. A stop
-    // already raised past the cap by a prior lock phase is left exactly where it is.
+    // already raised past the cap by a prior lock phase (stopLoss >= entryPrice)
+    // is left exactly where it is. Legacy stops set with a tighter MIN_STOP_PCT
+    // (stopLoss between breakevenCap and entryPrice) are corrected down to the cap.
     newStop = Math.min(newStop, breakevenCap);
   }
   newStop = Math.round(newStop * 100) / 100;

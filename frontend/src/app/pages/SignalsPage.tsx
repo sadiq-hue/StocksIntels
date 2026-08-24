@@ -550,12 +550,11 @@ export function SignalsPage() {
               </div>
 
               {/* Entry / Stop / Targets */}
-              <div className={`px-4 pb-3 grid grid-cols-2 gap-2 ${s.target3 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`} data-tour={idx === 0 ? "signal-levels" : undefined}>
+              <div className={`px-4 pb-3 grid grid-cols-2 gap-2 ${s.target3 ? "sm:grid-cols-4" : "sm:grid-cols-3"}`} data-tour={idx === 0 ? "signal-levels" : undefined}>
                 <div className="bg-blue-50 dark:bg-blue-950/30 rounded-md p-2 text-center border border-blue-100 dark:border-blue-800/50"><p className="text-[9px] font-medium text-blue-600 dark:text-blue-400 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 dark:text-blue-200 font-mono">{fmtPrice(s, s.entry)}</p></div>
                 <div className="bg-red-50 dark:bg-red-950/30 rounded-md p-2 text-center border border-red-100 dark:border-red-800/50"><p className="text-[9px] font-medium text-red-600 dark:text-red-400 uppercase">Stop</p><p className="text-xs font-bold text-red-900 dark:text-red-200 font-mono">{fmtPrice(s, s.stopLoss)}</p></div>
                 <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Target 1</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target1)}</p></div>
-                <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Target 2</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target2)}</p></div>
-                {s.target3 && <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Target 3</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target3)}</p></div>}
+                {s.target3 && <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Ultimate Target</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target3)}</p></div>}
               </div>
 
               {/* Risk / ML badges */}
@@ -698,12 +697,11 @@ export function SignalsPage() {
                   <h3 className="text-sm font-semibold text-foreground">Trade Parameters</h3>
                   <p className="text-[10px] text-muted-foreground italic">The action plan — what to do, step by step</p>
                 </div>
-                <div className={`grid grid-cols-2 gap-2 ${selected.target3 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
+                <div className={`grid grid-cols-2 gap-2 ${selected.target3 ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
                   <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 text-center"><p className="text-[10px] font-medium text-blue-600 uppercase">Entry</p><p className="text-sm font-bold text-blue-900 font-mono">{fmtPrice(selected, selected.entry)}</p></div>
                   <div className="bg-red-50 rounded-lg p-3 border border-red-100 text-center"><p className="text-[10px] font-medium text-red-600 uppercase">Stop</p><p className="text-sm font-bold text-red-900 font-mono">{fmtPrice(selected, selected.stopLoss)}</p></div>
                   <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">Target 1</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target1)}</p></div>
-                  <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">Target 2</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target2)}</p></div>
-                  {selected.target3 && <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">Target 3</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target3)}</p></div>}
+                  {selected.target3 && <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">Ultimate Target</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target3)}</p></div>}
                 </div>
                 <div className="mt-2 space-y-1 text-[11px] text-muted-foreground leading-relaxed">
                   <p><span className="font-semibold text-blue-700">Entry {fmtPrice(selected, selected.entry)}</span> — the market price when the signal was generated, used as the reference to size the stop and targets. Buy at the current market price — you don't need to wait for this exact level.</p>
@@ -713,8 +711,7 @@ export function SignalsPage() {
                     <p><span className="font-semibold text-red-700">Stop {fmtPrice(selected, selected.stopLoss)}</span> — the safety-net price. If the stock drops to this level, sell immediately to prevent further losses.</p>
                   )}
                   {selected.target1 && <p><span className="font-semibold text-emerald-700">Price Target 1 {fmtPrice(selected, selected.target1)}</span> — first profit goal. Many investors take some profit here.</p>}
-                  {selected.target2 && <p><span className="font-semibold text-emerald-700">Price Target 2 {fmtPrice(selected, selected.target2)}</span> — middle profit goal — take more profit if it reaches here.</p>}
-                  {selected.target3 && <p><span className="font-semibold text-emerald-700">Price Target 3 {fmtPrice(selected, selected.target3)}</span> — ultimate profit goal — the full win.</p>}
+                  {selected.target3 && <p><span className="font-semibold text-emerald-700">Ultimate Target {fmtPrice(selected, selected.target3)}</span> — maximum upside target. The full win if the stock reaches its highest potential.</p>}
                   {selected.riskReward != null && !Number.isNaN(selected.riskReward) && (
                     <p><span className="font-semibold text-foreground">Risk-to-reward {selected.riskReward.toFixed(1)}:1</span> — for every {curSym(selected)}1 you risk, the plan targets {curSym(selected)}{formatCurrency(selected.riskReward)} in profit.</p>
                   )}
