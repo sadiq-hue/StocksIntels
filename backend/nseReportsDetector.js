@@ -539,7 +539,13 @@ async function recordFiling({ key, company, ticker, url, filename, periodEnd, au
   await pool.query(
     `INSERT INTO nse_report_filings (filing_key, company_name, ticker, pdf_url, filename, period_end_date, audited, parsed, parse_status, source)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-     ON CONFLICT (filing_key) DO UPDATE SET parsed = EXCLUDED.parsed, parse_status = EXCLUDED.parse_status, source = EXCLUDED.source`,
+     ON CONFLICT (filing_key) DO UPDATE SET
+       company_name = EXCLUDED.company_name,
+       ticker = COALESCE(EXCLUDED.ticker, nse_report_filings.ticker),
+       period_end_date = COALESCE(EXCLUDED.period_end_date, nse_report_filings.period_end_date),
+       parsed = EXCLUDED.parsed,
+       parse_status = EXCLUDED.parse_status,
+       source = EXCLUDED.source`,
     [key, company, ticker, url, filename, periodEnd, audited, parsed, parseStatus, source]
   );
 }
