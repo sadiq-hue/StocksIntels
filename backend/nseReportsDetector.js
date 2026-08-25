@@ -497,7 +497,7 @@ async function scrapeNseFinancialResults() {
   // so historical periods are captured for free (no ScrapingBee needed).
   const currentYear = new Date().getFullYear();
   const years = [];
-  for (let y = 2026; y <= currentYear; y++) years.push(String(y));
+  for (let y = 2022; y <= currentYear; y++) years.push(String(y));
   const [a, b, c] = await Promise.allSettled([
     scrapePdfLinksFromPage(NSE_FINANCIALS_URL),
     scrapePdfLinksFromPage(NSE_ANNOUNCEMENTS_URL),
