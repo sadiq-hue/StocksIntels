@@ -33,6 +33,7 @@ const NSE_NAMES = {
   HFCK: 'HFCB Group Plc', IMH: 'I & M Holdings Plc', JUB: 'Jubilee Holdings', KAPC: 'Kapchorua Tea Kenya Plc',
   KCB: 'KCB Group Plc', KEGN: 'Kenya Electricity Generating Company Plc', KNRE: 'Kenya Re-Insurance Corporation',
   KPC: 'Kenya Pipeline Company Plc', KPLC: 'Kenya Power and Lighting Company Plc', KQ: 'Kenya Airways Plc',
+  KMRC: 'Kenya Mortgage Refinance Company Plc',
   KUKZ: 'Kakuzi Plc', KURV: 'Kurwitu Ventures', LAPR: 'LAPTrust Imara Income-REIT', LBTY: 'Liberty Kenya Holdings',
   LIMT: 'Limuru Tea Plc', LKL: 'Longhorn Publishers Plc', MSC: 'Mumias Sugar Company', NBV: 'Nairobi Business Ventures',
   NCBA: 'NCBA Group Plc', NMG: 'Nation Media Group Plc', NSE: 'Nairobi Securities Exchange Plc', OCH: 'Olympia Capital Holdings',
@@ -41,6 +42,7 @@ const NSE_NAMES = {
   SLAM: 'Sanlam Kenya Plc', SMER: 'Sameer Africa Plc', SMWF: 'Satrix MSCI World Feeder ETF',
   TCL: 'Trans-Century Plc', TOTL: 'TotalEnergies Marketing Kenya Plc', TPSE: 'TPS Eastern Africa (Serena)',
   UCHM: 'Uchumi Supermarket Plc', UMME: 'Umeme', UNGA: 'Unga Group', WTK: 'Williamson Tea Kenya Plc', XPRS: 'Express Kenya Plc',
+  KORCH: 'Kenya Orchards Plc', FHOK: 'Friends of the Earth Kenya Plc', ILAM: 'ILAM Fahari I-REIT',
 };
 
 const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
@@ -79,13 +81,31 @@ const MANUAL = {
   GLD: ['newgold', 'new gold etf'],
   SLAM: ['sanlam allianz', 'sanlam allianz holdings', 'sanlam kenya', 'sanlam kenya plc'],
   CGEN: ['car general', 'car general kenya'],
-  CTUM: ['centum'],
+  CTUM: ['centum', 'centum plc'],
   KEGN: ['kengen', 'kenya electricity generating'],
-  KPLC: ['kenya power', 'kenya power lighting'],
+  KPLC: ['kenya power', 'kenya power lighting', 'kenya power lighting company'],
   TPRI: ['tps', 'serena'],
   BBK: ['baroda', 'bank of baroda'],
   CFCI: ['cfc insurance'],
   HAFC: ['hf group plc'],
+  COOP: ['co op bank', 'co-operative bank', 'coop bank'],
+  FABL: ['family bank'],
+  TCL: ['trans century', 'trans-century', 'transcentury'],
+  LAPR: ['laptrust imara', 'laptrust imara i reit'],
+  CRWN: ['crown paints'],
+  KAPC: ['kapchorua tea'],
+  NBV: ['nairobi business ventures'],
+  OCH: ['olympia capital'],
+  SASN: ['sasini'],
+  EGAD: ['eaagads'],
+  DTK: ['diamond trust bank'],
+  PORT: ['portland cement'],
+  UMME: ['umeme'],
+  UNGA: ['unga'],
+  WTK: ['williamson tea'],
+  SMER: ['sameer', 'sameer africa'],
+  HBE: ['homeboyz'],
+  HAFR: ['home afrika'],
 };
 for (const [ticker, list] of Object.entries(MANUAL)) list.forEach(a => addAlias(ticker, a));
 
@@ -116,8 +136,8 @@ function extractCompanyName(filename) {
 
 function parsePeriodEnd(filename) {
   const f = filename.toLowerCase();
-  // 1) DD-Mon-YYYY (NSE filenames)
-  const m = f.match(/(\d{1,2})[- ](jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[- ](\d{4})/);
+  // 1) DD-Mon-YYYY or DDth-Mon-YYYY (NSE filenames with ordinal suffixes)
+  const m = f.match(/(\d{1,2})(?:st|nd|rd|th)?[- ](jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[- ](\d{4})/);
   if (m) {
     const day = parseInt(m[1], 10);
     const mon = MONTHS[m[2].slice(0, 3)];
@@ -544,13 +564,8 @@ async function processFiling(pdf, suppressAlert) {
   const periodEnd = parsePeriodEnd(pdf.filename);
   const audited = isAudited(pdf.filename);
 
-  // Pre-2026 reports: we already have ~5 years of data in the DB. Skip
-  // downloading/parsing/notifying for any report whose period ends before 2026.
-  if (periodEnd && new Date(periodEnd).getFullYear() < 2026) {
-    await recordFiling({ key, company, ticker, url: pdf.url, filename: pdf.filename, periodEnd, audited, parsed: true, parseStatus: 'skipped-pre-2026', source: pdf.source || 'nse' });
-    console.log(`[NSE-Detector] Skip ${ticker || company} ${periodEnd} (pre-2026, already in DB)`);
-    return { matched: !!ticker, parsed: true, skipped: true };
-  }
+  // Deduplication handles old reports — the coveredMatch check below skips
+  // any ticker+period that already has a row in financial_statements.
 
   // Can't determine period from filename — skip download/parse. The filing is
   // recorded so the detector doesn't re-attempt it each cycle.
@@ -627,7 +642,7 @@ async function processPdfBatch(pdfs, suppressAlert, sourceLabel) {
     const ex = await pool.query('SELECT parse_status, ticker, period_end_date FROM nse_report_filings WHERE filing_key = $1', [key]);
     if (ex.rows.length && ex.rows[0].parse_status !== 'failed') {
       const ps = ex.rows[0].parse_status || '';
-      if (!['skipped-completed', 'pending_review', 'completed'].includes(ps)) continue;
+      if (!['skipped-completed', 'pending_review', 'completed', 'unmatched', 'skipped-pre-2026'].includes(ps)) continue;
       // If it claims success, confirm a live statement row actually exists.
       try {
         const live = await pool.query(
@@ -655,24 +670,8 @@ async function runDetection() {
     if (!process.env.DATABASE_URL) { console.log('[NSE-Detector] No DATABASE_URL — skipping'); return; }
     await ensureTable();
 
-    // One-shot cleanup: reject any pending_review rows whose period is pre-2026.
-    // We have ~5 years of data already; only 2026+ reports need admin attention.
-    try {
-      const stale = await pool.query(
-        `UPDATE financial_statements SET status = 'failed', error_message = 'Auto-rejected: pre-2026 report'
-         WHERE status = 'pending_review' AND period_end_date < '2026-01-01' AND period_end_date IS NOT NULL`
-      );
-      if (stale.rowCount > 0) console.log(`[NSE-Detector] Auto-rejected ${stale.rowCount} pre-2026 pending statement(s)`);
-      // Also reject pre-2026 pending_review filings so they aren't re-processed each cycle
-      const staleFilings = await pool.query(
-        `UPDATE nse_report_filings SET parse_status = 'skipped-pre-2026'
-         WHERE parse_status = 'pending_review' AND (
-           (period_end_date IS NOT NULL AND period_end_date < '2026-01-01')
-           OR period_end_date IS NULL
-         )`
-      );
-      if (staleFilings.rowCount > 0) console.log(`[NSE-Detector] Auto-rejected ${staleFilings.rowCount} stale pending filing(s)`);
-    } catch { /* table may not exist */ }
+    // No automatic pre-2026 rejection — deduplication via coveredMatch handles
+    // skipping reports that already exist in financial_statements.
 
     // On a fresh deploy the filings table is empty, so every currently-published
     // PDF would look "new". Backfill + parse them, but suppress the alert storm.
