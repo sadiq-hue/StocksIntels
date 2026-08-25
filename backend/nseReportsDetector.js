@@ -579,7 +579,8 @@ async function processFiling(pdf, suppressAlert) {
     // Not a tracked ticker — record + alert only (no auto-parse)
     await recordFiling({ key, company, ticker: null, url: pdf.url, filename: pdf.filename, periodEnd, audited, parsed: false, parseStatus: 'unmatched', source: pdf.source || 'nse' });
     const label = `${company}${periodEnd ? ' (period ' + periodEnd + ')' : ''}`;
-    if (!suppressAlert) await notifyAllUsers('📄 New NSE filing: ' + company, `A new financial report was published on the NSE: ${label}. PDF: ${pdf.url}`, '/app/dashboard');
+    const isOldFiling = periodEnd && (Date.now() - new Date(periodEnd).getTime()) > 180 * 24 * 60 * 60 * 1000;
+    if (!suppressAlert && !isOldFiling) await notifyAllUsers('📄 New NSE filing: ' + company, `A new financial report was published on the NSE: ${label}. PDF: ${pdf.url}`, '/app/dashboard');
     console.log(`[NSE-Detector] Unmatched filing recorded: ${company} (${pdf.filename})`);
     return { matched: false };
   }
@@ -611,14 +612,18 @@ async function processFiling(pdf, suppressAlert) {
     const parsedOk = heldForReview || status === 'completed';
     await recordFiling({ key, company, ticker, url: pdf.url, filename: pdf.filename, periodEnd, audited, parsed: parsedOk, parseStatus: status, source: pdf.source || 'nse' });
     const label = `${NSE_NAMES[ticker] || ticker} (${ticker})`;
+    // Suppress notifications for old filings (>6 months) — they were detected late
+    // and the admin doesn't need an alert for historical data.
+    const isOldFiling = periodEnd && (Date.now() - new Date(periodEnd).getTime()) > 180 * 24 * 60 * 60 * 1000;
+    const sendAlert = !suppressAlert && !isOldFiling;
     if (heldForReview) {
-      if (!suppressAlert) await notifyAllUsers('🔍 New NSE report awaiting approval: ' + label, `A new financial report for ${label}${periodEnd ? ' (period ' + periodEnd + ')' : ''} was detected on the NSE and auto-parsed. It is held for admin review before going live. PDF: ${pdf.url}`, `/app/stock/${ticker}?market=nse`);
+      if (sendAlert) await notifyAllUsers('🔍 New NSE report awaiting approval: ' + label, `A new financial report for ${label}${periodEnd ? ' (period ' + periodEnd + ')' : ''} was detected on the NSE and auto-parsed. It is held for admin review before going live. PDF: ${pdf.url}`, `/app/stock/${ticker}?market=nse`);
       console.log(`[NSE-Detector] Parsed + held for review ${label} (doc ${docId})`);
     } else if (status === 'completed') {
-      if (!suppressAlert) await notifyAllUsers('📊 New NSE report auto-parsed: ' + label, `A new financial report for ${label}${periodEnd ? ' (period ' + periodEnd + ')' : ''} was detected on the NSE and automatically parsed into the database. PDF: ${pdf.url}`, `/app/stock/${ticker}?market=nse`);
+      if (sendAlert) await notifyAllUsers('📊 New NSE report auto-parsed: ' + label, `A new financial report for ${label}${periodEnd ? ' (period ' + periodEnd + ')' : ''} was detected on the NSE and automatically parsed into the database. PDF: ${pdf.url}`, `/app/stock/${ticker}?market=nse`);
       console.log(`[NSE-Detector] Parsed + stored ${label} (doc ${docId})`);
     } else {
-      if (!suppressAlert) await notifyAllUsers('📄 New NSE report (parse pending): ' + label, `A new financial report for ${label}${periodEnd ? ' (period ' + periodEnd + ')' : ''} was detected on the NSE but could not be auto-parsed. You may upload it manually. PDF: ${pdf.url}`, `/app/stock/${ticker}?market=nse`);
+      if (sendAlert) await notifyAllUsers('📄 New NSE report (parse pending): ' + label, `A new financial report for ${label}${periodEnd ? ' (period ' + periodEnd + ')' : ''} was detected on the NSE but could not be auto-parsed. You may upload it manually. PDF: ${pdf.url}`, `/app/stock/${ticker}?market=nse`);
       console.log(`[NSE-Detector] Filing stored but parse failed for ${label} (doc ${docId})`);
     }
     return { matched: true, parsed: parsedOk };
@@ -642,7 +647,7 @@ async function processPdfBatch(pdfs, suppressAlert, sourceLabel) {
     const ex = await pool.query('SELECT parse_status, ticker, period_end_date FROM nse_report_filings WHERE filing_key = $1', [key]);
     if (ex.rows.length && ex.rows[0].parse_status !== 'failed') {
       const ps = ex.rows[0].parse_status || '';
-      if (!['skipped-completed', 'pending_review', 'completed', 'unmatched', 'skipped-pre-2026'].includes(ps)) continue;
+      if (!['skipped-completed', 'pending_review', 'completed', 'unmatched'].includes(ps)) continue;
       // If it claims success, confirm a live statement row actually exists.
       try {
         const live = await pool.query(
