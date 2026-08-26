@@ -348,35 +348,70 @@ function generateFallbackNarrative(ticker, sentiment, articles, market) {
   const headlines = articles.filter(a => a.headline).map(a => a.headline);
   const primary = headlines[0] || '';
   const secondary = headlines[1] || '';
+  const excerpt = articles[0]?.excerpt || '';
 
-  // Build a unique thesis based on the actual headlines
+  // Build a unique thesis
   let thesis = pickFallbackThesis(name, sentiment);
 
-  // Build analysis from headlines
-  let analysis = '';
-  if (primary) {
-    analysis += `${name} (${ticker}) is in focus after "${primary}"`;
-    if (secondary) analysis += `, with follow-up coverage on "${secondary}"`;
-    analysis += `. `;
-  } else {
-    analysis += `${name} (${ticker}) is drawing attention in ${isGlobal ? 'global markets' : 'NSE trading'}. `;
+  // Rotate opening patterns so different stocks sound different
+  const openings = sentiment === 'positive' ? [
+    `${name} (${ticker}) is waking up. "${primary}" is the catalyst, and the market is starting to price it in.`,
+    `A shift is underway in ${name} (${ticker}). The lead story — "${primary}" — signals a turning point that the headline alone doesn't capture.`,
+    `${name} (${ticker}) just served notice. "${primary}" has given the bulls a concrete reason to step in, and the follow-through is what matters now.`,
+    `Don't overlook ${name} (${ticker}). "${primary}" is a bigger deal than the market consensus suggests, and the risk-reward is tilting in favor of the bulls.`,
+  ] : sentiment === 'negative' ? [
+    `${name} (${ticker}) is under pressure. "${primary}" has rattled confidence, and the selling pressure reflects deeper concerns than the headline suggests.`,
+    `The story in ${name} (${ticker}) has shifted. "${primary}" has changed the narrative, and the market is repricing accordingly.`,
+    `${name} (${ticker}) is facing headwinds. "${primary}" raises real questions about the near-term outlook, and the bears are making their case.`,
+    `Sentiment has turned against ${name} (${ticker}). "${primary}" is driving the selloff, but the question is whether this is an overreaction or a correction to fair value.`,
+  ] : [
+    `${name} (${ticker}) is stuck in the middle. "${primary}" has the market divided, and until clarity emerges, this one stays range-bound.`,
+    `${name} (${ticker}) is at a crossroads. "${primary}" is the kind of event that could tip the balance — the outcome determines the next 20% move.`,
+    `Mixed signals in ${name} (${ticker}). "${primary}" has created uncertainty, and the market is waiting for more data before committing.`,
+  ];
+
+  const opening = openings[_thesisIdx % openings.length];
+  _thesisIdx++;
+
+  // Build the body with specific context
+  let body = '';
+  if (secondary) {
+    body += `Secondary coverage on "${secondary}" adds context to the thesis. `;
+  }
+  if (excerpt && excerpt.length > 50) {
+    // Extract a key detail from the excerpt
+    const detail = excerpt.slice(0, 150).replace(/\s+/g, ' ').trim();
+    body += `The details: ${detail}. `;
   }
 
   if (sentiment === 'positive') {
-    analysis += `The bullish case is building — positive headlines are stacking up and momentum is shifting in the stock's favor. `;
+    const bullishPhrases = [
+      `Momentum is building, and the risk-reward favors the long side here.`,
+      `The setup is constructive — watch for volume confirmation on any push above recent highs.`,
+      `The path of least resistance is higher, provided the broader market cooperates.`,
+    ];
+    body += bullishPhrases[_thesisIdx % bullishPhrases.length] + ' ';
   } else if (sentiment === 'negative') {
-    analysis += `The bearish case is gaining traction as negative headlines accumulate and sellers take control. `;
+    const bearishPhrases = [
+      `Support levels are being tested, and a break below would open up more downside.`,
+      `The selling pressure suggests positioning ahead of something — watch for follow-through.`,
+      `The bearish case is gaining credibility, but oversold conditions could trigger a technical bounce.`,
+    ];
+    body += bearishPhrases[_thesisIdx % bearishPhrases.length] + ' ';
   } else {
-    analysis += `The tug-of-war between bulls and bears is keeping this one range-bound for now. `;
+    const neutralPhrases = [
+      `The market is waiting for a catalyst — the next earnings report or macro data point could tip the balance.`,
+      `Positioning is balanced, and the next directional move will likely come from external catalysts rather than company-specific news.`,
+      `The consolidation pattern suggests a bigger move is building — direction depends on how the macro backdrop evolves.`,
+    ];
+    body += neutralPhrases[_thesisIdx % neutralPhrases.length] + ' ';
   }
 
-  analysis += `${isGlobal ? 'Broader market conditions, sector rotation, and macro policy' : 'NSE market breadth, Kenyan macro dynamics, and sector trends'} will determine the next leg. `;
-  analysis += `Watch for ${isGlobal ? 'volume confirmation on any breakout and key moving average support' : 'banking sector rotation and NSE index participation'}. `;
+  const riskLine = isGlobal
+    ? `Key risks: Fed policy shifts, sector rotation, and earnings season volatility.`
+    : `Key risks: Kenyan macro factors, CBK policy direction, and NSE liquidity conditions.`;
 
-  const riskTheme = isGlobal
-    ? 'Interest rate uncertainty, sector rotation, and geopolitical headlines'
-    : 'Kenyan macro factors including shilling stability, CBK policy, and NSE liquidity';
-  analysis += `Key risks: ${riskTheme}. Any deterioration in the fundamental thesis or a broader selloff could invalidate the current setup.`;
+  const analysis = opening + ' ' + body + riskLine;
 
   return { thesis, analysis };
 }
