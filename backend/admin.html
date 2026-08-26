@@ -1711,11 +1711,34 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       </div>
 
       <!-- Preview modal -->
-      <div id="newsletterPreviewModal" class="hidden" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)this.classList.add('hidden')">
+      <div id="newsletterPreviewModal" class="hidden" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeNewsletterPreview()">
         <div style="background:#fff;border-radius:14px;max-width:700px;width:100%;max-height:90vh;overflow:auto;padding:24px;position:relative">
-          <button onclick="document.getElementById('newsletterPreviewModal').classList.add('hidden')" style="position:absolute;top:12px;right:12px;background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280">&times;</button>
+          <button onclick="closeNewsletterPreview()" style="position:absolute;top:12px;right:12px;background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280;z-index:10">&times;</button>
           <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">Email Preview</h3>
           <div id="newsletterPreviewContent" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden"></div>
+        </div>
+      </div>
+
+      <!-- Edit modal -->
+      <div id="newsletterEditModal" class="hidden" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeNewsletterEdit()">
+        <div style="background:#fff;border-radius:14px;max-width:800px;width:100%;max-height:90vh;overflow:auto;padding:24px;position:relative">
+          <button onclick="closeNewsletterEdit()" style="position:absolute;top:12px;right:12px;background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280;z-index:10">&times;</button>
+          <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">Edit Newsletter Draft</h3>
+          <div class="space-y-4">
+            <div>
+              <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px">Subject</label>
+              <input id="editSubject" class="input-field" style="width:100%;font-size:13px" />
+            </div>
+            <div>
+              <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:4px">Summary</label>
+              <textarea id="editSummary" class="input-field" style="width:100%;font-size:13px;min-height:60px" rows="3"></textarea>
+            </div>
+            <div id="editStocksContainer"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+              <button class="btn btn-secondary" onclick="closeNewsletterEdit()">Cancel</button>
+              <button class="btn btn-primary" onclick="saveNewsletterEdit()" id="btnSaveEdit">Save Changes</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -5275,6 +5298,23 @@ async function handleAdminLogout() {
 }
 
 // ── Newsletter ──
+let _editDraftId = null;
+let _editDraftContent = null;
+
+function closeNewsletterPreview() {
+  var m = document.getElementById('newsletterPreviewModal');
+  m.style.display = 'none';
+  m.classList.add('hidden');
+}
+
+function closeNewsletterEdit() {
+  var m = document.getElementById('newsletterEditModal');
+  m.style.display = 'none';
+  m.classList.add('hidden');
+  _editDraftId = null;
+  _editDraftContent = null;
+}
+
 async function fetchNewsletterDrafts() {
   const container = document.getElementById('newsletterDraftsList');
   container.innerHTML = '<div style="padding:24px;text-align:center;color:#9ca3af">Loading drafts...</div>';
@@ -5291,6 +5331,7 @@ async function fetchNewsletterDrafts() {
       html += `<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:10px 14px;white-space:nowrap">${new Date(d.draft_date).toLocaleDateString()}</td><td style="padding:10px 14px">${d.subject || '—'}</td><td style="padding:10px 14px">${stockCount} stocks</td><td style="padding:10px 14px"><span style="padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;${statusColors[d.status] || ''}">${d.status}</span></td>`;
       html += `<td style="padding:10px 14px;text-align:right;white-space:nowrap">`;
       html += `<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="previewNewsletter(${d.id})">Preview</button>`;
+      html += `<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="editNewsletter(${d.id})">Edit</button>`;
       if (d.status === 'draft' || d.status === 'rejected' || d.status === 'pending_review') html += `<button class="btn btn-primary" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="approveNewsletter(${d.id})">Approve</button>`;
       if (d.status === 'approved') html += `<button class="btn btn-primary" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="sendNewsletter(${d.id})">Send</button>`;
       if (d.status !== 'sent' && d.status !== 'approved') html += `<button class="btn" style="font-size:11px;padding:3px 8px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca" onclick="rejectNewsletter(${d.id})">Reject</button>`;
@@ -5345,10 +5386,86 @@ async function previewNewsletter(id) {
     const res = await fetch('/api/admin/newsletter/preview/' + id);
     const html = await res.text();
     document.getElementById('newsletterPreviewContent').innerHTML = html;
-    const modal = document.getElementById('newsletterPreviewModal');
-    modal.classList.remove('hidden');
-    modal.style.display = 'flex';
+    var m = document.getElementById('newsletterPreviewModal');
+    m.classList.remove('hidden');
+    m.style.display = 'flex';
   } catch (e) { toast('Preview failed: ' + e.message, 'error'); }
+}
+
+async function editNewsletter(id) {
+  try {
+    const res = await fetch('/api/admin/newsletter/drafts/' + id);
+    const draft = await res.json();
+    if (!draft) throw new Error('Draft not found');
+    _editDraftId = id;
+    _editDraftContent = draft.content || {};
+    document.getElementById('editSubject').value = draft.subject || '';
+    document.getElementById('editSummary').value = _editDraftContent.summary || '';
+    var stocksHtml = '';
+    var stocks = _editDraftContent.stocks || _editDraftContent.stockDeepDives || [];
+    stocks.forEach(function(s, i) {
+      stocksHtml += '<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:8px">';
+      stocksHtml += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+      stocksHtml += '<span style="background:#0D7490;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700">' + (s.ticker || s.symbol || '???') + '</span>';
+      stocksHtml += '<input class="input-field" data-field="companyName" data-idx="' + i + '" value="' + (s.companyName || s.name || '').replace(/"/g, '&quot;') + '" style="flex:1;font-size:12px;padding:4px 8px" placeholder="Company name" />';
+      stocksHtml += '<select class="input-field" data-field="sentiment" data-idx="' + i + '" style="font-size:12px;padding:4px 8px;width:100px">';
+      stocksHtml += '<option value="positive"' + (s.sentiment === 'positive' ? ' selected' : '') + '>positive</option>';
+      stocksHtml += '<option value="negative"' + (s.sentiment === 'negative' ? ' selected' : '') + '>negative</option>';
+      stocksHtml += '<option value="neutral"' + (s.sentiment === 'neutral' ? ' selected' : '') + '>neutral</option>';
+      stocksHtml += '</select>';
+      stocksHtml += '<select class="input-field" data-field="signal" data-idx="' + i + '" style="font-size:12px;padding:4px 8px;width:100px">';
+      stocksHtml += '<option value="BULLISH"' + (s.signal === 'BULLISH' ? ' selected' : '') + '>BULLISH</option>';
+      stocksHtml += '<option value="BEARISH"' + (s.signal === 'BEARISH' ? ' selected' : '') + '>BEARISH</option>';
+      stocksHtml += '<option value="NEUTRAL"' + (s.signal === 'NEUTRAL' ? ' selected' : '') + '>NEUTRAL</option>';
+      stocksHtml += '</select>';
+      stocksHtml += '</div>';
+      stocksHtml += '<input class="input-field" data-field="headline" data-idx="' + i + '" value="' + (s.headline || '').replace(/"/g, '&quot;') + '" style="width:100%;font-size:12px;padding:4px 8px;margin-bottom:6px" placeholder="Headline" />';
+      stocksHtml += '<textarea class="input-field" data-field="analysis" data-idx="' + i + '" style="width:100%;font-size:12px;padding:4px 8px;min-height:60px" rows="3" placeholder="Analysis">' + (s.analysis || '') + '</textarea>';
+      stocksHtml += '</div>';
+    });
+    document.getElementById('editStocksContainer').innerHTML = stocksHtml || '<div style="color:#9ca3af;font-size:13px;padding:12px">No stocks in this draft</div>';
+    var m = document.getElementById('newsletterEditModal');
+    m.classList.remove('hidden');
+    m.style.display = 'flex';
+  } catch (e) { toast('Failed to load draft: ' + e.message, 'error'); }
+}
+
+async function saveNewsletterEdit() {
+  if (!_editDraftId) return;
+  var btn = document.getElementById('btnSaveEdit');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    var subject = document.getElementById('editSubject').value;
+    var summary = document.getElementById('editSummary').value;
+    var content = JSON.parse(JSON.stringify(_editDraftContent));
+    content.summary = summary;
+    var fields = document.querySelectorAll('#editStocksContainer [data-field]');
+    var stockMap = {};
+    fields.forEach(function(el) {
+      var idx = parseInt(el.getAttribute('data-idx'));
+      var field = el.getAttribute('data-field');
+      if (!stockMap[idx]) stockMap[idx] = {};
+      stockMap[idx][field] = el.value;
+    });
+    var stocks = content.stocks || content.stockDeepDives || [];
+    Object.keys(stockMap).forEach(function(idx) {
+      if (stocks[idx]) {
+        Object.assign(stocks[idx], stockMap[idx]);
+      }
+    });
+    if (content.stocks) content.stocks = stocks;
+    if (content.stockDeepDives) content.stockDeepDives = stocks;
+    var res = await fetch('/api/admin/newsletter/drafts/' + _editDraftId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subject: subject, content: content })
+    });
+    if (!res.ok) throw new Error('Save failed');
+    toast('Draft updated', 'success');
+    closeNewsletterEdit();
+    fetchNewsletterDrafts();
+  } catch (e) { toast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Save Changes'; }
 }
 
 // ── User Activity ──
