@@ -3,23 +3,43 @@ const axios = require('axios');
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const MODEL = process.env.LLM_MODEL || 'llama3';
 const TIMEOUT = parseInt(process.env.LLM_TIMEOUT || '60000');
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+const MISTRAL_MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
 
 const SYSTEM_PROMPT = `You are a professional financial market analyst writing for StocksIntels, an African stock market intelligence platform covering NSE (Nairobi Securities Exchange), NGX (Nigeria), GSE (Ghana), JSE and global markets. Write concise, insightful editorial content. Use natural Kenyan financial market terminology. Keep each response to 3-5 sentences. Never use markdown formatting. Never mention you are an AI. Write as if you are the StocksIntels editorial team.`;
 
+async function generateViaMistral(prompt, system, maxTokens, temperature) {
+  const res = await axios.post('https://api.mistral.ai/v1/chat/completions', {
+    model: MISTRAL_MODEL,
+    messages: [
+      { role: 'system', content: system || SYSTEM_PROMPT },
+      { role: 'user', content: prompt },
+    ],
+    max_tokens: maxTokens,
+    temperature,
+  }, { timeout: TIMEOUT });
+  return res.data.choices[0].message.content.trim();
+}
+
 async function generate(prompt, options = {}) {
   const { temperature = 0.7, maxTokens = 300, system } = options;
-  try {
-    const res = await axios.post(`${OLLAMA_URL}/api/generate`, {
-      model: MODEL,
-      prompt,
-      system: system || SYSTEM_PROMPT,
-      stream: false,
-      options: { temperature, num_predict: maxTokens },
-    }, { timeout: TIMEOUT });
-    return res.data.response.trim();
-  } catch (err) {
-    throw new Error(`LLM error: ${err.message}`);
+  // Try Ollama first, fall back to Mistral API
+  if (OLLAMA_URL) {
+    try {
+      const res = await axios.post(`${OLLAMA_URL}/api/generate`, {
+        model: MODEL,
+        prompt,
+        system: system || SYSTEM_PROMPT,
+        stream: false,
+        options: { temperature, num_predict: maxTokens },
+      }, { timeout: TIMEOUT });
+      return res.data.response.trim();
+    } catch {}
   }
+  if (MISTRAL_API_KEY) {
+    return generateViaMistral(prompt, system, maxTokens, temperature);
+  }
+  throw new Error('No LLM backend available (set OLLAMA_URL or MISTRAL_API_KEY)');
 }
 
 async function generateNseSummary(nse20, nasi, gainers, losers, topSector, worstSector) {

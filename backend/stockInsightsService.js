@@ -23,7 +23,7 @@ async function getNseTickers() {
     return nseTickerCache;
   }
   try {
-    const { rows } = await pool.query('SELECT DISTINCT UPPER(ticker) as ticker FROM stocks WHERE ticker IS NOT NULL');
+    const { rows } = await pool.query("SELECT DISTINCT UPPER(ticker) as ticker FROM stocks WHERE ticker IS NOT NULL AND market = 'NSE'");
     nseTickerCache = new Set(rows.map(r => r.ticker));
     nseTickerCacheTime = Date.now();
     console.log(`[INSIGHTS] Loaded ${nseTickerCache.size} NSE tickers from DB`);
@@ -237,6 +237,37 @@ async function buildWeekAhead() {
 }
 
 // ── Generate unique narrative thesis for each stock ─────────────
+// Phrases rotate so fallback never repeats across stocks in the same newsletter
+const FALLBACK_THESES_POSITIVE = [
+  (n) => `The bullish case for ${n} is stronger than the headline suggests`,
+  (n) => `${n} is building momentum that most traders haven't noticed yet`,
+  (n) => `Why ${n}'s recent move is the start of something bigger`,
+  (n) => `${n} just gave patient investors a reason to stay long`,
+  (n) => `The setup in ${n} is more compelling than the consensus view`,
+];
+const FALLBACK_THESES_NEGATIVE = [
+  (n) => `${n}'s pullback is creating an entry point most investors are missing`,
+  (n) => `The bearish case for ${n} is overdone — here's why`,
+  (n) => `${n} is pricing in bad news that may never arrive`,
+  (n) => `Why the sell-off in ${n} looks like an overreaction`,
+  (n) => `${n} is wounded but not broken — the recovery play is forming`,
+];
+const FALLBACK_THESES_NEUTRAL = [
+  (n) => `${n} is at an inflection point — here's what the market is getting wrong`,
+  (n) => `The tug-of-war in ${n} is about to resolve — one way or the other`,
+  (n) => `${n} is quietly setting up for a bigger move than the chart shows`,
+  (n) => `Don't sleep on ${n} — the catalyst is closer than it appears`,
+  (n) => `${n}'s consolidation is masking a shift in the underlying thesis`,
+];
+let _thesisIdx = 0;
+function pickFallbackThesis(name, sentiment) {
+  const pool = sentiment === 'positive' ? FALLBACK_THESES_POSITIVE
+    : sentiment === 'negative' ? FALLBACK_THESES_NEGATIVE
+    : FALLBACK_THESES_NEUTRAL;
+  const fn = pool[_thesisIdx % pool.length];
+  _thesisIdx++;
+  return fn(name);
+}
 async function generateNarrativeThesis(ticker, sentiment, articles, priceData, market) {
   const name = getCompanyName(ticker) || ticker;
   const isGlobal = market === 'Global';
@@ -319,18 +350,7 @@ function generateFallbackNarrative(ticker, sentiment, articles, market) {
   const secondary = headlines[1] || '';
 
   // Build a unique thesis based on the actual headlines
-  let thesis = '';
-  if (primary.toLowerCase().includes('earnings') || primary.toLowerCase().includes('revenue') || primary.toLowerCase().includes('profit')) {
-    thesis = `${name}'s latest numbers tell a different story than the headline suggests`;
-  } else if (primary.toLowerCase().includes('deal') || primary.toLowerCase().includes('acqui') || primary.toLowerCase().includes('merger')) {
-    thesis = `Why this deal could reshape ${name}'s competitive position`;
-  } else if (sentiment === 'positive') {
-    thesis = `The catalyst behind ${name}'s momentum is more structural than it appears`;
-  } else if (sentiment === 'negative') {
-    thesis = `${name}'s pullback is creating an entry point most investors are missing`;
-  } else {
-    thesis = `${name} is at an inflection point — here's what the market is getting wrong`;
-  }
+  let thesis = pickFallbackThesis(name, sentiment);
 
   // Build analysis from headlines
   let analysis = '';
@@ -479,43 +499,53 @@ async function generateDailyInsights() {
     }
   } catch {}
 
-  // 4. Generate thematic intro + rich editorial analysis for each stock (parallel)
-  const [thematicIntro, ...analyses] = await Promise.all([
-    generateThematicIntro(hotStocks, marketOverview),
-    ...hotStocks.map(async (stock) => {
-      const priceKey = stock.market === 'NSE' ? `NSE:${stock.ticker}` : stock.ticker;
-      const priceData = priceDataMap[priceKey] || priceDataMap[stock.ticker] || null;
-      const { thesis, analysis } = await withTimeout(
-        generateNarrativeThesis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market),
-        30000,
-        `LLM analysis for ${stock.ticker}`
-      ).catch(() => generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market));
+  // 4. Generate thematic intro + rich editorial analysis for each stock
+  // Run sequentially to avoid overwhelming the LLM API
+  let thematicIntro = '';
+  try {
+    thematicIntro = await withTimeout(
+      generateThematicIntro(hotStocks, marketOverview),
+      45000,
+      'LLM thematic intro'
+    );
+  } catch {
+    // fallback handled inside generateThematicIntro
+    thematicIntro = await generateThematicIntro(hotStocks, marketOverview).catch(() => '');
+  }
 
-      const companyName = getCompanyName(stock.ticker) || stock.ticker;
-      const signal = stock.sentiment === 'positive' ? 'BULLISH'
-        : stock.sentiment === 'negative' ? 'BEARISH' : 'NEUTRAL';
+  const deepDives = [];
+  for (const stock of hotStocks) {
+    const priceKey = stock.market === 'NSE' ? `NSE:${stock.ticker}` : stock.ticker;
+    const priceData = priceDataMap[priceKey] || priceDataMap[stock.ticker] || null;
+    const { thesis, analysis } = await withTimeout(
+      generateNarrativeThesis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market),
+      45000,
+      `LLM analysis for ${stock.ticker}`
+    ).catch(() => generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market));
 
-      return {
-        ticker: stock.ticker,
-        companyName,
-        exchange: getExchangeDisplay(stock.market),
-        headline: stock.articles[0]?.headline || `${companyName} — ${stock.sentiment} sentiment`,
-        thesis,
-        analysis,
-        sentiment: stock.sentiment,
-        signal,
-        market: stock.market,
-        priceData: priceData ? {
-          price: priceData.price || priceData.regularMarketPrice || null,
-          change: priceData.change || priceData.regularMarketChange || null,
-          changePercent: priceData.changePercent || priceData.regularMarketChangePercent || null,
-          volume: priceData.volume || priceData.regularMarketVolume || null,
-        } : null,
-        relatedNews: stock.articles.slice(0, 3),
-      };
-    }),
-  ]);
-  const deepDives = analyses;
+    const companyName = getCompanyName(stock.ticker) || stock.ticker;
+    const signal = stock.sentiment === 'positive' ? 'BULLISH'
+      : stock.sentiment === 'negative' ? 'BEARISH' : 'NEUTRAL';
+
+    deepDives.push({
+      ticker: stock.ticker,
+      companyName,
+      exchange: getExchangeDisplay(stock.market),
+      headline: stock.articles[0]?.headline || `${companyName} — ${stock.sentiment} sentiment`,
+      thesis,
+      analysis,
+      sentiment: stock.sentiment,
+      signal,
+      market: stock.market,
+      priceData: priceData ? {
+        price: priceData.price || priceData.regularMarketPrice || null,
+        change: priceData.change || priceData.regularMarketChange || null,
+        changePercent: priceData.changePercent || priceData.regularMarketChangePercent || null,
+        volume: priceData.volume || priceData.regularMarketVolume || null,
+      } : null,
+      relatedNews: stock.articles.slice(0, 3),
+    });
+  }
 
   // 5. Build week-ahead events
   const weekAhead = await buildWeekAhead().catch(() => []);
