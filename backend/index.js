@@ -5884,6 +5884,7 @@ app.get('/api/unsubscribe', async (req, res) => {
       'daily-sentiment': { column: 'sentiment_opt_in', label: 'Daily Market Sentiment' },
       'monthly-top-movers': { column: 'monthly_top_movers_opt_in', label: 'Monthly Top Movers' },
       'quarterly-top-movers': { column: 'quarterly_top_movers_opt_in', label: 'Quarterly Top Movers' },
+      'stock-insights': { column: 'stock_insights_opt_in', label: 'Stock Insights' },
     };
     const mapping = typeMap[type] || typeMap['hot-news'];
     await pool.query(`UPDATE users SET ${mapping.column} = false WHERE email = $1`, [email]);
@@ -10909,6 +10910,23 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS monthly_top_movers_opt_in BOOLEAN DEFAULT true`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS quarterly_top_movers_opt_in BOOLEAN DEFAULT true`);
 
+    // Stock Insights Newsletter opt-in column (default true = opted in)
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stock_insights_opt_in BOOLEAN DEFAULT true`);
+
+    // Newsletter drafts table for semi-automated stock insights workflow
+    await pool.query(`CREATE TABLE IF NOT EXISTS newsletter_drafts (
+      id SERIAL PRIMARY KEY,
+      draft_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      subject TEXT NOT NULL,
+      content JSONB NOT NULL,
+      html_preview TEXT,
+      status VARCHAR(20) DEFAULT 'draft',
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      sent_at TIMESTAMP WITH TIME ZONE,
+      sent_count INT DEFAULT 0
+    )`);
+
     await pool.query(`CREATE TABLE IF NOT EXISTS watchlist_items (
       id SERIAL PRIMARY KEY, symbol VARCHAR(20) NOT NULL,
       company_name VARCHAR(255) NOT NULL, notes TEXT,
@@ -13152,6 +13170,176 @@ async function sendEarningsReportReports() {
   }
 }
 
+// ── STOCK INSIGHTS NEWSLETTER ──
+
+const stockInsightsService = require('./stockInsightsService');
+
+async function sendStockInsightsReports() {
+  try {
+    const result = await stockInsightsService.sendApprovedDraft();
+    console.log(`[INSIGHTS] Newsletter round finished: ${result.sent} sent`);
+  } catch (e) {
+    console.error('[INSIGHTS] Error:', e.message);
+  }
+}
+
+async function sendStockInsightsToUser(userId, email, fullName) {
+  try {
+    const { rows: drafts } = await pool.query(
+      `SELECT id, subject, content FROM newsletter_drafts WHERE status = 'approved' ORDER BY draft_date DESC, id DESC LIMIT 1`
+    );
+    if (drafts.length === 0) return false;
+    const draft = drafts[0];
+    const { sendStockInsightsEmail } = require('./mailer');
+    await withTimeout(
+      sendStockInsightsEmail(email, { ...draft.content, userName: fullName || 'Trader' }),
+      30000, 'insights email send'
+    );
+    console.log(`[INSIGHTS] Newsletter sent to ${email}`);
+    return true;
+  } catch (e) {
+    console.error(`[INSIGHTS] Error for ${email}:`, e.message);
+    return false;
+  }
+}
+
+// ── Admin Newsletter API ─────────────────────────────────────────
+
+app.get('/api/admin/newsletter/drafts', async (req, res) => {
+  try {
+    const { status, limit = 20 } = req.query;
+    let sql = 'SELECT id, draft_date, subject, status, sent_count, created_at, updated_at, sent_at FROM newsletter_drafts';
+    const params = [];
+    if (status) { sql += ' WHERE status = $1'; params.push(status); }
+    sql += ' ORDER BY draft_date DESC, id DESC LIMIT $' + (params.length + 1);
+    params.push(parseInt(limit));
+    const { rows } = await pool.query(sql, params);
+    res.json({ drafts: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/admin/newsletter/drafts/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM newsletter_drafts WHERE id = $1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Draft not found' });
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/admin/newsletter/drafts/:id', async (req, res) => {
+  try {
+    const { subject, content } = req.body;
+    const { rows: existing } = await pool.query('SELECT id, status FROM newsletter_drafts WHERE id = $1', [req.params.id]);
+    if (!existing.length) return res.status(404).json({ error: 'Draft not found' });
+    if (existing[0].status === 'sent') return res.status(409).json({ error: 'Cannot edit a sent draft' });
+
+    const updates = [];
+    const params = [];
+    if (subject) { updates.push('subject = $' + (updates.length + 1)); params.push(subject); }
+    if (content) { updates.push('content = $' + (updates.length + 1)); params.push(JSON.stringify(content)); }
+    updates.push('updated_at = NOW()');
+    params.push(req.params.id);
+
+    await pool.query(`UPDATE newsletter_drafts SET ${updates.join(', ')} WHERE id = $${params.length}`, params);
+    res.json({ success: true, message: 'Draft updated' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/newsletter/drafts/:id/approve', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, status FROM newsletter_drafts WHERE id = $1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Draft not found' });
+    if (rows[0].status === 'sent') return res.status(409).json({ error: 'Draft already sent' });
+    await pool.query(`UPDATE newsletter_drafts SET status = 'approved', updated_at = NOW() WHERE id = $1`, [req.params.id]);
+    res.json({ success: true, status: 'approved', message: 'Draft approved — will be sent on next cron cycle' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/newsletter/drafts/:id/reject', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, status FROM newsletter_drafts WHERE id = $1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Draft not found' });
+    if (rows[0].status === 'sent') return res.status(409).json({ error: 'Cannot reject a sent draft' });
+    await pool.query(`UPDATE newsletter_drafts SET status = 'rejected', updated_at = NOW() WHERE id = $1`, [req.params.id]);
+    res.json({ success: true, status: 'rejected', message: 'Draft rejected' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/newsletter/drafts/:id/send', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, status FROM newsletter_drafts WHERE id = $1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Draft not found' });
+    if (rows[0].status === 'sent') return res.status(409).json({ error: 'Already sent' });
+
+    // Approve then send
+    await pool.query(`UPDATE newsletter_drafts SET status = 'approved', updated_at = NOW() WHERE id = $1 AND status != 'sent'`, [req.params.id]);
+    const result = await stockInsightsService.sendApprovedDraft();
+    res.json({ success: true, message: `Sent to ${result.sent} users`, sent: result.sent, total: result.total });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/newsletter/generate', async (req, res) => {
+  try {
+    const draft = await stockInsightsService.generateDailyInsights();
+    if (!draft) return res.status(404).json({ error: 'No hot stocks found for today' });
+    res.json({ success: true, draft });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/admin/newsletter/preview/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT subject, content FROM newsletter_drafts WHERE id = $1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Draft not found' });
+    const { sendStockInsightsEmail } = require('./mailer');
+    const html = await sendStockInsightsEmail('preview@stocksintels.com', {
+      ...rows[0].content,
+      userName: 'Preview User',
+    });
+    res.type('html').send(typeof html === 'string' ? html : '<p>Preview generated — check email transport</p>');
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── User preference endpoint ──
+
+app.get('/api/user/stock-insights-preference', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const result = await pool.query('SELECT stock_insights_opt_in FROM users WHERE id = $1', [userId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ optedIn: result.rows[0].stock_insights_opt_in !== false });
+  } catch (e) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+app.post('/api/user/stock-insights-preference', async (req, res) => {
+  try {
+    const { userId, optedIn } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    await pool.query('UPDATE users SET stock_insights_opt_in = $1 WHERE id = $2', [!!optedIn, userId]);
+    res.json({ success: true, optedIn: !!optedIn });
+  } catch (e) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
 // ── Error handling infrastructure ──────────────────────────────
 
 const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -13664,6 +13852,30 @@ server.listen(port, '0.0.0.0', async () => {
       sendEarningsReportReports();
     });
     console.log('[EARNINGS CRON] Earnings report scheduled Friday at 10 AM EAT');
+
+    // Schedule stock insights newsletter — generate draft at 5 AM EAT (02:00 UTC) Mon-Fri
+    cron.schedule('0 2 * * 1-5', async () => {
+      console.log('[INSIGHTS CRON] Generating daily stock insights draft...');
+      try {
+        const draft = await stockInsightsService.generateDailyInsights();
+        if (draft) console.log(`[INSIGHTS CRON] Draft ${draft.id} created: ${draft.subject}`);
+        else console.log('[INSIGHTS CRON] No hot stocks found, skipping');
+      } catch (e) {
+        console.error('[INSIGHTS CRON] Generation error:', e.message);
+      }
+    });
+    console.log('[INSIGHTS CRON] Stock insights generation scheduled Mon-Fri at 5 AM EAT');
+
+    // Schedule stock insights send — send approved drafts at 8 AM EAT (05:00 UTC) Mon-Fri
+    cron.schedule('0 5 * * 1-5', async () => {
+      console.log('[INSIGHTS CRON] Sending approved stock insights...');
+      try {
+        await sendStockInsightsReports();
+      } catch (e) {
+        console.error('[INSIGHTS CRON] Send error:', e.message);
+      }
+    });
+    console.log('[INSIGHTS CRON] Stock insights send scheduled Mon-Fri at 8 AM EAT');
   });
 
   // Schedule NSE corporate actions scraping every hour during market hours (6 AM - 6 PM EAT, Mon-Fri)

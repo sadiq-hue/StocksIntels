@@ -1713,4 +1713,160 @@ async function sendTopMoversEmail(email, data) {
   return sendViaTransport({ to: email, subject, html, label: `${periodLabel} top movers` });
 }
 
-module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendContactAcknowledgmentEmail, sendTestimonialPublishedEmail, sendTopMoversEmail, sendViaTransport };
+// ── Stock Insights Newsletter (Hisa-style daily) ─────────────────
+
+async function sendStockInsightsEmail(email, data) {
+  const {
+    userName, dateStr,
+    marketOverview = {},
+    stockDeepDives = [],
+    weekAhead = [],
+    summary,
+  } = data;
+
+  const displayDate = dateStr || new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const subject = `Stock Insights: ${stockDeepDives.map(d => d.ticker).join(', ')} — ${displayDate}`;
+  const unsubUrl = buildUnsubUrl(email, 'stock-insights');
+
+  const sentColorMap = { positive: GREEN, negative: RED, neutral: AMBER };
+  const signalColorMap = { BULLISH: GREEN, BEARISH: RED, NEUTRAL: AMBER };
+
+  // ── Market overview row ──
+  const fmtIndex = (idx) => {
+    if (!idx) return `<td style="padding:10px;text-align:center;width:25%;border-right:1px solid ${BORDER}">
+      <div style="font-size:11px;color:${TEXT_LIGHT}">--</div>
+      <div style="font-size:11px;color:${TEXT_LIGHT}">--</div>
+    </td>`;
+    const isUp = parseFloat(String(idx.change || '0').replace(/[^0-9.\-]/g, '')) >= 0;
+    const color = isUp ? GREEN : RED;
+    return `<td style="padding:10px;text-align:center;width:25%;border-right:1px solid ${BORDER}">
+      <div style="font-size:11px;color:${TEXT_MED};margin-bottom:2px">${idx.value || '--'}</div>
+      <div style="font-size:12px;font-weight:700;color:${color}">${idx.change || '--'}</div>
+    </td>`;
+  };
+
+  const nse = marketOverview.nse || {};
+  const us = marketOverview.us || {};
+
+  const marketOverviewHtml = `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <div style="background:linear-gradient(135deg,${BRAND_COLOR} 0%,#0a5f8a 100%);color:#ffffff;padding:10px 16px;font-size:13px;font-weight:600">
+        Markets at a Glance
+      </div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+        <tr>
+          ${fmtIndex(nse.nse20)}
+          ${fmtIndex(us.sp500)}
+          ${fmtIndex(us.nasdaq)}
+          <td style="padding:10px;text-align:center;width:25%">
+            <div style="font-size:11px;color:${TEXT_MED};margin-bottom:2px">Mood</div>
+            <div style="font-size:12px;font-weight:700;color:${sentColorMap[marketOverview.sentiment?.toLowerCase()] || AMBER}">${marketOverview.sentiment || 'Neutral'}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:2px 10px 10px;text-align:center;border-right:1px solid ${BORDER}"><span style="font-size:10px;color:${TEXT_LIGHT}">NSE 20</span></td>
+          <td style="padding:2px 10px 10px;text-align:center;border-right:1px solid ${BORDER}"><span style="font-size:10px;color:${TEXT_LIGHT}">S&P 500</span></td>
+          <td style="padding:2px 10px 10px;text-align:center;border-right:1px solid ${BORDER}"><span style="font-size:10px;color:${TEXT_LIGHT}">NASDAQ</span></td>
+          <td style="padding:2px 10px 10px;text-align:center"><span style="font-size:10px;color:${TEXT_LIGHT}">${marketOverview.totalSignals || 0} signals</span></td>
+        </tr>
+      </table>
+    </div>`;
+
+  // ── Stock deep-dive cards ──
+  const deepDiveCards = stockDeepDives.slice(0, 3).map((d, i) => {
+    const sentColor = sentColorMap[d.sentiment] || AMBER;
+    const sigColor = signalColorMap[d.signal] || AMBER;
+    const priceChg = d.priceData?.changePercent
+      ? parseFloat(String(d.priceData.changePercent).replace(/[^0-9.\-]/g, ''))
+      : null;
+    const chgColor = priceChg !== null ? (priceChg >= 0 ? GREEN : RED) : TEXT_LIGHT;
+    const chgStr = priceChg !== null ? `${priceChg >= 0 ? '+' : ''}${priceChg.toFixed(2)}%` : '';
+    const priceStr = d.priceData?.price ? Number(d.priceData.price).toLocaleString() : '';
+
+    const newsItems = (d.relatedNews || []).slice(0, 3).map(n =>
+      `<div style="margin-bottom:6px;padding-left:10px;border-left:2px solid ${BORDER};font-size:12px;color:${TEXT_MED};line-height:1.4">
+        ${esc(n.headline)} <span style="color:${TEXT_LIGHT};font-size:10px">— ${esc(n.source || '')}</span>
+      </div>`
+    ).join('');
+
+    return `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;margin-bottom:16px;overflow:hidden">
+      <div style="padding:20px 20px 0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span style="background:${BRAND_COLOR};color:#fff;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:700">${esc(d.ticker)}</span>
+          <span style="font-size:14px;font-weight:700;color:${TEXT_DARK}">${esc(d.companyName || d.ticker)}</span>
+          <span style="background:${BG_LIGHT};color:${TEXT_MED};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;border:1px solid ${BORDER}">${esc(d.exchange || 'NSE')}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin:8px 0 12px">
+          <span style="font-size:11px;font-weight:600;text-transform:uppercase;color:${sentColor};display:flex;align-items:center;gap:4px">
+            <span style="width:6px;height:6px;border-radius:50%;background:${sentColor};display:inline-block"></span>
+            ${esc(d.sentiment || 'neutral')}
+          </span>
+          <span style="background:${sigColor}18;color:${sigColor};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">${esc(d.signal || 'NEUTRAL')}</span>
+          ${priceStr ? `<span style="font-size:13px;font-weight:600;color:${TEXT_DARK}">${d.priceData?.price > 100 ? 'KES ' : '$'}${priceStr}</span>` : ''}
+          ${chgStr ? `<span style="font-size:12px;font-weight:700;color:${chgColor}">${chgStr}</span>` : ''}
+        </div>
+      </div>
+      <div style="padding:0 20px 20px">
+        <div style="font-size:14px;font-weight:700;color:${TEXT_DARK};margin-bottom:8px;line-height:1.3">${esc(d.headline || '')}</div>
+        <div style="font-size:13px;color:${TEXT_MED};line-height:1.7;margin-bottom:12px;white-space:pre-line">${esc(d.analysis || '')}</div>
+        ${newsItems ? `<div style="margin-top:8px"><div style="font-size:11px;font-weight:600;color:${TEXT_LIGHT};text-transform:uppercase;margin-bottom:6px">Related News</div>${newsItems}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // ── Week ahead table ──
+  const weekAheadRows = weekAhead.slice(0, 5).map(w => {
+    const impactColor = (w.impact || '').toUpperCase() === 'HIGH' ? RED : (w.impact || '').toUpperCase() === 'MEDIUM' ? AMBER : TEXT_MED;
+    return `<tr>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};color:${TEXT_LIGHT};font-size:12px;white-space:nowrap">${esc(w.date || '')}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};color:${TEXT_DARK};font-size:13px">${esc(w.event || '')}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};text-align:center">
+        <span style="background:${impactColor}18;color:${impactColor};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700">${esc(w.impact || 'INFO')}</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const html = baseWrapper(`
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:22px;font-weight:700;color:${TEXT_DARK}">Stock Insights</div>
+      <div style="font-size:13px;color:${TEXT_MED};margin-top:4px">${displayDate}</div>
+      ${userName ? `<div style="font-size:14px;color:${TEXT_MED};margin-top:8px">Hello ${userName}</div>` : ''}
+    </div>
+
+    ${marketOverviewHtml}
+
+    ${stockDeepDives.length ? `
+    <div style="font-size:16px;font-weight:700;color:${TEXT_DARK};margin-bottom:14px;display:flex;align-items:center;gap:6px">
+      <span style="color:${BRAND_COLOR}">&#9679;</span> Stock Deep Dives
+    </div>
+    ${deepDiveCards}
+    ` : ''}
+
+    ${weekAhead.length ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
+      <div style="background:${AMBER};color:#ffffff;padding:10px 14px;font-size:13px;font-weight:600">The Week Ahead</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:${BG_LIGHT}">
+          <th style="padding:6px 10px;text-align:left;color:${TEXT_MED};font-weight:600">Date</th>
+          <th style="padding:6px 10px;text-align:left;color:${TEXT_MED};font-weight:600">Event</th>
+          <th style="padding:6px 10px;text-align:center;color:${TEXT_MED};font-weight:600">Impact</th>
+        </tr></thead>
+        <tbody>${weekAheadRows}</tbody>
+      </table>
+    </div>` : ''}
+
+    ${summary ? `
+    <div style="background:linear-gradient(135deg,${BRAND_COLOR}12,${BRAND_COLOR}06);border:1px solid ${BRAND_COLOR}25;border-radius:10px;padding:16px;margin-bottom:20px;font-size:13px;color:${TEXT_DARK};line-height:1.7;text-align:center">
+      ${esc(summary)}
+    </div>` : ''}
+
+    <div style="text-align:center;margin-top:20px">
+      <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/signals" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">View All Signals &rarr;</a>
+    </div>
+  `, '<meta name="referrer" content="no-referrer" />', unsubUrl);
+
+  return sendViaTransport({ to: email, subject, html, label: 'Stock insights' });
+}
+
+module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendContactAcknowledgmentEmail, sendTestimonialPublishedEmail, sendTopMoversEmail, sendStockInsightsEmail, sendViaTransport };
