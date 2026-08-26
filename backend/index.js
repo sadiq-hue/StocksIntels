@@ -13308,7 +13308,7 @@ app.get('/api/admin/newsletter/preview/:id', async (req, res) => {
     const html = await sendStockInsightsEmail('preview@stocksintels.com', {
       ...rows[0].content,
       userName: 'Preview User',
-    });
+    }, { previewOnly: true });
     res.type('html').send(typeof html === 'string' ? html : '<p>Preview generated — check email transport</p>');
   } catch (e) {
     res.status(500).json({ error: e.message });

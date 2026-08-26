@@ -1715,7 +1715,7 @@ async function sendTopMoversEmail(email, data) {
 
 // ── Stock Insights Newsletter (Hisa-style daily) ─────────────────
 
-async function sendStockInsightsEmail(email, data) {
+async function sendStockInsightsEmail(email, data, options = {}) {
   const {
     userName, dateStr,
     marketOverview = {},
@@ -1866,6 +1866,7 @@ async function sendStockInsightsEmail(email, data) {
     </div>
   `, '<meta name="referrer" content="no-referrer" />', unsubUrl);
 
+  if (options.previewOnly) return html;
   return sendViaTransport({ to: email, subject, html, label: 'Stock insights' });
 }
 
