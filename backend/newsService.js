@@ -521,8 +521,8 @@ async function getInsiderNewsSignals() {
 }
 
 // Determine if article is NSE-related or global
+// Only classify as NSE if article text contains NSE/Kenyan context keywords
 function classifyArticle(title, excerpt, relatedStocks) {
-  if (relatedStocks.length > 0) return 'nse';
   const lower = (title + ' ' + excerpt).toLowerCase();
   const nseKeywords = ['nse', 'nairobi', 'kenya', 'nairobi securities exchange',
     'safaricom', 'equity bank', 'kcb', 'eabl', 'east african', 'central bank of kenya',
