@@ -1731,17 +1731,19 @@ async function sendStockInsightsEmail(email, data, options = {}) {
   const sentColorMap = { positive: GREEN, negative: RED, neutral: AMBER };
   const signalColorMap = { BULLISH: GREEN, BEARISH: RED, NEUTRAL: AMBER };
 
-  // ── Market overview row ──
-  const fmtIndex = (idx) => {
-    if (!idx) return `<td style="padding:10px;text-align:center;width:25%;border-right:1px solid ${BORDER}">
+  // ── Helper: format index cell ──
+  const fmtIndex = (idx, label) => {
+    if (!idx) return `<td style="padding:8px 6px;text-align:center;width:20%;border-right:1px solid ${BORDER}">
+      <div style="font-size:10px;color:${TEXT_LIGHT};margin-bottom:1px">${label}</div>
       <div style="font-size:11px;color:${TEXT_LIGHT}">--</div>
-      <div style="font-size:11px;color:${TEXT_LIGHT}">--</div>
+      <div style="font-size:10px;color:${TEXT_LIGHT}">--</div>
     </td>`;
     const isUp = parseFloat(String(idx.change || '0').replace(/[^0-9.\-]/g, '')) >= 0;
     const color = isUp ? GREEN : RED;
-    return `<td style="padding:10px;text-align:center;width:25%;border-right:1px solid ${BORDER}">
-      <div style="font-size:11px;color:${TEXT_MED};margin-bottom:2px">${idx.value || '--'}</div>
-      <div style="font-size:12px;font-weight:700;color:${color}">${idx.change || '--'}</div>
+    return `<td style="padding:8px 6px;text-align:center;width:20%;border-right:1px solid ${BORDER}">
+      <div style="font-size:10px;color:${TEXT_LIGHT};margin-bottom:1px">${label}</div>
+      <div style="font-size:11px;color:${TEXT_DARK};font-weight:600">${idx.value || '--'}</div>
+      <div style="font-size:11px;font-weight:700;color:${color}">${idx.change || '--'}</div>
     </td>`;
   };
 
@@ -1755,25 +1757,79 @@ async function sendStockInsightsEmail(email, data, options = {}) {
       </div>
       <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
         <tr>
-          ${fmtIndex(nse.nse20)}
-          ${fmtIndex(us.sp500)}
-          ${fmtIndex(us.nasdaq)}
-          <td style="padding:10px;text-align:center;width:25%">
-            <div style="font-size:11px;color:${TEXT_MED};margin-bottom:2px">Mood</div>
-            <div style="font-size:12px;font-weight:700;color:${sentColorMap[marketOverview.sentiment?.toLowerCase()] || AMBER}">${marketOverview.sentiment || 'Neutral'}</div>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:2px 10px 10px;text-align:center;border-right:1px solid ${BORDER}"><span style="font-size:10px;color:${TEXT_LIGHT}">NSE 20</span></td>
-          <td style="padding:2px 10px 10px;text-align:center;border-right:1px solid ${BORDER}"><span style="font-size:10px;color:${TEXT_LIGHT}">S&P 500</span></td>
-          <td style="padding:2px 10px 10px;text-align:center;border-right:1px solid ${BORDER}"><span style="font-size:10px;color:${TEXT_LIGHT}">NASDAQ</span></td>
-          <td style="padding:2px 10px 10px;text-align:center"><span style="font-size:10px;color:${TEXT_LIGHT}">${marketOverview.totalSignals || 0} signals</span></td>
+          ${fmtIndex(nse.nse20, 'NSE 20')}
+          ${fmtIndex(nse.nasi, 'NSE ASI')}
+          ${fmtIndex(us.sp500, 'S&P 500')}
+          ${fmtIndex(us.dow, 'Dow Jones')}
+          ${fmtIndex(us.nasdaq, 'NASDAQ')}
         </tr>
       </table>
+      <div style="padding:6px 16px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid ${BORDER}">
+        <span style="font-size:10px;color:${TEXT_LIGHT}">${marketOverview.totalSignals || 0} active signals</span>
+        <span style="font-size:10px;color:${sentColorMap[marketOverview.sentiment?.toLowerCase()] || AMBER};font-weight:600">Market Mood: ${marketOverview.sentiment || 'Neutral'}</span>
+      </div>
     </div>`;
 
+  // ── Top Movers: NSE ──
+  const fmtMover = (m, isGainer) => {
+    const chg = parseFloat(String(m.change || '0').replace(/[^0-9.\-]/g, ''));
+    const color = chg >= 0 ? GREEN : RED;
+    return `<tr>
+      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${esc(m.ticker || m.symbol || '')}</td>
+      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${esc(m.name || '')}</td>
+      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:700;color:${color};text-align:right">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</td>
+    </tr>`;
+  };
+
+  const nseGainers = (nse.gainers || []).slice(0, 3);
+  const nseLosers = (nse.losers || []).slice(0, 3);
+  const nseMoversHtml = (nseGainers.length > 0 || nseLosers.length > 0) ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <div style="background:linear-gradient(135deg,${GREEN} 0%,#059669 100%);color:#ffffff;padding:8px 16px;font-size:12px;font-weight:600">
+        NSE Top Movers
+      </div>
+      <div style="display:flex">
+        <div style="flex:1;border-right:1px solid ${BORDER}">
+          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${GREEN};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Gainers</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+            ${nseGainers.map(g => fmtMover(g, true)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
+          </table>
+        </div>
+        <div style="flex:1">
+          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${RED};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Losers</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+            ${nseLosers.map(l => fmtMover(l, false)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
+          </table>
+        </div>
+      </div>
+    </div>` : '';
+
+  // ── Top Movers: Global ──
+  const globalGainers = (us.gainers || []).slice(0, 3);
+  const globalLosers = (us.losers || []).slice(0, 3);
+  const globalMoversHtml = (globalGainers.length > 0 || globalLosers.length > 0) ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <div style="background:linear-gradient(135deg,#1e40af 0%,#3b82f6 100%);color:#ffffff;padding:8px 16px;font-size:12px;font-weight:600">
+        Global Top Movers
+      </div>
+      <div style="display:flex">
+        <div style="flex:1;border-right:1px solid ${BORDER}">
+          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${GREEN};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Gainers</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+            ${globalGainers.map(g => fmtMover(g, true)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
+          </table>
+        </div>
+        <div style="flex:1">
+          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${RED};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Losers</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+            ${globalLosers.map(l => fmtMover(l, false)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
+          </table>
+        </div>
+      </div>
+    </div>` : '';
+
   // ── Stock deep-dive cards ──
-  const deepDiveCards = stockDeepDives.slice(0, 3).map((d, i) => {
+  const deepDiveCards = stockDeepDives.slice(0, 4).map((d, i) => {
     const sentColor = sentColorMap[d.sentiment] || AMBER;
     const sigColor = signalColorMap[d.signal] || AMBER;
     const priceChg = d.priceData?.changePercent
@@ -1782,6 +1838,11 @@ async function sendStockInsightsEmail(email, data, options = {}) {
     const chgColor = priceChg !== null ? (priceChg >= 0 ? GREEN : RED) : TEXT_LIGHT;
     const chgStr = priceChg !== null ? `${priceChg >= 0 ? '+' : ''}${priceChg.toFixed(2)}%` : '';
     const priceStr = d.priceData?.price ? Number(d.priceData.price).toLocaleString() : '';
+    const isGlobal = d.market === 'Global' || d.exchange !== 'NSE';
+    const currency = isGlobal ? '$' : 'KES ';
+    const marketBadge = isGlobal
+      ? `<span style="background:#1e40af;color:#fff;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:0.5px">GLOBAL</span>`
+      : `<span style="background:${BRAND_COLOR};color:#fff;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:0.5px">NSE</span>`;
 
     const newsItems = (d.relatedNews || []).slice(0, 3).map(n =>
       `<div style="margin-bottom:6px;padding-left:10px;border-left:2px solid ${BORDER};font-size:12px;color:${TEXT_MED};line-height:1.4">
@@ -1795,15 +1856,15 @@ async function sendStockInsightsEmail(email, data, options = {}) {
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
           <span style="background:${BRAND_COLOR};color:#fff;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:700">${esc(d.ticker)}</span>
           <span style="font-size:14px;font-weight:700;color:${TEXT_DARK}">${esc(d.companyName || d.ticker)}</span>
-          <span style="background:${BG_LIGHT};color:${TEXT_MED};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;border:1px solid ${BORDER}">${esc(d.exchange || 'NSE')}</span>
+          ${marketBadge}
         </div>
-        <div style="display:flex;align-items:center;gap:10px;margin:8px 0 12px">
+        <div style="display:flex;align-items:center;gap:10px;margin:8px 0 12px;flex-wrap:wrap">
           <span style="font-size:11px;font-weight:600;text-transform:uppercase;color:${sentColor};display:flex;align-items:center;gap:4px">
             <span style="width:6px;height:6px;border-radius:50%;background:${sentColor};display:inline-block"></span>
             ${esc(d.sentiment || 'neutral')}
           </span>
           <span style="background:${sigColor}18;color:${sigColor};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">${esc(d.signal || 'NEUTRAL')}</span>
-          ${priceStr ? `<span style="font-size:13px;font-weight:600;color:${TEXT_DARK}">${d.priceData?.price > 100 ? 'KES ' : '$'}${priceStr}</span>` : ''}
+          ${priceStr ? `<span style="font-size:13px;font-weight:600;color:${TEXT_DARK}">${currency}${priceStr}</span>` : ''}
           ${chgStr ? `<span style="font-size:12px;font-weight:700;color:${chgColor}">${chgStr}</span>` : ''}
         </div>
       </div>
@@ -1816,16 +1877,23 @@ async function sendStockInsightsEmail(email, data, options = {}) {
   }).join('');
 
   // ── Week ahead table ──
-  const weekAheadRows = weekAhead.slice(0, 5).map(w => {
+  const weekAheadRows = weekAhead.slice(0, 6).map(w => {
     const impactColor = (w.impact || '').toUpperCase() === 'HIGH' ? RED : (w.impact || '').toUpperCase() === 'MEDIUM' ? AMBER : TEXT_MED;
+    const marketBadge = w.market === 'Global'
+      ? `<span style="background:#1e40af;color:#fff;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;margin-left:4px">US</span>`
+      : `<span style="background:${BRAND_COLOR};color:#fff;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;margin-left:4px">NSE</span>`;
     return `<tr>
       <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};color:${TEXT_LIGHT};font-size:12px;white-space:nowrap">${esc(w.date || '')}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};color:${TEXT_DARK};font-size:13px">${esc(w.event || '')}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};color:${TEXT_DARK};font-size:13px">${esc(w.event || '')} ${marketBadge}</td>
       <td style="padding:8px 10px;border-bottom:1px solid ${BORDER};text-align:center">
         <span style="background:${impactColor}18;color:${impactColor};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700">${esc(w.impact || 'INFO')}</span>
       </td>
     </tr>`;
   }).join('');
+
+  // ── Separate NSE and Global stocks for section headers ──
+  const nseStocks = stockDeepDives.filter(d => d.market !== 'Global' && d.exchange === 'NSE');
+  const globalStocks = stockDeepDives.filter(d => d.market === 'Global' || d.exchange !== 'NSE');
 
   const html = baseWrapper(`
     <div style="text-align:center;margin-bottom:24px">
@@ -1835,6 +1903,10 @@ async function sendStockInsightsEmail(email, data, options = {}) {
     </div>
 
     ${marketOverviewHtml}
+
+    ${nseMoversHtml}
+
+    ${globalMoversHtml}
 
     ${stockDeepDives.length ? `
     <div style="font-size:16px;font-weight:700;color:${TEXT_DARK};margin-bottom:14px;display:flex;align-items:center;gap:6px">
