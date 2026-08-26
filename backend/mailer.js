@@ -1719,6 +1719,7 @@ async function sendStockInsightsEmail(email, data, options = {}) {
   const {
     userName, dateStr,
     marketOverview = {},
+    thematicIntro = '',
     stockDeepDives = [],
     weekAhead = [],
     summary,
@@ -1858,6 +1859,7 @@ async function sendStockInsightsEmail(email, data, options = {}) {
           <span style="font-size:14px;font-weight:700;color:${TEXT_DARK}">${esc(d.companyName || d.ticker)}</span>
           ${marketBadge}
         </div>
+        ${d.thesis ? `<div style="font-size:12px;font-style:italic;color:${TEXT_MED};margin:4px 0 6px;line-height:1.4">${esc(d.thesis)}</div>` : ''}
         <div style="display:flex;align-items:center;gap:10px;margin:8px 0 12px;flex-wrap:wrap">
           <span style="font-size:11px;font-weight:600;text-transform:uppercase;color:${sentColor};display:flex;align-items:center;gap:4px">
             <span style="width:6px;height:6px;border-radius:50%;background:${sentColor};display:inline-block"></span>
@@ -1909,8 +1911,11 @@ async function sendStockInsightsEmail(email, data, options = {}) {
     ${globalMoversHtml}
 
     ${stockDeepDives.length ? `
-    <div style="font-size:16px;font-weight:700;color:${TEXT_DARK};margin-bottom:14px;display:flex;align-items:center;gap:6px">
-      <span style="color:${BRAND_COLOR}">&#9679;</span> Stock Deep Dives
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;padding:20px;margin-bottom:20px">
+      <div style="font-size:16px;font-weight:700;color:${TEXT_DARK};margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <span style="color:${BRAND_COLOR}">&#9679;</span> Today's Narratives
+      </div>
+      <div style="font-size:13px;color:${TEXT_MED};line-height:1.7">${esc(thematicIntro || summary || '')}</div>
     </div>
     ${deepDiveCards}
     ` : ''}

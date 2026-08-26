@@ -236,8 +236,8 @@ async function buildWeekAhead() {
   return events.slice(0, 6);
 }
 
-// ── Generate rich LLM editorial analysis ──────────────────────────
-async function generateStockAnalysis(ticker, sentiment, articles, priceData, market) {
+// ── Generate unique narrative thesis for each stock ─────────────
+async function generateNarrativeThesis(ticker, sentiment, articles, priceData, market) {
   const name = getCompanyName(ticker) || ticker;
   const isGlobal = market === 'Global';
 
@@ -264,81 +264,128 @@ ${priceContext}
 CONTEXT:
 ${marketContext}
 
-WRITE THE ANALYSIS IN THIS STRUCTURE (3 short paragraphs, 180-250 words total):
+WRITE TWO THINGS:
 
-Paragraph 1 — THE MOVE: What happened, why it matters, and the catalyst. Be specific with numbers, percentages, and dates. Reference the actual news headlines.
+1. NARRATIVE THESIS (1 sentence, max 20 words): A compelling one-line hook that tells the reader WHY this stock matters right now. Format it as a contrarian or insight-driven statement. Examples:
+   - "Why Marathon Digital isn't a crypto proxy, but an energy arbitrage play"
+   - "The shipping bottleneck nobody is pricing in"
+   - "Nigeria's banking sector just got a second wind — this stock leads the charge"
 
-Paragraph 2 — THE OUTLOOK: Where this stock could go. Include 2-3 specific metrics or levels to watch (support/resistance, earnings dates, analyst targets, moving averages, sector trends). Connect to broader market themes.
-
-Paragraph 3 — THE RISK: Key downside risks and what could invalidate the thesis. Be honest about uncertainty. Mention specific risk factors (regulatory, competition, macro headwinds, earnings risk).
+2. ANALYSIS (2-3 paragraphs, 150-220 words total): Write a flowing editorial analysis. Do NOT use numbered sections, headers, or bullet points. Write like a human analyst who has a clear opinion. Structure it as:
+   - Opening: What happened and why it matters (reference specific headlines, numbers, dates)
+   - Body: Where this could go, what to watch, how it connects to broader themes
+   - Close: Key risks and what would invalidate the thesis
 
 RULES:
 - Be specific with numbers, not vague
-- Sound like a professional analyst, not a bot
-- Do NOT use markdown formatting, bullet points, or headers
+- Sound like a senior analyst with a clear point of view
+- Do NOT use markdown formatting, bullet points, or section headers
 - Do NOT mention AI or that this is auto-generated
-- Do NOT use phrases like "drawing investor attention" or "is among the stories" — be direct
+- Do NOT use generic phrases like "drawing investor attention" or "is among the stories"
 - Do NOT start sentences with "The stock" — vary sentence structure
-- Each sentence should convey new information`;
+- Each sentence should convey new information
+- Write with conviction — take a stance`;
 
   try {
-    const text = await llm.generate(prompt, { maxTokens: 400, temperature: 0.7 });
-    return text;
+    const text = await llm.generate(prompt, { maxTokens: 500, temperature: 0.8 });
+    // Parse thesis and analysis from LLM output
+    const thesisMatch = text.match(/^([^.\n]+[.\n])/m);
+    let thesis = '';
+    let analysis = text;
+    // Try to split thesis from analysis — thesis is the first line or sentence
+    const lines = text.split('\n').filter(l => l.trim());
+    if (lines.length >= 2) {
+      thesis = lines[0].replace(/^["']|["']$/g, '').trim();
+      analysis = lines.slice(1).join('\n\n').trim();
+    } else {
+      // Fallback: first sentence is thesis, rest is analysis
+      const firstPeriod = text.indexOf('. ');
+      if (firstPeriod > 0 && firstPeriod < 80) {
+        thesis = text.slice(0, firstPeriod + 1).trim();
+        analysis = text.slice(firstPeriod + 2).trim();
+      }
+    }
+    return { thesis, analysis };
   } catch {
-    return generateFallbackAnalysis(ticker, sentiment, articles, market);
+    return generateFallbackNarrative(ticker, sentiment, articles, market);
   }
 }
 
-function generateFallbackAnalysis(ticker, sentiment, articles, market) {
+function generateFallbackNarrative(ticker, sentiment, articles, market) {
   const name = getCompanyName(ticker) || ticker;
   const isGlobal = market === 'Global';
-  const headlines = articles.filter(a => a.headline).slice(0, 3);
-  const primaryHeadline = headlines[0]?.headline || '';
-  const secondaryHeadline = headlines[1]?.headline || '';
+  const headlines = articles.filter(a => a.headline).map(a => a.headline);
+  const primary = headlines[0] || '';
+  const secondary = headlines[1] || '';
 
-  let text = '';
+  // Build a unique thesis based on the actual headlines
+  let thesis = '';
+  if (primary.toLowerCase().includes('earnings') || primary.toLowerCase().includes('revenue') || primary.toLowerCase().includes('profit')) {
+    thesis = `${name}'s latest numbers tell a different story than the headline suggests`;
+  } else if (primary.toLowerCase().includes('deal') || primary.toLowerCase().includes('acqui') || primary.toLowerCase().includes('merger')) {
+    thesis = `Why this deal could reshape ${name}'s competitive position`;
+  } else if (sentiment === 'positive') {
+    thesis = `The catalyst behind ${name}'s momentum is more structural than it appears`;
+  } else if (sentiment === 'negative') {
+    thesis = `${name}'s pullback is creating an entry point most investors are missing`;
+  } else {
+    thesis = `${name} is at an inflection point — here's what the market is getting wrong`;
+  }
 
-  // Paragraph 1: What happened
-  if (primaryHeadline) {
-    text += `${name} (${ticker}) featured prominently in today's ${isGlobal ? 'global' : 'NSE'} news cycle. `;
-    text += `The lead story: "${primaryHeadline}"`;
-    if (secondaryHeadline) {
-      text += `, with additional coverage from "${secondaryHeadline}"`;
+  // Build analysis from headlines
+  let analysis = '';
+  if (primary) {
+    analysis += `${name} (${ticker}) is in focus after "${primary}"`;
+    if (secondary) analysis += `, with follow-up coverage on "${secondary}"`;
+    analysis += `. `;
+  } else {
+    analysis += `${name} (${ticker}) is drawing attention in ${isGlobal ? 'global markets' : 'NSE trading'}. `;
+  }
+
+  if (sentiment === 'positive') {
+    analysis += `The bullish case is building — positive headlines are stacking up and momentum is shifting in the stock's favor. `;
+  } else if (sentiment === 'negative') {
+    analysis += `The bearish case is gaining traction as negative headlines accumulate and sellers take control. `;
+  } else {
+    analysis += `The tug-of-war between bulls and bears is keeping this one range-bound for now. `;
+  }
+
+  analysis += `${isGlobal ? 'Broader market conditions, sector rotation, and macro policy' : 'NSE market breadth, Kenyan macro dynamics, and sector trends'} will determine the next leg. `;
+  analysis += `Watch for ${isGlobal ? 'volume confirmation on any breakout and key moving average support' : 'banking sector rotation and NSE index participation'}. `;
+
+  const riskTheme = isGlobal
+    ? 'Interest rate uncertainty, sector rotation, and geopolitical headlines'
+    : 'Kenyan macro factors including shilling stability, CBK policy, and NSE liquidity';
+  analysis += `Key risks: ${riskTheme}. Any deterioration in the fundamental thesis or a broader selloff could invalidate the current setup.`;
+
+  return { thesis, analysis };
+}
+
+// ── Generate thematic intro for the newsletter ───────────────────
+async function generateThematicIntro(stocks, marketOverview) {
+  const tickerList = stocks.map(s => `${getCompanyName(s.ticker) || s.ticker} (${s.ticker})`).join(', ');
+  const sentiment = marketOverview.sentiment || 'Neutral';
+  const nseCount = stocks.filter(s => s.market === 'NSE').length;
+  const globalCount = stocks.filter(s => s.market === 'Global').length;
+  const marketMood = sentiment === 'Bullish' ? 'risk-on' : sentiment === 'Bearish' ? 'risk-off' : 'cautious';
+
+  const prompt = `Write a short editorial intro (2-3 sentences, max 60 words) for a daily stock insights newsletter. The newsletter covers these stocks today: ${tickerList}. Market mood is ${marketMood}. There are ${nseCount} Kenyan (NSE) stocks and ${globalCount} US/global stocks.
+
+Write like a seasoned market commentator — not a bot. Set up why these stocks matter today. Be specific, not generic. Do NOT use markdown, bullets, or headers.`;
+
+  try {
+    const text = await llm.generate(prompt, { maxTokens: 120, temperature: 0.8 });
+    return text.trim();
+  } catch {
+    // Fallback: contextual intro based on market conditions
+    if (sentiment === 'Bullish') {
+      return `Markets are in risk-on mode today, and a handful of names are standing out from the noise. ${tickerList} — each carrying a distinct catalyst worth parsing before the next session opens.`;
+    } else if (sentiment === 'Bearish') {
+      return `Sellers have the upper hand today, but dislocation creates opportunity. ${tickerList} — each facing crosswinds, each worth watching for where the next buyers step in.`;
+    } else {
+      return `Markets are caught between competing narratives today. ${tickerList} — a mixed basket that tells you more about the current regime than any index reading.`;
     }
-    text += `. `;
-  } else {
-    text += `${name} (${ticker}) saw notable attention in today's ${isGlobal ? 'global markets' : 'NSE trading session'}. `;
   }
-
-  if (sentiment === 'positive') {
-    text += `The bullish tone across coverage suggests improving fundamentals or a positive catalyst that could drive further upside. `;
-  } else if (sentiment === 'negative') {
-    text += `The bearish sentiment across multiple sources signals caution — investors should watch for support levels and any corporate announcements that could change the narrative. `;
-  } else {
-    text += `Mixed signals across coverage suggest the stock may consolidate before establishing a clearer direction. `;
-  }
-
-  // Paragraph 2: Outlook
-  text += `\n\nFrom a technical perspective, ${isGlobal ? 'broader market conditions and sector rotation trends' : 'NSE market breadth and sector rotation'} will be key to ${ticker}'s near-term trajectory. `;
-  if (sentiment === 'positive') {
-    text += `Upside potential remains intact if the positive catalysts sustain. Key levels to watch include recent highs and the ${isGlobal ? '50-day moving average' : '20-day EMA'}. `;
-  } else if (sentiment === 'negative') {
-    text += `Downside risk persists until a reversal catalyst emerges. Watch for volume confirmation on any bounce and whether the stock holds key support zones. `;
-  } else {
-    text += `A breakout above recent resistance would confirm bullish momentum, while a breakdown below support would signal further weakness. `;
-  }
-
-  // Paragraph 3: Risk
-  text += `\n\nKey risks include ${isGlobal ? 'macro headwinds from interest rate policy, sector rotation, and broader market volatility' : 'Kenya-specific macro factors including currency movements, interest rate environment, and NSE liquidity conditions'}. `;
-  if (sentiment === 'positive') {
-    text += `While the current setup is constructive, any deterioration in the fundamental thesis or a broader market selloff could quickly erase gains.`;
-  } else if (sentiment === 'negative') {
-    text += `The current bearish positioning requires patience — rushing in before a clear reversal signal could expose investors to further downside.`;
-  } else {
-    text += `The lack of a clear directional bias means position sizing should be conservative until the picture clarifies.`;
-  }
-
-  return text;
 }
 
 // ── Generate editorial summary ────────────────────────────────────
@@ -347,48 +394,48 @@ function generateEditorialSummary(stocks, marketOverview) {
   const globalStocks = stocks.filter(s => s.market === 'Global');
   const positiveStocks = stocks.filter(s => s.sentiment === 'positive');
   const negativeStocks = stocks.filter(s => s.sentiment === 'negative');
+  const tickers = stocks.map(s => s.ticker).join(', ');
 
   let summary = '';
 
-  // Opening hook
+  // Opening — varied by actual market conditions and stock mix
   if (marketOverview.sentiment === 'Bullish') {
-    summary += `Markets are riding high today with a broadly bullish tone. `;
+    summary += `Risk-on today. `;
   } else if (marketOverview.sentiment === 'Bearish') {
-    summary += `Risk-off sentiment dominates as markets pull back. `;
+    summary += `Sellers are in control. `;
+  } else if (marketOverview.sentiment === 'Slightly Bullish') {
+    summary += `Cautious optimism across the board. `;
+  } else if (marketOverview.sentiment === 'Slightly Bearish') {
+    summary += `A defensive tone settling in. `;
   } else {
-    summary += `Markets are treading water with a neutral-to-cautious tone. `;
+    summary += `Neither side is willing to blink. `;
   }
 
-  // NSE section
-  if (nseStocks.length > 0) {
-    const tickers = nseStocks.map(s => s.ticker).join(' & ');
-    summary += `On the NSE, ${tickers} ${nseStocks.length > 1 ? 'are' : 'is'} in focus — `;
-    if (positiveStocks.some(s => nseStocks.includes(s))) {
-      summary += `bullish momentum is building `;
-    }
-    if (negativeStocks.some(s => nseStocks.includes(s))) {
-      summary += `while caution flags are waving `;
-    }
-    summary += `across the local board. `;
+  // Connect to the specific stocks — not just list tickers
+  if (nseStocks.length > 0 && globalStocks.length > 0) {
+    const nseT = nseStocks.map(s => getCompanyName(s.ticker) || s.ticker).join(' & ');
+    const globT = globalStocks.map(s => getCompanyName(s.ticker) || s.ticker).join(' & ');
+    summary += `${nseT} ${nseStocks.length > 1 ? 'lead' : 'leads'} the NSE conversation today, while ${globT} ${globalStocks.length > 1 ? 'carry' : 'carries'} the global narrative. `;
+  } else if (nseStocks.length > 0) {
+    const names = nseStocks.map(s => getCompanyName(s.ticker) || s.ticker).join(' & ');
+    summary += `On the NSE, ${names} ${nseStocks.length > 1 ? 'are' : 'is'} the names that matter today. `;
+  } else {
+    const names = globalStocks.map(s => getCompanyName(s.ticker) || s.ticker).join(' & ');
+    summary += `Globally, ${names} ${globalStocks.length > 1 ? 'are' : 'is'} driving the conversation. `;
   }
 
-  // Global section
-  if (globalStocks.length > 0) {
-    const tickers = globalStocks.map(s => s.ticker).join(' & ');
-    summary += `Globally, ${tickers} ${globalStocks.length > 1 ? 'are' : 'is'} the names to watch — `;
-    const globalPos = globalStocks.filter(s => s.sentiment === 'positive').length;
-    const globalNeg = globalStocks.filter(s => s.sentiment === 'negative').length;
-    if (globalPos > globalNeg) {
-      summary += `with positive sentiment outweighing the bearish undercurrents. `;
-    } else if (globalNeg > globalPos) {
-      summary += `as negative headlines pile up and traders take a defensive stance. `;
-    } else {
-      summary += `with competing narratives keeping traders on edge. `;
-    }
+  // Take a stance on the overall picture
+  if (positiveStocks.length === stocks.length) {
+    summary += `All ${stocks.length} names carry bullish signals — rare conviction across the board.`;
+  } else if (negativeStocks.length === stocks.length) {
+    summary += `All ${stocks.length} names face bearish headwinds — defensive positioning is warranted.`;
+  } else if (positiveStocks.length > negativeStocks.length) {
+    summary += `Bulls outnumber bears ${positiveStocks.length}-${negativeStocks.length} — the bias leans constructive, but the split means selectivity matters.`;
+  } else if (negativeStocks.length > positiveStocks.length) {
+    summary += `Bears outnumber bulls ${negativeStocks.length}-${positiveStocks.length} — caution is warranted, though dislocation creates entry points for the patient.`;
+  } else {
+    summary += `An even split between bulls and bears — conviction is thin, and the next catalyst will tip the balance.`;
   }
-
-  // Key stats
-  summary += `Across ${stocks.length} tracked names, ${positiveStocks.length} ${positiveStocks.length === 1 ? 'carries' : 'carry'} bullish signals while ${negativeStocks.length} ${negativeStocks.length === 1 ? 'faces' : 'face'} bearish headwinds.`;
 
   return summary;
 }
@@ -432,38 +479,43 @@ async function generateDailyInsights() {
     }
   } catch {}
 
-  // 4. Generate rich editorial analysis for each stock (parallel)
-  const deepDives = await Promise.all(hotStocks.map(async (stock) => {
-    const priceKey = stock.market === 'NSE' ? `NSE:${stock.ticker}` : stock.ticker;
-    const priceData = priceDataMap[priceKey] || priceDataMap[stock.ticker] || null;
-    const analysis = await withTimeout(
-      generateStockAnalysis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market),
-      30000,
-      `LLM analysis for ${stock.ticker}`
-    ).catch(() => generateFallbackAnalysis(stock.ticker, stock.sentiment, stock.articles, stock.market));
+  // 4. Generate thematic intro + rich editorial analysis for each stock (parallel)
+  const [thematicIntro, ...analyses] = await Promise.all([
+    generateThematicIntro(hotStocks, marketOverview),
+    ...hotStocks.map(async (stock) => {
+      const priceKey = stock.market === 'NSE' ? `NSE:${stock.ticker}` : stock.ticker;
+      const priceData = priceDataMap[priceKey] || priceDataMap[stock.ticker] || null;
+      const { thesis, analysis } = await withTimeout(
+        generateNarrativeThesis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market),
+        30000,
+        `LLM analysis for ${stock.ticker}`
+      ).catch(() => generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market));
 
-    const companyName = getCompanyName(stock.ticker) || stock.ticker;
-    const signal = stock.sentiment === 'positive' ? 'BULLISH'
-      : stock.sentiment === 'negative' ? 'BEARISH' : 'NEUTRAL';
+      const companyName = getCompanyName(stock.ticker) || stock.ticker;
+      const signal = stock.sentiment === 'positive' ? 'BULLISH'
+        : stock.sentiment === 'negative' ? 'BEARISH' : 'NEUTRAL';
 
-    return {
-      ticker: stock.ticker,
-      companyName,
-      exchange: getExchangeDisplay(stock.market),
-      headline: stock.articles[0]?.headline || `${companyName} — ${stock.sentiment} sentiment`,
-      analysis,
-      sentiment: stock.sentiment,
-      signal,
-      market: stock.market,
-      priceData: priceData ? {
-        price: priceData.price || priceData.regularMarketPrice || null,
-        change: priceData.change || priceData.regularMarketChange || null,
-        changePercent: priceData.changePercent || priceData.regularMarketChangePercent || null,
-        volume: priceData.volume || priceData.regularMarketVolume || null,
-      } : null,
-      relatedNews: stock.articles.slice(0, 3),
-    };
-  }));
+      return {
+        ticker: stock.ticker,
+        companyName,
+        exchange: getExchangeDisplay(stock.market),
+        headline: stock.articles[0]?.headline || `${companyName} — ${stock.sentiment} sentiment`,
+        thesis,
+        analysis,
+        sentiment: stock.sentiment,
+        signal,
+        market: stock.market,
+        priceData: priceData ? {
+          price: priceData.price || priceData.regularMarketPrice || null,
+          change: priceData.change || priceData.regularMarketChange || null,
+          changePercent: priceData.changePercent || priceData.regularMarketChangePercent || null,
+          volume: priceData.volume || priceData.regularMarketVolume || null,
+        } : null,
+        relatedNews: stock.articles.slice(0, 3),
+      };
+    }),
+  ]);
+  const deepDives = analyses;
 
   // 5. Build week-ahead events
   const weekAhead = await buildWeekAhead().catch(() => []);
@@ -479,6 +531,7 @@ async function generateDailyInsights() {
   const content = {
     dateStr,
     marketOverview,
+    thematicIntro,
     stockDeepDives: deepDives,
     weekAhead,
     summary,
