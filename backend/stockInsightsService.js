@@ -13,19 +13,25 @@ const periodReturnsService = require('./periodReturnsService');
 const PORT = process.env.PORT || 3001;
 const BASE = `http://localhost:${PORT}`;
 
-// Global (non-NSE) tickers that newsService can extract
-const GLOBAL_TICKERS = new Set([
-  'AAPL','MSFT','NVDA','TSLA','AMZN','GOOGL','META','JPM','V','LLY','AVGO','WMT','XOM','UNH',
-  'PG','COST','KO','PEP','AMD','CRM','ADBE','PLTR','SNOW','UBER','ORCL','NFLX','DIS','BAC',
-  'INTC','CSCO','QCOM','TXN','IBM','GS','MS','GE','BA','CAT','MCD','NKE','SBUX','PYPL',
-  'GME','AMC','TSM','ASML','SAP','NVO','AZN','SHEL','BP','UL','BABA','JD','PDD','NIO',
-  'LI','TM','HMC','SONY','RIVN','LCID','COIN','MARA','RIOT','HOOD','SQ','SHOP','SE',
-  'RBLX','SPOT','SNAP','PINS','ABNB','UBER','LYFT','DKNG','MGM','WYNN','LVS','CCL',
-  'RCL','AAL','DAL','UAL','JETS','SOXL','TQQQ','SQQQ','ARKK','ARKG','GLD','SLV','USO',
-  'TLT','HYG','EEM','FXI','KWEB','SOXX','IGV','HACK','CLOU','SKYY','ROBO','BOTZ',
-  'IDRV','LIT','ACES','ICLN','QCLN','PBW','TAN','FSLR','ENPH','SEDG','PLUG','BE',
-  'BLNK','CHPT','QS','MVST','NIO','XPEV','BYD','RIVN','LCID','FSR','GOEV',' Arrival',
-]);
+// Cache of known NSE tickers from DB (refreshed periodically)
+let nseTickerCache = new Set();
+let nseTickerCacheTime = 0;
+const NSE_CACHE_TTL = 3600000; // 1 hour
+
+async function getNseTickers() {
+  if (nseTickerCache.size > 0 && Date.now() - nseTickerCacheTime < NSE_CACHE_TTL) {
+    return nseTickerCache;
+  }
+  try {
+    const { rows } = await pool.query('SELECT DISTINCT UPPER(ticker) as ticker FROM stocks WHERE ticker IS NOT NULL');
+    nseTickerCache = new Set(rows.map(r => r.ticker));
+    nseTickerCacheTime = Date.now();
+    console.log(`[INSIGHTS] Loaded ${nseTickerCache.size} NSE tickers from DB`);
+  } catch (e) {
+    console.error('[INSIGHTS] Failed to load NSE tickers:', e.message);
+  }
+  return nseTickerCache;
+}
 
 function withTimeout(promise, ms, label = 'operation') {
   return Promise.race([
@@ -42,16 +48,18 @@ async function fetchJson(url, fallback = null) {
 }
 
 // ── Classify ticker as NSE or Global ──────────────────────────────
-function isGlobalTicker(ticker) {
-  return GLOBAL_TICKERS.has(ticker.toUpperCase());
+// If ticker exists in the stocks table → NSE. Otherwise → Global.
+async function isNseTicker(ticker) {
+  const nseTickers = await getNseTickers();
+  return nseTickers.has(ticker.toUpperCase());
 }
 
-function getMarketLabel(ticker) {
-  return isGlobalTicker(ticker) ? 'Global' : 'NSE';
+async function getMarketLabel(ticker) {
+  return (await isNseTicker(ticker)) ? 'NSE' : 'Global';
 }
 
-function getExchangeDisplay(ticker) {
-  return isGlobalTicker(ticker) ? getGlobalExchange(ticker) : 'NSE';
+function getExchangeDisplay(market) {
+  return market === 'Global' ? 'Global' : 'NSE';
 }
 
 function getGlobalExchange(ticker) {
@@ -90,15 +98,18 @@ async function pickHotStocks() {
   }
 
   // Score each ticker
-  const scored = Object.entries(tickerSentiment)
-    .map(([ticker, data]) => {
-      const polarity = Math.abs(data.positive - data.negative);
-      const score = data.total * 2 + polarity * 3;
-      const sentiment = data.positive > data.negative ? 'positive'
-        : data.negative > data.positive ? 'negative' : 'neutral';
-      return { ticker, score, sentiment, articles: data.articles, total: data.total, market: getMarketLabel(ticker) };
-    })
-    .sort((a, b) => b.score - a.score);
+  const scored = [];
+  for (const [ticker, data] of Object.entries(tickerSentiment)) {
+    if (!ticker || ticker.length < 2 || ticker.length > 6) continue;
+    const polarity = Math.abs(data.positive - data.negative);
+    const score = data.total * 2 + polarity * 3;
+    const sentiment = data.positive > data.negative ? 'positive'
+      : data.negative > data.positive ? 'negative' : 'neutral';
+    const market = await getMarketLabel(ticker);
+    scored.push({ ticker, score, sentiment, articles: data.articles, total: data.total, market });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
 
   // Pick top 2 NSE + top 2 global (with fallback)
   const nseStocks = scored.filter(s => s.market === 'NSE').slice(0, 2);
@@ -432,7 +443,7 @@ async function generateDailyInsights() {
     return {
       ticker: stock.ticker,
       companyName,
-      exchange: getExchangeDisplay(stock.ticker),
+      exchange: getExchangeDisplay(stock.market),
       headline: stock.articles[0]?.headline || `${companyName} — ${stock.sentiment} sentiment`,
       analysis,
       sentiment: stock.sentiment,
