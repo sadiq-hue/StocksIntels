@@ -73,12 +73,18 @@ function getGlobalExchange(ticker) {
 async function pickHotStocks() {
   const allNews = await getAllNews(300).catch(() => []);
 
+  const nseTickers = await getNseTickers();
+
   // Count sentiment per ticker
   const tickerSentiment = {};
   for (const article of allNews) {
     const stocks = article.relatedStocks || [];
+    const isNseContext = article.category === 'nse';
     for (const ticker of stocks) {
       if (!ticker || ticker.length < 2 || ticker.length > 6) continue;
+      // Skip global articles that tag a ticker which exists in NSE DB
+      // (e.g. Benzinga tags US Hasbro as HAS, which also exists as Kenyan Housing Finance)
+      if (!isNseContext && nseTickers.has(ticker.toUpperCase())) continue;
       if (!tickerSentiment[ticker]) {
         tickerSentiment[ticker] = { positive: 0, negative: 0, neutral: 0, articles: [], total: 0 };
       }
