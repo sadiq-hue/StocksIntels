@@ -5374,10 +5374,12 @@ async function rejectNewsletter(id) {
 async function sendNewsletter(id) {
   if (!confirm('Send this newsletter to all opted-in subscribers?')) return;
   try {
+    toast('Sending...', 'info');
     const res = await fetch('/api/admin/newsletter/drafts/' + id + '/send', { method: 'POST' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Send failed');
-    toast('Sent to ' + (data.sent || 0) + ' subscribers', 'success'); fetchNewsletterDrafts();
+    toast('Queued — sending to ' + (data.sent || 0) + ' subscribers', 'success');
+    setTimeout(fetchNewsletterDrafts, 3000);
   } catch (e) { toast(e.message, 'error'); }
 }
 

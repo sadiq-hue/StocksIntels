@@ -13277,16 +13277,45 @@ app.post('/api/admin/newsletter/drafts/:id/reject', async (req, res) => {
 
 app.post('/api/admin/newsletter/drafts/:id/send', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, status FROM newsletter_drafts WHERE id = $1', [req.params.id]);
+    const id = parseInt(req.params.id);
+    const { rows } = await pool.query('SELECT id, status, content, subject FROM newsletter_drafts WHERE id = $1', [id]);
     if (!rows.length) return res.status(404).json({ error: 'Draft not found' });
     if (rows[0].status === 'sent') return res.status(409).json({ error: 'Already sent' });
 
-    // Approve then send
-    await pool.query(`UPDATE newsletter_drafts SET status = 'approved', updated_at = NOW() WHERE id = $1 AND status != 'sent'`, [req.params.id]);
-    const result = await stockInsightsService.sendApprovedDraft();
-    res.json({ success: true, message: `Sent to ${result.sent} users`, sent: result.sent, total: result.total });
+    const draft = rows[0];
+    const { rows: users } = await pool.query(
+      `SELECT id, full_name, email FROM users WHERE stock_insights_opt_in = true AND email IS NOT NULL AND email != ''`
+    );
+    if (users.length === 0) return res.json({ success: true, sent: 0, message: 'No opted-in users' });
+
+    // Respond immediately, send in background
+    res.json({ success: true, message: `Sending to ${users.length} subscribers...`, sent: users.length, total: users.length });
+
+    const { sendStockInsightsEmail } = require('./mailer');
+    let sent = 0;
+    for (const user of users) {
+      try {
+        await withTimeout(
+          sendStockInsightsEmail(user.email, {
+            ...draft.content,
+            userName: user.full_name || 'Trader',
+          }),
+          30000,
+          `insights email to ${user.email}`
+        );
+        sent++;
+      } catch (e) {
+        console.error(`[INSIGHTS] Failed to send to ${user.email}:`, e.message);
+      }
+    }
+
+    await pool.query(
+      `UPDATE newsletter_drafts SET status = 'sent', sent_at = NOW(), sent_count = $1, updated_at = NOW() WHERE id = $2`,
+      [sent, id]
+    );
+    console.log(`[INSIGHTS] Newsletter "${draft.subject}" sent to ${sent}/${users.length} users`);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[INSIGHTS] Send error:', e.message);
   }
 });
 
