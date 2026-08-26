@@ -50,6 +50,7 @@ const DisclaimerPage = React.lazy(() => import("./pages/DisclaimerPage").then(m 
 const AffiliatesPage = React.lazy(() => import("./pages/AffiliatesPage").then(m => ({ default: m.AffiliatesPage })));
 const IpoPage = React.lazy(() => import("./pages/IpoPage").then(m => ({ default: m.IpoPage })));
 const DerivativesPage = React.lazy(() => import("./pages/DerivativesPage").then(m => ({ default: m.DerivativesPage })));
+const AdminNewsletter = React.lazy(() => import("./pages/AdminNewsletter").then(m => ({ default: m.AdminNewsletter })));
 
 
 function InactivityBanner() {
@@ -178,6 +179,7 @@ const router = createBrowserRouter([
       { path: "profile", element: <ProfilePage /> },
       { path: "affiliates", element: <AffiliatesPage /> },
       { path: "support", element: <SupportCenterPage /> },
+      { path: "admin/newsletter", element: <AdminNewsletter /> },
 
       { path: "*", element: <NotFoundPage /> },
         ],

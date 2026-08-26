@@ -300,6 +300,10 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
         Contact Messages
         <span id="contactMsgBadge" class="ml-auto text-xs text-gray-400"></span>
       </div>
+      <div class="nav-item" data-tab="newsletter" onclick="switchTab('newsletter')">
+        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        Newsletter
+      </div>
       <div class="nav-item" data-tab="engine" onclick="switchTab('engine')">
         <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         Engine
@@ -1677,6 +1681,45 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       </div>
     </div>
 
+    <!-- Tab: Newsletter -->
+    <div id="tab-newsletter" class="flex-1 hidden min-h-0 scroll p-6 space-y-6">
+      <div style="background:linear-gradient(135deg,#0D7490,#0EA5E9);border-radius:14px;padding:20px 24px;color:#fff;position:relative;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center">
+            <svg style="width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          </div>
+          <div>
+            <h1 style="font-size:18px;font-weight:700">Stock Insights Newsletter</h1>
+            <p style="font-size:12px;opacity:.8">Generate, review, and send daily stock insights to subscribers</p>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-primary" onclick="generateNewsletter()" id="btnGenerateNewsletter" style="display:flex;align-items:center;gap:6px">
+          <svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Generate Draft
+        </button>
+        <button class="btn btn-secondary" onclick="fetchNewsletterDrafts()" style="display:flex;align-items:center;gap:6px">
+          <svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Refresh
+        </button>
+      </div>
+
+      <div id="newsletterDraftsList" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+        <div style="padding:24px;text-align:center;color:#9ca3af">Loading drafts...</div>
+      </div>
+
+      <!-- Preview modal -->
+      <div id="newsletterPreviewModal" class="hidden" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:14px;max-width:700px;width:100%;max-height:90vh;overflow:auto;padding:24px;position:relative">
+          <button onclick="document.getElementById('newsletterPreviewModal').classList.add('hidden')" style="position:absolute;top:12px;right:12px;background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280">&times;</button>
+          <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">Email Preview</h3>
+          <div id="newsletterPreviewContent" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Tab: Engine -->
     <div id="tab-engine" class="flex-1 hidden min-h-0 scroll p-6 space-y-6" style="background:linear-gradient(180deg,#ecfdf5 0%,#f9fafb 100%)">
       <div style="background:linear-gradient(135deg,#0D7490,#0EA5E9);border-radius:14px;padding:20px 24px;color:#fff;position:relative;overflow:hidden">
@@ -1993,6 +2036,7 @@ function switchTab(tab) {
   if (tab === 'followers') fetchFollowers();
   if (tab === 'testimonials') fetchTestimonials();
   if (tab === 'contact-messages') fetchContactMessages();
+  if (tab === 'newsletter') fetchNewsletterDrafts();
   if (tab === 'user-activity') { fetchUserActivity(); }
   if (tab === 'affiliates') { fetchAffiliateStats(); fetchAffiliates(); }
   if (tab === 'engine') { fetchEngineHealth(); fetchForwardTest(); }
@@ -2008,7 +2052,7 @@ function switchTab(tab) {
     }
   }
 }
-['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','user-activity','engine','audit','settings'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
+['dashboard','users','subscribers','tickets','signals','portfolio-history','community','broker-accounts','chat','payments','affiliates','stocks','pending-reports','upload-json','signal-outcomes','notifications','followers','user-activity','newsletter','engine','audit','settings'].forEach(t => document.getElementById('tab-' + t).classList.add('tab-content'));
 
 // ── Dashboard ──
 async function fetchDashboard() {
@@ -5228,6 +5272,81 @@ async function handleAdminLogout() {
   localStorage.removeItem('stockintel_token');
   localStorage.removeItem('stockintel_user');
   location.reload();
+}
+
+// ── Newsletter ──
+async function fetchNewsletterDrafts() {
+  const container = document.getElementById('newsletterDraftsList');
+  container.innerHTML = '<div style="padding:24px;text-align:center;color:#9ca3af">Loading drafts...</div>';
+  try {
+    const res = await fetch('/api/admin/newsletter/drafts');
+    if (!res.ok) throw new Error('Failed to load drafts');
+    const data = await res.json();
+    const drafts = data.drafts || data;
+    if (!drafts.length) { container.innerHTML = '<div style="padding:24px;text-align:center;color:#9ca3af">No drafts yet. Click "Generate Draft" to create one.</div>'; return; }
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb"><th style="padding:10px 14px;text-align:left;font-weight:600">Date</th><th style="padding:10px 14px;text-align:left;font-weight:600">Subject</th><th style="padding:10px 14px;text-align:left;font-weight:600">Stocks</th><th style="padding:10px 14px;text-align:left;font-weight:600">Status</th><th style="padding:10px 14px;text-align:right;font-weight:600">Actions</th></tr></thead><tbody>';
+    drafts.forEach(d => {
+      const statusColors = { draft: 'background:#fef3c7;color:#92400e', pending_review: 'background:#dbeafe;color:#1e40af', approved: 'background:#d1fae5;color:#065f46', rejected: 'background:#fee2e2;color:#991b1b', sent: 'background:#e0e7ff;color:#3730a3' };
+      const stockCount = d.content?.stocks?.length || 0;
+      html += `<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:10px 14px;white-space:nowrap">${new Date(d.draft_date).toLocaleDateString()}</td><td style="padding:10px 14px">${d.subject || '—'}</td><td style="padding:10px 14px">${stockCount} stocks</td><td style="padding:10px 14px"><span style="padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;${statusColors[d.status] || ''}">${d.status}</span></td>`;
+      html += `<td style="padding:10px 14px;text-align:right;white-space:nowrap">`;
+      html += `<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="previewNewsletter(${d.id})">Preview</button>`;
+      if (d.status === 'draft' || d.status === 'rejected' || d.status === 'pending_review') html += `<button class="btn btn-primary" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="approveNewsletter(${d.id})">Approve</button>`;
+      if (d.status === 'approved') html += `<button class="btn btn-primary" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="sendNewsletter(${d.id})">Send</button>`;
+      if (d.status !== 'sent' && d.status !== 'approved') html += `<button class="btn" style="font-size:11px;padding:3px 8px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca" onclick="rejectNewsletter(${d.id})">Reject</button>`;
+      html += `</td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch (e) { container.innerHTML = '<div style="padding:24px;text-align:center;color:#ef4444">' + e.message + '</div>'; }
+}
+
+async function generateNewsletter() {
+  const btn = document.getElementById('btnGenerateNewsletter');
+  btn.disabled = true; btn.innerHTML = '<svg class="animate-spin" style="width:16px;height:16px" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Generating...';
+  try {
+    const res = await fetch('/api/admin/newsletter/generate', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Generation failed');
+    toast('Draft created: ' + (data.draft?.subject || 'Untitled'), 'success');
+    fetchNewsletterDrafts();
+  } catch (e) { toast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.innerHTML = '<svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Generate Draft'; }
+}
+
+async function approveNewsletter(id) {
+  try {
+    const res = await fetch('/api/admin/newsletter/drafts/' + id + '/approve', { method: 'POST' });
+    if (!res.ok) throw new Error('Approve failed');
+    toast('Draft approved', 'success'); fetchNewsletterDrafts();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function rejectNewsletter(id) {
+  try {
+    const res = await fetch('/api/admin/newsletter/drafts/' + id + '/reject', { method: 'POST' });
+    if (!res.ok) throw new Error('Reject failed');
+    toast('Draft rejected', 'success'); fetchNewsletterDrafts();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function sendNewsletter(id) {
+  if (!confirm('Send this newsletter to all opted-in subscribers?')) return;
+  try {
+    const res = await fetch('/api/admin/newsletter/drafts/' + id + '/send', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Send failed');
+    toast('Sent to ' + (data.sent || 0) + ' subscribers', 'success'); fetchNewsletterDrafts();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function previewNewsletter(id) {
+  try {
+    const res = await fetch('/api/admin/newsletter/preview/' + id);
+    const html = await res.text();
+    document.getElementById('newsletterPreviewContent').innerHTML = html;
+    document.getElementById('newsletterPreviewModal').classList.remove('hidden');
+  } catch (e) { toast('Preview failed: ' + e.message, 'error'); }
 }
 
 // ── User Activity ──

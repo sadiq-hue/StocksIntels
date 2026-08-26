@@ -1,11 +1,12 @@
 import { Link, useLocation } from "react-router";
 import { useState, useEffect } from "react";
+import { useAuth } from "../auth/AuthContext";
 import {
   LayoutGrid, Brain, PieChart, Star,
   LineChart, Newspaper, FileText, MessageSquare, Users,
   Briefcase, Layers, User, LifeBuoy, Landmark,
   DollarSign, TrendingUp, GraduationCap, Lightbulb,
-  ChevronsLeft, ChevronsRight,
+  ChevronsLeft, ChevronsRight, Mail,
 } from "lucide-react";
 import { useBeginnerMode } from "../contexts/BeginnerModeContext";
 
@@ -24,6 +25,7 @@ function Tooltip({ label, children }: { label: string; children: React.ReactNode
 
 export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { onNavigate?: () => void; onToggle?: () => void; collapsed?: boolean }) {
   const location = useLocation();
+  const { user } = useAuth();
   const { beginnerMode, toggleBeginnerMode } = useBeginnerMode();
   const [marketStatus, setMarketStatus] = useState<{ nse: { open: boolean; label: string; eventLabel: string }; global: { open: boolean; label: string; eventLabel: string } } | null>(null);
 
@@ -75,6 +77,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
         { path: "/app/profile", icon: User, label: "Profile" },
         { path: "/app/affiliates", icon: DollarSign, label: "Affiliates" },
         { path: "/app/support", icon: LifeBuoy, label: "Support Center" },
+        ...(user?.role === "admin" ? [{ path: "/app/admin/newsletter", icon: Mail, label: "Newsletter" }] : []),
       ],
     },
   ];

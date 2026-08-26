@@ -79,6 +79,7 @@ export function SettingsPage() {
   const [earningsReportOptedIn, setEarningsReportOptedIn] = useState(true);
   const [monthlyTopMoversOptedIn, setMonthlyTopMoversOptedIn] = useState(true);
   const [quarterlyTopMoversOptedIn, setQuarterlyTopMoversOptedIn] = useState(true);
+  const [stockInsightsOptedIn, setStockInsightsOptedIn] = useState(true);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [sendingReport, setSendingReport] = useState<string | null>(null);
@@ -133,6 +134,10 @@ export function SettingsPage() {
       fetch(`${API_BASE_URL}/user/quarterly-top-movers-preference?userId=${user.id}`)
         .then(r => r.json())
         .then(d => { if (d.optedIn !== undefined) setQuarterlyTopMoversOptedIn(d.optedIn); })
+        .catch(() => {});
+      fetch(`${API_BASE_URL}/user/stock-insights-preference?userId=${user.id}`)
+        .then(r => r.json())
+        .then(d => { if (d.optedIn !== undefined) setStockInsightsOptedIn(d.optedIn); })
         .catch(() => {});
     }
   }, [user?.id]);
@@ -382,6 +387,22 @@ export function SettingsPage() {
       toast.success(checked ? "Quarterly top movers subscribed" : "Quarterly top movers unsubscribed");
     } catch {
       setQuarterlyTopMoversOptedIn(!checked);
+      toast.error("Failed to update preference");
+    }
+  };
+
+  const handleStockInsightsToggle = async (checked: boolean) => {
+    setStockInsightsOptedIn(checked);
+    try {
+      const res = await fetch(`${API_BASE_URL}/user/stock-insights-preference`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user?.id, optedIn: checked }),
+      });
+      if (!res.ok) throw new Error("Failed to update preference");
+      toast.success(checked ? "Stock insights subscribed" : "Stock insights unsubscribed");
+    } catch {
+      setStockInsightsOptedIn(!checked);
       toast.error("Failed to update preference");
     }
   };
@@ -854,6 +875,25 @@ export function SettingsPage() {
                         "Send Now"
                       )}
                     </Button>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-muted rounded-lg border border-border md:col-span-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Mail className="w-5 h-5 text-[#0D7490]" />
+                    <div className="text-foreground font-medium">Stock Insights</div>
+                  </div>
+                  <div className="text-muted-foreground text-sm mb-3">
+                    Daily stock insights newsletter with deep-dive analysis on stocks making news, market overview, and week-ahead events. Sent weekdays at 8 AM EAT.
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={stockInsightsOptedIn}
+                        onCheckedChange={handleStockInsightsToggle}
+                      />
+                      <span className="text-sm text-muted-foreground">{stockInsightsOptedIn ? 'Subscribed' : 'Unsubscribed'}</span>
+                    </div>
                   </div>
                 </div>
               </div>
