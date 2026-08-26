@@ -133,10 +133,10 @@ async function pickHotStocks() {
 
 // ── Build market overview ────────────────────────────────────────
 async function buildMarketOverview() {
-  const [movers, indices, summary] = await Promise.all([
+  const [movers, indices, activeCount] = await Promise.all([
     fetchJson(`${BASE}/api/market/movers`, { nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] } }),
     fetchJson(`${BASE}/api/indices/all`, {}),
-    fetchJson(`${BASE}/api/ai/market-summary`, { sentiment: 'Neutral', signals: { total: 0 } }),
+    pool.query(`SELECT COUNT(*) FROM (SELECT DISTINCT ON (ticker) ticker FROM signal_history ORDER BY ticker, generated_at DESC) t`).then(r => parseInt(r.rows[0].count) || 0).catch(() => 0),
   ]);
 
   const indicesArr = indices && typeof indices === 'object' && !Array.isArray(indices)
@@ -192,8 +192,8 @@ async function buildMarketOverview() {
       gainers: globalGainers,
       losers: globalLosers,
     },
-    sentiment: summary?.sentiment || 'Neutral',
-    totalSignals: summary?.signals?.total || 0,
+    sentiment: 'Neutral',
+    totalSignals: activeCount,
   };
 }
 
