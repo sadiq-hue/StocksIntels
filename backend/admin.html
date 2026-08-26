@@ -5324,20 +5324,20 @@ async function fetchNewsletterDrafts() {
     const data = await res.json();
     const drafts = data.drafts || data;
     if (!drafts.length) { container.innerHTML = '<div style="padding:24px;text-align:center;color:#9ca3af">No drafts yet. Click "Generate Draft" to create one.</div>'; return; }
-    let html = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb"><th style="padding:10px 14px;text-align:left;font-weight:600">Date</th><th style="padding:10px 14px;text-align:left;font-weight:600">Subject</th><th style="padding:10px 14px;text-align:left;font-weight:600">Stocks</th><th style="padding:10px 14px;text-align:left;font-weight:600">Status</th><th style="padding:10px 14px;text-align:right;font-weight:600">Actions</th></tr></thead><tbody>';
+    let html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:700px"><thead><tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb"><th style="padding:10px 14px;text-align:left;font-weight:600">Date</th><th style="padding:10px 14px;text-align:left;font-weight:600">Subject</th><th style="padding:10px 14px;text-align:center;font-weight:600">Stocks</th><th style="padding:10px 14px;text-align:left;font-weight:600">Status</th><th style="padding:10px 14px;text-align:right;font-weight:600">Actions</th></tr></thead><tbody>';
     drafts.forEach(d => {
       const statusColors = { draft: 'background:#fef3c7;color:#92400e', pending_review: 'background:#dbeafe;color:#1e40af', approved: 'background:#d1fae5;color:#065f46', rejected: 'background:#fee2e2;color:#991b1b', sent: 'background:#e0e7ff;color:#3730a3' };
-      const stockCount = d.content?.stocks?.length || 0;
-      html += `<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:10px 14px;white-space:nowrap">${new Date(d.draft_date).toLocaleDateString()}</td><td style="padding:10px 14px">${d.subject || '—'}</td><td style="padding:10px 14px">${stockCount} stocks</td><td style="padding:10px 14px"><span style="padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;${statusColors[d.status] || ''}">${d.status}</span></td>`;
+      const stockCount = d.content?.stocks?.length || d.content?.stockDeepDives?.length || 0;
+      html += `<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:10px 14px;white-space:nowrap">${new Date(d.draft_date).toLocaleDateString()}</td><td style="padding:10px 14px">${d.subject || '—'}</td><td style="padding:10px 14px;text-align:center">${stockCount}</td><td style="padding:10px 14px"><span style="padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;${statusColors[d.status] || ''}">${d.status}</span></td>`;
       html += `<td style="padding:10px 14px;text-align:right;white-space:nowrap">`;
-      html += `<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="previewNewsletter(${d.id})">Preview</button>`;
-      html += `<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="editNewsletter(${d.id})">Edit</button>`;
-      if (d.status === 'draft' || d.status === 'rejected' || d.status === 'pending_review') html += `<button class="btn btn-primary" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="approveNewsletter(${d.id})">Approve</button>`;
-      if (d.status === 'approved') html += `<button class="btn btn-primary" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="sendNewsletter(${d.id})">Send</button>`;
-      if (d.status !== 'sent' && d.status !== 'approved') html += `<button class="btn" style="font-size:11px;padding:3px 8px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca" onclick="rejectNewsletter(${d.id})">Reject</button>`;
+      html += `<button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;margin:0 2px" onclick="previewNewsletter(${d.id})">Preview</button>`;
+      html += `<button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;margin:0 2px" onclick="editNewsletter(${d.id})">Edit</button>`;
+      if (d.status === 'draft' || d.status === 'rejected' || d.status === 'pending_review') html += `<button class="btn btn-primary" style="font-size:11px;padding:4px 10px;margin:0 2px" onclick="approveNewsletter(${d.id})">Approve</button>`;
+      if (d.status === 'approved') html += `<button class="btn btn-primary" style="font-size:11px;padding:4px 10px;margin:0 2px" onclick="sendNewsletter(${d.id})">Send</button>`;
+      if (d.status !== 'sent' && d.status !== 'approved') html += `<button style="font-size:11px;padding:4px 10px;margin:0 2px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:6px;cursor:pointer" onclick="rejectNewsletter(${d.id})">Reject</button>`;
       html += `</td></tr>`;
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     container.innerHTML = html;
   } catch (e) { container.innerHTML = '<div style="padding:24px;text-align:center;color:#ef4444">' + e.message + '</div>'; }
 }

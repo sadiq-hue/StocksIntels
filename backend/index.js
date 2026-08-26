@@ -13208,7 +13208,7 @@ async function sendStockInsightsToUser(userId, email, fullName) {
 app.get('/api/admin/newsletter/drafts', async (req, res) => {
   try {
     const { status, limit = 20 } = req.query;
-    let sql = 'SELECT id, draft_date, subject, status, sent_count, created_at, updated_at, sent_at FROM newsletter_drafts';
+    let sql = 'SELECT id, draft_date, subject, content, status, sent_count, created_at, updated_at, sent_at FROM newsletter_drafts';
     const params = [];
     if (status) { sql += ' WHERE status = $1'; params.push(status); }
     sql += ' ORDER BY draft_date DESC, id DESC LIMIT $' + (params.length + 1);
