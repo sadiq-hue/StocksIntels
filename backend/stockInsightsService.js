@@ -234,9 +234,11 @@ async function pickHotStocks(forceFresh = false) {
     // The exchange itself ("NSE") shows up as an all-caps word in headlines but
     // is not a pickable stock.
     if (ticker.toUpperCase() === 'NSE') continue;
-    // A single tagged article is easy to pollute (a coincidental word match);
-    // require the name to be independently covered by >= 2 articles.
-    if (data.total < MIN_TAGGED_ARTICLES) continue;
+    // Global tags can come from a coincidental symbol word-match, so require
+    // >= 2 independent articles. NSE tags are minted from distinctive company
+    // names ("Safaricom", "KCB Group") which never collide, so one solid
+    // Kenyan story is enough — otherwise quiet days leave the NSE side empty.
+    if (!nseTickers.has(ticker.toUpperCase()) && data.total < MIN_TAGGED_ARTICLES) continue;
     const polarity = Math.abs(data.positive - data.negative);
     const mentions = data.total;
     const recency = mentions ? data.recencySum / mentions : 0;
@@ -256,14 +258,15 @@ async function pickHotStocks(forceFresh = false) {
 
   scored.sort((a, b) => b.score - a.score);
 
-  // Rotation: shortlist only non-repeats. In force-fresh mode repeats are
-  // hard-blocked; otherwise a repeat clears the bar only when its story today
-  // is genuinely big.
+  // Rotation: shortlist only non-repeats. In force-fresh mode global repeaters
+  // are hard-blocked, but if the only Kenyan names with real news are recent
+  // features, allow ONE repeat so the draft never degenerates into an
+  // all-foreign issue (MAX_REPEATS_PER_DRAFT still caps total repeats at 1).
   const eligible = forceFresh
-    ? scored.filter(s => s.repeatCount <= 0)
+    ? scored.filter(s => (s.market === 'NSE' && s.repeatCount <= 1) || (s.market !== 'NSE' && s.repeatCount <= 0))
     : scored.filter(s => s.repeatCount <= 0 || s.score >= HARD_REPEAT_OVERRIDE_SCORE);
-  // Force-fresh never falls back to repeats; a quiet unwinds news into fewer,
-  // brand-new names instead of recycling the same tickers.
+  // Force-fresh generally avoids repeaters, but NSE repeats may fill a couple
+  // of seats so a quiet week still yields a local, market-balanced issue.
   const forSelection = forceFresh ? eligible : (eligible.length >= 4 ? eligible : scored);
 
   // Sequential selection: market-balanced (2 NSE + 2 global), sector-aware,
