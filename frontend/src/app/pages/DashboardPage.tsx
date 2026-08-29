@@ -367,7 +367,12 @@ export function DashboardPage() {
     const userIdParam = user?.id ? `?userId=${user.id}` : '';
     authFetch(`${import.meta.env.VITE_API_URL || "/api"}/signals${userIdParam}`)
       .then(r => r.json())
-      .then(data => { if (data.success) setSignals(data.signals); })
+      .then(data => {
+        if (!data.success || !Array.isArray(data.signals)) return;
+        // Never wipe an already-populated signal list on a transient empty payload
+        // (the Market Intelligence card would flash 0 / few signals between polls).
+        setSignals(prev => (data.signals.length > 0 || prev.length === 0) ? data.signals : prev);
+      })
       .catch(() => {});
   }, [user?.id]);
 
@@ -390,10 +395,10 @@ export function DashboardPage() {
       setPulse(prev => prev ? { ...prev, indices } : prev);
     });
     socket.on("signal:batch_update", (batch: any) => {
-      if (batch?.signals) setSignals(batch.signals);
+      if (Array.isArray(batch?.signals)) setSignals(prev => (batch.signals.length > 0 || prev.length === 0) ? batch.signals : prev);
     });
     socket.on("signal:updates", (updates: any) => {
-      if (Array.isArray(updates)) setSignals(updates);
+      if (Array.isArray(updates)) setSignals(prev => (updates.length > 0 || prev.length === 0) ? updates : prev);
     });
     return () => {
       if (socket) {

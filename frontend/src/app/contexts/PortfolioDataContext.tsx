@@ -151,9 +151,16 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
           setLoading(false);
           return;
         }
+        // Healthy response that truly has no holdings — safe to clear.
+        setHoldings([]);
+        setLoading(false);
+        return;
       }
     } catch {}
-    setHoldings([]);
+    // Failed or transient response (network error, 401, or the API restarting
+    // during a deploy): keep the last-loaded holdings instead of wiping them to
+    // $0.00. Wiping here made the dashboard top containers (Portfolio Value,
+    // vs Benchmarks, Holdings) flicker empty every 30s whenever a poll hiccupped.
     setLoading(false);
   }, [user, stockPriceMap]);
 
