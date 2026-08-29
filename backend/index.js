@@ -12276,6 +12276,7 @@ async function initDatabase() {
         await pool.query('CREATE INDEX IF NOT EXISTS idx_financial_statements_stock_id ON financial_statements(stock_id)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_financial_statements_status ON financial_statements(status)');
         await pool.query('CREATE INDEX IF NOT EXISTS idx_financial_statements_uploaded_at ON financial_statements(uploaded_at DESC)');
+        await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS uq_fs_one_live_per_period ON financial_statements (stock_id, period_end_date) WHERE status IN (\'completed\',\'pending_review\') AND parsed_data IS NOT NULL');
         console.log('[Migration] financial_statements table recreated with correct schema');
       }
     } catch (schemaErr) {
