@@ -3826,7 +3826,7 @@ async function fetchPendingReports() {
         <div class="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-200">
           <div class="flex items-center gap-3">
             <span class="text-sm font-bold text-gray-900">${esc(r.ticker || '?')}</span>
-            <span class="text-xs text-gray-500">${esc(r.period_type || 'annual')}</span>
+            <span class="text-xs text-gray-500">${esc(({ half_year: 'Half Year', quarterly: 'Quarterly', annual: 'Annual' })[r.period_type] || r.period_type || 'Annual')}</span>
             <span class="pill pill-verified">${esc(r.period_end_date ? new Date(r.period_end_date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '')}</span>
           </div>
           <div class="flex gap-2">

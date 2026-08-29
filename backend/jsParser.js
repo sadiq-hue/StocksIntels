@@ -405,7 +405,9 @@ function buildPrompt(text, meta) {
   const periodType = meta.period_type || '';
   const ped = meta.period_end_date || '';
   const ticker = meta.ticker || '';
-  const interimNote = periodType === 'quarterly'
+  const interimNote = periodType === 'half_year'
+    ? `\n\nPERIOD TYPE: half-year (6-month INTERIM report). Use the column for the SIX months ended ${ped} ONLY — NEVER the prior-year comparison column. Report every metric for the 6-month cumulative period.`
+    : periodType === 'quarterly'
     ? `\n\nPERIOD TYPE: quarterly (INTERIM report). The statement contains BOTH a single-period column (e.g. "3 months ended ${ped}" / "${ped} quarter") AND a cumulative year-to-date column (e.g. "9 months ended" / "6 months ended" / "year to date"). You MUST report figures for the SINGLE reporting quarter ONLY — the column whose header matches the period ${ped} — NEVER the cumulative/year-to-date column.`
     : periodType === 'annual'
     ? `\n\nPERIOD TYPE: annual (12-month / full-year report). Report the FULL-YEAR figure only.`
@@ -697,7 +699,7 @@ function tryLlm(text, apiKey, provider, meta) {
   return callLlm(text, apiKey, process.env.OPENAI_MODEL || 'gpt-4o-mini', meta);
 }
 
-async function processText(text, docId, source) {
+async function processText(text, docId, source, meta) {
   let parsedData = {};
   let processedBy = source || 'js';
 
@@ -709,7 +711,7 @@ async function processText(text, docId, source) {
 
   for (const { key, name } of llmProviders) {
     console.log('[JSParser] Calling ' + name + ' for doc ' + docId + ', text length=' + text.length);
-    const llmResult = normalizeAliases(await tryLlm(text, key, name));
+    const llmResult = normalizeAliases(await tryLlm(text, key, name, meta));
     if (llmResult) {
       let validCount = 0;
       const cand = {};
@@ -812,7 +814,7 @@ async function processText(text, docId, source) {
   }
 }
 
-async function parsePdfBuffer(buffer, docId) {
+async function parsePdfBuffer(buffer, docId, meta) {
   try {
     let text = null;
     if (MISTRAL_API_KEY) {
@@ -824,19 +826,19 @@ async function parsePdfBuffer(buffer, docId) {
       await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = 'No text could be extracted from PDF' WHERE id = $1`, [docId]);
       return;
     }
-    await processText(text, docId, 'js');
+    await processText(text, docId, 'js', meta);
   } catch (e) {
     await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`, [e.message, docId]);
   }
 }
 
-async function parseExtractedText(text, docId, fileName) {
+async function parseExtractedText(text, docId, fileName, meta) {
   try {
     if (!text.trim()) {
       await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = 'Empty text' WHERE id = $1`, [docId]);
       return;
     }
-    await processText(text, docId, 'js');
+    await processText(text, docId, 'js', meta);
   } catch (e) {
     await pool.query(`UPDATE financial_statements SET status = 'failed', error_message = $1 WHERE id = $2`, [e.message, docId]);
   }

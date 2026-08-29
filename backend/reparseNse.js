@@ -16,7 +16,7 @@ const targets = ocr
 
 (async () => {
   const rows = await pool.query(
-    `SELECT fs.id, s.ticker, fs.period_end_date, fs.file_name, fs.status, fs.parsed_data, fs.processed_by
+    `SELECT fs.id, s.ticker, fs.period_end_date, fs.period_type, fs.file_name, fs.status, fs.parsed_data, fs.processed_by
      FROM financial_statements fs JOIN stocks s ON s.id = fs.stock_id
      WHERE s.market='NSE' AND fs.status='completed'`
   );
@@ -35,7 +35,7 @@ const targets = ocr
     const beforeCount = Object.keys(row.parsed_data || {}).length;
     const buf = fs.readFileSync(dest);
     console.log(`REPARSE ${t.ticker} ${t.period} (id ${row.id}, before=${beforeCount} metrics)`);
-    await parsePdfBuffer(buf, row.id);
+    await parsePdfBuffer(buf, row.id, { ticker: row.ticker, period_end_date: row.period_end_date, period_type: row.period_type });
     const a = (await pool.query(`SELECT status, parsed_data, processed_by FROM financial_statements WHERE id=$1`, [row.id])).rows[0];
     const afterCount = Object.keys(a.parsed_data || {}).length;
     if (a.status !== 'completed' || afterCount < beforeCount) {

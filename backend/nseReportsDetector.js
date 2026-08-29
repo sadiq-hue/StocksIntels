@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const { URL } = require('url');
 const { pool } = require('./db');
 const { storePdfReport } = require('./financialStatementsStore');
+const { inferPeriodType } = require('./nseReportTypes');
 const mailer = require('./mailer');
 
 const NSE_FINANCIALS_URL = 'https://www.nse.co.ke/financial-results/';
@@ -166,17 +167,6 @@ function isAudited(filename) {
   if (/un[- ]?audited|unaudited/.test(f)) return false;
   if (/\baudited\b/.test(f)) return true;
   return null;
-}
-
-// Annual vs interim/quarterly, derived from the (often abbrev.) report type in
-// the filename/slug (e.g. AfricanFinancials "ir-q3" or NSE "Q3").
-function inferPeriodType(filename) {
-  const f = filename.toLowerCase();
-  // Quarterly cues: Q1-Q4 labels or 3/9-month periods.
-  // Half-year / H1 / H2 are 6-month reports — tag as 'annual' so they appear in the
-  // history grids alongside full-year data (matching KCB convention).
-  if (/\bq[1-4]\b|(?:three|nine|3|9)[-\s]?months?/.test(f)) return 'quarterly';
-  return 'annual';
 }
 
 function fetchWithParser(targetUrl, asBuffer = false, redirects = 0) {
@@ -613,7 +603,7 @@ async function processFiling(pdf, suppressAlert) {
     const pdfBuffer = await downloadPdf(pdf.url);
     // Auto-detected NSE reports are held for admin approval (publishStatus='pending_review')
     // so a bad auto-parse can't go live without review.
-    const { docId, status } = await storePdfReport({ ticker, period_type: inferPeriodType(pdf.filename), period_end_date: periodEnd, file_name: pdf.filename, pdfBuffer, processed_by: 'auto-nse', publishStatus: 'pending_review' });
+    const { docId, status } = await storePdfReport({ ticker, period_type: inferPeriodType(pdf.filename, periodEnd), period_end_date: periodEnd, file_name: pdf.filename, pdfBuffer, processed_by: 'auto-nse', publishStatus: 'pending_review' });
     const heldForReview = status === 'pending_review';
     const parsedOk = heldForReview || status === 'completed';
     await recordFiling({ key, company, ticker, url: pdf.url, filename: pdf.filename, periodEnd, audited, parsed: parsedOk, parseStatus: status, source: pdf.source || 'nse' });

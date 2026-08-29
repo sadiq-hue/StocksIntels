@@ -158,7 +158,7 @@ async function storePdfReport({ ticker, period_type, period_end_date, file_name,
   let parsed = null;
   let status = 'failed';
   try {
-    await jsParser.parsePdfBuffer(pdfBuffer, docId);
+    await jsParser.parsePdfBuffer(pdfBuffer, docId, { ticker: tickerVal, period_end_date: period_end_date || null, period_type: period_type || 'annual' });
     const r = await pool.query('SELECT parsed_data, status FROM financial_statements WHERE id = $1', [docId]);
     parsed = r.rows[0]?.parsed_data || null;
     status = r.rows[0]?.status || 'failed';

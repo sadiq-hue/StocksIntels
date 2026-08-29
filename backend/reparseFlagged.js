@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { pool } = require('./db');
 const { parsePdfBuffer } = require('./jsParser');
+const { inferPeriodType } = require('./nseReportTypes');
 
 // Flagged tickers to refresh. Override with FLAG=IMH,KCB for a subset test.
 const FLAGGED = (process.env.FLAG || 'ABSA,BAT,BOC,CABL,COOP,DTK,IMH,KCB,LIMT,NCBA,SLAM,TPSE')
@@ -40,7 +41,7 @@ function monthOf(pedText) { return parseInt(String(pedText).slice(5, 7), 10); }
     const beforeCount = Object.keys(r.parsed_data || {}).length;
     const buf = fs.readFileSync(dest);
     console.log(`REPARSE ${r.ticker} ${r.ped} (id ${r.id}, before=${beforeCount} metrics, pt=${r.period_type})`);
-    await parsePdfBuffer(buf, r.id);
+    await parsePdfBuffer(buf, r.id, { ticker: r.ticker, period_end_date: r.ped, period_type: r.period_type });
     const a = (await pool.query(`SELECT status, parsed_data, processed_by FROM financial_statements WHERE id=$1`, [r.id])).rows[0];
     const aData = a.parsed_data || {};
     const afterCount = Object.keys(aData).length;
@@ -84,7 +85,9 @@ function monthOf(pedText) { return parseInt(String(pedText).slice(5, 7), 10); }
     for (const [m, c] of Object.entries(months)) if (c > best) { best = c; fye = +m; }
     if (!fye) continue; // no clear annual cue; leave labels as-is
     for (const r of list) {
-      const newPt = (monthOf(r.ped) === fye) ? 'annual' : 'quarterly';
+      // FYE-month reports are full-year; everything else is interim — use the
+      // shared classifier for half-year (Jun) vs quarterly (Mar/Sep) granularity.
+      const newPt = (monthOf(r.ped) === fye) ? 'annual' : inferPeriodType(r.file_name, r.ped);
       if (newPt !== r.period_type) {
         await pool.query(`UPDATE financial_statements SET period_type=$1 WHERE id=$2`, [newPt, r.id]);
         ptChanged++;
