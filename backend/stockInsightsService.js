@@ -10,6 +10,17 @@ const { getCompanyName } = require('./marketService');
 const llm = require('./llmService');
 const periodReturnsService = require('./periodReturnsService');
 
+// ── Newsletter diversity config ────────────────────────────────────
+// Why the same 3-4 tickers kept repeating in every draft: the old picker
+// ranked purely by raw news-mention count, so whatever tickers dominated
+// the day's feed won every run — and repeated "Generate Draft" clicks wrote
+// byte-identical drafts with no rotation or dedupe. These knobs add a
+// diversity layer on top of the news score:
+const RECENT_FEATURE_DAYS = 7;          // exclude tickers featured in drafts/issues within the last N days
+const HARD_REPEAT_OVERRIDE_SCORE = 12;  // a news score this high means fresh news is real — allow the repeat
+const MAX_DEDUPE_ATTEMPTS = 12;         // safety bound on the walk-down that guarantees a different set
+const SECTOR_VARIETY_COUNT = 2;         // avoid two same-sector names leading the NSE line-up
+
 const PORT = process.env.PORT || 3001;
 const BASE = `http://localhost:${PORT}`;
 
@@ -69,13 +80,82 @@ function getGlobalExchange(ticker) {
   return 'US';
 }
 
+// ── Recently-featured tickers (for rotation) ──────────────────────
+// Pull tickers that already appeared in drafts/issues within the rotation
+// window, so coverage spreads instead of re-runs the same 4 names.
+async function getRecentFeaturedTickers() {
+  const featured = {};
+  try {
+    const { rows } = await pool.query(
+      `SELECT content FROM newsletter_drafts
+       WHERE draft_date >= CURRENT_DATE - ($1 || ' days')::interval
+       ORDER BY id DESC LIMIT 50`,
+      [RECENT_FEATURE_DAYS]
+    );
+    for (const row of rows) {
+      const content = typeof row.content === 'string' ? JSON.parse(row.content) : row.content;
+      const dives = content && content.stockDeepDives;
+      for (const d of (Array.isArray(dives) ? dives : [])) {
+        if (d && d.ticker) {
+          const t = d.ticker.toUpperCase();
+          featured[t] = (featured[t] || 0) + 1;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[INSIGHTS/pick] Failed to load featured tickers:', e.message);
+  }
+  return featured;
+}
+
+// Ticker set of the most recent draft — used to guarantee consecutive
+// drafts always differ by at least one name.
+async function getLatestDraftTickerSet() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT content FROM newsletter_drafts ORDER BY id DESC LIMIT 1`
+    );
+    if (!rows.length) return new Set();
+    const content = typeof rows[0].content === 'string' ? JSON.parse(rows[0].content) : rows[0].content;
+    const dives = content && content.stockDeepDives;
+    const set = new Set();
+    for (const d of (Array.isArray(dives) ? dives : [])) if (d && d.ticker) set.add(d.ticker.toUpperCase());
+    return set;
+  } catch { return new Set(); }
+}
+
+// Sector per ticker from latest signal_history rows (falls back to 'Other').
+async function loadSectorMap() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (UPPER(ticker)) UPPER(ticker) AS ticker, sector
+       FROM signal_history
+       WHERE sector IS NOT NULL AND sector != ''
+       ORDER BY UPPER(ticker), generated_at DESC`
+    );
+    const m = {};
+    for (const r of rows) m[r.ticker] = r.sector;
+    return m;
+  } catch { return {}; }
+}
+
+function logPickDecision(parts) {
+  console.log('[INSIGHTS/pick] ' + parts.join(' | '));
+}
+
 // ── Pick top stocks from BOTH NSE and global ──────────────────────
 async function pickHotStocks() {
   const allNews = await getAllNews(300).catch(() => []);
 
   const nseTickers = await getNseTickers();
 
-  // Count sentiment per ticker
+  const now = Date.now();
+  const assignAgeHours = a => {
+    const t = a.publishedAt ? new Date(a.publishedAt).getTime() : now;
+    return Number.isFinite(t) ? Math.max(0, (now - t) / 3600000) : 24;
+  };
+
+  // Count sentiment per ticker (weighted toward fresh news)
   const tickerSentiment = {};
   for (const article of allNews) {
     const stocks = article.relatedStocks || [];
@@ -86,11 +166,16 @@ async function pickHotStocks() {
       // (e.g. Benzinga tags US Hasbro as HAS, which also exists as Kenyan Housing Finance)
       if (!isNseContext && nseTickers.has(ticker.toUpperCase())) continue;
       if (!tickerSentiment[ticker]) {
-        tickerSentiment[ticker] = { positive: 0, negative: 0, neutral: 0, articles: [], total: 0 };
+        tickerSentiment[ticker] = { positive: 0, negative: 0, neutral: 0, articles: [], total: 0, recencySum: 0, hot: 0, urgent: 0 };
       }
       const sent = article.sentiment || 'neutral';
-      tickerSentiment[ticker][sent] = (tickerSentiment[ticker][sent] || 0) + 1;
+      const ageHours = assignAgeHours(article);
+      const recency = Math.max(0, 1 - ageHours / 72); // 72h; fresh news outranks the tail
+      tickerSentiment[ticker][sent]++;
       tickerSentiment[ticker].total++;
+      tickerSentiment[ticker].recencySum += recency;
+      if (article.hot) tickerSentiment[ticker].hot++;
+      if (article.catalystStrength === 'high') tickerSentiment[ticker].urgent++;
       if (tickerSentiment[ticker].articles.length < 6) {
         tickerSentiment[ticker].articles.push({
           headline: article.headline || article.title || '',
@@ -103,32 +188,100 @@ async function pickHotStocks() {
     }
   }
 
-  // Score each ticker
+  // Diversity context for ranking: recently-featured map, latest draft,
+  // and sector map (bank/insurer/etc per ticker).
+  const [recentFeatured, latestDraftSet, sectorMap] = await Promise.all([
+    getRecentFeaturedTickers(),
+    getLatestDraftTickerSet(),
+    loadSectorMap(),
+  ]);
+
+  // Composite score: recency-weighted news volume + polarity draw +
+  // hot/urgent boosts, plus a tiny random nudge so ties don't always
+  // resolve in cache/alphabetical order.
   const scored = [];
   for (const [ticker, data] of Object.entries(tickerSentiment)) {
     if (!ticker || ticker.length < 2 || ticker.length > 6) continue;
     const polarity = Math.abs(data.positive - data.negative);
-    const score = data.total * 2 + polarity * 3;
+    const mentions = data.total;
+    const recency = mentions ? data.recencySum / mentions : 0;
+    const freshVolume = mentions * (0.4 + recency * 0.6); // stale mentions count ~40%
+    const score = freshVolume * 2 + polarity * 3 + data.hot * 3 + data.urgent * 4 + (Math.random() * 0.001);
     const sentiment = data.positive > data.negative ? 'positive'
       : data.negative > data.positive ? 'negative' : 'neutral';
     const market = await getMarketLabel(ticker);
-    scored.push({ ticker, score, sentiment, articles: data.articles, total: data.total, market });
+    scored.push({
+      ticker, score, sentiment, articles: data.articles, total: mentions, market,
+      sector: sectorMap[ticker.toUpperCase()] || 'Other',
+      repeatCount: recentFeatured[ticker.toUpperCase()] || 0,
+    });
   }
 
   scored.sort((a, b) => b.score - a.score);
 
-  // Pick top 2 NSE + top 2 global (with fallback)
-  const nseStocks = scored.filter(s => s.market === 'NSE').slice(0, 2);
-  const globalStocks = scored.filter(s => s.market === 'Global').slice(0, 2);
+  // Rotation: shortlist only non-repeats, unless the repeat cleared the
+  // fresh-news bar (its story today is big enough to deserve airtime).
+  const eligible = scored.filter(s => s.repeatCount <= 0 || s.score >= HARD_REPEAT_OVERRIDE_SCORE);
+  // If diversity would starve the draft, relax back to the full ranked list.
+  const forSelection = eligible.length >= 4 ? eligible : scored;
 
-  // If one market is empty, fill from the other
-  const all = [...nseStocks, ...globalStocks];
-  if (all.length < 3) {
-    const extra = scored.filter(s => !all.find(a => a.ticker === s.ticker)).slice(0, 3 - all.length);
-    all.push(...extra);
+  const pickBy = (filterMarket, count) => {
+    const picked = [];
+    for (const s of forSelection) {
+      if (s.market !== filterMarket) continue;
+      if (picked.some(p => p.sector === s.sector && s.sector !== 'Other')) continue;
+      picked.push(s);
+      if (picked.length >= count) break;
+    }
+    return picked;
+  };
+
+  let picked = [...pickBy('NSE', SECTOR_VARIETY_COUNT), ...pickBy('Global', SECTOR_VARIETY_COUNT)];
+
+  // Top markets up with more names if a market came up short.
+  if (picked.filter(s => s.market === 'NSE').length < SECTOR_VARIETY_COUNT) {
+    for (const s of forSelection.filter(s => s.market === 'NSE')) {
+      if (!picked.find(p => p.ticker === s.ticker)) picked.push(s);
+      if (picked.filter(s => s.market === 'NSE').length >= SECTOR_VARIETY_COUNT) break;
+    }
+  }
+  if (picked.filter(s => s.market === 'Global').length < SECTOR_VARIETY_COUNT) {
+    for (const s of forSelection.filter(s => s.market === 'Global')) {
+      if (!picked.find(p => p.ticker === s.ticker)) picked.push(s);
+      if (picked.filter(s => s.market === 'Global').length >= SECTOR_VARIETY_COUNT) break;
+    }
   }
 
-  return all.slice(0, 4);
+  // If one market came up empty entirely, fill from the other.
+  if (picked.length < 3) {
+    const extra = forSelection.filter(s => !picked.find(p => p.ticker === s.ticker)).slice(0, 3 - picked.length);
+    picked.push(...extra);
+  }
+  picked = picked.slice(0, 4);
+
+  // No-boring-repeat guard: if the picked set is identical to the latest
+  // draft, walk further down the ranked list for a ticker not in that draft.
+  if (!latestDraftSet.size || picked.length < 4) {
+    // nothing to compare against or too few candidates
+  } else {
+    let attempt = 0;
+    while (picked.every(p => latestDraftSet.has(p.ticker.toUpperCase())) && attempt < MAX_DEDUPE_ATTEMPTS) {
+      const substitute = forSelection.find(s => !picked.find(p => p.ticker === s.ticker) && !latestDraftSet.has(s.ticker.toUpperCase()));
+      if (!substitute) break;
+      picked[picked.length - 1] = substitute; // swap out the lowest-ranked pick
+      attempt++;
+    }
+  }
+
+  logPickDecision([
+    `candidates=${scored.length}`,
+    `eligible=${eligible.length}`,
+    `repeats=${scored.filter(s => s.repeatCount > 0).length}`,
+    `repeats-kept=${eligible.filter(s => s.repeatCount > 0).map(s => s.ticker).join(',') || 'none'}`,
+    `picked=${picked.map(s => `${s.ticker}(${s.market})`).join(', ')}`,
+  ]);
+
+  return picked.slice(0, 4);
 }
 
 // ── Build market overview ────────────────────────────────────────
@@ -496,8 +649,25 @@ function generateEditorialSummary(stocks, marketOverview) {
 }
 
 // ── Main: generate daily newsletter draft ────────────────────────
-async function generateDailyInsights() {
+// Idempotent unless forced: with force=false, an unsent draft already created
+// today is returned instead of writing a duplicate newsletter_drafts row.
+// With force=true (admin regenerate), a fresh draft is produced — the
+// diversity layer already guarantees its picks differ from prior drafts.
+async function generateDailyInsights(force = false) {
   console.log('[INSIGHTS] Starting daily stock insights generation...');
+
+  if (!force) {
+    const { rows } = await pool.query(
+      `SELECT id, draft_date, subject, status, created_at
+       FROM newsletter_drafts
+       WHERE draft_date = CURRENT_DATE AND status IN ('draft', 'approved')
+       ORDER BY id DESC LIMIT 1`
+    );
+    if (rows.length > 0) {
+      console.log(`[INSIGHTS] Draft ${rows[0].id} already exists for today (status=${rows[0].status}), reusing it`);
+      return rows[0];
+    }
+  }
 
   // 1. Pick hot stocks from NSE + global
   const hotStocks = await pickHotStocks();

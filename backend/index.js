@@ -13321,7 +13321,8 @@ app.post('/api/admin/newsletter/drafts/:id/send', async (req, res) => {
 
 app.post('/api/admin/newsletter/generate', async (req, res) => {
   try {
-    const draft = await stockInsightsService.generateDailyInsights();
+    const force = req.body?.force === true || req.body?.force === 1 || req.query.force === '1' || req.query.force === 'true';
+    const draft = await stockInsightsService.generateDailyInsights(force);
     if (!draft) return res.status(404).json({ error: 'No hot stocks found for today' });
     res.json({ success: true, draft });
   } catch (e) {

@@ -4,7 +4,7 @@ import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
-import { Loader2, Mail, Send, Check, X, Eye, RefreshCw, Trash2 } from "lucide-react";
+import { Loader2, Mail, Send, Check, X, Eye, RefreshCw, Trash2, Plus } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -59,10 +59,13 @@ export function AdminNewsletter() {
 
   useEffect(() => { fetchDrafts(); }, [fetchDrafts]);
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (force = false) => {
     setGenerating(true);
     try {
-      const res = await apiFetch(`${API_URL}/admin/newsletter/generate`, { method: "POST" });
+      const res = await apiFetch(`${API_URL}/admin/newsletter/generate`, {
+        method: "POST",
+        ...(force ? { body: JSON.stringify({ force: 1 }), headers: { "Content-Type": "application/json" } } : {}),
+      });
       const data = await res.json();
       if (data.success) {
         fetchDrafts();
@@ -121,18 +124,33 @@ export function AdminNewsletter() {
             Semi-automated daily stock insights. Generate drafts, review, and send.
           </p>
         </div>
-        <Button
-          onClick={handleGenerate}
-          disabled={generating}
-          className="bg-[#0D7490] hover:bg-[#0A5F7A]"
-        >
-          {generating ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <RefreshCw className="w-4 h-4 mr-2" />
-          )}
-          Generate Draft
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => handleGenerate(false)}
+            disabled={generating}
+            className="bg-[#0D7490] hover:bg-[#0A5F7A]"
+          >
+            {generating ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4 mr-2" />
+            )}
+            Generate Draft
+          </Button>
+          <Button
+            onClick={() => { if (confirm("Create a fresh draft with different picks for today?")) handleGenerate(true); }}
+            disabled={generating}
+            variant="outline"
+            title="Force a fresh draft with rotated picks (bypasses today's existing draft)"
+          >
+            {generating ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
+            )}
+            Regenerate
+          </Button>
+        </div>
       </div>
 
       <Card className="p-0 overflow-hidden">
