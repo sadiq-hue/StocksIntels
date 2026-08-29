@@ -24,6 +24,7 @@ const SIGNAL_CONFIDENCE_MIN = 75;       // confidence threshold for the live-eng
 const SIGNAL_LOOKBACK_DAYS = 3;         // how far back live high-conviction signals count for the boost
 const MAX_DEDUPE_ATTEMPTS = 12;         // safety bound on the walk-down that guarantees a different set
 const SECTOR_VARIETY_COUNT = 2;         // avoid two same-sector names leading the NSE line-up
+const MIN_TAGGED_ARTICLES = 2;          // a name must be independently covered by this many articles to be a candidate
 
 const PORT = process.env.PORT || 3001;
 const BASE = `http://localhost:${PORT}`;
@@ -230,6 +231,12 @@ async function pickHotStocks(forceFresh = false) {
   const scored = [];
   for (const [ticker, data] of Object.entries(tickerSentiment)) {
     if (!ticker || ticker.length < 2 || ticker.length > 6) continue;
+    // The exchange itself ("NSE") shows up as an all-caps word in headlines but
+    // is not a pickable stock.
+    if (ticker.toUpperCase() === 'NSE') continue;
+    // A single tagged article is easy to pollute (a coincidental word match);
+    // require the name to be independently covered by >= 2 articles.
+    if (data.total < MIN_TAGGED_ARTICLES) continue;
     const polarity = Math.abs(data.positive - data.negative);
     const mentions = data.total;
     const recency = mentions ? data.recencySum / mentions : 0;

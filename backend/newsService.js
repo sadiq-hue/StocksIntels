@@ -195,12 +195,12 @@ const AV_QUERY_TICKERS = US_TICKERS.slice(0, 50);
 
 // Combined ticker list for news matching
 const ALL_NEWS_TICKERS = [...STOCK_SYMBOLS, ...US_TICKERS];
+const ALL_NEWS_TICKER_SET = new Set(ALL_NEWS_TICKERS.map(t => t.toUpperCase()));
 
-// Escape regex-special chars (e.g. the '.' in 'BRK.B') so tickers match literally.
-const escapeRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-// Build word-boundary regex once
-const tickerPattern = new RegExp(`\\b(${ALL_NEWS_TICKERS.map(escapeRegExp).join('|')})\\b`, 'gi');
+// Match only literal all-caps symbols ("NVDA jumped", "$SCOM", "EQTY"). Tickers
+// are deliberately NOT matched case-insensitively: lowercase common words that
+// happen to be tickers ("has", "are", "low", "key") used to mint false tags that
+// dominated picks. A title-case "Are"/"Has" at sentence start is excluded too.
 
 // Company-name aliases -> ticker. Headlines almost always use company names
 // ("Kenya Airways", "Safaricom") rather than tickers ("KQ", "SCOM"), so the
@@ -351,12 +351,20 @@ const NAME_ALIASES = {
 const NAME_ALIAS_ENTRIES = Object.entries(NAME_ALIASES).sort((a, b) => b[0].length - a[0].length);
 
 function extractRelatedStocks(text) {
-  const lower = String(text || '').toLowerCase();
+  const raw = String(text || '');
+  const lower = raw.toLowerCase();
   const found = new Set();
-  const matches = text.match(tickerPattern);
-  if (matches) matches.forEach(m => found.add(m.toUpperCase()));
+  // Distinctive company names ("Safaricom", "Kenya Airways") can't collide with
+  // everyday words, so they always tag.
   for (const [name, ticker] of NAME_ALIAS_ENTRIES) {
     if (lower.includes(name)) found.add(ticker);
+  }
+  // Literal all-caps symbol mentions only. Case-sensitive, so the word "has" or
+  // "Are" never tags a stock; a genuine symbol like "NVDA" always does.
+  const words = raw.match(/\$?[A-Z]{2,6}\b/g) || [];
+  for (const w of words) {
+    const t = w.startsWith('$') ? w.slice(1) : w;
+    if (ALL_NEWS_TICKER_SET.has(t)) found.add(t);
   }
   return [...found];
 }
