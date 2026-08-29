@@ -1,5 +1,5 @@
 const { pool } = require('./db');
-const { sendViaTransport } = require('./mailer');
+const { sendViaTransport, getEmailMarketOverview, buildMarketSnapshotHtml } = require('./mailer');
 
 const BRAND_COLOR = '#0D7490';
 const BG_LIGHT = '#f4f6f8';
@@ -57,7 +57,7 @@ function ctaButton(text, url) {
 }
 
 const TEMPLATES = {
-  onboarding_day1_welcome: (name) => ({
+  onboarding_day1_welcome: (name, data) => ({
     subject: "You're in. Here's what StocksIntels can do for you.",
     html: baseWrapper(`
       <p style="font-size:15px;color:${TEXT_DARK};line-height:1.7;margin:0 0 16px">Hi ${name || 'there'},</p>
@@ -71,6 +71,10 @@ const TEMPLATES = {
           <div style="margin-bottom:4px">→ Check today's <strong>market signals</strong> across your chosen exchange</div>
         </div>
       </div>
+      ${data?.marketOverview ? `
+      <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin:0 0 8px">Here's what's moving right now:</div>
+      ${buildMarketSnapshotHtml(data.marketOverview, 'full')}
+      ` : ''}
       <div style="background:linear-gradient(135deg,${BRAND_COLOR}08,${BRAND_COLOR}03);border:1px solid ${BRAND_COLOR}20;border-radius:10px;padding:18px 20px;margin:0 0 24px">
         <div style="font-size:13px;color:${TEXT_MED};line-height:1.6">
           <strong style="color:${BRAND_COLOR}">Your free trial</strong> gives you access to delayed data, basic snapshots, and a limited watchlist. When you're ready to go deeper — real-time signals, full AI analysis, and multi-exchange comparison — Pro is waiting for you at <strong>KES 2,599/month ($19.9/mo)</strong>.
@@ -294,6 +298,10 @@ async function sendStepEmail(userEmail, userName, step, userCampaignId) {
     if (mostWatched.rows.length > 0) {
       data = { mostWatchedStock: mostWatched.rows[0].ticker };
     }
+  }
+  if (step.template_name === 'onboarding_day1_welcome') {
+    const marketOverview = await getEmailMarketOverview();
+    if (marketOverview) data = { ...(data || {}), marketOverview };
   }
   const { subject, html } = templateFn(userName, data);
   try {

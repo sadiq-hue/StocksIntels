@@ -234,12 +234,21 @@ async function sendVerificationEmail(email, code) {
   return sendViaTransport({ to: email, subject, html, label: 'Verification' });
 }
 
-async function sendWelcomeEmail(email, name) {
+async function sendWelcomeEmail(email, name, marketOverview) {
+  const snapshot = marketOverview || await getEmailMarketOverview();
   const subject = 'Welcome to StocksIntels';
   const html = baseWrapper(`
     <div style="text-align:center">
       <div style="font-size:20px;font-weight:700;color:${TEXT_DARK};margin-bottom:4px">Welcome to StocksIntels</div>
       <div style="font-size:13px;color:${TEXT_MED};margin-bottom:24px">Hi ${name || 'there'}, your account is ready. Start tracking stocks and building your portfolio.</div>
+    </div>
+
+    ${snapshot ? `
+    <div style="font-size:14px;font-weight:600;color:${TEXT_DARK};margin-bottom:8px;text-align:center">Here's what's moving right now:</div>
+    ${buildMarketSnapshotHtml(snapshot, 'full')}
+    ` : ''}
+
+    <div style="text-align:center">
       <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/markets" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Explore Markets</a>
     </div>
   `);
@@ -814,6 +823,7 @@ async function sendHotNewsEmail(email, data) {
 
 async function sendPaymentReceiptEmail(email, data) {
   const { userName, planName, amount, currency, dateStr, paidAt } = data;
+  const marketOverview = data?.marketOverview || await getEmailMarketOverview();
   const displayDate = dateStr || (paidAt
     ? new Date(paidAt).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
     : new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
@@ -843,6 +853,11 @@ async function sendPaymentReceiptEmail(email, data) {
       </table>
     </div>
 
+    ${marketOverview ? `
+    <div style="font-size:13px;font-weight:600;color:${TEXT_DARK};margin-bottom:8px;text-align:center">Markets while you were checking out:</div>
+    ${buildMarketSnapshotHtml(marketOverview, 'compact')}
+    ` : ''}
+
     <div style="text-align:center;margin-bottom:16px">
       <a href="${process.env.APP_URL || 'https://stocksintels.com'}/app/subscription" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Manage Subscription</a>
     </div>
@@ -852,6 +867,7 @@ async function sendPaymentReceiptEmail(email, data) {
 
 async function sendSubscriptionExpiryReminder(email, data) {
   const { userName, planName, daysLeft, expiryDate } = data;
+  const marketOverview = data?.marketOverview || await getEmailMarketOverview();
   const subject = `Your ${planName} subscription expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`;
   const html = baseWrapper(`
     <div style="text-align:center;margin-bottom:24px">
@@ -865,6 +881,8 @@ async function sendSubscriptionExpiryReminder(email, data) {
       <div style="font-size:13px;color:${TEXT_DARK};margin-top:12px">Your ${planName} subscription expires on ${expiryDate}</div>
     </div>
 
+    ${marketOverview ? buildMarketSnapshotHtml(marketOverview, 'full') : ''}
+
     <div style="text-align:center;margin-bottom:16px">
       <a href="${process.env.APP_URL || 'https://stocksintels.com'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Renew Subscription</a>
     </div>
@@ -874,6 +892,7 @@ async function sendSubscriptionExpiryReminder(email, data) {
 
 async function sendSubscriptionExpiredEmail(email, data) {
   const { userName, planName } = data;
+  const marketOverview = data?.marketOverview || await getEmailMarketOverview();
   const subject = `Your ${planName} subscription has expired`;
   const html = baseWrapper(`
     <div style="text-align:center;margin-bottom:24px">
@@ -885,6 +904,8 @@ async function sendSubscriptionExpiredEmail(email, data) {
       <div style="font-size:16px;font-weight:600;color:${RED}">Your ${planName} subscription has expired</div>
       <div style="font-size:13px;color:${TEXT_MED};margin-top:8px">Renew now to continue enjoying premium features.</div>
     </div>
+
+    ${marketOverview ? buildMarketSnapshotHtml(marketOverview, 'full') : ''}
 
     <div style="text-align:center;margin-bottom:16px">
       <a href="${process.env.APP_URL || 'https://stocksintels.com'}/pricing" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;padding:12px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600">Renew Subscription</a>
@@ -932,6 +953,180 @@ function gainerTable(title, rows) {
 function loserTable(title, rows) {
   const r = (rows || []).slice(0, 10).map(s => `<tr><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${cleanTicker(s)}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;color:${TEXT_MED}">${s.company_name || s.name || ''}</td><td style="padding:4px 8px;border-bottom:1px solid ${BORDER};font-size:12px;text-align:right;color:${RED}">${s.change || (s.changePercent ? s.changePercent.toFixed(2) + '%' : '0.00%')}</td></tr>`).join('');
   return `<div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden"><div style="background:${RED};color:#ffffff;padding:8px 12px;font-size:12px;font-weight:600">${title}</div><table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:11px"><thead><tr style="background:${BG_LIGHT}"><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Symbol</th><th style="padding:4px 8px;text-align:left;color:${TEXT_MED}">Name</th><th style="padding:4px 8px;text-align:right;color:${TEXT_MED}">Chg</th></tr></thead><tbody>${r || '<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">No data</td></tr>'}</tbody></table></div>`;
+}
+
+// ── Shared market snapshot (reused across all emails) ──────────
+// Source of truth for the "Markets at a Glance" + gainer/loser blocks.
+// sendStockInsightsEmail renders exactly this block, so transactional
+// emails carry the same comprehensive data without duplicating markup.
+
+function fmtIndexCell(idx, label) {
+  if (!idx) return `<td style="padding:8px 6px;text-align:center;width:20%;border-right:1px solid ${BORDER}">
+    <div style="font-size:10px;color:${TEXT_LIGHT};margin-bottom:1px">${label}</div>
+    <div style="font-size:11px;color:${TEXT_LIGHT}">--</div>
+    <div style="font-size:10px;color:${TEXT_LIGHT}">--</div>
+  </td>`;
+  const isUp = parseFloat(String(idx.change || '0').replace(/[^0-9.\-]/g, '')) >= 0;
+  const color = isUp ? GREEN : RED;
+  return `<td style="padding:8px 6px;text-align:center;width:20%;border-right:1px solid ${BORDER}">
+    <div style="font-size:10px;color:${TEXT_LIGHT};margin-bottom:1px">${label}</div>
+    <div style="font-size:11px;color:${TEXT_DARK};font-weight:600">${idx.value || '--'}</div>
+    <div style="font-size:11px;font-weight:700;color:${color}">${idx.change || '--'}</div>
+  </td>`;
+}
+
+function fmtMoverRow(m) {
+  const chg = parseFloat(String(m.change || '0').replace(/[^0-9.\-]/g, ''));
+  const color = chg >= 0 ? GREEN : RED;
+  return `<tr>
+    <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${esc(m.ticker || m.symbol || '')}</td>
+    <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${esc(m.name || '')}</td>
+    <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:700;color:${color};text-align:right">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</td>
+  </tr>`;
+}
+
+function buildMarketSnapshotHtml(marketOverview, mode = 'full') {
+  if (!marketOverview) return '';
+  const nse = marketOverview.nse || {};
+  const us = marketOverview.us || {};
+  const sent = String(marketOverview.sentiment || 'Neutral').toLowerCase();
+  const sentColor = (sent === 'positive' || sent === 'bullish' || sent === 'slightly bullish') ? GREEN
+    : (sent === 'negative' || sent === 'bearish' || sent === 'slightly bearish') ? RED : AMBER;
+
+  const overview = `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <div style="background:linear-gradient(135deg,${BRAND_COLOR} 0%,#0a5f8a 100%);color:#ffffff;padding:10px 16px;font-size:13px;font-weight:600">
+        Markets at a Glance
+      </div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+        <tr>
+          ${fmtIndexCell(nse.nse20, 'NSE 20')}
+          ${fmtIndexCell(nse.nasi, 'NSE ASI')}
+          ${fmtIndexCell(us.sp500, 'S&P 500')}
+          ${fmtIndexCell(us.dow, 'Dow Jones')}
+          ${fmtIndexCell(us.nasdaq, 'NASDAQ')}
+        </tr>
+      </table>
+      <div style="padding:6px 16px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid ${BORDER}">
+        <span style="font-size:10px;color:${TEXT_LIGHT}">${marketOverview.totalSignals || 0} active signals</span>
+        <span style="font-size:10px;color:${sentColor};font-weight:600">Market Mood: ${esc(marketOverview.sentiment || 'Neutral')}</span>
+      </div>
+    </div>`;
+
+  if (mode === 'compact') return overview;
+
+  // ── Top Movers: NSE ──
+  const nseGainers = (nse.gainers || []).slice(0, 3);
+  const nseLosers = (nse.losers || []).slice(0, 3);
+  const nseMovers = (nseGainers.length > 0 || nseLosers.length > 0) ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <div style="background:linear-gradient(135deg,${GREEN} 0%,#059669 100%);color:#ffffff;padding:8px 16px;font-size:12px;font-weight:600">
+        NSE Top Movers
+      </div>
+      <div style="display:flex">
+        <div style="flex:1;border-right:1px solid ${BORDER}">
+          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${GREEN};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Gainers</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+            ${nseGainers.map(g => fmtMoverRow(g)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
+          </table>
+        </div>
+        <div style="flex:1">
+          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${RED};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Losers</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+            ${nseLosers.map(l => fmtMoverRow(l)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
+          </table>
+        </div>
+      </div>
+    </div>` : '';
+
+  // ── Top Movers: Global ──
+  const globalGainers = (us.gainers || []).slice(0, 3);
+  const globalLosers = (us.losers || []).slice(0, 3);
+  const globalMovers = (globalGainers.length > 0 || globalLosers.length > 0) ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <div style="background:linear-gradient(135deg,#1e40af 0%,#3b82f6 100%);color:#ffffff;padding:8px 16px;font-size:12px;font-weight:600">
+        Global Top Movers
+      </div>
+      <div style="display:flex">
+        <div style="flex:1;border-right:1px solid ${BORDER}">
+          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${GREEN};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Gainers</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+            ${globalGainers.map(g => fmtMoverRow(g)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
+          </table>
+        </div>
+        <div style="flex:1">
+          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${RED};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Losers</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+            ${globalLosers.map(l => fmtMoverRow(l)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
+          </table>
+        </div>
+      </div>
+    </div>` : '';
+
+  return `${overview}${nseMovers}${globalMovers}`;
+}
+
+// Market overview snapshot shared by transactional emails. Fetched from the
+// same reporter the newsletter uses, memoized for 5 minutes so cron loops
+// over many recipients don't hammer the internal market endpoints.
+let emailMarketOverviewCache = null;
+let emailMarketOverviewAt = 0;
+const EMAIL_MARKET_OVERVIEW_TTL = 5 * 60 * 1000;
+
+async function getEmailMarketOverview() {
+  if (emailMarketOverviewCache && Date.now() - emailMarketOverviewAt < EMAIL_MARKET_OVERVIEW_TTL) {
+    return emailMarketOverviewCache;
+  }
+  try {
+    const { buildMarketOverview } = require('./stockInsightsService');
+    const data = await Promise.race([
+      buildMarketOverview(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), 8000)),
+    ]);
+    emailMarketOverviewCache = data || null;
+    emailMarketOverviewAt = Date.now();
+    return emailMarketOverviewCache;
+  } catch (err) {
+    console.warn('[MAILER] Market overview unavailable, sending without snapshot:', err.message);
+    return null;
+  }
+}
+
+// Real "while you've been away" summary for win-back emails. Falls back to
+// generic copy when live market data is unavailable so the pitch never breaks.
+function winBackActivityHtml(marketOverview) {
+  if (!marketOverview) {
+    return `
+      &bull; AI signals have been tracking momentum shifts across the NSE and NGX<br>
+      &bull; Sector rotations are underway across African and global markets<br>
+      &bull; Earnings results and corporate actions are rolling in`;
+  }
+  const nse = marketOverview.nse || {};
+  const us = marketOverview.us || {};
+  const pct = v => {
+    const n = parseFloat(String(v || '0').replace(/[^0-9.\-]/g, ''));
+    return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
+  };
+  const nseG = (nse.gainers || [])[0];
+  const nseL = (nse.losers || [])[0];
+  const usG = (us.gainers || [])[0];
+  const usL = (us.losers || [])[0];
+  const lines = [];
+  if (marketOverview.sentiment) {
+    const mood = String(marketOverview.sentiment).toLowerCase();
+    lines.push(mood.includes('bull') ? `Markets have turned risk-on — ${marketOverview.sentiment} sentiment is driving the tape`
+      : mood.includes('bear') ? `Markets are risk-off right now, and ${marketOverview.sentiment} sentiment is shifting allocation`
+      : `Market mood is ${marketOverview.sentiment} as buyers and sellers fight for control`);
+  }
+  if (nseG) lines.push(`${esc(nseG.ticker || nseG.symbol || '')} is up ${pct(nseG.change)} — leading NSE gainers today`);
+  if (usG) lines.push(`${esc(usG.ticker || usG.symbol || '')} is up ${pct(usG.change)} — the top US/global mover`);
+  if (marketOverview.totalSignals) lines.push(`${marketOverview.totalSignals} fresh AI signals have fired since your access lapsed`);
+  if (nseL) lines.push(`${esc(nseL.ticker || nseL.symbol || '')} is down ${pct(nseL.change)} — among the NSE's biggest losers`);
+  if (usL) lines.push(`${esc(usL.ticker || usL.symbol || '')} is down ${pct(usL.change)} — a global name under pressure`);
+  if (lines.length < 3) {
+    lines.push('Earnings results and corporate actions are rolling in across NSE and global markets');
+  }
+  return lines.slice(0, 4).map(l => `&bull; ${l}<br>`).join('');
 }
 
 // ── 1. WEEKLY MARKET DIGEST ──
@@ -1190,6 +1385,7 @@ async function sendEarningsReportEmail(email, data) {
 
 async function sendSubscriptionExpiryEmail1(email, data) {
   const { userName } = data;
+  const marketOverview = data?.marketOverview || await getEmailMarketOverview();
   const subject = 'Your StocksIntels access has expired — here\'s what you\'re missing';
   const html = baseWrapper(`
     <div style="text-align:center;margin-bottom:24px">
@@ -1206,10 +1402,10 @@ async function sendSubscriptionExpiryEmail1(email, data) {
     </div>
 
     <div style="font-size:14px;color:${TEXT_DARK};line-height:1.8;padding-left:20px;margin-bottom:20px">
-      &bull; AI signals have been tracking momentum shifts across the NSE and NGX<br>
-      &bull; Sector rotations are underway across African and global markets<br>
-      &bull; Earnings results and corporate actions are rolling in
+      ${winBackActivityHtml(marketOverview)}
     </div>
+
+    ${marketOverview ? buildMarketSnapshotHtml(marketOverview, 'full') : ''}
 
     <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:24px">
       None of that intelligence is reaching you right now.
@@ -1234,6 +1430,7 @@ async function sendSubscriptionExpiryEmail1(email, data) {
 
 async function sendSubscriptionExpiryEmail2(email, data) {
   const { userName } = data;
+  const marketOverview = data?.marketOverview || await getEmailMarketOverview();
   const subject = `${userName || 'Your'} access expired — come back at 40% off (48 hours only)`;
   const html = baseWrapper(`
     <div style="text-align:center;margin-bottom:24px">
@@ -1248,6 +1445,16 @@ async function sendSubscriptionExpiryEmail2(email, data) {
     <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:16px">
       We don't want you to lose your edge on African and global markets — so we're making it easy to come back.
     </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:16px">
+      While you've been away:
+    </div>
+
+    <div style="font-size:14px;color:${TEXT_DARK};line-height:1.8;padding-left:20px;margin-bottom:20px">
+      ${winBackActivityHtml(marketOverview)}
+    </div>
+
+    ${marketOverview ? buildMarketSnapshotHtml(marketOverview, 'full') : ''}
 
     <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7;margin-bottom:12px;font-weight:600">
       For the next 48 hours: 40% off your first month back.
@@ -1288,6 +1495,7 @@ async function sendSubscriptionExpiryEmail2(email, data) {
 
 async function sendSubscriptionActivationEmail(email, data) {
   const { userName, planName, durationMonths, startDate, endDate } = data;
+  const marketOverview = data?.marketOverview || await getEmailMarketOverview();
   const features = {
     starter: ['Real-time African + global market data', '5 AI signals per day', 'Stock screener', 'Portfolio tracking'],
     premium: ['Unlimited NSE signals', '10 global signals/day', 'Advanced NSE screener', 'NSE technical analysis', 'Email support'],
@@ -1324,6 +1532,11 @@ async function sendSubscriptionActivationEmail(email, data) {
         ${planFeatures.map(f => `<div style="display:flex;align-items:flex-start;gap:8px;padding:4px 0">&bull; ${f}</div>`).join('')}
       </div>
     </div>
+
+    ${marketOverview ? `
+    <div style="font-size:15px;font-weight:700;color:${TEXT_DARK};margin-bottom:8px">What's moving today</div>
+    ${buildMarketSnapshotHtml(marketOverview, 'full')}
+    ` : ''}
 
     <div style="background:linear-gradient(135deg,${BRAND_COLOR}08,${BRAND_COLOR}04);border:1px solid ${BRAND_COLOR}20;border-radius:10px;padding:20px;margin-bottom:20px">
       <div style="font-size:14px;color:${TEXT_DARK};line-height:1.7">
@@ -1732,103 +1945,6 @@ async function sendStockInsightsEmail(email, data, options = {}) {
   const sentColorMap = { positive: GREEN, negative: RED, neutral: AMBER };
   const signalColorMap = { BULLISH: GREEN, BEARISH: RED, NEUTRAL: AMBER };
 
-  // ── Helper: format index cell ──
-  const fmtIndex = (idx, label) => {
-    if (!idx) return `<td style="padding:8px 6px;text-align:center;width:20%;border-right:1px solid ${BORDER}">
-      <div style="font-size:10px;color:${TEXT_LIGHT};margin-bottom:1px">${label}</div>
-      <div style="font-size:11px;color:${TEXT_LIGHT}">--</div>
-      <div style="font-size:10px;color:${TEXT_LIGHT}">--</div>
-    </td>`;
-    const isUp = parseFloat(String(idx.change || '0').replace(/[^0-9.\-]/g, '')) >= 0;
-    const color = isUp ? GREEN : RED;
-    return `<td style="padding:8px 6px;text-align:center;width:20%;border-right:1px solid ${BORDER}">
-      <div style="font-size:10px;color:${TEXT_LIGHT};margin-bottom:1px">${label}</div>
-      <div style="font-size:11px;color:${TEXT_DARK};font-weight:600">${idx.value || '--'}</div>
-      <div style="font-size:11px;font-weight:700;color:${color}">${idx.change || '--'}</div>
-    </td>`;
-  };
-
-  const nse = marketOverview.nse || {};
-  const us = marketOverview.us || {};
-
-  const marketOverviewHtml = `
-    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
-      <div style="background:linear-gradient(135deg,${BRAND_COLOR} 0%,#0a5f8a 100%);color:#ffffff;padding:10px 16px;font-size:13px;font-weight:600">
-        Markets at a Glance
-      </div>
-      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
-        <tr>
-          ${fmtIndex(nse.nse20, 'NSE 20')}
-          ${fmtIndex(nse.nasi, 'NSE ASI')}
-          ${fmtIndex(us.sp500, 'S&P 500')}
-          ${fmtIndex(us.dow, 'Dow Jones')}
-          ${fmtIndex(us.nasdaq, 'NASDAQ')}
-        </tr>
-      </table>
-      <div style="padding:6px 16px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid ${BORDER}">
-        <span style="font-size:10px;color:${TEXT_LIGHT}">${marketOverview.totalSignals || 0} active signals</span>
-        <span style="font-size:10px;color:${sentColorMap[marketOverview.sentiment?.toLowerCase()] || AMBER};font-weight:600">Market Mood: ${marketOverview.sentiment || 'Neutral'}</span>
-      </div>
-    </div>`;
-
-  // ── Top Movers: NSE ──
-  const fmtMover = (m, isGainer) => {
-    const chg = parseFloat(String(m.change || '0').replace(/[^0-9.\-]/g, ''));
-    const color = chg >= 0 ? GREEN : RED;
-    return `<tr>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${esc(m.ticker || m.symbol || '')}</td>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${esc(m.name || '')}</td>
-      <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:700;color:${color};text-align:right">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</td>
-    </tr>`;
-  };
-
-  const nseGainers = (nse.gainers || []).slice(0, 3);
-  const nseLosers = (nse.losers || []).slice(0, 3);
-  const nseMoversHtml = (nseGainers.length > 0 || nseLosers.length > 0) ? `
-    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
-      <div style="background:linear-gradient(135deg,${GREEN} 0%,#059669 100%);color:#ffffff;padding:8px 16px;font-size:12px;font-weight:600">
-        NSE Top Movers
-      </div>
-      <div style="display:flex">
-        <div style="flex:1;border-right:1px solid ${BORDER}">
-          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${GREEN};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Gainers</div>
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
-            ${nseGainers.map(g => fmtMover(g, true)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
-          </table>
-        </div>
-        <div style="flex:1">
-          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${RED};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Losers</div>
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
-            ${nseLosers.map(l => fmtMover(l, false)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
-          </table>
-        </div>
-      </div>
-    </div>` : '';
-
-  // ── Top Movers: Global ──
-  const globalGainers = (us.gainers || []).slice(0, 3);
-  const globalLosers = (us.losers || []).slice(0, 3);
-  const globalMoversHtml = (globalGainers.length > 0 || globalLosers.length > 0) ? `
-    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
-      <div style="background:linear-gradient(135deg,#1e40af 0%,#3b82f6 100%);color:#ffffff;padding:8px 16px;font-size:12px;font-weight:600">
-        Global Top Movers
-      </div>
-      <div style="display:flex">
-        <div style="flex:1;border-right:1px solid ${BORDER}">
-          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${GREEN};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Gainers</div>
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
-            ${globalGainers.map(g => fmtMover(g, true)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
-          </table>
-        </div>
-        <div style="flex:1">
-          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${RED};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Losers</div>
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
-            ${globalLosers.map(l => fmtMover(l, false)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
-          </table>
-        </div>
-      </div>
-    </div>` : '';
-
   // ── Stock deep-dive cards ──
   const deepDiveCards = stockDeepDives.slice(0, 4).map((d, i) => {
     const sentColor = sentColorMap[d.sentiment] || AMBER;
@@ -1904,11 +2020,7 @@ async function sendStockInsightsEmail(email, data, options = {}) {
       ${userName ? `<div style="font-size:14px;color:${TEXT_MED};margin-top:8px">Hello ${userName}</div>` : ''}
     </div>
 
-    ${marketOverviewHtml}
-
-    ${nseMoversHtml}
-
-    ${globalMoversHtml}
+    ${buildMarketSnapshotHtml(marketOverview, 'full')}
 
     ${stockDeepDives.length ? `
     <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;padding:20px;margin-bottom:20px">
@@ -1947,4 +2059,4 @@ async function sendStockInsightsEmail(email, data, options = {}) {
   return sendViaTransport({ to: email, subject, html, label: 'Stock insights' });
 }
 
-module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendContactAcknowledgmentEmail, sendTestimonialPublishedEmail, sendTopMoversEmail, sendStockInsightsEmail, sendViaTransport };
+module.exports = { sendResetCode, sendOtpEmail, sendVerificationEmail, sendWelcomeEmail, sendPortfolioReportEmail, sendDailySentimentEmail, sendHotNewsEmail, sendPaymentReceiptEmail, sendSubscriptionExpiryReminder, sendSubscriptionExpiredEmail, sendSubscriptionExpiryEmail1, sendSubscriptionExpiryEmail2, sendSubscriptionActivationEmail, sendWeeklyDigestEmail, sendDailyBriefEmail, sendEarningsReportEmail, sendCuratedNewsEmail, sendAnnouncementEmail, sendContactNotification, sendContactAcknowledgmentEmail, sendTestimonialPublishedEmail, sendTopMoversEmail, sendStockInsightsEmail, sendViaTransport, buildMarketSnapshotHtml, getEmailMarketOverview };
