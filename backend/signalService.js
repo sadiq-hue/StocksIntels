@@ -15,7 +15,7 @@ const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL
 const financialReportsService = require('./financialReportsService');
 const edgarService = require('./edgarService');
 const { getEffectiveSectorPE, getGrade, determineSignal, determineTradeType, getSectorMacroAdjustment, analyzeFundamentals, analyzeTechnicals, analyzeFinancials, generateReason } = require('./analysisEngine');
-const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, MIN_STOP_PCT, enforceStopFloor, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
+const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, MIN_STOP_PCT, enforceStopFloor, isPlausibleBuyLevels, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
 const mlModel = require('./mlSignalModel');
 const engineConfig = require('./engineConfig');
 const { trackSignalQuality, logHealth, detectSignalDrift, getQualityScore } = require('./monitorService');
@@ -952,9 +952,12 @@ async function restoreStateFromDb() {
       // above entry (re-leveled locked-profit stop) — but always below target.
       // For sells: stop must be above entry and target below entry.
       const saneLevels = action === 'buy'
-        ? (target > entry && stop < target && stop > 0)
+        ? isPlausibleBuyLevels(entry, stop, target)
         : (stop > entry && target < entry);
-      if (!saneLevels) continue;
+      if (!saneLevels) {
+        if (action === 'buy') console.warn(`[SignalService] ${sym} skipping corrupt buy levels (entry=${entry} stop=${stop} target=${target}) - inverted or implausible locked-profit stop`);
+        continue;
+      }
       // Legacy sub-floor stops (pre-MIN_STOP_PCT builds) would re-arm a noise-band
       // stop-out on the next cycle. Widen to the 15% floor at restore and persist
       // the repair so a restart doesn't re-seed the tight level from signal_history.

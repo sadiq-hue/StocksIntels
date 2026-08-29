@@ -127,5 +127,23 @@ m.get('X10').result = 'loss';
 trackSignalOutcomes(st, pf, m, 'X10', 101, sellSig(), true);
 check('gate-close + fresh Sell rating also clears it', m.size === 0);
 
+console.log('── locked-profit plausibility ceiling ──');
+
+// A re-leveled locked stop may sit at/above entry, but never above
+// entry + 0.5*(target1 - entry): entry 100, target 120 -> ceiling 110.
+m = new Map(); st = state(); pf = perf();
+trackSignalOutcomes(st, pf, m, 'Y1', 100, { signal: 'Buy', action: 'buy', stopLoss: 95, target1: 120, positionSize: '25%' }, true);
+m.get('Y1').stopLoss = 108; // legit re-level (<= 110 ceiling)
+advance(6 * 60 * 1000);
+trackSignalOutcomes(st, pf, m, 'Y1', 104, holdSig(), true); // price <= 108 (retraced to 104), moved 4%
+check('legit locked-profit stop (108 <= 110) books a WIN when hit', m.size === 0 && pf.wins === 1 && pf.total === 1);
+
+m = new Map(); st = state(); pf = perf();
+trackSignalOutcomes(st, pf, m, 'Y2', 100, { signal: 'Buy', action: 'buy', stopLoss: 95, target1: 120, positionSize: '25%' }, true);
+m.get('Y2').stopLoss = 115; // inverted/corrupt: above the 110 ceiling
+advance(6 * 60 * 1000);
+trackSignalOutcomes(st, pf, m, 'Y2', 104, holdSig(), true);
+check('implausible above-ceiling stop (115 > 110) does NOT book any outcome', m.get('Y2') && !m.get('Y2').result && pf.wins === 0 && pf.losses === 0 && pf.total === 0);
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

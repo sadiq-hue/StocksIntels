@@ -57,6 +57,12 @@ const MIN_STOP_PCT = 0.15;
 // ranges of room, or one bad day stops it out on noise. A tighter ceiling (the
 // old 15%) truncated an 8%+ daily-range stock's stop to less than two ranges.
 const MAX_STOP_PCT = 0.30;
+// Locked-profit re-levels (see signalService.computeRelevelStop RELEVEL_LOCK_RATIO)
+// bank at most half the open gain, so a re-leveled stop never sits above
+// entry + 0.5*(target1 - entry). A Buy stop above that ceiling — or at/above the
+// target — is inverted/corrupt legacy data and must not be monitored or book a
+// fabricated outcome.
+const LOCKED_PROFIT_MAX_RATIO = 0.5;
 // Target multiples anchor T1/T2/T3 to the actual stop distance, so the
 // risk-reward profile holds at any stop width: T1 is the resolution target
 // (touch = win) sized at 2x the risk (a guaranteed minimum 2:1 reward), while
@@ -226,6 +232,17 @@ function enforceStopFloor(entryPrice, stopLoss) {
   return stopLoss;
 }
 
+// A Buy's levels are plausible only if the stop is below the target (required for
+// any sane geometry) and, when the stop sits at/above entry (a re-leveled locked
+// stop), it respects the lock ceiling entry + 0.5*(target1 - entry). A stop above
+// the ceiling or at/above target is inverted/corrupt data — monitored, it would
+// book a fabricated outcome on the next cycle.
+function isPlausibleBuyLevels(entryPrice, stopLoss, target1) {
+  if (!(entryPrice > 0 && target1 > entryPrice && stopLoss > 0 && stopLoss < target1)) return false;
+  if (stopLoss >= entryPrice && stopLoss > entryPrice + (target1 - entryPrice) * LOCKED_PROFIT_MAX_RATIO) return false;
+  return true;
+}
+
 function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, symbol, currentPrice, newSignal, marketOpen = true) {
   let previous = signalOutcomes.get(symbol);
   const posSize = parseInt(newSignal.positionSize) || 25;
@@ -275,7 +292,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
     // stop above entry, target below entry. This mirrors restoreStateFromDb so a
     // re-leveled position is never treated as broken after a restart.
     const saneLevels = entry > 0 && isPrevBuy
-      ? previous.target1 > entry && previous.stopLoss < previous.target1 && previous.stopLoss > 0
+      ? isPlausibleBuyLevels(entry, previous.stopLoss, previous.target1)
       : entry > 0 && previous.stopLoss > entry && previous.target1 < entry;
     const pctMove = entry > 0 ? Math.abs(currentPrice - entry) / entry : 0;
     // Require a real move past the level but reject impossible single-cycle moves
@@ -390,10 +407,12 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
 module.exports = {
   MIN_STOP_PCT,
   MAX_STOP_PCT,
+  LOCKED_PROFIT_MAX_RATIO,
   calculatePositionSize,
   calculateKellyPositionSize,
   calculateTradeLevels,
   enforceStopFloor,
+  isPlausibleBuyLevels,
   updatePortfolioRisk,
   applyPortfolioConstraints,
   trackSignalOutcomes,
