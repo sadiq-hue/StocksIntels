@@ -129,6 +129,21 @@ async function storePdfReport({ ticker, period_type, period_end_date, file_name,
     return { docId: done.rows[0].id, parsed: done.rows[0].parsed_data, status: done.rows[0].status };
   }
 
+  // A company files ONE statement per reporting period. If a live row already
+  // exists for the same (stock_id, period_end_date) — even under a different
+  // period_type label (e.g. after a relabel migration) — skip instead of
+  // inserting, which would otherwise spawn a duplicate on the next detection.
+  const samePeriod = await pool.query(
+    `SELECT id, status, parsed_data FROM financial_statements
+     WHERE stock_id = $1 AND period_end_date IS NOT DISTINCT FROM $2
+       AND status IN ('completed','pending_review') AND parsed_data IS NOT NULL
+     ORDER BY id LIMIT 1`,
+    [sid, period_end_date || null]
+  );
+  if (samePeriod.rows.length > 0) {
+    return { docId: samePeriod.rows[0].id, parsed: samePeriod.rows[0].parsed_data, status: samePeriod.rows[0].status };
+  }
+
   // Reuse only rows that are NOT live: previously-failed/processing rows AND broken
   // 'completed' rows (error_message set / no parsed_data), so a failed parse is
   // re-attempted without ever overwriting a live statement.
