@@ -144,6 +144,22 @@ async function storePdfReport({ ticker, period_type, period_end_date, file_name,
     return { docId: samePeriod.rows[0].id, parsed: samePeriod.rows[0].parsed_data, status: samePeriod.rows[0].status };
   }
 
+  // A manually-rejected statement must stay rejected. A later detection pass may
+  // re-read the same filing (new run, relabel after migration, or a slightly
+  // different computed period_end_date), so guard on (stock, period) OR the
+  // exact source filename before the reuse/insert fallbacks can resurrect it.
+  const rejected = await pool.query(
+    `SELECT id FROM financial_statements
+     WHERE stock_id = $1
+       AND (period_end_date IS NOT DISTINCT FROM $2 OR (file_name IS NOT NULL AND $3 <> '' AND file_name = $3))
+       AND error_message ILIKE 'Rejected%'
+     LIMIT 1`,
+    [sid, period_end_date || null, file_name || '']
+  );
+  if (rejected.rows.length > 0) {
+    return { docId: rejected.rows[0].id, parsed: null, status: 'failed' };
+  }
+
   // Reuse only rows that are NOT live: previously-failed/processing rows AND broken
   // 'completed' rows (error_message set / no parsed_data), so a failed parse is
   // re-attempted without ever overwriting a live statement.

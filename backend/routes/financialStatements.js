@@ -751,7 +751,8 @@ router.post('/financial-statements/:id/approve', async (req, res) => {
 router.post('/financial-statements/:id/reject', async (req, res) => {
   try {
     const id = req.params.id;
-    const reason = (req.body && req.body.reason) || 'Rejected by admin';
+    const raw = (req.body && req.body.reason) || 'by admin';
+    const reason = 'Rejected: ' + String(raw).trim().replace(/^Rejected:\s*/i, '');
     const { rows } = await pool.query('SELECT status FROM financial_statements WHERE id = $1', [id]);
     if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
     if (rows[0].status !== 'pending_review') return res.status(409).json({ error: 'Statement is not pending review (status: ' + rows[0].status + ')' });
