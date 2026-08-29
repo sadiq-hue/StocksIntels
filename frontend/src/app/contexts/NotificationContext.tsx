@@ -72,10 +72,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const res = await authFetch(`${API_URL}/notifications?userId=${user.id}`);
+      // Failed/transient response (401, 5xx, or the API restarting during a
+      // deploy): keep the last-loaded notifications instead of wiping the bell
+      // to empty and resetting the unread badge to 0.
+      if (!res.ok) return;
       const data = await res.json();
-      const all = data.notifications || [];
-      setNotifications(all.filter(shouldShowNotification));
-      setUnread(data.unread || 0);
+      // Error-shaped payload (e.g. { error: ... }) has no notifications array —
+      // don't treat it as a real "you have no notifications" response.
+      if (!Array.isArray(data?.notifications)) return;
+      setNotifications(data.notifications.filter(shouldShowNotification));
+      if (typeof data.unread === "number") setUnread(data.unread);
     } catch {
       // silent
     } finally {
