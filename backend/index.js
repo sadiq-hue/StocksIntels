@@ -260,12 +260,19 @@ async function verifyTurnstile(req, res, next) {
 
 // ── Admin subdomain: serve admin.html BEFORE static/SPA fallback ──
 const fs = require('fs');
+// In-memory cache for the (heavy) dashboard aggregate endpoint. It is called
+// on every page load by checkAuth + the dashboard tab + a 30s polling timer.
+let dashboardCache = null;
+let dashboardCacheAt = 0;
+const DASHBOARD_CACHE_TTL = 15000;
 app.use((req, res, next) => {
   const host = (req.headers.host || '').replace(/:\d+$/, '');
   const fwdHost = (req.headers['x-forwarded-host'] || '').replace(/:\d+$/, '');
   const isAdmin = host === 'admin.stocksintels.com' || fwdHost === 'admin.stocksintels.com';
   if (isAdmin && !req.path.startsWith('/api/') && !req.path.includes('.')) {
-    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    // Allow browser caching + 304 revalidation (Last-Modified is set by
+    // sendFile) so repeat loads don't re-download the 430KB panel every time.
+    res.set('Cache-Control', 'no-cache, must-revalidate, private');
     return res.sendFile(path.join(__dirname, 'admin.html'));
   }
   next();
@@ -463,6 +470,9 @@ app.post('/api/admin/verify-otp', async (req, res) => {
 app.use('/api/admin', authenticateToken, requireAdmin);
 
 app.get('/api/admin/dashboard', async (req, res) => {
+  if (dashboardCache && Date.now() - dashboardCacheAt < DASHBOARD_CACHE_TTL) {
+    return res.json(dashboardCache);
+  }
   try {
     const [totalUsers, newToday, totalTrades, activeSubs, chatCount, recentReg, totalSubs, totalTickets, totalGroups, totalMessages, totalBrokerConns, totalPortSnaps, signalPredictions, signalHistory, signalTotal] = await Promise.all([
       pool.query('SELECT COUNT(*)::int as cnt FROM users'),
@@ -495,7 +505,7 @@ app.get('/api/admin/dashboard', async (req, res) => {
     const paperAccts = await pool.query('SELECT COALESCE(SUM(cash_balance),0) as kes, COALESCE(SUM(cash_balance_usd),0) as usd FROM paper_accounts');
     const fx = await getFxRate();
     const totalPortfolioValue = parseFloat(paperAccts.rows[0].kes) + parseFloat(paperAccts.rows[0].usd) * fx;
-    res.json({
+    const payload = {
       totalUsers: totalUsers.rows[0].cnt,
       newToday: newToday.rows[0].cnt,
       totalTrades: totalTrades.rows[0].cnt,
@@ -513,7 +523,10 @@ app.get('/api/admin/dashboard', async (req, res) => {
       wins: signalPredictions.rows[0].wins,
       losses: signalPredictions.rows[0].losses,
       totalSignals: signalHistory.rows[0].cnt,
-    });
+    };
+    dashboardCache = payload;
+    dashboardCacheAt = Date.now();
+    res.json(payload);
   } catch (err) { console.error('Admin dashboard error:', err.message); res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
