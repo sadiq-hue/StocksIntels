@@ -17,7 +17,11 @@ const periodReturnsService = require('./periodReturnsService');
 // byte-identical drafts with no rotation or dedupe. These knobs add a
 // diversity layer on top of the news score:
 const RECENT_FEATURE_DAYS = 7;          // exclude tickers featured in drafts/issues within the last N days
-const HARD_REPEAT_OVERRIDE_SCORE = 12;  // a news score this high means fresh news is real — allow the repeat
+const HARD_REPEAT_OVERRIDE_SCORE = 8;   // a news score this high means the story is real — eligible to repeat
+const MAX_REPEATS_PER_DRAFT = 1;        // cap: at most ONE recently-featured name per issue, so drafts rotate
+const SIGNAL_BOOST = 3;                 // points added when a candidate also has a recent high-confidence live signal
+const SIGNAL_CONFIDENCE_MIN = 75;       // confidence threshold for the live-engine boost
+const SIGNAL_LOOKBACK_DAYS = 3;         // how far back live high-conviction signals count for the boost
 const MAX_DEDUPE_ATTEMPTS = 12;         // safety bound on the walk-down that guarantees a different set
 const SECTOR_VARIETY_COUNT = 2;         // avoid two same-sector names leading the NSE line-up
 
@@ -139,6 +143,26 @@ async function loadSectorMap() {
   } catch { return {}; }
 }
 
+// Tickers the live engine is actively recommending with high conviction:
+// a news-candidate that is also a fresh high-confidence Buy gets a boost,
+// so the newsletter surfaces actionable engine picks, not just noise.
+async function loadSignalBoostMap() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT ON (UPPER(ticker)) UPPER(ticker) AS ticker, confidence
+       FROM signal_history
+       WHERE generated_at >= NOW() - ($1 || ' days')::interval
+         AND LOWER(signal) IN ('buy', 'strong buy', 'strongbuy')
+         AND confidence >= $2
+       ORDER BY UPPER(ticker), generated_at DESC`,
+      [SIGNAL_LOOKBACK_DAYS, SIGNAL_CONFIDENCE_MIN]
+    );
+    const m = {};
+    for (const r of rows) m[r.ticker] = m[r.ticker] === undefined ? SIGNAL_BOOST : m[r.ticker];
+    return m;
+  } catch { return {}; }
+}
+
 function logPickDecision(parts) {
   console.log('[INSIGHTS/pick] ' + parts.join(' | '));
 }
@@ -188,17 +212,18 @@ async function pickHotStocks() {
     }
   }
 
-  // Diversity context for ranking: recently-featured map, latest draft,
-  // and sector map (bank/insurer/etc per ticker).
-  const [recentFeatured, latestDraftSet, sectorMap] = await Promise.all([
+  // Diversity context for ranking: recently-featured map, sector map, and
+  // high-conviction live-engine signals (actionable-name boost).
+  const [recentFeatured, latestDraftSet, sectorMap, signalBoostMap] = await Promise.all([
     getRecentFeaturedTickers(),
     getLatestDraftTickerSet(),
     loadSectorMap(),
+    loadSignalBoostMap(),
   ]);
 
-  // Composite score: recency-weighted news volume + polarity draw +
-  // hot/urgent boosts, plus a tiny random nudge so ties don't always
-  // resolve in cache/alphabetical order.
+  // Composite score: recency-weighted news volume + polarity draw + hot/urgent
+  // boosts + a live-engine conviction boost, plus a tiny random nudge so ties
+  // don't always resolve in cache/alphabetical order.
   const scored = [];
   for (const [ticker, data] of Object.entries(tickerSentiment)) {
     if (!ticker || ticker.length < 2 || ticker.length > 6) continue;
@@ -206,7 +231,8 @@ async function pickHotStocks() {
     const mentions = data.total;
     const recency = mentions ? data.recencySum / mentions : 0;
     const freshVolume = mentions * (0.4 + recency * 0.6); // stale mentions count ~40%
-    const score = freshVolume * 2 + polarity * 3 + data.hot * 3 + data.urgent * 4 + (Math.random() * 0.001);
+    const signalBoost = signalBoostMap[ticker.toUpperCase()] || 0;
+    const score = freshVolume * 2 + polarity * 3 + data.hot * 3 + data.urgent * 4 + signalBoost + (Math.random() * 0.001);
     const sentiment = data.positive > data.negative ? 'positive'
       : data.negative > data.positive ? 'negative' : 'neutral';
     const market = await getMarketLabel(ticker);
@@ -214,6 +240,7 @@ async function pickHotStocks() {
       ticker, score, sentiment, articles: data.articles, total: mentions, market,
       sector: sectorMap[ticker.toUpperCase()] || 'Other',
       repeatCount: recentFeatured[ticker.toUpperCase()] || 0,
+      signalBoost,
     });
   }
 
@@ -225,34 +252,60 @@ async function pickHotStocks() {
   // If diversity would starve the draft, relax back to the full ranked list.
   const forSelection = eligible.length >= 4 ? eligible : scored;
 
-  const pickBy = (filterMarket, count) => {
-    const picked = [];
-    for (const s of forSelection) {
-      if (s.market !== filterMarket) continue;
-      if (picked.some(p => p.sector === s.sector && s.sector !== 'Other')) continue;
-      picked.push(s);
-      if (picked.length >= count) break;
-    }
-    return picked;
+  // Sequential selection: market-balanced (2 NSE + 2 global), sector-aware,
+  // and capped so at most MAX_REPEATS_PER_DRAFT featured names make the issue.
+  let picked = [];
+  const marketCount = { NSE: 0, Global: 0 };
+  const marketSectors = { NSE: new Set(), Global: new Set() };
+  let repeatsUsed = 0;
+
+  const tryAdd = s => {
+    if (picked.length >= 4) return false;
+    if (marketCount[s.market] >= SECTOR_VARIETY_COUNT) return false;
+    if (s.repeatCount > 0 && repeatsUsed >= MAX_REPEATS_PER_DRAFT) return false;
+    if (s.sector !== 'Other' && marketSectors[s.market].has(s.sector)) return false;
+    picked.push(s);
+    marketCount[s.market]++;
+    marketSectors[s.market].add(s.sector);
+    if (s.repeatCount > 0) repeatsUsed++;
+    return true;
   };
 
-  let picked = [...pickBy('NSE', SECTOR_VARIETY_COUNT), ...pickBy('Global', SECTOR_VARIETY_COUNT)];
-
-  // Top markets up with more names if a market came up short.
-  if (picked.filter(s => s.market === 'NSE').length < SECTOR_VARIETY_COUNT) {
-    for (const s of forSelection.filter(s => s.market === 'NSE')) {
-      if (!picked.find(p => p.ticker === s.ticker)) picked.push(s);
-      if (picked.filter(s => s.market === 'NSE').length >= SECTOR_VARIETY_COUNT) break;
-    }
-  }
-  if (picked.filter(s => s.market === 'Global').length < SECTOR_VARIETY_COUNT) {
-    for (const s of forSelection.filter(s => s.market === 'Global')) {
-      if (!picked.find(p => p.ticker === s.ticker)) picked.push(s);
-      if (picked.filter(s => s.market === 'Global').length >= SECTOR_VARIETY_COUNT) break;
-    }
+  for (const s of forSelection) {
+    if (picked.length >= 4) break;
+    tryAdd(s);
   }
 
-  // If one market came up empty entirely, fill from the other.
+  // If a market is still under quota while the other is over, swap in a name
+  // from the under-filled market (keeps the draft balanced NSE/global).
+  const otherMarket = m => (m === 'NSE' ? 'Global' : 'NSE');
+  for (const m of ['NSE', 'Global']) {
+    while (marketCount[m] < SECTOR_VARIETY_COUNT && marketCount[otherMarket(m)] > SECTOR_VARIETY_COUNT && picked.length >= 4) {
+      let idx = -1;
+      for (let i = picked.length - 1; i >= 0; i--) { if (picked[i].market === otherMarket(m)) { idx = i; break; } }
+      const sub = forSelection.find(s => s.market === m && !picked.find(p => p.ticker === s.ticker));
+      if (idx < 0 || !sub) break;
+      const removed = picked[idx];
+      picked[idx] = sub;
+      marketCount[otherMarket(m)]--;
+      marketCount[m]++;
+      marketSectors[m].add(sub.sector);
+      if (removed.repeatCount > 0) repeatsUsed--;
+      if (sub.repeatCount > 0) repeatsUsed++;
+    }
+  }
+
+  // Fill any remaining slots if one market was genuinely short of candidates.
+  if (picked.length < 4) {
+    for (const s of forSelection) {
+      if (picked.length >= 4) break;
+      if (picked.find(p => p.ticker === s.ticker)) continue;
+      picked.push(s);
+      marketCount[s.market]++;
+      if (s.repeatCount > 0) repeatsUsed++;
+    }
+  }
+  // Last-resort cross-market fill.
   if (picked.length < 3) {
     const extra = forSelection.filter(s => !picked.find(p => p.ticker === s.ticker)).slice(0, 3 - picked.length);
     picked.push(...extra);
@@ -277,7 +330,8 @@ async function pickHotStocks() {
     `candidates=${scored.length}`,
     `eligible=${eligible.length}`,
     `repeats=${scored.filter(s => s.repeatCount > 0).length}`,
-    `repeats-kept=${eligible.filter(s => s.repeatCount > 0).map(s => s.ticker).join(',') || 'none'}`,
+    `repeats-used=${repeatsUsed}`,
+    `signal-backed=${picked.filter(s => s.signalBoost > 0).map(s => s.ticker).join(',') || 'none'}`,
     `picked=${picked.map(s => `${s.ticker}(${s.market})`).join(', ')}`,
   ]);
 
