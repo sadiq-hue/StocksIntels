@@ -68,6 +68,10 @@ const upload = multer({
 
 const app = express();
 app.set('trust proxy', true);
+// Gzip/brotli-compress all responses (admin.html is a 420KB inline script and
+// the admin APIs return large JSON; the origin was serving everything raw).
+const compression = require('compression');
+app.use(compression({ threshold: 1024 }));
 const server = http.createServer(app);
 
 // Support single origin or comma-separated list (e.g. "https://app.netlify.app,http://localhost:5173")
