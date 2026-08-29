@@ -15,7 +15,7 @@ const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL
 const financialReportsService = require('./financialReportsService');
 const edgarService = require('./edgarService');
 const { getEffectiveSectorPE, getGrade, determineSignal, determineTradeType, getSectorMacroAdjustment, analyzeFundamentals, analyzeTechnicals, analyzeFinancials, generateReason } = require('./analysisEngine');
-const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, MIN_STOP_PCT, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
+const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, MIN_STOP_PCT, enforceStopFloor, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
 const mlModel = require('./mlSignalModel');
 const engineConfig = require('./engineConfig');
 const { trackSignalQuality, logHealth, detectSignalDrift, getQualityScore } = require('./monitorService');
@@ -945,7 +945,7 @@ async function restoreStateFromDb() {
       );
       if (resolved.rows.length > 0) continue;
       const entry = parseFloat(row.entry_price);
-      const stop = parseFloat(row.stop_loss);
+      let stop = parseFloat(row.stop_loss);
       const target = parseFloat(row.target1);
       const action = /buy/i.test(row.signal) ? 'buy' : 'sell';
       // For buys: target must be above entry. Stop can be below entry (initial) or
@@ -955,6 +955,21 @@ async function restoreStateFromDb() {
         ? (target > entry && stop < target && stop > 0)
         : (stop > entry && target < entry);
       if (!saneLevels) continue;
+      // Legacy sub-floor stops (pre-MIN_STOP_PCT builds) would re-arm a noise-band
+      // stop-out on the next cycle. Widen to the 15% floor at restore and persist
+      // the repair so a restart doesn't re-seed the tight level from signal_history.
+      const flooredStop = enforceStopFloor(entry, stop);
+      if (flooredStop !== stop) {
+        console.log(`[SignalService] ${sym} restored legacy sub-floor stop ${stop} -> floored to ${flooredStop} (entry=${entry})`);
+        stop = flooredStop;
+        pool.query(
+          `UPDATE signal_history SET stop_loss = $1
+           WHERE ticker = $2 AND generated_at >= $3::timestamptz - interval '30 seconds'
+             AND generated_at <= $3::timestamptz + interval '30 seconds'
+             AND stop_loss > 0`,
+          [stop, sym, row.generated_at]
+        ).catch(() => {});
+      }
       _signalOutcomes.set(sym, {
         entryPrice: entry, signal: row.signal, action, type: row.trade_type || 'Swing Trade',
         stopLoss: stop, target1: target, target2: row.target2 != null ? parseFloat(row.target2) : null,
@@ -1881,7 +1896,15 @@ function computeRelevelStop(position, currentPrice, freshStopLoss) {
     newStop = Math.min(newStop, breakevenCap);
   }
   newStop = Math.round(newStop * 100) / 100;
-  const changed = newStop > (stopLoss || 0) && newStop < currentPrice;
+  // changed means the stop actually moved — a real tighten (Math.max) or a downward
+  // correction of a legacy sub-floor stop (Math.min toward the breakevenCap, which
+  // never loosens past the MIN_STOP_PCT floor). Previously `newStop > stopLoss`
+  // only reported tightenings, so the legacy repair computed above was silently
+  // dropped and a 2.61% pre-floor stop (ASML 2026-08-28) stayed live and booked a
+  // noise-band loss instead of riding the -15% floor. Round both sides so an
+  // already-floored stop never churns (e.g. stop at 85 with price retrace).
+  const stopLossRounded = Math.round((stopLoss || 0) * 100) / 100;
+  const changed = newStop !== stopLossRounded && newStop < currentPrice;
   return { newStop, changed, progress };
 }
 

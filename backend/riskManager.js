@@ -211,6 +211,21 @@ function applyPortfolioConstraints(signals) {
   });
 }
 
+// Enforce the MIN_STOP_PCT floor on a monitored Buy's hard stop. Legacy signals
+// generated before the floor existed (or via an ATR/portfolio path with no floor)
+// carried stops of 2-10% — e.g. ASML's pre-floor 2.61% stop booked a "stop loss"
+// on a routine 2026-08-28 pullback instead of riding the -15% floor. A Buy stop
+// tighter than the floor relative to the position's entry is widened up to the
+// floor so ordinary noise can't stop out a position that deserves room to breathe.
+// Stops at/above entry (locked-profit re-levels) and non-buy levels are untouched.
+function enforceStopFloor(entryPrice, stopLoss) {
+  if (entryPrice > 0 && stopLoss != null && stopLoss < entryPrice
+      && (entryPrice - stopLoss) / entryPrice < MIN_STOP_PCT) {
+    return Math.round(entryPrice * (1 - MIN_STOP_PCT) * 100) / 100;
+  }
+  return stopLoss;
+}
+
 function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, symbol, currentPrice, newSignal, marketOpen = true) {
   let previous = signalOutcomes.get(symbol);
   const posSize = parseInt(newSignal.positionSize) || 25;
@@ -228,6 +243,17 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
   // gate, every stale-signal-on-restart becomes an instant ±10% / ±20% resolved
   // outcome with zero real market participation.
   const MIN_SIGNAL_AGE_MS = 5 * 60 * 1000; // 5 minutes
+
+  // Legacy sub-floor stops (pre-MIN_STOP_PCT) must not resolve on ordinary noise.
+  // Normalize BEFORE any resolution check so the effective exit level is the floor
+  // (e.g. ASML: entry 1748.54, legacy stop 1702.96 = -2.61% -> floored to 1486.26).
+  if (previous && previous.action === 'buy' && previous.entryPrice > 0 && previous.stopLoss != null) {
+    const flooredStop = enforceStopFloor(previous.entryPrice, previous.stopLoss);
+    if (flooredStop !== previous.stopLoss) {
+      console.log(`[RiskManager] ${symbol} widening legacy sub-floor stop ${previous.stopLoss} -> ${flooredStop} (entry=${previous.entryPrice})`);
+      previous.stopLoss = flooredStop;
+    }
+  }
 
   if (previous && previous.action !== 'hold' && previous.stopLoss != null && previous.target1 != null && !previous.result) {
     const isPrevBuy = previous.action === 'buy';
@@ -312,7 +338,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
       if (monitorable) {
         signalOutcomes.set(symbol, {
           entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
-          stopLoss: newSignal.stopLoss, target1: newSignal.target1,
+          stopLoss: enforceStopFloor(currentPrice, newSignal.stopLoss), target1: newSignal.target1,
           timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
           type: newSignal.type,
           reason: newSignal.reason || '', analysis: newSignal.analysis || null,
@@ -329,7 +355,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
     if (monitorable) {
       signalOutcomes.set(symbol, {
         entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
-        stopLoss: newSignal.stopLoss, target1: newSignal.target1,
+        stopLoss: enforceStopFloor(currentPrice, newSignal.stopLoss), target1: newSignal.target1,
         timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
         type: newSignal.type,
         reason: newSignal.reason || '', analysis: newSignal.analysis || null,
@@ -367,6 +393,7 @@ module.exports = {
   calculatePositionSize,
   calculateKellyPositionSize,
   calculateTradeLevels,
+  enforceStopFloor,
   updatePortfolioRisk,
   applyPortfolioConstraints,
   trackSignalOutcomes,

@@ -158,6 +158,22 @@ check('stop already at the floor does not churn when price retraces to entry',
   computeRelevelStop({ entryPrice: 100, stopLoss: 85, target1: 110 }, 100, 97),
   { newStop: 85, changed: false, progress: 0 });
 
+check('legacy sub-floor stop (2.6%, like ASML) is corrected down to the floor AND counts as changed',
+  computeRelevelStop({ entryPrice: 100, stopLoss: 97.4, target1: 110 }, 100, 97),
+  { newStop: 85, changed: true, progress: 0 });
+
+check('legacy sub-floor stop corrected even when the fresh stop is near breakeven',
+  computeRelevelStop({ entryPrice: 100, stopLoss: 97.4, target1: 110 }, 100, 99),
+  { newStop: 85, changed: true, progress: 0 });
+
+check('a fresh stop at the floor with a legacy sub-floor stop still corrects to the floor',
+  computeRelevelStop({ entryPrice: 100, stopLoss: 98, target1: 110 }, 100, 85),
+  { newStop: 85, changed: true, progress: 0 });
+
+check('correction result is rounded; an already-corrected stop does not re-churn',
+  computeRelevelStop({ entryPrice: 100, stopLoss: 85, target1: 110 }, 100, 85),
+  { newStop: 85, changed: false, progress: 0 });
+
 check('lock at exactly 75% progress banks half the open gain (entry + 3.75 = 103.75)',
   computeRelevelStop(pos, 107.5, 97),
   { newStop: 103.75, changed: true, progress: 75 });
