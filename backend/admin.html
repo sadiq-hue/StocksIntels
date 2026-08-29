@@ -1696,9 +1696,13 @@ td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f3f4f6}
       </div>
 
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-        <button class="btn btn-primary" onclick="generateNewsletter()" id="btnGenerateNewsletter" style="display:flex;align-items:center;gap:6px">
+        <button class="btn btn-primary" onclick="generateNewsletter(false, this)" id="btnGenerateNewsletter" style="display:flex;align-items:center;gap:6px">
           <svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
           Generate Draft
+        </button>
+        <button class="btn btn-secondary" onclick="if(confirm('Create a fresh draft with different picks for today? Drops all recently-featured tickers.'))generateNewsletter(true, this)" id="btnRegenerateNewsletter" title="Force a fresh draft — drops all recently-featured tickers (bypasses today's existing draft)" style="display:flex;align-items:center;gap:6px">
+          <svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Regenerate
         </button>
         <button class="btn btn-secondary" onclick="fetchNewsletterDrafts()" style="display:flex;align-items:center;gap:6px">
           <svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -5342,17 +5346,18 @@ async function fetchNewsletterDrafts() {
   } catch (e) { container.innerHTML = '<div style="padding:24px;text-align:center;color:#ef4444">' + e.message + '</div>'; }
 }
 
-async function generateNewsletter() {
-  const btn = document.getElementById('btnGenerateNewsletter');
+async async function generateNewsletter(force = false, btn) {
+  btn = btn || document.getElementById('btnGenerateNewsletter');
+  const label = force ? 'Regenerate' : 'Generate Draft';
   btn.disabled = true; btn.innerHTML = '<svg class="animate-spin" style="width:16px;height:16px" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Generating...';
   try {
-    const res = await fetch('/api/admin/newsletter/generate', { method: 'POST' });
+    const res = await fetch(force ? '/api/admin/newsletter/generate?force=1' : '/api/admin/newsletter/generate', { method: 'POST' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Generation failed');
-    toast('Draft created: ' + (data.draft?.subject || 'Untitled'), 'success');
+    toast((force ? 'Fresh draft created: ' : 'Draft created: ') + (data.draft?.subject || 'Untitled'), 'success');
     fetchNewsletterDrafts();
   } catch (e) { toast(e.message, 'error'); }
-  finally { btn.disabled = false; btn.innerHTML = '<svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> Generate Draft'; }
+  finally { btn.disabled = false; btn.innerHTML = '<svg style="width:16px;height:16px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> ' + label; }
 }
 
 async function approveNewsletter(id) {
