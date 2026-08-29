@@ -141,7 +141,7 @@ export function AdminNewsletter() {
             onClick={() => { if (confirm("Create a fresh draft with different picks for today?")) handleGenerate(true); }}
             disabled={generating}
             variant="outline"
-            title="Force a fresh draft with rotated picks (bypasses today's existing draft)"
+            title="Force a fresh draft — drops all recently-featured tickers (bypasses today's existing draft)"
           >
             {generating ? (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />

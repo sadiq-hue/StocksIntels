@@ -168,7 +168,10 @@ function logPickDecision(parts) {
 }
 
 // ── Pick top stocks from BOTH NSE and global ──────────────────────
-async function pickHotStocks() {
+// forceFresh = true (admin Regenerate): hard-block every recently-featured
+// ticker, no override — the result is guaranteed brand-new names even on a
+// quiet news day (the draft may be shorter if few fresh candidates exist).
+async function pickHotStocks(forceFresh = false) {
   const allNews = await getAllNews(300).catch(() => []);
 
   const nseTickers = await getNseTickers();
@@ -246,11 +249,15 @@ async function pickHotStocks() {
 
   scored.sort((a, b) => b.score - a.score);
 
-  // Rotation: shortlist only non-repeats, unless the repeat cleared the
-  // fresh-news bar (its story today is big enough to deserve airtime).
-  const eligible = scored.filter(s => s.repeatCount <= 0 || s.score >= HARD_REPEAT_OVERRIDE_SCORE);
-  // If diversity would starve the draft, relax back to the full ranked list.
-  const forSelection = eligible.length >= 4 ? eligible : scored;
+  // Rotation: shortlist only non-repeats. In force-fresh mode repeats are
+  // hard-blocked; otherwise a repeat clears the bar only when its story today
+  // is genuinely big.
+  const eligible = forceFresh
+    ? scored.filter(s => s.repeatCount <= 0)
+    : scored.filter(s => s.repeatCount <= 0 || s.score >= HARD_REPEAT_OVERRIDE_SCORE);
+  // Force-fresh never falls back to repeats; a quiet unwinds news into fewer,
+  // brand-new names instead of recycling the same tickers.
+  const forSelection = forceFresh ? eligible : (eligible.length >= 4 ? eligible : scored);
 
   // Sequential selection: market-balanced (2 NSE + 2 global), sector-aware,
   // and capped so at most MAX_REPEATS_PER_DRAFT featured names make the issue.
@@ -327,6 +334,7 @@ async function pickHotStocks() {
   }
 
   logPickDecision([
+    `mode=${forceFresh ? 'force-fresh' : 'daily'}`,
     `candidates=${scored.length}`,
     `eligible=${eligible.length}`,
     `repeats=${scored.filter(s => s.repeatCount > 0).length}`,
@@ -724,7 +732,7 @@ async function generateDailyInsights(force = false) {
   }
 
   // 1. Pick hot stocks from NSE + global
-  const hotStocks = await pickHotStocks();
+  const hotStocks = await pickHotStocks(force);
   if (hotStocks.length === 0) {
     console.log('[INSIGHTS] No hot stocks found, skipping generation');
     return null;
