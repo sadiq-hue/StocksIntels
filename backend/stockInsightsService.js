@@ -520,17 +520,21 @@ ${priceContext}
 CONTEXT:
 ${marketContext}
 
-WRITE TWO THINGS:
+WRITE FOUR LABELED SECTIONS — copy the exact labels below:
 
-1. NARRATIVE THESIS (1 sentence, max 20 words): A compelling one-line hook that tells the reader WHY this stock matters right now. Format it as a contrarian or insight-driven statement. Examples:
+THESIS: <one compelling one-line hook, max 20 words. A contrarian or insight-driven statement. Examples:
    - "Why Marathon Digital isn't a crypto proxy, but an energy arbitrage play"
    - "The shipping bottleneck nobody is pricing in"
-   - "Nigeria's banking sector just got a second wind — this stock leads the charge"
+   - "Nigeria's banking sector just got a second wind — this stock leads the charge">
 
-2. ANALYSIS (2-3 paragraphs, 150-220 words total): Write a flowing editorial analysis. Do NOT use numbered sections, headers, or bullet points. Write like a human analyst who has a clear opinion. Structure it as:
+ANALYSIS: <2-3 paragraphs, 150-220 words total. A flowing editorial analysis. Do NOT use numbered sections, headers, or bullet points. Write like a human analyst who has a clear opinion. Structure it as:
    - Opening: What happened and why it matters (reference specific headlines, numbers, dates)
    - Body: Where this could go, what to watch, how it connects to broader themes
-   - Close: Key risks and what would invalidate the thesis
+   - Close: what would invalidate the thesis>
+
+CATALYST: <one line, max 15 words. The single most concrete near-term catalyst to watch that would move this stock>
+
+RISK: <one line, max 15 words. The single biggest risk / what would break the thesis>
 
 RULES:
 - Be specific with numbers, not vague
@@ -543,26 +547,50 @@ RULES:
 - Write with conviction — take a stance`;
 
   try {
-    const text = await llm.generate(prompt, { maxTokens: 500, temperature: 0.8 });
-    // Parse thesis and analysis from LLM output
-    const thesisMatch = text.match(/^([^.\n]+[.\n])/m);
-    let thesis = '';
-    let analysis = text;
-    // Try to split thesis from analysis — thesis is the first line or sentence
-    const lines = text.split('\n').filter(l => l.trim());
-    if (lines.length >= 2) {
-      thesis = lines[0].replace(/^["']|["']$/g, '').trim();
-      analysis = lines.slice(1).join('\n\n').trim();
-    } else {
-      // Fallback: first sentence is thesis, rest is analysis
-      const firstPeriod = text.indexOf('. ');
-      if (firstPeriod > 0 && firstPeriod < 80) {
-        thesis = text.slice(0, firstPeriod + 1).trim();
-        analysis = text.slice(firstPeriod + 2).trim();
+    const text = await llm.generate(prompt, { maxTokens: 700, temperature: 0.8 });
+
+    const getSection = (label) => {
+      // The LLM sometimes wraps labels in markdown (e.g. "**THESIS:**", "THESIS :",
+      // "- THESIS:"), so tolerate optional markers/whitespace around the label.
+      const re = new RegExp(
+        `[\\*\\s\\-]*${label}[\\*]*\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*[\\*\\s\\-]*(?:THESIS|ANALYSIS|CATALYST|RISK)[\\*]*\\s*:|$)`,
+        'i'
+      );
+      const m = text.match(re);
+      return m ? m[1].trim() : '';
+    };
+
+    let thesis = getSection('THESIS');
+    let analysis = getSection('ANALYSIS');
+    let catalyst = getSection('CATALYST');
+    let risk = getSection('RISK');
+    const clean = (s) => (s || '').replace(/\*\*/g, '').replace(/^[\s\-*]+|[\s\-*]+$/g, '').trim();
+    thesis = clean(thesis);
+    analysis = clean(analysis);
+    catalyst = clean(catalyst);
+    risk = clean(risk);
+
+    // Fall back to the legacy one-line thesis split when labels are missing
+    if (!thesis && !analysis) {
+      const lines = text.split('\n').filter(l => l.trim());
+      if (lines.length >= 2) {
+        thesis = lines[0].replace(/^["']|["']$/g, '').trim();
+        analysis = lines.slice(1).join('\n\n').trim();
+      } else {
+        const firstPeriod = text.indexOf('. ');
+        if (firstPeriod > 0 && firstPeriod < 80) {
+          thesis = text.slice(0, firstPeriod + 1).trim();
+          analysis = text.slice(firstPeriod + 2).trim();
+        }
       }
     }
-    return { thesis, analysis };
-  } catch {
+    if (!thesis) thesis = pickFallbackThesis(name, sentiment);
+    if (!analysis) analysis = text;
+    if (!catalyst) catalyst = isGlobal ? 'Earnings and macro data flow' : 'NSE trading volumes and corporate announcements';
+
+    return { thesis, analysis, catalyst, risk };
+  } catch (e) {
+    console.warn(`[INSIGHTS] LLM narrative failed for ${ticker}: ${e.message} model=${process.env.MISTRAL_MODEL} body=${JSON.stringify(e.response?.data || '').slice(0,160)}`);
     return generateFallbackNarrative(ticker, sentiment, articles, market);
   }
 }
@@ -638,7 +666,12 @@ function generateFallbackNarrative(ticker, sentiment, articles, market) {
 
   const analysis = opening + ' ' + body + riskLine;
 
-  return { thesis, analysis };
+  return {
+    thesis,
+    analysis,
+    catalyst: isGlobal ? 'Earnings and macro data flow' : 'NSE trading volumes and corporate announcements',
+    risk: isGlobal ? 'Rate and sector rotation risk' : 'CBK policy and local macro risk',
+  };
 }
 
 // ── Generate thematic intro for the newsletter ───────────────────
@@ -665,6 +698,113 @@ Write like a seasoned market commentator — not a bot. Set up why these stocks 
     } else {
       return `Markets are caught between competing narratives today. ${tickerList} — a mixed basket that tells you more about the current regime than any index reading.`;
     }
+  }
+}
+
+// ── Generate a short editor's preamble note (like "A quick note...") ──
+async function generateEditorsNote(stocks, marketOverview) {
+  const sentiment = marketOverview.sentiment || 'Neutral';
+  const mood = String(sentiment).toLowerCase();
+  const moodDesc = mood.includes('bull') ? `risk appetite is building`
+    : mood.includes('bear') ? 'risk appetite is waning'
+    : 'investors are waiting for direction';
+  const tickers = stocks.slice(0, 3).map(s => s.ticker).join(', ');
+  const prompt = `Write a one-sentence editor's preamble note for a daily stock newsletter. It should feel like a human editor setting the agenda for the day, not a market recap. Mention that the markets above give the context, and that ${tickers} is the focus today. Current mood: ${moodDesc}. Max 25 words, no markdown, no bullets.`;
+
+  try {
+    const text = await llm.generate(prompt, { maxTokens: 80, temperature: 0.8 });
+    return text.trim().replace(/^["']|["']$/g, '');
+  } catch {
+    return `A quick note before we begin: with sentiment ${moodDesc}, today's briefing keeps the lens tight on ${tickers}.`;
+  }
+}
+
+// ── Generate the featured "Big Story" editorial deep-dive ─────────
+async function generateBigStory(stocks, marketOverview) {
+  if (!stocks.length) return null;
+  const names = stocks.slice(0, 4).map(s => `${getCompanyName(s.ticker) || s.ticker} (${s.ticker})`).join(', ');
+  const bulls = stocks.filter(s => s.sentiment === 'positive').map(s => s.ticker);
+  const bears = stocks.filter(s => s.sentiment === 'negative').map(s => s.ticker);
+  const nseCount = stocks.filter(s => s.market === 'NSE').length;
+  const globalCount = stocks.filter(s => s.market === 'Global').length;
+  const sentiment = marketOverview.sentiment || 'Neutral';
+
+  const prompt = `You are the lead editor at an African-focused stock newsletter. Write a rich, original flagship editorial for today (roughly 130-180 words) that reads like a premium market commentary — the kind of piece a reader prints out.
+
+SETUP:
+- Today's focus names: ${names}
+- Split: ${nseCount} NSE (Kenya) / ${globalCount} global
+- Bullish tickers: ${bulls.join(', ') || 'none'} / Bearish tickers: ${bears.join(', ') || 'none'}
+- Overall market mood: ${sentiment}
+
+REQUIREMENTS:
+1. Pick ONE honest, specific thesis that ties the day's names together (a real market idea, not a list).
+2. Give it a short headline (max 9 words).
+3. Make a concrete argument with numbers or referenced events where possible.
+4. End with a clear "what to watch" line.
+5. Do NOT use markdown, headers, bullets, or numbered lists. Plain flowing paragraphs (2-3).
+6. Do NOT mention AI or automation. Write as the StocksIntels editorial team.
+7. Never use generic filler like "drawing investor attention".
+
+Return ONLY the story, formatted as:
+TITLE: <headline>
+BODY: <2-3 paragraphs>`;
+
+  try {
+    const text = await llm.generate(prompt, { maxTokens: 500, temperature: 0.85 });
+    const titleMatch = text.match(/TITLE:\s*(.+)/i);
+    const bodyMatch = text.match(/BODY:\s*([\s\S]+)/i);
+    const title = titleMatch ? titleMatch[1].trim() : '';
+    const body = bodyMatch ? bodyMatch[1].trim() : text.replace(/^TITLE:\s*.+\n?/i, '').trim();
+    if (!title || !body) return null;
+    return { title, body };
+  } catch {
+    return null;
+  }
+}
+
+// ── Generate "The Bottom Line" takeaways ──────────────────────────
+async function generateBottomLine(stocks) {
+  if (!stocks.length) return [];
+  const lines = stocks.slice(0, 4).map((s, i) => {
+    const name = getCompanyName(s.ticker) || s.ticker;
+    return `${i + 1}. ${name} (${s.ticker})`;
+  });
+  const prompt = `Below is the day's focus list for a stock newsletter. Write exactly 3 crisp "bottom line" takeaways (max 18 words each, plain text, one per line, no numbers, no markdown). Each must be a specific, actionable insight that combines the names with today's market backdrop — NOT a generic platitude and NOT a per-stock recap.
+
+Focus list:
+${lines.join('\n')}
+
+Sentiment mix: ${stocks.map(s => `${s.ticker}=${s.sentiment}`).join(', ')}`;
+
+  try {
+    const text = await llm.generate(prompt, { maxTokens: 200, temperature: 0.7 });
+    const items = text.split('\n').map(l => l.trim()).filter(l => l && !/^\d+\./.test(l)).slice(0, 3);
+    if (items.length >= 1) return items;
+  } catch {}
+  // Fallback: derive a takeaway per sentiment grouping
+  const bullCount = stocks.filter(s => s.sentiment === 'positive').length;
+  const bearCount = stocks.filter(s => s.sentiment === 'negative').length;
+  const fallback = [];
+  if (bullCount >= 2) fallback.push('Breadth skews bullish today — the highest-conviction long setups are worth the most attention.');
+  else if (bearCount >= 2) fallback.push('Defensive posture is warranted — the focus names carry more downside skew than usual.');
+  else fallback.push('Today is a selectivity market — the edge is in the catalysts, not the index trend.');
+  if (stocks.length >= 2) fallback.push('Position sizing should reflect that the top ideas are only as good as the volume behind them.');
+  fallback.push('Watch the week-ahead calendar — the next macro print is the cleanest risk catalyst.');
+  return fallback.slice(0, 3);
+}
+
+// ── Generate the closing "Your Take" engagement prompt ────────────
+async function generateYourTake(stocks) {
+  const tickers = stocks.slice(0, 3).map(s => s.ticker).join(', ');
+  const prompt = `Write ONE short reader-engagement question (max 25 words, no markdown) for the end of a stock newsletter whose focus today was: ${tickers}. It should invite readers to share their own take in the replies — opinionated, specific, and about a real decision, not a poll cliché. Examples of tone: "Are these names cheap enough to add, or is the market wrong?"`;
+
+  try {
+    const text = await llm.generate(prompt, { maxTokens: 60, temperature: 0.8 });
+    const q = text.trim().replace(/^["']|["']$/g, '').replace(/[?!]+$/, '');
+    return q ? `${q}?` : `Which of today's focus names are you adding to — and which are you waiting on?`;
+  } catch {
+    return `Which of today's focus names hold up under your own numbers — and which are you waiting on?`;
   }
 }
 
@@ -780,11 +920,7 @@ async function generateDailyInsights(force = false) {
   // Run sequentially to avoid overwhelming the LLM API
   let thematicIntro = '';
   try {
-    thematicIntro = await withTimeout(
-      generateThematicIntro(hotStocks, marketOverview),
-      45000,
-      'LLM thematic intro'
-    );
+    thematicIntro = await generateThematicIntro(hotStocks, marketOverview);
   } catch {
     // fallback handled inside generateThematicIntro
     thematicIntro = await generateThematicIntro(hotStocks, marketOverview).catch(() => '');
@@ -794,11 +930,8 @@ async function generateDailyInsights(force = false) {
   for (const stock of hotStocks) {
     const priceKey = stock.market === 'NSE' ? `NSE:${stock.ticker}` : stock.ticker;
     const priceData = priceDataMap[priceKey] || priceDataMap[stock.ticker] || null;
-    const { thesis, analysis } = await withTimeout(
-      generateNarrativeThesis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market),
-      45000,
-      `LLM analysis for ${stock.ticker}`
-    ).catch(() => generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market));
+    const { thesis, analysis, catalyst, risk } = await generateNarrativeThesis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market)
+    .catch(e => { console.warn(`[INSIGHTS] narrative fallback for ${stock.ticker}: ${e.message}`); return generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market); });
 
     const companyName = getCompanyName(stock.ticker) || stock.ticker;
     const signal = stock.sentiment === 'positive' ? 'BULLISH'
@@ -811,6 +944,8 @@ async function generateDailyInsights(force = false) {
       headline: stock.articles[0]?.headline || `${companyName} — ${stock.sentiment} sentiment`,
       thesis,
       analysis,
+      catalyst,
+      risk,
       sentiment: stock.sentiment,
       signal,
       market: stock.market,
@@ -827,7 +962,28 @@ async function generateDailyInsights(force = false) {
   // 5. Build week-ahead events
   const weekAhead = await buildWeekAhead().catch(() => []);
 
-  // 6. Generate editorial summary
+  // 6. Generate editorial layers (each falls back internally, never blocks the draft)
+  let editorsNote = '';
+  try {
+    editorsNote = await generateEditorsNote(hotStocks, marketOverview).catch(() => '');
+  } catch {}
+
+  let bigStory = null;
+  try {
+    bigStory = await generateBigStory(hotStocks, marketOverview).catch(() => null);
+  } catch {}
+
+  let bottomLine = [];
+  try {
+    bottomLine = await generateBottomLine(hotStocks).catch(() => []);
+  } catch {}
+
+  let yourTake = '';
+  try {
+    yourTake = await generateYourTake(hotStocks).catch(() => '');
+  } catch {}
+
+  // 6b. Generate editorial summary
   const summary = generateEditorialSummary(deepDives, marketOverview);
 
   // 7. Build content object
@@ -838,9 +994,13 @@ async function generateDailyInsights(force = false) {
   const content = {
     dateStr,
     marketOverview,
+    editorsNote,
     thematicIntro,
+    bigStory,
     stockDeepDives: deepDives,
     weekAhead,
+    bottomLine,
+    yourTake,
     summary,
   };
 

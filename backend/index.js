@@ -2043,6 +2043,8 @@ io.on('connection', (socket) => {
               [member.user_id, `${sanitizeText(senderName)} in ${member.group_name}`, sanitizeText(preview), `/app/chat?group=${groupId}`]
             );
             io.to(`user:${member.user_id}`).emit('notification', n.rows[0]);
+            const { sendPushToUser } = require('./pushService');
+            sendPushToUser(member.user_id, n.rows[0]).catch?.(() => {});
           }
         } else if (recipientId) {
           const preview = cleanContent.length > 100 ? cleanContent.substring(0, 100) + '…' : cleanContent;
@@ -9291,6 +9293,43 @@ app.get('/api/notifications', authenticateToken, requireOwnership, async (req, r
   }
 });
 
+// ── Web Push subscriptions ─────────────────────────────────────────────
+app.get('/api/push/vapid-key', (req, res) => {
+  const publicKey = process.env.VAPID_PUBLIC_KEY || '';
+  res.json({ publicKey });
+});
+
+app.post('/api/push/subscribe', authenticateToken, requireOwnership, async (req, res) => {
+  try {
+    const { userId, subscription, prefs } = req.body;
+    if (!userId || !subscription) {
+      return res.status(400).json({ error: 'userId and subscription are required' });
+    }
+    const { subscribe } = require('./pushService');
+    const saved = await subscribe({ userId, subscription, prefs });
+    if (saved.error) return res.status(400).json({ error: saved.error });
+    res.json({ ok: true, subscriptionId: saved.id });
+  } catch (err) {
+    console.error('Error subscribing to push:', err.message);
+    res.status(500).json({ error: 'Failed to subscribe to push' });
+  }
+});
+
+app.post('/api/push/unsubscribe', authenticateToken, requireOwnership, async (req, res) => {
+  try {
+    const { userId, endpoint } = req.body;
+    if (!userId || !endpoint) {
+      return res.status(400).json({ error: 'userId and endpoint are required' });
+    }
+    const { unsubscribe } = require('./pushService');
+    const result = await unsubscribe({ userId, endpoint });
+    res.json({ ok: true, removed: result.removed });
+  } catch (err) {
+    console.error('Error unsubscribing from push:', err.message);
+    res.status(500).json({ error: 'Failed to unsubscribe from push' });
+  }
+});
+
 app.post('/api/market/quotes', marketDataLimiter, async (req, res) => {
   try {
     const { symbols } = req.body;
@@ -11020,6 +11059,13 @@ async function initDatabase() {
       read BOOLEAN DEFAULT false, link TEXT,
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );`);
+
+    try {
+      const { ensureTable: ensurePushTable } = require('./pushService');
+      await ensurePushTable();
+    } catch (pushErr) {
+      console.warn('[Push] push_subscriptions table init failed:', pushErr.message);
+    }
 
     await pool.query(`CREATE TABLE IF NOT EXISTS portfolio_holdings (
       id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,

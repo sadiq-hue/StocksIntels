@@ -2,23 +2,47 @@ const axios = require('axios');
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const MODEL = process.env.LLM_MODEL || 'llama3';
-const TIMEOUT = parseInt(process.env.LLM_TIMEOUT || '60000');
-const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+const TIMEOUT = parseInt(process.env.LLM_TIMEOUT || '240000');
 const MISTRAL_MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
 
-const SYSTEM_PROMPT = `You are a professional financial market analyst writing for StocksIntels, an African stock market intelligence platform covering NSE (Nairobi Securities Exchange), NGX (Nigeria), GSE (Ghana), JSE and global markets. Write concise, insightful editorial content. Use natural Kenyan financial market terminology. Keep each response to 3-5 sentences. Never use markdown formatting. Never mention you are an AI. Write as if you are the StocksIntels editorial team.`;
+const SYSTEM_PROMPT = `You are a professional financial market analyst writing for StocksIntels, an African stock market intelligence platform covering NSE (Nairobi Securities Exchange), NGX (Nigeria), GSE (Ghana), JSE and global markets. Write concise, insightful editorial content. Use natural Kenyan financial market terminology. Follow the length and format the task requests — if a task asks for a longer piece, write the full requested length. Never use markdown formatting unless the task explicitly requests a labeled format. Never mention you are an AI. Write as if you are the StocksIntels editorial team.`;
 
 async function generateViaMistral(prompt, system, maxTokens, temperature) {
-  const res = await axios.post('https://api.mistral.ai/v1/chat/completions', {
-    model: MISTRAL_MODEL,
-    messages: [
-      { role: 'system', content: system || SYSTEM_PROMPT },
-      { role: 'user', content: prompt },
-    ],
-    max_tokens: maxTokens,
-    temperature,
-  }, { timeout: TIMEOUT });
-  return res.data.choices[0].message.content.trim();
+  let lastErr;
+  // Read the key live from env at call time (a later dotenv override/load elsewhere in the
+  // process may have replaced process.env values; never cache it at require time).
+  const apiKey = process.env.MISTRAL_API_KEY;
+  if (!apiKey) throw new Error('MISTRAL_API_KEY not set at call time');
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await axios.post('https://api.mistral.ai/v1/chat/completions', {
+        model: MISTRAL_MODEL,
+        messages: [
+          { role: 'system', content: system || SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: maxTokens,
+        temperature,
+      }, { timeout: TIMEOUT, proxy: false, headers: { Authorization: `Bearer ${apiKey}` } });
+      return res.data.choices[0].message.content.trim();
+    } catch (err) {
+      lastErr = err;
+      const status = err.response?.status;
+      // Mistral intermittently returns 401/tier errors under concurrent load, so retry
+      // transient/account-level failures with backoff. Stop on persistent 400/422 (bad request).
+      if (attempt < 3 && (status === 401 || status === 403 || status === 429 || status >= 500)) {
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      if (attempt < 3 && status === undefined) {
+        // Network/ETIMEDOUT/EAI_AGAIN — retry once more
+        await new Promise(r => setTimeout(r, 3000 * attempt));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
 }
 
 async function generate(prompt, options = {}) {
@@ -32,11 +56,11 @@ async function generate(prompt, options = {}) {
         system: system || SYSTEM_PROMPT,
         stream: false,
         options: { temperature, num_predict: maxTokens },
-      }, { timeout: TIMEOUT });
+      }, { timeout: TIMEOUT, proxy: false });
       return res.data.response.trim();
     } catch {}
   }
-  if (MISTRAL_API_KEY) {
+  if (process.env.MISTRAL_API_KEY) {
     return generateViaMistral(prompt, system, maxTokens, temperature);
   }
   throw new Error('No LLM backend available (set OLLAMA_URL or MISTRAL_API_KEY)');
@@ -242,7 +266,7 @@ ${ctx}`;
 }
 
 module.exports = {
-  generateNseSummary, generateStoryOfWeek, generateMilestone,
+  generate, generateNseSummary, generateStoryOfWeek, generateMilestone,
   generateGlobalTheme, generateWhatToWatch, generateNseGlobalConnection,
   generateAiSignalContext, generateAnalystTake, generateEarningsAnalysis,
   generateMacroBackdrop, generateDailyGlobalConnection,

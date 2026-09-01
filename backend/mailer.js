@@ -1932,9 +1932,13 @@ async function sendStockInsightsEmail(email, data, options = {}) {
   const {
     userName, dateStr,
     marketOverview = {},
+    editorsNote = '',
     thematicIntro = '',
+    bigStory = null,
     stockDeepDives = [],
     weekAhead = [],
+    bottomLine = [],
+    yourTake = '',
     summary,
   } = data;
 
@@ -1989,6 +1993,17 @@ async function sendStockInsightsEmail(email, data, options = {}) {
       <div style="padding:0 20px 20px">
         <div style="font-size:14px;font-weight:700;color:${TEXT_DARK};margin-bottom:8px;line-height:1.3">${esc(d.headline || '')}</div>
         <div style="font-size:13px;color:${TEXT_MED};line-height:1.7;margin-bottom:12px;white-space:pre-line">${esc(d.analysis || '')}</div>
+        ${d.catalyst || d.risk ? `
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+          ${d.catalyst ? `<div style="flex:1;min-width:200px;background:${GREEN}0d;border:1px solid ${GREEN}30;border-radius:8px;padding:8px 10px">
+            <div style="font-size:10px;font-weight:700;color:${GREEN};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Catalyst to Watch</div>
+            <div style="font-size:12px;color:${TEXT_DARK};line-height:1.4">${esc(d.catalyst)}</div>
+          </div>` : ''}
+          ${d.risk ? `<div style="flex:1;min-width:200px;background:${RED}0d;border:1px solid ${RED}30;border-radius:8px;padding:8px 10px">
+            <div style="font-size:10px;font-weight:700;color:${RED};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Key Risk</div>
+            <div style="font-size:12px;color:${TEXT_DARK};line-height:1.4">${esc(d.risk)}</div>
+          </div>` : ''}
+        </div>` : ''}
         ${newsItems ? `<div style="margin-top:8px"><div style="font-size:11px;font-weight:600;color:${TEXT_LIGHT};text-transform:uppercase;margin-bottom:6px">Related News</div>${newsItems}</div>` : ''}
       </div>
     </div>`;
@@ -2022,6 +2037,20 @@ async function sendStockInsightsEmail(email, data, options = {}) {
 
     ${buildMarketSnapshotHtml(marketOverview, 'full')}
 
+    ${editorsNote ? `
+    <div style="background:${BG_LIGHT};border-left:4px solid ${BRAND_COLOR};border-radius:8px;padding:14px 16px;margin-bottom:20px;font-size:13px;color:${TEXT_MED};line-height:1.6;font-style:italic">
+      ${esc(editorsNote)}
+    </div>` : ''}
+
+    ${bigStory ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <div style="background:linear-gradient(135deg,${BRAND_COLOR} 0%,#0a5f8a 100%);color:#ffffff;padding:12px 18px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:0.85;margin-bottom:4px">The Big Story</div>
+        <div style="font-size:18px;font-weight:700;line-height:1.3">${esc(bigStory.title || 'Today in Markets')}</div>
+      </div>
+      <div style="padding:18px;font-size:14px;color:${TEXT_DARK};line-height:1.8;white-space:pre-line">${esc(bigStory.body || '')}</div>
+    </div>` : ''}
+
     ${stockDeepDives.length ? `
     <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;padding:20px;margin-bottom:20px">
       <div style="font-size:16px;font-weight:700;color:${TEXT_DARK};margin-bottom:10px;display:flex;align-items:center;gap:6px">
@@ -2048,6 +2077,25 @@ async function sendStockInsightsEmail(email, data, options = {}) {
     ${summary ? `
     <div style="background:linear-gradient(135deg,${BRAND_COLOR}12,${BRAND_COLOR}06);border:1px solid ${BRAND_COLOR}25;border-radius:10px;padding:16px;margin-bottom:20px;font-size:13px;color:${TEXT_DARK};line-height:1.7;text-align:center">
       ${esc(summary)}
+    </div>` : ''}
+
+    ${bottomLine.length ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <div style="background:${BRAND_COLOR};color:#ffffff;padding:10px 16px;font-size:13px;font-weight:700">The Bottom Line</div>
+      <div style="padding:14px 16px">
+        ${bottomLine.slice(0, 3).map(b => `
+        <div style="display:flex;gap:10px;margin-bottom:10px;font-size:13px;color:${TEXT_DARK};line-height:1.5">
+          <span style="color:${BRAND_COLOR};font-weight:700;flex-shrink:0">&#10003;</span>
+          <span>${esc(b)}</span>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    ${yourTake ? `
+    <div style="background:${BG_LIGHT};border:1px dashed ${BORDER};border-radius:10px;padding:18px;margin-bottom:20px;text-align:center">
+      <div style="font-size:11px;font-weight:700;color:${BRAND_COLOR};text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Your Take</div>
+      <div style="font-size:15px;font-weight:600;color:${TEXT_DARK};line-height:1.5">${esc(yourTake)}</div>
+      <div style="font-size:12px;color:${TEXT_LIGHT};margin-top:8px">Reply to this email — we share the best takes in tomorrow's edition.</div>
     </div>` : ''}
 
     <div style="text-align:center;margin-top:20px">
