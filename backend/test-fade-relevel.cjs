@@ -3,7 +3,7 @@
 //  2) computeRelevelStop   - stop re-leveling to live market behavior
 // Run: node backend/test-fade-relevel.cjs
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-const { assessConvictionFade, computeRelevelStop, fadeCloseReason, staleThesisDaysFor, isLongTermHold, evaluateScoreClose, fadeCutReached, getLiveWinRate } = require('./signalService');
+const { assessConvictionFade, computeRelevelStop, fadeCloseReason, isLongTermHold, evaluateScoreClose, getLiveWinRate } = require('./signalService');
 
 let passed = 0, failed = 0;
 function check(name, actual, expected) {
@@ -219,19 +219,6 @@ check('long-term hold types are never score-closed',
   [isLongTermHold('Long Term'), isLongTermHold('Long Term Value'), isLongTermHold('Swing Trade')],
   [true, true, false]);
 
-check('staleThesisDaysFor scales by trade type (Long Term is never stale)',
-  [staleThesisDaysFor('Day Trade'), staleThesisDaysFor('Momentum Trade'), staleThesisDaysFor('Swing Trade'), staleThesisDaysFor('Aggressive Buy'), staleThesisDaysFor('Long Term')],
-  [5, 21, 30, 30, Infinity]);
-
-check('staleThesisDaysFor stretches for a wide target (RR 6 -> swing 30 -> 60)',
-  [staleThesisDaysFor('Swing Trade', { entryPrice: 100, stopLoss: 95, target1: 130 }),
-   staleThesisDaysFor('Momentum Trade', { entryPrice: 100, stopLoss: 95, target1: 130 }),
-   staleThesisDaysFor('Day Trade', { entryPrice: 100, stopLoss: 95, target1: 130 })],
-  [60, 42, 10]);
-
-check('staleThesisDaysFor keeps the type base when RR is average (RR 1.25 -> swing 30)',
-  staleThesisDaysFor('Swing Trade', { entryPrice: 100, stopLoss: 92, target1: 110 }), 30);
-
 // base position: entry 100, target1 110, fresh, swing
 const basePos = { action: 'buy', entryPrice: 100, stopLoss: 92, target1: 110, timestamp: now, type: 'Swing Trade' };
 
@@ -272,8 +259,8 @@ check('stale day-trade (>=5d) hold but WINNER (+2%) -> no stale thesis (winners 
 check('exactly at threshold but WINNER -> no stale thesis',
   fadeCloseReason({ ...basePos, timestamp: now - 30 * DAY }, 'hold', true, 105), null);
 
-check('stale momentum (>21d) hold on a LOSER (-15% stop, -14% moved) -> stale thesis',
-  fadeCloseReason({ ...basePos, stopLoss: 85, type: 'Momentum Trade', timestamp: now - 25 * DAY }, 'hold', true, 86), 'stale thesis');
+check('stale momentum (>21d) hold on a LOSER (-15% stop, -14% moved) rides (winner-only: no stale cut)',
+  fadeCloseReason({ ...basePos, stopLoss: 85, type: 'Momentum Trade', timestamp: now - 25 * DAY }, 'hold', true, 86), null);
 
 check('stale swing (>30d) hold on a FLAT position (~breakeven) -> no stale thesis',
   fadeCloseReason({ ...basePos, timestamp: now - 31 * DAY }, 'hold', true, 99.5), null);
@@ -281,8 +268,8 @@ check('stale swing (>30d) hold on a FLAT position (~breakeven) -> no stale thesi
 check('wide-target swing (window 60) NOT stale at 31d',
   fadeCloseReason({ ...basePos, entryPrice: 100, stopLoss: 95, target1: 130, timestamp: now - 31 * DAY }, 'hold', true, 105), null);
 
-check('wide-target swing (window 60) stale past its stretched window on a LOSER (-15% stop) -> stale thesis',
-  fadeCloseReason({ ...basePos, entryPrice: 100, stopLoss: 85, target1: 130, timestamp: now - 61 * DAY }, 'hold', true, 86), 'stale thesis');
+check('wide-target swing (window 60) not stale-cut past its stretched window on a LOSER (-15% stop)',
+  fadeCloseReason({ ...basePos, entryPrice: 100, stopLoss: 85, target1: 130, timestamp: now - 61 * DAY }, 'hold', true, 86), null);
 
 check('stale momentum (>21d) loser only -4% from entry is NOT stale-cut (needs 90% of stop)',
   fadeCloseReason({ ...basePos, stopLoss: 85, type: 'Momentum Trade', timestamp: now - 25 * DAY }, 'hold', true, 96), null);
@@ -427,89 +414,6 @@ check('default min-age (6h): 7h-old 3rd reading same-day does NOT close (day spa
 check('default min-age (6h): 2d-old confirmed fade on a -14% loser does NOT close (winner-only: rides)',
   evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 86, now2d, undefined, DEEP),
   { close: null, fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
-
-// ─── fadeCutReached (fair fade cut: losers only, 90%-of-stop + 3% floor) ────
-section('fadeCutReached (fair fade cut - losers only)');
-const bandPos = { action: 'buy', entryPrice: 100, stopLoss: 85, target1: 110 };
-const bandSell = { action: 'sell', entryPrice: 100, stopLoss: 115, target1: 90 };
-
-check('buy WINNER +2% -> NO fade cut (winners always ride)',
-  fadeCutReached(bandPos, 102), false);
-
-check('buy WINNER +10% -> NO fade cut (winners always ride)',
-  fadeCutReached(bandPos, 110), false);
-
-check('buy flat 0% -> NO fade cut',
-  fadeCutReached(bandPos, 100), false);
-
-check('buy -1% loss (inside band) -> NO cut',
-  fadeCutReached(bandPos, 99), false);
-
-check('buy -4% (below the 12% threshold for 15% stop) -> NO cut',
-  fadeCutReached(bandPos, 96), false);
-
-check('buy -5% -> NO cut (still under 90% of the 15% stop = -13.5%)',
-  fadeCutReached(bandPos, 95), false);
-
-check('buy exactly at 90% of the stop distance (-13.5%) -> cut',
-  fadeCutReached(bandPos, 86.5), true);
-
-check('sell WINNER -4% -> NO fade cut (winners always ride)',
-  fadeCutReached(bandSell, 96), false);
-
-check('sell +4% (below the +13.5% threshold) -> NO cut',
-  fadeCutReached(bandSell, 104), false);
-
-check('sell exactly at +13.5% (90% of the +15% stop) -> cut',
-  fadeCutReached(bandSell, 113.5), true);
-
-check('sell +2% -> NO cut',
-  fadeCutReached(bandSell, 102), false);
-
-check('no position / zero prices -> false',
-  [fadeCutReached(null, 102), fadeCutReached(bandPos, 0), fadeCutReached({ ...bandPos, entryPrice: 0 }, 102)],
-  [false, false, false]);
-
-// The re-leveled pre-lock stop sits at least 2% below entry (volatility-scaled
-// buffer); SCORE_CLOSE_CUT_MIN_PCT (3%) must keep a confirmed fade from yanking
-// a position near breakeven — the hard stop is what books those exits.
-// With the MIN_STOP_PCT floor, stops below 15% never trigger fade cut — the
-// hard stop is the binding exit. This prevents premature closes on legacy or
-// tight-stop positions.
-const tightBand = { action: 'buy', entryPrice: 100, stopLoss: 98, target1: 110 };
-
-check('tight re-leveled stop (-2%): fade cut does NOT fire at -1% (noise floor)',
-  fadeCutReached(tightBand, 99), false);
-
-check('tight re-leveled stop (-2%): fade cut does NOT fire at -1.5% (3% floor wins)',
-  fadeCutReached(tightBand, 98.5), false);
-
-check('tight re-leveled stop (-2%): fade cut does NOT fire at -3% (below 15% floor)',
-  [fadeCutReached(tightBand, 97), fadeCutReached(tightBand, 99.5)],
-  [false, false]);
-
-// MIN_STOP_PCT floor: stops below 15% are protected from fade-cut — only the
-// hard stop books those exits. This prevents legacy tight stops from causing
-// premature closes (e.g. GE at -7.2% with an 8.5% stop).
-const floorPos = { action: 'buy', entryPrice: 100, stopLoss: 92, target1: 110 };
-check('8% stop: fade cut does NOT fire at -7% (below 15% floor, hard stop binds)',
-  fadeCutReached(floorPos, 93), false);
-
-check('8% stop: fade cut does NOT fire at -12% (below 15% floor)',
-  fadeCutReached(floorPos, 88), false);
-
-// Real-world regressions: BOC was fade-closed at -1.1% and EABL at +1.2% by the
-// older logic — neither may be cut under the fair rules.
-// With the MIN_STOP_PCT floor, BOC's 3.44% stop is below the floor, so fade cut
-// never fires — the hard stop binds first.
-check('BOC-like tight stop (-3.44%): -1.1% loss is NOT fade-cut (rides)',
-  fadeCutReached({ action: 'buy', entryPrice: 180, stopLoss: 173.81, target1: 198.57 }, 178), false);
-
-check('BOC-like tight stop: NOT cut even at -3% (below 15% floor, hard stop binds)',
-  fadeCutReached({ action: 'buy', entryPrice: 180, stopLoss: 173.81, target1: 198.57 }, 174.5), false);
-
-check('EABL-like winner +1.2% is never fade-cut',
-  fadeCutReached({ action: 'buy', entryPrice: 281.5, stopLoss: 274.99, target1: 320.76 }, 285), false);
 
 // ─── getLiveWinRate (mark-to-market win rate incl. open positions) ────────────
 section('getLiveWinRate (mark-to-market)');
