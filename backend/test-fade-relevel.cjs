@@ -272,8 +272,8 @@ check('stale day-trade (>=5d) hold but WINNER (+2%) -> no stale thesis (winners 
 check('exactly at threshold but WINNER -> no stale thesis',
   fadeCloseReason({ ...basePos, timestamp: now - 30 * DAY }, 'hold', true, 105), null);
 
-check('stale momentum (>21d) hold on a LOSER (-15% stop, -13% moved) -> stale thesis',
-  fadeCloseReason({ ...basePos, stopLoss: 85, type: 'Momentum Trade', timestamp: now - 25 * DAY }, 'hold', true, 87), 'stale thesis');
+check('stale momentum (>21d) hold on a LOSER (-15% stop, -14% moved) -> stale thesis',
+  fadeCloseReason({ ...basePos, stopLoss: 85, type: 'Momentum Trade', timestamp: now - 25 * DAY }, 'hold', true, 86), 'stale thesis');
 
 check('stale swing (>30d) hold on a FLAT position (~breakeven) -> no stale thesis',
   fadeCloseReason({ ...basePos, timestamp: now - 31 * DAY }, 'hold', true, 99.5), null);
@@ -282,7 +282,10 @@ check('wide-target swing (window 60) NOT stale at 31d',
   fadeCloseReason({ ...basePos, entryPrice: 100, stopLoss: 95, target1: 130, timestamp: now - 31 * DAY }, 'hold', true, 105), null);
 
 check('wide-target swing (window 60) stale past its stretched window on a LOSER (-15% stop) -> stale thesis',
-  fadeCloseReason({ ...basePos, entryPrice: 100, stopLoss: 85, target1: 130, timestamp: now - 61 * DAY }, 'hold', true, 88), 'stale thesis');
+  fadeCloseReason({ ...basePos, entryPrice: 100, stopLoss: 85, target1: 130, timestamp: now - 61 * DAY }, 'hold', true, 86), 'stale thesis');
+
+check('stale momentum (>21d) loser only -4% from entry is NOT stale-cut (needs 90% of stop)',
+  fadeCloseReason({ ...basePos, stopLoss: 85, type: 'Momentum Trade', timestamp: now - 25 * DAY }, 'hold', true, 96), null);
 
 check('no timestamp treated as fresh (age 0)',
   fadeCloseReason({ action: 'buy', entryPrice: 100, target1: 110, type: 'Swing Trade' }, 'hold', true, 102), null);
@@ -326,16 +329,24 @@ check('exactly at the guard boundary is old enough (>= min age)',
   evaluateScoreClose(freshPos, 'sell', true, 102, T0 + HOUR, HOUR),
   { close: null, fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
 
-check('2d-old single flip reading does NOT close (needs 2 confirmations)',
+check('2d-old single flip reading does NOT close (needs 3 confirmations)',
   evaluateScoreClose(freshPos, 'sell', true, 102, now2d, HOUR),
   { close: null, fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
 
-check('2d-old 2nd consecutive flip reading at a loss closes (score flipped)',
-  evaluateScoreClose({ ...freshPos, flipCount: 1, flipFirstSeen: T0 }, 'sell', true, 92, now2d, HOUR),
+check('2d-old 2nd flip reading does NOT close (still short of 3 confirmations)',
+  evaluateScoreClose({ ...freshPos, flipCount: 1, flipFirstSeen: T0 }, 'sell', true, 88, now2d, HOUR),
+  { close: null, fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
+
+check('2d-old 3rd consecutive flip reading at a loss closes (score flipped, past 80% of stop)',
+  evaluateScoreClose({ ...freshPos, flipCount: 2, flipFirstSeen: T0 }, 'sell', true, 88, now2d, HOUR),
   { close: 'score flipped', fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
 
-check('2d-old 2nd flip reading but still a winner (+2%) does NOT close',
-  evaluateScoreClose({ ...freshPos, flipCount: 1, flipFirstSeen: T0 }, 'sell', true, 102, now2d, HOUR),
+check('2d-old 3rd flip reading but only -4% (below 80% of stop) does NOT close',
+  evaluateScoreClose({ ...freshPos, flipCount: 2, flipFirstSeen: T0 }, 'sell', true, 96, now2d, HOUR),
+  { close: null, fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
+
+check('2d-old 3rd flip reading but still a winner (+2%) does NOT close',
+  evaluateScoreClose({ ...freshPos, flipCount: 2, flipFirstSeen: T0 }, 'sell', true, 102, now2d, HOUR),
   { close: null, fadeCount: 0, fadeFirstSeen: null, required: 3, isFade: false, tooYoung: false, longTermHold: false });
 
 check('2d-old first DEEP fade reading waits for confirmation (1/3)',
@@ -350,24 +361,24 @@ check('2d-old 2nd fade on a WINNER (+2%) does NOT close (winners ride)',
   evaluateScoreClose({ ...freshPos, fadeCount: 1 }, 'hold', true, 102, now2d, HOUR, DEEP),
   { close: null, fadeCount: 2, fadeFirstSeen: now2d, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('deep fade confirmed across days on a LOSER past 80%-of-stop (-13% vs 15% stop) closes',
-  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 87, now2d, HOUR, DEEP),
+check('deep fade confirmed across days on a LOSER past 90%-of-stop (-14% vs 15% stop) closes',
+  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 86, now2d, HOUR, DEEP),
   { close: 'conviction faded', fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('deep fade confirmed but only -4% (below the 12% cut for 15% stop) does NOT close',
+check('deep fade confirmed but only -4% (below the 90% cut for 15% stop) does NOT close',
   evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 96, now2d, HOUR, DEEP),
   { close: null, fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('same-day 3rd deep reading never closes, even at -13% (must span days)',
-  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: now2d }, 'hold', true, 87, now2d, HOUR, DEEP),
+check('same-day 3rd deep reading never closes, even at -14% (must span days)',
+  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: now2d }, 'hold', true, 86, now2d, HOUR, DEEP),
   { close: null, fadeCount: 3, fadeFirstSeen: now2d, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
 check('MARGINAL fade at count 3 across days still not confirmed (needs 4)',
-  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 87, now2d, HOUR, MARGINAL),
+  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 86, now2d, HOUR, MARGINAL),
   { close: null, fadeCount: 3, fadeFirstSeen: T0, required: 4, isFade: true, tooYoung: false, longTermHold: false });
 
-check('MARGINAL fade at count 4 across days on a -13% loser closes',
-  evaluateScoreClose({ ...freshPos, fadeCount: 3, fadeFirstSeen: T0 }, 'hold', true, 87, now2d, HOUR, MARGINAL),
+check('MARGINAL fade at count 4 across days on a -14% loser closes',
+  evaluateScoreClose({ ...freshPos, fadeCount: 3, fadeFirstSeen: T0 }, 'hold', true, 86, now2d, HOUR, MARGINAL),
   { close: 'conviction faded', fadeCount: 4, fadeFirstSeen: T0, required: 4, isFade: true, tooYoung: false, longTermHold: false });
 
 check('2d-old hold at/above target1 profit-fades on first reading',
@@ -402,11 +413,11 @@ check('default min-age (6h): 7h-old 3rd reading same-day does NOT close (day spa
   evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 96, T0 + 7 * HOUR, undefined, DEEP),
   { close: null, fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('default min-age (6h): 2d-old confirmed fade on a -13% loser closes (past 80% of 15% stop)',
-  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 87, now2d, undefined, DEEP),
+check('default min-age (6h): 2d-old confirmed fade on a -14% loser closes (past 90% of 15% stop)',
+  evaluateScoreClose({ ...freshPos, fadeCount: 2, fadeFirstSeen: T0 }, 'hold', true, 86, now2d, undefined, DEEP),
   { close: 'conviction faded', fadeCount: 3, fadeFirstSeen: T0, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-// ─── fadeCutReached (fair fade cut: losers only, 80%-of-stop + 3% floor) ────
+// ─── fadeCutReached (fair fade cut: losers only, 90%-of-stop + 3% floor) ────
 section('fadeCutReached (fair fade cut - losers only)');
 const bandPos = { action: 'buy', entryPrice: 100, stopLoss: 85, target1: 110 };
 const bandSell = { action: 'sell', entryPrice: 100, stopLoss: 115, target1: 90 };
@@ -426,20 +437,20 @@ check('buy -1% loss (inside band) -> NO cut',
 check('buy -4% (below the 12% threshold for 15% stop) -> NO cut',
   fadeCutReached(bandPos, 96), false);
 
-check('buy -5% -> NO cut (still under 80% of the 15% stop = -12%)',
+check('buy -5% -> NO cut (still under 90% of the 15% stop = -13.5%)',
   fadeCutReached(bandPos, 95), false);
 
-check('buy exactly at 80% of the stop distance (-12%) -> cut',
-  fadeCutReached(bandPos, 88), true);
+check('buy exactly at 90% of the stop distance (-13.5%) -> cut',
+  fadeCutReached(bandPos, 86.5), true);
 
 check('sell WINNER -4% -> NO fade cut (winners always ride)',
   fadeCutReached(bandSell, 96), false);
 
-check('sell +4% (below the +12% threshold) -> NO cut',
+check('sell +4% (below the +13.5% threshold) -> NO cut',
   fadeCutReached(bandSell, 104), false);
 
-check('sell exactly at +12% (80% of the +15% stop) -> cut',
-  fadeCutReached(bandSell, 112), true);
+check('sell exactly at +13.5% (90% of the +15% stop) -> cut',
+  fadeCutReached(bandSell, 113.5), true);
 
 check('sell +2% -> NO cut',
   fadeCutReached(bandSell, 102), false);

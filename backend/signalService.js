@@ -1603,13 +1603,16 @@ async function _getBenchmarkNow(symbol) {
 // traveled at least FLIP_CLOSE_CUT_FRACTION_OF_STOP of the way to its stop
 // before the close can fire — a Buy->Sell flip at -0.3% when the stop is at
 // -10% no longer qualifies; the position must be meaningfully under water.
-const FLIP_CLOSE_CONFIRMATIONS = 2;  // consecutive flip readings to confirm
-const FLIP_CLOSE_CUT_FRACTION_OF_STOP = 0.5; // must be >50% toward stop
+// Both are env-overridable; the defaults are deliberately lenient (3 readings,
+// must be 80% of the way to the stop) so a position is given maximum room to
+// reach its target or hard stop instead of being yanked by a signal reversal.
+const FLIP_CLOSE_CONFIRMATIONS = Math.max(1, parseInt(process.env.FLIP_CLOSE_CONFIRMATIONS || '3', 10) || 3);
+const FLIP_CLOSE_CUT_FRACTION_OF_STOP = Math.max(0, Math.min(1, parseFloat(process.env.FLIP_CLOSE_CUT_FRACTION_OF_STOP || '0.8')));
 // A fade is less decisive than a full flip, so it needs FADE_CLOSE_CONFIRMATIONS
 // consecutive trustworthy readings SPANNING at least two distinct days before it
 // can close — a cluster of readings inside a single session can all come from one
 // bad data spell, so the streak must survive a day boundary.
-const FADE_CLOSE_CONFIRMATIONS = 3;
+const FADE_CLOSE_CONFIRMATIONS = Math.max(2, parseInt(process.env.FADE_CLOSE_CONFIRMATIONS || '3', 10) || 3);
 // Fade strength: the fresh composite score sits in the Hold band (production
 // thresholds: buy starts at 55, hold band is 30..54). A DEEP fade has fallen to
 // FADE_DEEP_SCORE or below (more than halfway toward Sell) and confirms at the
@@ -1634,7 +1637,7 @@ const SCORE_CLOSE_MIN_AGE_MS = (Math.max(1, parseInt(process.env.SCORE_CLOSE_MIN
 // position has traveled 75% of the way to its hard stop (default
 // SCORE_CLOSE_CUT_FRACTION_OF_STOP) so a fading loser is given almost its full
 // risk budget before being yanked — the close is a failure exit, not a jitter.
-const SCORE_CLOSE_CUT_FRACTION_OF_STOP = Math.max(0, Math.min(1, parseFloat(process.env.SCORE_CLOSE_CUT_FRACTION_OF_STOP || '0.80')));
+const SCORE_CLOSE_CUT_FRACTION_OF_STOP = Math.max(0, Math.min(1, parseFloat(process.env.SCORE_CLOSE_CUT_FRACTION_OF_STOP || '0.90')));
 // A fade cut also requires the position to be at least this far past entry in the
 // loss direction — a sub-noise move near entry is consolidation, not failure, so a
 // fading position inside this envelope rides instead of being yanked at ~breakeven.
@@ -1757,7 +1760,7 @@ function fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice, 
 // Fade-cut threshold: whether a fading position has a REALIZED LOSS big enough to
 // justify an early exit. Winners and flat positions always return false — a stock
 // that is up (or merely consolidating around entry) is given time to reach its
-// target. Only a loser that has traveled SCORE_CLOSE_CUT_FRACTION_OF_STOP (75% by
+// target. Only a loser that has traveled SCORE_CLOSE_CUT_FRACTION_OF_STOP (90% by
 // default) of the way to its hard stop is cut by a fade (the stop itself remains
 // the final cap). The move must also clear SCORE_CLOSE_CUT_MIN_PCT (3% default) —
 // a sub-noise dip near entry is consolidation, and with re-leveling (pre-lock stop
