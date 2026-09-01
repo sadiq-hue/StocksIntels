@@ -1830,11 +1830,21 @@ function evaluateScoreClose(prevOutcome, freshAction, eligibilityOk, currentPric
   const tooYoung = prevOutcome.timestamp ? (now - prevOutcome.timestamp) < minAgeMs : true;
   const scoreCloseAllowed = allowScoreClose && !tooYoung;
 
-  // Flip: fresh thesis flipped direction (Buy->Sell or Sell->Buy). Unlike the
-  // fade (which only closes losers), a flip reflects a genuine directional
-  // change. But a single-cycle flicker at -0.3% must not yank the position:
-  // — requires FLIP_CLOSE_CONFIRMATIONS consecutive flip readings
-  // — AND the position must be at least 50% toward its stop (flipCutReached)
+  // WINNER-ONLY closes (Option 1): the score can book a gain when the thesis
+  // turns against an IN-PROFIT position, but it can never cut a loser early.
+  // A faded/flipped loser rides to its hard stop or target (resolved by
+  // riskManager.trackSignalOutcomes) — the score exit is a gain-banking signal,
+  // not a risk-cap. So every score close below is gated on inProfit (price has
+  // crossed entry toward target).
+  const isPrevBuy = prevAction === 'buy';
+  const inProfit = currentPrice > 0 && prevOutcome.entryPrice > 0
+    ? (isPrevBuy ? currentPrice >= prevOutcome.entryPrice : currentPrice <= prevOutcome.entryPrice)
+    : false;
+
+  // Flip: fresh thesis flipped direction (Buy->Sell or Sell->Buy). A winner-only
+  // flip requires FLIP_CLOSE_CONFIRMATIONS consecutive flip readings AND the
+  // position in profit — the reversal banks the gain instead of holding a thesis
+  // that just turned. A LOSER flip never closes here; it rides to its hard stop.
   const isFlipCandidate = eligibilityOk && scoreCloseAllowed && ((prevAction === 'buy' && freshAction === 'sell') || (prevAction === 'sell' && freshAction === 'buy'));
   if (isFlipCandidate) {
     if (prevOutcome.flipFirstSeen == null) {
@@ -1851,16 +1861,21 @@ function evaluateScoreClose(prevOutcome, freshAction, eligibilityOk, currentPric
     prevOutcome.flipFirstSeen = null;
   }
   const flipConfirmed = prevOutcome.flipCount >= FLIP_CLOSE_CONFIRMATIONS;
-  const flipQualifies = flipConfirmed && flipCutReached(prevOutcome, currentPrice);
+  const flipQualifies = flipConfirmed && inProfit;
 
   const { isFade, fadeCount, fadeConfirmed, fadeFirstSeen, required } = scoreCloseAllowed
     ? assessConvictionFade(prevAction, freshAction, eligibilityOk, prevOutcome.fadeCount, prevOutcome.fadeFirstSeen, now, freshScore)
     : { isFade: false, fadeCount: 0, fadeConfirmed: false, fadeFirstSeen: null, required: FADE_CLOSE_CONFIRMATIONS };
   const fadeReason = scoreCloseAllowed && isFade ? fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice, now) : null;
+  // Winner-only: every score close fires ONLY while the position is in profit
+  // (flip banks the gain on a reversed thesis; profit-fade banks it at target;
+  // stale-thesis never fires because it needs a realized loss). A LOSER never
+  // closes here — it rides to its hard stop/target (trackSignalOutcomes).
   let close = null;
-  if (flipQualifies) close = 'score flipped';
-  else if (fadeReason) close = fadeReason;
-  else if (isFade && fadeConfirmed && fadeCutReached(prevOutcome, currentPrice)) close = 'conviction faded';
+  if (inProfit) {
+    if (flipQualifies) close = 'score flipped';
+    else if (fadeReason) close = fadeReason;
+  }
   return { close, fadeCount, fadeFirstSeen, required, isFade, tooYoung, longTermHold };
 }
 
