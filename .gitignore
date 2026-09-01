@@ -63,6 +63,19 @@ frontend/.playwright/
 
 # Verification PDF cache (large)
 backend/verify_pdfs/
+
+# One-off dev/debug harnesses and data dumps (not part of the app)
+backend/diag_*.cjs
+backend/check*.cjs
+backend/trigger_gen.cjs
+backend/get_token.cjs
+backend/gen_direct.cjs
+backend/clean_drafts.cjs
+backend/test_stack.cjs
+backend/gen_result.json
+gen_draft.cjs
+ipo_dump.json
+ipos_dump.txt
 # Process/debug artifacts
 backend/*_pid.txt
 frontend/*_pid.txt
