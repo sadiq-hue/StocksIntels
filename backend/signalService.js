@@ -1732,7 +1732,7 @@ function staleThesisDaysFor(type, position = {}) {
 //                    forever bouncing Buy/Hold and never accumulating consecutive
 //                    fade readings.
 //   null           - fall through to the regular FADE_CLOSE_CONFIRMATIONS path.
-function fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice) {
+function fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice, now = Date.now()) {
   if (!eligibilityOk || !prevOutcome || freshAction !== 'hold') return null;
   const type = prevOutcome.type || 'Swing Trade';
   if (isLongTermHold(type)) return null;
@@ -1742,8 +1742,15 @@ function fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice) 
     const progress = ((currentPrice - entryPrice) / (target1 - entryPrice)) * 100;
     if (progress >= 100) return 'profit fade';
   }
-  const ageDays = prevOutcome.timestamp ? (Date.now() - prevOutcome.timestamp) / 86400000 : 0;
-  if (ageDays >= staleThesisDaysFor(type, prevOutcome)) return 'stale thesis';
+  const ageDays = prevOutcome.timestamp ? (now - prevOutcome.timestamp) / 86400000 : 0;
+  // A position is only called 'stale thesis' once it is BOTH past its trade-type
+  // window AND holding a realized loss deep enough to warrant cutting. Winners and
+  // flat positions are never swept for simply aging (c6e4d97 "run until
+  // stop/target") - a stale close on a green/breakeven name was force-booking a
+  // coin-flip around entry and churning weeks/months of thesis at ~0%. The loss
+  // guard mirrors the conviction-fade cut, so age alone can never close a name
+  // that is still working toward its target.
+  if (ageDays >= staleThesisDaysFor(type, prevOutcome) && fadeCutReached(prevOutcome, currentPrice)) return 'stale thesis';
   return null;
 }
 
@@ -1846,7 +1853,7 @@ function evaluateScoreClose(prevOutcome, freshAction, eligibilityOk, currentPric
   const { isFade, fadeCount, fadeConfirmed, fadeFirstSeen, required } = scoreCloseAllowed
     ? assessConvictionFade(prevAction, freshAction, eligibilityOk, prevOutcome.fadeCount, prevOutcome.fadeFirstSeen, now, freshScore)
     : { isFade: false, fadeCount: 0, fadeConfirmed: false, fadeFirstSeen: null, required: FADE_CLOSE_CONFIRMATIONS };
-  const fadeReason = scoreCloseAllowed && isFade ? fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice) : null;
+  const fadeReason = scoreCloseAllowed && isFade ? fadeCloseReason(prevOutcome, freshAction, eligibilityOk, currentPrice, now) : null;
   let close = null;
   if (flipQualifies) close = 'score flipped';
   else if (fadeReason) close = fadeReason;

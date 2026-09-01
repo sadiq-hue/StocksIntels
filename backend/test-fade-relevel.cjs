@@ -257,26 +257,32 @@ check('long-term hold never immediate-close, even stale or above target',
 check('trailing position excluded (trail stop books the exit)',
   fadeCloseReason({ ...basePos, trailing: true }, 'hold', true, 105), null);
 
-check('stale swing (>30d) hold -> stale thesis',
-  fadeCloseReason({ ...basePos, timestamp: now - 31 * DAY }, 'hold', true, 105), 'stale thesis');
+check('stale swing (>30d) hold but WINNER -> no stale thesis (winners ride)',
+  fadeCloseReason({ ...basePos, timestamp: now - 31 * DAY }, 'hold', true, 105), null);
 
 check('young momentum (<21d) hold -> null',
   fadeCloseReason({ ...basePos, type: 'Momentum Trade', timestamp: now - 10 * DAY }, 'hold', true, 105), null);
 
-check('stale momentum (>21d) hold -> stale thesis',
-  fadeCloseReason({ ...basePos, type: 'Momentum Trade', timestamp: now - 25 * DAY }, 'hold', true, 105), 'stale thesis');
+check('stale momentum (>21d) hold but WINNER -> no stale thesis (winners ride)',
+  fadeCloseReason({ ...basePos, type: 'Momentum Trade', timestamp: now - 25 * DAY }, 'hold', true, 105), null);
 
-check('stale day-trade (>=5d) hold -> stale thesis',
-  fadeCloseReason({ ...basePos, type: 'Day Trade', timestamp: now - 5 * DAY }, 'hold', true, 102), 'stale thesis');
+check('stale day-trade (>=5d) hold but WINNER (+2%) -> no stale thesis (winners ride)',
+  fadeCloseReason({ ...basePos, type: 'Day Trade', timestamp: now - 5 * DAY }, 'hold', true, 102), null);
 
-check('exactly at threshold counts as stale (age >= threshold)',
-  fadeCloseReason({ ...basePos, timestamp: now - 30 * DAY }, 'hold', true, 105), 'stale thesis');
+check('exactly at threshold but WINNER -> no stale thesis',
+  fadeCloseReason({ ...basePos, timestamp: now - 30 * DAY }, 'hold', true, 105), null);
+
+check('stale momentum (>21d) hold on a LOSER (-15% stop, -13% moved) -> stale thesis',
+  fadeCloseReason({ ...basePos, stopLoss: 85, type: 'Momentum Trade', timestamp: now - 25 * DAY }, 'hold', true, 87), 'stale thesis');
+
+check('stale swing (>30d) hold on a FLAT position (~breakeven) -> no stale thesis',
+  fadeCloseReason({ ...basePos, timestamp: now - 31 * DAY }, 'hold', true, 99.5), null);
 
 check('wide-target swing (window 60) NOT stale at 31d',
   fadeCloseReason({ ...basePos, entryPrice: 100, stopLoss: 95, target1: 130, timestamp: now - 31 * DAY }, 'hold', true, 105), null);
 
-check('wide-target swing (window 60) stale past its stretched window',
-  fadeCloseReason({ ...basePos, entryPrice: 100, stopLoss: 95, target1: 130, timestamp: now - 61 * DAY }, 'hold', true, 105), 'stale thesis');
+check('wide-target swing (window 60) stale past its stretched window on a LOSER (-15% stop) -> stale thesis',
+  fadeCloseReason({ ...basePos, entryPrice: 100, stopLoss: 85, target1: 130, timestamp: now - 61 * DAY }, 'hold', true, 88), 'stale thesis');
 
 check('no timestamp treated as fresh (age 0)',
   fadeCloseReason({ action: 'buy', entryPrice: 100, target1: 110, type: 'Swing Trade' }, 'hold', true, 102), null);
@@ -368,8 +374,12 @@ check('2d-old hold at/above target1 profit-fades on first reading',
   evaluateScoreClose(freshPos, 'hold', true, 112, now2d, HOUR, DEEP),
   { close: 'profit fade', fadeCount: 1, fadeFirstSeen: now2d, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
-check('stale position (>30d) + hold -> stale thesis',
+check('stale position (>30d) + hold but WINNER -> no stale thesis (winners ride)',
   evaluateScoreClose({ ...freshPos, timestamp: T0 - 31 * DAY }, 'hold', true, 105, now2d, HOUR, DEEP),
+  { close: null, fadeCount: 1, fadeFirstSeen: now2d, required: 3, isFade: true, tooYoung: false, longTermHold: false });
+
+check('stale position (>30d) + hold on a LOSER (-15% vs 15% stop) -> stale thesis',
+  evaluateScoreClose({ ...freshPos, timestamp: T0 - 31 * DAY }, 'hold', true, 85, now2d, HOUR, DEEP),
   { close: 'stale thesis', fadeCount: 1, fadeFirstSeen: now2d, required: 3, isFade: true, tooYoung: false, longTermHold: false });
 
 check('long-term hold type + old + flip -> still no score close (stop/target only)',
