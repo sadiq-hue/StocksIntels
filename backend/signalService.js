@@ -101,10 +101,12 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
 })();
 // Signal evaluation window (must be declared before restoreStateFromDb runs).
 // Covers the longest monitored position lifespan: wide targets can take weeks to
-// fill and positions run until stop/target (no expiry), so a 90-day window keeps
+// fill and positions run until stop/target (no expiry), so a 180-day window keeps
 // monitored signals, live/forward test stats, and the auto backtest aligned with
-// the full signal lifecycle instead of only the last day.
-const SIGNAL_WINDOW_DAYS = 90;
+// the full signal lifecycle instead of only the last day. Open positions restore
+// within this same window (see restoreStateFromDb) and OPEN_POSITION_MAX_AGE_HOURS
+// below is derived from it so stats and position-restore can never drift apart.
+const SIGNAL_WINDOW_DAYS = 180;
 // Physical retention is decoupled from the display/backtest window: the runtime
 // window (SIGNAL_WINDOW_DAYS) decides what the stats, live/forward test and auto
 // backtest show, while retentionDays (engine config, default 365; env override
@@ -126,7 +128,7 @@ const RETENTION_DAYS = Math.max(90, parseInt(process.env.RETENTION_DAYS || '365'
 // full SIGNAL_WINDOW_DAYS evaluation window. The resolved-outcome check
 // (9c1ebea fix) already prevents re-monitoring resolved positions, so there
 // is no harm in restoring more — every open position gets its fair chance.
-const OPEN_POSITION_MAX_AGE_HOURS = Math.max(1, parseInt(process.env.OPEN_POSITION_MAX_AGE_HOURS || '2160', 10) || 2160); // default 90 days (2160h) = SIGNAL_WINDOW_DAYS
+const OPEN_POSITION_MAX_AGE_HOURS = Math.max(1, parseInt(process.env.OPEN_POSITION_MAX_AGE_HOURS || String(SIGNAL_WINDOW_DAYS * 24), 10) || (SIGNAL_WINDOW_DAYS * 24)); // default = SIGNAL_WINDOW_DAYS days, so position restore matches the evaluation window
 // Restore performance stats and portfolio state from DB on startup
 restoreStateFromDb().catch(() => {});
 // Bootstrap durable NSE daily history (KenyanStocks seed + best-effort deep bootstrap) non-blocking
@@ -882,6 +884,33 @@ function computeDynamicWeights(regime) {
 }
 
 // Restore performance stats and portfolio state from DB on startup
+// Recompute the resolved live-outcomes tally from signal_outcomes using the
+// SAME canonical evaluation window (SIGNAL_WINDOW_DAYS) and filter that the
+// Forward Test / Audit tab uses (getForwardTestStats). The Health tab and the
+// Audit tab both claim to surface "the same resolved live outcomes", so they
+// must draw from one population when refreshed — otherwise dividing the truth
+// across a 30-day startup snapshot vs a 90-day live window manufactures a
+// phantom win-rate gap.
+async function refreshPerformanceStats() {
+  const result = await pool.query(
+    `SELECT result, COUNT(*) as cnt FROM signal_outcomes
+     WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - $1::interval AND result IS NOT NULL AND source = 'live'
+     GROUP BY result`,
+    [`${SIGNAL_WINDOW_DAYS} days`]
+  );
+  let wins = 0, losses = 0;
+  for (const row of result.rows) {
+    if (row.result === 'win') wins = parseInt(row.cnt) || 0;
+    if (row.result === 'loss') losses = parseInt(row.cnt) || 0;
+  }
+  _performanceStats.wins = wins;
+  _performanceStats.losses = losses;
+  _performanceStats.total = wins + losses;
+  _performanceStats.winRate = _performanceStats.total > 0
+    ? Math.round((_performanceStats.wins / _performanceStats.total) * 1000) / 10 : 0;
+  return _performanceStats;
+}
+
 async function restoreStateFromDb() {
   try {
     // Load all historical outcomes into memory so health/trade tracking works across restarts
@@ -986,28 +1015,16 @@ async function restoreStateFromDb() {
     }
     console.log(`[SignalService] Restored open live positions from signal_history`);
 
-    // Compute performance stats from signals generated in the last 30 days
-    const result = await pool.query(
-      `SELECT result, COUNT(*) as cnt FROM signal_outcomes
-       WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - INTERVAL '30 days' AND result IS NOT NULL AND source = 'live'
-       GROUP BY result`
-    );
-    let wins = 0, losses = 0;
-    for (const row of result.rows) {
-      if (row.result === 'win') wins = parseInt(row.cnt) || 0;
-      if (row.result === 'loss') losses = parseInt(row.cnt) || 0;
-    }
-    _performanceStats.wins = wins;
-    _performanceStats.losses = losses;
-    _performanceStats.total = wins + losses;
-    _performanceStats.winRate = _performanceStats.total > 0
-      ? Math.round((_performanceStats.wins / _performanceStats.total) * 1000) / 10 : 0;
+    // Compute performance stats from live outcomes in the canonical evaluation
+    // window (SIGNAL_WINDOW_DAYS, same as the Forward Test / Audit tab) so the
+    // Health tab's resolved win rate matches what the Audit tab reports.
+    await refreshPerformanceStats();
 
     // Track total signal history rows for health display
     const histCount = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_history').catch(() => ({ rows: [{ cnt: 0 }] }));
     _signalHistoryCount = histCount.rows[0]?.cnt || 0;
 
-    console.log(`[SignalService] Restored ${_signalOutcomes.size} outcomes, ${_signalHistoryCount} history rows from DB (${wins} wins, ${losses} losses in last 30d)`);
+    console.log(`[SignalService] Restored ${_signalOutcomes.size} outcomes, ${_signalHistoryCount} history rows from DB (${_performanceStats.wins} wins, ${_performanceStats.losses} losses in last ${SIGNAL_WINDOW_DAYS}d)`);
 
     // NOTE: automatic backfill intentionally removed. backfillOutcomesFromHistory
     // marked win/loss by comparing old entries to current quotes (no stop/target/
@@ -4599,6 +4616,7 @@ module.exports = {
   NSE_SYMBOLS,
   US_SYMBOLS,
   getEngineHealth,
+  refreshPerformanceStats,
   restoreStateFromDb,
   backfillOutcomesFromHistory,
   runHistoricalBacktest,
