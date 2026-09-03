@@ -62,13 +62,21 @@ interface NotificationContextValue {
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, token, isLoading: authLoading } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  // authReady guards the initial fetch: on a fresh page reload the token is
+  // restored asynchronously (via /auth/refresh), so the user object may be
+  // present before the Authorization token is. Firing the request first with
+  // no token makes /api/notifications 401 and leaves the bell empty, and since
+  // user?.id doesn't change when the token arrives, nothing refetches. Only
+  // fetch once auth has finished loading with a token in place.
+  const authReady = !authLoading && !!user?.id && !!token;
+
   const fetchNotifications = useCallback(async () => {
-    if (!user?.id) return;
+    if (!authReady) return;
     setLoading(true);
     try {
       const res = await authFetch(`${API_URL}/notifications?userId=${user.id}`);
@@ -87,19 +95,21 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [authReady]);
 
   useEffect(() => {
+    if (!authReady) return;
     fetchNotifications();
-  }, [fetchNotifications]);
+  }, [fetchNotifications, authReady]);
 
   // Refetch when the tab regains focus so the list stays fresh even if
   // real-time delivery is interrupted (sleep, background tab, etc.).
   useEffect(() => {
+    if (!authReady) return;
     const onFocus = () => fetchNotifications();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [fetchNotifications]);
+  }, [fetchNotifications, authReady]);
 
   useEffect(() => {
     if (!user?.id) return;
