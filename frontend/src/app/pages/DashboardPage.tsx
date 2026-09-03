@@ -254,12 +254,11 @@ export function DashboardPage() {
   );
 
   const sectorData = useMemo(() => {
-    const map = new Map<string, { totalChange: number; count: number; marketCaps: string[] }>();
+    const map = new Map<string, { totalChange: number; count: number }>();
     for (const s of allStocks) {
-      const existing = map.get(s.sector) || { totalChange: 0, count: 0, marketCaps: [] };
+      const existing = map.get(s.sector) || { totalChange: 0, count: 0 };
       existing.totalChange += s.change;
       existing.count += 1;
-      existing.marketCaps.push(s.marketCap);
       map.set(s.sector, existing);
     }
     return Array.from(map.entries()).map(([sector, data]) => ({
@@ -440,7 +439,7 @@ export function DashboardPage() {
   }, [perfData, perfMeta.totalReturnPercent, enhancedTotals.nseValue, enhancedTotals.globalValue]);
 
   const topSignals = useMemo(() =>
-    signals
+    [...signals]
       .sort((a, b) => b.confidence - a.confidence)
       .slice(0, 4)
       .map(s => ({
