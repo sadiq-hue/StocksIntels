@@ -32,13 +32,38 @@ export function StockSearchBar() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
+      const q = encodeURIComponent(query);
       try {
-        const res = await fetch(`${API_URL}/stocks/search/yahoo?q=${encodeURIComponent(query)}`);
-        if (res.ok) {
-          const data = await res.json();
-          setResults(data || []);
-          setOpen(data?.length > 0);
-        }
+        const [localRes, yahooRes] = await Promise.allSettled([
+          fetch(`${API_URL}/stocks/search?q=${q}`),
+          fetch(`${API_URL}/stocks/search/yahoo?q=${q}`),
+        ]);
+
+        const local: SearchResult[] =
+          localRes.status === "fulfilled" && localRes.value.ok
+            ? ((await localRes.value.json()) || []).map((s: any) => ({
+                symbol: s.ticker,
+                name: s.name,
+                exchange: s.market === "NSE" ? "NSE" : s.market,
+                quoteType: "EQUITY",
+              }))
+            : [];
+
+        const yahoo: SearchResult[] =
+          yahooRes.status === "fulfilled" && yahooRes.value.ok
+            ? ((await yahooRes.value.json()) || [])
+            : [];
+
+        const seen = new Set<string>();
+        const merged = [...local, ...yahoo].filter((r) => {
+          const key = r.symbol.toUpperCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        setResults(merged);
+        setOpen(merged.length > 0);
       } catch {
         // ignore
       }
