@@ -1870,7 +1870,7 @@ async function _loadForwardPredictionsFromDb() {
         action: row.action, tradeType, sector: row.sector,
         benchPrice: row.bench_price != null ? Number(row.bench_price) : null,
         generatedAt: new Date(row.generated_at).getTime(),
-        resolved: !!row.resolved, actualReturn: Number(row.actual_return), correct: row.correct,
+        resolved: !!row.resolved, actualReturn: row.actual_return != null ? Number(row.actual_return) : null, correct: row.correct,
         resolvedAt: row.resolved_at ? new Date(row.resolved_at).getTime() : null,
       });
     }

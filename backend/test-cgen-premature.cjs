@@ -30,5 +30,11 @@ const src = fs.readFileSync(__dirname + '/signalService.js', 'utf8');
 const buggy = src.includes('const actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;\n      pred.resolvedAt = Date.now();\n      pred.actualReturn = actualReturn;');
 check('No unconditional resolvedAt/actualReturn stamp before the status branch', !buggy);
 
+// Root cause of the trailing "0.0%" on the open 300-position: the DB restore path
+// mapped actual_return = NULL through bare Number(NULL) -> 0. Uppercase the guard
+// so a restored pending (resolved=false, actual_return=NULL) row stays null -> '—'.
+const badRestore = src.includes('resolved: !!row.resolved, actualReturn: Number(row.actual_return)');
+check('DB restore: actual_return NULL maps to null, not 0', !badRestore);
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
