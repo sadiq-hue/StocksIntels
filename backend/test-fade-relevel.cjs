@@ -83,96 +83,97 @@ check('fade without a fresh score defaults to the harder marginal count (4)',
 
 // ─── computeRelevelStop ────────────────────────────────────────────────────
 section('computeRelevelStop');
-// position: entry 100, stop 82 (an 18% stop — typical ATR-scaled width above the
-// 15% floor), target1 110  => targetDist 10. The pre-lock cap sits at
-// entry - max(2%, MIN_STOP_PCT*100=15%, freshStopDist*0.5) = 85 in these cases,
-// so pre-lock re-leveling can ratchet the stop up to (but never above) the 15%
+// position: entry 100, stop 79 (a 21% stop — wider than the 18% MIN_STOP_PCT floor,
+// leaving ~3% of room like the old 'stop 82 vs 15% floor' case), target1 110
+// => targetDist 10. The pre-lock cap sits at
+// entry - max(2%, MIN_STOP_PCT*100=18%, freshStopDist*0.5) = 82 in these cases,
+// so pre-lock re-leveling can ratchet the stop up to (but never above) the 18%
 // floor, and the lock phase (>= 75% progress) starts banking half the gain.
-const pos = { entryPrice: 100, stopLoss: 82, target1: 110 };
+const pos = { entryPrice: 100, stopLoss: 79, target1: 110 };
 
-check('tighter ATR stop ratchets up (82 -> 85), capped at the 15% floor, changed, progress 20',
+check('tighter ATR stop ratchets up (79 -> 82), capped at the 18% floor, changed, progress 20',
   computeRelevelStop(pos, 102, 95),
-  { newStop: 85, changed: true, progress: 20 });
+  { newStop: 82, changed: true, progress: 20 });
 
-check('looser ATR stop never loosens (82 kept), unchanged',
-  computeRelevelStop(pos, 102, 80),
-  { newStop: 82, changed: false, progress: 20 });
+check('looser ATR stop never loosens (79 kept), unchanged',
+  computeRelevelStop(pos, 102, 75),
+  { newStop: 79, changed: false, progress: 20 });
 
-check('progress 50 (pre-lock) tightens to the floor (85) but stays BELOW entry (no breakeven ratchet)',
+check('progress 50 (pre-lock) tightens to the floor (82) but stays BELOW entry (no breakeven ratchet)',
   computeRelevelStop(pos, 105, 94),
-  { newStop: 85, changed: true, progress: 50 });
+  { newStop: 82, changed: true, progress: 50 });
 
 check('progress >= 75 locks 50% of open gain (entry + 4 = 104)',
   computeRelevelStop(pos, 108, 97),
   { newStop: 104, changed: true, progress: 80 });
 
-check('progress beyond target keeps the fresher ATR stop (106.4) over the 106 lock floor',
+check('progress beyond target keeps the fresher ATR stop (106.4) over the lock floor',
   computeRelevelStop(pos, 112, 106.4),
   { newStop: 106.4, changed: true, progress: 120 });
 
 check('price at/below stop -> not a change',
   computeRelevelStop(pos, 80, 75),
-  { newStop: 82, changed: false, progress: -200 });
+  { newStop: 79, changed: false, progress: -200 });
 
 check('null fresh stop -> no change',
   computeRelevelStop(pos, 102, null),
-  { newStop: 82, changed: false, progress: 0 });
+  { newStop: 79, changed: false, progress: 0 });
 
 check('invalid geometry (target1 <= entry) -> no change',
-  computeRelevelStop({ entryPrice: 100, stopLoss: 82, target1: 95 }, 102, 95),
-  { newStop: 82, changed: false, progress: 0 });
+  computeRelevelStop({ entryPrice: 100, stopLoss: 79, target1: 95 }, 102, 95),
+  { newStop: 79, changed: false, progress: 0 });
 
 check('undefined position -> no change',
   computeRelevelStop(undefined, 102, 95),
   { newStop: undefined, changed: false, progress: 0 });
 
 check('fresh stop equal to current stop -> no change',
-  computeRelevelStop(pos, 102, 82),
-  { newStop: 82, changed: false, progress: 20 });
+  computeRelevelStop(pos, 102, 79),
+  { newStop: 79, changed: false, progress: 20 });
 
 check('lock result is rounded to 2 decimals (104.25)',
   computeRelevelStop(pos, 108.5, 97),
   { newStop: 104.25, changed: true, progress: 85 });
 
 check('entry <= 0 guard -> no change',
-  computeRelevelStop({ entryPrice: 0, stopLoss: 82, target1: 110 }, 102, 95),
-  { newStop: 82, changed: false, progress: 0 });
+  computeRelevelStop({ entryPrice: 0, stopLoss: 79, target1: 110 }, 102, 95),
+  { newStop: 79, changed: false, progress: 0 });
 
-check('pre-lock stop never ratchets above entry minus the 15% floor (fresh 99 capped at 85)',
+check('pre-lock stop never ratchets above entry minus the 18% floor (fresh 99 capped at 82)',
   computeRelevelStop(pos, 106, 99),
-  { newStop: 85, changed: true, progress: 60 });
+  { newStop: 82, changed: true, progress: 60 });
 
-check('extreme-volatility fresh stop is still held at the 15% floor pre-lock (fresh 95 -> cap 85)',
+check('extreme-volatility fresh stop is still held at the 18% floor pre-lock (fresh 95 -> cap 82)',
   computeRelevelStop(pos, 107, 95),
-  { newStop: 85, changed: true, progress: 70 });
+  { newStop: 82, changed: true, progress: 70 });
 
-check('calm name with a nearly-breakeven fresh stop is held at the 15% floor (cap 85)',
+check('calm name with a nearly-breakeven fresh stop is held at the 18% floor (cap 82)',
   computeRelevelStop(pos, 102, 99.5),
-  { newStop: 85, changed: true, progress: 20 });
+  { newStop: 82, changed: true, progress: 20 });
 
-check('the +10% rally then dip-to-entry scenario keeps the stop below entry (85), position alive',
+check('the +10% rally then dip-to-entry scenario keeps the stop below entry (82), position alive',
   computeRelevelStop(pos, 100, 98),
-  { newStop: 85, changed: true, progress: 0 });
+  { newStop: 82, changed: true, progress: 0 });
 
 check('stop already at the floor does not churn when price retraces to entry',
-  computeRelevelStop({ entryPrice: 100, stopLoss: 85, target1: 110 }, 100, 97),
-  { newStop: 85, changed: false, progress: 0 });
+  computeRelevelStop({ entryPrice: 100, stopLoss: 82, target1: 110 }, 100, 97),
+  { newStop: 82, changed: false, progress: 0 });
 
 check('legacy sub-floor stop (2.6%, like ASML) is corrected down to the floor AND counts as changed',
   computeRelevelStop({ entryPrice: 100, stopLoss: 97.4, target1: 110 }, 100, 97),
-  { newStop: 85, changed: true, progress: 0 });
+  { newStop: 82, changed: true, progress: 0 });
 
-check('legacy sub-floor stop corrected even when the fresh stop is near breakeven',
-  computeRelevelStop({ entryPrice: 100, stopLoss: 97.4, target1: 110 }, 100, 99),
-  { newStop: 85, changed: true, progress: 0 });
+check('legacy sub-floor stop corrected even when the fresh stop is near the floor',
+  computeRelevelStop({ entryPrice: 100, stopLoss: 97.4, target1: 110 }, 100, 82),
+  { newStop: 82, changed: true, progress: 0 });
 
 check('a fresh stop at the floor with a legacy sub-floor stop still corrects to the floor',
-  computeRelevelStop({ entryPrice: 100, stopLoss: 98, target1: 110 }, 100, 85),
-  { newStop: 85, changed: true, progress: 0 });
+  computeRelevelStop({ entryPrice: 100, stopLoss: 98, target1: 110 }, 100, 82),
+  { newStop: 82, changed: true, progress: 0 });
 
 check('correction result is rounded; an already-corrected stop does not re-churn',
-  computeRelevelStop({ entryPrice: 100, stopLoss: 85, target1: 110 }, 100, 85),
-  { newStop: 85, changed: false, progress: 0 });
+  computeRelevelStop({ entryPrice: 100, stopLoss: 82, target1: 110 }, 100, 82),
+  { newStop: 82, changed: false, progress: 0 });
 
 check('lock at exactly 75% progress banks half the open gain (entry + 3.75 = 103.75)',
   computeRelevelStop(pos, 107.5, 97),
@@ -182,9 +183,9 @@ check('a stop raised past the cap by a prior lock is never loosened on retrace',
   computeRelevelStop({ entryPrice: 100, stopLoss: 104, target1: 110 }, 101, 96),
   { newStop: 104, changed: false, progress: 10 });
 
-check('new stop must stay below the market price (85 < 93 ok, tightened)',
+check('new stop must stay below the market price (82 < 93 ok, tightened)',
   computeRelevelStop(pos, 93, 92.5),
-  { newStop: 85, changed: true, progress: -70 });
+  { newStop: 82, changed: true, progress: -70 });
 
 // ─── gate interaction invariants ───────────────────────────────────────────
 section('gate interaction invariants');

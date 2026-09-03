@@ -46,11 +46,12 @@ const TRADE_TYPE_STOP_MULT = {
 // distance from entry. 5% proved too tight in production: a normal 2-4% daily
 // range is barely 1-2 ATRs under a 5% stop, so ordinary intraday swings stopped
 // out names before a move could play out (e.g. PINS stopped at -5.6% on noise).
-// 15% is ~3-7 ATRs of room for typical US names — enough to breathe through a
-// pullback while still capping a stop-out loss at a bounded 15%. The re-level
-// pre-lock cap respects the same floor so live monitoring never tightens a calm
-// stock's stop back into the noise.
-const MIN_STOP_PCT = 0.15;
+// Raised from 15% to 18% (2026) to give signals a bit more room on the same
+// underlying rationale. ~18% is ~3-7 ATRs of room for typical US names — enough
+// to breathe through a pullback while still capping a stop-out loss at a bounded
+// 18%. The re-level pre-lock cap respects the same floor so live monitoring never
+// tightens a calm stock's stop back into the noise.
+const MIN_STOP_PCT = 0.18;
 // Absolute stop ceiling (fraction of price). calculateATR clamps daily range at
 // 15%, so the widest legitimate ATR-scaled stop is 2x that (30%) for a swing
 // trade — a stop must always leave a high-volatility name at least ~2 daily
