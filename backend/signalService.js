@@ -2043,17 +2043,22 @@ async function resolveForwardPredictions(symbol) {
         continue;
       }
       const actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;
-      pred.resolvedAt = Date.now();
-      pred.actualReturn = actualReturn;
       if (outcome.status === 'resolved') {
+        // Only when the level actually fires (stop for a loss, target for a win)
+        // do we stamp the return and resolution time. Pending buys below stay
+        // un-stamped so the UI never shows a fake "+x% / resolved" for an idea
+        // that is still monitoring toward its target.
         pred.correct = outcome.correct;
         pred.resolved = true;
+        pred.resolvedAt = Date.now();
+        pred.actualReturn = actualReturn;
       } else if (outcome.status === 'neutral') {
         // Missing directional action (legacy/foreign rows) — cannot be evaluated.
         // Resolve as neutral instead of guessing from the signal name, so stale
         // rows don't manufacture fake wins/losses.
         pred.correct = null;
         pred.actualReturn = null;
+        pred.resolvedAt = Date.now();
         pred.resolved = true;
       } else if (pred.action === 'sell') {
         // Pending sell — refine with benchmark-relative evaluation before
@@ -2069,27 +2074,35 @@ async function resolveForwardPredictions(symbol) {
         if (rel.resolved) {
           pred.correct = rel.correct;
           pred.resolved = true;
+          pred.resolvedAt = Date.now();
           pred.actualReturn = rel.actualReturn;
         } else if (age >= SELL_RESOLVE_MAX_AGE) {
           const horiz = evaluateSellAtHorizon(pred, currentPrice, benchReturn, th);
           if (horiz.resolved) {
             pred.correct = horiz.correct;
             pred.resolved = true;
+            pred.resolvedAt = Date.now();
             pred.actualReturn = horiz.actualReturn;
           } else {
+            pred.actualReturn = null;
+            pred.resolvedAt = null;
             continue; // Keep monitoring.
           }
         } else {
           continue; // Still pending — keep monitoring.
         }
       } else {
+        // Pending buy: still monitoring toward stop/target. Ensure no stale
+        // return/resolution time from an earlier cycle leaks into the UI.
+        pred.actualReturn = null;
+        pred.resolvedAt = null;
         continue; // Pending — keep monitoring.
       }
       if (pred.resolved && pred.id) {
         pool.query(
           `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = $2, resolved_at = NOW() WHERE id = $3`,
           [pred.actualReturn, pred.correct, pred.id]
-        ).catch(() => {});
+        ).catch(e => { console.warn(`[ForwardTest] Failed to persist resolved prediction #${pred.id} (${symbol}): ${e.message}`); });
       }
     }
   } catch { /* skip */ }
@@ -2552,7 +2565,7 @@ async function resolveAllForwardPredictions() {
             pool.query(
               `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = $2, resolved_at = NOW() WHERE id = $3`,
               [actualReturn, pred.correct, pred.id]
-            ).catch(() => {});
+            ).catch(e => { console.warn(`[ForwardTest] Failed to persist resolved prediction #${pred.id} (${symbol}): ${e.message}`); });
           }
           resolved++;
         }
@@ -2582,17 +2595,22 @@ async function resolveAllForwardPredictions() {
           continue;
         }
         const actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;
-        pred.resolvedAt = Date.now();
-        pred.actualReturn = actualReturn;
         if (outcome.status === 'resolved') {
+          // Only when the level actually fires (stop for a loss, target for a win)
+          // do we stamp the return and resolution time. Pending buys below stay
+          // un-stamped so the UI never shows a fake "+x% / resolved" for an idea
+          // that is still monitoring toward its target.
           pred.correct = outcome.correct;
           pred.resolved = true;
+          pred.resolvedAt = Date.now();
+          pred.actualReturn = actualReturn;
         } else if (outcome.status === 'neutral') {
           // Missing directional action (legacy/foreign rows) — cannot be evaluated.
           // Resolve as neutral instead of guessing from the signal name, so stale
           // rows don't manufacture fake wins/losses.
           pred.correct = null;
           pred.actualReturn = null;
+          pred.resolvedAt = Date.now();
           pred.resolved = true;
         } else if (pred.action === 'sell') {
           // Pending sell — refine with benchmark-relative evaluation before
@@ -2607,14 +2625,18 @@ async function resolveAllForwardPredictions() {
           if (rel.resolved) {
             pred.correct = rel.correct;
             pred.resolved = true;
+            pred.resolvedAt = Date.now();
             pred.actualReturn = rel.actualReturn;
           } else if (age >= SELL_RESOLVE_MAX_AGE) {
             const horiz = evaluateSellAtHorizon(pred, currentPrice, benchReturn, th);
             if (horiz.resolved) {
               pred.correct = horiz.correct;
               pred.resolved = true;
+              pred.resolvedAt = Date.now();
               pred.actualReturn = horiz.actualReturn;
             } else {
+              pred.actualReturn = null;
+              pred.resolvedAt = null;
               skipped++;
               continue;
             }
@@ -2623,6 +2645,10 @@ async function resolveAllForwardPredictions() {
             continue;
           }
         } else {
+          // Pending buy: still monitoring toward stop/target. Ensure no stale
+          // return/resolution time from an earlier cycle leaks into the UI.
+          pred.actualReturn = null;
+          pred.resolvedAt = null;
           skipped++;
           continue;
         }
@@ -2630,7 +2656,7 @@ async function resolveAllForwardPredictions() {
           pool.query(
             `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = $2, resolved_at = NOW() WHERE id = $3`,
             [pred.actualReturn, pred.correct, pred.id]
-          ).catch(() => {});
+          ).catch(e => { console.warn(`[ForwardTest] Failed to persist resolved prediction #${pred.id} (${symbol}): ${e.message}`); });
         }
         resolved++;
       }
