@@ -1,0 +1,68 @@
+name: Deploy backend to Hetzner
+
+# Replaces Railway's git-push auto-deploy. On every push to main it builds the
+# backend image remotely on the Hetzner box and brings the stack up.
+#
+# Requires three repository secrets (Settings -> Secrets and variables -> Actions):
+#   HETZNER_HOST     - VPS IP or hostname
+#   HETZNER_USER     - SSH user (e.g. deploy) on the box
+#   HETZNER_SSH_KEY  - private SSH key that can log into the box
+#   HETZNER_ENV_FILE - full contents of the production .env used by compose
+#
+# The deploy user must be able to run docker sudo-less; see docs/DEPLOY_HETZNER.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Skip until the Hetzner VPS + secrets are configured (docs/DEPLOY_HETZNER.md).
+    # Prevents a red failing run the moment these files land in the repo.
+    if: ${{ secrets.HETZNER_HOST != '' && secrets.HETZNER_SSH_KEY != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HETZNER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.HETZNER_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Build + deploy on the VPS
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+          USER: ${{ secrets.HETZNER_USER }}
+        run: |
+          # Create the deploy directory on first run.
+          ssh "$USER@$HOST" "mkdir -p app/deploy app/docs"
+
+          # Ship the compose stack + source so the remote docker build uses the
+          # exact current tree. Includes the pnpm workspace lockfile/manifest that
+          # backend/Dockerfile COPYs. Excludes node_modules/.git for speed.
+          tar --exclude='node_modules' --exclude='.git' -czf /tmp/stack.tgz \
+            backend frontend deploy pnpm-workspace.yaml pnpm-lock.yaml
+          scp /tmp/stack.tgz "$USER@$HOST":/tmp/stack.tgz
+          ssh "$USER@$HOST" "tar -xzf /tmp/stack.tgz -C app && rm -f /tmp/stack.tgz"
+
+          # Install / refresh the production env (never overwrite manually-set values
+          # if the secret is removed; set a sentinel so we only write when provided).
+          if [ -n "${{ secrets.HETZNER_ENV_FILE }}" ]; then
+            ssh "$USER@$HOST" "cat > app/.env" <<'EOF'
+${{ secrets.HETZNER_ENV_FILE }}
+EOF
+          fi
+
+          # Rebuild and restart. Image builds remotely on the box (Dockerfile).
+          ssh "$USER@$HOST" "cd app && docker compose -f deploy/docker-compose.yml up -d --build"
+
+      - name: Smoke test
+        run: |
+          sleep 15
+          curl -fsS -m 20 "https://admin.stocksintels.com/api/health" \
+            && echo "Deploy OK" || echo "WARN: health check failed (app may still be starting)"
