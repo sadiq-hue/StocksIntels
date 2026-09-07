@@ -96,6 +96,26 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS trade_type VARCHAR(30)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS sector VARCHAR(50)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS bench_price NUMERIC(15,2)`);
+    // Forward-test dedup in recordForwardPrediction is a SELECT-then-INSERT, which
+    // a concurrent signal cycle can race past — two identical theses landed as
+    // id 13453/13667 @ NMG 13.65 (Aug 31 + Sep 1), hidden from the UI only by the
+    // load-time keep-latest dedupe. Self-heal existing open duplicates (keep the
+    // newest per symbol+action+price), then back it with a partial UNIQUE index so
+    // racing inserts are serialized atomically instead of slipping through the
+    // check. The index only constrains OPEN rows (WHERE NOT resolved): once a
+    // prediction resolves, a later signal at the same price is allowed again,
+    // matching the JS recentResolved gate.
+    await pool.query(
+      `DELETE FROM forward_predictions a
+       USING forward_predictions b
+       WHERE NOT a.resolved AND NOT b.resolved
+         AND a.symbol = b.symbol AND a.action = b.action AND a.price = b.price
+         AND (a.generated_at < b.generated_at OR (a.generated_at = b.generated_at AND a.id < b.id))`
+    ).catch(() => {});
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS uq_forward_predictions_open_thesis
+       ON forward_predictions (symbol, action, price) WHERE NOT resolved`
+    ).catch(() => {});
     await nseHistory.ensureTable().catch(() => {});
   } catch {}
 })();
@@ -1939,10 +1959,19 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
   const store = _forwardTestStore.get(symbol);
   let dbId = null;
   try {
+    // Atomic insert: the partial unique index uq_forward_predictions_open_thesis
+    // on (symbol, action, price) WHERE NOT resolved serializes two signal cycles
+    // that both passed the SELECT backstop above. The loser of the race gets
+    // DO NOTHING (no row) instead of INSERTing a twin — the exact bug that
+    // produced id 13453/13667 (@ NMG 13.65). An empty result means the thesis
+    // is already open in the DB, so skip the in-memory push too.
     const result = await pool.query(
-      `INSERT INTO forward_predictions (symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, bench_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      `INSERT INTO forward_predictions (symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, bench_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (symbol, action, price) WHERE NOT resolved DO NOTHING
+       RETURNING id`,
       [symbol, signalAction, confidence, price, stopLoss, target1, signalObjAction, tradeType, sector, benchPrice]
     );
+    if (!result.rows.length) return;
     dbId = result.rows[0].id;
   } catch (e) { /* persistence best-effort */ }
   store.predictions.push({
