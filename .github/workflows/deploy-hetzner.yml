@@ -20,9 +20,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # Active once HETZNER_HOST/HETZNER_SSH_KEY/HETZNER_USER/HETZNER_ENV_FILE
-    # are set (Settings -> Secrets and variables -> Actions). See docs/DEPLOY_HETZNER.md.
-    if: ${{ secrets.HETZNER_HOST != '' && secrets.HETZNER_SSH_KEY != '' }}
+    # Deploy only on the main branch.
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
