@@ -13451,6 +13451,19 @@ class AppError extends Error {
   }
 }
 
+// ── SPA fallback: serve index.html for all non-API routes ────────
+// Only enabled when the backend is co-located with a built frontend.
+// MUST run before the 404 handler below, or SPA deep links 404.
+if (serveFrontend) {
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+} else {
+  // API-only fallback for separate frontend deployments
+  app.get('/', (_req, res) => res.json({ status: 'StocksIntels API', time: new Date().toISOString() }));
+}
+
 // 404 handler — must be after all routes
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found', code: 'NOT_FOUND' });
@@ -13502,18 +13515,6 @@ app.get('/api/admin/indexing-status', (req, res) => {
       : 'Set GOOGLE_REFRESH_TOKEN env var on Railway',
   });
 });
-
-// ── SPA fallback: serve index.html for all non-API routes ────────
-// Only enabled when the backend is co-located with a built frontend.
-if (serveFrontend) {
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api/')) return next();
-    res.sendFile(path.join(frontendDist, 'index.html'));
-  });
-} else {
-  // API-only fallback for separate frontend deployments
-  app.get('/', (_req, res) => res.json({ status: 'StocksIntels API', time: new Date().toISOString() }));
-}
 
 // ===================== START SERVER =====================
 
