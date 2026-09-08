@@ -57,6 +57,8 @@ services:
       ENSEND_PROJECT_SECRET: ${ENSEND_PROJECT_SECRET:-}
       ENSEND_SENDER_ADDRESS: ${ENSEND_SENDER_ADDRESS:-}
       ENSEND_SENDER_NAME: ${ENSEND_SENDER_NAME:-}
+      MYSTOCKS_AFRICA_API_KEY: ${MYSTOCKS_AFRICA_API_KEY:-}
+      MYSTOCKS_AFRICA_BASE_URL: ${MYSTOCKS_AFRICA_BASE_URL:-}
     volumes:
       # Uploads must survive container rebuilds.
       - uploads:/app/backend/uploads
