@@ -20,8 +20,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # Skip until the Hetzner VPS + secrets are configured (docs/DEPLOY_HETZNER.md).
-    # Prevents a red failing run the moment these files land in the repo.
+    # Active once HETZNER_HOST/HETZNER_SSH_KEY/HETZNER_USER/HETZNER_ENV_FILE
+    # are set (Settings -> Secrets and variables -> Actions). See docs/DEPLOY_HETZNER.md.
     if: ${{ secrets.HETZNER_HOST != '' && secrets.HETZNER_SSH_KEY != '' }}
     steps:
       - name: Checkout
