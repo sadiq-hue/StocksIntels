@@ -2,8 +2,8 @@ const { Pool } = require('pg');
 
 const connectionString = process.env.DATABASE_URL;
 
-// Only force SSL for non-localhost connections
-const isLocal = !connectionString || connectionString.includes('@localhost') || connectionString.includes('@127.0.0.1');
+// Only force SSL for non-local connections (localhost, Docker-internal host, etc.)
+const isLocal = !connectionString || connectionString.includes('@localhost') || connectionString.includes('@127.0.0.1') || connectionString.includes('@db:') || connectionString.includes('@db/');
 
 const pool = new Pool(
   connectionString
