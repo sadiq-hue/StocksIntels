@@ -1018,15 +1018,15 @@ export function StockAnalysisPage() {
               </div>
 
               {activeSelection.market === "nse" && nseInsights && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-medium">
-                    <DollarSign className="size-3" />
-                    KES/USD: 1 USD = {nseInsights.fxRate || 130} KES
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted text-muted-foreground border border-border text-[11px]">
-                    <Info className="size-3" />
+                <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-gradient-to-r from-sky-50/80 to-blue-50/50 dark:from-sky-950/25 dark:to-blue-950/15 border border-sky-200/60 dark:border-sky-800/30 px-4 py-2.5">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-sky-700 dark:text-sky-400">
+                    <DollarSign className="size-3.5 shrink-0" />
+                    1 USD = {nseInsights.fxRate || 130} KES
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1 text-[10px] text-sky-500/70 dark:text-sky-400/50">
+                    <Info className="size-3 shrink-0" />
                     Dollar-adjusted returns may differ due to FX volatility
-                  </span>
+                  </div>
                 </div>
               )}
             </div>
