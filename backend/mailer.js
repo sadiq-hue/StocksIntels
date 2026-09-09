@@ -1008,7 +1008,7 @@ function buildMarketSnapshotHtml(marketOverview, mode = 'full') {
         </tr>
       </table>
       <div style="padding:6px 16px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid ${BORDER}">
-        <span style="font-size:10px;color:${TEXT_LIGHT}">${marketOverview.totalSignals || 0} active signals</span>
+        <span style="font-size:10px;color:${TEXT_LIGHT}">${marketOverview.totalSignals || 0} Signals Detected Across Markets</span>
         <span style="font-size:10px;color:${sentColor};font-weight:600">Market Mood: ${esc(marketOverview.sentiment || 'Neutral')}</span>
       </div>
     </div>`;
