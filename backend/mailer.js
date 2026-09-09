@@ -1750,6 +1750,20 @@ function sendAnnouncementEmail(email, announcement, name) {
 
 function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
+function fmtMarketCap(value) {
+  const n = Number(value);
+  if (!n || n <= 0) return '';
+  if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+  return n.toLocaleString();
+}
+
+function fmtNum(value, digits = 1) {
+  const n = Number(value);
+  return n !== null && n !== undefined && !isNaN(n) ? n.toFixed(digits) : '';
+}
+
 async function sendContactNotification({ name, email, subject, message: msg }) {
   const n = esc(name);
   const e = esc(email);
@@ -1971,6 +1985,24 @@ async function sendStockInsightsEmail(email, data, options = {}) {
       </div>`
     ).join('');
 
+    const fund = d.fundamentals || {};
+    const currencyPrefix = isGlobal ? '$' : 'KES ';
+    const metricBlocks = [
+      fund.peRatio ? { label: 'P/E', value: fmtNum(fund.peRatio) } : null,
+      fund.dividendYield ? { label: 'Div Yield', value: `${fmtNum(fund.dividendYield)}%` } : null,
+      fund.marketCap ? { label: 'Mkt Cap', value: `${currencyPrefix}${fmtMarketCap(fund.marketCap)}` } : null,
+      fund.epsGrowth ? { label: 'EPS Growth', value: `${fund.epsGrowth > 0 ? '+' : ''}${fmtNum(fund.epsGrowth)}%` } : null,
+      d.priceData?.volume ? { label: 'Volume', value: Number(d.priceData.volume).toLocaleString() } : null,
+    ].filter(Boolean);
+    const fundStrip = metricBlocks.length > 0 ? `
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px">
+        ${metricBlocks.map(m => `
+          <div style="background:${BG_LIGHT};border:1px solid ${BORDER};border-radius:6px;padding:4px 8px;text-align:center">
+            <div style="font-size:9px;font-weight:600;color:${TEXT_LIGHT};text-transform:uppercase;letter-spacing:0.4px">${esc(m.label)}</div>
+            <div style="font-size:12px;font-weight:700;color:${TEXT_DARK}">${esc(m.value)}</div>
+          </div>`).join('')}
+      </div>` : '';
+
     return `
     <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;margin-bottom:16px;overflow:hidden">
       <div style="padding:20px 20px 0">
@@ -1989,6 +2021,7 @@ async function sendStockInsightsEmail(email, data, options = {}) {
           ${priceStr ? `<span style="font-size:13px;font-weight:600;color:${TEXT_DARK}">${currency}${priceStr}</span>` : ''}
           ${chgStr ? `<span style="font-size:12px;font-weight:700;color:${chgColor}">${chgStr}</span>` : ''}
         </div>
+        ${fundStrip}
       </div>
       <div style="padding:0 20px 20px">
         <div style="font-size:14px;font-weight:700;color:${TEXT_DARK};margin-bottom:8px;line-height:1.3">${esc(d.headline || '')}</div>

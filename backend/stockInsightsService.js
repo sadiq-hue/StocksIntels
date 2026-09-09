@@ -7,6 +7,7 @@ const axios = require('axios');
 const { pool } = require('./db');
 const { getAllNews, getNewsSummary } = require('./newsService');
 const { getCompanyName } = require('./marketService');
+const { getFundamentals } = require('./signalService');
 const llm = require('./llmService');
 const periodReturnsService = require('./periodReturnsService');
 
@@ -445,16 +446,19 @@ async function buildWeekAhead() {
 
   // Upcoming earnings
   try {
-    const earningsRes = await fetchJson(`${BASE}/api/earnings/calendar?days=7`, []);
-    if (Array.isArray(earningsRes)) {
-      for (const e of earningsRes.slice(0, 5)) {
-        events.push({
-          date: e.date ? new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'TBA',
-          event: `${e.symbol || e.ticker || ''} — Earnings Report`,
-          impact: 'HIGH',
-          market: 'Global',
-        });
-      }
+    const fromDate = new Date().toISOString().slice(0, 10);
+    const toDate = new Date(Date.now() + 12 * 86400000).toISOString().slice(0, 10);
+    const earningsRes = await fetchJson(`${BASE}/api/earnings/upcoming?from=${fromDate}&to=${toDate}&limit=10`, null);
+    const list = earningsRes && Array.isArray(earningsRes.earnings) ? earningsRes.earnings : [];
+    for (const e of list.slice(0, 6)) {
+      const market = (e.market || '').toLowerCase() === 'nse' ? 'NSE' : 'Global';
+      const event = e.eventType === 'filings' ? 'Filings' : e.eventType ? e.eventType : 'Earnings Report';
+      events.push({
+        date: e.dateStr || (e.date ? new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'TBA'),
+        event: `${e.ticker || e.name || ''} — ${event}`,
+        impact: 'HIGH',
+        market,
+      });
     }
   } catch {}
 
@@ -904,15 +908,23 @@ async function generateDailyInsights(force = false) {
     const nseStocks = hotStocks.filter(s => s.market === 'NSE');
     if (nseStocks.length > 0) {
       const nseSymbols = nseStocks.map(s => `NSE:${s.ticker}`).join(',');
-      const nseQuotes = await fetchJson(`${BASE}/api/market/quotes?symbols=${nseSymbols}`, {});
-      if (nseQuotes && typeof nseQuotes === 'object') Object.assign(priceDataMap, nseQuotes);
+      const nseQuotes = await fetchJson(`${BASE}/api/quotes?symbols=${nseSymbols}`, []);
+      if (Array.isArray(nseQuotes)) {
+        for (const q of nseQuotes) {
+          if (q && q.symbol) priceDataMap[q.symbol] = q;
+        }
+      }
     }
     // Fetch global stocks
     const globalStocks = hotStocks.filter(s => s.market === 'Global');
     if (globalStocks.length > 0) {
       const globalSymbols = globalStocks.map(s => s.ticker).join(',');
-      const globalQuotes = await fetchJson(`${BASE}/api/market/quotes?symbols=${globalSymbols}`, {});
-      if (globalQuotes && typeof globalQuotes === 'object') Object.assign(priceDataMap, globalQuotes);
+      const globalQuotes = await fetchJson(`${BASE}/api/quotes?symbols=${globalSymbols}`, []);
+      if (Array.isArray(globalQuotes)) {
+        for (const q of globalQuotes) {
+          if (q && q.symbol) priceDataMap[q.symbol] = q;
+        }
+      }
     }
   } catch {}
 
@@ -937,6 +949,23 @@ async function generateDailyInsights(force = false) {
     const signal = stock.sentiment === 'positive' ? 'BULLISH'
       : stock.sentiment === 'negative' ? 'BEARISH' : 'NEUTRAL';
 
+    // Pull fundamentals (P/E, dividend yield, market cap, growth) from the live
+    // financial-reports cache or curated fallback. Never blocks the draft.
+    let fundamentals = null;
+    try {
+      const f = getFundamentals(stock.ticker);
+      fundamentals = {
+        peRatio: f.peRatio != null ? Number(f.peRatio) : null,
+        pbRatio: f.pbRatio != null ? Number(f.pbRatio) : null,
+        dividendYield: f.dividendYield != null ? Number(f.dividendYield) : null,
+        marketCap: f.marketCap != null ? Number(f.marketCap) : null,
+        epsGrowth: f.epsGrowth != null ? Number(f.epsGrowth) : null,
+        revenueGrowth: f.revenueGrowth != null ? Number(f.revenueGrowth) : null,
+        sector: f.sector || null,
+        dataSource: f.dataSource || null,
+      };
+    } catch {}
+
     deepDives.push({
       ticker: stock.ticker,
       companyName,
@@ -949,11 +978,15 @@ async function generateDailyInsights(force = false) {
       sentiment: stock.sentiment,
       signal,
       market: stock.market,
+      fundamentals,
       priceData: priceData ? {
         price: priceData.price || priceData.regularMarketPrice || null,
         change: priceData.change || priceData.regularMarketChange || null,
         changePercent: priceData.changePercent || priceData.regularMarketChangePercent || null,
         volume: priceData.volume || priceData.regularMarketVolume || null,
+        dayHigh: priceData.dayHigh || priceData.regularMarketDayHigh || null,
+        dayLow: priceData.dayLow || priceData.regularMarketDayLow || null,
+        marketCap: priceData.marketCap || null,
       } : null,
       relatedNews: stock.articles.slice(0, 3),
     });
