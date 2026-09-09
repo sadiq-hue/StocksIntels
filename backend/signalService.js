@@ -1897,6 +1897,36 @@ async function _loadForwardPredictionsFromDb() {
   } catch (e) { /* table may not exist yet */ }
 }
 
+// Thesis identity for the OPEN-store dedup: two open predictions are the SAME
+// call when they describe the same entry point. A materially different entry
+// (>=2%) is always a distinct thesis; at a near-identical entry price (<0.5%)
+// they are the same thesis regardless of target (an open position must not be
+// re-counted just because the horizon target was re-scoped next cycle); for
+// buys between those bands the target1 thesis (within 5%) decides. Sells carry
+// no target levels, so price proximity alone decides.
+function sameThesis(p, price, target1, action) {
+  if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price >= 0.02) return false; // materially new entry → distinct thesis
+  if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price < 0.005) return true;  // same entry price → duplicate thesis regardless of target levels
+  if (action === 'sell') return true; // sells carry no target levels
+  return p.target1 != null && target1 != null && Math.abs(p.target1 - target1) / target1 < 0.05;
+}
+
+// Identity used against RESOLVED rows (the recently-resolved in-memory guard and
+// the resolved half of the DB backstop). A resolved row must never silence a
+// genuinely new thesis at a near-identical price forever — SCOM traded
+// 35.6-38.9 for weeks and its Sep 3/Sep 9 Buy signals were swallowed by price-
+// only matches against RESOLVED rows (12048 @36.60/target 39.15, 11955
+// @36.50/37.63) even though the new call carried fresh levels. A resolved row
+// only blocks the EXACT thesis that was just resolved: same entry price AND
+// (for buys) the same target1 within 5%. That preserves the restart-race guard
+// (a restart re-records the identical resolved prediction) without hiding new
+// calls.
+function sameResolvedThesis(p, price, target1, action) {
+  if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price >= 0.005) return false;
+  if (action === 'sell') return true; // sells carry no target levels
+  return p.target1 != null && target1 != null && Math.abs(p.target1 - target1) / target1 < 0.05;
+}
+
 async function recordForwardPrediction(symbol, signalAction, confidence, price, stopLoss, target1, signalObjAction, tradeType, sector) {
   // Dedup: one live prediction per symbol+action+THESIS. A persistent signal that
   // never triggers a decisive move must NOT re-emit a fresh prediction every
@@ -1911,32 +1941,30 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
   const existing = _forwardTestStore.get(symbol);
   if (existing) {
     const open = existing.predictions.find(p =>
-      !p.resolved && p.action === signalObjAction &&
-      (() => {
-        if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price >= 0.02) return false; // materially new entry → distinct thesis
-        // Same price within 0.5% is a duplicate thesis regardless of target levels
-        if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price < 0.005) return true;
-        if (signalObjAction === 'sell') return true; // sells carry no target levels
-        return p.target1 != null && target1 != null && Math.abs(p.target1 - target1) / target1 < 0.05;
-      })()
+      !p.resolved && p.action === signalObjAction && sameThesis(p, price, target1, signalObjAction)
     );
     if (open) return;
-    // Also block re-creation of a prediction with the same thesis that was
-    // recently resolved — without this, a restart between two hourly cycles
-    // re-records the same prediction (DB loads the resolved row, next cycle
-    // sees it resolved and creates a duplicate in-memory).
+    // Also block re-creation of a prediction that was recently resolved — without
+    // this, a restart between two hourly cycles re-records the same prediction
+    // (DB loads the resolved row, next cycle sees it resolved and creates a
+    // duplicate in-memory). The identity check is the strict sameResolvedThesis
+    // so a fresh call with new target levels still gets in.
     const recentResolved = existing.predictions.find(p =>
-      p.resolved && p.action === signalObjAction && p.price > 0 && price > 0 &&
-      Math.abs(p.price - price) / price < 0.005
+      p.resolved && p.action === signalObjAction && sameResolvedThesis(p, price, target1, signalObjAction)
     );
     if (recentResolved) return;
   }
   // DB-backed dedup backstop: the in-memory store above can be empty during a
   // startup race (it loads asynchronously while the first signal cycle already
-  // runs at +100ms), so also guard against any row (resolved or not) with the
-  // same thesis still in forward_predictions. Without this, a restart between
-  // two hourly cycles re-emits the same prediction and creates a duplicate (e.g.
-  // CGEN Aug 10: identical rows id 12422/12428, COMP Aug 11: twin entries).
+  // runs at +100ms), so also guard against any row with the same thesis still in
+  // forward_predictions. Without this, a restart between two hourly cycles
+  // re-emits the same prediction and creates a duplicate (e.g. CGEN Aug 10:
+  // identical rows id 12422/12428, COMP Aug 11: twin entries). Two rules:
+  //   - OPEN rows block any candidate within 0.5% price (mirrors the unique
+  //     partial index uq_forward_predictions_open_thesis, which prevents racing
+  //     twin inserts).
+  //   - RESOLVED rows block only the exact thesis that was resolved (entry price
+  //     AND target1 within tolerance) so a past outcome never hides a new call.
   try {
     const dup = await pool.query(
       `SELECT id FROM forward_predictions
@@ -1944,8 +1972,13 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
          AND generated_at > NOW() - $3::interval
          AND price > 0 AND $4 > 0
          AND ABS(price - $4) / $4 < 0.005
+         AND (
+           NOT resolved
+           OR $5 = 'sell'
+           OR (target1 IS NOT NULL AND $6 IS NOT NULL AND ABS(target1 - $6) / $6 < 0.05)
+         )
        LIMIT 1`,
-      [symbol, signalObjAction, `${SIGNAL_WINDOW_DAYS} days`, price]
+      [symbol, signalObjAction, `${SIGNAL_WINDOW_DAYS} days`, price, signalObjAction, target1]
     );
     if (dup.rows.length) return;
   } catch (e) { /* persistence best-effort */ }
@@ -4683,6 +4716,8 @@ module.exports = {
   sanitizeLiveFundamentals,
   resolveAllForwardPredictions,
   // Pure helpers (unit-testable sell/exit + resolution logic)
+  sameThesis,
+  sameResolvedThesis,
   classifySignalBucket,
   evaluateForwardPrediction,
   evaluateSellRelative,
