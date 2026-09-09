@@ -96,6 +96,7 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS trade_type VARCHAR(30)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS sector VARCHAR(50)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS bench_price NUMERIC(15,2)`);
+    await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMP WITH TIME ZONE`);
     // Forward-test dedup in recordForwardPrediction is a SELECT-then-INSERT, which
     // a concurrent signal cycle can race past — two identical theses landed as
     // id 13453/13667 @ NMG 13.65 (Aug 31 + Sep 1), hidden from the UI only by the
@@ -1547,7 +1548,7 @@ function computeMaxDrawdown(returns) {
 
 // ─── Forward Testing ────────────────────────────────────────────────────────
 // Tracks signal predictions forward and compares to actual outcomes.
-const _forwardTestStore = new Map(); // symbol -> { predictions: [{id, signal, confidence, price, stopLoss, target1, action, tradeType, generatedAt, resolved, actualReturn, correct, resolvedAt, expiry}] }
+const _forwardTestStore = new Map(); // symbol -> { predictions: [{id, signal, confidence, price, stopLoss, target1, action, tradeType, sector, generatedAt, resolved, actualReturn, correct, resolvedAt, supersededAt}] }
 
 const FORWARD_TEST_MIN_AGE = 28800000; // 8 hours — predictions younger than this are skipped
 
@@ -1860,7 +1861,7 @@ function computeRelevelStop(position, currentPrice, freshStopLoss) {
 async function _loadForwardPredictionsFromDb() {
   try {
     const result = await pool.query(
-      `SELECT id, symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, bench_price, generated_at, resolved, actual_return, correct, resolved_at
+      `SELECT id, symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, bench_price, generated_at, resolved, actual_return, correct, resolved_at, superseded_at
        FROM forward_predictions WHERE generated_at > NOW() - $1::interval ORDER BY generated_at`,
       [`${SIGNAL_WINDOW_DAYS} days`]
     );
@@ -1892,6 +1893,7 @@ async function _loadForwardPredictionsFromDb() {
         generatedAt: new Date(row.generated_at).getTime(),
         resolved: !!row.resolved, actualReturn: row.actual_return != null ? Number(row.actual_return) : null, correct: row.correct,
         resolvedAt: row.resolved_at ? new Date(row.resolved_at).getTime() : null,
+        supersededAt: row.superseded_at ? new Date(row.superseded_at).getTime() : null,
       });
     }
   } catch (e) { /* table may not exist yet */ }
@@ -2006,9 +2008,34 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
     id: dbId, signal: signalAction, confidence, price,
     stopLoss, target1, action: signalObjAction, tradeType, sector, benchPrice,
     generatedAt: Date.now(), resolved: false,
-    actualReturn: null, correct: null,
+    actualReturn: null, correct: null, resolvedAt: null, supersededAt: null,
   });
   if (store.predictions.length > 200) store.predictions = store.predictions.slice(-200);
+  // A genuinely new BUY thesis (we reached the insert, so no same-thesis row
+  // was open) REPLACES every older open buy prediction for this symbol: they are
+  // not awaiting their levels any more, they are obsolete. Marking them
+  // superseded (resolved, no return/correct verdict) keeps the Forward Test
+  // History honest — no fake ⏳ blanks for theses that stopped being the active
+  // call — while never touching resolved rows or the win/loss stats
+  // (superseded rows have correct = NULL, which all accuracy readers exclude).
+  if (signalObjAction === 'buy') {
+    for (const p of store.predictions) {
+      if (!p.resolved && p.action === 'buy' && p.id !== dbId) {
+        p.resolved = true;
+        p.correct = null;
+        p.actualReturn = null;
+        p.resolvedAt = null;
+        p.supersededAt = Date.now();
+      }
+    }
+    if (dbId) {
+      pool.query(
+        `UPDATE forward_predictions SET resolved = TRUE, correct = NULL, actual_return = NULL, resolved_at = NULL, superseded_at = NOW()
+         WHERE symbol = $1 AND action = $2 AND NOT resolved AND id <> $3`,
+        [symbol, signalObjAction, dbId]
+      ).catch(e => { console.warn(`[ForwardTest] Failed to supersede older ${symbol} buy predictions: ${e.message}`); });
+    }
+  }
 }
 
 // True when the resolution quote is stale/garbage — a quote that deviates more
@@ -2315,6 +2342,7 @@ function getForwardTestSnapshot() {
     for (const p of store.predictions) {
       if (p.generatedAt && (now - p.generatedAt) > maxAge) continue;
       if (!p.resolved) continue;
+      if (p.supersededAt) continue; // replaced by a newer thesis — not a verdict
       total++;
       if (p.correct === true) correct++;
       else if (p.correct === false) losses++;
@@ -2551,7 +2579,7 @@ function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0 } 
       if (p.generatedAt && (now - p.generatedAt) > maxAge) continue;
       if (symbol && sym !== symbol) continue;
       if (resolved !== undefined && p.resolved !== resolved) continue;
-      all.push({ symbol: sym, ...p, currency: NSE_SYMBOLS.includes(sym) ? 'KES' : 'USD', generatedAt: new Date(p.generatedAt).toISOString(), resolvedAt: p.resolvedAt ? new Date(p.resolvedAt).toISOString() : null });
+      all.push({ symbol: sym, ...p, currency: NSE_SYMBOLS.includes(sym) ? 'KES' : 'USD', generatedAt: new Date(p.generatedAt).toISOString(), resolvedAt: p.resolvedAt ? new Date(p.resolvedAt).toISOString() : null, supersededAt: p.supersededAt ? new Date(p.supersededAt).toISOString() : null });
     }
   }
   // Deduplicate: the in-memory store can accumulate duplicate entries for the
@@ -2580,6 +2608,7 @@ async function resolveAllForwardPredictions() {
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS trade_type VARCHAR(30)`).catch(() => {});
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS sector VARCHAR(50)`).catch(() => {});
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS bench_price NUMERIC(15,2)`).catch(() => {});
+  await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
   await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
   let resolved = 0, failed = 0, skipped = 0;
   for (const [symbol, store] of _forwardTestStore) {
@@ -4710,6 +4739,7 @@ module.exports = {
   getSellAudit,
   sanitizeLiveFundamentals,
   resolveAllForwardPredictions,
+  recordForwardPrediction,
   // Pure helpers (unit-testable sell/exit + resolution logic)
   isSameThesis,
   classifySignalBucket,

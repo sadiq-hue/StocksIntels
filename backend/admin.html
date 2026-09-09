@@ -5915,7 +5915,7 @@ function renderEngineStockResult(el, raw, sig, fw) {
 
   html += `
     <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
-      <p style="font-size:13px;font-weight:600;margin-bottom:8px">Forward Test History <span style="color:#6b7280;font-weight:400">(${preds.length} shown${fw && fw.total ? ' of ' + fw.total : ''})</span></p>
+      <p style="font-size:13px;font-weight:600;margin-bottom:8px">Forward Test History <span style="color:#6b7280;font-weight:400">(${preds.length} shown${fw && fw.total ? ' of ' + fw.total : ''})</span>${preds.some(p => p.supersededAt) ? '<span style="color:#9ca3af;font-weight:400;font-size:11px"> · greyed = superseded (replaced by a newer thesis)</span>' : ''}</p>
       <div style="overflow-x:auto;max-height:360px;overflow-y:auto">
         <table style="width:100%;font-size:11px">
           <thead><tr style="border-bottom:1px solid #e5e7eb">
@@ -5932,14 +5932,14 @@ function renderEngineStockResult(el, raw, sig, fw) {
               const pSig = p.signal;
               const pColor = ({ 'Strong Buy': 'bg-emerald-100 text-emerald-700', 'Buy': 'bg-green-100 text-green-700', 'Hold': 'bg-gray-100 text-gray-600', 'Sell': 'bg-red-100 text-red-700', 'Strong Sell': 'bg-rose-100 text-rose-700' }[pSig] || 'bg-gray-100 text-gray-600');
               const pSym = p.currency === 'KES' ? 'KES ' : '$';
-              return `<tr style="border-bottom:1px solid #f3f4f6">
+              return `<tr style="border-bottom:1px solid #f3f4f6;${p.supersededAt ? 'opacity:0.55;background:#fafafa' : ''}">
                 <td style="padding:4px 8px;color:#6b7280;white-space:nowrap">${formatDate(p.generatedAt)}</td>
                 <td style="padding:4px 8px"><span class="pill ${pColor}">${esc(pSig)}</span></td>
                 <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.confidence != null ? Math.round(Number(p.confidence)) + '%' : '—'}</td>
                 <td style="padding:4px 8px;text-align:right;color:#6b7280">${p.price != null ? pSym + Number(p.price).toFixed(2) : '—'}</td>
                 <td style="padding:4px 8px;text-align:right;font-weight:500;color:${p.actualReturn != null ? (p.actualReturn > 0 ? '#059669' : '#dc2626') : '#6b7280'}">${p.actualReturn != null ? (p.actualReturn > 0 ? '+' : '') + Number(p.actualReturn).toFixed(1) + '%' : '—'}</td>
-                <td style="padding:4px 8px;text-align:center">${p.resolved ? (p.correct === true ? '✓' : p.correct === false ? '✗' : '•') : '⏳'}</td>
-                <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${p.resolvedAt ? formatDate(p.resolvedAt) : '—'}</td>
+                <td style="padding:4px 8px;text-align:center">${p.supersededAt ? '<span style="font-size:10px;color:#9ca3af;font-weight:600;letter-spacing:0.4px">SUPERSEDED</span>' : (p.resolved ? (p.correct === true ? '✓' : p.correct === false ? '✗' : '•') : '⏳')}</td>
+                <td style="padding:4px 8px;text-align:right;color:#6b7280;white-space:nowrap">${p.supersededAt ? formatDate(p.supersededAt) : (p.resolvedAt ? formatDate(p.resolvedAt) : '—')}</td>
               </tr>`;
             }).join('')}
           </tbody>

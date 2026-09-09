@@ -11930,7 +11930,8 @@ async function initDatabase() {
       generated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
       resolved BOOLEAN DEFAULT false,
       actual_return NUMERIC(10,4),
-      correct BOOLEAN
+      correct BOOLEAN,
+      superseded_at TIMESTAMP WITH TIME ZONE
     );`);
     await pool.query('CREATE INDEX IF NOT EXISTS idx_fp_symbol ON forward_predictions(symbol)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_fp_resolved ON forward_predictions(resolved)');
