@@ -1859,44 +1859,59 @@ function computeRelevelStop(position, currentPrice, freshStopLoss) {
 }
 
 async function _loadForwardPredictionsFromDb() {
-  try {
-    const result = await pool.query(
-      `SELECT id, symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, bench_price, generated_at, resolved, actual_return, correct, resolved_at, superseded_at
-       FROM forward_predictions WHERE generated_at > NOW() - $1::interval ORDER BY generated_at`,
-      [`${SIGNAL_WINDOW_DAYS} days`]
-    );
-    const resolved = result.rows.filter(r => r.resolved).length;
-    const unresolved = result.rows.length - resolved;
-    if (result.rows.length) console.log(`[SignalService] Loaded ${result.rows.length} forward predictions from DB (${unresolved} unresolved, ${resolved} resolved)`);
-    // Deduplicate DB rows on load: keep latest per (symbol, price, action)
-    const seenFp = new Map();
-    const dedupedRows = [];
-    for (const row of result.rows) {
-      const key = `${row.symbol}:${row.price}:${row.action}`;
-      const existing = seenFp.get(key);
-      if (!existing || row.generated_at > existing.generated_at) {
-        if (existing) { const idx = dedupedRows.indexOf(existing); if (idx >= 0) dedupedRows.splice(idx, 1); }
-        dedupedRows.push(row);
-        seenFp.set(key, row);
+  // The pre-warm call below races the boot migration IIFE that ADD COLUMNs like
+  // superseded_at — on the first boot after such a migration ships, the SELECT
+  // throws 'column does not exist' (42P01) before the ALTER lands. Retrying a
+  // few times self-heals instead of silently dropping every forward prediction
+  // from the in-memory store until the next restart.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const result = await pool.query(
+        `SELECT id, symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, bench_price, generated_at, resolved, actual_return, correct, resolved_at, superseded_at
+         FROM forward_predictions WHERE generated_at > NOW() - $1::interval ORDER BY generated_at`,
+        [`${SIGNAL_WINDOW_DAYS} days`]
+      );
+      const resolved = result.rows.filter(r => r.resolved).length;
+      const unresolved = result.rows.length - resolved;
+      if (result.rows.length) console.log(`[SignalService] Loaded ${result.rows.length} forward predictions from DB (${unresolved} unresolved, ${resolved} resolved)`);
+      // Deduplicate DB rows on load: keep latest per (symbol, price, action)
+      const seenFp = new Map();
+      const dedupedRows = [];
+      for (const row of result.rows) {
+        const key = `${row.symbol}:${row.price}:${row.action}`;
+        const existing = seenFp.get(key);
+        if (!existing || row.generated_at > existing.generated_at) {
+          if (existing) { const idx = dedupedRows.indexOf(existing); if (idx >= 0) dedupedRows.splice(idx, 1); }
+          dedupedRows.push(row);
+          seenFp.set(key, row);
+        }
       }
+      const dropped = result.rows.length - dedupedRows.length;
+      if (dropped > 0) console.log(`[SignalService] Deduped ${dropped} duplicate forward predictions from DB`);
+      for (const row of dedupedRows) {
+        if (!_forwardTestStore.has(row.symbol)) _forwardTestStore.set(row.symbol, { predictions: [] });
+        const tradeType = row.trade_type || 'Swing Trade';
+        _forwardTestStore.get(row.symbol).predictions.push({
+          id: row.id, signal: row.signal, confidence: row.confidence,
+          price: Number(row.price), stopLoss: row.stop_loss != null ? Number(row.stop_loss) : null, target1: row.target1 != null ? Number(row.target1) : null,
+          action: row.action, tradeType, sector: row.sector,
+          benchPrice: row.bench_price != null ? Number(row.bench_price) : null,
+          generatedAt: new Date(row.generated_at).getTime(),
+          resolved: !!row.resolved, actualReturn: row.actual_return != null ? Number(row.actual_return) : null, correct: row.correct,
+          resolvedAt: row.resolved_at ? new Date(row.resolved_at).getTime() : null,
+          supersededAt: row.superseded_at ? new Date(row.superseded_at).getTime() : null,
+        });
+      }
+      return;
+    } catch (e) {
+      const pendingCol = e && e.code === '42P01';
+      if (!pendingCol || attempt === 2) {
+        console.warn(`[SignalService] Failed to load forward predictions${pendingCol ? ' (column pending migration)' : ''}: ${e.message}`);
+        return;
+      }
+      await new Promise(r => setTimeout(r, 1500));
     }
-    const dropped = result.rows.length - dedupedRows.length;
-    if (dropped > 0) console.log(`[SignalService] Deduped ${dropped} duplicate forward predictions from DB`);
-    for (const row of dedupedRows) {
-      if (!_forwardTestStore.has(row.symbol)) _forwardTestStore.set(row.symbol, { predictions: [] });
-      const tradeType = row.trade_type || 'Swing Trade';
-      _forwardTestStore.get(row.symbol).predictions.push({
-        id: row.id, signal: row.signal, confidence: row.confidence,
-        price: Number(row.price), stopLoss: row.stop_loss != null ? Number(row.stop_loss) : null, target1: row.target1 != null ? Number(row.target1) : null,
-        action: row.action, tradeType, sector: row.sector,
-        benchPrice: row.bench_price != null ? Number(row.bench_price) : null,
-        generatedAt: new Date(row.generated_at).getTime(),
-        resolved: !!row.resolved, actualReturn: row.actual_return != null ? Number(row.actual_return) : null, correct: row.correct,
-        resolvedAt: row.resolved_at ? new Date(row.resolved_at).getTime() : null,
-        supersededAt: row.superseded_at ? new Date(row.superseded_at).getTime() : null,
-      });
-    }
-  } catch (e) { /* table may not exist yet */ }
+  }
 }
 
 // Thesis identity for forward-prediction dedup, shared by the open store, the
@@ -3861,6 +3876,7 @@ async function getSignalForStock(symbol) {
       }
       return {
         ticker: upper, signal: open.signal, action: open.action,
+        currency: NSE_SYMBOLS.includes(upper) ? 'KES' : 'USD',
         entry: entry, entryPrice: entry, stopLoss: stop, target1: t1,
         target2: open.target2 != null ? open.target2 : null,
         target3: open.target3 != null ? open.target3 : null,
