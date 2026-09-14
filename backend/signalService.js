@@ -26,8 +26,12 @@ signalEventBus.setMaxListeners(50);
 
 console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)');
 
-// Ensure DB schema columns exist before any operations
-(async () => {
+// Ensure DB schema columns exist before any operations. The promise is captured
+// so boot-time loads that SELECT the migrated columns (forward predictions,
+// signal_history restores) can await it instead of racing the ALTERs (during
+// which 'column does not exist' 42P01 aborts the pre-warm and the whole
+// in-memory store stays empty until the next restart).
+const schemaReadyPromise = (async () => {
   try {
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`);
     // Source of each outcome row: 'live' (live-monitor stop/target/trailing fills),
@@ -1876,6 +1880,7 @@ async function _loadForwardPredictionsFromDb() {
   // throws 'column does not exist' (42P01) before the ALTER lands. Retrying a
   // few times self-heals instead of silently dropping every forward prediction
   // from the in-memory store until the next restart.
+  await schemaReadyPromise.catch(() => {});
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const result = await pool.query(
