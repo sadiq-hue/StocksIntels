@@ -15,7 +15,7 @@ const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL
 const financialReportsService = require('./financialReportsService');
 const edgarService = require('./edgarService');
 const { getEffectiveSectorPE, getGrade, determineSignal, determineTradeType, getSectorMacroAdjustment, analyzeFundamentals, analyzeTechnicals, analyzeFinancials, generateReason } = require('./analysisEngine');
-const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, MIN_STOP_PCT, enforceStopFloor, isPlausibleBuyLevels, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
+const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, MIN_STOP_PCT, enforceStopFloor, isPlausibleBuyLevels, qualifyingTargets, activeStageIndex, activeStageTarget, ultimateTargetOf, targetLockFloor, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
 const mlModel = require('./mlSignalModel');
 const engineConfig = require('./engineConfig');
 const { trackSignalQuality, logHealth, detectSignalDrift, getQualityScore } = require('./monitorService');
@@ -90,8 +90,11 @@ console.log('📊 Signal Service Loaded - AI Trading Signals Engine (NYSE + NSE)
     // working on schemas created before target3/T2 existed.
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS target3 NUMERIC(15,2)`);
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS reason TEXT`);
+    await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS stage_idx INTEGER DEFAULT 0`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS stop_loss NUMERIC(15,2)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS target1 NUMERIC(15,2)`);
+    await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS target2 NUMERIC(15,2)`);
+    await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS target3 NUMERIC(15,2)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS action VARCHAR(10)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS trade_type VARCHAR(30)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS sector VARCHAR(50)`);
@@ -974,7 +977,7 @@ async function restoreStateFromDb() {
     // line prevents re-monitoring any position that already resolved. Only the
     // most recent signal per ticker is restored (DISTINCT ON + ORDER BY DESC).
     const openRes = await pool.query(
-      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, trade_type, position_size, generated_at, reason, analysis_data, confidence, timeframe
+      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, stage_idx, trade_type, position_size, generated_at, reason, analysis_data, confidence, timeframe
        FROM signal_history
        WHERE signal IN ('Strong Buy','Buy')
          AND entry_price > 0 AND stop_loss > 0 AND target1 > 0
@@ -996,16 +999,19 @@ async function restoreStateFromDb() {
       if (resolved.rows.length > 0) continue;
       const entry = parseFloat(row.entry_price);
       let stop = parseFloat(row.stop_loss);
-      const target = parseFloat(row.target1);
+      const safeTarget = parseFloat(row.target1);
+      const safeTarget2 = row.target2 != null ? parseFloat(row.target2) : null;
+      const safeTarget3 = row.target3 != null ? parseFloat(row.target3) : null;
       const action = /buy/i.test(row.signal) ? 'buy' : 'sell';
-      // For buys: target must be above entry. Stop can be below entry (initial) or
-      // above entry (re-leveled locked-profit stop) — but always below target.
-      // For sells: stop must be above entry and target below entry.
+      // For buys: target above entry. Stop can be below entry (initial) or
+      // above entry (re-leveled locked-profit stop) — but always below the
+      // ULTIMATE target (the highest defined). For sells: stop must be above
+      // entry and target below entry.
       const saneLevels = action === 'buy'
-        ? isPlausibleBuyLevels(entry, stop, target)
-        : (stop > entry && target < entry);
+        ? isPlausibleBuyLevels(entry, stop, safeTarget, safeTarget2, safeTarget3)
+        : (stop > entry && safeTarget < entry);
       if (!saneLevels) {
-        if (action === 'buy') console.warn(`[SignalService] ${sym} skipping corrupt buy levels (entry=${entry} stop=${stop} target=${target}) - inverted or implausible locked-profit stop`);
+        if (action === 'buy') console.warn(`[SignalService] ${sym} skipping corrupt buy levels (entry=${entry} stop=${stop} target=${safeTarget} target2=${safeTarget2} target3=${safeTarget3}) - inverted or implausible locked-profit stop`);
         continue;
       }
       // Legacy sub-floor stops (pre-MIN_STOP_PCT builds) would re-arm a noise-band
@@ -1025,8 +1031,8 @@ async function restoreStateFromDb() {
       }
       _signalOutcomes.set(sym, {
         entryPrice: entry, signal: row.signal, action, type: row.trade_type || 'Swing Trade',
-        stopLoss: stop, target1: target, target2: row.target2 != null ? parseFloat(row.target2) : null,
-        target3: row.target3 != null ? parseFloat(row.target3) : null,
+        stopLoss: stop, target1: safeTarget, target2: safeTarget2, target3: safeTarget3,
+        stageIdx: row.stage_idx != null && !isNaN(parseInt(row.stage_idx)) ? parseInt(row.stage_idx) : 0,
         positionSize: parseInt(row.position_size) || 25,
         timestamp: genAt, result: null, lastProgressAlert: 0,
         reason: row.reason || '', analysis: row.analysis_data || null,
@@ -1812,11 +1818,17 @@ function evaluateScoreClose(prevOutcome, freshAction, eligibilityOk, currentPric
 // loosened if price later retraces below lock. Returns changed=false when the new
 // stop isn't a real improvement or would sit at/above the market price.
 function computeRelevelStop(position, currentPrice, freshStopLoss) {
-  const { entryPrice, stopLoss, target1 } = position || {};
-  if (freshStopLoss == null || currentPrice <= 0 || entryPrice <= 0 || !(target1 > entryPrice)) {
+  const { entryPrice, stopLoss } = position || {};
+  // The re-level ladder follows the ACTIVE stage target (target1 while riding the
+  // first leg, target2 once target1 passed, target3 once target2 passed) so a
+  // position that already booked a milestone keeps tightening toward the next
+  // target instead of clamming up at the first one.
+  const stageIdx = activeStageIndex(position);
+  const activeTarget = activeStageTarget(position);
+  if (freshStopLoss == null || currentPrice <= 0 || entryPrice <= 0 || activeTarget == null || !(activeTarget > entryPrice)) {
     return { newStop: stopLoss, changed: false, progress: 0 };
   }
-  const progress = ((currentPrice - entryPrice) / (target1 - entryPrice)) * 100;
+  const progress = ((currentPrice - entryPrice) / (activeTarget - entryPrice)) * 100;
   // The pre-lock cap is entry minus a volatility-scaled buffer: the fresher the
   // ATR stop (i.e. the more the stock is moving), the further below entry the stop
   // must stay. A fixed tiny buffer lets the cap climb to just under entry on a
@@ -1836,7 +1848,7 @@ function computeRelevelStop(position, currentPrice, freshStopLoss) {
   let newStop = stopLoss;
   // Math.max can only tighten, never loosen, the hard stop.
   newStop = Math.max(newStop, freshStopLoss);
-  if (progress >= RELEVEL_LOCK_PROGRESS) {
+  if (progress >= RELEVEL_LOCK_PROGRESS || stageIdx > 0) {
     newStop = Math.max(newStop, entryPrice + (currentPrice - entryPrice) * RELEVEL_LOCK_RATIO);
   } else if (stopLoss != null && stopLoss < entryPrice) {
     // Pre-lock: tighten toward entry but never above entry minus the buffer. A stop
@@ -1867,7 +1879,7 @@ async function _loadForwardPredictionsFromDb() {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const result = await pool.query(
-        `SELECT id, symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, bench_price, generated_at, resolved, actual_return, correct, resolved_at, superseded_at
+        `SELECT id, symbol, signal, confidence, price, stop_loss, target1, target2, target3, action, trade_type, sector, bench_price, generated_at, resolved, actual_return, correct, resolved_at, superseded_at
          FROM forward_predictions WHERE generated_at > NOW() - $1::interval ORDER BY generated_at`,
         [`${SIGNAL_WINDOW_DAYS} days`]
       );
@@ -1893,7 +1905,10 @@ async function _loadForwardPredictionsFromDb() {
         const tradeType = row.trade_type || 'Swing Trade';
         _forwardTestStore.get(row.symbol).predictions.push({
           id: row.id, signal: row.signal, confidence: row.confidence,
-          price: Number(row.price), stopLoss: row.stop_loss != null ? Number(row.stop_loss) : null, target1: row.target1 != null ? Number(row.target1) : null,
+          price: Number(row.price), stopLoss: row.stop_loss != null ? Number(row.stop_loss) : null,
+          target1: row.target1 != null ? Number(row.target1) : null,
+          target2: row.target2 != null ? Number(row.target2) : null,
+          target3: row.target3 != null ? Number(row.target3) : null,
           action: row.action, tradeType, sector: row.sector,
           benchPrice: row.bench_price != null ? Number(row.bench_price) : null,
           generatedAt: new Date(row.generated_at).getTime(),
@@ -1953,7 +1968,7 @@ function isSameThesis(p, price, target1, action) {
   return !profileChanged();
 }
 
-async function recordForwardPrediction(symbol, signalAction, confidence, price, stopLoss, target1, signalObjAction, tradeType, sector) {
+async function recordForwardPrediction(symbol, signalAction, confidence, price, stopLoss, target1, target2, target3, signalObjAction, tradeType, sector) {
   // Dedup: one live prediction per symbol+action+THESIS. A persistent signal that
   // never triggers a decisive move must NOT re-emit a fresh prediction every
   // signal cycle — the audit would count the same call N times (same ref price,
@@ -2026,17 +2041,19 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
     // produced id 13453/13667 (@ NMG 13.65). An empty result means the thesis
     // is already open in the DB, so skip the in-memory push too.
     const result = await pool.query(
-      `INSERT INTO forward_predictions (symbol, signal, confidence, price, stop_loss, target1, action, trade_type, sector, bench_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO forward_predictions (symbol, signal, confidence, price, stop_loss, target1, target2, target3, action, trade_type, sector, bench_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        ON CONFLICT (symbol, action, price) WHERE NOT resolved DO NOTHING
        RETURNING id`,
-      [symbol, signalAction, confidence, price, stopLoss, target1, signalObjAction, tradeType, sector, benchPrice]
+      [symbol, signalAction, confidence, price, stopLoss, target1, target2, target3, signalObjAction, tradeType, sector, benchPrice]
     );
     if (!result.rows.length) return;
     dbId = result.rows[0].id;
   } catch (e) { /* persistence best-effort */ }
   store.predictions.push({
     id: dbId, signal: signalAction, confidence, price,
-    stopLoss, target1, action: signalObjAction, tradeType, sector, benchPrice,
+    stopLoss, target1, target2: target2 != null ? target2 : null,
+    target3: target3 != null ? target3 : null,
+    action: signalObjAction, tradeType, sector, benchPrice,
     generatedAt: Date.now(), resolved: false,
     actualReturn: null, correct: null, resolvedAt: null, supersededAt: null,
   });
@@ -2089,7 +2106,13 @@ function evaluateForwardPrediction(pred, currentPrice, th = DEFAULT_SELL_THRESHO
   const isSell = pred.action === 'sell';
   if (isBuy && pred.stopLoss != null && pred.target1 != null) {
     if (currentPrice <= pred.stopLoss) return { status: 'resolved', correct: false, actualReturn };
-    if (currentPrice >= pred.target1) return { status: 'resolved', correct: true, actualReturn };
+    // A buy resolves as a win only when the ULTIMATE (highest defined) target
+    // is reached. Intermediate targets are milestone checkpoints along the
+    // ride — not exit points — so hitting target1 or target2 leaves the
+    // prediction pending until the full ladder is climbed.
+    const targets = qualifyingTargets(pred.price, pred.target1, pred.target2, pred.target3);
+    const ultimate = targets.length ? targets[targets.length - 1] : pred.target1;
+    if (ultimate != null && currentPrice >= ultimate) return { status: 'resolved', correct: true, actualReturn };
     return { status: 'pending' };
   }
   if (isSell) {
@@ -2638,6 +2661,8 @@ async function resolveAllForwardPredictions() {
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS trade_type VARCHAR(30)`).catch(() => {});
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS sector VARCHAR(50)`).catch(() => {});
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS bench_price NUMERIC(15,2)`).catch(() => {});
+  await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS target2 NUMERIC(15,2)`).catch(() => {});
+  await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS target3 NUMERIC(15,2)`).catch(() => {});
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
   await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
   let resolved = 0, failed = 0, skipped = 0;
@@ -3635,9 +3660,14 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         const sc = evaluateScoreClose(prevOutcome, sigObj.action, eligibility.ok, currentPrice, Date.now(), SCORE_CLOSE_MIN_AGE_MS, sigObj.analysis?.overall?.score);
         prevOutcome.fadeCount = sc.fadeCount;
         prevOutcome.fadeFirstSeen = sc.fadeFirstSeen;
-        if (!sc.close) {
+        // Once a long has passed its first milestone it is "riding to the
+        // ultimate target": score-based closes are disabled so a flip or
+        // conviction-fade can't cut the ride short. It closes ONLY by the locked
+        // stop (milestone floor already banks the gain) or the ultimate target.
+        const ridingUltimate = prevAction === 'buy' && (prevOutcome.stageIdx || 0) > 0;
+        if (!sc.close || ridingUltimate) {
           emitSignal = false;
-          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${sc.isFade ? ` (conviction fading ${sc.fadeCount}/${sc.required})` : ''}${sc.longTermHold ? ' [long-term hold: score-based close disabled]' : ''}${sc.tooYoung && !sc.longTermHold ? ` [min-age guard: ${Math.max(0, Math.round((SCORE_CLOSE_MIN_AGE_MS - (Date.now() - prevOutcome.timestamp)) / 60000))}m remaining]` : ''}`);
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${ridingUltimate ? ` [riding toward ultimate: milestone passed, score-based close disabled]` : ''}${sc.isFade ? ` (conviction fading ${sc.fadeCount}/${sc.required})` : ''}${sc.longTermHold ? ' [long-term hold: score-based close disabled]' : ''}${sc.tooYoung && !sc.longTermHold ? ` [min-age guard: ${Math.max(0, Math.round((SCORE_CLOSE_MIN_AGE_MS - (Date.now() - prevOutcome.timestamp)) / 60000))}m remaining]` : ''}`);
         } else if (marketOpen) {
           // Score-based close at market: the full analysis flipped direction against
           // the open position, its conviction faded to neutral on consecutive
@@ -3693,7 +3723,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       console.log(`[SignalService] ${symbol} ${sigObj.signal} confidence ${sigObj.confidence} below emission floor ${cfg.minConfidence || 40} - not persisting`);
     }
     if (emitSignal && !suppressSellPersist && sigObj.signal !== 'Hold') {
-      recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.action, sigObj.type, sigObj.sector).catch(() => {});
+      recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.target2, sigObj.target3, sigObj.action, sigObj.type, sigObj.sector).catch(() => {});
     }
     if (prevOutcome && prevOutcome.result && prevOutcome.timestamp) {
       // Only persist outcomes that trackSignalOutcomes resolved THIS cycle.
@@ -3722,9 +3752,13 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     const currentActive = _signalOutcomes.get(symbol);
     if (currentActive && !currentActive.result && currentActive.action !== 'hold' && currentActive.entryPrice > 0 && currentActive.target1) {
       const isBuy = currentActive.action === 'buy';
+      // Progress is measured against the ACTIVE stage target (the one the position
+      // is currently riding toward), so after T1 passes the bar resets toward T2
+      // instead of clamping at 100% against the old T1.
+      const stageTarget = isBuy ? activeStageTarget(currentActive) : currentActive.target1;
       let progress = 0;
       if (isBuy) {
-        const targetDist = currentActive.target1 - currentActive.entryPrice;
+        const targetDist = stageTarget - currentActive.entryPrice;
         progress = targetDist > 0 ? ((currentPrice - currentActive.entryPrice) / targetDist) * 100 : 0;
       } else {
         const targetDist = currentActive.entryPrice - currentActive.target1;
@@ -3737,7 +3771,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           signalEventBus.emit('signal:progress', {
             ticker: symbol,
             entryPrice: currentActive.entryPrice,
-            targetPrice: currentActive.target1,
+            targetPrice: stageTarget,
             stopPrice: currentActive.stopLoss,
             currentPrice,
             progress: Math.min(100, Math.round(progress * 10) / 10),
@@ -3797,7 +3831,22 @@ async function generateSignals(marketData = null, quick = false, force = false) 
                        AND stop_loss > 0 ORDER BY generated_at DESC LIMIT 1)`,
           [newStop, symbol, genAtIso]
         ).catch(() => {});
-        console.log(`[SignalService] ${symbol} re-leveled stop ${prevStop} -> ${newStop} (price=${currentPrice}, progress=${Math.round(progress)}% of target1)`);
+        console.log(`[SignalService] ${symbol} re-leveled stop ${prevStop} -> ${newStop} (price=${currentPrice}, progress=${Math.round(progress)}% of target${relevelTarget.stageIdx + 1})`);
+      }
+      // Stage persistence: a target-milestone lock raised the stop (and advanced
+      // stageIdx) in-memory only. Persist stage_idx + the locked stop together so
+      // a restart re-arms the milestone floor from signal_history instead of
+      // falling back to the original entry-cycle stop (which would book the ride
+      // leg as a stop-loss after a bounce).
+      if (relevelTarget.stageIdx > 0) {
+        const genAtIso = new Date(relevelTarget.timestamp).toISOString();
+        pool.query(
+          `UPDATE signal_history SET stop_loss = $1, stage_idx = $2
+           WHERE id = (SELECT id FROM signal_history WHERE ticker = $3
+                       AND generated_at BETWEEN $4::timestamptz - interval '30 seconds' AND $4::timestamptz + interval '30 seconds'
+                       AND stop_loss > 0 ORDER BY generated_at DESC LIMIT 1)`,
+          [relevelTarget.stopLoss, relevelTarget.stageIdx, symbol, genAtIso]
+        ).catch(() => {});
       }
     }
     resolveForwardPredictions(symbol).catch(() => {});
@@ -3895,6 +3944,12 @@ async function getSignalForStock(symbol) {
         entry: entry, entryPrice: entry, stopLoss: stop, target1: t1,
         target2: open.target2 != null ? open.target2 : null,
         target3: open.target3 != null ? open.target3 : null,
+        // Ride state: once the position has passed a milestone its active (stage)
+        // target and the ultimate target differ from T1 — surface both so the
+        // dashboard shows what it is really riding toward and how far is left.
+        stageIdx: open.stageIdx != null ? open.stageIdx : 0,
+        activeTarget: activeStageTarget(open),
+        ultimateTarget: ultimateTargetOf(open),
         type: open.type || 'Swing Trade',
         riskReward,
         confidence: open.confidence || 0,

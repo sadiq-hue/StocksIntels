@@ -11881,6 +11881,7 @@ async function initDatabase() {
       target1 NUMERIC(15,2),
       target2 NUMERIC(15,2),
       target3 NUMERIC(15,2),
+      stage_idx INTEGER DEFAULT 0,
       risk_reward NUMERIC(5,2),
       sector VARCHAR(100),
       market VARCHAR(20),
@@ -11895,6 +11896,7 @@ async function initDatabase() {
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS position_size INTEGER DEFAULT 25`).catch(() => {});
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS analysis_data JSONB`).catch(() => {});
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS target3 NUMERIC(15,2)`).catch(() => {});
+    await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS stage_idx INTEGER DEFAULT 0`).catch(() => {});
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_history_ticker ON signal_history(ticker)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_history_generated_at ON signal_history(generated_at)');
 
@@ -11923,6 +11925,8 @@ async function initDatabase() {
       price NUMERIC(15,2),
       stop_loss NUMERIC(15,2),
       target1 NUMERIC(15,2),
+      target2 NUMERIC(15,2),
+      target3 NUMERIC(15,2),
       action VARCHAR(10),
       trade_type VARCHAR(30),
       sector VARCHAR(50),

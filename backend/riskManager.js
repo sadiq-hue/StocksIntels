@@ -233,14 +233,75 @@ function enforceStopFloor(entryPrice, stopLoss) {
   return stopLoss;
 }
 
-// A Buy's levels are plausible only if the stop is below the target (required for
-// any sane geometry) and, when the stop sits at/above entry (a re-leveled locked
-// stop), it respects the lock ceiling entry + 0.5*(target1 - entry). A stop above
-// the ceiling or at/above target is inverted/corrupt data — monitored, it would
-// book a fabricated outcome on the next cycle.
-function isPlausibleBuyLevels(entryPrice, stopLoss, target1) {
-  if (!(entryPrice > 0 && target1 > entryPrice && stopLoss > 0 && stopLoss < target1)) return false;
-  if (stopLoss >= entryPrice && stopLoss > entryPrice + (target1 - entryPrice) * LOCKED_PROFIT_MAX_RATIO) return false;
+// ─── Target-milestone ladder (ride-to-ultimate) helpers ─────────────────────
+// The working ladder of a Buy's price targets that sit strictly above entry, in
+// ascending order. Targets at/below entry are unusable — a monitoring stop-out
+// would trigger them instantly. target2/target3 may be null (legacy or partial
+// ladders); the ladder degrades to [target1] and the legacy behavior holds (the
+// first touch of the single target resolves the win).
+function qualifyingTargets(entryPrice, target1, target2, target3) {
+  return [target1, target2, target3]
+    .filter(t => t != null && t > 0 && entryPrice > 0 && t > entryPrice);
+}
+
+// The ladder stage a long is currently riding: index into qualifyingTargets().
+// 0 = entry stage (monitoring target1); after target1 passes it becomes 1
+// (monitoring target2); etc. Clamped to the top of the ladder once the ultimate
+// target is reached, so a position that just advanced never steps past the end.
+function activeStageIndex(position) {
+  const { entryPrice, target1, target2, target3, stageIdx } = position || {};
+  const targets = qualifyingTargets(entryPrice, target1, target2, target3);
+  if (!targets.length) return 0;
+  return Math.min(stageIdx != null ? stageIdx : 0, targets.length - 1);
+}
+
+// The target the position is currently riding toward (the active stage target).
+function activeStageTarget(position) {
+  const { entryPrice, target1, target2, target3 } = position || {};
+  const targets = qualifyingTargets(entryPrice, target1, target2, target3);
+  const idx = activeStageIndex(position);
+  return targets.length ? targets[idx] : (target1 != null ? target1 : null);
+}
+
+// The highest defined target above entry — the point a riding long finally
+// closes as a win (target3, else target2, else target1).
+function ultimateTargetOf(position) {
+  const { entryPrice, target1, target2, target3 } = position || {};
+  const targets = qualifyingTargets(entryPrice, target1, target2, target3);
+  return targets.length ? targets[targets.length - 1] : (target1 != null ? target1 : null);
+}
+
+// The stop floor a riding long must hold after passing a target stage:
+//   passedStage 0 (just passed target1, advancing to T2): entry + 0.5*(T1-entry)
+//     — banks half the first leg, the stop sits at/above entry.
+//   passedStage >= 1 (just passed target2, advancing to T3): at least target1 —
+//     the highest level the position has already booked.
+// A prior lock is never lowered when a later milestone is crossed.
+function targetLockFloor(position, passedStage) {
+  const { entryPrice, target1, target2 } = position || {};
+  if (!(entryPrice > 0)) return null;
+  let floor = null;
+  if (target1 != null && target1 > entryPrice) {
+    floor = entryPrice + (target1 - entryPrice) * LOCKED_PROFIT_MAX_RATIO;
+  }
+  if (passedStage >= 1 && target2 != null && target2 > entryPrice) {
+    if (target1 != null && target1 > entryPrice) floor = Math.max(floor, target1);
+  }
+  return floor;
+}
+
+// A Buy's levels are plausible only if the stop is below the ULTIMATE (highest)
+// target — required for any sane geometry — and, when the stop sits at/above
+// entry (a re-leveled locked stop or a target-milestone lock), it respects the
+// lock ceiling entry + 0.5*(ultimate - entry). Milestone locks sit at an
+// already-passed lower target, which the ladder spacing always keeps below the
+// ceiling. A stop at/above the ultimate target is inverted/corrupt data —
+// monitored, it would book a fabricated outcome on the next cycle.
+function isPlausibleBuyLevels(entryPrice, stopLoss, target1, target2 = null, target3 = null) {
+  const targets = qualifyingTargets(entryPrice, target1, target2, target3);
+  const ultimate = targets.length ? targets[targets.length - 1] : (target1 != null && target1 > entryPrice ? target1 : null);
+  if (!(entryPrice > 0 && ultimate > entryPrice && stopLoss > 0 && stopLoss < ultimate)) return false;
+  if (stopLoss >= entryPrice && stopLoss > entryPrice + (ultimate - entryPrice) * LOCKED_PROFIT_MAX_RATIO) return false;
   return true;
 }
 
@@ -289,30 +350,64 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
       console.warn(`[RiskManager] ${symbol} deferring resolution — signal only ${Math.round(signalAge / 1000)}s old (min ${MIN_SIGNAL_AGE_MS / 1000}s)`);
     } else {
     // For buys: target above entry; stop may be below entry (initial) or above
-    // entry (re-leveled locked-profit stop), but always below target. For sells:
-    // stop above entry, target below entry. This mirrors restoreStateFromDb so a
-    // re-leveled position is never treated as broken after a restart.
+    // entry (re-leveled locked-profit stop), but always below the ULTIMATE target.
+    // For sells: stop above entry, target below entry. This mirrors
+    // restoreStateFromDb so a re-leveled position is never treated as broken
+    // after a restart.
+    const buyTargets = isPrevBuy ? qualifyingTargets(entry, previous.target1, previous.target2, previous.target3) : [];
+    const stageIdx = isPrevBuy ? activeStageIndex(previous) : 0;
+    const ultimateTarget = isPrevBuy && buyTargets.length ? buyTargets[buyTargets.length - 1] : previous.target1;
     const saneLevels = entry > 0 && isPrevBuy
-      ? isPlausibleBuyLevels(entry, previous.stopLoss, previous.target1)
+      ? isPlausibleBuyLevels(entry, previous.stopLoss, previous.target1, previous.target2, previous.target3)
       : entry > 0 && previous.stopLoss > entry && previous.target1 < entry;
     const pctMove = entry > 0 ? Math.abs(currentPrice - entry) / entry : 0;
     // Require a real move past the level but reject impossible single-cycle moves
-    // (garbage quotes) that would record absurd outcomes.
-    const moved = pctMove > 0.0005 && pctMove < 0.5;
+    // (garbage quotes) that would record absurd outcomes. The +50% cap guards the
+    // entry stage — a RIDE to the ultimate target is routinely +100%+ from entry
+    // once the position has already banked a milestone, so a staged long
+    // (stageIdx > 0) is exempt: it has proven its path gradually by passing
+    // intermediate levels, and its price can legitimately sit far above entry.
+    const moved = pctMove > 0.0005 && (pctMove < 0.5 || (isPrevBuy && stageIdx > 0));
     if (marketOpen && saneLevels && moved) {
       if (isPrevBuy) {
         if (currentPrice <= previous.stopLoss) {
-          // A stop at/above entry is a locked-profit level (re-leveled): hitting it
-          // books a win, not a loss. A stop below entry is a real stop-out.
+          // A stop at/above entry is a locked-profit level (re-leveled or a target
+          // milestone lock): hitting it books a win, not a loss. A stop below
+          // entry is a real stop-out.
           const lockedProfit = previous.stopLoss >= entry;
           previous.result = lockedProfit ? 'win' : 'loss';
           previous.closeReason = 'stop loss';
           if (lockedProfit) { performanceStats.wins++; portfolioState.consecutiveLosses = 0; }
           else { performanceStats.losses++; portfolioState.consecutiveLosses++; }
           performanceStats.total++;
-        } else if (currentPrice >= previous.target1) {
-          previous.result = 'win'; previous.closeReason = 'target reached'; performanceStats.wins++; performanceStats.total++;
+        } else if (ultimateTarget != null && currentPrice >= ultimateTarget) {
+          // The position rode the whole ladder: only the ULTIMATE (highest)
+          // target closes a win. Reaching it books the full ride, not just the
+          // first leg — target1/target2 were milestone stops, not exits.
+          previous.result = 'win'; previous.closeReason = 'ultimate target reached';
+          previous.ultimateTarget = ultimateTarget;
+          performanceStats.wins++; performanceStats.total++;
           portfolioState.consecutiveLosses = 0;
+        } else {
+          // Target-milestone riding: the price cleared an intermediate target
+          // (target1 / target2) but not the ultimate one. Record each hit, bank a
+          // locked-profit stop per stage, and keep monitoring toward the ultimate
+          // target. The while-loop advances past every crossed stage in one cycle
+          // so a gap that clears T1 and T2 together lands on the right stage.
+          let stage = stageIdx;
+          let crossed = 0;
+          while (stage < buyTargets.length - 1 && buyTargets[stage] != null && currentPrice >= buyTargets[stage]) {
+            const lockedFloor = targetLockFloor(previous, stage);
+            if (lockedFloor != null && (previous.stopLoss == null || previous.stopLoss < lockedFloor)) previous.stopLoss = lockedFloor;
+            if (stage === 0) previous.target1HitAt = Date.now();
+            else if (stage === 1) previous.target2HitAt = Date.now();
+            stage++;
+            crossed++;
+          }
+          if (crossed > 0) {
+            previous.stageIdx = stage;
+            console.log(`[RiskManager] ${symbol} ${previous.signal} crossed target${stage + 1} (price=${currentPrice}) - milestone recorded, riding toward ultimate target=${ultimateTarget} (stop locked to ${previous.stopLoss})`);
+          }
         }
       } else {
         if (currentPrice >= previous.stopLoss) {
@@ -343,7 +438,11 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
       // Record the level that actually resolved the trade (stop for a loss,
       // target for a win) so the persisted outcome shows the true exit, not
       // the market price at the check moment.
-      previous.exitPrice = previous.result === 'win' ? previous.target1 : previous.stopLoss;
+      previous.exitPrice = previous.result === 'win'
+        ? (previous.closeReason === 'stop loss' ? previous.stopLoss
+           : previous.closeReason === 'ultimate target reached' && previous.ultimateTarget != null ? previous.ultimateTarget
+           : previous.target1)
+        : previous.stopLoss;
       portfolioState.totalTrades++;
       performanceStats.winRate = performanceStats.total > 0
         ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;
@@ -356,7 +455,11 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
       if (monitorable) {
         signalOutcomes.set(symbol, {
           entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
-          stopLoss: enforceStopFloor(currentPrice, newSignal.stopLoss), target1: newSignal.target1,
+          stopLoss: enforceStopFloor(currentPrice, newSignal.stopLoss),
+          target1: newSignal.target1,
+          target2: newSignal.target2 != null ? newSignal.target2 : null,
+          target3: newSignal.target3 != null ? newSignal.target3 : null,
+          stageIdx: 0,
           timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
           type: newSignal.type,
           reason: newSignal.reason || '', analysis: newSignal.analysis || null,
@@ -373,7 +476,11 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
     if (monitorable) {
       signalOutcomes.set(symbol, {
         entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
-        stopLoss: enforceStopFloor(currentPrice, newSignal.stopLoss), target1: newSignal.target1,
+        stopLoss: enforceStopFloor(currentPrice, newSignal.stopLoss),
+        target1: newSignal.target1,
+        target2: newSignal.target2 != null ? newSignal.target2 : null,
+        target3: newSignal.target3 != null ? newSignal.target3 : null,
+        stageIdx: 0,
         timestamp: Date.now(), result: null, positionSize: posSize, lastProgressAlert: 0,
         type: newSignal.type,
         reason: newSignal.reason || '', analysis: newSignal.analysis || null,
@@ -413,6 +520,11 @@ module.exports = {
   calculateKellyPositionSize,
   calculateTradeLevels,
   enforceStopFloor,
+  qualifyingTargets,
+  activeStageIndex,
+  activeStageTarget,
+  ultimateTargetOf,
+  targetLockFloor,
   isPlausibleBuyLevels,
   updatePortfolioRisk,
   applyPortfolioConstraints,
