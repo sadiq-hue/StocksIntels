@@ -65,50 +65,15 @@ const schemaReadyPromise = (async () => {
     // key (ticker, signal_generated_at) via ON CONFLICT — drop the stale index so
     // the entry-keyed collisions can never silently drop a legitimate row.
     await pool.query(`DROP INDEX IF EXISTS idx_signal_outcomes_source_ticker_entry`).catch(() => {});
-    // Backtest rows duplicated live outcomes: the live outcome's
-    // signal_generated_at is the position-seed time, while the backtest row's is
-    // the signal_history generated_at (a batch NOW() written at the end of the
-    // cycle). The two differ by seconds, so the old exact-ms dedupe let the 6h
-    // auto-backtest re-evaluate an already-live-resolved signal and insert a
-    // 'backtest' twin; computeBacktestStats counts source IN ('live','backtest'),
-    // so the same trade appeared twice (inflated total/winRate). Self-heal
-    // existing twins (a live outcome within ±30s of the backtest row — the same
-    // tolerance restoreStateFromDb uses) so the tab reconciles after deploy.
-    await pool.query(`DELETE FROM signal_outcomes bt
-      USING signal_outcomes lv
-      WHERE bt.source = 'backtest' AND lv.source = 'live'
-        AND bt.ticker = lv.ticker
-        AND lv.signal_generated_at >= date_trunc('milliseconds', bt.signal_generated_at) - interval '30 seconds'
-        AND lv.signal_generated_at <= date_trunc('milliseconds', bt.signal_generated_at) + interval '30 seconds'`).catch(() => {});
-    // Historical backtest previously force-closed signals at the last available
-    // bar even when the trade-type hold window hadn't elapsed (CGEN Aug 5 Long
-    // Term: entry 156.75, target1 208.34, force-closed at 194.75 four bars later,
-    // ~5 calendar days, as an 'expiry close'; same for the Aug 2 signal closed
-    // at 158.00 — matched neither stop 146.11 nor target1 172.52). Those rows are
-    // premature and pollute stats; delete them so the fixed backtest re-evaluates
-    // each signal honestly once available history covers its hold window (Long
-    // Term ~130 bars, short-term ~20 bars, approximated in calendar days below).
-    // A row is premature when it resolved before its hold window elapsed AND its
-    // exit price matches neither the stop nor target1 (the ONLY legitimate
-    // short-history closes); close_reason may be empty on rows recorded before
-    // that column existed.
-    await pool.query(`DELETE FROM signal_outcomes o
-      USING signal_history h
-      WHERE o.ticker = h.ticker
-        AND o.signal_generated_at IS NOT DISTINCT FROM date_trunc('milliseconds', h.generated_at)
-        AND o.source = 'backtest'
-        AND o.resolved_at - o.signal_generated_at < CASE
-          WHEN h.trade_type ILIKE '%long term%' THEN INTERVAL '182 days'
-          ELSE INTERVAL '20 days'
-        END
-        AND (
-          o.close_reason = 'expiry close'
-          OR (
-            (o.close_reason IS NULL OR o.close_reason = '')
-            AND NOT (o.exit_price BETWEEN h.stop_loss - 0.001 AND h.stop_loss + 0.001)
-            AND NOT (o.exit_price BETWEEN h.target1 - 0.001 AND h.target1 + 0.001)
-          )
-        )`).catch(() => {});
+    // Simulated 'backtest' outcomes are not wanted anywhere: the Backtest tab,
+    // forward test, admin signal-outcomes and Health tab all audit source='live'
+    // only. Historical-backtest rows are OHLC-day-close estimates (force-closed
+    // at the last bar even before the trade-type hold window elapsed) — they were
+    // never stop/target driven, duplicated live resolutions (±seconds apart due
+    // to position-seed vs batch-NOW timestamps, inflating total/winRate), and
+    // same-price re-emissions at one entry collided. Purge every one on boot so a
+    // manual "Run Historical Backtest" (admin tool) can never leak into stats.
+    await pool.query(`DELETE FROM signal_outcomes WHERE source = 'backtest'`).catch(() => {});
     await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS analysis_data JSONB`);
     // restoreStateFromDb SELECTs target3/reason from signal_history to re-seed
     // monitored positions across restarts; the idempotent ALTERs keep restores
@@ -1186,14 +1151,15 @@ function backtestHoldBarsFor(tradeType, fallback = 20) {
 async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals = 1000, force = false } = {}) {
   try {
     // Dedupe by (ticker, signal_generated_at) so a signal is evaluated once no
-    // matter how many cycles run — the old entry_price match collided across
-    // same-price re-emissions and the forced 6h run re-inserted duplicate rows.
-    // force=true explicitly bypasses the dedupe for a manual re-run.
+    // matter how many runs execute — the old entry_price match collided across
+    // same-price re-emissions. force=true explicitly bypasses the dedupe for a
+    // manual force re-run.
     // ±30s tolerance matches restoreStateFromDb: the live outcome's
     // signal_generated_at (position-seed time) differs from signal_history's
-    // generated_at (batch NOW()) by seconds.  Using the same window prevents the
-    // 6h auto-backtest from re-evaluating an already-live-resolved signal and
-    // inserting a 'backtest' twin (see boot-time self-heal above).
+    // generated_at (batch NOW()) by seconds. Using the same window prevents a
+    // manual historical re-run from resurrecting rows for signals that already
+    // resolved live (they are purged on every boot anyway, so this is the last
+    // line of defense for the admin tool).
     const dedupeClause = force ? '' : `NOT EXISTS (
           SELECT 1 FROM signal_outcomes so
           WHERE so.ticker = sh.ticker
@@ -1463,8 +1429,11 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
     // Primary data source: signal_outcomes — has actual exit prices and real win/loss results.
     // Single consistent source filter + signal filter shared by every query below so the
     // aggregate, by-signal, returns and outcome-row figures all reconcile.
+    // Live only: the tab audits real monitored resolutions. Simulated 'backtest'
+    // rows are OHLC estimates (force-closed at the last bar, never stop/target
+    // driven while a market is closed) and mixing them in inflated/biased the rate.
     const tradable = "o.signal IN ('Strong Buy','Buy','Sell','Strong Sell')";
-    const conditions = ['o.recorded_at > NOW() - $1::interval', "o.source IN ('live','backtest')", tradable];
+    const conditions = ['o.recorded_at > NOW() - $1::interval', "o.source = 'live'", tradable];
     const params = [`${days} days`];
     let idx = 2;
     if (signalType && signalType !== 'All' && signalType !== 'all') { conditions.push(`o.signal = $${idx++}`); params.push(signalType); }
@@ -3505,15 +3474,11 @@ setInterval(() => {
   generateSignals(null, false).catch(() => {});
 }, 60 * 60 * 1000);
 
-// Auto-run historical backtest every 6 hours to mature signal outcomes.
-// Window is SIGNAL_WINDOW_DAYS so only current-engine signals are evaluated,
-// keeping metrics aligned with live/forward test instead of old-engine data.
-setTimeout(() => {
-  runHistoricalBacktest({ days: SIGNAL_WINDOW_DAYS, maxHoldDays: 20, maxSignals: 1000 }).catch(() => {});
-}, 60000);
-setInterval(() => {
-  runHistoricalBacktest({ days: SIGNAL_WINDOW_DAYS, maxHoldDays: 20, maxSignals: 1000 }).catch(() => {});
-}, 6 * 60 * 60 * 1000);
+// Historical backtest is now an explicit operator tool only (admin
+// "Run Historical Backtest"). It is NOT auto-scheduled: the Backtest tab
+// audits real live outcomes (source='live') and simulated 'backtest' rows are
+// no longer read by any stat, so seeding them every 6h just fattened the table
+// and the boot-time cleanup had to chase them. A manual run still works.
 
 // Main function to generate signals for all tracked stocks
 // When quick=true, skips all external API fetches and uses only cached data.
