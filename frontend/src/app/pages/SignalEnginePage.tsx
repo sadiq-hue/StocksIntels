@@ -87,7 +87,7 @@ function fmtDuration(seconds: number) {
 function BacktestPanel() {
   const [stats, setStats] = useState<BacktestStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [days, setDays] = useState("30");
+  const [days, setDays] = useState("180");
   const [signalType, setSignalType] = useState("all");
   const { user } = useAuth();
   const userIdParam = user?.id ? `&userId=${user.id}` : '';
@@ -117,6 +117,7 @@ function BacktestPanel() {
               <SelectItem value="14">14 days</SelectItem>
               <SelectItem value="30">30 days</SelectItem>
               <SelectItem value="90">90 days</SelectItem>
+              <SelectItem value="180">180 days</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -4130,7 +4130,7 @@ app.get('/api/signal/:symbol', async (req, res) => {
 app.get('/api/signals/backtest', async (req, res) => {
   try {
     const stats = await computeBacktestStats({
-      days: parseInt(req.query.days) || 30,
+      days: parseInt(req.query.days) || 180,
       limit: parseInt(req.query.limit) || 500,
       signalType: req.query.signal || null,
       minConfidence: parseInt(req.query.minConfidence) || 0,

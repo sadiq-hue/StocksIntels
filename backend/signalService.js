@@ -1423,7 +1423,7 @@ async function getWeeklyTrend(symbol) {
 // ─── Historical Backtesting ─────────────────────────────────────────────────
 // Queries signal_history DB table and computes actual win/loss rates
 // by comparing entry prices to current market prices.
-async function computeBacktestStats({ days = 30, limit = 500, signalType, minConfidence = 0 } = {}) {
+async function computeBacktestStats({ days = 180, limit = 500, signalType, minConfidence = 0 } = {}) {
   try {
     console.log(`[Backtest] computeBacktestStats requested: days=${days}, signalType=${signalType || 'all'}`);
     // Primary data source: signal_outcomes — has actual exit prices and real win/loss results.
