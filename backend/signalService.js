@@ -941,9 +941,13 @@ async function refreshPerformanceStats() {
 
 async function restoreStateFromDb() {
   try {
-    // Load all historical outcomes into memory so health/trade tracking works across restarts
+    // Load all historical outcomes into memory so health/trade tracking works across restarts.
+    // A 'target1 milestone' outcome (result='win') is a riding position that booked its
+    // win at T1 and is still monitoring toward the ultimate target — exclude it from the
+    // resolved snapshot so the position continues riding after restart instead of being
+    // treated as a frozen win.
     const outcomes = await pool.query(
-      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, close_reason FROM signal_outcomes WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - $1::interval AND result IS NOT NULL AND source = 'live' ORDER BY recorded_at DESC`,
+      `SELECT ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, close_reason FROM signal_outcomes WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - $1::interval AND result IS NOT NULL AND source = 'live' AND (close_reason IS NULL OR close_reason <> 'target1 milestone') ORDER BY recorded_at DESC`,
       [`${SIGNAL_WINDOW_DAYS} days`]
     );
     _signalOutcomes.clear();
@@ -997,7 +1001,7 @@ async function restoreStateFromDb() {
       // a strict >= match would miss it and re-monitor a resolved position
       // with stale levels after a restart.
       const resolved = await pool.query(
-        `SELECT 1 FROM signal_outcomes WHERE ticker = $1 AND COALESCE(signal_generated_at, recorded_at) >= date_trunc('milliseconds', $2::timestamptz) - interval '30 seconds' AND COALESCE(signal_generated_at, recorded_at) <= date_trunc('milliseconds', $2::timestamptz) + interval '30 seconds' AND result IS NOT NULL LIMIT 1`,
+        `SELECT 1 FROM signal_outcomes WHERE ticker = $1 AND COALESCE(signal_generated_at, recorded_at) >= date_trunc('milliseconds', $2::timestamptz) - interval '30 seconds' AND COALESCE(signal_generated_at, recorded_at) <= date_trunc('milliseconds', $2::timestamptz) + interval '30 seconds' AND result IS NOT NULL AND (close_reason IS NULL OR close_reason <> 'target1 milestone') LIMIT 1`,
         [sym, row.generated_at]
       );
       if (resolved.rows.length > 0) continue;
@@ -1038,6 +1042,13 @@ async function restoreStateFromDb() {
         stopLoss: stop, target1: safeTarget, target2: safeTarget2, target3: safeTarget3,
         stageIdx: row.stage_idx != null && !isNaN(parseInt(row.stage_idx)) ? parseInt(row.stage_idx) : 0,
         positionSize: parseInt(row.position_size) || 25,
+        // A restored position past its first milestone (stageIdx > 0) already
+        // booked its T1 win — a 'target1 milestone' outcome row exists in
+        // signal_outcomes (excluded from the resolved snapshot above). Restore
+        // the milestone state so the final resolution upgrades instead of
+        // double-counting the win.
+        milestoneWinBooked: row.stage_idx != null && parseInt(row.stage_idx) > 0,
+        milestonePersisted: row.stage_idx != null && parseInt(row.stage_idx) > 0,
         timestamp: genAt, result: null, lastProgressAlert: 0,
         reason: row.reason || '', analysis: row.analysis_data || null,
         confidence: row.confidence != null ? parseInt(row.confidence) : null,
@@ -2971,13 +2982,59 @@ function getConfidenceMultiplier() {
 
 // ─── Persist Signal Outcomes to DB ──────────────────────────────────────────
 // Stores signal performance outcomes in the database so state survives restarts.
-async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result, resolvedAt, signalGeneratedAt, closeReason = null) {
+// isMilestoneUpgrade: when true, the resolved win upgrades an existing
+// T1-milestone row (close_reason='target1 milestone') instead of inserting a
+// phantom second win.  One win per trade — the milestone books the win at
+// target1; the final resolution (ultimate target or locked-profit stop) updates
+// exit_price / resolved_at / close_reason on the same row.
+async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result, resolvedAt, signalGeneratedAt, closeReason = null, isMilestoneUpgrade = false) {
   try {
     const prevOutcome = _signalOutcomes.get(symbol);
     const signalGenAtMs = signalGeneratedAt || prevOutcome?.timestamp || Date.now();
     const posSize = prevOutcome?.positionSize || 25;
     const now = new Date().toISOString();
     const signalGenAt = new Date(signalGenAtMs).toISOString();
+    // Milestone upgrade path: update the existing 'target1 milestone' row in
+    // place instead of inserting a second win.  The UPDATE's PK lookup uses
+    // source + ticker + signal_generated_at, which uniquely identifies the
+    // original milestone outcome; if the row was never created (restored legacy
+    // direct-ultimate) the UPDATE affects 0 rows and we fall through to a
+    // normal insert so the win is still recorded.
+    if (isMilestoneUpgrade && result === 'win') {
+      const upd = await pool.query(
+        `UPDATE signal_outcomes
+         SET exit_price = $4, resolved_at = $8, close_reason = $10, result = $5
+         WHERE source = 'live' AND ticker = $1 AND signal_generated_at = $9
+           AND close_reason = 'target1 milestone'`,
+        [symbol, entryPrice, signalAction, currentPrice, result, posSize, now, resolvedAt || now, signalGenAt, closeReason]
+      ).catch(() => ({ rowCount: 0 }));
+      if ((upd.rowCount || 0) > 0) {
+        // Live test store: upgrade the existing milestone entry in-place so
+        // the forward-test time-bucket analysis shows one outcome per trade.
+        // After a restart the milestone entry was excluded at restore — push a
+        // freshly-upgraded entry so the trade still appears in the snapshot.
+        const store = _liveTestStore.get(symbol);
+        if (!store) _liveTestStore.set(symbol, { outcomes: [] });
+        const s = _liveTestStore.get(symbol);
+        if (!Array.isArray(s.outcomes)) s.outcomes = [];
+        const existing = [...s.outcomes].reverse().find(o => o.closeReason === 'target1 milestone');
+        if (existing) {
+          existing.exitPrice = currentPrice;
+          existing.resolvedAt = resolvedAt ? new Date(resolvedAt).getTime() : Date.now();
+          existing.closeReason = closeReason;
+        } else {
+          s.outcomes.push({
+            result, signal: signalAction, entryPrice, exitPrice: currentPrice,
+            generatedAt: signalGenAtMs, resolvedAt: resolvedAt ? new Date(resolvedAt).getTime() : Date.now(),
+            closeReason,
+          });
+          if (s.outcomes.length > LIVE_TEST_MAX_PER_SYMBOL) s.outcomes = s.outcomes.slice(-LIVE_TEST_MAX_PER_SYMBOL);
+        }
+        resolvePredictionLogs(symbol, result).catch(() => {});
+        return;
+      }
+      // Fall through to plain insert — legacy position without a milestone row.
+    }
     await pool.query(
       `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at, signal_generated_at, close_reason, source)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'live')
@@ -3730,28 +3787,44 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     if (emitSignal && !suppressSellPersist && sigObj.signal !== 'Hold') {
       recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.target2, sigObj.target3, sigObj.action, sigObj.type, sigObj.sector).catch(() => {});
     }
-    if (prevOutcome && prevOutcome.result && prevOutcome.timestamp) {
-      // Only persist outcomes that trackSignalOutcomes resolved THIS cycle.
-      // Entries restored from DB / backfilled / backtest have result pre-set but no
-      // timestamp — re-persisting them creates duplicate rows and a self-perpetuating
-      // cascade (each re-persist becomes a "resolved prevOutcome" for the next cycle).
-      persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, prevOutcome.exitPrice != null ? prevOutcome.exitPrice : currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null, prevOutcome.timestamp, prevOutcome.closeReason || null);
-      signalEventBus.emit('signal:resolved', {
-        ticker: symbol,
-        entryPrice: prevOutcome.entryPrice,
-        targetPrice: prevOutcome.target1,
-        stopPrice: prevOutcome.stopLoss,
-        currentPrice,
-        result: prevOutcome.result,
-        returnPct: prevOutcome.entryPrice > 0 ? Math.round(((currentPrice - prevOutcome.entryPrice) / prevOutcome.entryPrice) * 10000) / 100 : 0,
-        signal: prevOutcome.signal,
-        resolvedAt: prevOutcome.resolvedAt || Date.now(),
-      });
-      // If the position resolved on a cycle where the data was untrustworthy,
-      // drop it from the monitored set — trackSignalOutcomes re-seeds a fresh
-      // entry from this cycle's (invalid) signal object, which would otherwise
-      // linger as an inert position that can never resolve.
-      if (!eligibility.ok) _signalOutcomes.delete(symbol);
+    if (prevOutcome && prevOutcome.timestamp) {
+      // Persist THIS cycle's new milestone or final resolution.  The resolved
+      // branch fires when the ride completes (ultimate target / locked stop);
+      // the milestone branch fires exactly once on the T1 crossing so the win
+      // books immediately while the position keeps riding.
+      const resolvedNow = !!prevOutcome.result;
+      const milestoneNow = !resolvedNow && !!prevOutcome.milestoneWinBooked && !prevOutcome.milestonePersisted;
+      if (milestoneNow) {
+        // T1 milestone: book the win row NOW (exit = target1).  The final
+        // resolution later upgrades this same row to the ultimate/locked exit
+        // — one win per trade, never a second count.
+        prevOutcome.milestonePersisted = true;
+        persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal,
+          prevOutcome.milestoneExitPrice != null ? prevOutcome.milestoneExitPrice : currentPrice,
+          'win', prevOutcome.milestoneWinAt ? new Date(prevOutcome.milestoneWinAt).toISOString() : null,
+          prevOutcome.timestamp, 'target1 milestone', false);
+      }
+      if (resolvedNow) {
+        // Final resolution: pass isMilestoneUpgrade so the persist function
+        // upgrades the T1-milestone row in place when one exists.
+        persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, prevOutcome.exitPrice != null ? prevOutcome.exitPrice : currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null, prevOutcome.timestamp, prevOutcome.closeReason || null, prevOutcome.milestoneWinBooked === true);
+        signalEventBus.emit('signal:resolved', {
+          ticker: symbol,
+          entryPrice: prevOutcome.entryPrice,
+          targetPrice: prevOutcome.target1,
+          stopPrice: prevOutcome.stopLoss,
+          currentPrice,
+          result: prevOutcome.result,
+          returnPct: prevOutcome.entryPrice > 0 ? Math.round(((currentPrice - prevOutcome.entryPrice) / prevOutcome.entryPrice) * 10000) / 100 : 0,
+          signal: prevOutcome.signal,
+          resolvedAt: prevOutcome.resolvedAt || Date.now(),
+        });
+        // If the position resolved on a cycle where the data was untrustworthy,
+        // drop it from the monitored set — trackSignalOutcomes re-seeds a fresh
+        // entry from this cycle's (invalid) signal object, which would otherwise
+        // linger as an inert position that can never resolve.
+        if (!eligibility.ok) _signalOutcomes.delete(symbol);
+      }
     }
     // Check progress milestones on the current active signal
     const currentActive = _signalOutcomes.get(symbol);
@@ -3957,6 +4030,7 @@ async function getSignalForStock(symbol) {
         ultimateTarget: ultimateTargetOf(open),
         type: open.type || 'Swing Trade',
         riskReward,
+        winBooked: open.milestoneWinBooked === true,
         confidence: open.confidence || 0,
         timeframe: open.timeframe || null,
         positionSize: open.positionSize != null ? open.positionSize + '%' : null,

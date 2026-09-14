@@ -375,18 +375,26 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
           // milestone lock): hitting it books a win, not a loss. A stop below
           // entry is a real stop-out.
           const lockedProfit = previous.stopLoss >= entry;
-          previous.result = lockedProfit ? 'win' : 'loss';
+          previous.result = 'win';
           previous.closeReason = 'stop loss';
-          if (lockedProfit) { performanceStats.wins++; portfolioState.consecutiveLosses = 0; }
-          else { performanceStats.losses++; portfolioState.consecutiveLosses++; }
-          performanceStats.total++;
+          // A position that already booked its target1 milestone win is being
+          // upgraded to the locked-stop exit, not counted a second time. (Its
+          // milestone lock always sits above entry, so even the defensive
+          // below-entry case resolves as the banked win.)
+          if (!previous.milestoneWinBooked) {
+            if (lockedProfit) { performanceStats.wins++; portfolioState.consecutiveLosses = 0; }
+            else { performanceStats.losses++; portfolioState.consecutiveLosses++; }
+            performanceStats.total++;
+          }
         } else if (ultimateTarget != null && currentPrice >= ultimateTarget) {
           // The position rode the whole ladder: only the ULTIMATE (highest)
           // target closes a win. Reaching it books the full ride, not just the
-          // first leg — target1/target2 were milestone stops, not exits.
+          // first leg — target1/target2 were milestone stops, not exits. A
+          // milestone-booked position upgrades its existing win row to this
+          // final exit instead of booking a second win.
           previous.result = 'win'; previous.closeReason = 'ultimate target reached';
           previous.ultimateTarget = ultimateTarget;
-          performanceStats.wins++; performanceStats.total++;
+          if (!previous.milestoneWinBooked) { performanceStats.wins++; performanceStats.total++; }
           portfolioState.consecutiveLosses = 0;
         } else {
           // Target-milestone riding: the price cleared an intermediate target
@@ -399,7 +407,28 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
           while (stage < buyTargets.length - 1 && buyTargets[stage] != null && currentPrice >= buyTargets[stage]) {
             const lockedFloor = targetLockFloor(previous, stage);
             if (lockedFloor != null && (previous.stopLoss == null || previous.stopLoss < lockedFloor)) previous.stopLoss = lockedFloor;
-            if (stage === 0) previous.target1HitAt = Date.now();
+            if (stage === 0) {
+              previous.target1HitAt = Date.now();
+              // Price Target 1 books a WIN right now while the position keeps
+              // riding to the ultimate target — one win per trade. The stat is
+              // banked on the milestone touch (exit = target1); if the ride
+              // later reaches the ultimate target (or the locked-profit stop)
+              // the SAME outcome row is upgraded to that final exit instead of
+              // counting a second win. previous.result stays null so the
+              // position remains open and is re-seeded/restored as riding.
+              if (!previous.milestoneWinBooked) {
+                previous.milestoneWinBooked = true;
+                previous.milestoneExitPrice = buyTargets[0];
+                previous.milestoneWinAt = Date.now();
+                previous.closeReason = 'target1 milestone';
+                performanceStats.wins++; performanceStats.total++;
+                portfolioState.consecutiveLosses = 0;
+                portfolioState.totalTrades++;
+                performanceStats.winRate = performanceStats.total > 0
+                  ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;
+                console.log(`[RiskManager] ${symbol} ${previous.signal} WIN booked at target1 (${buyTargets[0]}, price=${currentPrice}) - riding to ultimate target=${ultimateTarget} (stop locked to ${previous.stopLoss})`);
+              }
+            }
             else if (stage === 1) previous.target2HitAt = Date.now();
             stage++;
             crossed++;
@@ -443,9 +472,13 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
            : previous.closeReason === 'ultimate target reached' && previous.ultimateTarget != null ? previous.ultimateTarget
            : previous.target1)
         : previous.stopLoss;
-      portfolioState.totalTrades++;
-      performanceStats.winRate = performanceStats.total > 0
-        ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;
+      // A milestone-booked position banked its win (and total trade) at target1;
+      // the final resolution only upgrades the exit, never re-counts it.
+      if (!previous.milestoneWinBooked) {
+        portfolioState.totalTrades++;
+        performanceStats.winRate = performanceStats.total > 0
+          ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;
+      }
     }
     // Clear the resolved entry; re-seed only if the fresh signal is itself a new
     // monitored position (a Buy re-rating). Hold/Sell-after-close means the symbol
