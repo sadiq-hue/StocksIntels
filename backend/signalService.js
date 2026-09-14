@@ -59,6 +59,27 @@ const schemaReadyPromise = (async () => {
         AND a.signal_generated_at IS NOT DISTINCT FROM b.signal_generated_at`).catch(() => {});
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_signal_outcomes_signal
       ON signal_outcomes (ticker, signal_generated_at)`).catch(() => {});
+    // The old entry-price unique index conflated distinct signals with the same
+    // entry price (same-price re-emissions across weeks) into one row.  All three
+    // insert sites (live / backfill / backtest) now use the signal-level unique
+    // key (ticker, signal_generated_at) via ON CONFLICT — drop the stale index so
+    // the entry-keyed collisions can never silently drop a legitimate row.
+    await pool.query(`DROP INDEX IF EXISTS idx_signal_outcomes_source_ticker_entry`).catch(() => {});
+    // Backtest rows duplicated live outcomes: the live outcome's
+    // signal_generated_at is the position-seed time, while the backtest row's is
+    // the signal_history generated_at (a batch NOW() written at the end of the
+    // cycle). The two differ by seconds, so the old exact-ms dedupe let the 6h
+    // auto-backtest re-evaluate an already-live-resolved signal and insert a
+    // 'backtest' twin; computeBacktestStats counts source IN ('live','backtest'),
+    // so the same trade appeared twice (inflated total/winRate). Self-heal
+    // existing twins (a live outcome within ±30s of the backtest row — the same
+    // tolerance restoreStateFromDb uses) so the tab reconciles after deploy.
+    await pool.query(`DELETE FROM signal_outcomes bt
+      USING signal_outcomes lv
+      WHERE bt.source = 'backtest' AND lv.source = 'live'
+        AND bt.ticker = lv.ticker
+        AND lv.signal_generated_at >= date_trunc('milliseconds', bt.signal_generated_at) - interval '30 seconds'
+        AND lv.signal_generated_at <= date_trunc('milliseconds', bt.signal_generated_at) + interval '30 seconds'`).catch(() => {});
     // Historical backtest previously force-closed signals at the last available
     // bar even when the trade-type hold window hadn't elapsed (CGEN Aug 5 Long
     // Term: entry 156.75, target1 208.34, force-closed at 194.75 four bars later,
@@ -1132,7 +1153,7 @@ const isBuy = row.signal === 'Strong Buy' || row.signal === 'Buy';
          await pool.query(
             `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, source, close_reason)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'backfill', 'mark-to-market')
-             ON CONFLICT (source, ticker, entry_price) DO NOTHING`,
+             ON CONFLICT (ticker, signal_generated_at) DO NOTHING`,
            [row.ticker, row.entry_price, row.signal, currentPrice, resultStr, now, now, row.generated_at]
          );
         inserted++;
@@ -1168,9 +1189,16 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
     // matter how many cycles run — the old entry_price match collided across
     // same-price re-emissions and the forced 6h run re-inserted duplicate rows.
     // force=true explicitly bypasses the dedupe for a manual re-run.
+    // ±30s tolerance matches restoreStateFromDb: the live outcome's
+    // signal_generated_at (position-seed time) differs from signal_history's
+    // generated_at (batch NOW()) by seconds.  Using the same window prevents the
+    // 6h auto-backtest from re-evaluating an already-live-resolved signal and
+    // inserting a 'backtest' twin (see boot-time self-heal above).
     const dedupeClause = force ? '' : `NOT EXISTS (
           SELECT 1 FROM signal_outcomes so
-          WHERE so.ticker = sh.ticker AND so.signal_generated_at = date_trunc('milliseconds', sh.generated_at)
+          WHERE so.ticker = sh.ticker
+            AND so.signal_generated_at >= date_trunc('milliseconds', sh.generated_at) - interval '30 seconds'
+            AND so.signal_generated_at <= date_trunc('milliseconds', sh.generated_at) + interval '30 seconds'
         ) AND `;
     const result = await pool.query(`
       SELECT sh.id, sh.ticker, sh.signal, sh.entry_price, sh.stop_loss, sh.target1, sh.target2, sh.generated_at, sh.trade_type
@@ -1316,7 +1344,7 @@ async function runHistoricalBacktest({ days = 90, maxHoldDays = 20, maxSignals =
           await pool.query(
             `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, recorded_at, resolved_at, signal_generated_at, source, close_reason)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'backtest', $9)
-             ON CONFLICT (source, ticker, entry_price) DO NOTHING`,
+             ON CONFLICT (ticker, signal_generated_at) DO NOTHING`,
             [sig.ticker, entry, sig.signal, exitPrice, resultStr, now, now, sig.generated_at, closeReason]
           );
           totalInserted++;
@@ -1435,19 +1463,30 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
     // Primary data source: signal_outcomes — has actual exit prices and real win/loss results.
     // Single consistent source filter + signal filter shared by every query below so the
     // aggregate, by-signal, returns and outcome-row figures all reconcile.
-    const tradable = "signal IN ('Strong Buy','Buy','Sell','Strong Sell')";
-    const conditions = ['recorded_at > NOW() - $1::interval', "source IN ('live','backtest')", tradable];
+    const tradable = "o.signal IN ('Strong Buy','Buy','Sell','Strong Sell')";
+    const conditions = ['o.recorded_at > NOW() - $1::interval', "o.source IN ('live','backtest')", tradable];
     const params = [`${days} days`];
     let idx = 2;
-    if (signalType && signalType !== 'All' && signalType !== 'all') { conditions.push(`signal = $${idx++}`); params.push(signalType); }
+    if (signalType && signalType !== 'All' && signalType !== 'all') { conditions.push(`o.signal = $${idx++}`); params.push(signalType); }
+    if (minConfidence && minConfidence > 0) {
+      conditions.push(`EXISTS (
+        SELECT 1 FROM signal_history h
+        WHERE h.ticker = o.ticker
+          AND h.generated_at BETWEEN COALESCE(o.signal_generated_at, o.recorded_at) - interval '5 minutes'
+                                AND COALESCE(o.signal_generated_at, o.recorded_at) + interval '5 minutes'
+          AND h.confidence >= $${idx}
+      )`);
+      params.push(minConfidence);
+      idx++;
+    }
     const whereClause = conditions.join(' AND ');
 
     let outcomeRows;
     try {
       const result = await pool.query(
         `SELECT ticker, signal, entry_price, exit_price, result, recorded_at
-         FROM signal_outcomes WHERE ${whereClause}
-         ORDER BY recorded_at DESC LIMIT $${idx}`,
+         FROM signal_outcomes o WHERE ${whereClause}
+         ORDER BY o.recorded_at DESC LIMIT $${idx}`,
         [...params, limit]
       );
       outcomeRows = result.rows;
@@ -1461,10 +1500,10 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
       // Aggregate win/loss counts
       const aggResult = await pool.query(`
         SELECT
-          COUNT(*) FILTER (WHERE result = 'win') AS wins,
-          COUNT(*) FILTER (WHERE result = 'loss') AS losses,
+          COUNT(*) FILTER (WHERE o.result = 'win') AS wins,
+          COUNT(*) FILTER (WHERE o.result = 'loss') AS losses,
           COUNT(*) AS total
-        FROM signal_outcomes
+        FROM signal_outcomes o
         WHERE ${whereClause}
       `, params);
       const agg = aggResult.rows[0];
@@ -1474,13 +1513,13 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
 
       // By-signal breakdown
       const bySignalResult = await pool.query(`
-        SELECT signal,
-          COUNT(*) FILTER (WHERE result = 'win') AS wins,
-          COUNT(*) FILTER (WHERE result = 'loss') AS losses,
+        SELECT o.signal,
+          COUNT(*) FILTER (WHERE o.result = 'win') AS wins,
+          COUNT(*) FILTER (WHERE o.result = 'loss') AS losses,
           COUNT(*) AS total
-        FROM signal_outcomes
+        FROM signal_outcomes o
         WHERE ${whereClause}
-        GROUP BY signal
+        GROUP BY o.signal
       `, params);
       const bySignal = {};
       for (const r of bySignalResult.rows) {
@@ -1495,13 +1534,13 @@ async function computeBacktestStats({ days = 30, limit = 500, signalType, minCon
 
         // Return-based metrics from resolved rows (where exit_price != entry_price)
         const returnsResult = await pool.query(`
-          SELECT ticker, signal, entry_price, exit_price,
-            (exit_price - entry_price) / entry_price * 100 AS return_pct,
-            COALESCE(position_size, 25) AS position_size
-          FROM signal_outcomes
+          SELECT o.ticker, o.signal, o.entry_price, o.exit_price,
+            (o.exit_price - o.entry_price) / o.entry_price * 100 AS return_pct,
+            COALESCE(o.position_size, 25) AS position_size
+          FROM signal_outcomes o
           WHERE ${whereClause}
-            AND entry_price > 0 AND exit_price > 0 AND exit_price != entry_price
-          ORDER BY recorded_at ASC
+            AND o.entry_price > 0 AND o.exit_price > 0 AND o.exit_price != o.entry_price
+          ORDER BY o.recorded_at ASC
         `, params);
 
         let avgReturn = 0, profitFactor = 0, sharpe = 0, maxDrawdown = 0;
@@ -3038,7 +3077,7 @@ async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPri
     await pool.query(
       `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at, signal_generated_at, close_reason, source)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'live')
-       ON CONFLICT (source, ticker, entry_price) DO NOTHING`,
+       ON CONFLICT (ticker, signal_generated_at) DO NOTHING`,
       [symbol, entryPrice, signalAction, currentPrice, result, posSize, now, resolvedAt || now, signalGenAt, closeReason]
     );
     // Push to live test store
