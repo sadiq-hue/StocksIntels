@@ -1917,25 +1917,40 @@ async function _loadForwardPredictionsFromDb() {
 // Thesis identity for forward-prediction dedup, shared by the open store, the
 // recently-resolved guard and (as closely as SQL allows) the DB backstop so the
 // paths cannot drift. A BUY is the "same call" only when BOTH its entry price
-// AND its target1 level match: a materially new entry (>=2%) or a materially
-// different target (>5%) is a distinct thesis. At a near-identical price the
-// target still decides — SCOM's Sep 9 call (36.65, target 49.84) was swallowed
-// by a price-only match against a RESOLVED 36.60/target 39.15 row (and a
-// 36.50/37.63 row) even though the thesis differed ~21%, so the latest SCOM
-// signal never reached the forward test. A stale/resolved row must never hide a
-// genuinely new call. Sells carry no target levels, so near-identical price
-// alone decides.
+// AND its target1 level match: a materially new entry (>=8%) or a materially
+// different reward profile is a distinct thesis. The reward profile is the
+// target-to-entry ratio (T1/entry) rather than the absolute target, because
+// T1 is anchored to the stop distance (riskManager TARGET1_MULT), so it tracks
+// entry by construction — a 6% repricing moves the absolute target ~6% too,
+// and any fixed % target bound would re-fragment the same call (CGEN Sep 2026:
+// 234→304, ~30% round-trip, repriced >2% almost every cycle → 12 near-duplicate
+// BUY rows, all superseded, none resolvable). At a near-identical price the
+// profile still decides — SCOM's Sep 9 call (36.65, target 49.84) has profile
+// 1.36 vs a RESOLVED 36.60/target 39.15 row (profile 1.07), ~27% apart, so the
+// latest SCOM signal still reaches the forward test. A stale/resolved row must
+// never hide a genuinely new call. Sells carry no target levels, so
+// near-identical price alone decides.
+const THESIS_ENTRY_DELTA = 0.08;      // >=8% price re-rate = materially new entry -> distinct thesis
+const THESIS_ENTRY_IDENTICAL = 0.005; // near-identical entry (<=0.5%): same thesis unless profile changed
+const THESIS_PROFILE_DELTA = 0.10;    // reward-profile (T1/entry) drift of >=10% = a different call
+
 function isSameThesis(p, price, target1, action) {
   if (action === 'sell') {
-    return p.price > 0 && price > 0 && Math.abs(p.price - price) / price < 0.005;
+    return p.price > 0 && price > 0 && Math.abs(p.price - price) / price < THESIS_ENTRY_IDENTICAL;
   }
-  if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price >= 0.02) return false; // materially new entry → distinct thesis
-  if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price < 0.005) {
-    // near-identical entry: same thesis unless the target is materially different
-    return p.target1 == null || target1 == null || Math.abs(p.target1 - target1) / target1 < 0.05;
+  if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price >= THESIS_ENTRY_DELTA) return false; // re-rated >=8% -> distinct thesis
+  const profileChanged = () => {
+    if (!p.target1 || !target1 || !p.price || !price) return false;
+    const profile = p.target1 / p.price;
+    const profileNow = target1 / price;
+    return Math.abs(profile - profileNow) / profileNow >= THESIS_PROFILE_DELTA;
+  };
+  if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price < THESIS_ENTRY_IDENTICAL) {
+    // near-identical entry: same thesis unless the reward profile is materially different
+    return !profileChanged();
   }
-  // entry band [0.5%, 2%): the target thesis decides
-  return p.target1 != null && target1 != null && Math.abs(p.target1 - target1) / target1 < 0.05;
+  // entry band [0.5%, 8%): the reward profile decides
+  return !profileChanged();
 }
 
 async function recordForwardPrediction(symbol, signalAction, confidence, price, stopLoss, target1, signalObjAction, tradeType, sector) {
@@ -4456,7 +4471,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
 
   // Use configurable thresholds + the evidence-gated sell classifier
   const thresholds = engineConfig.getConfig().thresholds;
-  const sig = classifySignalBucket(overallScore, thresholds, {
+  let sig = classifySignalBucket(overallScore, thresholds, {
     subScores: {
       fundamental: fundamental.score,
       technical: technical.score,
@@ -4477,8 +4492,6 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     priorScore: getPriorScore(symbol),
   });
 
-  const tradeType = sig.action === 'sell' ? 'Avoid' : determineTradeType(technical.score, fundamental.score);
-  const tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, stopLossPct, tradeType);
   const scoreVariance = Math.max(
     Math.abs(fundamental.score - overallScore),
     Math.abs(technical.score - overallScore),
@@ -4496,6 +4509,30 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   if (_portfolioState.maxDrawdown > maxDrawdownThreshold) {
     confidence = Math.round(confidence * 0.7);
   }
+
+  // ── Confidence gate: label must be backed by scaled conviction ───────
+  // The bucket label comes from overallScore alone; after variance/skew
+  // deductions the confidence can fall below the bucket's bar, making the
+  // label misleading (e.g. CGEN score 55 → Buy, but confidence only 47%).
+  // Demote to the next weaker label so the displayed conviction matches the
+  // displayed label.
+  const _origSignalLabel = sig.signal;
+  let _confidenceGateNote = null;
+  if (sig.action === 'buy') {
+    if (confidence < thresholds.buy) {
+      _confidenceGateNote = `${_origSignalLabel} (confidence ${confidence}% < buy bar ${thresholds.buy}%)`;
+      sig = { ...sig, signal: 'Hold', action: 'hold', strength: 'neutral' };
+    } else if (confidence < thresholds.strong_buy && sig.signal === 'Strong Buy') {
+      _confidenceGateNote = `Strong Buy (confidence ${confidence}% < strong_buy bar ${thresholds.strong_buy}%) -> Buy`;
+      sig = { ...sig, signal: 'Buy', strength: 'moderate' };
+    }
+  }
+  if (_confidenceGateNote) {
+    console.log(`[SignalService] ${symbol} confidence-gate: ${_confidenceGateNote}`);
+  }
+
+  const tradeType = sig.action === 'sell' ? 'Avoid' : determineTradeType(technical.score, fundamental.score);
+  const tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, stopLossPct, tradeType);
 
   const regimePenalty = regime.regime === 'crash' ? regimePenaltyCrash : 1;
 
@@ -4538,6 +4575,9 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     reason += ` | Insider ${dirWord}: ${insider.buyCount} buys / ${insider.sellCount} sells${netTxt} (score ${insider.score}${latest})`;
   }
   reason += '.';
+  if (sig.action === 'hold' && _origSignalLabel !== 'Hold') {
+    reason = reason.replace(/\.$/, '') + ` | Confidence ${confidence}% below ${_origSignalLabel} bar (${thresholds.buy}%) -- downgraded to Hold.`;
+  }
   // Expected holding period derived from the engine's own volatility measurement:
   // how many trading sessions price needs to travel from entry to target1 at the
   // stock's average daily range (tradeLevels.expectedDays). Falls back to the
