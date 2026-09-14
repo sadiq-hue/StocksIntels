@@ -13684,10 +13684,11 @@ server.listen(port, '0.0.0.0', async () => {
       warmFMPCache(ALL_SYMBOLS).catch(() => {});
 
       // Pre-warm the realtime quote cache so the first page loads are fast.
-      // Skip NSE symbols (handled by the mystocks background auto-refresh) to
-      // avoid hammering live.mystocks.co.ke with a full-universe scrape at boot.
+      // NSE symbols resolve from the single bulk portal ticker feed (one
+      // request warms the whole universe) plus the KenyanStocks baseline, so
+      // warming ALL symbols is cheap and makes cold `/api/market/quotes` fast.
       setTimeout(() => {
-        const warmSymbols = ALL_SYMBOLS.filter((s) => !s.startsWith('NSE:'));
+        const warmSymbols = ALL_SYMBOLS.map((s) => (NSE_SYMBOLS.includes(s) ? `NSE:${s}` : s));
         getQuotesBatch(warmSymbols).catch((e) => console.error('[warm] quote cache warm failed:', e.message));
       }, 8000);
 
@@ -13702,6 +13703,13 @@ server.listen(port, '0.0.0.0', async () => {
         const heroSymbols = ['NSE:SCOM', 'NSE:EQTY', 'NSE:KCB', 'NSE:EABL', 'AAPL', 'TSLA', 'MSFT', 'GOOGL', 'NVDA'];
         getQuotesBatch(heroSymbols).catch(() => {});
       }, 120000);
+
+      // Periodically re-warm the full universe every 3 minutes so the frontend
+      // batch poll (30s) always hits a warm cache and never shows stale data.
+      setInterval(() => {
+        const warmSymbols = ALL_SYMBOLS.map((s) => (NSE_SYMBOLS.includes(s) ? `NSE:${s}` : s));
+        getQuotesBatch(warmSymbols).catch(() => {});
+      }, 180000);
 
       // Seed NSE stock fundamentals from static data into DB (background)
       const nseFundamentals = require('./nseFundamentalsSeeder');

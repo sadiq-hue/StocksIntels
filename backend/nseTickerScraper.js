@@ -14,64 +14,72 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 let cache = new Map(); // ticker -> normalized quote
 let cacheTime = 0;
 let failCount = 0;
+let inflight = null; // shared promise for concurrent callers (batch fan-out)
 
 async function fetchNseTickerQuotes() {
   const now = Date.now();
   const ttl = failCount >= 3 ? CACHE_TTL * 2 : CACHE_TTL;
   if (cache.size > 0 && now - cacheTime < ttl) return cache;
+  if (inflight) return inflight;
 
-  try {
-    const resp = await axios.post(TICKER_URL, JSON.stringify({ nopage: 'true', isinno: NSE_ACCOUNT }), {
-      timeout: 15000,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'User-Agent': UA,
-        'Referer': 'https://www.nse.co.ke/',
-        'Origin': 'https://www.nse.co.ke',
-        'Host': 'deveintapps.com',
-      },
-    });
-    const snapshot = resp?.data?.message?.[0]?.snapshot;
-    if (!Array.isArray(snapshot) || !snapshot.length) {
-      throw new Error('empty ticker snapshot');
-    }
-    const next = new Map();
-    for (const q of snapshot) {
-      const price = Number(q.price);
-      if (!q.issuer || !(price > 0)) continue;
-      const prev = Number(q.prev_price) > 0 ? Number(q.prev_price) : price;
-      // The API's `change` field is already the % change (verified against
-      // price/prev_price on CRWN 0.42 vs 0.422 and SCOM -0.82 vs -0.82).
-      const changePercent = Number(q.change);
-      next.set(q.issuer.toUpperCase(), {
-        symbol: q.issuer.toUpperCase(),
-        price,
-        previousClose: prev,
-        change: price - prev,
-        changePercent: isFinite(changePercent) ? changePercent : prev > 0 ? ((price - prev) / prev) * 100 : 0,
-        changesPercentage: isFinite(changePercent) ? changePercent : prev > 0 ? ((price - prev) / prev) * 100 : 0,
-        volume: Number(q.volume) || 0,
-        dayHigh: Number(q.today_high) > 0 ? Number(q.today_high) : price,
-        dayLow: Number(q.today_low) > 0 ? Number(q.today_low) : price,
-        open: Number(q.today_open) || prev,
-        marketCap: 0,
-        timestamp: Math.floor(Date.now() / 1000),
-        lastUpdated: new Date().toISOString(),
-        provider: 'nseportal',
+  inflight = (async () => {
+    try {
+      const resp = await axios.post(TICKER_URL, JSON.stringify({ nopage: 'true', isinno: NSE_ACCOUNT }), {
+        timeout: 15000,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': UA,
+          'Referer': 'https://www.nse.co.ke/',
+          'Origin': 'https://www.nse.co.ke',
+          'Host': 'deveintapps.com',
+        },
       });
+      const snapshot = resp?.data?.message?.[0]?.snapshot;
+      if (!Array.isArray(snapshot) || !snapshot.length) {
+        throw new Error('empty ticker snapshot');
+      }
+      const next = new Map();
+      for (const q of snapshot) {
+        const price = Number(q.price);
+        if (!q.issuer || !(price > 0)) continue;
+        const prev = Number(q.prev_price) > 0 ? Number(q.prev_price) : price;
+        // The API's `change` field is already the % change (verified against
+        // price/prev_price on CRWN 0.42 vs 0.422 and SCOM -0.82 vs -0.82).
+        const changePercent = Number(q.change);
+        next.set(q.issuer.toUpperCase(), {
+          symbol: q.issuer.toUpperCase(),
+          price,
+          previousClose: prev,
+          change: price - prev,
+          changePercent: isFinite(changePercent) ? changePercent : prev > 0 ? ((price - prev) / prev) * 100 : 0,
+          changesPercentage: isFinite(changePercent) ? changePercent : prev > 0 ? ((price - prev) / prev) * 100 : 0,
+          volume: Number(q.volume) || 0,
+          dayHigh: Number(q.today_high) > 0 ? Number(q.today_high) : price,
+          dayLow: Number(q.today_low) > 0 ? Number(q.today_low) : price,
+          open: Number(q.today_open) || prev,
+          marketCap: 0,
+          timestamp: Math.floor(Date.now() / 1000),
+          lastUpdated: new Date().toISOString(),
+          provider: 'nseportal',
+        });
+      }
+      if (next.size === 0) throw new Error('no parseable ticker entries');
+      cache = next;
+      cacheTime = now;
+      failCount = 0;
+      return cache;
+    } catch (e) {
+      failCount++;
+      console.warn(`[NSE-Ticker] fetch failed (${failCount}): ${e.message}`);
+      if (cache.size > 0 && now - cacheTime < MAX_STALE_CACHE_MS) return cache;
+      return new Map();
+    } finally {
+      inflight = null;
     }
-    if (next.size === 0) throw new Error('no parseable ticker entries');
-    cache = next;
-    cacheTime = now;
-    failCount = 0;
-    return cache;
-  } catch (e) {
-    failCount++;
-    console.warn(`[NSE-Ticker] fetch failed (${failCount}): ${e.message}`);
-    if (cache.size > 0 && now - cacheTime < MAX_STALE_CACHE_MS) return cache;
-    return new Map();
-  }
+  })();
+
+  return inflight;
 }
 
 async function getQuoteForSymbol(symbol) {

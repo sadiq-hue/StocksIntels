@@ -305,7 +305,7 @@ function isPlausibleBuyLevels(entryPrice, stopLoss, target1, target2 = null, tar
   return true;
 }
 
-function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, symbol, currentPrice, newSignal, marketOpen = true) {
+function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, symbol, currentPrice, newSignal, marketOpen = true, maxSingleMovePct = 0.5) {
   let previous = signalOutcomes.get(symbol);
   const posSize = parseInt(newSignal.positionSize) || 25;
   // Only open Buy-direction positions are tracked. Sell/Strong Sell are exit/avoid
@@ -362,12 +362,15 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
       : entry > 0 && previous.stopLoss > entry && previous.target1 < entry;
     const pctMove = entry > 0 ? Math.abs(currentPrice - entry) / entry : 0;
     // Require a real move past the level but reject impossible single-cycle moves
-    // (garbage quotes) that would record absurd outcomes. The +50% cap guards the
-    // entry stage — a RIDE to the ultimate target is routinely +100%+ from entry
+    // (garbage quotes) that would record absurd outcomes. The +50% default cap guards
+    // the entry stage — a RIDE to the ultimate target is routinely +100%+ from entry
     // once the position has already banked a milestone, so a staged long
     // (stageIdx > 0) is exempt: it has proven its path gradually by passing
     // intermediate levels, and its price can legitimately sit far above entry.
-    const moved = pctMove > 0.0005 && (pctMove < 0.5 || (isPrevBuy && stageIdx > 0));
+    // A caller may pass a tighter cap (e.g. 0.25 for NSE, whose day limit is ~10%)
+    // so a corrupt 24.88 quote against a 35.20 SCOM entry (~30% "move") can't trip
+    // the stop/target resolution in a single cycle.
+    const moved = pctMove > 0.0005 && (pctMove < maxSingleMovePct || (isPrevBuy && stageIdx > 0));
     if (marketOpen && saneLevels && moved) {
       if (isPrevBuy) {
         if (currentPrice <= previous.stopLoss) {

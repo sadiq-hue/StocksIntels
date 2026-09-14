@@ -387,6 +387,11 @@ async function getNseBaseQuote(symbol) {
   //     KenyanStocks / MyStocks feeds below share a stale upstream reference.
   //     Only trusted when its price is sane relative to the KenyanStocks close,
   //     otherwise the portal row is garbage and we fall through.
+  //     The band is deliberately tight: NSE same-day moves are a few percent, so
+  //     a price deviating >25% from the prior close (e.g. a 24.88 portal low
+  //     against a 35.30 KenyanStocks close) is a broken row, not a real move.
+  //     The old 0.5-2x band let exactly that kind of garbage through, which
+  //     tripped phantom stop-loss resolutions for SCOM on 2026-09-14.
   try {
     const nseTicker = require('./nseTickerScraper');
     const tq = await nseTicker.getQuoteForSymbol(symbol);
@@ -394,8 +399,8 @@ async function getNseBaseQuote(symbol) {
     if (tq && p > 0) {
       const ksClose = Number(ks && ks.close);
       const ratio = ksClose > 0 ? p / ksClose : 0;
-      if (!ksClose || (ratio >= 0.5 && ratio <= 2)) return tq;
-      console.warn(`[marketService] NSE portal price suspect for ${cleanTicker} (${p} vs KenyanStocks ${ksClose}); using KenyanStocks`);
+      if (!ksClose || (ratio >= 0.75 && ratio <= 1.35)) return tq;
+      console.warn(`[marketService] NSE portal price suspect for ${cleanTicker} (${p} vs KenyanStocks ${ksClose}, ratio ${ratio.toFixed(3)}); using KenyanStocks`);
     }
   } catch (e) { /* fall through to other sources */ }
 
@@ -694,6 +699,36 @@ async function getQuotesBatch(symbols) {
       }
     } catch (e) {
       console.warn(`[getQuotesBatch] bulk spark failed: ${e.message}`);
+    }
+  }
+
+  // Bulk NSE warm-up: the NSE portal ticker feed returns ALL equities in a
+  // single request (cached 3min). Fill every missing NSE symbol from that map
+  // in one shot, sanity-checked against the KenyanStocks close, so a full
+  // 72-symbol batch never degrades into 72 sequential portal scrapes.
+  const missingNse = missing.filter(s => s.startsWith('NSE:')).filter(s => !results[s]);
+  if (missingNse.length > 0) {
+    try {
+      const [nseTicker, ksMod] = await Promise.all([
+        import('./nseTickerScraper').then(m => m.fetchNseTickerQuotes()),
+        import('./kenyanStocksScraper').then(m => m.getStocksData()).catch(() => null),
+      ]);
+      const ksArray = Array.isArray(ksMod) ? ksMod : [];
+      const ksBySymbol = new Map(ksArray.map(k => [String(k && k.symbol || '').toUpperCase(), k]));
+      for (const s of missingNse) {
+        if (timedOut) break;
+        const clean = s.replace('NSE:', '').toUpperCase();
+        const q = nseTicker.get ? nseTicker.get(clean) : null;
+        if (!q || !(Number(q.price) > 0)) continue;
+        const ksClose = Number(ksBySymbol.get(clean) && ksBySymbol.get(clean).close);
+        const ratio = ksClose > 0 ? q.price / ksClose : 0;
+        if (ksClose && (ratio < 0.75 || ratio > 1.35)) continue; // same gate as getNseBaseQuote
+        const full = { ...q, symbol: s, marketCap: q.marketCap || 0 };
+        quoteCache.set(s, full);
+        results[s] = quoteCache.get(s);
+      }
+    } catch (e) {
+      console.warn(`[getQuotesBatch] bulk NSE warm-up failed: ${e.message}`);
     }
   }
 

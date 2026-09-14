@@ -416,6 +416,12 @@ const MAX_DAYS = 90;
 // Catches absurd entries without blocking real (large but plausible) moves.
 const MAX_ENTRY_DEVIATION = 0.5;
 
+// Max allowed single-quote deviation from the prior session close in the NSE
+// intraday accumulator. NSE same-day moves are a few percent; a quote deviating
+// more than ±25% (e.g. SCOM's corrupt 24.8840 low on 2026-09-14 vs a 35.30
+// prior close) is a broken feed row and must not enter the daily OHLC bar.
+const NSE_QUOTE_MAX_DEVIATION = 0.25;
+
 // Strict signal eligibility: a stock only earns a signal when its data and
 // trade levels satisfy every condition. These are the floors for data
 // trustworthiness — see meetsSignalConditions() below.
@@ -464,9 +470,42 @@ function nseTradingDate() {
   return dow >= 1 && dow <= 5 ? `${y}-${m}-${d}` : null;
 }
 
-function accumulateNseQuote(symbol, price, volume) {
+function prevCloseFor(symbol, priceHistory) {
+  // Most recent completed session close from price history (DB-backed), falling
+  // back to the in-memory accumulated bars if history is unavailable.
+  if (Array.isArray(priceHistory)) {
+    const closes = priceHistory.filter(v => v != null && v > 0);
+    if (closes.length) return closes[closes.length - 1];
+  }
+  const hist = _nseDailyHistory.get(symbol);
+  if (Array.isArray(hist) && hist.length && hist[hist.length - 1].close > 0) {
+    return hist[hist.length - 1].close;
+  }
+  return null;
+}
+
+function accumulateNseQuote(symbol, price, volume, priorClose = null) {
   const today = nseTradingDate();
   if (!today) return; // weekend — no NSE session, don't write spurious bars
+  // Plausibility guard: an NSE daily bar can never move more than ±25% vs the
+  // prior session close in a single live session. A quote outside that band is
+  // a broken feed row (e.g. SCOM's 24.8840 "low" on 2026-09-14 against a 35.30
+  // prior close), and the low=min(low,price) accumulator would otherwise bake it
+  // into the daily bar permanently — where stop/target resolution then reads it.
+  // The anchor is the caller-provided prior close from price history (DB-backed),
+  // falling back to the in-memory accumulated bars when history is unavailable.
+  let prior = priorClose && priorClose > 0 ? priorClose : null;
+  if (prior == null) {
+    const hist = _nseDailyHistory.get(symbol);
+    prior = Array.isArray(hist) && hist.length ? hist[hist.length - 1].close : null;
+  }
+  if (prior && prior > 0) {
+    const dev = Math.abs(price - prior) / prior;
+    if (dev > NSE_QUOTE_MAX_DEVIATION) {
+      console.warn(`[SignalService] ${symbol} rejecting NSE quote ${price} (${(dev * 100).toFixed(1)}% vs prior close ${prior}) - corrupt/plausibility guard`);
+      return;
+    }
+  }
   if (!_nseIntradayBuffer.has(symbol)) _nseIntradayBuffer.set(symbol, {});
   const buf = _nseIntradayBuffer.get(symbol);
   if (!buf[today]) buf[today] = { open: price, high: price, low: price, close: price, volume: 0 };
@@ -3634,7 +3673,6 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       }
     }
     
-    if (NSE_SYMBOLS.includes(symbol)) accumulateNseQuote(symbol, currentPrice, volume);
     if (currentPrice > 0) _lastKnownPrices.set(symbol, currentPrice);
     
     const marketOpen = isExchangeOpen(symbol);
@@ -3647,6 +3685,10 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     if (reportMetrics) stock = sanitizeLiveFundamentals(stock, reportMetrics);
     const fundamental = analyzeFundamentals(stock, currentPrice, newsSentiment[symbol] || null, _dynamicSectorPE);
     const priceHistory = await getPriceHistory(symbol);
+    // Accumulate the live NSE quote into today's daily bar AFTER price history is
+    // available so the plausibility guard can anchor against the prior session
+    // close (the in-memory _nseDailyHistory map is empty until bootstrapped).
+    if (NSE_SYMBOLS.includes(symbol)) accumulateNseQuote(symbol, currentPrice, volume, prevCloseFor(symbol, priceHistory));
     // Entry sanity check: the quote used to build stop/target levels must be
     // plausible relative to the prior session close. Day-high-as-price or broken
     // feed values create phantom entries with meaningless stops (e.g. CRWN 60.00).
@@ -3763,7 +3805,11 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         }
       }
     }
-    trackSignalOutcomes(_portfolioState, _performanceStats, _signalOutcomes, symbol, currentPrice, sigObj, marketOpen);
+    // NSE stocks trade under a hard ~10% daily limit, so a quote moving more than
+    // 25% in a single cycle is a corrupt feed row (e.g. SCOM 24.88 vs 35.20 entry
+    // on 2026-09-14) — passing a tight cap keeps it from resolving a phantom stop.
+    // US symbols keep the wider 50% default (overnight gaps to targets are real).
+    trackSignalOutcomes(_portfolioState, _performanceStats, _signalOutcomes, symbol, currentPrice, sigObj, marketOpen, NSE_SYMBOLS.includes(symbol) ? 0.25 : 0.5);
     // Sell persistence gate: one sell forward-prediction per symbol until it
     // resolves. A persistent sell must not create a new prediction every cycle
     // — the audit counts every persisted row, so duplicates inflate the totals.

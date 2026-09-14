@@ -9,6 +9,7 @@ let eventsCache = [];
 let eventsCacheTime = 0;
 let stocksCache = null;
 let stocksCacheTime = 0;
+let stocksInflight = null; // shared promise for concurrent callers (batch fan-out)
 
 async function scrapeEvents() {
   const now = Date.now();
@@ -59,24 +60,31 @@ async function getStocksData() {
   if (stocksCache && (now - stocksCacheTime) < CACHE_TTL) {
     return stocksCache;
   }
+  if (stocksInflight) return stocksInflight;
 
-  try {
-    const response = await axios.get(STOCKS_API_URL, {
-      timeout: SCRAPE_TIMEOUT,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; StocksIntelsBot/1.0)' },
-    });
+  stocksInflight = (async () => {
+    try {
+      const response = await axios.get(STOCKS_API_URL, {
+        timeout: SCRAPE_TIMEOUT,
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; StocksIntelsBot/1.0)' },
+      });
 
-    const data = response.data;
-    if (data && Array.isArray(data.data)) {
-      stocksCache = data.data;
-      stocksCacheTime = now;
-      console.log(`[KenyanStocks] Fetched ${data.data.length} stocks from API`);
+      const data = response.data;
+      if (data && Array.isArray(data.data)) {
+        stocksCache = data.data;
+        stocksCacheTime = Date.now();
+        console.log(`[KenyanStocks] Fetched ${data.data.length} stocks from API`);
+      }
+      return stocksCache;
+    } catch (e) {
+      console.error('[KenyanStocks] Stocks API failed:', e.message);
+      return stocksCache;
+    } finally {
+      stocksInflight = null;
     }
-    return stocksCache;
-  } catch (e) {
-    console.error('[KenyanStocks] Stocks API failed:', e.message);
-    return stocksCache;
-  }
+  })();
+
+  return stocksInflight;
 }
 
 function getEvents() {

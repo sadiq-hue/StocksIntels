@@ -144,6 +144,8 @@ export function StockAnalysisPage() {
   const [page, setPage] = useState(1);
   const itemsPerPage = 15;
 
+  const { getQuote, quotes } = useRealtimeQuotes();
+
   const parseVolume = (vol: string): number => {
     const num = parseFloat(vol.replace("M", "").replace("K", ""));
     return vol.includes("M") ? num * 1000000 : vol.includes("K") ? num * 1000 : num;
@@ -157,12 +159,16 @@ export function StockAnalysisPage() {
           (filterSector === "All" || s.sector === filterSector);
       })
       .sort((a, b) => {
-        if (sortBy === "price") return b.price - a.price;
+        if (sortBy === "price") {
+          const pa = getQuote(a.ticker)?.price || a.price;
+          const pb = getQuote(b.ticker)?.price || b.price;
+          return pb - pa;
+        }
         if (sortBy === "change") return b.change - a.change;
         if (sortBy === "volume") return parseVolume(b.volume) - parseVolume(a.volume);
         return a.ticker.localeCompare(b.ticker);
       });
-  }, [stockUniverse, searchTerm, filterSector, sortBy]);
+  }, [stockUniverse, searchTerm, filterSector, sortBy, quotes]);
 
   const totalPages = Math.max(1, Math.ceil(filteredStocks.length / itemsPerPage));
   const safePage = Math.min(page, totalPages);
@@ -232,8 +238,6 @@ export function StockAnalysisPage() {
   }
   const [holders, setHolders] = useState<Holder[]>([]);
   const [etfHolders, setEtfHolders] = useState<Holder[]>([]);
-
-  const { getQuote, quotes } = useRealtimeQuotes();
 
   const activeSelection = stockUniverse.find((s) => s.ticker === selectedStock.ticker) || selectedStock;
 
@@ -743,9 +747,8 @@ export function StockAnalysisPage() {
                 filteredStocks.map((stock) => {
                   const isActive = activeSelection.ticker === stock.ticker;
                   const live = getQuote(stock.ticker);
-                  const listPrice = live?.price && live.price > 0 ? live.price : stock.price;
-                  const listChange = live?.changePercent ?? stock.change;
-                  const isPos = listChange >= 0;
+                  const listPrice = live?.price && live.price > 0 ? live.price : null;
+                  const listChange = live?.changePercent != null && listPrice != null ? live.changePercent : null;
                   return (
                     <button
                       key={stock.ticker}
@@ -783,13 +786,19 @@ export function StockAnalysisPage() {
                         </div>
                         <div className="text-right shrink-0">
                           <div className={`text-sm font-semibold ${isActive ? "text-white" : "text-foreground"}`}>
-                            {formatPrice(listPrice)}
+                            {listPrice != null ? formatPrice(listPrice) : <span className="opacity-40">—</span>}
                           </div>
                           <div className={`flex items-center justify-end gap-0.5 text-[11px] font-medium ${
-                            isPos ? "text-emerald-400" : "text-red-400"
+                            listChange != null ? (listChange >= 0 ? "text-emerald-400" : "text-red-400") : "opacity-40"
                           }`}>
-                            {isPos ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-                            {listChange > 0 ? "+" : ""}{listChange.toFixed(2)}%
+                            {listChange != null ? (
+                              <>
+                                {listChange >= 0 ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                                {listChange > 0 ? "+" : ""}{listChange.toFixed(2)}%
+                              </>
+                            ) : (
+                              <span>—</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -853,13 +862,16 @@ export function StockAnalysisPage() {
                 {[...stockUniverse]
                   .map((s) => {
                     const q = getQuote(s.ticker);
+                    const has = !!q?.price && q.price > 0;
+                    if (!has || q.changePercent == null) return null;
                     return {
                       ...s,
-                      price: q?.price && q.price > 0 ? q.price : s.price,
-                      chg: q?.changePercent ?? s.change,
+                      price: q.price,
+                      chg: q.changePercent,
                     };
                   })
-                  .sort((a, b) => Math.abs(b.chg) - Math.abs(a.chg))
+                  .filter((m): m is NonNullable<typeof m> => m != null)
+                  .sort((a, b) => Math.abs(b!.chg) - Math.abs(a!.chg))
                   .slice(0, 10)
                   .map((m, i) => (
                     <button
