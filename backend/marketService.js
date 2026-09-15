@@ -710,8 +710,8 @@ async function getQuotesBatch(symbols) {
   if (missingNse.length > 0) {
     try {
       const [nseTicker, ksMod] = await Promise.all([
-        import('./nseTickerScraper').then(m => m.fetchNseTickerQuotes()),
-        import('./kenyanStocksScraper').then(m => m.getStocksData()).catch(() => null),
+        import('./nseTickerScraper.js').then(m => m.fetchNseTickerQuotes()),
+        import('./kenyanStocksScraper.js').then(m => m.getStocksData()).catch(() => null),
       ]);
       const ksArray = Array.isArray(ksMod) ? ksMod : [];
       const ksBySymbol = new Map(ksArray.map(k => [String(k && k.symbol || '').toUpperCase(), k]));
