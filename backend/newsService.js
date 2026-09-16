@@ -120,13 +120,35 @@ const KENYAN_NEWS_SOURCES = [
   'kenyanews.go.ke'
 ];
 
-// Global financial news RSS feeds
+// Global financial news RSS feeds. `max` caps items taken per feed; `category`
+// is an optional hint (Kenyan business feeds sort into the NSE tab even when no
+// ticker is named).
 const GLOBAL_RSS_FEEDS = [
-  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114', source: 'CNBC' },
-  { url: 'https://feeds.marketwatch.com/marketwatch/topstories', source: 'MarketWatch' },
-  { url: 'https://www.ft.com/rss/home', source: 'Financial Times' },
-  { url: 'https://www.theguardian.com/business/rss', source: 'The Guardian' },
+  { url: 'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114', source: 'CNBC', max: 15 },
+  { url: 'https://feeds.marketwatch.com/marketwatch/topstories', source: 'MarketWatch', max: 15 },
+  { url: 'https://www.ft.com/rss/home', source: 'Financial Times', max: 15 },
+  { url: 'https://www.theguardian.com/business/rss', source: 'The Guardian', max: 15 },
+  { url: 'https://feeds.bbci.co.uk/news/business/rss.xml', source: 'BBC Business', max: 20 },
+  { url: 'https://www.investing.com/rss/news.rss', source: 'Investing.com', max: 15 },
+  { url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml', source: 'WSJ Markets', max: 15 },
+  // Kenyan business feeds — tagged 'nse' so they render in the NSE tab.
+  { url: 'https://www.capitalfm.co.ke/business/feed/', source: 'Capital FM', category: 'nse', max: 12 },
+  { url: 'https://www.kbc.co.ke/feed/', source: 'KBC', category: 'nse', max: 12 },
+  { url: 'https://www.standardmedia.co.ke/rss/business.php', source: 'The Standard', category: 'nse', max: 15 },
 ];
+
+// Dedicated RSS client: follows redirects, sets a browser UA, and is NOT behind
+// the shared `generic` rate-limiter (which the Kenyan/Yahoo scrapers also use —
+// sharing it would serialize the 10 feeds and risk the whole RSS batch timing
+// out to [] under getAllNews's withTimeout).
+const rssHttp = axios.create({
+  timeout: 12000,
+  maxRedirects: 5,
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+  },
+});
 
 // Parse relative time strings ("2 days ago", "4h ago") into Date
 function parseRelativeTime(str) {
@@ -900,12 +922,35 @@ async function fetchFromKWS() {
   }
 }
 
-// Fetch news from global financial RSS feeds
+// Pull an image URL out of an RSS item (enclosure / media:content / media:thumbnail
+// / first <img> in the body). Returns null when the feed carries no image.
+function extractRssImage(item) {
+  const mc = item['media:content'];
+  const mt = item['media:thumbnail'];
+  const cand =
+    item.enclosure?.url ||
+    item.enclosure?.link ||
+    mc?.$?.url ||
+    (Array.isArray(mc) ? mc[0]?.$?.url : null) ||
+    mt?.$?.url ||
+    (Array.isArray(mt) ? mt[0]?.$?.url : null) ||
+    null;
+  if (cand) return cand;
+  const html = item['content:encoded'] || item.content || item.summary || '';
+  const m = String(html).match(/<img[^>]+src=["']([^"']+)["']/i);
+  return m ? m[1] : null;
+}
+
+// Fetch news from global + Kenyan financial RSS feeds. Uses the shared axios
+// client (follows redirects, sets a UA) instead of rss-parser's own fetch, so
+// feeds that 301 (e.g. Capital FM) still resolve.
 async function fetchFromGlobalRSS() {
   const results = await Promise.allSettled(
-    GLOBAL_RSS_FEEDS.map(feed =>
-      rssParser.parseURL(feed.url).then(data => ({ feed, data }))
-    )
+    GLOBAL_RSS_FEEDS.map(async feed => {
+      const res = await rssHttp.get(feed.url);
+      const data = await rssParser.parseString(res.data);
+      return { feed, data };
+    })
   );
 
   const articles = [];
@@ -917,25 +962,25 @@ async function fetchFromGlobalRSS() {
     const { feed, data } = result.value;
     if (!data.items?.length) continue;
 
-    for (const item of data.items.slice(0, 8)) {
+    for (const item of data.items.slice(0, feed.max || 15)) {
       const title = item.title?.trim();
-      const excerpt = (item.contentSnippet || item.content || '').trim();
+      const excerpt = (item.contentSnippet || item.summary || item.content || '').replace(/\s+/g, ' ').trim();
       if (!title || title.length < 10) continue;
 
-      const pubDate = item.isoDate ? new Date(item.isoDate) : new Date();
+      const pubDate = item.isoDate ? new Date(item.isoDate) : (item.pubDate ? new Date(item.pubDate) : new Date());
       const relatedStocks = extractRelatedStocks(title + ' ' + excerpt);
       articles.push({
         id: `rss-${feed.source.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         headline: title.substring(0, 200),
         source: feed.source,
-        timestamp: item.isoDate ? getTimeAgo(pubDate) : 'just now',
+        timestamp: getTimeAgo(pubDate),
         publishedAt: pubDate.toISOString(),
-        category: classifyArticle(title, excerpt, relatedStocks),
+        category: feed.category || classifyArticle(title, excerpt, relatedStocks),
         relatedStocks,
         sentiment: analyzeSentiment(title + ' ' + excerpt),
         excerpt: excerpt.substring(0, 300),
         url: item.link || '#',
-        imageUrl: null,
+        imageUrl: extractRssImage(item),
       });
     }
   }
@@ -1424,7 +1469,7 @@ async function getAllNews(limit = 50, categoryFilter) {
     const [kenyanBusinessNews, kwsNews, globalRssNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews, yahooNews, kenyanMarketsNews] = await Promise.allSettled([
       getKenyanBusinessNews(),
       withTimeout(fetchFromKWS(), 12000),
-      withTimeout(fetchFromGlobalRSS(), 12000),
+      withTimeout(fetchFromGlobalRSS(), 20000),
       withTimeout(fetchFromNewsAPI(), 8000),
       withTimeout(fetchFromFinnhub(), 8000),
       withTimeout(fetchFromBenzinga(), 8000),
@@ -1466,6 +1511,22 @@ async function getAllNews(limit = 50, categoryFilter) {
       const ins = classifyInsider(a.headline, a.excerpt);
       a.insiderDirection = ins.direction;
       a.insiderType = ins.type;
+    });
+
+    // Enrich every article to one shape: guaranteed publishedAt + a human
+    // "time ago", plus reading time and source domain. Kenyan market-page
+    // articles (Business Daily) previously carried publishedAt but no timestamp,
+    // so the UI rendered a blank time; normalizing here fixes every source.
+    unique.forEach(a => {
+      let d = a.publishedAt ? new Date(a.publishedAt) : null;
+      if (!d || isNaN(d.getTime())) d = new Date();
+      a.publishedAt = d.toISOString();
+      a.timestamp = a.timestamp || getTimeAgo(d);
+      a.excerpt = a.excerpt || '';
+      const words = `${a.headline || ''} ${a.excerpt || ''}`.split(/\s+/).filter(Boolean).length;
+      a.readingTimeMin = Math.max(1, Math.round(words / 200));
+      try { a.sourceDomain = new URL(a.url).hostname.replace(/^www\./, ''); }
+      catch { a.sourceDomain = ''; }
     });
 
     unique.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));

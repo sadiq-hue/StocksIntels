@@ -13,6 +13,8 @@ export interface NewsArticle {
   sentimentScore?: number | null;
   url: string;
   imageUrl?: string | null;
+  readingTimeMin?: number;
+  sourceDomain?: string;
   hot?: boolean;
   hotType?: string | null;
 }

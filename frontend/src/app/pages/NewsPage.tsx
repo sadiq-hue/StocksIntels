@@ -14,6 +14,24 @@ import {
   type NewsArticle, type NewsSummary,
 } from "../services/newsService";
 
+// Relative publish time derived from the ISO publishedAt (authoritative), with
+// the backend's pre-formatted `timestamp` as a fallback. Kenyan/Business Daily
+// articles used to have neither, so the time rendered blank.
+function timeAgo(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const days = Math.floor(h / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 const getSentimentColor = (s: string) => {
   switch (s) {
     case "positive": return "bg-emerald-100 text-emerald-700 border-emerald-200";
@@ -90,9 +108,15 @@ function ArticleCard({ article }: { article: NewsArticle }) {
           )}
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="flex items-center gap-1 text-muted-foreground">
-              <Clock className="size-3" /> {article.timestamp}
+            <span className="flex items-center gap-1 text-muted-foreground" title={article.publishedAt ? new Date(article.publishedAt).toLocaleString() : article.timestamp}>
+              <Clock className="size-3" /> {timeAgo(article.publishedAt) || article.timestamp}
             </span>
+            {article.readingTimeMin ? (
+              <>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-muted-foreground">{article.readingTimeMin} min read</span>
+              </>
+            ) : null}
             <span className="text-muted-foreground">·</span>
             <span className="text-muted-foreground">{article.source}</span>
             {(article.relatedStocks || []).length > 0 && (
@@ -127,6 +151,16 @@ function ArticleCard({ article }: { article: NewsArticle }) {
             )}
           </div>
         </div>
+        {article.imageUrl && (
+          <img
+            src={article.imageUrl}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            className="hidden sm:block w-28 h-20 object-cover rounded-lg shrink-0 bg-muted"
+          />
+        )}
       </div>
     </Card>
   );
@@ -142,6 +176,8 @@ export function NewsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<NewsArticle[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [visible, setVisible] = useState(24);
 
   // `silent` = background auto-refresh: update data in place with no visible
   // loading state (no skeleton swap, no error banner). Only the initial load and
@@ -150,7 +186,7 @@ export function NewsPage() {
     try {
       setError(null);
       const [articles, summ] = await Promise.all([
-        fetchAllNews("all", 100),
+        fetchAllNews("all", 200),
         fetchNewsSummary(),
       ]);
       setNewsItems(articles);
@@ -190,8 +226,13 @@ export function NewsPage() {
     setSearching(false);
   };
 
-  const currentArticles = searchResults !== null ? searchResults :
-    filterNewsByCategory(newsItems, tab as any);
+  const sources = Array.from(new Set(newsItems.map(a => a.source).filter(Boolean))).sort();
+  const currentArticles = (searchResults !== null ? searchResults : filterNewsByCategory(newsItems, tab as any))
+    .filter(a => sourceFilter === "all" || a.source === sourceFilter);
+  const shownArticles = currentArticles.slice(0, visible);
+
+  // Reset pagination whenever the user switches tab/source or searches.
+  useEffect(() => { setVisible(24); }, [tab, sourceFilter, searchResults]);
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
@@ -266,15 +307,28 @@ export function NewsPage() {
         )}
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-        <Input
-          value={searchQuery}
-          onChange={e => handleSearch(e.target.value)}
-          placeholder="Search news, tickers, keywords..."
-          className="pl-9"
-        />
+      {/* Search + source filter */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-md flex-1 min-w-[240px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={e => handleSearch(e.target.value)}
+            placeholder="Search news, tickers, keywords..."
+            className="pl-9"
+          />
+        </div>
+        <select
+          value={sourceFilter}
+          onChange={e => setSourceFilter(e.target.value)}
+          className="h-9 rounded-lg border bg-background px-3 text-sm text-foreground"
+        >
+          <option value="all">All sources</option>
+          {sources.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <span className="text-xs text-muted-foreground">
+          {currentArticles.length} article{currentArticles.length === 1 ? "" : "s"}
+        </span>
       </div>
 
       {/* Tabs */}
@@ -312,7 +366,19 @@ export function NewsPage() {
                 </p>
               </Card>
             ) : (
-              currentArticles.map(a => <ArticleCard key={a.id} article={a} />)
+              <>
+                {shownArticles.map(a => <ArticleCard key={a.id} article={a} />)}
+                {currentArticles.length > visible && (
+                  <div className="pt-2 text-center">
+                    <button
+                      onClick={() => setVisible(v => v + 24)}
+                      className="px-4 py-2 text-sm border rounded-lg hover:bg-muted transition-colors"
+                    >
+                      Load more ({currentArticles.length - visible} left)
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
         ))}
