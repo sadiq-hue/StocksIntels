@@ -131,10 +131,13 @@ function ArticleCard({ article }: { article: NewsArticle }) {
                 {article.hotType}
               </Badge>
             )}
-            <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${article.category === "nse" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-blue-100 text-blue-700 border-blue-200"}`}>
+            <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${
+              article.category === "nse" ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                : article.category === "africa" ? "bg-amber-100 text-amber-700 border-amber-200"
+                : "bg-blue-100 text-blue-700 border-blue-200"}`}>
               <span className="flex items-center gap-1">
-                {article.category === "nse" ? <MapPin className="size-2.5" /> : <Globe2 className="size-2.5" />}
-                {article.category === "nse" ? "NSE" : "Global"}
+                {article.category === "global" ? <Globe2 className="size-2.5" /> : <MapPin className="size-2.5" />}
+                {article.category === "nse" ? "NSE" : article.category === "africa" ? "Africa" : "Global"}
               </span>
             </Badge>
             <Badge className={`${getSentimentColor(article.sentiment)} text-[9px] px-1.5 py-0`}>
