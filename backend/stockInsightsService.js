@@ -729,47 +729,56 @@ function generateFallbackNarrative(ticker, sentiment, articles, market, priceDat
 }
 
 // ── Generate thematic intro for the newsletter ───────────────────
-async function generateThematicIntro(stocks, marketOverview) {
+// Templated (no-LLM) intro + editor's note. The daily flow uses these so the
+// limited LLM quota is spent on the per-stock narratives and the big story,
+// where it adds the most value, instead of on these short preambles.
+function buildThematicIntro(stocks, marketOverview) {
   const tickerList = stocks.map(s => `${getCompanyName(s.ticker) || s.ticker} (${s.ticker})`).join(', ');
   const sentiment = marketOverview.sentiment || 'Neutral';
-  const nseCount = stocks.filter(s => s.market === 'NSE').length;
-  const globalCount = stocks.filter(s => s.market === 'Global').length;
-  const marketMood = sentiment === 'Bullish' ? 'risk-on' : sentiment === 'Bearish' ? 'risk-off' : 'cautious';
-
-  const prompt = `Write a short editorial intro (2-3 sentences, max 60 words) for a daily stock insights newsletter. The newsletter covers these stocks today: ${tickerList}. Market mood is ${marketMood}. There are ${nseCount} Kenyan (NSE) stocks and ${globalCount} US/global stocks.
-
-Write like a seasoned market commentator — not a bot. Set up why these stocks matter today. Be specific, not generic. Do NOT use markdown, bullets, or headers.`;
-
-  try {
-    const text = await llm.generate(prompt, { maxTokens: 120, temperature: 0.8 });
-    return text.trim();
-  } catch {
-    // Fallback: contextual intro based on market conditions
-    if (sentiment === 'Bullish') {
-      return `Risk appetite is improving today, so we're looking past the headline indices to the names actually moving: ${tickerList}. Below is what's driving each one.`;
-    } else if (sentiment === 'Bearish') {
-      return `Sellers are in control today. ${tickerList} are each under pressure — below is what is behind the move and what to watch next.`;
-    } else {
-      return `Markets are giving mixed signals today, so it helps to get specific. Today's focus: ${tickerList} — each with its own story worth understanding.`;
-    }
+  if (sentiment === 'Bullish') {
+    return `Risk appetite is improving today, so we're looking past the headline indices to the names actually moving: ${tickerList}. Below is what's driving each one.`;
+  } else if (sentiment === 'Bearish') {
+    return `Sellers are in control today. ${tickerList} are each under pressure — below is what is behind the move and what to watch next.`;
   }
+  return `Markets are giving mixed signals today, so it helps to get specific. Today's focus: ${tickerList} — each with its own story worth understanding.`;
 }
 
-// ── Generate a short editor's preamble note (like "A quick note...") ──
-async function generateEditorsNote(stocks, marketOverview) {
+function buildEditorsNote(stocks, marketOverview) {
   const sentiment = marketOverview.sentiment || 'Neutral';
   const mood = String(sentiment).toLowerCase();
   const moodDesc = mood.includes('bull') ? `risk appetite is building`
     : mood.includes('bear') ? 'risk appetite is waning'
     : 'investors are waiting for direction';
   const tickers = stocks.slice(0, 3).map(s => s.ticker).join(', ');
-  const prompt = `Write a one-sentence editor's preamble note for a daily stock newsletter. It should feel like a human editor setting the agenda for the day, not a market recap. Mention that the markets above give the context, and that ${tickers} is the focus today. Current mood: ${moodDesc}. Max 25 words, no markdown, no bullets.`;
+  return `Before we dive in: ${moodDesc}, so today we're focusing on ${tickers} — the names with the clearest story to tell.`;
+}
 
+// Optional LLM versions (kept for explicit callers); they fall back to the
+// templated builders above on any error.
+async function generateThematicIntro(stocks, marketOverview) {
+  const tickerList = stocks.map(s => `${getCompanyName(s.ticker) || s.ticker} (${s.ticker})`).join(', ');
+  const sentiment = marketOverview.sentiment || 'Neutral';
+  const nseCount = stocks.filter(s => s.market === 'NSE').length;
+  const globalCount = stocks.filter(s => s.market === 'Global').length;
+  const marketMood = sentiment === 'Bullish' ? 'risk-on' : sentiment === 'Bearish' ? 'risk-off' : 'cautious';
+  const prompt = `Write a short editorial intro (2-3 sentences, max 60 words) for a daily stock insights newsletter. The newsletter covers these stocks today: ${tickerList}. Market mood is ${marketMood}. There are ${nseCount} Kenyan (NSE) stocks and ${globalCount} US/global stocks.\n\nWrite like a seasoned market commentator — not a bot. Set up why these stocks matter today. Be specific, not generic. Do NOT use markdown, bullets, or headers.`;
+  try {
+    const text = await llm.generate(prompt, { maxTokens: 120, temperature: 0.8 });
+    return text.trim();
+  } catch {
+    return buildThematicIntro(stocks, marketOverview);
+  }
+}
+
+// ── Generate a short editor's preamble note ──
+async function generateEditorsNote(stocks, marketOverview) {
+  const tickers = stocks.slice(0, 3).map(s => s.ticker).join(', ');
+  const prompt = `Write a one-sentence editor's preamble note for a daily stock newsletter. It should feel like a human editor setting the agenda for the day, not a market recap. Mention that the markets above give the context, and that ${tickers} is the focus today. Max 25 words, no markdown, no bullets.`;
   try {
     const text = await llm.generate(prompt, { maxTokens: 80, temperature: 0.8 });
     return text.trim().replace(/^["']|["']$/g, '');
   } catch {
-    return `Before we dive in: ${moodDesc}, so today we're focusing on ${tickers} — the names with the clearest story to tell.`;
+    return buildEditorsNote(stocks, marketOverview);
   }
 }
 
@@ -978,22 +987,16 @@ async function generateDailyInsights(force = false) {
     }
   } catch {}
 
-  // 4. Generate thematic intro + rich editorial analysis for each stock
-  // Run sequentially to avoid overwhelming the LLM API
-  let thematicIntro = '';
-  try {
-    thematicIntro = await generateThematicIntro(hotStocks, marketOverview);
-  } catch {
-    // fallback handled inside generateThematicIntro
-    thematicIntro = await generateThematicIntro(hotStocks, marketOverview).catch(() => '');
-  }
+  // 4. Thematic intro is templated (no LLM) so the limited LLM quota is reserved
+  // for the per-stock narratives + big story, which carry far more value.
+  const thematicIntro = buildThematicIntro(hotStocks, marketOverview);
 
   const deepDives = [];
   for (const stock of hotStocks) {
     const priceKey = stock.market === 'NSE' ? `NSE:${stock.ticker}` : stock.ticker;
     const priceData = priceDataMap[priceKey] || priceDataMap[stock.ticker] || null;
     const { thesis, analysis, catalyst, risk } = await generateNarrativeThesis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market)
-    .catch(e => { console.warn(`[INSIGHTS] narrative fallback for ${stock.ticker}: ${e.message}`); return generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market); });
+    .catch(e => { console.warn(`[INSIGHTS] narrative fallback for ${stock.ticker}: ${e.message}`); return generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market, priceData); });
 
     const companyName = getCompanyName(stock.ticker) || stock.ticker;
     const signal = stock.sentiment === 'positive' ? 'BULLISH'
@@ -1045,11 +1048,8 @@ async function generateDailyInsights(force = false) {
   // 5. Build week-ahead events
   const weekAhead = await buildWeekAhead().catch(() => []);
 
-  // 6. Generate editorial layers (each falls back internally, never blocks the draft)
-  let editorsNote = '';
-  try {
-    editorsNote = await generateEditorsNote(hotStocks, marketOverview).catch(() => '');
-  } catch {}
+  // 6. Editor's note is templated (no LLM), like the thematic intro.
+  const editorsNote = buildEditorsNote(hotStocks, marketOverview);
 
   let bigStory = null;
   try {
