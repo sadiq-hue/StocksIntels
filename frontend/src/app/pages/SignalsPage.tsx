@@ -19,6 +19,21 @@ import { authFetch } from "../auth/tokenStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
+// Apple-style stat tile: soft shadow, no border, tight typography.
+function StatCard({ icon: Icon, label, value, tone }: {
+  icon: typeof TrendingUp; label: string; value: string | number; tone: string;
+}) {
+  return (
+    <div className="rounded-2xl bg-white dark:bg-white/[0.06] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.06)] transition-transform duration-200 hover:-translate-y-0.5">
+      <div className="flex items-center gap-1.5 mb-2.5 text-muted-foreground">
+        <Icon className="w-3.5 h-3.5" />
+        <span className="text-[11px] font-medium uppercase tracking-wide">{label}</span>
+      </div>
+      <p className={`text-[28px] leading-none font-semibold tracking-tight tabular-nums ${tone}`}>{value}</p>
+    </div>
+  );
+}
+
 const SIGNAL_STYLES: Record<string, { bg: string; text: string; border: string; accent: string; icon: typeof TrendingUp }> = {
   "Strong Buy":  { bg: "bg-emerald-600", text: "text-white", border: "border-emerald-600", accent: "bg-emerald-600", icon: TrendingUp },
   "Buy":         { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200", accent: "bg-emerald-400", icon: TrendingUp },
@@ -374,6 +389,7 @@ export function SignalsPage() {
   const strongSell = signals.filter(s => s.signal === "Sell" || s.signal === "Strong Sell").length;
   const topConf = [...signals].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0)).slice(0, 5);
   const peakConf = topConf.length ? Math.round(topConf[0].confidence ?? 0) : 0;
+  const avgConf = signals.length ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / signals.length) : 0;
 
   const toggleFav = (t: string) => setFavorites(p => p.includes(t) ? p.filter(f => f !== t) : [...p, t]);
 
@@ -390,68 +406,55 @@ export function SignalsPage() {
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-lg shadow-[#0D7490]/20">
-              <Brain className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground tracking-tight">Market Intelligence</h1>
-              <p className="text-muted-foreground/70 text-sm">Data-driven signals verified by fundamental and technical metrics.</p>
-            </div>
+        <div className="flex items-center gap-3.5">
+          <div className="flex w-11 h-11 items-center justify-center rounded-2xl bg-[#0D7490]/10">
+            <Brain className="w-6 h-6 text-[#0D7490]" />
+          </div>
+          <div>
+            <h1 className="text-[28px] leading-tight font-semibold tracking-tight text-foreground">Market Intelligence</h1>
+            <p className="text-[13px] text-muted-foreground">Data-driven signals verified by fundamental and technical metrics.</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {lastUpdated && <span className="text-muted-foreground text-xs hidden sm:flex items-center gap-1"><Clock className="w-3 h-3" /> {lastUpdated}</span>}
+        <div className="flex items-center gap-2">
+          {lastUpdated && (
+            <span className="text-muted-foreground text-xs hidden sm:flex items-center gap-1.5 mr-1">
+              <Clock className="w-3.5 h-3.5" /> {lastUpdated}
+            </span>
+          )}
           <Link to="/app/stocks">
-            <Button variant="outline" size="sm" className="border-border">
+            <Button variant="outline" size="sm" className="rounded-full h-9 px-4 border-border/70 font-medium shadow-none">
               <BarChart3 className="w-3.5 h-3.5 mr-2" />Screener
             </Button>
           </Link>
-          <Button onClick={fetchSignals} disabled={loading} variant="outline" size="sm" className="border-border">
+          <Button onClick={fetchSignals} disabled={loading} size="sm" className="rounded-full h-9 px-4 bg-[#0D7490] hover:bg-[#0D7490]/90 text-white font-medium shadow-sm">
             <RefreshCw className={`w-3.5 h-3.5 mr-2 ${loading ? "animate-spin" : ""}`} />Refresh
           </Button>
         </div>
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3" data-tour="signals-stats">
-        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all">
-          <div className="w-9 h-9 rounded-lg bg-[#0D7490]/10 flex items-center justify-center shrink-0"><Signal className="w-4 h-4 text-[#0D7490]" /></div>
-          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Total Signals</p><p className="text-foreground text-2xl font-bold leading-tight">{signals.length}</p></div>
-        </Card>
-        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all">
-          <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0"><TrendingUp className="w-4 h-4 text-emerald-600" /></div>
-          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Strong Buy/Buy</p><p className="text-emerald-600 text-2xl font-bold leading-tight">{strongBuy}</p></div>
-        </Card>
-        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all">
-          <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center shrink-0"><TrendingDown className="w-4 h-4 text-red-600" /></div>
-          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Sell/Strong Sell</p><p className="text-red-600 text-2xl font-bold leading-tight">{strongSell}</p></div>
-        </Card>
-        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all">
-          <div className="w-9 h-9 rounded-lg bg-yellow-100 flex items-center justify-center shrink-0"><Flame className="w-4 h-4 text-yellow-600" /></div>
-          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Peak Confidence</p><p className="text-[#0D7490] text-2xl font-bold leading-tight">{peakConf}%</p></div>
-        </Card>
-        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all">
-          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0"><Gauge className="w-4 h-4 text-blue-600" /></div>
-          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Avg Confidence</p><p className="text-foreground text-2xl font-bold leading-tight">{signals.length ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / signals.length) : 0}%</p></div>
-        </Card>
-        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl hover:shadow-md hover:-translate-y-0.5 transition-all">
-          <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0"><Star className="w-4 h-4 text-amber-500" /></div>
-          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Favorites</p><p className="text-amber-500 text-2xl font-bold leading-tight">{favorites.length}</p></div>
-        </Card>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" data-tour="signals-stats">
+        <StatCard icon={Signal} label="Total Signals" value={signals.length} tone="text-foreground" />
+        <StatCard icon={TrendingUp} label="Strong Buy / Buy" value={strongBuy} tone="text-emerald-600" />
+        <StatCard icon={TrendingDown} label="Sell / Strong Sell" value={strongSell} tone="text-red-600" />
+        <StatCard icon={Flame} label="Peak Confidence" value={`${peakConf}%`} tone="text-[#0D7490]" />
+        <StatCard icon={Gauge} label="Avg Confidence" value={`${avgConf}%`} tone="text-foreground" />
+        <StatCard icon={Star} label="Favorites" value={favorites.length} tone="text-amber-500" />
       </div>
 
       {/* Top signals by confidence */}
       {topConf.length > 0 && (
-        <div className="bg-gradient-to-r from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-950/10 border border-emerald-200 dark:border-emerald-800/50 rounded-lg p-4 flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <Zap className="w-5 h-5 text-emerald-600" />
-            <div><p className="text-emerald-900 dark:text-emerald-300 text-sm font-semibold">Top signals by confidence</p><p className="text-emerald-700 dark:text-emerald-400 text-xs">Highest-conviction setups in the feed right now</p></div>
+        <div className="rounded-2xl bg-white dark:bg-white/[0.06] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.06)] flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2.5">
+            <Zap className="w-4 h-4 text-emerald-600" />
+            <div>
+              <p className="text-sm font-semibold tracking-tight text-foreground">Top signals by confidence</p>
+              <p className="text-xs text-muted-foreground">Highest-conviction setups in the feed right now</p>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {topConf.map(s => (
-              <button key={s.ticker} onClick={() => { setSelected(s); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="px-2.5 py-1 bg-card dark:bg-white/[0.04] border border-emerald-200 dark:border-emerald-800/50 rounded-md text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30">{s.ticker} <span className="text-emerald-500 dark:text-emerald-400">{s.confidence}%</span></button>
+              <button key={s.ticker} onClick={() => { setSelected(s); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="px-3 py-1.5 rounded-full bg-black/[0.05] dark:bg-white/10 text-xs font-medium text-foreground hover:bg-black/[0.08] dark:hover:bg-white/15 transition-colors">{s.ticker} <span className="text-emerald-600 font-semibold">{s.confidence}%</span></button>
             ))}
           </div>
         </div>
@@ -461,7 +464,7 @@ export function SignalsPage() {
       <div className="flex flex-wrap items-center gap-3" data-tour="signals-filters">
         <div className="relative flex-1 min-w-[180px] max-w-[260px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search ticker or name..." className="pl-9 h-9 text-sm border-border" />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search ticker or name..." className="pl-9 h-9 text-sm rounded-full bg-muted/40 border-transparent focus-visible:bg-background" />
         </div>
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-[120px] h-9 text-sm border-border"><SelectValue placeholder="Type" /></SelectTrigger>
@@ -483,7 +486,7 @@ export function SignalsPage() {
           <SelectTrigger className="w-[160px] h-9 text-sm border-border"><ArrowUpDown className="w-3.5 h-3.5 mr-2" /><SelectValue placeholder="Sort" /></SelectTrigger>
           <SelectContent><SelectItem value="confidence">Confidence ↓</SelectItem><SelectItem value="change">Change ↓</SelectItem><SelectItem value="ticker">Ticker A–Z</SelectItem></SelectContent>
         </Select>
-        <Badge className="h-9 px-3 flex items-center gap-1.5 bg-[#0D7490] text-white border-0 text-xs">{filtered.length} signal{filtered.length !== 1 ? "s" : ""}</Badge>
+        <Badge className="h-9 px-3.5 flex items-center gap-1.5 rounded-full bg-[#0D7490] text-white border-0 text-xs">{filtered.length} signal{filtered.length !== 1 ? "s" : ""}</Badge>
         {hasActiveFilters && (
           <button onClick={clearFilters} className="h-9 px-3 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-red-600 transition-colors">
             <FilterX className="w-3.5 h-3.5" />Clear filters
@@ -497,7 +500,7 @@ export function SignalsPage() {
           const ss = SIGNAL_STYLES[s.signal];
           const Icon = ss.icon;
           return (
-            <Card key={s.id || s.ticker} className="bg-white/40 dark:bg-white/[0.04] border border-white/20 dark:border-white/[0.06] rounded-xl overflow-hidden hover:border-[#0D7490]/40 hover:shadow-md transition-all cursor-pointer group flex flex-col backdrop-blur-sm" onClick={() => setSelected(s)} data-tour={idx === 0 ? "signal-card" : undefined}>
+            <Card key={s.id || s.ticker} className="bg-white dark:bg-white/[0.06] border border-black/[0.05] dark:border-white/[0.06] rounded-2xl overflow-hidden hover:shadow-[0_10px_30px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all cursor-pointer group flex flex-col" onClick={() => setSelected(s)} data-tour={idx === 0 ? "signal-card" : undefined}>
               {/* Signal accent bar */}
               <div className={`h-1 w-full ${ss.accent}`} />
               {/* Top: ticker, signal badge */}
