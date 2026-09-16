@@ -26,8 +26,23 @@ const SIGNAL_STYLES: Record<string, { bg: string; text: string; border: string; 
   "Strong Sell": { bg: "bg-red-600", text: "text-white", border: "border-red-600", accent: "bg-red-600", icon: TrendingDown },
 };
 
-const TYPE_STYLES: Record<string, string> = {
-  Intraday: "bg-orange-100 text-orange-700 border-orange-200",
+function StatCard({ icon: Icon, label, value, accent, tile, valueClass }: {
+  icon: typeof TrendingUp; label: string; value: string | number;
+  accent: string; tile: string; valueClass: string;
+}) {
+  return (
+    <Card className="relative overflow-hidden border border-border/60 p-3.5 rounded-2xl bg-card hover:-translate-y-0.5 hover:shadow-lg transition-all">
+      <div className={`absolute inset-x-0 top-0 h-1 ${accent}`} />
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-2.5 shadow-sm ${tile}`}>
+        <Icon className="w-4 h-4" />
+      </div>
+      <p className={`text-2xl font-bold leading-none tabular-nums ${valueClass}`}>{value}</p>
+      <p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider mt-1">{label}</p>
+    </Card>
+  );
+}
+
+const TYPE_STYLES: Record<string, string> = {  Intraday: "bg-orange-100 text-orange-700 border-orange-200",
   "Swing Trade": "bg-blue-100 text-blue-700 border-blue-200",
   "Long Term": "bg-purple-100 text-purple-700 border-purple-200",
   "Aggressive Buy": "bg-emerald-600 text-white border-emerald-600",
@@ -373,6 +388,11 @@ export function SignalsPage() {
   const strongSell = signals.filter(s => s.signal === "Sell" || s.signal === "Strong Sell").length;
   const topConf = [...signals].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0)).slice(0, 5);
   const peakConf = topConf.length ? Math.round(topConf[0].confidence ?? 0) : 0;
+  const avgConf = signals.length ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / signals.length) : 0;
+  const holdCount = Math.max(0, signals.length - strongBuy - strongSell);
+  const buyPct = signals.length ? (strongBuy / signals.length) * 100 : 0;
+  const holdPct = signals.length ? (holdCount / signals.length) * 100 : 0;
+  const sellPct = signals.length ? (strongSell / signals.length) * 100 : 0;
 
   const toggleFav = (t: string) => setFavorites(p => p.includes(t) ? p.filter(f => f !== t) : [...p, t]);
 
@@ -387,59 +407,65 @@ export function SignalsPage() {
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] shadow-lg shadow-[#0D7490]/20">
-              <Gauge className="w-5 h-5 text-white" />
+      {/* Header — gradient hero */}
+      <div className="relative overflow-hidden rounded-2xl border border-[#0D7490]/20 shadow-sm">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0D7490] via-[#0D7490] to-[#0EA5E9]" />
+        <div className="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-white/10 blur-2xl" />
+        <div className="absolute -left-10 -bottom-24 w-52 h-52 rounded-full bg-white/10 blur-2xl" />
+        <div className="relative p-5 md:p-6 flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3.5">
+            <div className="p-3 rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm shadow-lg">
+              <Gauge className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground tracking-tight">Market Intelligence</h1>
-              <p className="text-muted-foreground/70 text-sm">Data-driven signals verified by fundamental and technical metrics.</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Market Intelligence</h1>
+              <p className="text-white/75 text-sm">Data-driven signals verified by fundamental and technical metrics.</p>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {lastUpdated && <span className="text-muted-foreground text-xs hidden sm:flex items-center gap-1"><Clock className="w-3 h-3" /> {lastUpdated}</span>}
-          <Link to="/app/stocks">
-            <Button variant="outline" size="sm" className="border-border">
-              <BarChart3 className="w-3.5 h-3.5 mr-2" />Screener
+          <div className="flex items-center gap-2 flex-wrap">
+            {lastUpdated && (
+              <span className="hidden sm:flex items-center gap-1.5 text-white/80 text-xs bg-white/10 ring-1 ring-white/20 rounded-full px-3 py-1.5 backdrop-blur-sm">
+                <Clock className="w-3 h-3" /> {lastUpdated}
+              </span>
+            )}
+            <Link to="/app/stocks">
+              <Button size="sm" className="bg-white/15 hover:bg-white/25 text-white border-0 ring-1 ring-white/25 backdrop-blur-sm">
+                <BarChart3 className="w-3.5 h-3.5 mr-2" />Screener
+              </Button>
+            </Link>
+            <Button onClick={fetchSignals} disabled={loading} size="sm" className="bg-white text-[#0D7490] hover:bg-white/90 border-0 font-semibold">
+              <RefreshCw className={`w-3.5 h-3.5 mr-2 ${loading ? "animate-spin" : ""}`} />Refresh
             </Button>
-          </Link>
-          <Button onClick={fetchSignals} disabled={loading} variant="outline" size="sm" className="border-border">
-            <RefreshCw className={`w-3.5 h-3.5 mr-2 ${loading ? "animate-spin" : ""}`} />Refresh
-          </Button>
+          </div>
         </div>
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3" data-tour="signals-stats">
-        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl">
-          <div className="w-9 h-9 rounded-lg bg-[#0D7490]/10 flex items-center justify-center shrink-0"><Gauge className="w-4 h-4 text-[#0D7490]" /></div>
-          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Total Signals</p><p className="text-foreground text-xl font-bold leading-tight">{signals.length}</p></div>
-        </Card>
-        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl">
-          <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0"><TrendingUp className="w-4 h-4 text-emerald-600" /></div>
-          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Strong Buy/Buy</p><p className="text-emerald-600 text-xl font-bold leading-tight">{strongBuy}</p></div>
-        </Card>
-        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl">
-          <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center shrink-0"><TrendingDown className="w-4 h-4 text-red-600" /></div>
-          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Sell/Strong Sell</p><p className="text-red-600 text-xl font-bold leading-tight">{strongSell}</p></div>
-        </Card>
-        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl">
-          <div className="w-9 h-9 rounded-lg bg-yellow-100 flex items-center justify-center shrink-0"><Target className="w-4 h-4 text-yellow-600" /></div>
-          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Peak Confidence</p><p className="text-[#0D7490] text-xl font-bold leading-tight">{peakConf}%</p></div>
-        </Card>
-        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl">
-          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center shrink-0"><BarChart3 className="w-4 h-4 text-blue-600" /></div>
-          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Avg Confidence</p><p className="text-foreground text-xl font-bold leading-tight">{signals.length ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / signals.length) : 0}%</p></div>
-        </Card>
-        <Card className="border border-white/20 dark:border-white/[0.06] p-3 flex items-center gap-3 backdrop-blur-sm shadow-sm bg-white/40 dark:bg-white/[0.04] rounded-xl">
-          <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0"><Star className="w-4 h-4 text-amber-500" /></div>
-          <div><p className="text-muted-foreground/70 text-[10px] uppercase tracking-wider">Favorites</p><p className="text-amber-500 text-xl font-bold leading-tight">{favorites.length}</p></div>
-        </Card>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" data-tour="signals-stats">
+        <StatCard icon={Gauge} label="Total Signals" value={signals.length} accent="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9]" tile="bg-[#0D7490]/10 text-[#0D7490]" valueClass="text-foreground" />
+        <StatCard icon={TrendingUp} label="Strong Buy / Buy" value={strongBuy} accent="bg-emerald-500" tile="bg-emerald-100 text-emerald-600" valueClass="text-emerald-600" />
+        <StatCard icon={TrendingDown} label="Sell / Strong Sell" value={strongSell} accent="bg-red-500" tile="bg-red-100 text-red-600" valueClass="text-red-600" />
+        <StatCard icon={Target} label="Peak Confidence" value={`${peakConf}%`} accent="bg-gradient-to-r from-[#0EA5E9] to-[#0D7490]" tile="bg-yellow-100 text-yellow-600" valueClass="text-[#0D7490]" />
+        <StatCard icon={BarChart3} label="Avg Confidence" value={`${avgConf}%`} accent="bg-blue-500" tile="bg-blue-100 text-blue-600" valueClass="text-foreground" />
+        <StatCard icon={Star} label="Favorites" value={favorites.length} accent="bg-amber-400" tile="bg-amber-100 text-amber-500" valueClass="text-amber-500" />
       </div>
+
+      {/* Signal breadth */}
+      {signals.length > 0 && (
+        <div className="rounded-2xl border border-border/60 bg-card p-4">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Signal Breadth</span>
+            <span className="text-[11px] text-muted-foreground">
+              <span className="text-emerald-600 font-semibold">{strongBuy}</span> bullish · <span className="text-amber-600 font-semibold">{holdCount}</span> hold · <span className="text-red-600 font-semibold">{strongSell}</span> bearish · avg confidence <span className="font-semibold text-foreground">{avgConf}%</span>
+            </span>
+          </div>
+          <div className="flex h-2.5 rounded-full overflow-hidden bg-muted">
+            <div className="bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all" style={{ width: `${buyPct}%` }} />
+            <div className="bg-amber-400 transition-all" style={{ width: `${holdPct}%` }} />
+            <div className="bg-gradient-to-r from-red-500 to-red-400 transition-all" style={{ width: `${sellPct}%` }} />
+          </div>
+        </div>
+      )}
 
       {/* Top signals by confidence */}
       {topConf.length > 0 && (
