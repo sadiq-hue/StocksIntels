@@ -1425,7 +1425,7 @@ export function StockAnalysisPage() {
                 <div className="flex h-full flex-col p-4">
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
                     <span className="flex size-6 items-center justify-center rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white shadow-sm"><Target className="size-3" /></span>
-                    Trading Signal
+                    Market Intelligence
                   </h3>
                   {loadingData ? (
                     <div className="flex flex-1 items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
@@ -1498,52 +1498,45 @@ export function StockAnalysisPage() {
                         </div>
                       </div>
 
-                      {/* Entry / Targets Grid */}
+                      {/* Trade Parameters — mirrors the Market Intelligence page
+                          exactly: Entry, Stop, Target 1, Ultimate Target. */}
                       {(stockSignal?.entry || stockSignal?.stopLoss || stockSignal?.target1) && (
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {stockSignal?.entry && (
-                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
-                              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target Entry</div>
-                              <div className="text-sm font-semibold text-foreground">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.entry)}</div>
-                            </div>
-                          )}
-                          {stockSignal?.stopLoss && (
-                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
-                              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Stop Loss</div>
-                              <div className="text-sm font-semibold text-red-500">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.stopLoss)}</div>
-                            </div>
-                          )}
-                          {stockSignal?.target1 && (
-                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
-                              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target 1</div>
-                              <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target1)}</div>
-                            </div>
-                          )}
-                          {stockSignal?.target2 && (
-                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
-                              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target 2</div>
-                              <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target2)}</div>
-                            </div>
-                          )}
-                          {stockSignal?.target3 && (
-                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
-                              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target 3</div>
-                              <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target3)}</div>
-                            </div>
-                          )}
-                          {stockSignal?.riskReward && (
-                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
-                              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Risk/Reward</div>
-                              <div className="text-sm font-semibold text-foreground">1:{stockSignal.riskReward.toFixed(1)}</div>
-                            </div>
-                          )}
-                          {stockSignal?.timeframe && (
-                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
-                              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Holding Period</div>
-                              <div className="text-sm font-semibold text-foreground">{stockSignal.timeframe}</div>
-                            </div>
-                          )}
-                        </div>
+                        <>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                            {stockSignal?.entry && (
+                              <div className="bg-blue-50 rounded-lg p-2 border border-blue-100 text-center">
+                                <div className="text-[9px] font-medium text-blue-600 uppercase">Entry</div>
+                                <div className="text-sm font-bold text-blue-900">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.entry)}</div>
+                              </div>
+                            )}
+                            {stockSignal?.stopLoss && (
+                              <div className="bg-red-50 rounded-lg p-2 border border-red-100 text-center">
+                                <div className="text-[9px] font-medium text-red-600 uppercase">Stop</div>
+                                <div className="text-sm font-bold text-red-900">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.stopLoss)}</div>
+                              </div>
+                            )}
+                            {stockSignal?.target1 && (
+                              <div className="bg-emerald-50 rounded-lg p-2 border border-emerald-100 text-center">
+                                <div className="text-[9px] font-medium text-emerald-600 uppercase">Target 1</div>
+                                <div className="text-sm font-bold text-emerald-900">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target1)}</div>
+                              </div>
+                            )}
+                            {stockSignal?.target3 && (
+                              <div className="bg-emerald-50 rounded-lg p-2 border border-emerald-100 text-center">
+                                <div className="text-[9px] font-medium text-emerald-600 uppercase">Ultimate Target</div>
+                                <div className="text-sm font-bold text-emerald-900">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target3)}</div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                            {stockSignal?.riskReward != null && (
+                              <span>Risk-to-reward <span className="font-semibold text-foreground">1:{stockSignal.riskReward.toFixed(1)}</span></span>
+                            )}
+                            {stockSignal?.timeframe && (
+                              <span>Holding Period: <span className="font-semibold text-foreground">{stockSignal.timeframe}</span></span>
+                            )}
+                          </div>
+                        </>
                       )}
 
                       {/* Tags */}
