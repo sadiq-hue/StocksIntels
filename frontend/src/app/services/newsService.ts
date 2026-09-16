@@ -7,7 +7,7 @@ export interface NewsArticle {
   source: string;
   timestamp: string;
   publishedAt: string;
-  category: "nse" | "global";
+  category: "nse" | "africa" | "global";
   relatedStocks: string[];
   sentiment: "positive" | "negative" | "neutral";
   sentimentScore?: number | null;
@@ -22,6 +22,7 @@ export interface NewsArticle {
 export interface NewsSummary {
   total: number;
   nseCount: number;
+  africaCount: number;
   globalCount: number;
   positiveCount: number;
   negativeCount: number;
@@ -80,7 +81,7 @@ export async function fetchAggregatedSentiment(): Promise<Record<string, string>
 
 export function filterNewsByCategory(
   articles: NewsArticle[],
-  category: "all" | "nse" | "global" | "trending" | "hot"
+  category: "all" | "nse" | "africa" | "global" | "trending" | "hot"
 ): NewsArticle[] {
   switch (category) {
     case "nse":
@@ -90,6 +91,8 @@ export function filterNewsByCategory(
         a.headline.toLowerCase().includes("nse") ||
         a.source.toLowerCase().includes("nairobi")
       );
+    case "africa":
+      return articles.filter(a => a.category === "africa");
     case "global":
       return articles.filter(a =>
         a.category === "global" &&

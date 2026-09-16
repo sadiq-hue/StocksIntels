@@ -261,7 +261,7 @@ export function NewsPage() {
 
       {/* Summary Cards */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
           <Card className="p-3">
             <p className="text-[10px] text-muted-foreground uppercase font-semibold">Total</p>
             <p className="text-xl font-bold text-foreground">{summary.total}</p>
@@ -269,6 +269,10 @@ export function NewsPage() {
           <Card className="p-3">
             <p className="text-[10px] text-muted-foreground uppercase font-semibold">NSE</p>
             <p className="text-xl font-bold text-emerald-600">{summary.nseCount}</p>
+          </Card>
+          <Card className="p-3">
+            <p className="text-[10px] text-muted-foreground uppercase font-semibold">Africa</p>
+            <p className="text-xl font-bold text-amber-600">{summary.africaCount}</p>
           </Card>
           <Card className="p-3">
             <p className="text-[10px] text-muted-foreground uppercase font-semibold">Global</p>
@@ -345,11 +349,12 @@ export function NewsPage() {
             )}
           </TabsTrigger>
           <TabsTrigger value="nse">NSE Specific</TabsTrigger>
+          <TabsTrigger value="africa">Africa</TabsTrigger>
           <TabsTrigger value="global">Global Markets</TabsTrigger>
           <TabsTrigger value="trending">Trending</TabsTrigger>
         </TabsList>
 
-        {["all", "hot", "nse", "global", "trending"].map(t => (
+        {["all", "hot", "nse", "africa", "global", "trending"].map(t => (
           <TabsContent key={t} value={t} className="mt-4 space-y-3">
             {loading ? (
               <div className="space-y-3">
@@ -362,7 +367,7 @@ export function NewsPage() {
             ) : currentArticles.length === 0 ? (
               <Card className="p-6 text-center">
                 <p className="text-muted-foreground text-sm">
-                  {searchQuery ? "No articles match your search." : t === "nse" ? "No NSE-specific news available." : t === "trending" ? "No trending news available yet." : t === "hot" ? "No hot news available yet." : "No news available."}
+                  {searchQuery ? "No articles match your search." : t === "nse" ? "No NSE-specific news available." : t === "africa" ? "No African market news available." : t === "trending" ? "No trending news available yet." : t === "hot" ? "No hot news available yet." : "No news available."}
                 </p>
               </Card>
             ) : (

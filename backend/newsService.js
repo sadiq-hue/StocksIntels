@@ -135,6 +135,14 @@ const GLOBAL_RSS_FEEDS = [
   { url: 'https://www.capitalfm.co.ke/business/feed/', source: 'Capital FM', category: 'nse', max: 12 },
   { url: 'https://www.kbc.co.ke/feed/', source: 'KBC', category: 'nse', max: 12 },
   { url: 'https://www.standardmedia.co.ke/rss/business.php', source: 'The Standard', category: 'nse', max: 15 },
+  // Broader African markets (non-Kenyan) — tagged 'africa' so they get their own
+  // tab instead of being mislabelled as Kenyan NSE or global.
+  { url: 'https://nairametrics.com/feed/', source: 'Nairametrics', category: 'africa', max: 15 },
+  { url: 'https://businessday.ng/feed/', source: 'BusinessDay NG', category: 'africa', max: 10 },
+  { url: 'https://www.premiumtimesng.com/category/business/feed', source: 'Premium Times', category: 'africa', max: 12 },
+  { url: 'https://www.myjoyonline.com/business/feed/', source: 'MyJoyOnline', category: 'africa', max: 15 },
+  { url: 'https://enterprise.news/feed', source: 'Enterprise', category: 'africa', max: 12 },
+  { url: 'https://www.iol.co.za/rss', source: 'IOL', category: 'africa', max: 12 },
 ];
 
 // Dedicated RSS client: follows redirects, sets a browser UA, and is NOT behind
@@ -1558,7 +1566,8 @@ function filterNews(articles, limit, category) {
 async function getNewsSummary() {
   const news = await getAllNews(200);
   const nseCount = news.filter(a => a.category === 'nse' || (a.relatedStocks && a.relatedStocks.length > 0)).length;
-  const globalCount = news.filter(a => a.category !== 'nse' && (!a.relatedStocks || a.relatedStocks.length === 0)).length;
+  const africaCount = news.filter(a => a.category === 'africa').length;
+  const globalCount = news.filter(a => a.category !== 'nse' && a.category !== 'africa' && (!a.relatedStocks || a.relatedStocks.length === 0)).length;
   const posCount = news.filter(a => a.sentiment === 'positive').length;
   const negCount = news.filter(a => a.sentiment === 'negative').length;
   const neutralCount = news.filter(a => a.sentiment === 'neutral').length;
@@ -1581,6 +1590,7 @@ async function getNewsSummary() {
   return {
     total: news.length,
     nseCount,
+    africaCount,
     globalCount,
     positiveCount: posCount,
     negativeCount: negCount,
