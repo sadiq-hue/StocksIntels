@@ -151,4 +151,74 @@ async function createSignalNotifications(signals) {
   }
 }
 
-module.exports = { start, stop, generateAndPublish, createSignalNotifications };
+// ─── Positive stock-news notifications ──────────────────────────────────────
+// Feed the notification bell with positive news about tracked stocks: articles
+// whose sentiment is positive AND that name a ticker. Broadcast to all users,
+// deduped per user/ticker (24h) so the same story doesn't re-notify every cycle.
+async function createPositiveStockNewsNotifications(limit = 5) {
+  try {
+    const { getPositiveStockNews } = require('./newsService');
+    const items = await getPositiveStockNews(limit);
+    if (items.length === 0) return [];
+
+    const { rows: users } = await pool.query('SELECT id FROM users').catch(() => ({ rows: [] }));
+    if (users.length === 0) return [];
+
+    const notifications = [];
+    for (const user of users) {
+      for (const a of items) {
+        const tickers = (a.relatedStocks || []).slice(0, 3).join(', ');
+        if (!tickers) continue;
+        const title = `🟢 Positive: ${tickers}`;
+        const body = `${(a.headline || '').slice(0, 160)} — ${a.source}`;
+        const link = a.url && a.url !== '#' ? a.url : '/app/news';
+
+        const dup = await pool.query(
+          `SELECT 1 FROM notifications
+           WHERE user_id = $1 AND title = $2 AND type = 'news'
+             AND created_at > NOW() - INTERVAL '24 hours'
+           LIMIT 1`,
+          [user.id, title]
+        );
+        if (dup.rows.length > 0) continue;
+
+        const { rows } = await pool.query(
+          `INSERT INTO notifications (user_id, title, body, type, link)
+           VALUES ($1, $2, $3, 'news', $4)
+           RETURNING id, user_id, title, body, type, read, link, created_at`,
+          [user.id, title, body, link]
+        );
+        notifications.push(rows[0]);
+      }
+    }
+
+    if (notifications.length > 0) {
+      await publishSignalNotifications(notifications);
+    }
+    console.log(`[SignalPublisher] Created ${notifications.length} positive-news notifications`);
+    return notifications;
+  } catch (error) {
+    console.error('[SignalPublisher] Positive-news notification error:', error.message);
+    return [];
+  }
+}
+
+let newsIntervalHandle = null;
+
+function startNewsNotifications() {
+  if (newsIntervalHandle) return;
+  const intervalMs = 30 * 60 * 1000; // every 30 min
+  console.log(`[SignalPublisher] Starting positive-news notification worker (interval: ${intervalMs}ms)`);
+  // First pass shortly after boot (the news cache warms at startup), then on interval.
+  setTimeout(() => { createPositiveStockNewsNotifications(5).catch(() => {}); }, 45000);
+  newsIntervalHandle = setInterval(() => { createPositiveStockNewsNotifications(5).catch(() => {}); }, intervalMs);
+}
+
+function stopNewsNotifications() {
+  if (newsIntervalHandle) {
+    clearInterval(newsIntervalHandle);
+    newsIntervalHandle = null;
+  }
+}
+
+module.exports = { start, stop, generateAndPublish, createSignalNotifications, createPositiveStockNewsNotifications, startNewsNotifications, stopNewsNotifications };

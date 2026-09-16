@@ -1602,7 +1602,17 @@ async function getNewsSummary() {
   };
 }
 
-module.exports = { getAllNews, getNewsSummary, getAggregatedSentiment, getCatalysts, getInsiderNewsSignals, classifyHotNews,
+// Positive, stock-tagged news for the notification feed. Only articles that name
+// a ticker AND carry positive sentiment, newest first.
+async function getPositiveStockNews(limit = 5) {
+  const news = await getAllNews(500);
+  return news
+    .filter(a => a.sentiment === 'positive' && Array.isArray(a.relatedStocks) && a.relatedStocks.length > 0)
+    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+    .slice(0, limit);
+}
+
+module.exports = { getAllNews, getPositiveStockNews, getNewsSummary, getAggregatedSentiment, getCatalysts, getInsiderNewsSignals, classifyHotNews,
     classifyCatalyst, classifyInsider, extractRelatedStocks, backfillSentimentHistory, initNewsHistory, KENYAN_STOCKS,
     STOCK_SYMBOLS };
 

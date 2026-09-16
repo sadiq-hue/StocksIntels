@@ -13638,6 +13638,7 @@ server.listen(port, '0.0.0.0', async () => {
         io.emit(`signal:progress:${payload.ticker}`, payload);
       });
       signalPublisher.start();
+      signalPublisher.startNewsNotifications();
 
       // Warm the period-returns cache in the background so the first dashboard
       // visit shows Daily/Weekly/Quarterly/Yearly movers immediately instead of
