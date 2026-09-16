@@ -14,6 +14,124 @@ import {
   type NewsArticle, type NewsSummary,
 } from "../services/newsService";
 
+const getSentimentColor = (s: string) => {
+  switch (s) {
+    case "positive": return "bg-emerald-100 text-emerald-700 border-emerald-200";
+    case "negative": return "bg-red-100 text-red-700 border-red-200";
+    default: return "bg-muted text-muted-foreground border-border";
+  }
+};
+
+const getHotTypeColor = (type: string | null) => {
+  switch (type) {
+    case 'IPO': return 'bg-violet-100 text-violet-700 border-violet-200';
+    case 'Earnings': return 'bg-[#0D7490]/10 text-[#0D7490] border-[#0D7490]/20';
+    case 'Merger': return 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200';
+    case 'Partnership': return 'bg-cyan-100 text-cyan-700 border-cyan-200';
+    case 'Regulatory': return 'bg-amber-100 text-amber-700 border-amber-200';
+    case 'Expansion': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    case 'Funding': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+    case 'Leadership': return 'bg-lime-100 text-lime-700 border-lime-200';
+    case 'Crisis': return 'bg-red-100 text-red-700 border-red-200';
+    default: return 'bg-muted text-muted-foreground border-border';
+  }
+};
+
+// Defined at module scope (not inside NewsPage) so its identity is stable across
+// re-renders. An inline component would be a new type on every render, forcing
+// React to unmount/remount every card — resetting each card's loaded excerpt and
+// producing a visible flash on the 60s background refresh.
+function ArticleCard({ article }: { article: NewsArticle }) {
+  const [excerpt, setExcerpt] = useState<string | null>(null);
+  const [loadingExcerpt, setLoadingExcerpt] = useState(false);
+
+  const loadExcerpt = async () => {
+    if (excerpt !== null || loadingExcerpt || !article.url || article.url === "#") return;
+    setLoadingExcerpt(true);
+    const text = await fetchArticleExcerpt(article.url);
+    setExcerpt(text || generateSummary(article));
+    setLoadingExcerpt(false);
+  };
+
+  const isFallback = !excerpt || excerpt === "Read the full story on Yahoo Finance.";
+  const showExcerpt = excerpt !== null && !isFallback;
+
+  return (
+    <Card
+      className={`p-5 hover:border-[#0D7490]/50 transition-all cursor-pointer group ${article.hot ? 'border-amber-300/50 bg-amber-50/30' : ''}`}
+      onClick={() => window.open(article.url, "_blank")}
+    >
+      <div className="flex items-start gap-4">
+        <div className={`p-2.5 rounded-lg shrink-0 ${article.hot ? 'bg-amber-100' : 'bg-muted'}`}>
+          {article.hot ? <TrendingUp className="size-5 text-amber-600" /> : <Newspaper className="size-5 text-[#0D7490]" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-4 mb-1.5">
+            <h3 className="text-foreground font-semibold group-hover:text-[#0D7490] transition-colors line-clamp-2 text-sm">
+              {article.headline}
+            </h3>
+            <ExternalLink className="size-3.5 text-muted-foreground shrink-0 mt-1" />
+          </div>
+
+          {showExcerpt ? (
+            <p className="text-xs text-muted-foreground mb-2.5 line-clamp-3">{excerpt}</p>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); loadExcerpt(); }}
+              className="mb-2.5 text-xs font-medium text-[#0D7490] hover:underline inline-flex items-center gap-1"
+            >
+              {loadingExcerpt ? (
+                <>Loading summary…</>
+              ) : (
+                <><Newspaper className="size-3" /> Read summary</>
+              )}
+            </button>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <Clock className="size-3" /> {article.timestamp}
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-muted-foreground">{article.source}</span>
+            {(article.relatedStocks || []).length > 0 && (
+              <div className="flex items-center gap-1">
+                {(article.relatedStocks || []).slice(0, 3).map(s => (
+                  <Badge key={s} variant="outline" className="text-[9px] px-1.5 py-0">{s}</Badge>
+                ))}
+              </div>
+            )}
+            {article.hot && article.hotType && (
+              <Badge className={`${getHotTypeColor(article.hotType)} text-[9px] px-1.5 py-0 font-semibold`}>
+                {article.hotType}
+              </Badge>
+            )}
+            <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${article.category === "nse" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-blue-100 text-blue-700 border-blue-200"}`}>
+              <span className="flex items-center gap-1">
+                {article.category === "nse" ? <MapPin className="size-2.5" /> : <Globe2 className="size-2.5" />}
+                {article.category === "nse" ? "NSE" : "Global"}
+              </span>
+            </Badge>
+            <Badge className={`${getSentimentColor(article.sentiment)} text-[9px] px-1.5 py-0`}>
+              {article.sentiment}
+            </Badge>
+            {article.sentimentScore != null && (
+              <Badge
+                variant="outline"
+                className="text-[9px] px-1.5 py-0 bg-white/60"
+                title={`Alpha Vantage sentiment score: ${article.sentimentScore.toFixed(3)}`}
+              >
+                AV {article.sentimentScore >= 0 ? "+" : ""}{article.sentimentScore.toFixed(2)}
+              </Badge>
+            )}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function NewsPage() {
   const [newsItems, setNewsItems] = useState<NewsArticle[]>([]);
   const [summary, setSummary] = useState<NewsSummary | null>(null);
@@ -25,10 +143,12 @@ export function NewsPage() {
   const [searchResults, setSearchResults] = useState<NewsArticle[] | null>(null);
   const [searching, setSearching] = useState(false);
 
-  const load = useCallback(async () => {
+  // `silent` = background auto-refresh: update data in place with no visible
+  // loading state (no skeleton swap, no error banner). Only the initial load and
+  // the user-initiated Refresh show their indicators.
+  const load = useCallback(async (silent = false) => {
     try {
       setError(null);
-      setLoading(true);
       const [articles, summ] = await Promise.all([
         fetchAllNews("all", 100),
         fetchNewsSummary(),
@@ -36,23 +156,28 @@ export function NewsPage() {
       setNewsItems(articles);
       setSummary(summ);
     } catch (err) {
-      setError("Failed to fetch news. Please try again.");
+      if (!silent) setError("Failed to fetch news. Please try again.");
       console.error("News fetch error:", err);
-    } finally {
-      setLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-
+  // Initial load — the only time the skeleton placeholders should appear.
   useEffect(() => {
-    const interval = setInterval(load, 60000);
+    let cancelled = false;
+    setLoading(true);
+    load(false).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [load]);
+
+  // Silent background refresh every 60s — the user never sees it happen.
+  useEffect(() => {
+    const interval = setInterval(() => { load(true); }, 60000);
     return () => clearInterval(interval);
   }, [load]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await load();
+    await load(false);
     setRefreshing(false);
   };
 
@@ -65,123 +190,8 @@ export function NewsPage() {
     setSearching(false);
   };
 
-  const getSentimentColor = (s: string) => {
-    switch (s) {
-      case "positive": return "bg-emerald-100 text-emerald-700 border-emerald-200";
-      case "negative": return "bg-red-100 text-red-700 border-red-200";
-      default: return "bg-muted text-muted-foreground border-border";
-    }
-  };
-
-  const getHotTypeColor = (type: string | null) => {
-    switch (type) {
-      case 'IPO': return 'bg-violet-100 text-violet-700 border-violet-200';
-      case 'Earnings': return 'bg-[#0D7490]/10 text-[#0D7490] border-[#0D7490]/20';
-      case 'Merger': return 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200';
-      case 'Partnership': return 'bg-cyan-100 text-cyan-700 border-cyan-200';
-      case 'Regulatory': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'Expansion': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'Funding': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
-      case 'Leadership': return 'bg-lime-100 text-lime-700 border-lime-200';
-      case 'Crisis': return 'bg-red-100 text-red-700 border-red-200';
-      default: return 'bg-muted text-muted-foreground border-border';
-    }
-  };
-
   const currentArticles = searchResults !== null ? searchResults :
     filterNewsByCategory(newsItems, tab as any);
-
-  const ArticleCard = ({ article }: { article: NewsArticle }) => {
-    const [excerpt, setExcerpt] = useState<string | null>(null);
-    const [loadingExcerpt, setLoadingExcerpt] = useState(false);
-
-    const loadExcerpt = async () => {
-      if (excerpt !== null || loadingExcerpt || !article.url || article.url === "#") return;
-      setLoadingExcerpt(true);
-      const text = await fetchArticleExcerpt(article.url);
-      setExcerpt(text || generateSummary(article));
-      setLoadingExcerpt(false);
-    };
-
-    const isFallback = !excerpt || excerpt === "Read the full story on Yahoo Finance.";
-    const showExcerpt = excerpt !== null && !isFallback;
-
-    return (
-      <Card
-        key={article.id}
-        className={`p-5 hover:border-[#0D7490]/50 transition-all cursor-pointer group ${article.hot ? 'border-amber-300/50 bg-amber-50/30' : ''}`}
-        onClick={() => window.open(article.url, "_blank")}
-      >
-        <div className="flex items-start gap-4">
-          <div className={`p-2.5 rounded-lg shrink-0 ${article.hot ? 'bg-amber-100' : 'bg-muted'}`}>
-            {article.hot ? <TrendingUp className="size-5 text-amber-600" /> : <Newspaper className="size-5 text-[#0D7490]" />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-4 mb-1.5">
-              <h3 className="text-foreground font-semibold group-hover:text-[#0D7490] transition-colors line-clamp-2 text-sm">
-                {article.headline}
-              </h3>
-              <ExternalLink className="size-3.5 text-muted-foreground shrink-0 mt-1" />
-            </div>
-
-            {showExcerpt ? (
-              <p className="text-xs text-muted-foreground mb-2.5 line-clamp-3">{excerpt}</p>
-            ) : (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); loadExcerpt(); }}
-                className="mb-2.5 text-xs font-medium text-[#0D7490] hover:underline inline-flex items-center gap-1"
-              >
-                {loadingExcerpt ? (
-                  <>Loading summary…</>
-                ) : (
-                  <><Newspaper className="size-3" /> Read summary</>
-                )}
-              </button>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <Clock className="size-3" /> {article.timestamp}
-              </span>
-              <span className="text-muted-foreground">·</span>
-              <span className="text-muted-foreground">{article.source}</span>
-              {(article.relatedStocks || []).length > 0 && (
-                <div className="flex items-center gap-1">
-                  {(article.relatedStocks || []).slice(0, 3).map(s => (
-                    <Badge key={s} variant="outline" className="text-[9px] px-1.5 py-0">{s}</Badge>
-                  ))}
-                </div>
-              )}
-              {article.hot && article.hotType && (
-                <Badge className={`${getHotTypeColor(article.hotType)} text-[9px] px-1.5 py-0 font-semibold`}>
-                  {article.hotType}
-                </Badge>
-              )}
-              <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${article.category === "nse" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-blue-100 text-blue-700 border-blue-200"}`}>
-                <span className="flex items-center gap-1">
-                  {article.category === "nse" ? <MapPin className="size-2.5" /> : <Globe2 className="size-2.5" />}
-                  {article.category === "nse" ? "NSE" : "Global"}
-                </span>
-              </Badge>
-              <Badge className={`${getSentimentColor(article.sentiment)} text-[9px] px-1.5 py-0`}>
-                {article.sentiment}
-              </Badge>
-              {article.sentimentScore != null && (
-                <Badge
-                  variant="outline"
-                  className="text-[9px] px-1.5 py-0 bg-white/60"
-                  title={`Alpha Vantage sentiment score: ${article.sentimentScore.toFixed(3)}`}
-                >
-                  AV {article.sentimentScore >= 0 ? "+" : ""}{article.sentimentScore.toFixed(2)}
-                </Badge>
-              )}
-            </div>
-          </div>
-        </div>
-      </Card>
-    );
-  };
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
