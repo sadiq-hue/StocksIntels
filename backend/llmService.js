@@ -88,7 +88,7 @@ async function generateViaGemini(prompt, system, maxTokens, temperature) {
           {
             systemInstruction: system ? { parts: [{ text: system }] } : undefined,
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { temperature, maxOutputTokens: maxTokens },
+            generationConfig: { temperature, maxOutputTokens: maxTokens, thinkingConfig: { thinkingBudget: 0 } },
           },
           { timeout: TIMEOUT, proxy: false });
         const parts = res.data?.candidates?.[0]?.content?.parts || [];
