@@ -47,6 +47,7 @@ import type { Signal as SharedSignal } from "../types/signals";
 import { FinancialMetrics } from "../components/FinancialMetrics";
 import { TradingViewChart } from "../components/TradingViewChart";
 import { useAuth } from "../auth/AuthContext";
+import { authFetch } from "../auth/tokenStore";
 import { fetchFinancialReport, type FinancialReport } from "../services/financialsService";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
@@ -463,7 +464,10 @@ export function StockAnalysisPage() {
   const displayName = yahooData?.company_name?.trim() || liveQuote?.company_name?.trim() || activeSelection.name || activeSelection.ticker;
   const currencyLabel = yahooData?.currency || liveQuote?.currency || activeSelection.currency || (isNse ? 'KES' : 'USD');
 
-  // Fetch signal and profile
+  // Fetch signal from the SAME source as the Market Intelligence page
+  // (/api/signals, the signal-engine cache + monitored open positions) so this
+  // card always shows the engine's actual call. Fall back to the single-stock
+  // endpoint only when the ticker isn't in the Market Intelligence list.
   useEffect(() => {
     const ticker = activeSelection.ticker;
     let cancelled = false;
@@ -471,19 +475,29 @@ export function StockAnalysisPage() {
     setStockSignal(null);
     const fetchData = async () => {
       setLoadingData(true);
-      const [signalRes, finRes] = await Promise.allSettled([
-        fetch(`${API_URL}/signal/${ticker}`).then(r => r.ok ? r.json() : null),
+      const userIdParam = user?.id ? `?userId=${user.id}` : '';
+      const [signalsRes, finRes] = await Promise.allSettled([
+        authFetch(`${API_URL}/signals${userIdParam}`).then(r => r.ok ? r.json() : null),
         fetchFinancialReport(ticker, "annual", 2),
       ]);
+      let sig: any = null;
+      if (signalsRes.status === 'fulfilled' && signalsRes.value?.signals) {
+        sig = signalsRes.value.signals.find(
+          (s: any) => String(s.ticker).toUpperCase() === ticker.toUpperCase()
+        ) || null;
+      }
+      if (!sig) {
+        sig = await fetch(`${API_URL}/signal/${ticker}`).then(r => r.ok ? r.json() : null).catch(() => null);
+      }
       if (!cancelled) {
-        if (signalRes.status === 'fulfilled' && signalRes.value) setStockSignal(signalRes.value);
+        if (sig) setStockSignal(sig);
         if (finRes.status === 'fulfilled') setFinancialReport(finRes.value);
         setLoadingData(false);
       }
     };
     fetchData();
     return () => { cancelled = true; };
-  }, [activeSelection.ticker]);
+  }, [activeSelection.ticker, user?.id]);
 
   const displayPrice = regularPrice;
   const displayChange = liveQuote?.changePercent ?? activeSelection.change;
@@ -1400,17 +1414,17 @@ export function StockAnalysisPage() {
           )}
 
           {/* ── Analytics Grid ── */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-stretch">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 
-            {/* Narrow column: Trading Signal + Key Indicators */}
-            <div className="xl:col-span-1 flex flex-col gap-6">
+            {/* Left column: Trading Signal + Key Indicators */}
+            <div className="flex flex-col gap-6">
 
               {/* Trading Signal */}
               <Card className="relative overflow-hidden border border-border shadow-sm flex-1 min-h-0">
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
-                <div className="flex h-full flex-col p-5">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4">
-                    <span className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white shadow-sm"><Target className="size-3.5" /></span>
+                <div className="flex h-full flex-col p-4">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
+                    <span className="flex size-6 items-center justify-center rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white shadow-sm"><Target className="size-3" /></span>
                     Trading Signal
                   </h3>
                   {loadingData ? (
@@ -1418,7 +1432,7 @@ export function StockAnalysisPage() {
                   ) : (
                     <div className="flex-1 space-y-3">
                       {/* Signal + Confidence Gauge */}
-                      <div className={`rounded-2xl border p-4 flex items-center gap-4 ${
+                      <div className={`rounded-2xl border p-3 flex items-center gap-3 ${
                         signalTone === "emerald"
                           ? "border-emerald-200 bg-emerald-50/50"
                           : signalTone === "red"
@@ -1427,7 +1441,7 @@ export function StockAnalysisPage() {
                       }`}>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2 mb-2">
-                            <span className={`text-2xl font-extrabold tracking-tight ${
+                            <span className={`text-xl font-extrabold tracking-tight ${
                               signalTone === "emerald" ? "text-emerald-700" :
                               signalTone === "red" ? "text-red-700" : "text-amber-700"
                             }`}>
@@ -1449,8 +1463,8 @@ export function StockAnalysisPage() {
                             <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{stockSignal.reason}</p>
                           )}
                         </div>
-                        <div className="relative flex size-20 shrink-0 items-center justify-center">
-                          <svg className="size-20 -rotate-90" viewBox="0 0 36 36" aria-hidden="true">
+                        <div className="relative flex size-16 shrink-0 items-center justify-center">
+                          <svg className="size-16 -rotate-90" viewBox="0 0 36 36" aria-hidden="true">
                             <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="3" className="stroke-border" />
                             <circle
                               cx="18" cy="18" r="15.5" fill="none" strokeWidth="3" strokeLinecap="round"
@@ -1465,9 +1479,9 @@ export function StockAnalysisPage() {
                       </div>
 
                       {/* What's driving this signal */}
-                      <div className="rounded-2xl border border-border bg-muted/30 p-3">
-                        <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">What&apos;s driving this</div>
-                        <div className="space-y-2">
+                      <div className="rounded-2xl border border-border bg-muted/30 p-2.5">
+                        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">What&apos;s driving this</div>
+                        <div className="space-y-1.5">
                           {[
                             { label: "RSI (14)", value: rsi > 70 ? "Overbought" : rsi < 30 ? "Oversold" : "Neutral", tone: rsi > 70 ? "text-red-500" : rsi < 30 ? "text-emerald-600" : "text-amber-600", dot: rsi > 70 ? "bg-red-500" : rsi < 30 ? "bg-emerald-500" : "bg-amber-500" },
                             { label: "MACD", value: macdSignal, tone: macdSignal === "Bullish" ? "text-emerald-600" : "text-red-500", dot: macdSignal === "Bullish" ? "bg-emerald-500" : "bg-red-500" },
@@ -1486,45 +1500,45 @@ export function StockAnalysisPage() {
 
                       {/* Entry / Targets Grid */}
                       {(stockSignal?.entry || stockSignal?.stopLoss || stockSignal?.target1) && (
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-3 gap-1.5">
                           {stockSignal?.entry && (
-                            <div className="bg-muted/40 rounded-xl p-2.5 border border-border/50">
+                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
                               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target Entry</div>
                               <div className="text-sm font-semibold text-foreground">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.entry)}</div>
                             </div>
                           )}
                           {stockSignal?.stopLoss && (
-                            <div className="bg-muted/40 rounded-xl p-2.5 border border-border/50">
+                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
                               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Stop Loss</div>
                               <div className="text-sm font-semibold text-red-500">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.stopLoss)}</div>
                             </div>
                           )}
                           {stockSignal?.target1 && (
-                            <div className="bg-muted/40 rounded-xl p-2.5 border border-border/50">
+                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
                               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target 1</div>
                               <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target1)}</div>
                             </div>
                           )}
                           {stockSignal?.target2 && (
-                            <div className="bg-muted/40 rounded-xl p-2.5 border border-border/50">
+                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
                               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target 2</div>
                               <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target2)}</div>
                             </div>
                           )}
                           {stockSignal?.target3 && (
-                            <div className="bg-muted/40 rounded-xl p-2.5 border border-border/50">
+                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
                               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Target 3</div>
                               <div className="text-sm font-semibold text-emerald-600">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target3)}</div>
                             </div>
                           )}
                           {stockSignal?.riskReward && (
-                            <div className="bg-muted/40 rounded-xl p-2.5 border border-border/50">
+                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
                               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Risk/Reward</div>
                               <div className="text-sm font-semibold text-foreground">1:{stockSignal.riskReward.toFixed(1)}</div>
                             </div>
                           )}
                           {stockSignal?.timeframe && (
-                            <div className="bg-muted/40 rounded-xl p-2.5 border border-border/50">
+                            <div className="bg-muted/40 rounded-lg p-2 border border-border/50">
                               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Holding Period</div>
                               <div className="text-sm font-semibold text-foreground">{stockSignal.timeframe}</div>
                             </div>
@@ -1741,8 +1755,8 @@ export function StockAnalysisPage() {
               </Card>
             </div>
 
-            {/* Wide column: Financial Health */}
-            <div className="xl:col-span-2">
+            {/* Right column: Financial Health */}
+            <div className="flex flex-col gap-6">
               <FinancialMetrics symbol={activeSelection.ticker} sector={activeSelection.sector} />
             </div>
           </div>
