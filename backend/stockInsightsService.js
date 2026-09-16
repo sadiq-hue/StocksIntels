@@ -669,7 +669,10 @@ function generateFallbackNarrative(ticker, sentiment, articles, market, priceDat
   const heads = articles.filter(a => a.headline).map(a => a.headline);
   const primary = heads[0] || '';
   const secondary = heads[1] || '';
-  const detail = cleanSnippet(articles[0]?.excerpt || '', 170);
+  // Ignore placeholder "excerpts" (RSS items whose body is just a link-out).
+  const rawExcerpt = String(articles[0]?.excerpt || '');
+  const isPlaceholder = /read the full story|read more|click here|continue reading|subscribe/i.test(rawExcerpt) && rawExcerpt.length < 90;
+  const detail = isPlaceholder ? '' : cleanSnippet(rawExcerpt, 170);
 
   const thesis = pickFallbackThesis(name, sentiment);
 

@@ -11,7 +11,7 @@ const SYSTEM_PROMPT = `You are a professional financial market analyst writing f
 // generation fires many prompts in a row (per-stock narratives + editorial
 // sections); bursting them trips the account rate limit (429 "Rate limit
 // exceeded"), which pushed every narrative onto the generic fallback.
-const LLM_MIN_GAP_MS = parseInt(process.env.LLM_MIN_GAP_MS || '1200', 10);
+const LLM_MIN_GAP_MS = parseInt(process.env.LLM_MIN_GAP_MS || '2000', 10);
 let _llmChain = Promise.resolve();
 let _llmLastAt = 0;
 function scheduleLlm(fn) {
