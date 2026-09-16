@@ -21,6 +21,17 @@ services:
     expose:
       - "5432"
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     # Build from the repo root so the Dockerfile can COPY ../frontend and the
     # pnpm workspace files. context = repo root, dockerfile = backend/Dockerfile.
@@ -31,11 +42,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       PORT: 3001
       LOG_REQUESTS: "1"
       DATABASE_URL: postgres://${POSTGRES_USER:-stockintel}:${POSTGRES_PASSWORD:?set a strong password in .env}@db:5432/${POSTGRES_DB:-stockintel}
+      REDIS_URL: redis://redis:6379
       CORS_ORIGIN: ${CORS_ORIGIN:-https://admin.stocksintels.com}
       # Runtime secrets / API keys passed through from the host .env
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
@@ -48,6 +62,11 @@ services:
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID:-}
       PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET:-}
+      # PayHero (M-Pesa STK push) — channel 12663
+      PAYHERO_BASE_URL: ${PAYHERO_BASE_URL:-https://backend.payhero.co.ke/api/v2}
+      PAYHERO_AUTH_TOKEN: ${PAYHERO_AUTH_TOKEN:-}
+      PAYHERO_CHANNEL_ID: ${PAYHERO_CHANNEL_ID:-}
+      PAYHERO_CALLBACK_URL: ${PAYHERO_CALLBACK_URL:-}
       FRONTEND_URL: ${FRONTEND_URL:-https://admin.stocksintels.com}
       APP_URL: ${APP_URL:-https://stocksintels.com}
       SMTP_HOST: ${SMTP_HOST:-}
