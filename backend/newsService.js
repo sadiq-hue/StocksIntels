@@ -394,9 +394,10 @@ const AMBIGUOUS_TICKERS = new Set([
 // "metaverse", "zoom call"). Their companies only tag via cashtag/uppercase.
 const AMBIGUOUS_ALIASES = new Set(['meta', 'visa', 'zoom']);
 
-// Attribution that follows the *opinion giver*, not the subject stock
-// ("UBS says…", "GS raises its target", "Citi downgrades…").
-const ANALYST_AFTER = /^[)'"]?\s*(says?|said|analysts?|reiterates?|upgrades?|downgrades?|raises?|lowers?|cuts?|lifts?|maintains?|initiates?|notes?|price target|overweight|underweight|outperforms?|rating|research)\b/i;
+// Attribution around an *opinion giver* (analyst/broker), not the subject stock:
+// "UBS says…", "GS raises its target", "…per UBS.", "according to UBS", "Citi research".
+const ANALYST_AFTER = /^[)'"]?\s*(says?|said|analysts?|reiterates?|upgrades?|downgrades?|raises?|lowers?|cuts?|lifts?|maintains?|initiates?|notes?|price target|overweight|underweight|outperforms?|rating|research|securities)\b/i;
+const ANALYST_BEFORE = /(per|according to|by|from|at|courtesy of|analysts? at|analyst with|analysis by)\s*$/i;
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Longest alias first so "kenya power" isn't shadowed by a shorter subset.
@@ -427,8 +428,9 @@ function extractRelatedStocks(text) {
   for (const m of raw.matchAll(/\b([A-Z]{2,5})\b/g)) {
     const t = m[1];
     if (!ALL_NEWS_TICKER_SET.has(t) || AMBIGUOUS_TICKERS.has(t)) continue;
+    const before = raw.slice(Math.max(0, m.index - 30), m.index);
     const after = raw.slice(m.index + t.length, m.index + t.length + 40);
-    if (ANALYST_AFTER.test(after)) continue;
+    if (ANALYST_AFTER.test(after) || ANALYST_BEFORE.test(before)) continue;
     found.add(t);
   }
   return [...found];
