@@ -1564,7 +1564,7 @@ function filterNews(articles, limit, category) {
 
 // Get news summary with stats
 async function getNewsSummary() {
-  const news = await getAllNews(200);
+  const news = await getAllNews(500);
   const nseCount = news.filter(a => a.category === 'nse' || (a.relatedStocks && a.relatedStocks.length > 0)).length;
   const africaCount = news.filter(a => a.category === 'africa').length;
   const globalCount = news.filter(a => a.category !== 'nse' && a.category !== 'africa' && (!a.relatedStocks || a.relatedStocks.length === 0)).length;
