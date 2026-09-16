@@ -3146,6 +3146,22 @@ async function persistPortfolioState() {
 // same rule the monitor gate applies when a score-close books the market print.
 // Positions without a live quote this session are left out rather than guessed.
 // State maps are injectable for unit tests (see test-fade-relevel.cjs).
+// Resolve a current price for mark-to-market. Prefer the freshest _lastKnownPrices
+// (written by every quote prefetch); fall back to the batch quote cache and the
+// signals cache, which also carry live-derived quotes. Previously only
+// _lastKnownPrices was consulted, so any monitored position whose latest price
+// lived in the signals cache — skipped by _warmMonitoredQuotes because it already
+// had a price — was silently dropped from "Open / Mark-to-Market" (e.g. 26 of 556).
+function _resolveMarkPrice(symbol, lastKnownPrices = _lastKnownPrices) {
+  const p = lastKnownPrices.get(symbol);
+  if (p > 0) return p;
+  const qc = _quoteCache.get(symbol);
+  if (qc && qc.price > 0) return qc.price;
+  const cached = Array.isArray(_signalsCache) ? _signalsCache.find(s => s && s.ticker === symbol) : null;
+  if (cached && cached.price > 0) return cached.price;
+  return null;
+}
+
 function getLiveWinRate(signalOutcomes = _signalOutcomes, lastKnownPrices = _lastKnownPrices, performanceStats = _performanceStats) {
   const resolvedWins = performanceStats.wins || 0;
   const resolvedLosses = performanceStats.losses || 0;
@@ -3154,7 +3170,7 @@ function getLiveWinRate(signalOutcomes = _signalOutcomes, lastKnownPrices = _las
   const openPositions = [];
   for (const [symbol, pos] of signalOutcomes) {
     if (!pos || pos.result || pos.action === 'hold' || pos.entryPrice == null || pos.entryPrice <= 0) continue;
-    const price = lastKnownPrices.get(symbol);
+    const price = _resolveMarkPrice(symbol, lastKnownPrices);
     if (!price || price <= 0) continue;
     const isBuy = pos.action === 'buy';
     const mtmWin = isBuy ? price >= pos.entryPrice : price <= pos.entryPrice;
