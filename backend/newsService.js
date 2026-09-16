@@ -311,7 +311,9 @@ const NAME_ALIASES = {
   'microsoft': 'MSFT',
   'alphabet': 'GOOGL',
   'nvidia': 'NVDA',
-  'meta': 'META',
+  'meta platforms': 'META',
+  'meta stock': 'META',
+  'meta shares': 'META',
   'facebook': 'META',
   'tesla': 'TSLA',
   'netflix': 'NFLX',
@@ -377,24 +379,57 @@ const NAME_ALIASES = {
   'planet labs': 'PL',
 };
 
+// Tickers too ambiguous to tag from a bare UPPERCASE word: they collide with
+// everyday words / market acronyms (ON, SO, IT, ALL, NOW, KEY, PAY, US...). They
+// still tag via a cashtag ("$ON") or a distinctive company-name alias.
+const AMBIGUOUS_TICKERS = new Set([
+  'ALL', 'ANY', 'ARE', 'BIG', 'BUY', 'CAN', 'CEO', 'CFO', 'CUT', 'DAY', 'DOW', 'END',
+  'EPS', 'ETF', 'EU', 'EV', 'FED', 'FOR', 'GDP', 'GET', 'GOT', 'HAS', 'HOT', 'HOW',
+  'IMF', 'IPO', 'IT', 'ITS', 'KEY', 'LOW', 'MAX', 'NEW', 'NOW', 'OFF', 'ON', 'ONE',
+  'OPEN', 'OUT', 'PAY', 'PUT', 'RUN', 'SEC', 'SELL', 'SET', 'SO', 'TAX', 'THE', 'TOO',
+  'TOP', 'TWO', 'UK', 'UP', 'US', 'USA', 'USD', 'VAT', 'WAR', 'WHO', 'WHY', 'WIN', 'YES',
+]);
+
+// Alias keys too generic to match as a standalone word ("visa-free travel",
+// "metaverse", "zoom call"). Their companies only tag via cashtag/uppercase.
+const AMBIGUOUS_ALIASES = new Set(['meta', 'visa', 'zoom']);
+
+// Attribution that follows the *opinion giver*, not the subject stock
+// ("UBS says…", "GS raises its target", "Citi downgrades…").
+const ANALYST_AFTER = /^[)'"]?\s*(says?|said|analysts?|reiterates?|upgrades?|downgrades?|raises?|lowers?|cuts?|lifts?|maintains?|initiates?|notes?|price target|overweight|underweight|outperforms?|rating|research)\b/i;
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Longest alias first so "kenya power" isn't shadowed by a shorter subset.
-const NAME_ALIAS_ENTRIES = Object.entries(NAME_ALIASES).sort((a, b) => b[0].length - a[0].length);
+// Precompiled word-boundary regexes (no /g, so .test() has no lastIndex state).
+const NAME_ALIAS_ENTRIES = Object.entries(NAME_ALIASES)
+  .filter(([name]) => !AMBIGUOUS_ALIASES.has(name))
+  .sort((a, b) => b[0].length - a[0].length)
+  .map(([name, ticker]) => ({ ticker, re: new RegExp(`\\b${escapeRe(name)}\\b`, 'i') }));
 
 function extractRelatedStocks(text) {
   const raw = String(text || '');
-  const lower = raw.toLowerCase();
   const found = new Set();
-  // Distinctive company names ("Safaricom", "Kenya Airways") can't collide with
-  // everyday words, so they always tag.
-  for (const [name, ticker] of NAME_ALIAS_ENTRIES) {
-    if (lower.includes(name)) found.add(ticker);
+
+  // 1. Distinctive company names, matched on word boundaries so "meta" inside
+  //    "metadata"/"metaverse" or "apple" inside "pineapple" can never false-tag.
+  for (const { ticker, re } of NAME_ALIAS_ENTRIES) {
+    if (re.test(raw)) found.add(ticker);
   }
-  // Literal all-caps symbol mentions only. Case-sensitive, so the word "has" or
-  // "Are" never tags a stock; a genuine symbol like "NVDA" always does.
-  const words = raw.match(/\$?[A-Z]{2,6}\b/g) || [];
-  for (const w of words) {
-    const t = w.startsWith('$') ? w.slice(1) : w;
+
+  // 2. Cashtags ($SCOM, $NVDA) are explicit and always tag.
+  for (const m of raw.matchAll(/\$([A-Za-z]{1,6})\b/g)) {
+    const t = m[1].toUpperCase();
     if (ALL_NEWS_TICKER_SET.has(t)) found.add(t);
+  }
+
+  // 3. Bare UPPERCASE ticker mentions, minus everyday-word tickers and analyst
+  //    attributions ("UBS says…" names the analyst, not the subject stock).
+  for (const m of raw.matchAll(/\b([A-Z]{2,5})\b/g)) {
+    const t = m[1];
+    if (!ALL_NEWS_TICKER_SET.has(t) || AMBIGUOUS_TICKERS.has(t)) continue;
+    const after = raw.slice(m.index + t.length, m.index + t.length + 40);
+    if (ANALYST_AFTER.test(after)) continue;
+    found.add(t);
   }
   return [...found];
 }
