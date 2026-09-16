@@ -1974,8 +1974,7 @@ async function _loadForwardPredictionsFromDb() {
     try {
       const result = await pool.query(
         `SELECT id, symbol, signal, confidence, price, stop_loss, target1, target2, target3, action, trade_type, sector, bench_price, generated_at, resolved, actual_return, correct, resolved_at, superseded_at
-         FROM forward_predictions WHERE generated_at > NOW() - $1::interval ORDER BY generated_at`,
-        [`${SIGNAL_WINDOW_DAYS} days`]
+         FROM forward_predictions ORDER BY generated_at`
       );
       const resolved = result.rows.filter(r => r.resolved).length;
       const unresolved = result.rows.length - resolved;
@@ -2461,12 +2460,10 @@ async function getForwardTestStats() {
 
 function getForwardTestSnapshot() {
   const now = Date.now();
-  const maxAge = SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
   let total = 0, correct = 0, losses = 0, neutral = 0, totalHours = 0, hourlyCount = 0;
   const buckets = { '1d': { total: 0, correct: 0, losses: 0, neutral: 0 }, '5d': { total: 0, correct: 0, losses: 0, neutral: 0 }, '20d': { total: 0, correct: 0, losses: 0, neutral: 0 } };
   for (const [, store] of _forwardTestStore) {
     for (const p of store.predictions) {
-      if (p.generatedAt && (now - p.generatedAt) > maxAge) continue;
       if (!p.resolved) continue;
       if (p.supersededAt) continue; // replaced by a newer thesis — not a verdict
       total++;
@@ -2697,12 +2694,9 @@ function getLiveTestSnapshot() {
 }
 
 function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0 } = {}) {
-  const now = Date.now();
-  const maxAge = SIGNAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
   const all = [];
   for (const [sym, store] of _forwardTestStore) {
     for (const p of store.predictions) {
-      if (p.generatedAt && (now - p.generatedAt) > maxAge) continue;
       if (symbol && sym !== symbol) continue;
       if (resolved !== undefined && p.resolved !== resolved) continue;
       all.push({ symbol: sym, ...p, currency: NSE_SYMBOLS.includes(sym) ? 'KES' : 'USD', generatedAt: new Date(p.generatedAt).toISOString(), resolvedAt: p.resolvedAt ? new Date(p.resolvedAt).toISOString() : null, supersededAt: p.supersededAt ? new Date(p.supersededAt).toISOString() : null });
