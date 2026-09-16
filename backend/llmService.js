@@ -11,20 +11,26 @@ const SYSTEM_PROMPT = `You are a professional financial market analyst writing f
 // generation fires many prompts in a row (per-stock narratives + editorial
 // sections); bursting them trips the account rate limit (429 "Rate limit
 // exceeded"), which pushed every narrative onto the generic fallback.
-const MISTRAL_MIN_GAP_MS = parseInt(process.env.MISTRAL_MIN_GAP_MS || '1200', 10);
-let _mistralChain = Promise.resolve();
-let _mistralLastAt = 0;
-function scheduleMistral(fn) {
+const LLM_MIN_GAP_MS = parseInt(process.env.LLM_MIN_GAP_MS || '1200', 10);
+let _llmChain = Promise.resolve();
+let _llmLastAt = 0;
+function scheduleLlm(fn) {
   const run = async () => {
-    const wait = Math.max(0, MISTRAL_MIN_GAP_MS - (Date.now() - _mistralLastAt));
+    const wait = Math.max(0, LLM_MIN_GAP_MS - (Date.now() - _llmLastAt));
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    _mistralLastAt = Date.now();
+    _llmLastAt = Date.now();
     return fn();
   };
-  const result = _mistralChain.then(run, run);
-  _mistralChain = result.catch(() => {});
+  const result = _llmChain.then(run, run);
+  _llmChain = result.catch(() => {});
   return result;
 }
+
+// Circuit breakers: when a provider returns a rate-limit/auth error, stop hitting
+// it (and paying its retry backoff) for a while and use the next provider. Without
+// this, a rate-limited Mistral adds tens of seconds of backoff per call.
+let _mistralDownUntil = 0;
+let _geminiDownUntil = 0;
 
 async function generateViaMistral(prompt, system, maxTokens, temperature) {
   // Read the key live from env at call time (a later dotenv override/load elsewhere in the
@@ -32,10 +38,10 @@ async function generateViaMistral(prompt, system, maxTokens, temperature) {
   const apiKey = process.env.MISTRAL_API_KEY;
   if (!apiKey) throw new Error('MISTRAL_API_KEY not set at call time');
   let lastErr;
-  const MAX_ATTEMPTS = 5;
+  const MAX_ATTEMPTS = 3;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      return await scheduleMistral(async () => {
+      return await scheduleLlm(async () => {
         const res = await axios.post('https://api.mistral.ai/v1/chat/completions', {
           model: MISTRAL_MODEL,
           messages: [
@@ -67,9 +73,47 @@ async function generateViaMistral(prompt, system, maxTokens, temperature) {
   throw lastErr;
 }
 
+// Google Gemini (generativelanguage) — fallback for when Mistral is rate-limited
+// or its key is absent. GEMINI_MODEL overrides the model.
+async function generateViaGemini(prompt, system, maxTokens, temperature) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY not set at call time');
+  const model = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await scheduleLlm(async () => {
+        const res = await axios.post(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            systemInstruction: system ? { parts: [{ text: system }] } : undefined,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { temperature, maxOutputTokens: maxTokens },
+          },
+          { timeout: TIMEOUT, proxy: false });
+        const parts = res.data?.candidates?.[0]?.content?.parts || [];
+        const text = parts.map(p => p.text).filter(Boolean).join('').trim();
+        if (!text) throw new Error('empty Gemini response');
+        return text;
+      });
+    } catch (err) {
+      lastErr = err;
+      const status = err.response?.status;
+      if (attempt < 3 && (status === 429 || status >= 500 || status === undefined)) {
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 async function generate(prompt, options = {}) {
   const { temperature = 0.7, maxTokens = 300, system } = options;
-  // Try Ollama first, fall back to Mistral API
+  const errors = [];
+  // 1) Ollama (self-hosted), 2) Mistral, 3) Gemini — first that answers wins, so a
+  // rate-limited/absent Mistral key no longer forces the generic fallback text.
   if (OLLAMA_URL) {
     try {
       const res = await axios.post(`${OLLAMA_URL}/api/generate`, {
@@ -79,13 +123,27 @@ async function generate(prompt, options = {}) {
         stream: false,
         options: { temperature, num_predict: maxTokens },
       }, { timeout: TIMEOUT, proxy: false });
-      return res.data.response.trim();
-    } catch {}
+      if (res.data?.response?.trim()) return res.data.response.trim();
+    } catch (e) { errors.push('ollama: ' + e.message); }
   }
-  if (process.env.MISTRAL_API_KEY) {
-    return generateViaMistral(prompt, system, maxTokens, temperature);
+  if (process.env.MISTRAL_API_KEY && Date.now() > _mistralDownUntil) {
+    try { return await generateViaMistral(prompt, system, maxTokens, temperature); }
+    catch (e) {
+      const s = e.response?.status;
+      if (s === 429 || s === 401 || s === 403) _mistralDownUntil = Date.now() + 10 * 60 * 1000;
+      errors.push('mistral: ' + e.message);
+    }
+  } else if (process.env.MISTRAL_API_KEY) {
+    errors.push('mistral: cooling down after rate limit');
   }
-  throw new Error('No LLM backend available (set OLLAMA_URL or MISTRAL_API_KEY)');
+  if (process.env.GEMINI_API_KEY && Date.now() > _geminiDownUntil) {
+    try { return await generateViaGemini(prompt, system, maxTokens, temperature); }
+    catch (e) {
+      if (e.response?.status === 429) _geminiDownUntil = Date.now() + 60 * 1000;
+      errors.push('gemini: ' + e.message);
+    }
+  }
+  throw new Error('No LLM backend available (' + (errors.join('; ') || 'no provider configured') + ')');
 }
 
 async function generateNseSummary(nse20, nasi, gainers, losers, topSector, worstSector) {
