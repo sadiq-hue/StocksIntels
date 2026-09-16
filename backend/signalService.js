@@ -144,7 +144,21 @@ const RETENTION_DAYS = Math.max(90, parseInt(process.env.RETENTION_DAYS || '365'
 // is no harm in restoring more — every open position gets its fair chance.
 const OPEN_POSITION_MAX_AGE_HOURS = Math.max(1, parseInt(process.env.OPEN_POSITION_MAX_AGE_HOURS || String(SIGNAL_WINDOW_DAYS * 24), 10) || (SIGNAL_WINDOW_DAYS * 24)); // default = SIGNAL_WINDOW_DAYS days, so position restore matches the evaluation window
 // Restore performance stats and portfolio state from DB on startup
-restoreStateFromDb().catch(() => {});
+var _lastRestoreFailed = false;
+// Boot restore with a self-healing retry. If the DB is briefly unreachable at
+// startup (e.g. the container came up before its network/DB was attached —
+// previously EAI_AGAIN), the monitored-position map would silently stay empty,
+// collapsing "Monitored Signals" until a manual restart. Retry with backoff so
+// it converges on its own.
+(function bootRestore(attempt) {
+  restoreStateFromDb().then(() => {
+    if (!_lastRestoreFailed) return;
+    if (attempt >= 30) { console.warn('[SignalService] giving up state restore after 30 attempts'); return; }
+    const delay = Math.min(60000, 5000 * attempt);
+    console.warn(`[SignalService] retrying state restore in ${Math.round(delay / 1000)}s (attempt ${attempt + 1})`);
+    setTimeout(() => bootRestore(attempt + 1), delay);
+  }).catch(() => {});
+})(1);
 // Bootstrap durable NSE daily history (KenyanStocks seed + best-effort deep bootstrap) non-blocking
 nseHistory.bootstrapNseHistory().catch(() => {});
 // Bootstrap durable news-sentiment history (ensure table, prune, backfill past ~2 weeks) non-blocking
@@ -965,6 +979,7 @@ async function refreshPerformanceStats() {
 }
 
 async function restoreStateFromDb() {
+  _lastRestoreFailed = false;
   try {
     // Load all historical outcomes into memory so health/trade tracking works across restarts.
     // A 'target1 milestone' outcome (result='win') is a riding position that booked its
@@ -1099,7 +1114,7 @@ async function restoreStateFromDb() {
     // stats with pseudo-outcomes (e.g. phantom CRWN 60.00 entry). It is still
     // available manually via POST /api/signals/engine/backfill and tags rows as
     // source='backfill' so they never count toward live stats.
-  } catch (e) { /* table may not exist — start fresh */ console.warn('[SignalService] restoreStateFromDb outcomes error:', e.message); }
+  } catch (e) { /* table may not exist — start fresh */ _lastRestoreFailed = true; console.warn('[SignalService] restoreStateFromDb failed — DB unreachable; monitored positions will be restored by the retry loop:', e.message); }
   try {
     const result = await pool.query(
       `SELECT consecutive_losses FROM portfolio_state ORDER BY updated_at DESC LIMIT 1`
@@ -3489,8 +3504,15 @@ setTimeout(() => {
 // so the Signal Engine backtest has something to show. Uses cached/fundamental data.
 setTimeout(async () => {
   try {
-    const countRes = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_history').catch(() => ({ rows: [{ cnt: 0 }] }));
-    if ((countRes.rows[0]?.cnt || 0) === 0) {
+    let count = null;
+    try {
+      const countRes = await pool.query('SELECT COUNT(*)::int as cnt FROM signal_history');
+      count = countRes.rows[0]?.cnt ?? 0;
+    } catch (e) {
+      console.warn('[SignalService] startup seed skipped — signal_history unreachable:', e.message);
+      return;
+    }
+    if (count === 0) {
       console.log('[SignalService] signal_history is empty; seeding initial signals...');
       const signals = await generateSignals(null, false, true);
       if (signals && signals.length > 0) {
