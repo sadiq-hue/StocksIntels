@@ -7,36 +7,58 @@ const MISTRAL_MODEL = process.env.MISTRAL_MODEL || 'mistral-large-latest';
 
 const SYSTEM_PROMPT = `You are a professional financial market analyst writing for StocksIntels, an African stock market intelligence platform covering NSE (Nairobi Securities Exchange), NGX (Nigeria), GSE (Ghana), JSE and global markets. Write concise, insightful editorial content. Use natural Kenyan financial market terminology. Follow the length and format the task requests — if a task asks for a longer piece, write the full requested length. Never use markdown formatting unless the task explicitly requests a labeled format. Never mention you are an AI. Write as if you are the StocksIntels editorial team.`;
 
+// Serialize Mistral calls with a minimum gap between them. Newsletter/insights
+// generation fires many prompts in a row (per-stock narratives + editorial
+// sections); bursting them trips the account rate limit (429 "Rate limit
+// exceeded"), which pushed every narrative onto the generic fallback.
+const MISTRAL_MIN_GAP_MS = parseInt(process.env.MISTRAL_MIN_GAP_MS || '1200', 10);
+let _mistralChain = Promise.resolve();
+let _mistralLastAt = 0;
+function scheduleMistral(fn) {
+  const run = async () => {
+    const wait = Math.max(0, MISTRAL_MIN_GAP_MS - (Date.now() - _mistralLastAt));
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    _mistralLastAt = Date.now();
+    return fn();
+  };
+  const result = _mistralChain.then(run, run);
+  _mistralChain = result.catch(() => {});
+  return result;
+}
+
 async function generateViaMistral(prompt, system, maxTokens, temperature) {
-  let lastErr;
   // Read the key live from env at call time (a later dotenv override/load elsewhere in the
   // process may have replaced process.env values; never cache it at require time).
   const apiKey = process.env.MISTRAL_API_KEY;
   if (!apiKey) throw new Error('MISTRAL_API_KEY not set at call time');
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  let lastErr;
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const res = await axios.post('https://api.mistral.ai/v1/chat/completions', {
-        model: MISTRAL_MODEL,
-        messages: [
-          { role: 'system', content: system || SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-        max_tokens: maxTokens,
-        temperature,
-      }, { timeout: TIMEOUT, proxy: false, headers: { Authorization: `Bearer ${apiKey}` } });
-      return res.data.choices[0].message.content.trim();
+      return await scheduleMistral(async () => {
+        const res = await axios.post('https://api.mistral.ai/v1/chat/completions', {
+          model: MISTRAL_MODEL,
+          messages: [
+            { role: 'system', content: system || SYSTEM_PROMPT },
+            { role: 'user', content: prompt },
+          ],
+          max_tokens: maxTokens,
+          temperature,
+        }, { timeout: TIMEOUT, proxy: false, headers: { Authorization: `Bearer ${apiKey}` } });
+        return res.data.choices[0].message.content.trim();
+      });
     } catch (err) {
       lastErr = err;
       const status = err.response?.status;
-      // Mistral intermittently returns 401/tier errors under concurrent load, so retry
-      // transient/account-level failures with backoff. Stop on persistent 400/422 (bad request).
-      if (attempt < 3 && (status === 401 || status === 403 || status === 429 || status >= 500)) {
-        await new Promise(r => setTimeout(r, 1500 * attempt));
-        continue;
-      }
-      if (attempt < 3 && status === undefined) {
-        // Network/ETIMEDOUT/EAI_AGAIN — retry once more
-        await new Promise(r => setTimeout(r, 3000 * attempt));
+      const retryAfter = parseInt(err.response?.headers?.['retry-after'], 10);
+      // Retry transient/account-level failures with exponential backoff (honouring
+      // Retry-After when Mistral sends one). Stop immediately on 400/422 (bad request).
+      const retryable = status === 401 || status === 403 || status === 429 || status >= 500 || status === undefined;
+      if (attempt < MAX_ATTEMPTS && retryable) {
+        const backoff = Number.isFinite(retryAfter) && retryAfter > 0
+          ? retryAfter * 1000
+          : Math.min(20000, 1500 * Math.pow(2, attempt - 1)) + Math.floor(Math.random() * 500);
+        await new Promise(r => setTimeout(r, backoff));
         continue;
       }
       throw err;
