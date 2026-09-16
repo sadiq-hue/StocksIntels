@@ -110,6 +110,22 @@ const schemaReadyPromise = (async () => {
       `CREATE UNIQUE INDEX IF NOT EXISTS uq_forward_predictions_open_thesis
        ON forward_predictions (symbol, action, price) WHERE NOT resolved`
     ).catch(() => {});
+    // One-time cleanup: superseding was removed (a generated signal must run to
+    // its own stop/target). Re-open predictions that were superseded under the
+    // old behaviour so they resume tracking and resolve on their own levels.
+    // Verified: no duplicate (symbol, action, price) keys among superseded rows and
+    // no collision with an open row, so this cannot violate the unique index.
+    // Idempotent — after the first run there are no superseded rows left.
+    await pool.query(
+      `UPDATE forward_predictions f
+          SET resolved = FALSE, superseded_at = NULL
+        WHERE f.superseded_at IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM forward_predictions o
+            WHERE o.symbol = f.symbol AND o.action = f.action AND o.price = f.price
+              AND NOT o.resolved
+          )`
+    ).catch((e) => console.warn('[SignalService] un-supersede cleanup skipped:', e.message));
     await nseHistory.ensureTable().catch(() => {});
   } catch {}
 })();
@@ -2136,31 +2152,10 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
     actualReturn: null, correct: null, resolvedAt: null, supersededAt: null,
   });
   if (store.predictions.length > 200) store.predictions = store.predictions.slice(-200);
-  // A genuinely new BUY thesis (we reached the insert, so no same-thesis row
-  // was open) REPLACES every older open buy prediction for this symbol: they are
-  // not awaiting their levels any more, they are obsolete. Marking them
-  // superseded (resolved, no return/correct verdict) keeps the Forward Test
-  // History honest — no fake ⏳ blanks for theses that stopped being the active
-  // call — while never touching resolved rows or the win/loss stats
-  // (superseded rows have correct = NULL, which all accuracy readers exclude).
-  if (signalObjAction === 'buy') {
-    for (const p of store.predictions) {
-      if (!p.resolved && p.action === 'buy' && p.id !== dbId) {
-        p.resolved = true;
-        p.correct = null;
-        p.actualReturn = null;
-        p.resolvedAt = null;
-        p.supersededAt = Date.now();
-      }
-    }
-    if (dbId) {
-      pool.query(
-        `UPDATE forward_predictions SET resolved = TRUE, correct = NULL, actual_return = NULL, resolved_at = NULL, superseded_at = NOW()
-         WHERE symbol = $1 AND action = $2 AND NOT resolved AND id <> $3`,
-        [symbol, signalObjAction, dbId]
-      ).catch(e => { console.warn(`[ForwardTest] Failed to supersede older ${symbol} buy predictions: ${e.message}`); });
-    }
-  }
+  // Older open buys are intentionally NOT superseded. Once a signal is generated
+  // it must run to its own stop/target (or benchmark/expiry) and be judged on its
+  // own merits. The old behaviour replaced every older open buy with the newest
+  // thesis, which silently hid those calls' outcomes.
 }
 
 // True when the resolution quote is stale/garbage — a quote that deviates more
