@@ -186,7 +186,7 @@ export function NewsPage() {
     try {
       setError(null);
       const [articles, summ] = await Promise.all([
-        fetchAllNews("all", 200),
+        fetchAllNews("all", 300),
         fetchNewsSummary(),
       ]);
       setNewsItems(articles);
