@@ -541,7 +541,8 @@ CATALYST: <one line, max 15 words. The single most concrete near-term catalyst t
 RISK: <one line, max 15 words. The single biggest risk / what would break the thesis>
 
 RULES:
-- Be specific with numbers, not vague
+- Write in clear, plain English a smart non-specialist can follow; explain any jargon in a few words
+- Be specific with numbers, not vague; lead with the most important fact
 - Sound like a senior analyst with a clear point of view
 - Do NOT use markdown formatting, bullet points, or section headers
 - Do NOT mention AI or that this is auto-generated
@@ -590,91 +591,137 @@ RULES:
     }
     if (!thesis) thesis = pickFallbackThesis(name, sentiment);
     if (!analysis) analysis = text;
-    if (!catalyst) catalyst = isGlobal ? 'Earnings and macro data flow' : 'NSE trading volumes and corporate announcements';
+    if (!catalyst) catalyst = fallbackCatalystLine(ticker, isGlobal);
+    if (!risk) risk = fallbackRiskLine(ticker, isGlobal);
 
     return { thesis, analysis, catalyst, risk };
   } catch (e) {
     console.warn(`[INSIGHTS] LLM narrative failed for ${ticker}: ${e.message} model=${process.env.MISTRAL_MODEL} body=${JSON.stringify(e.response?.data || '').slice(0,160)}`);
-    return generateFallbackNarrative(ticker, sentiment, articles, market);
+    return generateFallbackNarrative(ticker, sentiment, articles, market, priceData);
   }
 }
 
-function generateFallbackNarrative(ticker, sentiment, articles, market) {
+// Trim a news snippet to a clean sentence/word boundary so it never cuts mid-word
+// ("…before selli."). An ellipsis is added only when text was actually truncated.
+function cleanSnippet(text, maxLen = 180) {
+  const s = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  if (s.length <= maxLen) return s.replace(/[.,;:\s]+$/, '');
+  const cut = s.slice(0, maxLen);
+  const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+  if (end > maxLen * 0.5) return cut.slice(0, end + 1).trim();
+  const sp = cut.lastIndexOf(' ');
+  return ((sp > 0 ? cut.slice(0, sp) : cut).replace(/[.,;:\s]+$/, '')) + '…';
+}
+
+const lowerFirst = (s) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+
+// Sector-aware risk lines so every name in a newsletter doesn't repeat the same
+// generic sentence.
+function fallbackRiskLine(ticker, isGlobal) {
+  const t = String(ticker || '').toUpperCase();
+  const NSE_RISKS = {
+    SCOM: 'M-Pesa regulation, mobile-data pricing and competitive pressure',
+    EABL: 'excise-duty changes, input-cost inflation and consumer demand',
+    NMG: 'advertising spend, print decline and digital-transition execution',
+    SGL: 'advertising spend and the pace of the print-to-digital shift',
+    BAMB: 'construction demand, energy costs and cement pricing',
+    PORT: 'construction demand, energy costs and cement pricing',
+    KPLC: 'fuel prices, tariff reviews and regulatory decisions',
+    KEGN: 'hydrology, power-purchase agreements and tariff reviews',
+    TOTL: 'fuel prices, demand and petroleum-sector regulation',
+    EQTY: 'credit growth, CBK policy and loan-loss trends',
+    KCB: 'credit growth, CBK policy and loan-loss trends',
+    COOP: 'credit growth, CBK policy and loan-loss trends',
+    ABSA: 'credit growth, CBK policy and loan-loss trends',
+    NCBA: 'credit growth, CBK policy and loan-loss trends',
+    SBIC: 'credit growth, CBK policy and loan-loss trends',
+    SCBK: 'credit growth, CBK policy and loan-loss trends',
+    DTK: 'credit growth, CBK policy and loan-loss trends',
+    HFCK: 'credit growth, CBK policy and loan-loss trends',
+    BAT: 'excise duty, illicit-trade volumes and consumer demand',
+    JUB: 'claims inflation and investment returns',
+    BRIT: 'claims inflation and investment returns',
+  };
+  if (!isGlobal && NSE_RISKS[t]) return NSE_RISKS[t];
+  return isGlobal
+    ? 'rate expectations, sector rotation and earnings revisions'
+    : 'Kenyan macro conditions, CBK policy and NSE liquidity';
+}
+
+// Near-term catalyst, varied by market/sector rather than one repeated line.
+function fallbackCatalystLine(ticker, isGlobal) {
+  const t = String(ticker || '').toUpperCase();
+  if (!isGlobal) {
+    if (['EQTY', 'KCB', 'COOP', 'ABSA', 'NCBA', 'SBIC', 'SCBK', 'DTK', 'HFCK', 'BKG', 'IMH'].includes(t)) return 'the next CBK rate decision and Q3 earnings';
+    if (t === 'SCOM') return 'M-Pesa monetisation updates and the next results';
+    if (t === 'EABL') return 'volume trends in the next trading update';
+    if (['BAMB', 'PORT'].includes(t)) return 'construction-demand data and the next results';
+    if (['NMG', 'SGL'].includes(t)) return 'digital-subscription growth in the next update';
+    return 'the next corporate announcement or NSE trading update';
+  }
+  return 'the next earnings report and US macro data';
+}
+
+function generateFallbackNarrative(ticker, sentiment, articles, market, priceData) {
   const name = getCompanyName(ticker) || ticker;
   const isGlobal = market === 'Global';
-  const headlines = articles.filter(a => a.headline).map(a => a.headline);
-  const primary = headlines[0] || '';
-  const secondary = headlines[1] || '';
-  const excerpt = articles[0]?.excerpt || '';
+  const heads = articles.filter(a => a.headline).map(a => a.headline);
+  const primary = heads[0] || '';
+  const secondary = heads[1] || '';
+  const detail = cleanSnippet(articles[0]?.excerpt || '', 170);
 
-  // Build a unique thesis
-  let thesis = pickFallbackThesis(name, sentiment);
+  const thesis = pickFallbackThesis(name, sentiment);
 
-  // Rotate opening patterns so different stocks sound different
-  const openings = sentiment === 'positive' ? [
-    `${name} (${ticker}) is waking up. "${primary}" is the catalyst, and the market is starting to price it in.`,
-    `A shift is underway in ${name} (${ticker}). The lead story — "${primary}" — signals a turning point that the headline alone doesn't capture.`,
-    `${name} (${ticker}) just served notice. "${primary}" has given the bulls a concrete reason to step in, and the follow-through is what matters now.`,
-    `Don't overlook ${name} (${ticker}). "${primary}" is a bigger deal than the market consensus suggests, and the risk-reward is tilting in favor of the bulls.`,
-  ] : sentiment === 'negative' ? [
-    `${name} (${ticker}) is under pressure. "${primary}" has rattled confidence, and the selling pressure reflects deeper concerns than the headline suggests.`,
-    `The story in ${name} (${ticker}) has shifted. "${primary}" has changed the narrative, and the market is repricing accordingly.`,
-    `${name} (${ticker}) is facing headwinds. "${primary}" raises real questions about the near-term outlook, and the bears are making their case.`,
-    `Sentiment has turned against ${name} (${ticker}). "${primary}" is driving the selloff, but the question is whether this is an overreaction or a correction to fair value.`,
-  ] : [
-    `${name} (${ticker}) is stuck in the middle. "${primary}" has the market divided, and until clarity emerges, this one stays range-bound.`,
-    `${name} (${ticker}) is at a crossroads. "${primary}" is the kind of event that could tip the balance — the outcome determines the next 20% move.`,
-    `Mixed signals in ${name} (${ticker}). "${primary}" has created uncertainty, and the market is waiting for more data before committing.`,
-  ];
+  const px = priceData && priceData.price != null ? priceData.price : null;
+  const pct = priceData && priceData.changePercent != null ? String(priceData.changePercent) : null;
+  const vol = priceData && priceData.volume ? Number(priceData.volume).toLocaleString() : null;
 
-  const opening = openings[_thesisIdx % openings.length];
-  _thesisIdx++;
+  // 1) What happened — plain, factual.
+  const opening = primary
+    ? `${name} (${ticker}) is in focus after "${cleanSnippet(primary, 120)}".`
+    : `${name} (${ticker}) is in focus today.`;
 
-  // Build the body with specific context
-  let body = '';
-  if (secondary) {
-    body += `Secondary coverage on "${secondary}" adds context to the thesis. `;
-  }
-  if (excerpt && excerpt.length > 50) {
-    // Extract a key detail from the excerpt
-    const detail = excerpt.slice(0, 150).replace(/\s+/g, ' ').trim();
-    body += `The details: ${detail}. `;
-  }
+  // 2) The concrete detail behind the headline.
+  const detailSentence = detail ? `The substance: ${detail}.` : '';
 
-  if (sentiment === 'positive') {
-    const bullishPhrases = [
-      `Momentum is building, and the risk-reward favors the long side here.`,
-      `The setup is constructive — watch for volume confirmation on any push above recent highs.`,
-      `The path of least resistance is higher, provided the broader market cooperates.`,
-    ];
-    body += bullishPhrases[_thesisIdx % bullishPhrases.length] + ' ';
-  } else if (sentiment === 'negative') {
-    const bearishPhrases = [
-      `Support levels are being tested, and a break below would open up more downside.`,
-      `The selling pressure suggests positioning ahead of something — watch for follow-through.`,
-      `The bearish case is gaining credibility, but oversold conditions could trigger a technical bounce.`,
-    ];
-    body += bearishPhrases[_thesisIdx % bearishPhrases.length] + ' ';
+  // 3) A second thread, if there is one.
+  const secondarySentence = secondary ? `A second thread worth noting: "${cleanSnippet(secondary, 110)}".` : '';
+
+  // 4) The market's read, using the live move and volume.
+  let marketRead;
+  if (px != null) {
+    const reaction = sentiment === 'positive'
+      ? 'the market has not fully priced the news in yet'
+      : sentiment === 'negative'
+      ? 'the market is still absorbing it'
+      : 'the market is waiting for confirmation';
+    marketRead = `The shares are at ${px}${pct ? ` (${pct} on the day)` : ''}${vol ? `, on volume of ${vol}` : ''}, so ${reaction}.`;
   } else {
-    const neutralPhrases = [
-      `The market is waiting for a catalyst — the next earnings report or macro data point could tip the balance.`,
-      `Positioning is balanced, and the next directional move will likely come from external catalysts rather than company-specific news.`,
-      `The consolidation pattern suggests a bigger move is building — direction depends on how the macro backdrop evolves.`,
-    ];
-    body += neutralPhrases[_thesisIdx % neutralPhrases.length] + ' ';
+    marketRead = sentiment === 'positive'
+      ? 'The news is constructive, but it only becomes convincing on follow-through volume.'
+      : sentiment === 'negative'
+      ? 'The news weighs on sentiment; the next session will show whether sellers follow through.'
+      : 'The market is waiting for a clearer signal before committing either way.';
   }
 
-  const riskLine = isGlobal
-    ? `Key risks: Fed policy shifts, sector rotation, and earnings season volatility.`
-    : `Key risks: Kenyan macro factors, CBK policy direction, and NSE liquidity conditions.`;
+  // 5) What to watch.
+  const outlook = sentiment === 'positive'
+    ? 'Watch for a close above recent highs on rising volume — that would confirm the bullish read.'
+    : sentiment === 'negative'
+    ? 'Watch whether the recent support holds; a decisive break below would open the next leg lower.'
+    : 'Watch the next company update or macro print — it should break the current range.';
 
-  const analysis = opening + ' ' + body + riskLine;
+  // 6) A specific, sector-aware risk.
+  const riskText = `Key risk: ${fallbackRiskLine(ticker, isGlobal)}.`;
+
+  const analysis = [opening, detailSentence, secondarySentence, marketRead, outlook, riskText].filter(Boolean).join(' ');
 
   return {
     thesis,
     analysis,
-    catalyst: isGlobal ? 'Earnings and macro data flow' : 'NSE trading volumes and corporate announcements',
-    risk: isGlobal ? 'Rate and sector rotation risk' : 'CBK policy and local macro risk',
+    catalyst: fallbackCatalystLine(ticker, isGlobal),
+    risk: fallbackRiskLine(ticker, isGlobal),
   };
 }
 
@@ -696,11 +743,11 @@ Write like a seasoned market commentator — not a bot. Set up why these stocks 
   } catch {
     // Fallback: contextual intro based on market conditions
     if (sentiment === 'Bullish') {
-      return `Markets are in risk-on mode today, and a handful of names are standing out from the noise. ${tickerList} — each carrying a distinct catalyst worth parsing before the next session opens.`;
+      return `Risk appetite is improving today, so we're looking past the headline indices to the names actually moving: ${tickerList}. Below is what's driving each one.`;
     } else if (sentiment === 'Bearish') {
-      return `Sellers have the upper hand today, but dislocation creates opportunity. ${tickerList} — each facing crosswinds, each worth watching for where the next buyers step in.`;
+      return `Sellers are in control today. ${tickerList} are each under pressure — below is what is behind the move and what to watch next.`;
     } else {
-      return `Markets are caught between competing narratives today. ${tickerList} — a mixed basket that tells you more about the current regime than any index reading.`;
+      return `Markets are giving mixed signals today, so it helps to get specific. Today's focus: ${tickerList} — each with its own story worth understanding.`;
     }
   }
 }
@@ -719,7 +766,7 @@ async function generateEditorsNote(stocks, marketOverview) {
     const text = await llm.generate(prompt, { maxTokens: 80, temperature: 0.8 });
     return text.trim().replace(/^["']|["']$/g, '');
   } catch {
-    return `A quick note before we begin: with sentiment ${moodDesc}, today's briefing keeps the lens tight on ${tickers}.`;
+    return `Before we dive in: ${moodDesc}, so today we're focusing on ${tickers} — the names with the clearest story to tell.`;
   }
 }
 
