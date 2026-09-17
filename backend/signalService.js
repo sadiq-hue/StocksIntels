@@ -126,6 +126,14 @@ const schemaReadyPromise = (async () => {
               AND NOT o.resolved
           )`
     ).catch((e) => console.warn('[SignalService] un-supersede cleanup skipped:', e.message));
+    // Data repair: a regression (commit 8aa278f) made the buy stop-out branch set
+    // result='win' unconditionally, so live outcomes closed at a stop BELOW entry
+    // were mislabelled a win. A stop-out below entry is a loss — correct any such
+    // rows (idempotent; affects 0 rows once repaired).
+    await pool.query(
+      `UPDATE signal_outcomes SET result = 'loss'
+        WHERE source = 'live' AND result = 'win' AND close_reason = 'stop loss' AND exit_price < entry_price`
+    ).catch((e) => console.warn('[SignalService] stop-out outcome repair skipped:', e.message));
     await nseHistory.ensureTable().catch(() => {});
   } catch {}
 })();

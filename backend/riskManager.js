@@ -378,7 +378,7 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
           // milestone lock): hitting it books a win, not a loss. A stop below
           // entry is a real stop-out.
           const lockedProfit = previous.stopLoss >= entry;
-          previous.result = 'win';
+          previous.result = lockedProfit ? 'win' : 'loss';
           previous.closeReason = 'stop loss';
           // A position that already booked its target1 milestone win is being
           // upgraded to the locked-stop exit, not counted a second time. (Its
