@@ -5801,6 +5801,7 @@ app.get('/api/user/sentiment-preference', async (req, res) => {
 });
 
 app.post('/api/user/send-test-portfolio', requireOwnership, async (req, res) => {
+  if (!REAL_PORTFOLIO_REPORT_ENABLED) return res.status(503).json({ success: false, message: 'Real portfolio report is temporarily disabled' });
   try {
     let { userId, email } = req.body;
     let fullName = 'Trader';
@@ -12360,7 +12361,13 @@ async function initDatabase() {
 }
 
 // ── Daily Portfolio Report Scheduler ──
+// Real-portfolio (broker) report emails are PAUSED for now while the report is
+// reworked (the placeholder "ACCOUNT" row, empty sector/worst-performer sections,
+// etc.). Set REAL_PORTFOLIO_REPORT_ENABLED=true in the env to re-enable. The
+// paper-trading report is unaffected.
+const REAL_PORTFOLIO_REPORT_ENABLED = process.env.REAL_PORTFOLIO_REPORT_ENABLED === 'true';
 async function sendDailyPortfolioReports() {
+  if (!REAL_PORTFOLIO_REPORT_ENABLED) { console.log('[DAILY REPORT] Real portfolio report is DISABLED for now'); return; }
   try {
     const { rows: users } = await pool.query(
       `SELECT DISTINCT u.id, u.full_name, u.email FROM users u
@@ -12603,6 +12610,7 @@ async function sendDailyPaperTradingReports() {
 
 // ── Send single portfolio report to a specific user ──
 async function sendPortfolioReportToUser(userId, email, fullName) {
+  if (!REAL_PORTFOLIO_REPORT_ENABLED) { console.log('[SINGLE REPORT] Real portfolio report is DISABLED for now'); return false; }
   try {
     const { rows: brokers } = await pool.query(
       `SELECT bc.id,
@@ -13721,11 +13729,15 @@ server.listen(port, '0.0.0.0', async () => {
     }
 
     // Schedule daily portfolio report (real holdings) at midnight EAT (00:00 EAT)
-    cron.schedule('0 0 * * 1-5', () => {
-      console.log('[CRON] Running daily real portfolio report...');
-      sendDailyPortfolioReports();
-    });
-    console.log('[CRON] Daily real portfolio report scheduled Mon-Fri at midnight EAT (00:00 EAT)');
+    if (REAL_PORTFOLIO_REPORT_ENABLED) {
+      cron.schedule('0 0 * * 1-5', () => {
+        console.log('[CRON] Running daily real portfolio report...');
+        sendDailyPortfolioReports();
+      });
+      console.log('[CRON] Daily real portfolio report scheduled Mon-Fri at midnight EAT (00:00 EAT)');
+    } else {
+      console.log('[CRON] Real portfolio report is DISABLED for now');
+    }
 
     // Schedule daily paper trading portfolio report at midnight EAT (00:00 EAT)
     cron.schedule('0 0 * * 1-5', () => {
