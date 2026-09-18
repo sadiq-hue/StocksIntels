@@ -1138,7 +1138,7 @@ async function sendWeeklyDigestEmail(email, data) {
     newsHeadlines, totalSignals,
     nseSummary, storyOfWeek, milestone,
     globalTheme, macroBackdrop, whatToWatch,
-    nseGlobalConnection,
+    nseGlobalConnection, breadth, indices,
   } = data;
 
   const subject = `Your Weekly Market Digest — ${dateStr}`;
@@ -1161,13 +1161,39 @@ async function sendWeeklyDigestEmail(email, data) {
     </div>` : ''}
 
     ${section('NSE — What Happened Last Week', mdToHtml(nseSummary || ''))}
+
+    ${breadth ? `
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:16px">
+      <tr>
+        <td style="width:50%;padding:0 6px 0 0;vertical-align:top"><div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:11px;color:${TEXT_LIGHT};text-transform:uppercase;letter-spacing:.4px">NSE breadth (week)</div>
+          <div style="font-size:18px;font-weight:800;color:${TEXT_DARK};margin-top:4px"><span style="color:${GREEN}">${breadth.nseUp}</span> up · <span style="color:${RED}">${breadth.nseDown}</span> down</div>
+        </div></td>
+        <td style="width:50%;padding:0 0 0 6px;vertical-align:top"><div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;padding:14px;text-align:center">
+          <div style="font-size:11px;color:${TEXT_LIGHT};text-transform:uppercase;letter-spacing:.4px">Global breadth (week)</div>
+          <div style="font-size:18px;font-weight:800;color:${TEXT_DARK};margin-top:4px"><span style="color:${GREEN}">${breadth.globalUp}</span> up · <span style="color:${RED}">${breadth.globalDown}</span> down</div>
+        </div></td>
+      </tr>
+    </table>` : ''}
+
+    ${(indices && indices.length) ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">
+      <div style="background:${BRAND_COLOR};color:#ffffff;padding:10px 14px;font-size:13px;font-weight:600">Market Snapshot</div>
+      <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:12px">
+        ${indices.map(i => {
+          const up = parseFloat(String(i.change || '0').replace(/[^0-9.\-]/g, '')) >= 0;
+          return `<tr><td style="padding:8px 12px;border-bottom:1px solid ${BORDER};color:${TEXT_DARK};font-weight:600">${i.label || ''}</td><td style="padding:8px 12px;border-bottom:1px solid ${BORDER};text-align:right;color:${TEXT_DARK}">${i.value || '--'}</td><td style="padding:8px 12px;border-bottom:1px solid ${BORDER};text-align:right;font-weight:700;color:${up ? GREEN : RED}">${i.change || '--'}</td></tr>`;
+        }).join('')}
+      </table>
+    </div>` : ''}
+
     ${section('Story of the Week', mdToHtml(storyOfWeek || ''))}
     ${section('Milestone to Note', mdToHtml(milestone || ''))}
 
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:16px">
       <tr>
-        <td style="width:50%;padding:0 6px 0 0;vertical-align:top">${gainerTable('NSE Top Gainers', nseGainers)}</td>
-        <td style="width:50%;padding:0 0 0 6px;vertical-align:top">${loserTable('NSE Top Losers', nseLosers)}</td>
+        <td style="width:50%;padding:0 6px 0 0;vertical-align:top">${gainerTable('NSE Top Gainers (weekly)', nseGainers)}</td>
+        <td style="width:50%;padding:0 0 0 6px;vertical-align:top">${loserTable('NSE Top Losers (weekly)', nseLosers)}</td>
       </tr>
     </table>
 
@@ -1177,8 +1203,8 @@ async function sendWeeklyDigestEmail(email, data) {
 
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:16px">
       <tr>
-        <td style="width:50%;padding:0 6px 0 0;vertical-align:top">${gainerTable('Global Top Gainers', globalGainers)}</td>
-        <td style="width:50%;padding:0 0 0 6px;vertical-align:top">${loserTable('Global Top Losers', globalLosers)}</td>
+        <td style="width:50%;padding:0 6px 0 0;vertical-align:top">${gainerTable('Global Top Gainers (weekly)', globalGainers)}</td>
+        <td style="width:50%;padding:0 0 0 6px;vertical-align:top">${loserTable('Global Top Losers (weekly)', globalLosers)}</td>
       </tr>
     </table>
 

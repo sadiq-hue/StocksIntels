@@ -29,6 +29,11 @@ async function generateWeeklyDigestContent() {
     fxService.getRate('USDKES').catch(() => null),
   ]);
 
+  // Weekly gainers/losers (period '1w') — the digest is a WEEKLY recap, so the
+  // movers must reflect the week's change, not the latest session.
+  let weeklyMovers = { gainers: [], losers: [] };
+  try { weeklyMovers = await periodReturnsService.getPeriodMovers('1w'); } catch { /* fall back below */ }
+
   const signalArr = mergeMonitoredSignals(Array.isArray(signals) ? signals : []);
 
   // Fill company names from canonical sources (stockData curated maps, then the
@@ -69,11 +74,31 @@ async function generateWeeklyDigestContent() {
   const nasi = nseIndices.find(i => i.symbol?.includes('NSEASI'));
   const sp500 = globalIdx.find(i => i.symbol?.includes('GSPC'));
 
-  // Prefer movers derived from the signal universe (guaranteed non-empty when
-  // signals carry change data); fall back to the /api/market/movers snapshot.
-  const nseGainers = derivedMovers.nseGainers.length ? derivedMovers.nseGainers : (movers?.nse?.gainers?.slice(0, 3) || []);
-  const nseLosers = derivedMovers.nseLosers.length ? derivedMovers.nseLosers : (movers?.nse?.losers?.slice(0, 3) || []);
-  const globalGainers = derivedMovers.globalGainers.length ? derivedMovers.globalGainers : (movers?.global?.gainers?.slice(0, 3) || []);
+  // Weekly movers (period '1w'). Fall back to the signal-universe daily movers
+  // only if the weekly computation returned nothing.
+  const NSE_SET = new Set(NSE_SYMBOLS);
+  const fmtPct = (n) => `${Number(n) >= 0 ? '+' : ''}${Number(n).toFixed(2)}%`;
+  const asEmailRow = (r) => ({
+    ticker: r.ticker || r.symbol,
+    symbol: r.ticker || r.symbol,
+    name: r.name || r.ticker || r.symbol,
+    change: fmtPct(r.changePercent || 0),
+    changePercent: Number(r.changePercent) || 0,
+  });
+  const isNseRow = (r) => NSE_SET.has(r.ticker) || r.market === 'NSE';
+  const wk = weeklyMovers && Array.isArray(weeklyMovers.gainers) ? weeklyMovers : { gainers: [], losers: [] };
+  const nseGainers = wk.gainers.filter(isNseRow).map(asEmailRow).slice(0, 10);
+  const nseLosers = wk.losers.filter(isNseRow).map(asEmailRow).slice(0, 10);
+  const globalGainers = wk.gainers.filter(r => !isNseRow(r)).map(asEmailRow).slice(0, 10);
+  const globalLosers = wk.losers.filter(r => !isNseRow(r)).map(asEmailRow).slice(0, 10);
+  const breadth = {
+    nseUp: wk.gainers.filter(isNseRow).length, nseDown: wk.losers.filter(isNseRow).length,
+    globalUp: wk.gainers.filter(r => !isNseRow(r)).length, globalDown: wk.losers.filter(r => !isNseRow(r)).length,
+  };
+  if (nseGainers.length === 0) nseGainers.push(...(derivedMovers.nseGainers.length ? derivedMovers.nseGainers : (movers?.nse?.gainers || [])).slice(0, 10));
+  if (nseLosers.length === 0) nseLosers.push(...(derivedMovers.nseLosers.length ? derivedMovers.nseLosers : (movers?.nse?.losers || [])).slice(0, 10));
+  if (globalGainers.length === 0) globalGainers.push(...(derivedMovers.globalGainers.length ? derivedMovers.globalGainers : (movers?.global?.gainers || [])).slice(0, 10));
+  if (globalLosers.length === 0) globalLosers.push(...((derivedMovers.globalLosers && derivedMovers.globalLosers.length) ? derivedMovers.globalLosers : (movers?.global?.losers || [])).slice(0, 10));
   const active = movers?.active?.slice(0, 3) || [];
 
   const nseSentiment = (nse20?.isPositive ? 'positive' : nse20?.changeRaw < -0.5 ? 'negative' : 'mixed');
@@ -109,10 +134,16 @@ async function generateWeeklyDigestContent() {
     source: a.source || a.sourceName || '',
   }));
 
+  const indexRows = [nse20, nasi, sp500,
+    globalIdx.find(i => i.symbol?.includes('IXIC')),
+    globalIdx.find(i => i.symbol?.includes('DJI')),
+  ].filter(Boolean).map(i => ({ label: i.label || i.name || i.symbol, value: i.value, change: i.change }));
+
   return {
     nseSummary, storyOfWeek, milestone, globalTheme, macroBackdrop, whatToWatch, nseGlobalConnection,
     totalSignals,
-    nseGainers, nseLosers, globalGainers, globalLosers: derivedMovers.globalLosers,
+    nseGainers, nseLosers, globalGainers, globalLosers,
+    breadth, indices: indexRows,
     hotNews: newsForEmail,
   };
 }

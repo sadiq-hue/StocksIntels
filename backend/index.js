@@ -12969,6 +12969,8 @@ async function sendWeeklyDigestToUser(userId, email, fullName) {
         macroBackdrop: editorial.macroBackdrop || '',
         whatToWatch: editorial.whatToWatch || '',
         nseGlobalConnection: editorial.nseGlobalConnection || '',
+        breadth: editorial.breadth,
+        indices: editorial.indices,
       }),
       30000, 'digest email send'
     );
@@ -13943,12 +13945,12 @@ server.listen(port, '0.0.0.0', async () => {
     });
     console.log('[EMAIL SEQ CRON] Onboarding email processing scheduled every 6 hours');
 
-    // Schedule weekly market digest every Friday at 10 PM EAT (19:00 UTC)
-    cron.schedule('0 19 * * 5', () => {
+    // Schedule weekly market digest every Saturday at 8 AM EAT (05:00 UTC)
+    cron.schedule('0 5 * * 6', () => {
       console.log('[DIGEST CRON] Running weekly market digest...');
       sendWeeklyDigestReports();
     });
-    console.log('[DIGEST CRON] Weekly market digest scheduled for Friday at 10 PM EAT');
+    console.log('[DIGEST CRON] Weekly market digest scheduled for Saturday at 8 AM EAT (05:00 UTC)');
 
     // Schedule monthly top movers on 1st of month at 8 AM EAT (05:00 UTC)
     cron.schedule('0 5 1 * *', () => {
