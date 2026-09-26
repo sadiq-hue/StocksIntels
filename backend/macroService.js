@@ -116,7 +116,11 @@ function getMacroData(country) {
 
 // ─── Cache ─────────────────────────────────────────────────────────────────
 const cache = new Map();
-const CACHE_TTL = 6 * 60 * 60 * 1000;
+// 1 hour: macro data moves monthly/quarterly, but a short TTL keeps the store
+// at most ~1h behind a release so the next market-hours signal regeneration
+// picks it up within the same session. Sources are keyless and cheap (CBK 2
+// requests, World Bank ~4 per refresh), so the extra polling is negligible.
+const CACHE_TTL = 60 * 60 * 1000;
 
 function cacheGet(key) {
   const hit = cache.get(key);
@@ -132,10 +136,11 @@ function cacheSet(key, data, ttl = CACHE_TTL) {
 
 // ─── Live macro overlay ────────────────────────────────────────────────────
 // Official data pulled from the World Bank (no API key); IMF supplies a GDP
-// cross-check when the World Bank has no fresh value. Refreshed on boot and
-// every 6h. Fields that have no free live source (PMI, sovereign credit
-// rating, political risk) keep the curated COUNTRY_MACRO value and are listed
-// in `meta.referenceFields` so the UI can label them as reference estimates.
+// cross-check when the World Bank has no fresh value; CBK supplies Kenya's
+// monthly CPI and policy rate. Refreshed on boot and every hour. Fields that
+// have no free live source (PMI, sovereign credit rating, political risk) keep
+// the curated COUNTRY_MACRO value and are listed in `meta.referenceFields` so
+// the UI can label them as reference estimates.
 const worldBankCountry = { US: 'US', KE: 'KE', EU: 'XC', JP: 'JP', UK: 'GB' };
 const imfCountry = { US: 'USA', KE: 'KEN', EU: 'EU', JP: 'JPN', UK: 'GBR' };
 
