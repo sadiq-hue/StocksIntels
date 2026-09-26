@@ -3,6 +3,7 @@
 
 const { generic } = require('./apiClient');
 const { NSE_SYMBOLS } = require('./stockData');
+const cheerio = require('cheerio');
 
 // ─── Static Reference Data (used when APIs are unavailable) ────────────────
 const COUNTRY_MACRO = {
@@ -200,6 +201,82 @@ async function fetchIMFGrowth(countryCode) {
     }
   } catch { /* silent */ }
   return null;
+}
+
+// ─── Central Bank of Kenya (live KE macro) ─────────────────────────────────
+// CBK publishes monthly CPI inflation and the policy Central Bank Rate, which
+// are far more current than the World Bank annual series. Both pages are plain
+// HTML tables; parsed with cheerio and cached for CACHE_TTL.
+const CBK_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const CBK_HOME_URL = 'https://www.centralbank.go.ke/';
+const CBK_INFLATION_URL = 'https://www.centralbank.go.ke/inflation-rates/';
+
+async function fetchCBKInflation() {
+  const key = 'cbk_inflation';
+  const cached = cacheGet(key);
+  if (cached !== null) return cached;
+  try {
+    const { data: html } = await generic.get(CBK_INFLATION_URL, {
+      timeout: 20000,
+      headers: { 'User-Agent': CBK_UA },
+    });
+    const $ = cheerio.load(html);
+    let out = null;
+    $('table').each((i, t) => {
+      if (out) return;
+      const header = $(t).find('tr').first().find('td,th')
+        .map((k, c) => $(c).text().replace(/\s+/g, ' ').trim()).get().join(' ');
+      if (!/12-Month Inflation/i.test(header)) return;
+      // Scan for the first genuine data row (a 4-digit year with a numeric
+      // 12-month figure) — the CBK table repeats its header across responsive
+      // variants, so index-based row picks are unreliable.
+      $(t).find('tr').each((j, r) => {
+        if (out) return;
+        const cells = $(r).find('td,th')
+          .map((k, c) => $(c).text().replace(/\s+/g, ' ').trim()).get();
+        if (cells.length < 4 || !/^\d{4}$/.test(cells[0])) return;
+        const twelve = parseFloat(cells[3]);
+        if (!isFinite(twelve) || twelve < -20 || twelve > 100) return;
+        out = {
+          twelveMonth: twelve,
+          annualAverage: parseFloat(cells[2]) || null,
+          year: cells[0],
+          month: cells[1],
+          period: `${cells[1]} ${cells[0]}`,
+        };
+      });
+    });
+    if (!out) return null;
+    return cacheSet(key, out, CACHE_TTL);
+  } catch { return null; }
+}
+
+async function fetchCBKKeyRates() {
+  const key = 'cbk_key_rates';
+  const cached = cacheGet(key);
+  if (cached !== null) return cached;
+  try {
+    const { data: html } = await generic.get(CBK_HOME_URL, {
+      timeout: 20000,
+      headers: { 'User-Agent': CBK_UA },
+    });
+    const $ = cheerio.load(html);
+    const rates = {};
+    $('table').each((i, t) => {
+      const text = $(t).text();
+      if (!/Central Bank Rate/.test(text) || !/Lending Rate/.test(text)) return;
+      $(t).find('tr').each((j, r) => {
+        const cells = $(r).find('td').map((k, c) => $(c).text().replace(/\s+/g, ' ').trim()).get();
+        if (cells.length < 2) return;
+        const label = cells[0];
+        const val = String(cells[1]).match(/(-?\d+(?:\.\d+)?)\s*%?/);
+        if (!label || !val) return;
+        rates[label] = { value: parseFloat(val[1]), period: cells[2] || null };
+      });
+    });
+    if (Object.keys(rates).length === 0) return null;
+    return cacheSet(key, rates, CACHE_TTL);
+  } catch { return null; }
 }
 
 // ─── Scoring Functions ─────────────────────────────────────────────────────
@@ -440,6 +517,35 @@ async function refreshCountryData(country) {
       meta.asOf.gdpGrowth = imf.year;
       liveConds.add('gdpGrowth');
       if (!meta.sources.includes('IMF')) meta.sources.push('IMF');
+      meta.live = true;
+    }
+  }
+
+  // Kenya: the central bank publishes monthly CPI inflation and the policy CBK
+  // Rate, both far more current than the annual World Bank series. Prefer them.
+  if (country === 'KE') {
+    const [cbkInfl, cbkRates] = await Promise.all([fetchCBKInflation(), fetchCBKKeyRates()]);
+    const addCbkSource = (label) => { if (!meta.sources.includes(label)) meta.sources.push(label); };
+
+    const infl = cbkInfl && isFinite(cbkInfl.twelveMonth)
+      ? { value: cbkInfl.twelveMonth, period: cbkInfl.period }
+      : cbkRates && cbkRates['Inflation Rate']
+        ? { value: cbkRates['Inflation Rate'].value, period: cbkRates['Inflation Rate'].period }
+        : null;
+    if (infl && isFinite(infl.value)) {
+      data.inflation = round(infl.value, 2);
+      meta.asOf.inflation = infl.period || 'latest';
+      liveConds.add('inflation');
+      addCbkSource('CBK (KNBS CPI)');
+      meta.live = true;
+    }
+
+    const cbr = cbkRates && cbkRates['Central Bank Rate'];
+    if (cbr && isFinite(cbr.value)) {
+      data.interestRate = round(cbr.value, 2);
+      meta.asOf.interestRate = cbr.period || 'latest';
+      liveConds.add('interestRateDifferential');
+      addCbkSource('CBK');
       meta.live = true;
     }
   }

@@ -185,9 +185,12 @@ const MACRO_PLAIN: Record<string, string> = {
 function macroAsOfLabel(meta?: { live: boolean; sources: string[]; asOf: Record<string, string> }): string {
   if (!meta) return '';
   if (!meta.live) return 'Reference estimates';
-  const years = Object.values(meta.asOf || {}).filter(Boolean);
-  const range = years.length ? [...new Set(years)].sort() : [];
-  const span = range.length ? ` · ${range[0]}${range.length > 1 ? `–${range[range.length - 1]}` : ''}` : '';
+  const years = [...new Set(
+    Object.values(meta.asOf || {})
+      .map((v) => String(v).match(/\d{4}/)?.[0])
+      .filter(Boolean)
+  )].sort();
+  const span = years.length ? ` · ${years[0]}${years.length > 1 ? `–${years[years.length - 1]}` : ''}` : '';
   return `Live · ${(meta.sources || []).join(', ') || 'World Bank'}${span}`;
 }
 
