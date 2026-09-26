@@ -833,14 +833,21 @@ export function SignalsPage() {
                         <span className={`font-semibold ${selected.analysis.macro.meta?.live ? 'text-emerald-600' : 'text-amber-600'}`}>
                           {macroAsOfLabel(selected.analysis.macro.meta)}
                         </span>
-                        {selected.analysis.macro.meta?.live ? ' — figures refresh from official sources' : ' — no free live feed for this country'}
+                        {selected.analysis.macro.meta?.live
+                          ? ' — figures refresh from official sources'
+                          : selected.analysis.macro.meta
+                          ? ' — some figures are reference estimates'
+                          : ' — snapshot taken when this position opened'}
                       </p>
                       <div className="grid grid-cols-2 gap-2">
                         {Object.entries(selected.analysis.macro.conditions).map(([key, cond]) => {
                           const sig = (cond as any).signal || 'NEUTRAL';
                           const style = sig === 'BUY' ? 'bg-emerald-50 border-emerald-200' :
                             sig === 'SELL' ? 'bg-red-50 border-red-200' : 'bg-muted border-border';
-                          const ref = isReferenceField(selected.analysis!.macro!.meta, key);
+                          // Without `meta` we cannot prove a field is live, so default
+                          // to REF rather than mislabelling everything as LIVE.
+                          const meta = selected.analysis!.macro!.meta;
+                          const ref = !meta || !meta.live || isReferenceField(meta, key);
                           return (
                             <div key={key} className={`rounded-lg p-2.5 border ${style}`}>
                               <div className="flex items-center justify-between mb-1 gap-1">
@@ -851,7 +858,7 @@ export function SignalsPage() {
                                   {ref ? (
                                     <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-amber-100 text-amber-700" title="Reference estimate — no free live source">REF</span>
                                   ) : (
-                                    <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700" title={`Live — ${selected.analysis!.macro!.meta?.sources?.join(', ') || 'official data'}${selected.analysis!.macro!.meta?.asOf?.[key] ? ` (${selected.analysis!.macro!.meta!.asOf[key]})` : ''}`}>LIVE</span>
+                                    <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700" title={`Live — ${meta?.sources?.join(', ') || 'official data'}${meta?.asOf?.[key] ? ` (${meta.asOf[key]})` : ''}`}>LIVE</span>
                                   )}
                                   <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
                                     sig === 'BUY' ? 'bg-emerald-100 text-emerald-700' :

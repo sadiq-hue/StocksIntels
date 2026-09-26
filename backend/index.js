@@ -4098,6 +4098,16 @@ app.get('/api/signals', async (req, res) => {
       base.target2 = m.target2;
       base.target3 = m.target3;
       base.riskReward = stopDist > 0 ? Math.round(((m.target1 - m.entryPrice) / stopDist) * 10) / 10 : null;
+      // A monitored card carries the analysis snapshot frozen when the position
+      // was opened, so its macro block can be months stale (and predate the live
+      // macro overlay, leaving no `meta`). Refresh just the country macro from
+      // the live store so the card shows current conditions and provenance.
+      if (base.analysis) {
+        try {
+          const { getMacroScore, getCountryForSymbol } = require('./macroService');
+          base.analysis = { ...base.analysis, macro: getMacroScore(getCountryForSymbol(m.ticker)) };
+        } catch { /* keep the stored macro if the refresh fails */ }
+      }
       if (!existing) merged.push(base);
     }
     res.json({ success: true, signals: merged });

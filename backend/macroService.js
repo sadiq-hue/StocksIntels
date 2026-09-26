@@ -284,6 +284,56 @@ async function fetchCBKKeyRates() {
   } catch { return null; }
 }
 
+// ─── United States: BLS CPI (monthly inflation) + NY Fed EFFR (policy rate) ─
+// The US equivalent of the CBK source: the BLS monthly CPI gives the current
+// 12-month inflation rate, and the New York Fed publishes the effective federal
+// funds rate (EFFR) with its target range. Both are keyless.
+const BLS_CPI_URL = 'https://api.bls.gov/publicAPI/v1/timeseries/data/';
+const EFFR_URL = 'https://markets.newyorkfed.org/api/rates/unsecured/effr/last/1.json';
+const BLS_MONTHS = { M01: 'Jan', M02: 'Feb', M03: 'Mar', M04: 'Apr', M05: 'May', M06: 'Jun', M07: 'Jul', M08: 'Aug', M09: 'Sep', M10: 'Oct', M11: 'Nov', M12: 'Dec' };
+
+async function fetchUSInflationBLS() {
+  const key = 'us_bls_cpi';
+  const cached = cacheGet(key);
+  if (cached !== null) return cached;
+  try {
+    const year = new Date().getFullYear();
+    const { data } = await generic.post(BLS_CPI_URL, {
+      seriesid: ['CUUR0000SA0'], // CPI-U, all items, NSA
+      startyear: String(year - 2),
+      endyear: String(year),
+    }, { timeout: 20000, headers: { 'Content-Type': 'application/json' } });
+    const series = data?.Results?.series?.[0]?.data;
+    if (!Array.isArray(series) || !series.length) return null;
+    const byYM = {};
+    for (const d of series) byYM[`${d.year}-${d.period}`] = parseFloat(d.value);
+    const latest = series[0]; // BLS returns newest first
+    const cur = byYM[`${latest.year}-${latest.period}`];
+    const prev = byYM[`${Number(latest.year) - 1}-${latest.period}`];
+    if (!isFinite(cur) || !isFinite(prev) || prev <= 0) return null;
+    const month = BLS_MONTHS[latest.period] || latest.period;
+    return cacheSet(key, { inflation: (cur / prev - 1) * 100, period: `${month} ${latest.year}` }, CACHE_TTL);
+  } catch { return null; }
+}
+
+async function fetchUSPolicyRateFed() {
+  const key = 'us_effr';
+  const cached = cacheGet(key);
+  if (cached !== null) return cached;
+  try {
+    const { data } = await generic.get(EFFR_URL, { timeout: 20000 });
+    const r = data?.refRates?.[0];
+    const rate = Number(r?.percentRate);
+    if (!r || !isFinite(rate)) return null;
+    return cacheSet(key, {
+      rate,
+      targetFrom: r.targetRateFrom != null ? Number(r.targetRateFrom) : null,
+      targetTo: r.targetRateTo != null ? Number(r.targetRateTo) : null,
+      period: r.effectiveDate ? `as of ${r.effectiveDate}` : 'latest',
+    }, CACHE_TTL);
+  } catch { return null; }
+}
+
 // ─── Scoring Functions ─────────────────────────────────────────────────────
 // Each returns { score: 0-100, signal: 'BUY'|'SELL'|'NEUTRAL', detail: string }
 
@@ -419,7 +469,13 @@ function getGrade(score) {
 function getMacroScore(country) {
   const { data, meta } = getMacroBundle(country);
 
-  const rateDiff = scoreInterestRateDifferential(data);
+  // Reference rate for the "vs Fed" differential is the live US policy rate
+  // when available (NY Fed EFFR), else the curated Fed rate. For the US itself
+  // this makes the differential ~0 ("aligned"), and for other countries it
+  // compares against the real current Fed rate instead of a frozen 4.50.
+  const usRate = getMacroBundle('US').data.interestRate;
+  const referenceRate = (isFinite(usRate) && usRate > 0) ? usRate : 4.50;
+  const rateDiff = scoreInterestRateDifferential(data, referenceRate);
   const gdp = scoreGDPGrowth(data);
   const inflation = scoreInflation(data);
   const currentAcc = scoreCurrentAccount(data);
@@ -551,6 +607,27 @@ async function refreshCountryData(country) {
       meta.asOf.interestRate = cbr.period || 'latest';
       liveConds.add('interestRateDifferential');
       addCbkSource('CBK');
+      meta.live = true;
+    }
+  }
+
+  // United States: BLS monthly CPI for inflation and the NY Fed EFFR for the
+  // policy rate, replacing the annual World Bank series and the curated rate.
+  if (country === 'US') {
+    const addUsSource = (label) => { if (!meta.sources.includes(label)) meta.sources.push(label); };
+    const [bls, effr] = await Promise.all([fetchUSInflationBLS(), fetchUSPolicyRateFed()]);
+    if (bls && isFinite(bls.inflation)) {
+      data.inflation = round(bls.inflation, 2);
+      meta.asOf.inflation = bls.period;
+      liveConds.add('inflation');
+      addUsSource('BLS (CPI)');
+      meta.live = true;
+    }
+    if (effr && isFinite(effr.rate)) {
+      data.interestRate = round(effr.rate, 2);
+      meta.asOf.interestRate = effr.period;
+      liveConds.add('interestRateDifferential');
+      addUsSource('NY Fed (EFFR)');
       meta.live = true;
     }
   }
