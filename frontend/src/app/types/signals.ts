@@ -48,6 +48,36 @@ export interface InsiderActivity {
   shortFloatPct?: number | null;
 }
 
+export interface SignalNewsItem {
+  headline: string;
+  source: string;
+  url: string;
+  sentiment: "positive" | "negative" | "neutral" | string;
+  sentimentScore?: number | null;
+  publishedAt: string;
+  timestamp?: string;
+  category?: string;
+  hot?: boolean;
+  catalystDirection?: string | null;
+  catalystStrength?: number | null;
+}
+
+export interface SignalNewsSummary {
+  count: number;
+  positive: number;
+  negative: number;
+  neutral: number;
+  net: "positive" | "negative" | "neutral" | string;
+}
+
+export interface MacroMeta {
+  live: boolean;
+  sources: string[];
+  asOf: Record<string, string>;
+  referenceFields: string[];
+  fetchedAt: number | null;
+}
+
 export interface Signal {
   id: string;
   ticker: string;
@@ -91,6 +121,8 @@ export interface Signal {
   catalyst?: Catalyst | null;
   speculative?: SpeculativeFlag | null;
   insider?: InsiderActivity | null;
+  news?: SignalNewsItem[];
+  newsSummary?: SignalNewsSummary | null;
   analysis?: {
     fundamental: { score: number; grade: string; metrics: Record<string, string> };
     technical: { score: number; grade: string; indicators: Record<string, string> };
@@ -102,6 +134,7 @@ export interface Signal {
       signal: string;
       country: string;
       summary: string;
+      meta?: MacroMeta;
       conditions: Record<string, { score: number; signal: string; detail: string }>;
     };
     overall: { score: number; grade: string };

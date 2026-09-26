@@ -7,8 +7,8 @@ const { pool } = require('./db');
 const { getStockQuote, getQuotesBatch } = require('./marketService');
 const { fetchHistoricalQuotes } = require('./globalScraper');
 const nseHistory = require('./nseHistoryService');
-const { getMacroScore, getCountryForSymbol, generateMacroReason } = require('./macroService');
-const { getAggregatedSentiment, getCatalysts, getInsiderNewsSignals, initNewsHistory } = require('./newsService');
+const { getMacroScore, getCountryForSymbol, generateMacroReason, startMacroRefresh } = require('./macroService');
+const { getAggregatedSentiment, getCatalysts, getInsiderNewsSignals, initNewsHistory, getAllNews } = require('./newsService');
 const { getKeyMetrics, getQuote, getCompanyProfile } = require('./financialReportsService');
 const { calculateSMA } = require('./technicalIndicators');
 const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL_SYMBOLS, SECTOR_AVG_PE, INDUSTRY_MEDIAN_EV_EBITDA, TBILI_RATE, KNOWN_FUNDAMENTALS, NSE_FUNDAMENTALS } = require('./stockData');
@@ -3548,11 +3548,46 @@ setInterval(() => {
   generateSignals(null, false).catch(() => {});
 }, 60 * 60 * 1000);
 
+// Live macro data (World Bank/IMF): warm on boot and refresh every 6h so the
+// Macro Conditions cards reflect current official figures, not frozen values.
+startMacroRefresh();
+
 // Historical backtest is now an explicit operator tool only (admin
 // "Run Historical Backtest"). It is NOT auto-scheduled: the Backtest tab
 // audits real live outcomes (source='live') and simulated 'backtest' rows are
 // no longer read by any stat, so seeding them every 6h just fattened the table
 // and the boot-time cleanup had to chase them. A manual run still works.
+
+// Group the aggregated news feed by the ticker(s) each article relates to, so
+// every signal can carry its own recent-news list. Returns a map of
+// UPPERCASE ticker -> articles (newest first, capped).
+function groupNewsBySymbol(articles, perSymbol = 6) {
+  const bySymbol = {};
+  for (const a of articles || []) {
+    if (!a || a.isMock || !Array.isArray(a.relatedStocks)) continue;
+    for (const raw of a.relatedStocks) {
+      const t = String(raw || '').toUpperCase();
+      if (!t) continue;
+      if (!bySymbol[t]) bySymbol[t] = [];
+      if (bySymbol[t].length < perSymbol) {
+        bySymbol[t].push({
+          headline: a.headline,
+          source: a.source,
+          url: a.url,
+          sentiment: a.sentiment,
+          sentimentScore: a.sentimentScore != null ? a.sentimentScore : null,
+          publishedAt: a.publishedAt,
+          timestamp: a.timestamp,
+          category: a.category,
+          hot: !!a.hot,
+          catalystDirection: a.catalystDirection || null,
+          catalystStrength: a.catalystStrength != null ? a.catalystStrength : null,
+        });
+      }
+    }
+  }
+  return bySymbol;
+}
 
 // Main function to generate signals for all tracked stocks
 // When quick=true, skips all external API fetches and uses only cached data.
@@ -3607,6 +3642,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   let newsSentiment = {};
   let catalysts = {};
   let insiderNews = {};
+  let newsBySymbol = {};
   let regime = _marketRegime;
   if (!quick) {
     try {
@@ -3626,6 +3662,16 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         getInsiderNewsSignals(),
         new Promise(resolve => setTimeout(() => resolve({}), 15000)),
       ]);
+    } catch { /* silent */ }
+    // Per-symbol recent news so each signal carries the articles that can move
+    // it, not just a coarse sentiment label. getAllNews is cached (60s) and
+    // shared with the sentiment/catalyst scoring above, so this is cheap.
+    try {
+      const allNews = await Promise.race([
+        getAllNews(400),
+        new Promise(resolve => setTimeout(() => resolve([]), 15000)),
+      ]);
+      newsBySymbol = groupNewsBySymbol(allNews);
     } catch { /* silent */ }
     await Promise.all([
       prefetchPriceHistories(symbols).catch(() => {}),
@@ -3758,6 +3804,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       newsSent: newsSentiment[symbol] || null,
       catalyst: catalysts[symbol] || null,
       insiderNews: insiderNews[symbol] || null,
+      news: newsBySymbol[String(symbol).toUpperCase()] || [],
       priceHistory, degFactor
     });
     const prevOutcome = _signalOutcomes.get(symbol);
@@ -4160,6 +4207,11 @@ async function generateSingleSignal(symbol) {
       const insiderNewsMap = await getInsiderNewsSignals();
       insiderNews = insiderNewsMap[symbol] || null;
     } catch { /* silent */ }
+    let signalNews = [];
+    try {
+      const allNews = await getAllNews(400);
+      signalNews = groupNewsBySymbol(allNews)[String(symbol).toUpperCase()] || [];
+    } catch { /* silent */ }
     const priceHistory = await getPriceHistory(symbol).catch(() => null);
     const reportMetrics = _financialReportCache.get(symbol);
     if (reportMetrics) stock = sanitizeLiveFundamentals(stock, reportMetrics);
@@ -4179,7 +4231,7 @@ async function generateSingleSignal(symbol) {
     const sigObj = await _buildSignal({
       symbol, stock, currentPrice, priceChange, volume,
       fundamental, technical, financial, macro, regime, weights, weeklyTrend,
-      newsSent, catalyst, insiderNews, priceHistory, degFactor
+      newsSent, catalyst, insiderNews, news: signalNews, priceHistory, degFactor
     });
     if (sigObj) {
       // Same strict all-conditions gate as the batch path: an on-demand lookup
@@ -4602,7 +4654,7 @@ function formatHoldingPeriod(days, tradeType) {
   if (days <= 90) return '1-3 months';
   return '3-6 months';
 }
-async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, catalyst, insiderNews, priceHistory, degFactor }) {
+async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, catalyst, insiderNews, news = [], priceHistory, degFactor }) {
   // Read scoring and portfolio config once at the top
   const sc = engineConfig.getConfig().scoring?.signal_confidence || {};
   const baselineConf = sc.baseline ?? 50;
@@ -4804,6 +4856,23 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const timeframes = { 'Aggressive Buy': '1-4 weeks', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks', 'Long Term Value': '3-6 months', 'Long Term': '3-6 months', 'Avoid': 'N/A' };
   const holdingPeriod = formatHoldingPeriod(tradeLevels.expectedDays, tradeType);
   const isNse = NSE_SYMBOLS.includes(symbol);
+  // Recent-news digest: every article that mentions this ticker, newest first.
+  // A coarse sentiment label alone hides the actual events that can move the
+  // stock, so the list travels with the signal and is rendered per stock.
+  const newsList = Array.isArray(news) ? news.slice(0, 6) : [];
+  const newsCounts = newsList.reduce((acc, n) => {
+    const s = n.sentiment === 'positive' ? 'positive' : n.sentiment === 'negative' ? 'negative' : 'neutral';
+    acc[s] += 1;
+    return acc;
+  }, { positive: 0, negative: 0, neutral: 0 });
+  const newsSummary = newsList.length > 0 ? {
+    count: newsList.length,
+    positive: newsCounts.positive,
+    negative: newsCounts.negative,
+    neutral: newsCounts.neutral,
+    net: newsCounts.positive > newsCounts.negative ? 'positive'
+      : newsCounts.negative > newsCounts.positive ? 'negative' : 'neutral',
+  } : null;
   const obj = {
     id: `signal-${symbol}-${Date.now()}`, ticker: symbol, name: stock.name,
     price: Math.round(currentPrice * 100) / 100, change: Math.round(priceChange * 100) / 100,
@@ -4817,6 +4886,8 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       type: cat.type, direction: cat.direction, strength: cat.strength || 1,
       headline: cat.headline || null, source: cat.source || null, publishedAt: cat.publishedAt || null,
     } : null,
+    news: newsList,
+    newsSummary,
     speculative: speculative ? {
       momentumPct: speculative.momentum,
       lookbackSessions: speculative.lookback,
@@ -4847,7 +4918,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       fundamental: { score: fundamental.score, grade: fundamental.fundamentalGrade, metrics: { ...fundamental.metrics, dataSource: stock.dataSource || 'fallback' } },
       technical: { score: technical.score, grade: technical.technicalGrade, indicators: technical.indicators },
       financial: { score: financial.score, grade: financial.financialGrade, analysis: financial.analysis },
-      macro: { score: macro.score, grade: macro.grade, signal: macro.signal, country: macro.country, summary: macro.summary, conditions: macro.conditions },
+      macro: { score: macro.score, grade: macro.grade, signal: macro.signal, country: macro.country, summary: macro.summary, meta: macro.meta, conditions: macro.conditions },
       insider: insider ? { score: insider.score, grade: getGrade(insider.score), hasActivity: insider.hasActivity, netShares: insider.netShares, buyCount: insider.buyCount, sellCount: insider.sellCount, latestDate: insider.latestDate, summary: insider.summary } : { score: null, grade: 'N/A', hasActivity: false, summary: 'No insider data (NSE stocks have no Yahoo insider coverage)' },
       mlFeatures,
       overall: { score: Math.round(overallScore), grade: getGrade(Math.round(overallScore)), dataSource: stock.dataSource || 'fallback' },

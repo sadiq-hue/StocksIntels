@@ -99,8 +99,18 @@ function getCountryForSymbol(symbol) {
   return NSE_SYMBOLS.includes(String(symbol).toUpperCase()) ? 'KE' : 'US';
 }
 
+function getMacroBundle(country) {
+  const live = liveMacro.get(country);
+  if (live) return live;
+  const base = COUNTRY_MACRO[country] || COUNTRY_MACRO.US;
+  return {
+    data: { ...base },
+    meta: { live: false, sources: ['Reference estimate'], asOf: {}, referenceFields: ALL_CONDITION_KEYS.slice(), fetchedAt: null },
+  };
+}
+
 function getMacroData(country) {
-  return COUNTRY_MACRO[country] || COUNTRY_MACRO.US;
+  return getMacroBundle(country).data;
 }
 
 // ─── Cache ─────────────────────────────────────────────────────────────────
@@ -110,7 +120,7 @@ const CACHE_TTL = 6 * 60 * 60 * 1000;
 function cacheGet(key) {
   const hit = cache.get(key);
   if (!hit) return null;
-  if (Date.now() - hit.ts > CACHE_TTL) { cache.delete(key); return null; }
+  if (Date.now() - hit.ts > (hit.ttl || CACHE_TTL)) { cache.delete(key); return null; }
   return hit.data;
 }
 
@@ -119,61 +129,74 @@ function cacheSet(key, data, ttl = CACHE_TTL) {
   return data;
 }
 
+// ─── Live macro overlay ────────────────────────────────────────────────────
+// Official data pulled from the World Bank (no API key); IMF supplies a GDP
+// cross-check when the World Bank has no fresh value. Refreshed on boot and
+// every 6h. Fields that have no free live source (PMI, sovereign credit
+// rating, political risk) keep the curated COUNTRY_MACRO value and are listed
+// in `meta.referenceFields` so the UI can label them as reference estimates.
+const worldBankCountry = { US: 'US', KE: 'KE', EU: 'XC', JP: 'JP', UK: 'GB' };
+const imfCountry = { US: 'USA', KE: 'KEN', EU: 'EU', JP: 'JPN', UK: 'GBR' };
+
+const WB_FIELDS = {
+  gdpGrowth: 'NY.GDP.MKTP.KD.ZG',
+  inflation: 'FP.CPI.TOTL.ZG',
+  currentAccount: 'BN.CAB.XOKA.GD.ZS',
+  interestRate: 'FR.INR.LEND',
+};
+
+// The condition keys that appear in `getMacroScore().conditions`.
+const ALL_CONDITION_KEYS = ['interestRateDifferential', 'gdpGrowth', 'inflation', 'currentAccount', 'politicalRisk', 'creditRating', 'pmi'];
+
+const liveMacro = new Map(); // country -> { data, meta }
+
 // ─── World Bank API ────────────────────────────────────────────────────────
 async function worldBankIndicator(countryCode, indicator) {
   const key = `wb_${countryCode}_${indicator}`;
   const cached = cacheGet(key);
-  if (cached) return cached;
+  if (cached !== null) return cached;
 
   try {
     const { data } = await generic.get(
       `https://api.worldbank.org/v2/country/${countryCode}/indicator/${indicator}?format=json&per_page=5&mrnev=1`,
-      { timeout: 10000 }
+      { timeout: 12000 }
     );
-    if (data && data[1] && data[1].length > 0) {
-      const vals = data[1].filter(d => d.value != null).map(d => ({ date: d.date, value: parseFloat(d.value) }));
-      if (vals.length > 0) return cacheSet(key, vals, CACHE_TTL);
+    const rows = Array.isArray(data) && Array.isArray(data[1]) ? data[1] : [];
+    const hit = rows.find((r) => r && r.value != null);
+    if (hit) {
+      return cacheSet(key, { value: parseFloat(hit.value), year: String(hit.date) }, CACHE_TTL);
     }
   } catch (err) {
-    /* silently fall back to static data */
+    /* fall back to curated reference data */
   }
   return null;
 }
 
-async function fetchWorldBank(countryCode) {
-  const [cpi, gdp, interest] = await Promise.all([
-    worldBankIndicator(countryCode, 'FP.CPI.TOTL.ZG'),
-    worldBankIndicator(countryCode, 'NY.GDP.MKTP.KD.ZG'),
-    worldBankIndicator(countryCode, 'FR.INR.LEND'),
-  ]);
-
-  return {
-    cpiGrowth: cpi?.[0]?.value ?? null,
-    gdpGrowth: gdp?.[0]?.value ?? null,
-    lendingRate: interest?.[0]?.value ?? null,
-  };
-}
-
-// ─── IMF API ───────────────────────────────────────────────────────────────
-async function fetchIMF(countryCode) {
+// ─── IMF API (GDP growth cross-check) ──────────────────────────────────────
+async function fetchIMFGrowth(countryCode) {
   const key = `imf_${countryCode}`;
   const cached = cacheGet(key);
-  if (cached) return cached;
+  if (cached !== null) return cached;
 
-  const imfCode = { KE: 'KEN', US: 'USA', EU: 'EU', JP: 'JPN', UK: 'GBR' }[countryCode];
+  const imfCode = imfCountry[countryCode];
   if (!imfCode) return null;
 
   try {
     const { data } = await generic.get(
-      `https://www.imf.org/external/datamapper/api/v1/NGDP_RPCH/${imfCode}`,
-      { timeout: 10000 }
+      'https://www.imf.org/external/datamapper/api/v1/NGDP_RPCH',
+      { timeout: 12000 }
     );
-    if (data?.values?.[imfCode]) {
-      const years = Object.keys(data.values[imfCode]).sort();
-      return cacheSet(key, {
-        gdpGrowth: years.length > 0 ? data.values[imfCode][years[years.length - 1]] : null,
-        lastYear: years.length > 0 ? years[years.length - 1] : null,
-      }, CACHE_TTL);
+    const series = data?.values?.NGDP_RPCH?.[imfCode];
+    if (series) {
+      const currentYear = new Date().getFullYear();
+      // Only use actuals/estimates, never multi-year projections.
+      const years = Object.keys(series)
+        .filter((y) => series[y] != null && Number(y) <= currentYear)
+        .sort();
+      if (years.length) {
+        const last = years[years.length - 1];
+        return cacheSet(key, { value: Number(series[last]), year: last }, CACHE_TTL);
+      }
     }
   } catch { /* silent */ }
   return null;
@@ -312,7 +335,7 @@ function getGrade(score) {
 }
 
 function getMacroScore(country) {
-  const data = getMacroData(country);
+  const { data, meta } = getMacroBundle(country);
 
   const rateDiff = scoreInterestRateDifferential(data);
   const gdp = scoreGDPGrowth(data);
@@ -346,6 +369,7 @@ function getMacroScore(country) {
     country: data.name,
     countryCode: country,
     summary: `${data.name}: ${buyCount} bullish / ${sellCount} bearish macro signals`,
+    meta,
     conditions: {
       interestRateDifferential: rateDiff,
       gdpGrowth: gdp,
@@ -359,52 +383,115 @@ function getMacroScore(country) {
 }
 
 // ─── Fetch macro data and merge with static reference ─────────────────────
+// Returns { data, meta } — the curated record with live World Bank/IMF values
+// merged over it, plus provenance so the UI can show the source and the year
+// each figure is from.
 async function refreshCountryData(country) {
-  const staticData = { ...COUNTRY_MACRO[country] };
-  if (!staticData) return null;
+  const base = COUNTRY_MACRO[country];
+  if (!base) return null;
 
-  const wbCode = { KE: 'KE', US: 'US', EU: 'EU', JP: 'JP', UK: 'GB' }[country];
+  const data = { ...base };
+  const meta = {
+    live: false,
+    sources: [],
+    asOf: {},
+    referenceFields: [],
+    fetchedAt: Date.now(),
+  };
 
-  const [wb, imf] = await Promise.allSettled([
-    wbCode ? fetchWorldBank(wbCode) : Promise.resolve(null),
-    fetchIMF(country),
-  ]);
+  const wbCode = worldBankCountry[country];
+  const [gdp, inflation, currentAccount, interestRate] = wbCode
+    ? await Promise.all([
+        worldBankIndicator(wbCode, WB_FIELDS.gdpGrowth),
+        worldBankIndicator(wbCode, WB_FIELDS.inflation),
+        worldBankIndicator(wbCode, WB_FIELDS.currentAccount),
+        worldBankIndicator(wbCode, WB_FIELDS.interestRate),
+      ])
+    : [null, null, null, null];
 
-  const wbData = wb.status === 'fulfilled' ? wb.value : null;
-  const imfData = imf.status === 'fulfilled' ? imf.value : null;
+  // Stale official series (e.g. the US lending rate stops at 2021) are less
+  // useful than the curated current figure, so only accept a value published
+  // within the last two calendar years.
+  const minYear = new Date().getFullYear() - 2;
+  const liveConds = new Set();
+  const round = (v, dp) => Math.round(v * 10 ** dp) / 10 ** dp;
+  const apply = (field, condKey, res, dp) => {
+    if (!res || res.value == null || !isFinite(res.value)) return;
+    if (Number(res.year) < minYear) return;
+    data[field] = round(res.value, dp);
+    meta.asOf[field] = res.year;
+    liveConds.add(condKey);
+  };
+  apply('gdpGrowth', 'gdpGrowth', gdp, 1);
+  apply('inflation', 'inflation', inflation, 1);
+  apply('currentAccount', 'currentAccount', currentAccount, 1);
+  apply('interestRate', 'interestRateDifferential', interestRate, 2);
 
-  if (wbData?.gdpGrowth != null) staticData.gdpGrowth = wbData.gdpGrowth;
-  if (wbData?.cpiGrowth != null) staticData.inflation = wbData.cpiGrowth;
-  if (wbData?.lendingRate != null) staticData.interestRate = wbData.lendingRate;
-  if (imfData?.gdpGrowth != null) staticData.gdpGrowth = imfData.gdpGrowth;
+  if (liveConds.size > 0) {
+    meta.sources.push('World Bank');
+    meta.live = true;
+  }
 
-  return staticData;
+  // GDP cross-check: use the IMF when the World Bank has no recent value.
+  if (!liveConds.has('gdpGrowth')) {
+    const imf = await fetchIMFGrowth(country);
+    if (imf && imf.value != null && isFinite(imf.value) && Number(imf.year) >= minYear) {
+      data.gdpGrowth = round(imf.value, 1);
+      meta.asOf.gdpGrowth = imf.year;
+      liveConds.add('gdpGrowth');
+      if (!meta.sources.includes('IMF')) meta.sources.push('IMF');
+      meta.live = true;
+    }
+  }
+
+  // Every scored condition that did not receive live data is a reference value.
+  meta.referenceFields = ALL_CONDITION_KEYS.filter((k) => !liveConds.has(k));
+  if (!meta.live) meta.sources.push('Reference estimate');
+  return { data, meta };
+}
+
+async function refreshMacroData() {
+  const countries = Object.keys(COUNTRY_MACRO);
+  const results = await Promise.allSettled(countries.map((c) => refreshCountryData(c)));
+
+  let live = 0;
+  countries.forEach((c, i) => {
+    const r = results[i];
+    if (r.status === 'fulfilled' && r.value) {
+      liveMacro.set(c, r.value);
+      if (r.value.meta.live) live += 1;
+    }
+  });
+  console.log(`[macroService] live macro refreshed for ${live}/${countries.length} countries`);
+  return { countries: countries.length, live };
+}
+
+let refreshTimer = null;
+function startMacroRefresh() {
+  refreshMacroData().catch((e) => console.warn('[macroService] initial refresh failed:', e.message));
+  if (!refreshTimer) {
+    refreshTimer = setInterval(() => {
+      refreshMacroData().catch(() => {});
+    }, CACHE_TTL);
+    if (refreshTimer.unref) refreshTimer.unref();
+  }
 }
 
 async function getMacroIndicators() {
+  await refreshMacroData().catch(() => {});
   const countries = Object.keys(COUNTRY_MACRO);
-  const results = await Promise.allSettled(countries.map(c => refreshCountryData(c)));
-
-  const enriched = {};
-  countries.forEach((c, i) => {
-    enriched[c] = results[i].status === 'fulfilled' && results[i].value
-      ? results[i].value
-      : COUNTRY_MACRO[c];
-  });
-
   return {
-    countries: enriched,
-    scores: Object.fromEntries(
-      Object.keys(enriched).map(c => [c, getMacroScore(c)])
-    ),
+    countries: Object.fromEntries(countries.map((c) => [c, getMacroBundle(c).data])),
+    meta: Object.fromEntries(countries.map((c) => [c, getMacroBundle(c).meta])),
+    scores: Object.fromEntries(countries.map((c) => [c, getMacroScore(c)])),
     timestamp: Date.now(),
   };
 }
 
 function getCachedIndicators() {
   const snapshot = {};
-  for (const [key, val] of cache.entries()) {
-    snapshot[key] = val.data;
+  for (const [country, val] of liveMacro.entries()) {
+    snapshot[country] = val;
   }
   return snapshot;
 }
@@ -437,5 +524,7 @@ module.exports = {
   getCachedIndicators,
   getCountryForSymbol,
   generateMacroReason,
+  refreshMacroData,
+  startMacroRefresh,
   COUNTRY_MACRO,
 };

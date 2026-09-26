@@ -4314,6 +4314,28 @@ app.get('/api/news/excerpt', async (req, res) => {
   }
 });
 
+// Per-ticker aggregated news sentiment ({ SYMBOL: 'positive'|'negative'|'neutral' }).
+app.get('/api/news/sentiment', async (req, res) => {
+  try {
+    const sentiment = await getAggregatedSentiment();
+    res.json(sentiment || {});
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// Macro conditions with live World Bank/IMF data and provenance (`meta`), so the
+// frontend can show the source and as-of year for each figure.
+app.get('/api/macro', async (req, res) => {
+  try {
+    const { getMacroIndicators } = require('./macroService');
+    const indicators = await getMacroIndicators();
+    res.json({ success: true, ...indicators });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
 // --- Watchlist Routes (with in-memory fallback when DB unavailable) ---
 const _watchlistMemory = {};
 

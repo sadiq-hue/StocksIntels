@@ -1569,6 +1569,47 @@ export function StockAnalysisPage() {
                           {stockSignal.sector && `Sector: ${stockSignal.sector}`}{stockSignal.sector && stockSignal.market ? ' · ' : ''}{stockSignal.market || ''}
                         </div>
                       )}
+
+                      {/* Recent news that can move this stock */}
+                      {stockSignal?.news && stockSignal.news.length > 0 && (
+                        <div className="rounded-2xl border border-border bg-muted/30 p-2.5">
+                          <div className="flex items-center justify-between mb-2 gap-2">
+                            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Recent News &amp; Impact</div>
+                            {stockSignal.newsSummary && (
+                              <span className={`text-[10px] font-semibold ${
+                                stockSignal.newsSummary.net === 'positive' ? 'text-emerald-600'
+                                  : stockSignal.newsSummary.net === 'negative' ? 'text-red-600' : 'text-muted-foreground'
+                              }`}>
+                                Net: {stockSignal.newsSummary.net} ({stockSignal.newsSummary.count})
+                              </span>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            {stockSignal.news.map((n, i) => (
+                              <a
+                                key={`${n.url}-${i}`}
+                                href={n.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block group"
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className={`mt-1 shrink-0 size-1.5 rounded-full ${
+                                    n.sentiment === 'positive' ? 'bg-emerald-500'
+                                      : n.sentiment === 'negative' ? 'bg-red-500' : 'bg-muted-foreground/40'
+                                  }`} />
+                                  <div className="min-w-0">
+                                    <p className="text-xs text-foreground leading-snug group-hover:text-[#0D7490]">{n.headline}</p>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                                      {n.source}{n.timestamp ? ` · ${n.timestamp}` : ''}
+                                    </p>
+                                  </div>
+                                </div>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

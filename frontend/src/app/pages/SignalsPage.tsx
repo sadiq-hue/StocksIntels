@@ -182,6 +182,25 @@ const MACRO_PLAIN: Record<string, string> = {
   interestRateDifferential: "Local interest rates vs the US Federal Reserve — affects currency strength and borrowing costs.",
 };
 
+function macroAsOfLabel(meta?: { live: boolean; sources: string[]; asOf: Record<string, string> }): string {
+  if (!meta) return '';
+  if (!meta.live) return 'Reference estimates';
+  const years = Object.values(meta.asOf || {}).filter(Boolean);
+  const range = years.length ? [...new Set(years)].sort() : [];
+  const span = range.length ? ` · ${range[0]}${range.length > 1 ? `–${range[range.length - 1]}` : ''}` : '';
+  return `Live · ${(meta.sources || []).join(', ') || 'World Bank'}${span}`;
+}
+
+function isReferenceField(meta: { referenceFields?: string[] } | undefined, key: string): boolean {
+  return !!meta && Array.isArray(meta.referenceFields) && meta.referenceFields.includes(key);
+}
+
+function newsItemTone(sentiment: string): string {
+  return sentiment === 'positive' ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+    : sentiment === 'negative' ? 'bg-red-100 text-red-700 border-red-200'
+    : 'bg-muted text-muted-foreground border-border';
+}
+
 function ratingPlain(signal: string): string {
   switch (signal) {
     case 'BUY': return "Positive — helps this stock";
@@ -794,7 +813,7 @@ export function SignalsPage() {
                   {/* ── Macro Conditions ── */}
                   {selected.analysis?.macro && (
                     <div>
-                      <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
+                      <div className="flex items-baseline justify-between flex-wrap gap-2 mb-1">
                         <h3 className="text-sm font-semibold text-foreground">
                           Macro Conditions — {selected.analysis.macro.country}{' '}
                           <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded ${
@@ -807,21 +826,35 @@ export function SignalsPage() {
                         </h3>
                         <p className="text-[10px] text-muted-foreground italic">The big economic picture around this stock</p>
                       </div>
+                      <p className="text-[10px] mb-3 text-muted-foreground">
+                        <span className={`font-semibold ${selected.analysis.macro.meta?.live ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {macroAsOfLabel(selected.analysis.macro.meta)}
+                        </span>
+                        {selected.analysis.macro.meta?.live ? ' — figures refresh from official sources' : ' — no free live feed for this country'}
+                      </p>
                       <div className="grid grid-cols-2 gap-2">
                         {Object.entries(selected.analysis.macro.conditions).map(([key, cond]) => {
                           const sig = (cond as any).signal || 'NEUTRAL';
                           const style = sig === 'BUY' ? 'bg-emerald-50 border-emerald-200' :
                             sig === 'SELL' ? 'bg-red-50 border-red-200' : 'bg-muted border-border';
+                          const ref = isReferenceField(selected.analysis!.macro!.meta, key);
                           return (
                             <div key={key} className={`rounded-lg p-2.5 border ${style}`}>
-                              <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center justify-between mb-1 gap-1">
                                 <span className="text-[10px] font-semibold text-muted-foreground uppercase">
                                   {MACRO_LABELS[key] || key.replace(/([A-Z])/g, ' $1').trim()}
                                 </span>
-                                <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
-                                  sig === 'BUY' ? 'bg-emerald-100 text-emerald-700' :
-                                  sig === 'SELL' ? 'bg-red-100 text-red-700' : 'bg-muted text-muted-foreground'
-                                }`}>{sig}</span>
+                                <span className="flex items-center gap-1 shrink-0">
+                                  {ref ? (
+                                    <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-amber-100 text-amber-700" title="Reference estimate — no free live source">REF</span>
+                                  ) : (
+                                    <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700" title={`Live — ${selected.analysis!.macro!.meta?.sources?.join(', ') || 'official data'}${selected.analysis!.macro!.meta?.asOf?.[key] ? ` (${selected.analysis!.macro!.meta!.asOf[key]})` : ''}`}>LIVE</span>
+                                  )}
+                                  <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
+                                    sig === 'BUY' ? 'bg-emerald-100 text-emerald-700' :
+                                    sig === 'SELL' ? 'bg-red-100 text-red-700' : 'bg-muted text-muted-foreground'
+                                  }`}>{sig}</span>
+                                </span>
                               </div>
                               <p className="text-[11px] text-muted-foreground leading-tight">{(cond as any).detail}</p>
                               <p className="mt-1 text-[10px] text-muted-foreground/80 leading-snug">
@@ -830,6 +863,58 @@ export function SignalsPage() {
                             </div>
                           );
                         })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Recent News & Impact ── */}
+                  {selected.news && selected.news.length > 0 && (
+                    <div>
+                      <div className="flex items-baseline justify-between flex-wrap gap-2 mb-2">
+                        <h3 className="text-sm font-semibold text-foreground">Recent News &amp; Impact</h3>
+                        <p className="text-[10px] text-muted-foreground italic">Headlines that can move this stock</p>
+                      </div>
+                      {selected.newsSummary && (
+                        <div className="flex items-center gap-2 mb-2 text-[10px] text-muted-foreground flex-wrap">
+                          <span className="font-semibold text-foreground">
+                            {selected.newsSummary.count} recent article{selected.newsSummary.count === 1 ? '' : 's'}
+                          </span>
+                          {selected.newsSummary.positive > 0 && <span className="text-emerald-600">{selected.newsSummary.positive} positive</span>}
+                          {selected.newsSummary.negative > 0 && <span className="text-red-600">{selected.newsSummary.negative} negative</span>}
+                          {selected.newsSummary.neutral > 0 && <span>{selected.newsSummary.neutral} neutral</span>}
+                          <span className={`ml-auto font-semibold ${
+                            selected.newsSummary.net === 'positive' ? 'text-emerald-600'
+                              : selected.newsSummary.net === 'negative' ? 'text-red-600' : 'text-muted-foreground'
+                          }`}>
+                            Net: {selected.newsSummary.net}
+                          </span>
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        {selected.news.map((n, i) => (
+                          <a
+                            key={`${n.url}-${i}`}
+                            href={n.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block rounded-lg border border-border bg-muted/40 p-2.5 hover:bg-muted transition-colors"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-xs font-medium text-foreground leading-snug">{n.headline}</p>
+                              <span className={`shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded border ${newsItemTone(n.sentiment)}`}>{n.sentiment}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground flex-wrap">
+                              {n.source && <span>{n.source}</span>}
+                              {n.timestamp && <span>· {n.timestamp}</span>}
+                              {n.hot && <span className="text-orange-600 font-semibold">· Hot</span>}
+                              {n.catalystDirection && (
+                                <span className={n.catalystDirection === 'positive' ? 'text-emerald-600' : 'text-red-600'}>
+                                  · {n.catalystDirection} catalyst
+                                </span>
+                              )}
+                            </div>
+                          </a>
+                        ))}
                       </div>
                     </div>
                   )}
