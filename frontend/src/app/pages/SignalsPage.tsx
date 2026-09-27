@@ -850,14 +850,14 @@ export function SignalsPage() {
                                       <span className="font-medium text-foreground min-w-0 sm:min-w-[7rem]">{c.name}</span>
                                       <span className="text-muted-foreground leading-tight">{c.rating}</span>
                                     </div>
-                                    <p className="pl-[4.25rem] text-[10px] text-muted-foreground/80 leading-snug mt-0.5">
+                                    <p className="pl-6 sm:pl-[4.25rem] text-[10px] text-muted-foreground/80 leading-snug mt-0.5">
                                       <span className="font-medium text-foreground/70">What it means:</span> {CONDITION_PLAIN[c.key] || 'See the detail above.'} <span className="font-medium text-foreground/70">Verdict:</span> {ratingPlain(signal).toLowerCase()}.
                                     </p>
                                     {c.key === 'newsSignal' && (() => {
                                       const items = influentialNews(selected.news, 5);
                                       if (items.length === 0) return null;
                                       return (
-                                        <div className="pl-[4.25rem] mt-1.5 space-y-1.5">
+                                        <div className="pl-6 sm:pl-[4.25rem] mt-1.5 space-y-1.5">
                                           {items.map((n, i) => (
                                             <a key={`${n.url}-${i}`} href={n.url} target="_blank" rel="noopener noreferrer" className="block group">
                                               <div className="flex items-start gap-1.5">
