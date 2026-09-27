@@ -118,9 +118,6 @@ export interface Signal {
   regime?: string;
   weeklyTrend?: string;
   dataSource?: string;
-  monitored?: boolean;
-  openedAt?: string;
-  daysHeld?: number;
   catalyst?: Catalyst | null;
   speculative?: SpeculativeFlag | null;
   insider?: InsiderActivity | null;

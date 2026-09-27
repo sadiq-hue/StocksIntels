@@ -768,15 +768,6 @@ export function SignalsPage() {
                 <div className="bg-muted rounded-lg p-3 border border-border"><p className="text-xs text-muted-foreground">Confidence</p><p className={`text-lg font-bold ${selected.confidence >= 80 ? "text-emerald-600" : selected.confidence >= 70 ? "text-yellow-600" : "text-red-600"}`}>{selected.confidence}%</p></div>
               </div>
 
-              {selected.monitored && (
-                <div className="rounded-lg border border-[#0D7490]/30 bg-[#0D7490]/5 p-2.5 text-[11px] text-muted-foreground leading-snug">
-                  <span className="font-semibold text-foreground">Open position</span>
-                  {selected.daysHeld != null ? ` — held ${selected.daysHeld} day${selected.daysHeld === 1 ? '' : 's'}` : ''}
-                  {selected.openedAt ? ` since ${new Date(selected.openedAt).toLocaleDateString()}` : ''}
-                  . The <span className="font-semibold text-foreground">{selected.signal}</span> call, entry, stop and targets are fixed from when it was opened and managed to stop/target; the analysis below reflects current market conditions.
-                </div>
-              )}
-
               <div>
                 <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
                   <h3 className="text-sm font-semibold text-foreground">Trade Parameters</h3>
