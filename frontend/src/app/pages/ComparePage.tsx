@@ -14,6 +14,14 @@ import { formatCompactNumber } from "../utils/format";
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const MAX_STOCKS = 5;
 const CHART_COLORS = ["#0D7490", "#0EA5E9", "#f59e0b", "#8b5cf6", "#ef4444"];
+// MyStocks only serves 1Y/5Y for NSE (its 6mo/2y/10y periods return ~1 month),
+// so 2Y/10Y are hidden when any Kenyan stock is in the mix.
+const CHART_RANGES = [
+  { k: "1y", label: "1Y" },
+  { k: "2y", label: "2Y" },
+  { k: "5y", label: "5Y" },
+  { k: "10y", label: "10Y" },
+];
 const SUGGESTIONS = ["SCOM", "EQTY", "KCB", "AAPL", "MSFT", "NVDA", "TSLA"];
 
 interface CompareStock {
@@ -131,7 +139,7 @@ export function ComparePage() {
   const [data, setData] = useState<CompareStock[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<"6mo" | "1y">("6mo");
+  const [range, setRange] = useState<string>("1y");
   const [chartData, setChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
 
@@ -180,8 +188,8 @@ export function ComparePage() {
     Promise.all(
       data.map(async (s) => {
         const sym = s.market === "NSE" ? `${s.ticker}.NSE` : s.ticker;
-        // NSE's upstream "6mo" period returns only ~1 month, so use 1y there.
-        const r = s.market === "NSE" ? "1y" : range;
+        // NSE supports only 1Y/5Y upstream; fall back for any other range.
+        const r = s.market === "NSE" && range !== "1y" && range !== "5y" ? "1y" : range;
         try { return { t: s.ticker, bars: await fetchStockHistory(sym, r) }; }
         catch { return { t: s.ticker, bars: [] as PriceBar[] }; }
       })
@@ -202,6 +210,12 @@ export function ComparePage() {
     }).finally(() => { if (!cancelled) setChartLoading(false); });
     return () => { cancelled = true; };
   }, [data, range]);
+
+  const hasNse = data.some((s) => s.market === "NSE");
+  const visibleRanges = CHART_RANGES.filter((r) => !hasNse || r.k === "1y" || r.k === "5y");
+  useEffect(() => {
+    if (hasNse && (range === "2y" || range === "10y")) setRange("1y");
+  }, [hasNse, range]);
 
   const groups = useMemo(() => ([
     {
@@ -395,14 +409,14 @@ export function ComparePage() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-foreground">Relative Performance <span className="text-muted-foreground font-normal">(% change)</span></h2>
               <div className="flex gap-1">
-                {(["6mo", "1y"] as const).map((r) => (
+                {visibleRanges.map((r) => (
                   <button
-                    key={r}
+                    key={r.k}
                     type="button"
-                    onClick={() => setRange(r)}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${range === r ? "bg-[#0D7490] text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+                    onClick={() => setRange(r.k)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${range === r.k ? "bg-[#0D7490] text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
                   >
-                    {r === "6mo" ? "6M" : "1Y"}
+                    {r.label}
                   </button>
                 ))}
               </div>
