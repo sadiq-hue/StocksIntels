@@ -204,6 +204,22 @@ function newsItemTone(sentiment: string): string {
     : 'bg-muted text-muted-foreground border-border';
 }
 
+// Rank news by how likely it is to move the stock: directed catalysts first,
+// then hot stories, then clearly-signed sentiment. Used to surface the most
+// influential headlines next to the News Sentiment verdict.
+function newsImpactScore(n: { catalystDirection?: string | null; catalystStrength?: number | null; hot?: boolean; sentiment: string }): number {
+  let s = 0;
+  if (n.catalystDirection) s += 3 + (n.catalystStrength ? Math.min(3, n.catalystStrength) : 0);
+  if (n.hot) s += 2;
+  if (n.sentiment === 'positive' || n.sentiment === 'negative') s += 1;
+  return s;
+}
+
+function topImpactNews<T extends { catalystDirection?: string | null; catalystStrength?: number | null; hot?: boolean; sentiment: string }>(news: T[] | undefined, n = 3): T[] {
+  if (!Array.isArray(news)) return [];
+  return [...news].sort((a, b) => newsImpactScore(b) - newsImpactScore(a)).slice(0, n);
+}
+
 function ratingPlain(signal: string): string {
   switch (signal) {
     case 'BUY': return "Positive — helps this stock";
@@ -803,6 +819,29 @@ export function SignalsPage() {
                                     <p className="pl-[4.25rem] text-[10px] text-muted-foreground/80 leading-snug mt-0.5">
                                       <span className="font-medium text-foreground/70">What it means:</span> {CONDITION_PLAIN[c.key] || 'See the detail above.'} <span className="font-medium text-foreground/70">Verdict:</span> {ratingPlain(signal).toLowerCase()}.
                                     </p>
+                                    {c.key === 'newsSignal' && (() => {
+                                      const top = topImpactNews(selected.news);
+                                      if (top.length === 0) return null;
+                                      return (
+                                        <div className="pl-[4.25rem] mt-1.5 space-y-1.5">
+                                          <p className="text-[9px] font-semibold text-foreground/70 uppercase tracking-wide">What can move it</p>
+                                          {top.map((n, i) => (
+                                            <a key={`${n.url}-${i}`} href={n.url} target="_blank" rel="noopener noreferrer" className="block group">
+                                              <div className="flex items-start gap-1.5">
+                                                <span className={`mt-1 size-1.5 rounded-full shrink-0 ${n.sentiment === 'positive' ? 'bg-emerald-500' : n.sentiment === 'negative' ? 'bg-red-500' : 'bg-muted-foreground/40'}`} />
+                                                <p className="text-[10px] text-foreground/90 leading-snug group-hover:text-[#0D7490]">
+                                                  {n.headline}
+                                                  {n.catalystDirection && (
+                                                    <span className={n.catalystDirection === 'positive' ? 'text-emerald-600' : 'text-red-600'}> · {n.catalystDirection} catalyst</span>
+                                                  )}
+                                                </p>
+                                              </div>
+                                              <p className="pl-3 text-[9px] text-muted-foreground">{n.source}{n.timestamp ? ` · ${n.timestamp}` : ''}</p>
+                                            </a>
+                                          ))}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 );
                               })}

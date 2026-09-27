@@ -4068,6 +4068,13 @@ app.get('/api/signals', async (req, res) => {
     // monitored position as a Buy card with its live stop/target levels. Refresh
     // their quotes first so the cards render a live price/change, not a blank.
     await refreshMonitoredQuotes();
+    // Per-ticker news for monitored cards: their stored snapshot has no `news`
+    // array, so a held position would otherwise show no source of movement.
+    let liveNewsMap = {};
+    try {
+      const { getNewsMap } = require('./signalService');
+      liveNewsMap = await getNewsMap();
+    } catch { /* leave cards without news */ }
     for (const m of getMonitoredSignals()) {
       const isNse = m.market === 'NSE';
       const existing = byTicker.get(m.ticker);
@@ -4107,6 +4114,12 @@ app.get('/api/signals', async (req, res) => {
           const { getMacroScore, getCountryForSymbol } = require('./macroService');
           base.analysis = { ...base.analysis, macro: getMacroScore(getCountryForSymbol(m.ticker)) };
         } catch { /* keep the stored macro if the refresh fails */ }
+      }
+      // Attach current news if the card has none (monitored snapshot), so the
+      // "News Sentiment" row and Recent News list reflect what can move it now.
+      if ((!base.news || base.news.length === 0)) {
+        const nw = liveNewsMap[String(m.ticker).toUpperCase()];
+        if (nw) { base.news = nw.news; base.newsSummary = nw.summary; }
       }
       if (!existing) merged.push(base);
     }

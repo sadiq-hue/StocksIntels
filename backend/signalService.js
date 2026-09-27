@@ -3589,6 +3589,37 @@ function groupNewsBySymbol(articles, perSymbol = 6) {
   return bySymbol;
 }
 
+// Positive/negative/neutral tally + net tone for a news list.
+function summarizeNews(newsList) {
+  if (!Array.isArray(newsList) || newsList.length === 0) return null;
+  const counts = newsList.reduce((acc, n) => {
+    const s = n.sentiment === 'positive' ? 'positive' : n.sentiment === 'negative' ? 'negative' : 'neutral';
+    acc[s] += 1;
+    return acc;
+  }, { positive: 0, negative: 0, neutral: 0 });
+  return {
+    count: newsList.length,
+    positive: counts.positive,
+    negative: counts.negative,
+    neutral: counts.neutral,
+    net: counts.positive > counts.negative ? 'positive'
+      : counts.negative > counts.positive ? 'negative' : 'neutral',
+  };
+}
+
+// Current per-ticker news map (articles + summary). Reused by the signals route
+// to attach fresh news to monitored-position cards, whose stored analysis
+// snapshot carries none.
+async function getNewsMap(perSymbol = 6) {
+  const articles = await getAllNews(400);
+  const bySymbol = groupNewsBySymbol(articles, perSymbol);
+  const out = {};
+  for (const [t, list] of Object.entries(bySymbol)) {
+    out[t] = { news: list, summary: summarizeNews(list) };
+  }
+  return out;
+}
+
 // Main function to generate signals for all tracked stocks
 // When quick=true, skips all external API fetches and uses only cached data.
 async function generateSignals(marketData = null, quick = false, force = false) {
@@ -4860,19 +4891,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // A coarse sentiment label alone hides the actual events that can move the
   // stock, so the list travels with the signal and is rendered per stock.
   const newsList = Array.isArray(news) ? news.slice(0, 6) : [];
-  const newsCounts = newsList.reduce((acc, n) => {
-    const s = n.sentiment === 'positive' ? 'positive' : n.sentiment === 'negative' ? 'negative' : 'neutral';
-    acc[s] += 1;
-    return acc;
-  }, { positive: 0, negative: 0, neutral: 0 });
-  const newsSummary = newsList.length > 0 ? {
-    count: newsList.length,
-    positive: newsCounts.positive,
-    negative: newsCounts.negative,
-    neutral: newsCounts.neutral,
-    net: newsCounts.positive > newsCounts.negative ? 'positive'
-      : newsCounts.negative > newsCounts.positive ? 'negative' : 'neutral',
-  } : null;
+  const newsSummary = summarizeNews(newsList);
   const obj = {
     id: `signal-${symbol}-${Date.now()}`, ticker: symbol, name: stock.name,
     price: Math.round(currentPrice * 100) / 100, change: Math.round(priceChange * 100) / 100,
@@ -5084,6 +5103,8 @@ module.exports = {
   getForwardTestPredictions,
   getSellAudit,
   sanitizeLiveFundamentals,
+  summarizeNews,
+  getNewsMap,
   resolveAllForwardPredictions,
   recordForwardPrediction,
   // Pure helpers (unit-testable sell/exit + resolution logic)
