@@ -86,12 +86,12 @@ export function Header() {
   return (
     <>
       <TrialBanner />
-      <header className="sticky top-0 z-30 bg-background border-b border-border px-4 md:px-6 py-3">
-        <div className="flex items-center justify-between gap-4">
+      <header className="sticky top-0 z-30 border-b border-border/70 bg-background/80 backdrop-blur-xl px-3 py-2.5 md:px-6 md:py-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
               <SheetTrigger asChild>
-                <button className="md:hidden p-2 hover:bg-muted rounded-lg transition-colors">
+                <button className="md:hidden flex size-10 items-center justify-center rounded-xl hover:bg-muted active:scale-95 transition-all" aria-label="Open menu">
                   <Menu className="w-5 h-5 text-foreground" />
                 </button>
               </SheetTrigger>
