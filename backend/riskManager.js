@@ -85,6 +85,20 @@ const TARGET3_MULT = 6;
 const RESISTANCE_SNAP_TOLERANCE = 0.30;
 const MIN_TARGET_SPACING = 0.15;
 
+// Realistic time-to-target (trading sessions). The naive distance/ATR assumes
+// the stock moves its full average daily range straight to the target every
+// session — the best case, with no down days or retracements — which makes a
+// +36% target on a 3%-ATR name read as a ridiculous "~2 weeks". Real paths give
+// most of their range back to noise, so assume only ~a third of the daily range
+// becomes net directional progress. This keeps horizons honest across every
+// stock (a calm name still lands in weeks, a high-beta name in months).
+const PATH_EFFICIENCY = 1 / 3;
+function estimateHoldingDays(entry, target1, atrFraction) {
+  if (!(entry > 0) || !(target1 > entry) || !(atrFraction > 0)) return null;
+  const days = (target1 - entry) / (entry * atrFraction * PATH_EFFICIENCY);
+  return Math.min(250, Math.max(1, Math.ceil(days)));
+}
+
 function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = MIN_STOP_PCT, tradeType = 'Swing Trade') {
   const volatility = calculateATR(priceHistory);
   const mult = TRADE_TYPE_STOP_MULT[tradeType] || 1.5;
@@ -147,13 +161,7 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
   const risk = Math.abs(entry - stopLoss);
   const reward = Math.abs(target1 - entry);
   const riskReward = risk > 0 ? (reward / risk).toFixed(1) : '1.0';
-  // Expected holding period (trading sessions) for the trade to play out: the
-  // distance price must travel to hit target1, divided by the stock's own average
-  // daily range. Uses the real volatility the stop was sized from, so a calm name
-  // shows a longer horizon than a fast mover instead of a static per-type label.
-  const expectedDays = signal.action === 'buy' && target1 > entry && volatility > 0
-    ? Math.max(1, Math.ceil((target1 - entry) / (currentPrice * volatility)))
-    : null;
+  const expectedDays = signal.action === 'buy' ? estimateHoldingDays(entry, target1, volatility) : null;
   return {
     entry: Math.round(entry * 100) / 100,
     stopLoss: Math.round(stopLoss * 100) / 100,
@@ -336,6 +344,9 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
 
   if (previous && previous.action !== 'hold' && previous.stopLoss != null && previous.target1 != null && !previous.result) {
     const isPrevBuy = previous.action === 'buy';
+    // Refresh the displayed holding period with the fresh volatility-based
+    // estimate every cycle, so a held card never shows a label frozen at open.
+    if (newSignal.timeframe) previous.timeframe = newSignal.timeframe;
     // Defensive guards: never resolve a position whose stop sits on the wrong side of
     // entry (broken/inverted levels) or when the price hasn't actually moved past the
     // level (stale/identical cached quote). Otherwise every broken position resolves
@@ -555,6 +566,7 @@ module.exports = {
   calculatePositionSize,
   calculateKellyPositionSize,
   calculateTradeLevels,
+  estimateHoldingDays,
   enforceStopFloor,
   qualifyingTargets,
   activeStageIndex,

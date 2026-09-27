@@ -10,12 +10,12 @@ const nseHistory = require('./nseHistoryService');
 const { getMacroScore, getCountryForSymbol, generateMacroReason, startMacroRefresh } = require('./macroService');
 const { getAggregatedSentiment, getCatalysts, getInsiderNewsSignals, initNewsHistory, getAllNews } = require('./newsService');
 const { getKeyMetrics, getQuote, getCompanyProfile } = require('./financialReportsService');
-const { calculateSMA } = require('./technicalIndicators');
+const { calculateSMA, calculateATR } = require('./technicalIndicators');
 const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL_SYMBOLS, SECTOR_AVG_PE, INDUSTRY_MEDIAN_EV_EBITDA, TBILI_RATE, KNOWN_FUNDAMENTALS, NSE_FUNDAMENTALS } = require('./stockData');
 const financialReportsService = require('./financialReportsService');
 const edgarService = require('./edgarService');
 const { getEffectiveSectorPE, getGrade, determineSignal, determineTradeType, getSectorMacroAdjustment, analyzeFundamentals, analyzeTechnicals, analyzeFinancials, generateReason } = require('./analysisEngine');
-const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, MIN_STOP_PCT, enforceStopFloor, isPlausibleBuyLevels, qualifyingTargets, activeStageIndex, activeStageTarget, ultimateTargetOf, targetLockFloor, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
+const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, estimateHoldingDays, MIN_STOP_PCT, enforceStopFloor, isPlausibleBuyLevels, qualifyingTargets, activeStageIndex, activeStageTarget, ultimateTargetOf, targetLockFloor, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
 const mlModel = require('./mlSignalModel');
 const engineConfig = require('./engineConfig');
 const { trackSignalQuality, logHealth, detectSignalDrift, getQualityScore } = require('./monitorService');
@@ -312,6 +312,23 @@ function getOpenPositionCount() {
   return n;
 }
 
+// Re-derive a monitored position's holding period from its own levels and the
+// latest cached volatility, so a held card shows the current realistic horizon
+// instead of the label frozen at open. Falls back to the stored label when the
+// price history (and thus ATR) is not warm.
+function monitoredTimeframe(ticker, v, cached) {
+  const histEntry = _priceHistoryCache.get(ticker);
+  const hist = histEntry && histEntry.data;
+  if (hist && hist.length >= 14) {
+    try {
+      const days = estimateHoldingDays(v.entryPrice, v.target1, calculateATR(hist));
+      const tf = formatHoldingPeriod(days, v.type || 'Swing Trade');
+      if (tf) return tf;
+    } catch { /* fall through to stored */ }
+  }
+  return v.timeframe || (cached && cached.timeframe ? cached.timeframe : null);
+}
+
 // Detail list of the positions the live monitor is actively tracking — every one
 // is a Buy-direction call (Sell ratings are exit/avoid flags with no levels, so
 // they are never tracked as positions). Exposed so the frontend can show the
@@ -347,7 +364,7 @@ function getMonitoredSignals() {
       confidence: v.confidence != null ? v.confidence : (cached && cached.confidence != null ? cached.confidence : null),
       name: cached && cached.name ? cached.name : null,
       sector: cached && cached.sector ? cached.sector : null,
-      timeframe: v.timeframe || (cached && cached.timeframe ? cached.timeframe : null),
+      timeframe: monitoredTimeframe(ticker, v, cached),
       market: isNse ? 'NSE' : 'Global',
       currency: isNse ? 'KES' : 'USD',
       openedAt: new Date(v.timestamp).toISOString(),
