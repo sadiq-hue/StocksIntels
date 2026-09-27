@@ -3561,7 +3561,7 @@ startMacroRefresh();
 // Group the aggregated news feed by the ticker(s) each article relates to, so
 // every signal can carry its own recent-news list. Returns a map of
 // UPPERCASE ticker -> articles (newest first, capped).
-function groupNewsBySymbol(articles, perSymbol = 6) {
+function groupNewsBySymbol(articles, perSymbol = 10) {
   const bySymbol = {};
   for (const a of articles || []) {
     if (!a || a.isMock || !Array.isArray(a.relatedStocks)) continue;
@@ -3610,7 +3610,7 @@ function summarizeNews(newsList) {
 // Current per-ticker news map (articles + summary). Reused by the signals route
 // to attach fresh news to monitored-position cards, whose stored analysis
 // snapshot carries none.
-async function getNewsMap(perSymbol = 6) {
+async function getNewsMap(perSymbol = 10) {
   const articles = await getAllNews(400);
   const bySymbol = groupNewsBySymbol(articles, perSymbol);
   const out = {};
@@ -4890,7 +4890,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // Recent-news digest: every article that mentions this ticker, newest first.
   // A coarse sentiment label alone hides the actual events that can move the
   // stock, so the list travels with the signal and is rendered per stock.
-  const newsList = Array.isArray(news) ? news.slice(0, 6) : [];
+  const newsList = Array.isArray(news) ? news.slice(0, 10) : [];
   const newsSummary = summarizeNews(newsList);
   const obj = {
     id: `signal-${symbol}-${Date.now()}`, ticker: symbol, name: stock.name,

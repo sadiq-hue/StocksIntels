@@ -820,7 +820,7 @@ export function SignalsPage() {
                                       <span className="font-medium text-foreground/70">What it means:</span> {CONDITION_PLAIN[c.key] || 'See the detail above.'} <span className="font-medium text-foreground/70">Verdict:</span> {ratingPlain(signal).toLowerCase()}.
                                     </p>
                                     {c.key === 'newsSignal' && (() => {
-                                      const top = topImpactNews(selected.news);
+                                      const top = topImpactNews(selected.news, 2);
                                       if (top.length === 0) return null;
                                       return (
                                         <div className="pl-[4.25rem] mt-1.5 space-y-1.5">
