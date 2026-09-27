@@ -31,6 +31,7 @@ const PricingPage = React.lazy(() => import("./pages/PricingPage").then(m => ({ 
 const SubscriptionPage = React.lazy(() => import("./pages/SubscriptionPage").then(m => ({ default: m.SubscriptionPage })));
 const StockAnalysisPage = React.lazy(() => import("./pages/StockAnalysisPage").then(m => ({ default: m.StockAnalysisPage })));
 const StocksPage = React.lazy(() => import("./pages/StocksPage").then(m => ({ default: m.StocksPage })));
+const ComparePage = React.lazy(() => import("./pages/ComparePage").then(m => ({ default: m.ComparePage })));
 const SettingsPage = React.lazy(() => import("./pages/SettingsPage").then(m => ({ default: m.SettingsPage })));
 const SectorsPage = React.lazy(() => import("./pages/SectorsPage").then(m => ({ default: m.SectorsPage })));
 // const ChatPage = React.lazy(() => import("./pages/ChatPage").then(m => ({ default: m.ChatPage })));
@@ -159,6 +160,7 @@ const router = createBrowserRouter([
       { path: "dashboard", element: <DashboardPage /> },
       { path: "markets", element: <MarketPage /> },
       { path: "stocks", element: <StocksPage /> },
+      { path: "compare", element: <ComparePage /> },
       { path: "watchlist", element: <WatchlistPage /> },
       { path: "signals", element: <SignalsPage /> },
       { path: "ai-insights", element: <AIInsightsPage /> },

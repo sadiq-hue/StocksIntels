@@ -3972,6 +3972,7 @@ const authSubs = [authenticateToken, requireActiveSubscription];
 const authOwnSubs = [authenticateToken, requireOwnership, requireActiveSubscription];
 app.use('/api/signals', ...authSubs);
 app.use('/api/signal', ...authSubs);
+app.use('/api/compare', ...authSubs);
 app.use('/api/watchlist', ...authSubs);
 app.use('/api/portfolio', ...authSubs);
 app.use('/api/trade', ...authSubs);
@@ -4125,6 +4126,125 @@ app.get('/api/signals', async (req, res) => {
     }
     res.json({ success: true, signals: merged });
   } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// ─── Stock Comparison ───────────────────────────────────────────────────────
+// Normalized side-by-side metrics for 2-5 tickers (NSE or US). One call builds
+// every column from the same sources — the live quote batch, the signal
+// engine's analysis (scores, technicals, targets), and the raw fundamentals —
+// so the compare page is consistent across NSE and global names.
+app.get('/api/compare', async (req, res) => {
+  try {
+    const { NSE_SYMBOLS } = require('./stockData');
+    const svc = require('./signalService');
+    const num = (v) => { const n = Number(v); return v == null || v === '' || !isFinite(n) ? null : n; };
+
+    const raw = String(req.query.symbols || '')
+      .split(',').map((s) => s.trim().toUpperCase().replace(/^NSE:/, '')).filter(Boolean);
+    const symbols = [...new Set(raw)].slice(0, 5);
+    if (symbols.length < 2) return res.status(400).json({ error: 'Provide 2 to 5 symbols (?symbols=A,B)' });
+
+    const quoteSyms = symbols.map((s) => (NSE_SYMBOLS.includes(s) ? `NSE:${s}` : s));
+    const [signals, monitored, quotes] = await Promise.all([
+      svc.generateSignals(null, true).catch(() => []),
+      Promise.resolve(svc.getMonitoredSignals ? svc.getMonitoredSignals() : []),
+      getQuotesBatch(quoteSyms).catch(() => ({})),
+    ]);
+    const byTicker = new Map((Array.isArray(signals) ? signals : []).map((s) => [String(s.ticker).toUpperCase(), s]));
+    // Include open monitored positions too (they aren't in the generation cache).
+    for (const m of Array.isArray(monitored) ? monitored : []) {
+      const t = String(m.ticker).toUpperCase();
+      if (byTicker.has(t)) continue;
+      const risk = m.entryPrice - m.stopLoss;
+      byTicker.set(t, {
+        ticker: m.ticker, name: m.name, signal: m.signal, confidence: m.confidence,
+        type: m.type, timeframe: m.timeframe, entry: m.entryPrice, stopLoss: m.stopLoss,
+        target1: m.target1, target2: m.target2, target3: m.target3,
+        riskReward: risk > 0 ? Math.round(((m.target1 - m.entryPrice) / risk) * 10) / 10 : null,
+        positionSize: typeof m.positionSize === "number" ? `${m.positionSize}%` : m.positionSize,
+        analysis: m.analysis,
+      });
+    }
+
+    const stocks = symbols.map((sym) => {
+      const isNse = NSE_SYMBOLS.includes(sym);
+      const q = quotes[isNse ? `NSE:${sym}` : sym] || {};
+      const sig = byTicker.get(sym) || null;
+      const f = svc.getFundamentals(sym) || {};
+      const an = (sig && sig.analysis) || {};
+      const ti = (an.technical && an.technical.indicators) || {};
+      return {
+        ticker: sym,
+        name: (sig && sig.name) || f.name || sym,
+        market: isNse ? 'NSE' : 'US',
+        currency: isNse ? 'KES' : 'USD',
+        quote: {
+          price: num(q.price) != null ? num(q.price) : num(sig && sig.price),
+          change: num(q.changePercent) != null ? num(q.changePercent) : num(sig && sig.change),
+          volume: num(q.volume) != null ? num(q.volume) : num(sig && sig.rawVolume),
+          dayHigh: num(q.dayHigh),
+          dayLow: num(q.dayLow),
+          previousClose: num(q.previousClose),
+          marketCap: num(q.marketCap) || num(f.marketCap) || null,
+        },
+        signal: sig ? {
+          rating: sig.signal,
+          confidence: num(sig.confidence),
+          type: sig.type,
+          timeframe: sig.timeframe,
+          entry: num(sig.entry),
+          stopLoss: num(sig.stopLoss),
+          target1: num(sig.target1),
+          target2: num(sig.target2),
+          target3: num(sig.target3),
+          riskReward: num(sig.riskReward),
+          positionSize: sig.positionSize,
+          mlWinProb: sig.mlWinProb,
+          regime: sig.regime,
+          weeklyTrend: sig.weeklyTrend,
+          overall: num(an.overall && an.overall.score),
+          overallGrade: (an.overall && an.overall.grade) || null,
+          fundamental: num(an.fundamental && an.fundamental.score),
+          technical: num(an.technical && an.technical.score),
+          financial: num(an.financial && an.financial.score),
+          macro: num(an.macro && an.macro.score),
+          insider: an.insider ? num(an.insider.score) : null,
+        } : null,
+        metrics: {
+          pe: num(f.peRatio),
+          pb: num(f.pbRatio),
+          evEbitda: num(f.evEbitda),
+          dividendYield: num(f.dividendYield),
+          revenueGrowth: num(f.revenueGrowth),
+          epsGrowth: num(f.epsGrowth),
+          epsSurprise: num(f.epsSurprise),
+          marginChange: num(f.marginChange),
+          roe: num(f.roe),
+          fcfYield: num(f.fcfYield),
+          debtEquity: num(f.debtToEquity),
+          currentRatio: num(f.currentRatio),
+          altmanZ: num(f.altmanZ),
+          payoutRatio: num(f.payoutRatio),
+          dataSource: f.dataSource || null,
+        },
+        technicals: {
+          rsi: num(ti.rsi),
+          rsiSignal: ti.rsiSignal || null,
+          macdSignal: ti.macdSignal || null,
+          trendSignal: ti.trendSignal || null,
+          momentum: ti.momentum || null,
+          momentumSignal: ti.momentumSignal || null,
+          volumeSignal: ti.volumeSignal || null,
+          bbSignal: ti.bbSignal || null,
+        },
+      };
+    });
+
+    res.json({ success: true, stocks, timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('Compare error:', error.message);
     res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });

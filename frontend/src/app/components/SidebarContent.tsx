@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../auth/AuthContext";
 import {
   LayoutGrid, Brain, PieChart, Star,
-  LineChart, Newspaper, FileText, MessageSquare, Users,
+  LineChart, Newspaper, FileText, MessageSquare, Users, GitCompare,
   Briefcase, Layers, User, LifeBuoy, Landmark,
   DollarSign, TrendingUp, GraduationCap, Lightbulb,
   ChevronsLeft, ChevronsRight, Mail,
@@ -63,6 +63,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
         { path: "/app/markets", icon: TrendingUp, label: "Markets" },
         { path: "/app/signals", icon: Brain, label: "Market Intelligence" },
         { path: "/app/stocks", icon: LineChart, label: "Stocks" },
+        { path: "/app/compare", icon: GitCompare, label: "Compare" },
         { path: "/app/financials", icon: FileText, label: "Financials" },
         { path: "/app/news", icon: Newspaper, label: "News" },
         { path: "/app/bonds", icon: Landmark, label: "Bonds" },
