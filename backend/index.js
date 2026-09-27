@@ -4130,6 +4130,70 @@ app.get('/api/signals', async (req, res) => {
   }
 });
 
+// ─── Comparison: total-return performance ───────────────────────────────────
+// Uses split/dividend-adjusted closes (Yahoo adjclose) so returns assume
+// dividends are reinvested. Cached 6h per symbol.
+const _perfCache = new Map();
+const PERF_CACHE_TTL = 6 * 60 * 60 * 1000;
+
+function _perfFromBars(bars) {
+  if (!Array.isArray(bars) || bars.length < 2) return null;
+  const pts = bars
+    .map((b) => ({
+      t: b.timestamp ? b.timestamp * 1000 : new Date(b.date).getTime(),
+      v: b.adjclose != null ? b.adjclose : b.close,
+    }))
+    .filter((p) => p.v > 0 && isFinite(p.t))
+    .sort((a, b) => a.t - b.t);
+  if (pts.length < 2) return null;
+  const end = pts[pts.length - 1];
+  const yearMs = 365.25 * 24 * 3600 * 1000;
+  const spanYears = (end.t - pts[0].t) / yearMs;
+  const nearest = (years) => {
+    const target = end.t - years * yearMs;
+    let best = pts[0], bestD = Infinity;
+    for (const p of pts) { const d = Math.abs(p.t - target); if (d < bestD) { bestD = d; best = p; } }
+    return best;
+  };
+  const ret = (p) => (p && p.v > 0 ? (end.v / p.v - 1) * 100 : null);
+  const ann = (p, years) => (p && p.v > 0 ? (Math.pow(end.v / p.v, 1 / years) - 1) * 100 : null);
+  const has = (years) => spanYears >= years * 0.9;
+  return {
+    y1: has(1) ? ret(nearest(1)) : null,
+    y3Annualized: has(3) ? ann(nearest(3), 3) : null,
+    y5Annualized: has(5) ? ann(nearest(5), 5) : null,
+    y10Annualized: has(10) ? ann(nearest(10), 10) : null,
+    spanYears: Math.round(spanYears * 10) / 10,
+    basis: bars.some((b) => b.adjclose != null) ? 'adjusted' : 'price',
+  };
+}
+
+async function _performanceFor(symbol, market) {
+  const key = `${market}:${symbol}`;
+  const hit = _perfCache.get(key);
+  if (hit && Date.now() - hit.ts < PERF_CACHE_TTL) return hit.data;
+  let bars = null;
+  try {
+    if (market === 'NSE') {
+      try {
+        const msa = require('./mystocksAfricaApi');
+        bars = await msa.fetchHistorical(`NSE:${symbol}`, '10y');
+      } catch { /* fall through to Yahoo */ }
+    }
+    if (!bars || bars.length < 2) {
+      const { fetchHistoricalQuotes } = require('./globalScraper');
+      const ysym = market === 'NSE' ? `${symbol}.NR` : symbol;
+      bars = await Promise.race([
+        fetchHistoricalQuotes(ysym, '10y', '1mo').catch(() => null),
+        new Promise((r) => setTimeout(() => r(null), 12000)),
+      ]);
+    }
+  } catch { bars = null; }
+  const data = _perfFromBars(bars);
+  if (data) _perfCache.set(key, { ts: Date.now(), data });
+  return data;
+}
+
 // ─── Stock Comparison ───────────────────────────────────────────────────────
 // Normalized side-by-side metrics for 2-5 tickers (NSE or US). One call builds
 // every column from the same sources — the live quote batch, the signal
@@ -4168,8 +4232,10 @@ app.get('/api/compare', async (req, res) => {
       });
     }
 
-    const stocks = symbols.map((sym) => {
-      const isNse = NSE_SYMBOLS.includes(sym);
+    const markets = symbols.map((s) => (NSE_SYMBOLS.includes(s) ? 'NSE' : 'US'));
+    const perf = await Promise.all(symbols.map((s, i) => _performanceFor(s, markets[i])));
+    const stocks = symbols.map((sym, i) => {
+      const isNse = markets[i] === 'NSE';
       const q = quotes[isNse ? `NSE:${sym}` : sym] || {};
       const sig = byTicker.get(sym) || null;
       const f = svc.getFundamentals(sym) || {};
@@ -4239,6 +4305,7 @@ app.get('/api/compare', async (req, res) => {
           volumeSignal: ti.volumeSignal || null,
           bbSignal: ti.bbSignal || null,
         },
+        performance: perf[i] || null,
       };
     });
 

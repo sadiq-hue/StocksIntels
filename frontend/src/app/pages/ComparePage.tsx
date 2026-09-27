@@ -42,6 +42,10 @@ interface CompareStock {
     rsi: number | null; rsiSignal: string | null; macdSignal: string | null; trendSignal: string | null;
     momentum: string | null; momentumSignal: string | null; volumeSignal: string | null; bbSignal: string | null;
   };
+  performance: {
+    y1: number | null; y3Annualized: number | null; y5Annualized: number | null; y10Annualized: number | null;
+    spanYears: number | null; basis: string | null;
+  } | null;
 }
 
 interface SearchResult { ticker: string; name: string; sector?: string; market?: string; }
@@ -74,6 +78,42 @@ function ScoreBar({ score }: { score: number | null }) {
       <span className="tabular-nums text-foreground">{score}</span>
     </div>
   );
+}
+
+// Plain-language comparison of the selected stocks' returns.
+function buildPerfNarrative(stocks: CompareStock[]): string | null {
+  const withPerf = stocks.filter((s) => s.performance);
+  if (withPerf.length < 2) return null;
+  const parts: string[] = [];
+
+  const y1 = withPerf.filter((s) => s.performance!.y1 != null)
+    .sort((a, b) => (b.performance!.y1!) - (a.performance!.y1!));
+  if (y1.length >= 2) {
+    const best = y1[0];
+    const worst = y1[y1.length - 1];
+    const middle = y1.slice(1, -1).map((s) => `${s.ticker} ${pctSigned(s.performance!.y1)}`).join(", ");
+    parts.push(
+      `In the past year, ${best.ticker} returned the most (${pctSigned(best.performance!.y1)}), versus ${worst.ticker} (${pctSigned(worst.performance!.y1)})${middle ? `, with ${middle}` : ""}.`
+    );
+  }
+
+  const windows: { key: "y10Annualized" | "y5Annualized" | "y3Annualized"; years: number }[] = [
+    { key: "y10Annualized", years: 10 },
+    { key: "y5Annualized", years: 5 },
+    { key: "y3Annualized", years: 3 },
+  ];
+  for (const w of windows) {
+    const have = withPerf.filter((s) => s.performance![w.key] != null)
+      .sort((a, b) => (b.performance![w.key]!) - (a.performance![w.key]!));
+    if (have.length >= 2) {
+      parts.push(`Over the past ${w.years} years, annualized returns were ${have.map((s) => `${s.ticker} ${pctSigned(s.performance![w.key])}`).join(", ")}.`);
+      break;
+    }
+  }
+
+  if (parts.length === 0) return null;
+  parts.push("Figures use split-adjusted prices and assume dividends are reinvested.");
+  return parts.join(" ");
 }
 
 export function ComparePage() {
@@ -174,6 +214,15 @@ export function ComparePage() {
         { label: "Volume", render: (s: CompareStock) => (s.quote.volume == null ? DASH : formatCompactNumber(s.quote.volume)) },
         { label: "Market Cap", render: (s: CompareStock) => (s.quote.marketCap == null ? DASH : formatCompactNumber(s.quote.marketCap)) },
         { label: "Day Range", render: (s: CompareStock) => (s.quote.dayLow == null || s.quote.dayHigh == null ? DASH : `${money(s.quote.dayLow, s.currency)} – ${money(s.quote.dayHigh, s.currency)}`) },
+      ],
+    },
+    {
+      title: "Performance",
+      rows: [
+        { label: "1-Year Return", render: (s: CompareStock) => (s.performance?.y1 == null ? DASH : <span className={s.performance.y1 >= 0 ? "text-emerald-600" : "text-red-500"}>{pctSigned(s.performance.y1)}</span>) },
+        { label: "3-Year (annualized)", render: (s: CompareStock) => pctSigned(s.performance?.y3Annualized ?? null) },
+        { label: "5-Year (annualized)", render: (s: CompareStock) => pctSigned(s.performance?.y5Annualized ?? null) },
+        { label: "10-Year (annualized)", render: (s: CompareStock) => pctSigned(s.performance?.y10Annualized ?? null) },
       ],
     },
     {
@@ -373,6 +422,13 @@ export function ComparePage() {
               )}
             </div>
           </Card>
+
+          {(() => {
+            const narrative = buildPerfNarrative(data);
+            return narrative ? (
+              <Card className="p-4 text-sm text-muted-foreground leading-relaxed">{narrative}</Card>
+            ) : null;
+          })()}
 
           {/* Metric matrix */}
           <Card className="p-0 overflow-hidden">
