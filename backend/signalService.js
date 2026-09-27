@@ -3561,29 +3561,39 @@ startMacroRefresh();
 // Group the aggregated news feed by the ticker(s) each article relates to, so
 // every signal can carry its own recent-news list. Returns a map of
 // UPPERCASE ticker -> articles (newest first, capped).
+// Only keep reasonably recent news — some free RSS feeds return years-old
+// cached items, which must never surface as "what can move it".
+const NEWS_MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
+
 function groupNewsBySymbol(articles, perSymbol = 10) {
   const bySymbol = {};
+  const seenBy = {};
+  const now = Date.now();
   for (const a of articles || []) {
     if (!a || a.isMock || !Array.isArray(a.relatedStocks)) continue;
+    const ts = a.publishedAt ? new Date(a.publishedAt).getTime() : NaN;
+    if (!isFinite(ts) || now - ts > NEWS_MAX_AGE_MS) continue;
+    const norm = String(a.headline || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     for (const raw of a.relatedStocks) {
       const t = String(raw || '').toUpperCase();
       if (!t) continue;
-      if (!bySymbol[t]) bySymbol[t] = [];
-      if (bySymbol[t].length < perSymbol) {
-        bySymbol[t].push({
-          headline: a.headline,
-          source: a.source,
-          url: a.url,
-          sentiment: a.sentiment,
-          sentimentScore: a.sentimentScore != null ? a.sentimentScore : null,
-          publishedAt: a.publishedAt,
-          timestamp: a.timestamp,
-          category: a.category,
-          hot: !!a.hot,
-          catalystDirection: a.catalystDirection || null,
-          catalystStrength: a.catalystStrength != null ? a.catalystStrength : null,
-        });
-      }
+      if (!bySymbol[t]) { bySymbol[t] = []; seenBy[t] = new Set(); }
+      if (bySymbol[t].length >= perSymbol) continue;
+      if (seenBy[t].has(norm)) continue; // same story syndicated across sources
+      seenBy[t].add(norm);
+      bySymbol[t].push({
+        headline: a.headline,
+        source: a.source,
+        url: a.url,
+        sentiment: a.sentiment,
+        sentimentScore: a.sentimentScore != null ? a.sentimentScore : null,
+        publishedAt: a.publishedAt,
+        timestamp: a.timestamp,
+        category: a.category,
+        hot: !!a.hot,
+        catalystDirection: a.catalystDirection || null,
+        catalystStrength: a.catalystStrength != null ? a.catalystStrength : null,
+      });
     }
   }
   return bySymbol;

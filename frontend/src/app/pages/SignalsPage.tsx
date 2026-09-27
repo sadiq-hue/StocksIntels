@@ -198,15 +198,8 @@ function isReferenceField(meta: { referenceFields?: string[] } | undefined, key:
   return !!meta && Array.isArray(meta.referenceFields) && meta.referenceFields.includes(key);
 }
 
-function newsItemTone(sentiment: string): string {
-  return sentiment === 'positive' ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-    : sentiment === 'negative' ? 'bg-red-100 text-red-700 border-red-200'
-    : 'bg-muted text-muted-foreground border-border';
-}
-
 // Rank news by how likely it is to move the stock: directed catalysts first,
-// then hot stories, then clearly-signed sentiment. Used to surface the most
-// influential headlines next to the News Sentiment verdict.
+// then hot stories, then clearly-signed sentiment.
 function newsImpactScore(n: { catalystDirection?: string | null; catalystStrength?: number | null; hot?: boolean; sentiment: string }): number {
   let s = 0;
   if (n.catalystDirection) s += 3 + (n.catalystStrength ? Math.min(3, n.catalystStrength) : 0);
@@ -215,9 +208,27 @@ function newsImpactScore(n: { catalystDirection?: string | null; catalystStrengt
   return s;
 }
 
-function topImpactNews<T extends { catalystDirection?: string | null; catalystStrength?: number | null; hot?: boolean; sentiment: string }>(news: T[] | undefined, n = 3): T[] {
+function normHeadline(h: string): string {
+  return String(h || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+// Only the stories that can actually move the stock: a directed catalyst, a hot
+// story, or a clearly-signed sentiment. Deduped by headline (the same story
+// syndicated across sources) and ranked by impact, capped for a clean card.
+function influentialNews<T extends { headline: string; catalystDirection?: string | null; catalystStrength?: number | null; hot?: boolean; sentiment: string }>(news: T[] | undefined, max = 5): T[] {
   if (!Array.isArray(news)) return [];
-  return [...news].sort((a, b) => newsImpactScore(b) - newsImpactScore(a)).slice(0, n);
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const n of [...news].sort((a, b) => newsImpactScore(b) - newsImpactScore(a))) {
+    const influential = !!n.catalystDirection || !!n.hot || n.sentiment === 'positive' || n.sentiment === 'negative';
+    if (!influential) continue;
+    const key = normHeadline(n.headline);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(n);
+    if (out.length >= max) break;
+  }
+  return out;
 }
 
 function ratingPlain(signal: string): string {
@@ -820,17 +831,17 @@ export function SignalsPage() {
                                       <span className="font-medium text-foreground/70">What it means:</span> {CONDITION_PLAIN[c.key] || 'See the detail above.'} <span className="font-medium text-foreground/70">Verdict:</span> {ratingPlain(signal).toLowerCase()}.
                                     </p>
                                     {c.key === 'newsSignal' && (() => {
-                                      const top = topImpactNews(selected.news, 2);
-                                      if (top.length === 0) return null;
+                                      const items = influentialNews(selected.news, 5);
+                                      if (items.length === 0) return null;
                                       return (
                                         <div className="pl-[4.25rem] mt-1.5 space-y-1.5">
-                                          <p className="text-[9px] font-semibold text-foreground/70 uppercase tracking-wide">What can move it</p>
-                                          {top.map((n, i) => (
+                                          {items.map((n, i) => (
                                             <a key={`${n.url}-${i}`} href={n.url} target="_blank" rel="noopener noreferrer" className="block group">
                                               <div className="flex items-start gap-1.5">
                                                 <span className={`mt-1 size-1.5 rounded-full shrink-0 ${n.sentiment === 'positive' ? 'bg-emerald-500' : n.sentiment === 'negative' ? 'bg-red-500' : 'bg-muted-foreground/40'}`} />
                                                 <p className="text-[10px] text-foreground/90 leading-snug group-hover:text-[#0D7490]">
                                                   {n.headline}
+                                                  {n.hot && <span className="text-orange-600 font-semibold"> · Hot</span>}
                                                   {n.catalystDirection && (
                                                     <span className={n.catalystDirection === 'positive' ? 'text-emerald-600' : 'text-red-600'}> · {n.catalystDirection} catalyst</span>
                                                   )}
@@ -912,58 +923,6 @@ export function SignalsPage() {
                             </div>
                           );
                         })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── Recent News & Impact ── */}
-                  {selected.news && selected.news.length > 0 && (
-                    <div>
-                      <div className="flex items-baseline justify-between flex-wrap gap-2 mb-2">
-                        <h3 className="text-sm font-semibold text-foreground">Recent News &amp; Impact</h3>
-                        <p className="text-[10px] text-muted-foreground italic">Headlines that can move this stock</p>
-                      </div>
-                      {selected.newsSummary && (
-                        <div className="flex items-center gap-2 mb-2 text-[10px] text-muted-foreground flex-wrap">
-                          <span className="font-semibold text-foreground">
-                            {selected.newsSummary.count} recent article{selected.newsSummary.count === 1 ? '' : 's'}
-                          </span>
-                          {selected.newsSummary.positive > 0 && <span className="text-emerald-600">{selected.newsSummary.positive} positive</span>}
-                          {selected.newsSummary.negative > 0 && <span className="text-red-600">{selected.newsSummary.negative} negative</span>}
-                          {selected.newsSummary.neutral > 0 && <span>{selected.newsSummary.neutral} neutral</span>}
-                          <span className={`ml-auto font-semibold ${
-                            selected.newsSummary.net === 'positive' ? 'text-emerald-600'
-                              : selected.newsSummary.net === 'negative' ? 'text-red-600' : 'text-muted-foreground'
-                          }`}>
-                            Net: {selected.newsSummary.net}
-                          </span>
-                        </div>
-                      )}
-                      <div className="space-y-2">
-                        {selected.news.map((n, i) => (
-                          <a
-                            key={`${n.url}-${i}`}
-                            href={n.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block rounded-lg border border-border bg-muted/40 p-2.5 hover:bg-muted transition-colors"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-xs font-medium text-foreground leading-snug">{n.headline}</p>
-                              <span className={`shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded border ${newsItemTone(n.sentiment)}`}>{n.sentiment}</span>
-                            </div>
-                            <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground flex-wrap">
-                              {n.source && <span>{n.source}</span>}
-                              {n.timestamp && <span>· {n.timestamp}</span>}
-                              {n.hot && <span className="text-orange-600 font-semibold">· Hot</span>}
-                              {n.catalystDirection && (
-                                <span className={n.catalystDirection === 'positive' ? 'text-emerald-600' : 'text-red-600'}>
-                                  · {n.catalystDirection} catalyst
-                                </span>
-                              )}
-                            </div>
-                          </a>
-                        ))}
                       </div>
                     </div>
                   )}
