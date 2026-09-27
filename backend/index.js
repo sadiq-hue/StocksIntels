@@ -4177,7 +4177,9 @@ async function _performanceFor(symbol, market) {
     if (market === 'NSE') {
       try {
         const msa = require('./mystocksAfricaApi');
-        bars = await msa.fetchHistorical(`NSE:${symbol}`, '10y');
+        // MyStocks supports 1Y / 5Y (its 6MO/2Y periods are broken and return
+        // ~1 month), so ask for 5y to enable 1/3/5-year NSE returns.
+        bars = await msa.fetchHistorical(`NSE:${symbol}`, '5y');
       } catch { /* fall through to Yahoo */ }
     }
     if (!bars || bars.length < 2) {

@@ -102,17 +102,24 @@ function buildPerfNarrative(stocks: CompareStock[]): string | null {
     { key: "y5Annualized", years: 5 },
     { key: "y3Annualized", years: 3 },
   ];
-  for (const w of windows) {
-    const have = withPerf.filter((s) => s.performance![w.key] != null)
-      .sort((a, b) => (b.performance![w.key]!) - (a.performance![w.key]!));
-    if (have.length >= 2) {
-      parts.push(`Over the past ${w.years} years, annualized returns were ${have.map((s) => `${s.ticker} ${pctSigned(s.performance![w.key])}`).join(", ")}.`);
-      break;
-    }
+  // Prefer the longest window that covers the most of the selected stocks, so a
+  // mixed NSE + US list still compares everyone (NSE has up to 5y, US up to 10y).
+  const candidates = windows
+    .map((w) => ({
+      ...w,
+      have: withPerf
+        .filter((s) => s.performance![w.key] != null)
+        .sort((a, b) => (b.performance![w.key]!) - (a.performance![w.key]!)),
+    }))
+    .filter((w) => w.have.length >= 2)
+    .sort((a, b) => (b.have.length - a.have.length) || (b.years - a.years));
+  if (candidates.length) {
+    const w = candidates[0];
+    parts.push(`Over the past ${w.years} years, annualized returns were ${w.have.map((s) => `${s.ticker} ${pctSigned(s.performance![w.key])}`).join(", ")}.`);
   }
 
   if (parts.length === 0) return null;
-  parts.push("Figures use split-adjusted prices and assume dividends are reinvested.");
+  parts.push("Returns use adjusted closes (splits, and reinvested dividends where available).");
   return parts.join(" ");
 }
 
@@ -173,7 +180,9 @@ export function ComparePage() {
     Promise.all(
       data.map(async (s) => {
         const sym = s.market === "NSE" ? `${s.ticker}.NSE` : s.ticker;
-        try { return { t: s.ticker, bars: await fetchStockHistory(sym, range) }; }
+        // NSE's upstream "6mo" period returns only ~1 month, so use 1y there.
+        const r = s.market === "NSE" ? "1y" : range;
+        try { return { t: s.ticker, bars: await fetchStockHistory(sym, r) }; }
         catch { return { t: s.ticker, bars: [] as PriceBar[] }; }
       })
     ).then((series) => {

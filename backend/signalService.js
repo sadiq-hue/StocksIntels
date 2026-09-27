@@ -481,7 +481,7 @@ const QUOTE_CACHE_TTL = 30 * 1000; // 30 seconds
 // NSE price accumulator: builds daily OHLC bars from periodic scraper data
 const _nseDailyHistory = new Map();
 const _nseIntradayBuffer = new Map();
-const MAX_DAYS = 90;
+const MAX_DAYS = 365;
 
 // Max allowed deviation of a live quote from the prior session close before it is
 // treated as a garbage/stale quote (day-high-as-price, wrong symbol, broken feed).
@@ -633,11 +633,13 @@ async function getPriceHistory(symbol) {
 
   const isNse = NSE_SYMBOLS.includes(symbol);
 
-  // NSE stocks: use MyStocks Africa (same pipeline as financial-reports page)
+  // NSE stocks: use MyStocks Africa (same pipeline as financial-reports page).
+  // Request 1y (the upstream "6mo" period only returns ~1 month, which starved
+  // NSE technicals of history).
   if (isNse) {
     try {
       const msa = require('./mystocksAfricaApi');
-      const bars = await msa.fetchHistorical(`NSE:${symbol}`, '6mo');
+      const bars = await msa.fetchHistorical(`NSE:${symbol}`, '1y');
       if (bars && bars.length >= 2) {
         const valid = bars.filter(b => b.close != null);
         const prices = valid.map(b => b.close);
