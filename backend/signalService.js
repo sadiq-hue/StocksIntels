@@ -192,7 +192,10 @@ initNewsHistory().catch(() => {});
 let _signalsCache = null;
 let _signalsCacheTime = 0;
 let _signalsInProgress = false;
-const SIGNALS_CACHE_TTL = 30 * 60 * 1000; // 30 minutes (matches the quick-mode stale background refresh threshold)
+// Signals are considered stale after 15 min, so during market hours a fresh
+// cycle is kicked off around every 15 min (the _signalsInProgress guard means
+// cycles never overlap, so a slow cycle simply delays the next one).
+const SIGNALS_CACHE_TTL = 15 * 60 * 1000;
 
 async function _persistSignalCache(signals) {
   try {
@@ -3574,10 +3577,12 @@ setTimeout(async () => {
 setInterval(() => {
   resolveAllForwardPredictions().catch(() => {});
 }, 5 * 60 * 1000);
-// Auto-generate signals every hour (checks market hours internally)
+// Auto-generate signals every 15 min (the exchange-hours guard inside means it
+// only actually runs while a tracked market is live; _signalsInProgress prevents
+// overlap, so a long cycle simply defers the next tick).
 setInterval(() => {
   generateSignals(null, false).catch(() => {});
-}, 60 * 60 * 1000);
+}, SIGNALS_CACHE_TTL);
 
 // Live macro data (World Bank/IMF): warm on boot and refresh every 6h so the
 // Macro Conditions cards reflect current official figures, not frozen values.
@@ -3668,10 +3673,10 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     return _signalsCache;
   }
   if (!marketData && quick && _signalsCache) {
-    // Kick off background full regeneration if cache is stale (>30 min old).
+    // Kick off background full regeneration if the cache is stale.
     // No force: the exchange-hours guard below applies, so a cycle only runs
     // when a tracked exchange is actually live — never on weekends/nights.
-    if (!_signalsInProgress && Date.now() - _signalsCacheTime > 30 * 60 * 1000) {
+    if (!_signalsInProgress && Date.now() - _signalsCacheTime > SIGNALS_CACHE_TTL) {
       generateSignals(null, false, false).catch(() => {});
     }
     return _signalsCache;
