@@ -8,6 +8,7 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
 import { authFetch } from "../auth/tokenStore";
+import { useCompare } from "../contexts/CompareContext";
 import { fetchStockHistory, type PriceBar } from "../services/marketDataService";
 import { formatCompactNumber } from "../utils/format";
 
@@ -122,7 +123,7 @@ function buildPerfNarrative(stocks: CompareStock[]): string | null {
 
 export function ComparePage() {
   const navigate = useNavigate();
-  const [selected, setSelected] = useState<string[]>([]);
+  const { list: selected, add, remove, clear } = useCompare();
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [data, setData] = useState<CompareStock[]>([]);
@@ -148,13 +149,7 @@ export function ComparePage() {
     return () => clearTimeout(id);
   }, [search]);
 
-  const add = (raw: string) => {
-    const t = String(raw || "").toUpperCase().replace(/^NSE:/, "").trim();
-    if (!t) return;
-    setSelected((prev) => (prev.includes(t) || prev.length >= MAX_STOCKS ? prev : [...prev, t]));
-    setSearch(""); setResults([]);
-  };
-  const remove = (t: string) => setSelected((prev) => prev.filter((x) => x !== t));
+  const addTicker = (raw: string) => { add(raw); setSearch(""); setResults([]); };
 
   // Fetch the normalized comparison payload
   useEffect(() => {
@@ -324,7 +319,7 @@ export function ComparePage() {
                 <button
                   key={r.ticker}
                   type="button"
-                  onClick={() => add(r.ticker)}
+                  onClick={() => addTicker(r.ticker)}
                   className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-muted"
                 >
                   <span className="min-w-0">
@@ -352,12 +347,12 @@ export function ComparePage() {
             </span>
           ))}
           {selected.length === 0 && SUGGESTIONS.map((s) => (
-            <button key={s} type="button" onClick={() => add(s)} className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:bg-muted">
+            <button key={s} type="button" onClick={() => addTicker(s)} className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:bg-muted">
               {s}
             </button>
           ))}
           {selected.length > 1 && (
-            <button type="button" onClick={() => setSelected([])} className="ml-auto text-xs text-muted-foreground hover:text-foreground">
+            <button type="button" onClick={() => clear()} className="ml-auto text-xs text-muted-foreground hover:text-foreground">
               Clear all
             </button>
           )}

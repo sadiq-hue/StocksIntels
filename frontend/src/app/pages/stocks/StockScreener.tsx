@@ -11,6 +11,7 @@ import {
   type ScreenerFilters, type ScreenerStock, type ScreenerResult, type ScreenerCriteria,
 } from "../../services/screenerService";
 import { formatVolume } from "../../utils/format";
+import { CompareButton } from "../../components/CompareButton";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -346,6 +347,7 @@ export function StockScreener() {
                   <th className="px-4 py-3 text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-right hidden xl:table-cell cursor-pointer select-none hover:text-foreground" onClick={() => toggleSort("score")}>
                     Score <SortIcon col="score" />
                   </th>
+                  <th className="px-4 py-3"><span className="sr-only">Compare</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -395,6 +397,9 @@ export function StockScreener() {
                       </td>
                       <td className="px-4 py-3 text-right hidden xl:table-cell">
                         <ScoreBar score={stock.score} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <CompareButton ticker={stock.ticker} withLabel={false} size="sm" />
                       </td>
                     </tr>
                   );
@@ -481,6 +486,7 @@ export function StockScreener() {
                   </span>
                   <span className="text-[10px] text-muted-foreground">{stock.type}</span>
                   <span className="text-[10px] text-muted-foreground ml-auto">Conf: {stock.confidence}%</span>
+                  <CompareButton ticker={stock.ticker} withLabel={false} size="sm" />
                 </div>
                 <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
                   <span>{stock.sector || 'N/A'}</span>

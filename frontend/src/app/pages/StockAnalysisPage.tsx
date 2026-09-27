@@ -48,6 +48,7 @@ import { FinancialMetrics } from "../components/FinancialMetrics";
 import { TradingViewChart } from "../components/TradingViewChart";
 import { useAuth } from "../auth/AuthContext";
 import { authFetch } from "../auth/tokenStore";
+import { CompareButton } from "../components/CompareButton";
 import { fetchFinancialReport, type FinancialReport } from "../services/financialsService";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
@@ -959,6 +960,7 @@ export function StockAnalysisPage() {
                         }`} />
                         {isRegular ? "Market Open" : isPreMarket ? "Pre-Market" : isPostMarket ? "After Hours" : "Closed"}
                       </Badge>
+                      <CompareButton ticker={activeSelection.ticker} size="sm" />
                     </div>
                     <p className="mt-1 truncate text-sm font-medium text-muted-foreground">{tickerLine}</p>
                   </div>

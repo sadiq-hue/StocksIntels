@@ -26,6 +26,7 @@ import { NotificationProvider } from "./app/contexts/NotificationContext";
 import { StockDataProvider } from "./app/contexts/StockDataContext";
 import { PortfolioDataProvider } from "./app/contexts/PortfolioDataContext";
 import { PaperTradingProvider } from "./app/contexts/PaperTradingContext";
+import { CompareProvider } from "./app/contexts/CompareContext";
 import { kenyanStocks, globalStocks } from "./app/data/stockUniverses";
   import App from "./app/App.tsx";
   import "./styles/index.css";
@@ -42,9 +43,11 @@ createRoot(document.getElementById("root")!).render(
             <StockDataProvider>
               <PortfolioDataProvider>
                 <PaperTradingProvider>
-                  <ErrorBoundary>
-                    <App />
-                  </ErrorBoundary>
+                  <CompareProvider>
+                    <ErrorBoundary>
+                      <App />
+                    </ErrorBoundary>
+                  </CompareProvider>
                 </PaperTradingProvider>
               </PortfolioDataProvider>
             </StockDataProvider>

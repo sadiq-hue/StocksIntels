@@ -9,6 +9,7 @@ import {
   ChevronsLeft, ChevronsRight, Mail,
 } from "lucide-react";
 import { useBeginnerMode } from "../contexts/BeginnerModeContext";
+import { useCompare } from "../contexts/CompareContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -27,6 +28,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
   const location = useLocation();
   const { user } = useAuth();
   const { beginnerMode, toggleBeginnerMode } = useBeginnerMode();
+  const { list: compareList } = useCompare();
   const [marketStatus, setMarketStatus] = useState<{ nse: { open: boolean; label: string; eventLabel: string }; global: { open: boolean; label: string; eventLabel: string } } | null>(null);
 
   useEffect(() => {
@@ -63,7 +65,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
         { path: "/app/markets", icon: TrendingUp, label: "Markets" },
         { path: "/app/signals", icon: Brain, label: "Market Intelligence" },
         { path: "/app/stocks", icon: LineChart, label: "Stocks" },
-        { path: "/app/compare", icon: GitCompare, label: "Compare" },
+        { path: "/app/compare", icon: GitCompare, label: "Compare", badge: compareList.length },
         { path: "/app/financials", icon: FileText, label: "Financials" },
         { path: "/app/news", icon: Newspaper, label: "News" },
         { path: "/app/bonds", icon: Landmark, label: "Bonds" },
@@ -83,7 +85,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
     },
   ];
 
-  const NavLink = ({ item }: { item: { path: string; icon: React.ComponentType<{ className?: string }>; label: string } }) => {
+  const NavLink = ({ item }: { item: { path: string; icon: React.ComponentType<{ className?: string }>; label: string; badge?: number } }) => {
     const Icon = item.icon;
     const active = isActive(item.path);
     const link = (
@@ -103,6 +105,14 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
         )}
         <Icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-200 ${active ? "" : "group-hover:scale-110"}`} />
         {!collapsed && <span className="text-sm font-medium">{item.label}</span>}
+        {!collapsed && item.badge ? (
+          <span className={`ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${active ? "bg-white/25 text-white" : "bg-[#0D7490] text-white"}`}>
+            {item.badge}
+          </span>
+        ) : null}
+        {collapsed && item.badge ? (
+          <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#0D7490] px-1 text-[9px] font-bold text-white">{item.badge}</span>
+        ) : null}
       </Link>
     );
     return collapsed ? <Tooltip label={item.label}>{link}</Tooltip> : link;
