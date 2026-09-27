@@ -77,21 +77,6 @@ function signalTone(rating: string): string {
   return "bg-yellow-100 text-yellow-700 border-yellow-200";
 }
 
-function ScoreBar({ score }: { score: number | null }) {
-  if (score == null) return <span className="text-muted-foreground">{DASH}</span>;
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-14 rounded-full bg-muted overflow-hidden">
-        <div
-          className={`h-full rounded-full ${score >= 70 ? "bg-emerald-500" : score >= 45 ? "bg-yellow-500" : "bg-red-500"}`}
-          style={{ width: `${Math.max(0, Math.min(100, score))}%` }}
-        />
-      </div>
-      <span className="tabular-nums text-foreground">{score}</span>
-    </div>
-  );
-}
-
 // Plain-language comparison of the selected stocks' returns.
 function buildPerfNarrative(stocks: CompareStock[]): string | null {
   const withPerf = stocks.filter((s) => s.performance);
@@ -262,17 +247,6 @@ export function ComparePage() {
         { label: "Risk / Reward", render: (s: CompareStock) => (s.signal?.riskReward == null ? DASH : `1:${s.signal.riskReward.toFixed(1)}`) },
         { label: "Target 1", render: (s: CompareStock) => money(s.signal?.target1 ?? null, s.currency) },
         { label: "Stop", render: (s: CompareStock) => money(s.signal?.stopLoss ?? null, s.currency) },
-      ],
-    },
-    {
-      title: "Scores",
-      rows: [
-        { label: "Overall", render: (s: CompareStock) => (s.signal ? <span className="font-medium">{s.signal.overallGrade || DASH} <span className="text-muted-foreground">({s.signal.overall ?? DASH})</span></span> : DASH) },
-        { label: "Fundamental", render: (s: CompareStock) => <ScoreBar score={s.signal?.fundamental ?? null} /> },
-        { label: "Technical", render: (s: CompareStock) => <ScoreBar score={s.signal?.technical ?? null} /> },
-        { label: "Financial", render: (s: CompareStock) => <ScoreBar score={s.signal?.financial ?? null} /> },
-        { label: "Macro", render: (s: CompareStock) => <ScoreBar score={s.signal?.macro ?? null} /> },
-        { label: "Insider", render: (s: CompareStock) => <ScoreBar score={s.signal?.insider ?? null} /> },
       ],
     },
     {
