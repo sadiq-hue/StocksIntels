@@ -862,6 +862,7 @@ function getKenyanBusinessNews() {
 // Fetch article dates from KWS sitemap (cached)
 let kwsDateCache = null;
 let kwsDateCacheTime = 0;
+let kwsFailCount = 0;
 const KWS_DATE_CACHE_TTL = 3600000; // 1 hour
 
 async function fetchKwsSitemapDates() {
@@ -962,7 +963,11 @@ async function fetchFromKWS() {
     console.log('  Fetched ' + articles.length + ' articles from Kenyan Wall Street');
     return articles.slice(0, 20);
   } catch (error) {
-    console.error('  KWS fetch error:', error.message);
+    kwsFailCount++;
+    // KWS sits behind Cloudflare and 403s from datacenter IPs; log sparingly.
+    if (kwsFailCount <= 3 || kwsFailCount % 20 === 0) {
+      console.error('  KWS fetch error (suppressing repeats):', error.message);
+    }
     return [];
   }
 }
@@ -992,7 +997,7 @@ function extractRssImage(item) {
 async function fetchFromGlobalRSS() {
   const results = await Promise.allSettled(
     GLOBAL_RSS_FEEDS.map(async feed => {
-      const res = await rssHttp.get(feed.url);
+      const res = await fetchRssWithRetry(feed.url);
       const data = await rssParser.parseString(res.data);
       return { feed, data };
     })
@@ -1031,6 +1036,91 @@ async function fetchFromGlobalRSS() {
   }
 
   console.log(`✅ Fetched ${articles.length} articles from global RSS feeds`);
+  return articles;
+}
+
+// Strip HTML tags/entities from an RSS description.
+function stripHtml(html) {
+  return String(html || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// RSS fetch with a couple of quick retries — free feeds occasionally 5xx/timing
+// out, and one flaky feed shouldn't cost us the whole batch.
+async function fetchRssWithRetry(url, attempts = 2) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await rssHttp.get(url);
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
+// ─── Google News RSS (free, reliable, rich Kenyan corporate coverage) ───────
+// Each query returns up to 100 items. The item title is "Headline - Source", so
+// the source is split off and the clean headline tagged against the NSE/US
+// universe. Queries are Kenyan-focused; the global tickers already have plenty
+// of sources elsewhere.
+const GOOGLE_NEWS_QUERIES = [
+  { q: 'Nairobi Securities Exchange OR "NSE Kenya"', max: 25 },
+  { q: 'Safaricom OR "Equity Group" OR "KCB Group" OR EABL OR "Kenya Airways" OR "Co-operative Bank"', max: 25 },
+  { q: 'Kenya listed company earnings OR profit warning OR dividend OR acquisition', max: 20 },
+  { q: 'NSE Kenya share price OR results OR trading', max: 20 },
+];
+
+function googleNewsUrl(q) {
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-KE&gl=KE&ceid=KE:en`;
+}
+
+async function fetchFromGoogleNews() {
+  const results = await Promise.allSettled(
+    GOOGLE_NEWS_QUERIES.map(async (cfg) => {
+      const res = await fetchRssWithRetry(googleNewsUrl(cfg.q));
+      const data = await rssParser.parseString(res.data);
+      return { cfg, data };
+    })
+  );
+
+  const articles = [];
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    const { cfg, data } = result.value;
+    for (const item of (data.items || []).slice(0, cfg.max || 20)) {
+      const rawTitle = (item.title || '').trim();
+      if (!rawTitle || rawTitle.length < 12) continue;
+      // Google News appends " - Source" to every headline.
+      const m = rawTitle.match(/^(.*\S)\s+-\s+([^-]{2,40})$/);
+      const headline = (m ? m[1] : rawTitle).trim();
+      const source = m ? m[2].trim() : 'Google News';
+      const excerpt = stripHtml(item.contentSnippet || item.content || item.summary || '').substring(0, 300);
+      const pubDate = item.isoDate ? new Date(item.isoDate) : (item.pubDate ? new Date(item.pubDate) : new Date());
+      const relatedStocks = extractRelatedStocks(headline + ' ' + excerpt);
+      articles.push({
+        id: `gnews-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        headline: headline.substring(0, 200),
+        source,
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: 'nse',
+        relatedStocks,
+        sentiment: analyzeSentiment(headline + ' ' + excerpt),
+        excerpt,
+        url: item.link || '#',
+        imageUrl: null,
+      });
+    }
+  }
+  if (articles.length) console.log(`✅ Fetched ${articles.length} articles from Google News`);
   return articles;
 }
 
@@ -1511,10 +1601,11 @@ async function getAllNews(limit = 50, categoryFilter) {
   }
 
   try {
-    const [kenyanBusinessNews, kwsNews, globalRssNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews, yahooNews, kenyanMarketsNews] = await Promise.allSettled([
+    const [kenyanBusinessNews, kwsNews, globalRssNews, googleNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews, yahooNews, kenyanMarketsNews] = await Promise.allSettled([
       getKenyanBusinessNews(),
       withTimeout(fetchFromKWS(), 12000),
       withTimeout(fetchFromGlobalRSS(), 20000),
+      withTimeout(fetchFromGoogleNews(), 20000),
       withTimeout(fetchFromNewsAPI(), 8000),
       withTimeout(fetchFromFinnhub(), 8000),
       withTimeout(fetchFromBenzinga(), 8000),
@@ -1529,6 +1620,7 @@ async function getAllNews(limit = 50, categoryFilter) {
       ...extract(kwsNews),
       ...extract(kenyanBusinessNews),
       ...extract(kenyanMarketsNews),
+      ...extract(googleNews),
       ...extract(globalRssNews),
       ...extract(alphaVantageNews),
       ...extract(yahooNews),
