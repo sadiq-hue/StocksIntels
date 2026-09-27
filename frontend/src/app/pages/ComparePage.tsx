@@ -432,9 +432,9 @@ export function ComparePage() {
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="sticky left-0 z-10 bg-card p-3 text-left text-xs font-semibold text-muted-foreground min-w-[10rem]">Metric</th>
+                    <th className="sticky left-0 z-10 bg-card p-3 text-left text-xs font-semibold text-muted-foreground min-w-[7.5rem] sm:min-w-[10rem]">Metric</th>
                     {data.map((s) => (
-                      <th key={s.ticker} className="p-3 text-left align-top min-w-[9.5rem]">
+                      <th key={s.ticker} className="p-3 text-left align-top min-w-[8rem] sm:min-w-[9.5rem]">
                         <button type="button" onClick={() => navigate(`/app/stock/${s.ticker}?market=${s.market === "NSE" ? "nse" : "us"}`)} className="text-left group">
                           <div className="flex items-center gap-1.5">
                             <span className="font-semibold text-foreground group-hover:text-[#0D7490]">{s.ticker}</span>

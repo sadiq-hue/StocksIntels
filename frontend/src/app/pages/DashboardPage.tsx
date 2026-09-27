@@ -1347,7 +1347,7 @@ export function DashboardPage() {
                   <>
                     <div>
                       <h4 className="text-xs font-semibold text-foreground mb-2">Trading Parameters</h4>
-                      <div className="grid grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <div className="bg-blue-50 rounded-md p-2 text-center border border-blue-100"><p className="text-[9px] font-medium text-blue-600 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 font-mono">${sig.price.toFixed(2)}</p></div>
                         <div className="bg-red-50 rounded-md p-2 text-center border border-red-100"><p className="text-[9px] font-medium text-red-600 uppercase">Stop</p><p className="text-xs font-bold text-red-900 font-mono">${sig.price?.toFixed(2)}</p></div>
                         <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">Conf</p><p className={`text-xs font-bold ${sig.confidence >= 80 ? 'text-emerald-700' : sig.confidence >= 60 ? 'text-yellow-700' : 'text-red-700'}`}>{sig.confidence}%</p></div>

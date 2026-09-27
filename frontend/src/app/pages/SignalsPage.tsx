@@ -912,7 +912,7 @@ export function SignalsPage() {
                           ? ' — some figures are reference estimates'
                           : ' — snapshot taken when this position opened'}
                       </p>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {Object.entries(selected.analysis.macro.conditions).map(([key, cond]) => {
                           const sig = (cond as any).signal || 'NEUTRAL';
                           const style = sig === 'BUY' ? 'bg-emerald-50 border-emerald-200' :
