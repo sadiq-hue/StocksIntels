@@ -344,9 +344,11 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
 
   if (previous && previous.action !== 'hold' && previous.stopLoss != null && previous.target1 != null && !previous.result) {
     const isPrevBuy = previous.action === 'buy';
-    // Refresh the displayed holding period with the fresh volatility-based
-    // estimate every cycle, so a held card never shows a label frozen at open.
+    // Refresh the displayed holding period + analysis (technicals, macro, etc.)
+    // with the fresh signal every cycle, so a held card never shows a snapshot
+    // frozen at open. Persisted with the portfolio state.
     if (newSignal.timeframe) previous.timeframe = newSignal.timeframe;
+    if (newSignal.analysis) previous.analysis = newSignal.analysis;
     // Defensive guards: never resolve a position whose stop sits on the wrong side of
     // entry (broken/inverted levels) or when the price hasn't actually moved past the
     // level (stale/identical cached quote). Otherwise every broken position resolves

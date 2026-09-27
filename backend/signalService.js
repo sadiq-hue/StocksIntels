@@ -329,6 +329,20 @@ function monitoredTimeframe(ticker, v, cached) {
   return v.timeframe || (cached && cached.timeframe ? cached.timeframe : null);
 }
 
+// Recompute the technical indicators from the current price and cached daily
+// history so a monitored card's Technicals block matches the displayed price
+// instead of the snapshot frozen at open. Falls back to the stored analysis
+// when the price history (and thus the indicators) is not warm.
+function liveTechnicalAnalysis(ticker, price, volume, storedAnalysis) {
+  const histEntry = _priceHistoryCache.get(ticker);
+  const hist = histEntry && histEntry.data;
+  if (!(price > 0) || !hist || hist.length < 20) return storedAnalysis;
+  try {
+    const t = analyzeTechnicals(ticker, price, hist, volume || null, engineConfig.getConfig().indicator_params);
+    return { ...(storedAnalysis || {}), technical: { score: t.score, grade: t.technicalGrade, indicators: t.indicators } };
+  } catch { return storedAnalysis; }
+}
+
 // Detail list of the positions the live monitor is actively tracking — every one
 // is a Buy-direction call (Sell ratings are exit/avoid flags with no levels, so
 // they are never tracked as positions). Exposed so the frontend can show the
@@ -376,7 +390,7 @@ function getMonitoredSignals() {
       // catalyst append ("...pressure.. | Deal catalyst") from the macro-reason
       // embed bug in generateReason.
       reason: (v.reason || '').replace(/\.{2,}/g, '.') || null,
-      analysis: v.analysis || null,
+      analysis: liveTechnicalAnalysis(ticker, price, qc && qc.volume, v.analysis),
     });
   }
   _warmMonitoredQuotes().catch(() => {});
