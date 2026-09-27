@@ -105,11 +105,10 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/app";
   const refParam = searchParams.get("ref") || undefined;
-  const { login, register, sendVerificationCode, verifyEmailAndRegister, forgotPassword, resetPassword, sendOtp, verifyOtp, requestLoginOtp, verifyLoginOtp } = useAuth();
+  const { login, register, sendVerificationCode, verifyEmailAndRegister, forgotPassword, resetPassword, sendOtp, verifyOtp } = useAuth();
   const [mode, setMode] = useState<AuthMode>("login");
   const [regStage, setRegStage] = useState<RegStage>("form");
   const [otpStage, setOtpStage] = useState<OtpStage>("send");
-  const [loginStage, setLoginStage] = useState<"password" | "otp">("password");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -183,24 +182,13 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); clear();
     if (mode === "login") {
-      if (loginStage === "password") {
-        if (!email || !password) { setError("Email and password are required"); return; }
-        setIsLoading(true);
-        try {
-          const res = await requestLoginOtp(email, password, turnstileToken);
-          setCountdown(res.expiresIn);
-          setSuccess("OTP sent to your email");
-          setLoginStage("otp");
-          resetTurnstile();
-        } catch (err) { setError(err instanceof Error ? err.message : "Failed to send login OTP"); }
-        finally { setIsLoading(false); }
-      } else {
-        if (!otpCode || otpCode.length < 6) { setError("Enter the 6-digit OTP"); return; }
-        setIsLoading(true);
-        try { await verifyLoginOtp(email, otpCode); navigate(redirectTo); }
-        catch (err) { setError(err instanceof Error ? err.message : "OTP verification failed"); }
-        finally { setIsLoading(false); }
-      }
+      if (!email || !password) { setError("Email and password are required"); return; }
+      setIsLoading(true);
+      try {
+        await login(email, password, turnstileToken);
+        navigate(redirectTo);
+      } catch (err) { setError(err instanceof Error ? err.message : "Sign in failed"); }
+      finally { setIsLoading(false); }
     } else if (mode === "register") {
       if (regStage === "form") {
         if (!email) { setError("Email is required"); return; }
@@ -268,22 +256,10 @@ export function LoginPage() {
       try {
         await resetPassword(email, otpCode, newPassword);
         setSuccess("Password reset successful. Sign in with your new password.");
-        setTimeout(() => { setMode("login"); setLoginStage("password"); setPassword(""); setOtpCode(""); setNewPassword(""); }, 2000);
+        setTimeout(() => { setMode("login"); setPassword(""); setOtpCode(""); setNewPassword(""); }, 2000);
       } catch (err) { setError(err instanceof Error ? err.message : "Password reset failed"); }
       finally { setIsLoading(false); }
     }
-  };
-
-  const handleResendLoginOtp = async () => {
-    if (!email || !password) return;
-    clear(); setIsLoading(true);
-    try {
-      const res = await requestLoginOtp(email, password, turnstileToken);
-      setCountdown(res.expiresIn);
-      setSuccess("A new OTP has been sent to your email");
-      resetTurnstile();
-    } catch (err) { setError(err instanceof Error ? err.message : "Failed to resend OTP"); }
-    finally { setIsLoading(false); }
   };
 
   const handleGoogleSuccess = useCallback(async (credentialResponse: any) => {
@@ -355,7 +331,7 @@ export function LoginPage() {
                 </h2>
                 <p className="text-muted-foreground/70 text-sm leading-relaxed">
                   {mode === "login"
-                    ? (loginStage === "password" ? "Enter your credentials to request a one-time password" : "Enter the OTP sent to your email")
+                    ? "Enter your email and password to sign in"
                     : mode === "register"
                     ? "Enter your credentials to access your dashboard"
                     : mode === "forgot"
@@ -402,10 +378,10 @@ export function LoginPage() {
                         <Mail className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                         <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)}
                           onFocus={() => setFocusedField("email")} onBlur={() => setFocusedField(null)}
-                          className={inputClasses("email")} required autoComplete="email" disabled={(mode === "register" && regStage === "verify") || (mode === "login" && loginStage === "otp")} />
+                          className={inputClasses("email")} required autoComplete="email" disabled={mode === "register" && regStage === "verify"} />
                       </div>
                     </div>
-                    {mode === "login" && loginStage === "password" && (
+                    {mode === "login" && (
                       <>
                         <div className="space-y-1.5">
                           <div className="flex flex-wrap items-center justify-between gap-2 ml-1">
@@ -428,51 +404,12 @@ export function LoginPage() {
                         </div>
                         <Button type="submit" disabled={isLoading || !email || !password || (turnstileEnabled && !turnstileToken && !turnstileUnavailable)}
                           className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
-                          {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending OTP...</span>
+                          {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Signing in...</span>
                             : <span className="flex items-center gap-2">Sign In <ArrowRight className="w-4 h-4" /></span>}
                         </Button>
                         <button type="button" onClick={() => { setMode("otp-login"); setOtpStage("send"); clear(); }}
                           className="w-full text-center text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold">
                           <KeyRound className="inline w-3.5 h-3.5 mr-1 -mt-0.5" /> Sign in with OTP Only
-                        </button>
-                      </>
-                    )}
-                    {mode === "login" && loginStage === "otp" && (
-                      <>
-                        <div className="space-y-1.5">
-                          <label className="text-muted-foreground/70 text-xs font-medium block ml-1">One-Time Password</label>
-                          <div className="relative">
-                            <KeyRound className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "otpCode" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
-                            <Input type="text" placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                              onFocus={() => setFocusedField("otpCode")} onBlur={() => setFocusedField(null)}
-                              className={cn(inputClasses("otpCode"), "text-center text-xl sm:text-2xl tracking-[0.3em] sm:tracking-[0.5em] font-mono font-bold")} maxLength={6} required />
-                          </div>
-                          <div className="flex flex-col items-center gap-1 mt-1">
-                            {countdown > 0 && (
-                              <p className="text-xs text-muted-foreground/70 inline-flex items-center gap-1.5">
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                Code expires in
-                                <span className="font-mono font-semibold text-foreground tabular-nums">
-                                  {String(Math.floor(countdown / 60)).padStart(2, "0")}:{String(countdown % 60).padStart(2, "0")}
-                                </span>
-                              </p>
-                            )}
-                            {countdown === 0 && (
-                              <button type="button" onClick={handleResendLoginOtp} disabled={isLoading}
-                                className="w-full text-xs text-[#0D7490] hover:text-[#14A9B9] font-semibold text-center disabled:opacity-50">
-                                {isLoading ? "Resending..." : "Didn't receive it? Resend OTP"}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <Button type="submit" disabled={isLoading || otpCode.length < 6}
-                          className="w-full h-10 bg-gradient-to-r from-[#0D7490] to-[#14A9B9] hover:from-[#0A5F8E] hover:to-[#0D7490] text-white font-semibold rounded-xl shadow transition-all duration-200 disabled:opacity-70 text-sm">
-                          {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Verifying...</span>
-                            : <span className="flex items-center gap-2">Verify & Sign In <ArrowRight className="w-4 h-4" /></span>}
-                        </Button>
-                        <button type="button" onClick={() => { setLoginStage("password"); setOtpCode(""); clear(); }}
-                          className="w-full text-xs text-muted-foreground/60 hover:text-[#0D7490] font-semibold text-center transition-colors">
-                          Back to password
                         </button>
                       </>
                     )}
@@ -631,7 +568,7 @@ export function LoginPage() {
                       {isLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin w-4 h-4" /> Sending...</span>
                         : <span className="flex items-center gap-2">Send Reset Code <ArrowRight className="w-4 h-4" /></span>}
                     </Button>
-                    <button type="button" onClick={() => { setMode("login"); setLoginStage("password"); clear(); }}
+                    <button type="button" onClick={() => { setMode("login"); clear(); }}
                       className="w-full text-sm text-[#AEB7C2] hover:text-[#0D7490] font-semibold text-center">
                       Back to sign in
                     </button>
@@ -678,7 +615,7 @@ export function LoginPage() {
 
 
 
-              {((mode === "login" && loginStage === "password") || mode === "register") && (
+              {(mode === "login" || mode === "register") && (
                 <>
                   <div className="flex items-center my-5">
                     <div className="flex-1 h-px bg-white/30 dark:bg-white/[0.08]" />
@@ -712,7 +649,7 @@ export function LoginPage() {
                 {(mode === "login" || mode === "otp-login" || mode === "register") && (
                   <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="text-center text-muted-foreground/60 text-xs flex items-center justify-center gap-2">
                     <span>{mode === "register" ? "Already have an account?" : "Don't have an account?"}</span>
-                      <button type="button" onClick={() => { setMode(mode === "register" ? "login" : "register"); setLoginStage("password"); setRegStage("form"); setVerifyCode(""); setError(null); }}
+                      <button type="button" onClick={() => { setMode(mode === "register" ? "login" : "register"); setRegStage("form"); setVerifyCode(""); setError(null); }}
                       className="text-[#0D7490] hover:text-[#14A9B9] font-semibold text-xs transition-colors">
                       {mode === "register" ? "Sign in" : "Create one"}
                     </button>
