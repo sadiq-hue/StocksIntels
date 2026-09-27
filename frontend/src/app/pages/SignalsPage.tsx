@@ -294,14 +294,37 @@ interface PlainReasonItem {
   text: string;
 }
 
-function extractTechFragment(reason: string): string {
-  const preMacro = reason.split(/\bMacro\s*:/i)[0] || '';
-  return preMacro
-    .split(',')
-    .map(f => f.trim())
-    .filter(Boolean)
-    .filter(f => /bullish|bearish|MACD|momentum|trend|breakout|RSI|support|resistance|moving average|golden cross|death cross|volume|setup/i.test(f))
-    .join(', ');
+// Real technical readout from the signal's own computed indicators (RSI, MACD,
+// trend/SMA, Bollinger, momentum, volume) instead of scraping keywords out of
+// the prose reason, which mislabeled non-technical items as "Chart / Technicals".
+function buildTechnicalNotes(ind: Record<string, any> | undefined): { label: string; text: string }[] {
+  if (!ind) return [];
+  const ok = (v: any) => v != null && v !== 'N/A' && v !== 'No Data' && v !== 'Insufficient Data';
+  const notes: { label: string; text: string }[] = [];
+
+  if (ok(ind.rsi)) notes.push({ label: 'RSI', text: `${ind.rsi} — ${ind.rsiSignal || 'Neutral'}` });
+
+  if (ok(ind.macdSignal)) {
+    notes.push({ label: 'MACD', text: `${ind.macdSignal}${ok(ind.macd) ? ` (MACD ${ind.macd})` : ''}` });
+  }
+
+  if (ok(ind.trendSignal)) {
+    const sma = ok(ind.smaFast) && ok(ind.smaSlow)
+      ? ` (SMA${ind.smaFastPeriod || 20} ${ind.smaFast} vs SMA${ind.smaSlowPeriod || 50} ${ind.smaSlow})`
+      : '';
+    notes.push({ label: 'Trend', text: `${ind.trendSignal}${sma}` });
+  }
+
+  if (ok(ind.bbSignal)) notes.push({ label: 'Bollinger Bands', text: ind.bbSignal });
+
+  if (ok(ind.momentum)) notes.push({ label: 'Momentum', text: `${ind.momentum} — ${ind.momentumSignal || 'Neutral'}` });
+
+  if (ok(ind.volumeSignal)) {
+    const vol = ok(ind.volume) ? ` (${ind.volume}${ok(ind.volRatio) ? `, ${ind.volRatio}x avg` : ''})` : '';
+    notes.push({ label: 'Volume', text: `${ind.volumeSignal}${vol}` });
+  }
+
+  return notes;
 }
 
 function buildPlainReason(s: StockSignal): PlainReasonItem[] {
@@ -315,8 +338,8 @@ function buildPlainReason(s: StockSignal): PlainReasonItem[] {
     items.push({ group, label: c.name, text: `${c.rating} — ${ratingPlain(sig).toLowerCase()}.` });
   });
 
-  const techFrag = extractTechFragment(s.reason || '');
-  if (techFrag) items.push({ group: 'note', label: 'Chart / Technicals', text: techFrag });
+  const techIndicators = (s.analysis?.technical as any)?.indicators;
+  buildTechnicalNotes(techIndicators).forEach(t => items.push({ group: 'note', label: t.label, text: t.text }));
 
   const macro = s.analysis?.macro;
   if (macro?.conditions) {
@@ -1064,7 +1087,7 @@ export function SignalsPage() {
                           )}
                           {noteItems.length > 0 && (
                             <div>
-                              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Other context</p>
+                              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Technicals</p>
                               <ul className="mt-1 space-y-1">
                                 {noteItems.map((it, i) => (
                                   <li key={i} className="text-xs text-muted-foreground leading-relaxed flex gap-1.5">
