@@ -14,14 +14,18 @@ import { formatCompactNumber } from "../utils/format";
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const MAX_STOCKS = 5;
 const CHART_COLORS = ["#0D7490", "#0EA5E9", "#f59e0b", "#8b5cf6", "#ef4444"];
-// MyStocks only serves 1Y/5Y for NSE (its 6mo/2y/10y periods return ~1 month),
-// so 2Y/10Y are hidden when any Kenyan stock is in the mix.
+// MyStocks only serves correct NSE series for 1M, 1Y and 5Y (its 3M/6M/2Y/10Y
+// periods all return ~1 month), so the unsupported ones are hidden whenever a
+// Kenyan stock is in the mix.
 const CHART_RANGES = [
+  { k: "1mo", label: "1M" },
+  { k: "3mo", label: "3M" },
   { k: "1y", label: "1Y" },
   { k: "2y", label: "2Y" },
   { k: "5y", label: "5Y" },
   { k: "10y", label: "10Y" },
 ];
+const NSE_RANGE_KEYS = new Set(["1mo", "1y", "5y"]);
 const SUGGESTIONS = ["SCOM", "EQTY", "KCB", "AAPL", "MSFT", "NVDA", "TSLA"];
 
 interface CompareStock {
@@ -188,8 +192,8 @@ export function ComparePage() {
     Promise.all(
       data.map(async (s) => {
         const sym = s.market === "NSE" ? `${s.ticker}.NSE` : s.ticker;
-        // NSE supports only 1Y/5Y upstream; fall back for any other range.
-        const r = s.market === "NSE" && range !== "1y" && range !== "5y" ? "1y" : range;
+        // NSE serves only 1M/1Y/5Y correctly; fall back for any other range.
+        const r = s.market === "NSE" && !NSE_RANGE_KEYS.has(range) ? "1y" : range;
         try { return { t: s.ticker, bars: await fetchStockHistory(sym, r) }; }
         catch { return { t: s.ticker, bars: [] as PriceBar[] }; }
       })
@@ -212,9 +216,9 @@ export function ComparePage() {
   }, [data, range]);
 
   const hasNse = data.some((s) => s.market === "NSE");
-  const visibleRanges = CHART_RANGES.filter((r) => !hasNse || r.k === "1y" || r.k === "5y");
+  const visibleRanges = CHART_RANGES.filter((r) => !hasNse || NSE_RANGE_KEYS.has(r.k));
   useEffect(() => {
-    if (hasNse && (range === "2y" || range === "10y")) setRange("1y");
+    if (hasNse && !NSE_RANGE_KEYS.has(range)) setRange("1y");
   }, [hasNse, range]);
 
   const groups = useMemo(() => ([
