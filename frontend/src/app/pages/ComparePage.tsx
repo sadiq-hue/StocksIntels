@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState, Fragment } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useMemo, useState, Fragment, type ReactNode } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
-import { X, Search, GitCompare, TrendingUp, TrendingDown, Loader2, Plus } from "lucide-react";
+import { Button } from "../components/ui/button";
+import { X, Search, GitCompare, TrendingUp, TrendingDown, Loader2, Plus, Download, Share2, Check, Trophy } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  RadarChart, PolarGrid, PolarAngleAxis, Radar,
 } from "recharts";
 import { authFetch } from "../auth/tokenStore";
 import { useCompare } from "../contexts/CompareContext";
@@ -56,19 +58,22 @@ interface CompareStock {
     momentum: string | null; momentumSignal: string | null; volumeSignal: string | null; bbSignal: string | null;
   };
   performance: {
-    y1: number | null; y3Annualized: number | null; y5Annualized: number | null; y10Annualized: number | null;
-    spanYears: number | null; basis: string | null;
+    y1: number | null; ytd: number | null; y3Annualized: number | null; y5Annualized: number | null;
+    y10Annualized: number | null; spanYears: number | null; basis: string | null;
+  } | null;
+  risk: {
+    volatility: number | null; maxDrawdown1y: number | null; high52: number | null; low52: number | null; fromHigh52: number | null;
   } | null;
 }
 
 interface SearchResult { ticker: string; name: string; sector?: string; market?: string; }
 
 const DASH = "—";
-const money = (v: number | null, c: string) =>
+const money = (v: number | null | undefined, c: string) =>
   v == null ? DASH : `${c === "KES" ? "KES " : "$"}${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const ratio = (v: number | null) => (v == null ? DASH : Number(v).toFixed(2));
-const pctSuffix = (v: number | null, dp = 1) => (v == null ? DASH : `${Number(v).toFixed(dp)}%`);
-const pctSigned = (v: number | null, dp = 2) => (v == null ? DASH : `${v > 0 ? "+" : ""}${Number(v).toFixed(dp)}%`);
+const ratio = (v: number | null | undefined) => (v == null ? DASH : Number(v).toFixed(2));
+const pct = (v: number | null | undefined, dp = 1) => (v == null ? DASH : `${Number(v).toFixed(dp)}%`);
+const signed = (v: number | null | undefined, dp = 2) => (v == null ? DASH : `${v > 0 ? "+" : ""}${Number(v).toFixed(dp)}%`);
 
 function signalTone(rating: string): string {
   if (rating === "Strong Buy") return "bg-emerald-600 text-white border-emerald-600";
@@ -76,6 +81,27 @@ function signalTone(rating: string): string {
   if (rating === "Sell") return "bg-red-100 text-red-700 border-red-200";
   if (rating === "Strong Sell") return "bg-red-600 text-white border-red-600";
   return "bg-yellow-100 text-yellow-700 border-yellow-200";
+}
+
+interface Row {
+  label: string;
+  value?: (s: CompareStock) => number | null;
+  fmt?: (v: number) => string;
+  node?: (s: CompareStock) => ReactNode;
+  text?: (s: CompareStock) => string;
+  better?: "high" | "low";
+}
+interface Group { title: string; rows: Row[]; }
+
+function cellText(row: Row, s: CompareStock): string {
+  if (row.text) return row.text(s);
+  if (row.value) { const v = row.value(s); return v == null ? DASH : (row.fmt ? row.fmt(v) : String(v)); }
+  return DASH;
+}
+function cellNode(row: Row, s: CompareStock): ReactNode {
+  if (row.node) return row.node(s);
+  if (row.value) { const v = row.value(s); return v == null ? DASH : (row.fmt ? row.fmt(v) : String(v)); }
+  return DASH;
 }
 
 // Plain-language comparison of the selected stocks' returns.
@@ -89,9 +115,9 @@ function buildPerfNarrative(stocks: CompareStock[]): string | null {
   if (y1.length >= 2) {
     const best = y1[0];
     const worst = y1[y1.length - 1];
-    const middle = y1.slice(1, -1).map((s) => `${s.ticker} ${pctSigned(s.performance!.y1)}`).join(", ");
+    const middle = y1.slice(1, -1).map((s) => `${s.ticker} ${signed(s.performance!.y1)}`).join(", ");
     parts.push(
-      `In the past year, ${best.ticker} returned the most (${pctSigned(best.performance!.y1)}), versus ${worst.ticker} (${pctSigned(worst.performance!.y1)})${middle ? `, with ${middle}` : ""}.`
+      `In the past year, ${best.ticker} returned the most (${signed(best.performance!.y1)}), versus ${worst.ticker} (${signed(worst.performance!.y1)})${middle ? `, with ${middle}` : ""}.`
     );
   }
 
@@ -100,8 +126,6 @@ function buildPerfNarrative(stocks: CompareStock[]): string | null {
     { key: "y5Annualized", years: 5 },
     { key: "y3Annualized", years: 3 },
   ];
-  // Prefer the longest window that covers the most of the selected stocks, so a
-  // mixed NSE + US list still compares everyone (NSE has up to 5y, US up to 10y).
   const candidates = windows
     .map((w) => ({
       ...w,
@@ -113,7 +137,7 @@ function buildPerfNarrative(stocks: CompareStock[]): string | null {
     .sort((a, b) => (b.have.length - a.have.length) || (b.years - a.years));
   if (candidates.length) {
     const w = candidates[0];
-    parts.push(`Over the past ${w.years} years, annualized returns were ${w.have.map((s) => `${s.ticker} ${pctSigned(s.performance![w.key])}`).join(", ")}.`);
+    parts.push(`Over the past ${w.years} years, annualized returns were ${w.have.map((s) => `${s.ticker} ${signed(s.performance![w.key])}`).join(", ")}.`);
   }
 
   if (parts.length === 0) return null;
@@ -121,8 +145,27 @@ function buildPerfNarrative(stocks: CompareStock[]): string | null {
   return parts.join(" ");
 }
 
+interface Quick { label: string; ticker: string; value: number; fmt: (v: number) => string; }
+function buildQuickTake(data: CompareStock[]): Quick[] {
+  const pick = (label: string, fn: (s: CompareStock) => number | null, dir: "high" | "low", fmt: (v: number) => string): Quick | null => {
+    const withV = data.map((s) => ({ s, v: fn(s) })).filter((x) => x.v != null && isFinite(x.v)) as { s: CompareStock; v: number }[];
+    if (withV.length < 2) return null;
+    withV.sort((a, b) => (dir === "high" ? b.v - a.v : a.v - b.v));
+    return { label, ticker: withV[0].s.ticker, value: withV[0].v, fmt };
+  };
+  return [
+    pick("Cheapest (lowest P/E)", (s) => (s.metrics.pe && s.metrics.pe > 0 ? s.metrics.pe : null), "low", ratio),
+    pick("Fastest revenue growth", (s) => s.metrics.revenueGrowth, "high", (v) => pct(v)),
+    pick("Highest dividend yield", (s) => s.metrics.dividendYield, "high", (v) => pct(v)),
+    pick("Best 1-year return", (s) => s.performance?.y1 ?? null, "high", (v) => signed(v)),
+    pick("Lowest volatility", (s) => s.risk?.volatility ?? null, "low", (v) => pct(v)),
+    pick("Highest overall grade", (s) => s.signal?.overall ?? null, "high", (v) => String(Math.round(v))),
+  ].filter((x): x is Quick => x != null);
+}
+
 export function ComparePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { list: selected, add, remove, clear } = useCompare();
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -132,8 +175,16 @@ export function ComparePage() {
   const [range, setRange] = useState<string>("1y");
   const [chartData, setChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const selKey = selected.join(",");
+
+  // Seed the list from a shared ?symbols= link.
+  useEffect(() => {
+    const q = searchParams.get("symbols");
+    if (q) q.split(",").forEach((s) => add(s));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Ticker search (public endpoint, debounced)
   useEffect(() => {
@@ -172,7 +223,6 @@ export function ComparePage() {
     Promise.all(
       data.map(async (s) => {
         const sym = s.market === "NSE" ? `${s.ticker}.NSE` : s.ticker;
-        // NSE serves only 1M/1Y/5Y correctly; fall back for any other range.
         const r = s.market === "NSE" && !NSE_RANGE_KEYS.has(range) ? "1y" : range;
         try { return { t: s.ticker, bars: await fetchStockHistory(sym, r) }; }
         catch { return { t: s.ticker, bars: [] as PriceBar[] }; }
@@ -201,105 +251,169 @@ export function ComparePage() {
     if (hasNse && !NSE_RANGE_KEYS.has(range)) setRange("1y");
   }, [hasNse, range]);
 
-  const groups = useMemo(() => ([
+  const groups = useMemo((): Group[] => ([
     {
       title: "Snapshot",
       rows: [
-        { label: "Price", render: (s: CompareStock) => money(s.quote.price, s.currency) },
+        { label: "Price", node: (s) => <span className="font-semibold">{money(s.quote.price, s.currency)}</span>, text: (s) => money(s.quote.price, s.currency) },
         {
-          label: "Change",
-          render: (s: CompareStock) => {
+          label: "Change", value: (s) => s.quote.change, fmt: (v) => signed(v), better: "high",
+          node: (s) => {
             const c = s.quote.change;
             if (c == null) return DASH;
             return (
               <span className={c >= 0 ? "text-emerald-600" : "text-red-500"}>
-                {c >= 0 ? <TrendingUp className="inline size-3" /> : <TrendingDown className="inline size-3" />} {pctSigned(c)}
+                {c >= 0 ? <TrendingUp className="inline size-3" /> : <TrendingDown className="inline size-3" />} {signed(c)}
               </span>
             );
           },
+          text: (s) => signed(s.quote.change),
         },
-        { label: "Volume", render: (s: CompareStock) => (s.quote.volume == null ? DASH : formatCompactNumber(s.quote.volume)) },
-        { label: "Market Cap", render: (s: CompareStock) => (s.quote.marketCap == null ? DASH : formatCompactNumber(s.quote.marketCap)) },
-        { label: "Day Range", render: (s: CompareStock) => (s.quote.dayLow == null || s.quote.dayHigh == null ? DASH : `${money(s.quote.dayLow, s.currency)} – ${money(s.quote.dayHigh, s.currency)}`) },
+        { label: "Volume", value: (s) => s.quote.volume, fmt: (v) => formatCompactNumber(v) },
+        { label: "Market Cap", value: (s) => s.quote.marketCap, fmt: (v) => formatCompactNumber(v) },
+        { label: "Day Range", text: (s) => (s.quote.dayLow == null || s.quote.dayHigh == null ? DASH : `${money(s.quote.dayLow, s.currency)} – ${money(s.quote.dayHigh, s.currency)}`), node: (s) => (s.quote.dayLow == null || s.quote.dayHigh == null ? DASH : `${money(s.quote.dayLow, s.currency)} – ${money(s.quote.dayHigh, s.currency)}`) },
+        { label: "52-Week Range", text: (s) => (s.risk?.low52 == null || s.risk?.high52 == null ? DASH : `${money(s.risk.low52, s.currency)} – ${money(s.risk.high52, s.currency)}`), node: (s) => (s.risk?.low52 == null || s.risk?.high52 == null ? DASH : `${money(s.risk.low52, s.currency)} – ${money(s.risk.high52, s.currency)}`) },
       ],
     },
     {
       title: "Performance",
       rows: [
-        { label: "1-Year Return", render: (s: CompareStock) => (s.performance?.y1 == null ? DASH : <span className={s.performance.y1 >= 0 ? "text-emerald-600" : "text-red-500"}>{pctSigned(s.performance.y1)}</span>) },
-        { label: "3-Year (annualized)", render: (s: CompareStock) => pctSigned(s.performance?.y3Annualized ?? null) },
-        { label: "5-Year (annualized)", render: (s: CompareStock) => pctSigned(s.performance?.y5Annualized ?? null) },
-        { label: "10-Year (annualized)", render: (s: CompareStock) => pctSigned(s.performance?.y10Annualized ?? null) },
+        { label: "1-Year Return", value: (s) => s.performance?.y1 ?? null, fmt: (v) => signed(v), better: "high",
+          node: (s) => { const v = s.performance?.y1 ?? null; return v == null ? DASH : <span className={v >= 0 ? "text-emerald-600" : "text-red-500"}>{signed(v)}</span>; } },
+        { label: "YTD Return", value: (s) => s.performance?.ytd ?? null, fmt: (v) => signed(v), better: "high",
+          node: (s) => { const v = s.performance?.ytd ?? null; return v == null ? DASH : <span className={v >= 0 ? "text-emerald-600" : "text-red-500"}>{signed(v)}</span>; } },
+        { label: "3-Year (annualized)", value: (s) => s.performance?.y3Annualized ?? null, fmt: (v) => signed(v), better: "high" },
+        { label: "5-Year (annualized)", value: (s) => s.performance?.y5Annualized ?? null, fmt: (v) => signed(v), better: "high" },
+        { label: "10-Year (annualized)", value: (s) => s.performance?.y10Annualized ?? null, fmt: (v) => signed(v), better: "high" },
+      ],
+    },
+    {
+      title: "Risk",
+      rows: [
+        { label: "Volatility (ann.)", value: (s) => s.risk?.volatility ?? null, fmt: (v) => pct(v), better: "low" },
+        { label: "Max Drawdown (1Y)", value: (s) => s.risk?.maxDrawdown1y ?? null, fmt: (v) => pct(v), better: "low" },
+        { label: "From 52W High", value: (s) => s.risk?.fromHigh52 ?? null, fmt: (v) => signed(v), better: "high" },
       ],
     },
     {
       title: "Signal",
       rows: [
-        { label: "Rating", render: (s: CompareStock) => (s.signal ? <Badge variant="outline" className={signalTone(s.signal.rating)}>{s.signal.rating}</Badge> : DASH) },
-        { label: "Confidence", render: (s: CompareStock) => (s.signal?.confidence == null ? DASH : `${s.signal.confidence}%`) },
-        { label: "Type", render: (s: CompareStock) => s.signal?.type || DASH },
-        { label: "Holding Period", render: (s: CompareStock) => s.signal?.timeframe || DASH },
-        { label: "Risk / Reward", render: (s: CompareStock) => (s.signal?.riskReward == null ? DASH : `1:${s.signal.riskReward.toFixed(1)}`) },
-        { label: "Target 1", render: (s: CompareStock) => money(s.signal?.target1 ?? null, s.currency) },
-        { label: "Stop", render: (s: CompareStock) => money(s.signal?.stopLoss ?? null, s.currency) },
+        { label: "Rating", text: (s) => s.signal?.rating || DASH, node: (s) => (s.signal ? <Badge variant="outline" className={signalTone(s.signal.rating)}>{s.signal.rating}</Badge> : DASH) },
+        { label: "Confidence", value: (s) => s.signal?.confidence ?? null, fmt: (v) => `${Math.round(v)}%`, better: "high" },
+        { label: "Type", text: (s) => s.signal?.type || DASH },
+        { label: "Holding Period", text: (s) => s.signal?.timeframe || DASH },
+        {
+          label: "Upside to Target 1", value: (s) => (s.signal?.target1 != null && s.quote.price ? ((s.signal.target1 / s.quote.price) - 1) * 100 : null), fmt: (v) => signed(v), better: "high",
+          node: (s) => {
+            const v = s.signal?.target1 != null && s.quote.price ? ((s.signal.target1 / s.quote.price) - 1) * 100 : null;
+            return v == null ? DASH : <span className="text-emerald-600">{signed(v)}</span>;
+          },
+        },
+        { label: "Risk / Reward", value: (s) => s.signal?.riskReward ?? null, fmt: (v) => `1:${v.toFixed(1)}`, better: "high" },
       ],
     },
     {
       title: "Valuation",
       rows: [
-        { label: "P/E", render: (s: CompareStock) => ratio(s.metrics.pe) },
-        { label: "P/B", render: (s: CompareStock) => ratio(s.metrics.pb) },
-        { label: "EV/EBITDA", render: (s: CompareStock) => ratio(s.metrics.evEbitda) },
-        { label: "Dividend Yield", render: (s: CompareStock) => pctSuffix(s.metrics.dividendYield) },
-        { label: "Payout Ratio", render: (s: CompareStock) => pctSuffix(s.metrics.payoutRatio, 0) },
+        { label: "P/E", value: (s) => s.metrics.pe, fmt: ratio, better: "low" },
+        { label: "P/B", value: (s) => s.metrics.pb, fmt: ratio, better: "low" },
+        { label: "EV/EBITDA", value: (s) => s.metrics.evEbitda, fmt: ratio, better: "low" },
+        { label: "Dividend Yield", value: (s) => s.metrics.dividendYield, fmt: (v) => pct(v), better: "high" },
+        { label: "Payout Ratio", value: (s) => s.metrics.payoutRatio, fmt: (v) => pct(v, 0) },
       ],
     },
     {
       title: "Growth",
       rows: [
-        { label: "Revenue Growth", render: (s: CompareStock) => pctSuffix(s.metrics.revenueGrowth) },
-        { label: "EPS Growth", render: (s: CompareStock) => pctSuffix(s.metrics.epsGrowth) },
-        { label: "Earnings Surprise", render: (s: CompareStock) => pctSuffix(s.metrics.epsSurprise) },
-        { label: "Margin Change", render: (s: CompareStock) => (s.metrics.marginChange == null ? DASH : `${s.metrics.marginChange > 0 ? "+" : ""}${Number(s.metrics.marginChange).toFixed(1)}pp`) },
+        { label: "Revenue Growth", value: (s) => s.metrics.revenueGrowth, fmt: (v) => pct(v), better: "high" },
+        { label: "EPS Growth", value: (s) => s.metrics.epsGrowth, fmt: (v) => pct(v), better: "high" },
+        { label: "Earnings Surprise", value: (s) => s.metrics.epsSurprise, fmt: (v) => pct(v), better: "high" },
+        { label: "Margin Change", value: (s) => s.metrics.marginChange, fmt: (v) => `${v > 0 ? "+" : ""}${Number(v).toFixed(1)}pp`, better: "high" },
       ],
     },
     {
       title: "Profitability",
       rows: [
-        { label: "Return on Equity", render: (s: CompareStock) => pctSuffix(s.metrics.roe) },
-        { label: "FCF Yield", render: (s: CompareStock) => pctSuffix(s.metrics.fcfYield) },
+        { label: "Return on Equity", value: (s) => s.metrics.roe, fmt: (v) => pct(v), better: "high" },
+        { label: "FCF Yield", value: (s) => s.metrics.fcfYield, fmt: (v) => pct(v), better: "high" },
       ],
     },
     {
       title: "Balance Sheet",
       rows: [
-        { label: "Debt / Equity", render: (s: CompareStock) => ratio(s.metrics.debtEquity) },
-        { label: "Current Ratio", render: (s: CompareStock) => ratio(s.metrics.currentRatio) },
-        { label: "Altman Z-Score", render: (s: CompareStock) => ratio(s.metrics.altmanZ) },
+        { label: "Debt / Equity", value: (s) => s.metrics.debtEquity, fmt: ratio, better: "low" },
+        { label: "Current Ratio", value: (s) => s.metrics.currentRatio, fmt: ratio, better: "high" },
+        { label: "Altman Z-Score", value: (s) => s.metrics.altmanZ, fmt: ratio, better: "high" },
       ],
     },
     {
       title: "Technicals",
       rows: [
-        { label: "RSI", render: (s: CompareStock) => (s.technicals.rsi == null ? DASH : `${s.technicals.rsi.toFixed(1)}${s.technicals.rsiSignal ? ` · ${s.technicals.rsiSignal}` : ""}`) },
-        { label: "MACD", render: (s: CompareStock) => s.technicals.macdSignal || DASH },
-        { label: "Trend", render: (s: CompareStock) => s.technicals.trendSignal || DASH },
-        { label: "Momentum", render: (s: CompareStock) => (s.technicals.momentum ? `${s.technicals.momentum}${s.technicals.momentumSignal ? ` · ${s.technicals.momentumSignal}` : ""}` : DASH) },
-        { label: "Volume", render: (s: CompareStock) => s.technicals.volumeSignal || DASH },
+        { label: "RSI", value: (s) => s.technicals.rsi, text: (s) => (s.technicals.rsi == null ? DASH : `${s.technicals.rsi.toFixed(1)}${s.technicals.rsiSignal ? ` · ${s.technicals.rsiSignal}` : ""}`) },
+        { label: "MACD", text: (s) => s.technicals.macdSignal || DASH },
+        { label: "Trend", text: (s) => s.technicals.trendSignal || DASH },
+        { label: "Momentum", text: (s) => (s.technicals.momentum ? `${s.technicals.momentum}${s.technicals.momentumSignal ? ` · ${s.technicals.momentumSignal}` : ""}` : DASH) },
+        { label: "Volume", text: (s) => s.technicals.volumeSignal || DASH },
       ],
     },
   ]), []);
 
+  const radarData = useMemo(() => {
+    const dims = [
+      { key: "overall", label: "Overall" },
+      { key: "fundamental", label: "Fundamental" },
+      { key: "technical", label: "Technical" },
+      { key: "financial", label: "Financial" },
+      { key: "macro", label: "Macro" },
+      { key: "insider", label: "Insider" },
+    ] as const;
+    return dims.map((d) => {
+      const row: Record<string, number | string> = { dimension: d.label };
+      data.forEach((s) => { row[s.ticker] = s.signal ? Number((s.signal as any)[d.key] ?? 0) : 0; });
+      return row;
+    });
+  }, [data]);
+
+  const quickTake = useMemo(() => buildQuickTake(data), [data]);
+
+  const exportCsv = () => {
+    const header = ["Metric", ...data.map((s) => `${s.ticker} (${s.currency})`)];
+    const lines = [header.map((h) => `"${h}"`).join(",")];
+    for (const g of groups) {
+      for (const row of g.rows) {
+        lines.push([`"${g.title} - ${row.label}"`, ...data.map((s) => `"${cellText(row, s).replace(/"/g, '""')}"`)].join(","));
+      }
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `compare-${data.map((s) => s.ticker).join("-")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const share = () => {
+    const url = `${window.location.origin}/app/compare?symbols=${selected.join(",")}`;
+    navigator.clipboard?.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {});
+  };
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 space-y-5">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white shadow-sm">
           <GitCompare className="size-5" />
         </span>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-lg font-semibold text-foreground">Compare Stocks</h1>
-          <p className="text-xs text-muted-foreground">Put 2–5 NSE or global stocks side by side — valuation, growth, profitability, technicals and signals.</p>
+          <p className="text-xs text-muted-foreground">Put 2–5 NSE or global stocks side by side — valuation, growth, profitability, risk, technicals and signals.</p>
         </div>
+        {data.length >= 2 && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={exportCsv}><Download className="size-3.5" /> CSV</Button>
+            <Button variant="outline" size="sm" onClick={share}>{copied ? <Check className="size-3.5" /> : <Share2 className="size-3.5" />} {copied ? "Copied" : "Share"}</Button>
+          </div>
+        )}
       </div>
 
       {/* Picker */}
@@ -377,53 +491,96 @@ export function ComparePage() {
 
       {!loading && !error && data.length >= 2 && (
         <>
-          {/* Relative performance */}
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-foreground">Relative Performance <span className="text-muted-foreground font-normal">(% change)</span></h2>
-              <div className="flex gap-1">
-                {visibleRanges.map((r) => (
+          {/* Quick take */}
+          {quickTake.length > 0 && (
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Trophy className="size-4 text-amber-500" />
+                <h2 className="text-sm font-semibold text-foreground">Quick take</h2>
+                <span className="text-[10px] text-muted-foreground italic">best pick per metric</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {quickTake.map((q) => (
                   <button
-                    key={r.k}
+                    key={q.label}
                     type="button"
-                    onClick={() => setRange(r.k)}
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${range === r.k ? "bg-[#0D7490] text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+                    onClick={() => navigate(`/app/stock/${q.ticker}?market=${data.find((d) => d.ticker === q.ticker)?.market === "NSE" ? "nse" : "us"}`)}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-left hover:bg-muted transition-colors"
                   >
-                    {r.label}
+                    <span className="text-[11px] text-muted-foreground">{q.label}</span>
+                    <span className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm font-semibold text-foreground">{q.ticker}</span>
+                      <Badge className="border-0 bg-emerald-100 text-emerald-700">{q.fmt(q.value)}</Badge>
+                    </span>
                   </button>
                 ))}
               </div>
-            </div>
-            <div className="h-64">
-              {chartLoading ? (
-                <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="size-4 animate-spin" /></div>
-              ) : chartData.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No price history available.</div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 5, right: 12, bottom: 0, left: -12 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={40} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} />
-                    <Tooltip
-                      formatter={(v: any) => `${Number(v).toFixed(2)}%`}
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    {data.map((s, i) => (
-                      <Line key={s.ticker} type="monotone" dataKey={s.ticker} name={s.ticker} stroke={CHART_COLORS[i % CHART_COLORS.length]} dot={false} strokeWidth={2} connectNulls />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </Card>
+            </Card>
+          )}
 
+          {/* Chart + Radar */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <Card className="p-4 xl:col-span-2">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-foreground">Relative Performance <span className="text-muted-foreground font-normal">(% change)</span></h2>
+                <div className="flex flex-wrap gap-1">
+                  {visibleRanges.map((r) => (
+                    <button
+                      key={r.k}
+                      type="button"
+                      onClick={() => setRange(r.k)}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium ${range === r.k ? "bg-[#0D7490] text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="h-64">
+                {chartLoading ? (
+                  <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="size-4 animate-spin" /></div>
+                ) : chartData.length === 0 ? (
+                  <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No price history available.</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData} margin={{ top: 5, right: 12, bottom: 0, left: -12 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={40} />
+                      <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} />
+                      <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)}%`} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      {data.map((s, i) => (
+                        <Line key={s.ticker} type="monotone" dataKey={s.ticker} name={s.ticker} stroke={CHART_COLORS[i % CHART_COLORS.length]} dot={false} strokeWidth={2} connectNulls />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </Card>
+
+            <Card className="p-4">
+              <h2 className="text-sm font-semibold text-foreground mb-1">Score Profile</h2>
+              <p className="text-[10px] text-muted-foreground mb-2">Model grades across each dimension (0–100)</p>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={radarData} outerRadius="72%">
+                    <PolarGrid stroke="var(--border)" />
+                    <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 10 }} />
+                    {data.map((s, i) => (
+                      <Radar key={s.ticker} name={s.ticker} dataKey={s.ticker} stroke={CHART_COLORS[i % CHART_COLORS.length]} fill={CHART_COLORS[i % CHART_COLORS.length]} fillOpacity={0.12} strokeWidth={2} />
+                    ))}
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }} />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+          </div>
+
+          {/* Narrative */}
           {(() => {
             const narrative = buildPerfNarrative(data);
-            return narrative ? (
-              <Card className="p-4 text-sm text-muted-foreground leading-relaxed">{narrative}</Card>
-            ) : null;
+            return narrative ? <Card className="p-4 text-sm text-muted-foreground leading-relaxed">{narrative}</Card> : null;
           })()}
 
           {/* Metric matrix */}
@@ -455,24 +612,36 @@ export function ComparePage() {
                       <tr className="bg-muted/50">
                         <td colSpan={data.length + 1} className="sticky left-0 p-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{g.title}</td>
                       </tr>
-                      {g.rows.map((row) => (
-                        <tr key={`${g.title}-${row.label}`} className="border-b border-border/60 hover:bg-muted/30">
-                          <td className="sticky left-0 z-10 bg-card p-2.5 px-3 text-xs text-muted-foreground">{row.label}</td>
-                          {data.map((s) => (
-                            <td key={s.ticker} className="p-2.5 pr-4 text-sm text-foreground">{row.render(s)}</td>
-                          ))}
-                        </tr>
-                      ))}
+                      {g.rows.map((row) => {
+                        const vals = data.map((s) => (row.value ? row.value(s) : null));
+                        const nonNull = vals.filter((v) => v != null && isFinite(v)) as number[];
+                        let bestIdx = -1, worstIdx = -1;
+                        if (row.better && nonNull.length >= 2) {
+                          const bv = row.better === "high" ? Math.max(...nonNull) : Math.min(...nonNull);
+                          const wv = row.better === "high" ? Math.min(...nonNull) : Math.max(...nonNull);
+                          if (bv !== wv) { bestIdx = vals.indexOf(bv); worstIdx = vals.indexOf(wv); }
+                        }
+                        return (
+                          <tr key={`${g.title}-${row.label}`} className="border-b border-border/60 hover:bg-muted/30">
+                            <td className="sticky left-0 z-10 bg-card p-2.5 px-3 text-xs text-muted-foreground">{row.label}</td>
+                            {data.map((s, i) => (
+                              <td key={s.ticker} className={`p-2.5 pr-4 text-sm ${i === bestIdx ? "text-emerald-600 font-semibold" : i === worstIdx ? "text-red-500" : "text-foreground"}`}>
+                                {i === bestIdx && <Trophy className="inline size-3 mr-1 -mt-0.5 text-amber-500" />}
+                                {cellNode(row, s)}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
                     </Fragment>
                   ))}
                 </tbody>
               </table>
             </div>
-            {data.some((s) => s.metrics.dataSource === "fallback") && (
-              <p className="p-3 text-[10px] text-muted-foreground border-t border-border">
-                Some ratios are curated estimates (live fundamentals unavailable for those names).
-              </p>
-            )}
+            <p className="p-3 text-[10px] text-muted-foreground border-t border-border flex items-center gap-1.5">
+              <Trophy className="size-3 text-amber-500" /> marks the best value in a row. Green = best, red = worst.
+              {data.some((s) => s.metrics.dataSource === "fallback") && " Some ratios are curated estimates where live fundamentals are unavailable."}
+            </p>
           </Card>
         </>
       )}

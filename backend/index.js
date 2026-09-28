@@ -4158,8 +4158,12 @@ function _perfFromBars(bars) {
   const ret = (p) => (p && p.v > 0 ? (end.v / p.v - 1) * 100 : null);
   const ann = (p, years) => (p && p.v > 0 ? (Math.pow(end.v / p.v, 1 / years) - 1) * 100 : null);
   const has = (years) => spanYears >= years * 0.9;
+  const jan1 = new Date(new Date(end.t).getFullYear(), 0, 1).getTime();
+  const ytdBase = pts.find((p) => p.t >= jan1) || pts[0];
+  const ytd = ytdBase && ytdBase.t < end.t ? ret(ytdBase) : null;
   return {
     y1: has(1) ? ret(nearest(1)) : null,
+    ytd,
     y3Annualized: has(3) ? ann(nearest(3), 3) : null,
     y5Annualized: has(5) ? ann(nearest(5), 5) : null,
     y10Annualized: has(10) ? ann(nearest(10), 10) : null,
@@ -4168,32 +4172,81 @@ function _perfFromBars(bars) {
   };
 }
 
+// Risk stats from a daily (or best-available) series: annualized volatility,
+// 1-year max drawdown, 52-week range and distance from the 52-week high.
+function _riskFromBars(bars) {
+  if (!Array.isArray(bars) || bars.length < 20) return {};
+  const pts = bars
+    .map((b) => ({
+      t: b.timestamp ? b.timestamp * 1000 : new Date(b.date).getTime(),
+      c: b.adjclose != null ? b.adjclose : b.close,
+      h: b.high != null ? b.high : (b.adjclose != null ? b.adjclose : b.close),
+      l: b.low != null ? b.low : (b.adjclose != null ? b.adjclose : b.close),
+    }))
+    .filter((p) => p.c > 0 && isFinite(p.t))
+    .sort((a, b) => a.t - b.t);
+  if (pts.length < 20) return {};
+  const year = pts.slice(-260);
+  const closes = year.map((p) => p.c);
+  const rets = [];
+  for (let i = 1; i < closes.length; i++) rets.push(closes[i] / closes[i - 1] - 1);
+  const mean = rets.reduce((a, b) => a + b, 0) / (rets.length || 1);
+  const variance = rets.reduce((a, b) => a + (b - mean) ** 2, 0) / (rets.length || 1);
+  const volatility = Math.sqrt(variance) * Math.sqrt(252) * 100;
+  let peak = -Infinity, maxDD = 0;
+  for (const c of closes) { if (c > peak) peak = c; const dd = (peak - c) / peak; if (dd > maxDD) maxDD = dd; }
+  const high52 = Math.max(...year.map((p) => p.h));
+  const low52 = Math.min(...year.map((p) => p.l));
+  const last = closes[closes.length - 1];
+  const fromHigh52 = high52 > 0 ? (last / high52 - 1) * 100 : null;
+  return {
+    volatility: Math.round(volatility * 10) / 10,
+    maxDrawdown1y: Math.round(maxDD * 1000) / 10,
+    high52: Math.round(high52 * 100) / 100,
+    low52: Math.round(low52 * 100) / 100,
+    fromHigh52: fromHigh52 != null ? Math.round(fromHigh52 * 10) / 10 : null,
+  };
+}
+
+// Historical series for a symbol: NSE via MyStocks, otherwise Yahoo.
+async function _fetchSeries(symbol, market, range, interval) {
+  if (market === 'NSE') {
+    try {
+      const msa = require('./mystocksAfricaApi');
+      const b = await msa.fetchHistorical(`NSE:${symbol}`, range);
+      if (b && b.length) return b;
+    } catch { /* fall through to Yahoo */ }
+  }
+  const { fetchHistoricalQuotes } = require('./globalScraper');
+  const ysym = market === 'NSE' ? `${symbol}.NR` : symbol;
+  return Promise.race([
+    fetchHistoricalQuotes(ysym, range, interval).catch(() => null),
+    new Promise((r) => setTimeout(() => r(null), 12000)),
+  ]);
+}
+
 async function _performanceFor(symbol, market) {
   const key = `${market}:${symbol}`;
   const hit = _perfCache.get(key);
   if (hit && Date.now() - hit.ts < PERF_CACHE_TTL) return hit.data;
-  let bars = null;
-  try {
-    if (market === 'NSE') {
-      try {
-        const msa = require('./mystocksAfricaApi');
-        // MyStocks supports 1Y / 5Y (its 6MO/2Y periods are broken and return
-        // ~1 month), so ask for 5y to enable 1/3/5-year NSE returns.
-        bars = await msa.fetchHistorical(`NSE:${symbol}`, '5y');
-      } catch { /* fall through to Yahoo */ }
-    }
-    if (!bars || bars.length < 2) {
-      const { fetchHistoricalQuotes } = require('./globalScraper');
-      const ysym = market === 'NSE' ? `${symbol}.NR` : symbol;
-      bars = await Promise.race([
-        fetchHistoricalQuotes(ysym, '10y', '1mo').catch(() => null),
-        new Promise((r) => setTimeout(() => r(null), 12000)),
-      ]);
-    }
-  } catch { bars = null; }
-  const data = _perfFromBars(bars);
-  if (data) _perfCache.set(key, { ts: Date.now(), data });
-  return data;
+  // Long-range series for annualized returns + a 1y daily series for risk stats.
+  // MyStocks throttles concurrent calls, so fetch sequentially for NSE.
+  let longBars, dailyBars;
+  if (market === 'NSE') {
+    longBars = await _fetchSeries(symbol, market, '5y', '1mo');
+    dailyBars = await _fetchSeries(symbol, market, '1y', '1d');
+  } else {
+    [longBars, dailyBars] = await Promise.all([
+      _fetchSeries(symbol, market, '10y', '1mo'),
+      _fetchSeries(symbol, market, '1y', '1d'),
+    ]);
+  }
+  const perf = _perfFromBars(longBars);
+  const risk = _riskFromBars(dailyBars || longBars);
+  const data = { ...(perf || {}), ...risk };
+  const hasAny = !!perf || risk.volatility != null;
+  if (hasAny) _perfCache.set(key, { ts: Date.now(), data });
+  return hasAny ? data : null;
 }
 
 // ─── Stock Comparison ───────────────────────────────────────────────────────
@@ -4307,7 +4360,16 @@ app.get('/api/compare', async (req, res) => {
           volumeSignal: ti.volumeSignal || null,
           bbSignal: ti.bbSignal || null,
         },
-        performance: perf[i] || null,
+        performance: perf[i] ? {
+          y1: num(perf[i].y1), ytd: num(perf[i].ytd),
+          y3Annualized: num(perf[i].y3Annualized), y5Annualized: num(perf[i].y5Annualized),
+          y10Annualized: num(perf[i].y10Annualized), spanYears: num(perf[i].spanYears),
+          basis: perf[i].basis || null,
+        } : null,
+        risk: perf[i] ? {
+          volatility: num(perf[i].volatility), maxDrawdown1y: num(perf[i].maxDrawdown1y),
+          high52: num(perf[i].high52), low52: num(perf[i].low52), fromHigh52: num(perf[i].fromHigh52),
+        } : null,
       };
     });
 
