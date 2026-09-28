@@ -102,9 +102,11 @@ async function createSignalNotifications(signals) {
     const { rows: users } = await pool.query('SELECT id FROM users').catch(() => ({ rows: [] }));
     if (users.length === 0) return [];
 
-    // Only notify for significant signals
+    // Only push buy-side signals to the notification bell. Sell/Strong Sell
+    // ratings remain visible in the feed but are no longer broadcast as
+    // notifications.
     const significantSignals = signals.filter(s =>
-      ['Strong Buy', 'Buy', 'Sell', 'Strong Sell'].includes(s.signal)
+      ['Strong Buy', 'Buy'].includes(s.signal)
     );
 
     if (significantSignals.length === 0) return [];
