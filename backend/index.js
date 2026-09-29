@@ -7315,6 +7315,25 @@ app.get('/api/nse/insights/:ticker', async (req, res) => {
 });
 
 // --- NSE IPO Tracker ---
+// Live NSE prices for a set of bare tickers, keyed by bare ticker.
+//
+// This replaced the AFX scraper. AFX (afx.kwayisi.org) is unreachable from the
+// production VPS - TCP 443 times out while Yahoo and kenyanstocks succeed from
+// the same container - so every route that merged AFX quotes was silently
+// serving rows with no live price at all. mystocks.africa is reachable, the key
+// is configured in production, and getBatchQuotes already returns the same
+// bare-ticker -> quote map the AFX scraper did.
+async function getNsePriceMap(tickers) {
+  const list = [...new Set((tickers || []).filter(Boolean).map(t => String(t).toUpperCase()))].slice(0, 50);
+  if (list.length === 0) return {};
+  try {
+    const msa = require('./mystocksAfricaApi');
+    return await msa.getBatchQuotes(list);
+  } catch (e) {
+    return {};
+  }
+}
+
 app.get('/api/nse/ipos', async (req, res) => {
   try {
     const { status } = req.query;
@@ -7326,21 +7345,17 @@ app.get('/api/nse/ipos', async (req, res) => {
     }
     query += ' ORDER BY listing_date DESC NULLS LAST, created_at DESC';
     const result = await pool.query(query, params);
-    // Merge live prices from AFX scraper
-    let afxQuotes = {};
-    try { const { fetchNseQuotes } = require('./nseAfxScraper'); afxQuotes = await fetchNseQuotes(); } catch {}
+    // Merge live prices (mystocks.africa Partner API; AFX was unreachable)
+    const nseQuotes = await getNsePriceMap(result.rows.map(r => r.ticker));
     const ipos = result.rows.map(r => {
-      let currentPrice = r.current_price;
-      if (r.ticker && afxQuotes[r.ticker]) {
-        currentPrice = afxQuotes[r.ticker].price;
-      }
+      const q = r.ticker ? nseQuotes[String(r.ticker).toUpperCase()] : null;
       return {
         ...r,
         listing_date: r.listing_date?.toISOString().split('T')[0],
         created_at: r.created_at?.toISOString(),
-        current_price: currentPrice,
-        price_change_pct: (r.ticker && afxQuotes[r.ticker]) ? afxQuotes[r.ticker].changePercent : null,
-        price_change: (r.ticker && afxQuotes[r.ticker]) ? afxQuotes[r.ticker].change : null,
+        current_price: q ? q.price : r.current_price,
+        price_change_pct: q ? (q.changePercent ?? q.changesPercentage ?? null) : null,
+        price_change: q ? (q.change ?? null) : null,
       };
     });
     if (ipos.length === 0) {
@@ -7368,18 +7383,20 @@ app.get('/api/nse/corporate-actions', async (req, res) => {
     if (conditions.length) query += ' WHERE ' + conditions.join(' AND ');
     query += ' ORDER BY event_date DESC NULLS LAST';
     const result = await pool.query(query, params);
-    // Merge live prices from AFX scraper
-    let afxQuotes = {};
-    try { const { fetchNseQuotes } = require('./nseAfxScraper'); afxQuotes = await fetchNseQuotes(); } catch {}
-    const actions = result.rows.map(r => ({
-      ...r,
-      event_date: r.event_date?.toISOString().split('T')[0],
-      record_date: r.record_date?.toISOString().split('T')[0],
-      created_at: r.created_at?.toISOString(),
-      current_price: (r.ticker && afxQuotes[r.ticker]) ? afxQuotes[r.ticker].price : null,
-      price_change: (r.ticker && afxQuotes[r.ticker]) ? afxQuotes[r.ticker].change : null,
-      price_change_pct: (r.ticker && afxQuotes[r.ticker]) ? afxQuotes[r.ticker].changePercent : null,
-    }));
+    // Merge live prices (mystocks.africa Partner API; AFX was unreachable)
+    const nseQuotes = await getNsePriceMap(result.rows.map(r => r.ticker));
+    const actions = result.rows.map(r => {
+      const q = r.ticker ? nseQuotes[String(r.ticker).toUpperCase()] : null;
+      return {
+        ...r,
+        event_date: r.event_date?.toISOString().split('T')[0],
+        record_date: r.record_date?.toISOString().split('T')[0],
+        created_at: r.created_at?.toISOString(),
+        current_price: q ? q.price : null,
+        price_change: q ? (q.change ?? null) : null,
+        price_change_pct: q ? (q.changePercent ?? q.changesPercentage ?? null) : null,
+      };
+    });
     res.json(actions);
   } catch (err) {
     console.error('Error fetching corporate actions:', err.message);

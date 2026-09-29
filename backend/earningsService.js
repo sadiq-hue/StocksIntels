@@ -1,6 +1,5 @@
 const axios = require('axios');
 const signalService = require('./signalService');
-const nseAfxScraper = require('./nseAfxScraper');
 const kenyanStocksScraper = require('./kenyanStocksScraper');
 
 const FINNHUB_KEY = process.env.FINNHUB_API_KEY || process.env.VITE_FINNHUB_KEY || 'd7ji2ihr01qhf13euuvgd7ji2ihr01qhf13euv00';
@@ -226,7 +225,6 @@ async function syncEarnings() {
   syncInProgress = true;
 
   try {
-    nseAfxScraper.fetchNseQuotes().catch(() => {});
     const alphaKey = process.env.ALPHA_VANTAGE_API_KEY;
     const allEvents = [];
     const trackedSet = new Set(signalService.ALL_SYMBOLS);
