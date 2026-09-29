@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router";
+import { openNotificationLink, isExternalLink } from "../utils/notificationLink";
 import { Bell, Check, ArrowUp, ArrowDown, Loader2, X, ExternalLink, Clock } from "lucide-react";
 import { useNotifications, type Notification } from "../contexts/NotificationContext";
 import { formatNotificationTime } from "../utils/timeFormat";
@@ -204,11 +205,11 @@ export function NotificationsPage() {
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
                 {selected.link && (
                   <button
-                    onClick={() => { navigate(selected.link!); setSelected(null); }}
+                    onClick={() => { openNotificationLink(selected.link, navigate); setSelected(null); }}
                     className="flex items-center gap-1.5 px-4 py-2 bg-[#0D7490] text-white rounded-lg text-sm font-medium hover:bg-[#0A5F7A] transition-colors"
                   >
                     <ExternalLink className="w-4 h-4" />
-                    {selected.type === "message" ? "View" : "View Related Stock"}
+                    {selected.type === "message" ? "View" : isExternalLink(selected.link) ? "Read Article" : "View Related Stock"}
                   </button>
                 )}
                 {!selected.read && (

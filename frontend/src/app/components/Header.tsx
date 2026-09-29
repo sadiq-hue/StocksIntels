@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth, getTrialInfo } from "../auth/AuthContext";
 import { disconnectSocket } from "../services/socketService";
 import { useNotifications } from "../contexts/NotificationContext";
+import { openNotificationLink } from "../utils/notificationLink";
 import { formatNotificationTime } from "../utils/timeFormat";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { SidebarContent } from "./SidebarContent";
@@ -188,7 +189,7 @@ function ProfileDropdown({ marketStatus }: { marketStatus: { nse: { open: boolea
                     const isBearish = n.type === "signal" && (n.title?.includes("Sell") || n.title?.includes("Strong Sell"));
                     const handleClick = () => {
                       if (!n.read) markRead(n.id);
-                      if (n.link) navigate(n.link);
+                      openNotificationLink(n.link, navigate);
                       setShowNotifications(false);
                     };
                     return (
