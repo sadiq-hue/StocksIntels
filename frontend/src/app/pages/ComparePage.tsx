@@ -35,6 +35,10 @@ const PERIODS = [
 type PeriodKey = typeof PERIODS[number]["k"];
 const NSE_OK = new Set<PeriodKey>(["1m", "1y", "5y", "max"]);
 
+// Temporarily disabled so the relative-performance chart can use the full width.
+// Flip to true to bring the radar "Score Profile" back.
+const SHOW_SCORE_PROFILE = false;
+
 // Series a chart metric can be built from: daily price bars, or the dated
 // fundamental histories returned by /api/financials.
 type MetricSource = "price" | "keyMetrics" | "income" | "cashflow" | "balance";
@@ -646,7 +650,7 @@ export function ComparePage() {
 
           {/* Chart + Radar */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <Card className="p-4 xl:col-span-2">
+            <Card className={`p-4 ${SHOW_SCORE_PROFILE ? "xl:col-span-2" : "xl:col-span-3"}`}>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <h2 className="text-sm font-semibold text-foreground">
                   {metricDef.id === "growth10k" ? "Growth of $10K" : "Relative Performance"}
@@ -722,6 +726,7 @@ export function ComparePage() {
               </div>
             </Card>
 
+            {SHOW_SCORE_PROFILE && (
             <Card className="p-4">
               <h2 className="text-sm font-semibold text-foreground mb-1">Score Profile</h2>
               <p className="text-[10px] text-muted-foreground mb-2">Model grades across each dimension (0–100)</p>
@@ -739,6 +744,7 @@ export function ComparePage() {
                 </ResponsiveContainer>
               </div>
             </Card>
+            )}
           </div>
 
           {/* Narrative */}
