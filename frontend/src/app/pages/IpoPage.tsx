@@ -333,14 +333,50 @@ export function IpoPage() {
         </div>
       ) : view === "statistics" ? (
         stats ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <StatCard label="Total IPOs" value={stats.total} icon={Rocket} />
-            <StatCard label="Upcoming" value={stats.byStatus?.upcoming || 0} icon={CalendarDays} />
-            <StatCard label="Listed" value={stats.byStatus?.listed || 0} icon={History} />
-            <StatCard label="Avg Since IPO" value={fmtPct(stats.avgSinceIpoPct)} icon={TrendingUp} />
-            <StatCard label="Best Since IPO" value={fmtPct(stats.best)} icon={TrendingUp} />
-            <StatCard label="Worst Since IPO" value={fmtPct(stats.worst)} icon={TrendingDown} />
-            <StatCard label="Median Since IPO" value={fmtPct(stats.medianSinceIpoPct)} icon={BarChart3} />
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <StatCard label="Total IPOs" value={stats.total} icon={Rocket} />
+              <StatCard label="Upcoming" value={(stats.byStatus?.upcoming || 0) + (stats.byStatus?.filed || 0)} icon={CalendarDays} />
+              <StatCard label="Listed" value={stats.byStatus?.listed || 0} icon={History} />
+              <StatCard label="Avg Since IPO" value={fmtPct(stats.avgSinceIpoPct)} icon={TrendingUp} />
+              <StatCard label="Best Since IPO" value={fmtPct(stats.bestSinceIpoPct)} icon={TrendingUp} />
+              <StatCard label="Worst Since IPO" value={fmtPct(stats.worstSinceIpoPct)} icon={TrendingDown} />
+              <StatCard label="Median Since IPO" value={fmtPct(stats.medianSinceIpoPct)} icon={BarChart3} />
+              <StatCard label="% Above Offer" value={stats.pctAboveOffer == null ? "—" : `${stats.pctAboveOffer.toFixed(0)}%`} icon={TrendingUp} />
+            </div>
+            {stats.pricedCount != null && stats.pricedCount < 3 && (
+              <p className="text-[10px] text-muted-foreground">Only {stats.pricedCount} priced IPO(s) have both an offer and a current price, so return stats are based on a small sample.</p>
+            )}
+            {(stats.topPerformers?.length > 0 || stats.bottomPerformers?.length > 0) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {stats.topPerformers?.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-2">Top since IPO</h3>
+                    <div className="space-y-1">
+                      {stats.topPerformers.map((p: any) => (
+                        <div key={p.ticker} className="flex items-center justify-between rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs">
+                          <span className="font-medium text-foreground">{p.ticker}</span>
+                          <span className="font-semibold text-emerald-600">{fmtPct(p.pct)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {stats.bottomPerformers?.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-red-600 dark:text-red-400 mb-2">Weakest since IPO</h3>
+                    <div className="space-y-1">
+                      {stats.bottomPerformers.map((p: any) => (
+                        <div key={p.ticker} className="flex items-center justify-between rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs">
+                          <span className="font-medium text-foreground">{p.ticker}</span>
+                          <span className="font-semibold text-red-500">{fmtPct(p.pct)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : <div className="text-sm text-muted-foreground">Loading statistics…</div>
       ) : (

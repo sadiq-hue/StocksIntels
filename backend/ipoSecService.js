@@ -261,6 +261,25 @@ async function getRecentIpoFilings() {
   return data;
 }
 
+// "The initial public offering price is $X.00 per share" / price-range tables.
+function parseOfferPrice(text) {
+  const pats = [
+    /initial public offering price is\s*\$\s*([\d,]+(?:\.\d+)?)/i,
+    /public offering price of\s*\$\s*([\d,]+(?:\.\d+)?)/i,
+    /offering price is\s*\$\s*([\d,]+(?:\.\d+)?)/i,
+    /Per Share\s*Total[\s\S]{0,500}?\$\s*([\d,]+(?:\.\d+)?)/i,
+    /\$\s*([\d,]+(?:\.\d{2}))\s+per\s+share/i,
+  ];
+  for (const p of pats) {
+    const m = text.match(p);
+    if (m) {
+      const v = parseFloat(m[1].replace(/,/g, ''));
+      if (isFinite(v) && v > 0 && v < 100000) return v;
+    }
+  }
+  return null;
+}
+
 // Global IPO pipeline from SEC filings (replaces the Alpha Vantage free-tier
 // calendar, which is heavily rate-limited and often returns a truncated error).
 // Final prospectuses are priced/listed IPOs; S-1 registrations are upcoming.
@@ -294,6 +313,21 @@ async function getSecIpoPipeline() {
       stage: f.stage,
       accession: f.accession,
     }));
+
+  // For final (priced) IPOs, pull the real offer price from the prospectus so
+  // "since IPO" returns and the statistics are meaningful. Bounded to the most
+  // recent filings — each prospectus is multi-MB, so this stays time-boxed.
+  const priced = items
+    .filter((i) => i.stage === 'Final (424B4)' && !i.offer_price)
+    .sort((a, b) => new Date(b.listing_date) - new Date(a.listing_date))
+    .slice(0, 8);
+  for (const it of priced) {
+    const f = filings.find((x) => x.accession === it.accession);
+    if (!f) continue;
+    const doc = await fetchProspectusText(f.cik, f.accession);
+    if (doc) it.offer_price = parseOfferPrice(doc.text.slice(0, 250000));
+  }
+
   const data = { items, updatedAt: Date.now() };
   _pipelineCache.data = data; _pipelineCache.ts = Date.now();
   return data;

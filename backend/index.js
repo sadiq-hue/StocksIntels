@@ -7655,25 +7655,40 @@ app.get('/api/ipo/lookup', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to search IPOs' }); }
 });
 
-// IPO Statistics — aggregate counts/averages across the feed.
+// IPO Statistics — aggregate counts and real since-IPO performance across the feed.
 app.get('/api/ipo/statistics', async (req, res) => {
   try {
     const all = await _loadIpoHub();
-    const byStatus = { upcoming: 0, listed: 0, filed: 0 };
-    const returns = [];
-    let sum = 0, n = 0;
+    const byStatus = { upcoming: 0, listed: 0, filed: 0, current: 0, withdrawn: 0 };
+    const byMarket = {};
+    const perf = [];
     for (const i of all) {
       byStatus[i.status] = (byStatus[i.status] || 0) + 1;
-      if (typeof i.since_ipo_pct === 'number' && isFinite(i.since_ipo_pct)) { sum += i.since_ipo_pct; n++; returns.push(i.since_ipo_pct); }
+      byMarket[i.market || '?'] = (byMarket[i.market || '?'] || 0) + 1;
+      if (typeof i.since_ipo_pct === 'number' && isFinite(i.since_ipo_pct)) {
+        perf.push({ ticker: i.ticker, name: i.company_name, pct: i.since_ipo_pct });
+      }
     }
-    returns.sort((a, b) => a - b);
+    const pcts = perf.map((p) => p.pct).sort((a, b) => a - b);
+    const mean = pcts.length ? pcts.reduce((s, v) => s + v, 0) / pcts.length : null;
+    const median = pcts.length ? (pcts.length % 2
+      ? pcts[(pcts.length - 1) / 2]
+      : (pcts[pcts.length / 2 - 1] + pcts[pcts.length / 2]) / 2) : null;
+    const sortedByPerf = [...perf].sort((a, b) => b.pct - a.pct);
     res.json({
       total: all.length,
       byStatus,
-      avgSinceIpoPct: n ? sum / n : null,
-      medianSinceIpoPct: returns.length ? returns[Math.floor(returns.length / 2)] : null,
-      best: returns.length ? returns[returns.length - 1] : null,
-      worst: returns.length ? returns[0] : null,
+      byMarket,
+      // How many IPOs we can actually compute a return for (have offer + current price)
+      pricedCount: pcts.length,
+      avgSinceIpoPct: mean,
+      medianSinceIpoPct: median,
+      bestSinceIpoPct: pcts.length ? pcts[pcts.length - 1] : null,
+      worstSinceIpoPct: pcts.length ? pcts[0] : null,
+      // Share of priced IPOs currently trading above their offer price
+      pctAboveOffer: pcts.length ? (pcts.filter((v) => v > 0).length / pcts.length) * 100 : null,
+      topPerformers: sortedByPerf.slice(0, 5),
+      bottomPerformers: sortedByPerf.slice(-5).reverse(),
     });
   } catch (e) { res.status(500).json({ error: 'Failed to compute IPO statistics' }); }
 });
