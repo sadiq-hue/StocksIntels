@@ -590,7 +590,7 @@ export function ComparePage() {
         </span>
         <div className="min-w-0 flex-1">
           <h1 className="text-lg font-semibold text-foreground">Compare Stocks</h1>
-          <p className="text-xs text-muted-foreground">Compare up to 5 African (NSE) and global stocks across valuation, growth, profitability, balance sheet, risk, momentum, technicals and AI signals — with best-in-row highlights, relative performance and a quick-take verdict to support informed decisions.</p>
+          <p className="text-xs text-muted-foreground">Compare up to 5 African (NSE) and global stocks across valuation, growth, profitability, balance sheet, risk, momentum, technicals and market intel — with best-in-row highlights, relative performance and a quick-take verdict to support informed decisions.</p>
         </div>
         {data.length >= 2 && (
           <div className="flex items-center gap-2">
