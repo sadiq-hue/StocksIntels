@@ -608,7 +608,13 @@ const US_SYMBOLS = [
   'VMI','VIAV','OSK','MSGS','CUBE','PTGX','COMP','ESI','TTC','LEVI',
 ];
 
-const ALL_SYMBOLS = [...NSE_SYMBOLS, ...US_SYMBOLS];
+// NSE_SYMBOLS and US_SYMBOLS are not disjoint: 'ARM' is both a Kenyan listing
+// (Armstrong Surface) and a US listing (Arm Holdings). Everything downstream keys
+// signals by the bare ticker, so a duplicate produced two signals for one ticker,
+// double-counted it in the dashboard summary, and made whichever entry landed
+// last win any ticker-keyed map. De-duplicate on the way in, keeping the first
+// occurrence (NSE first), so a future collision cannot repeat this.
+const ALL_SYMBOLS = [...new Set([...NSE_SYMBOLS, ...US_SYMBOLS])];
 
 const SECTOR_AVG_PE = {
   'Telecommunications': 15, 'Banking': 10, 'Manufacturing': 18,

@@ -554,13 +554,35 @@ export function DashboardPage() {
 
   const signalSummary = useMemo(() => {
     const counts: Record<string, number> = { "Strong Buy": 0, Buy: 0, Hold: 0, Sell: 0, "Strong Sell": 0 };
-    signals.forEach(s => { if (counts[s.signal] !== undefined) counts[s.signal]++; });
-    const total = signals.length;
-    const avgConf = total ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / total) : 0;
-    const peakConf = total ? Math.round(signals.reduce((a, b) => Math.max(a, b.confidence), 0)) : 0;
-    const strongBuy = signals.filter(s => s.signal === "Strong Buy" || s.signal === "Buy").length;
-    const strongSell = signals.filter(s => s.signal === "Sell" || s.signal === "Strong Sell").length;
-    return { total, avgConf, peakConf, strongBuy, strongSell, counts };
+    // De-duplicate by ticker: the backend universe contains ARM twice (an NSE
+    // listing and a US listing share the bare ticker), so the raw array can hold
+    // two entries for the same ticker and inflate every count.
+    const seen = new Set<string>();
+    const unique = signals.filter(s => {
+      const k = String(s?.ticker ?? "").toUpperCase();
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+
+    unique.forEach(s => { if (counts[s.signal] !== undefined) counts[s.signal]++; });
+    const total = unique.length;
+    const conf = (s: any) => (typeof s?.confidence === "number" && isFinite(s.confidence) ? s.confidence : 0);
+    // A missing confidence must not poison these: Math.max(0, undefined) is NaN,
+    // which would render "Avg NaN%" / "peak NaN%".
+    const avgConf = total ? Math.round(unique.reduce((a, b) => a + conf(b), 0) / total) : 0;
+    const peakConf = total ? Math.round(unique.reduce((a, b) => Math.max(a, conf(b)), 0)) : 0;
+    const strongBuy = counts["Strong Buy"] + counts.Buy;
+    const strongSell = counts.Sell + counts["Strong Sell"];
+    return {
+      total, avgConf, peakConf, strongBuy, strongSell, counts,
+      // The card is about actionable calls. Hold is the overwhelming majority of
+      // the generated set, so leading with the grand total made the tile read
+      // "480 / 0 Buy · 3 Sell" - a number that contradicts its own caption.
+      actionable: strongBuy + strongSell,
+      hold: counts.Hold,
+      unrated: total - strongBuy - strongSell - counts.Hold,
+    };
   }, [signals]);
 
   const benchmarkMetrics = useMemo(() => {
@@ -604,27 +626,43 @@ export function DashboardPage() {
     };
   }, [perfData, perfMeta.totalReturnPercent, enhancedTotals.nseValue, enhancedTotals.globalValue]);
 
-  const topSignals = useMemo(() =>
-    [...signals]
-      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-      .slice(0, 4)
-      .map(s => {
-        // Socket-delivered signals bypass the server's normalisation, so `change`
-        // can be missing — default it instead of calling toFixed on undefined.
-        const ch = typeof s.change === "number" && isFinite(s.change) ? s.change : 0;
-        return {
-          ...s,
-          ticker: s.ticker,
-          name: s.name,
-          signal: s.signal,
-          confidence: s.confidence,
-          change: `${ch >= 0 ? "+" : ""}${ch.toFixed(2)}%`,
-          trend: (ch >= 0 ? "up" : "down") as "up" | "down",
-          market: s.market,
-        };
-      }),
-    [signals]
-  );
+  const topSignals = useMemo(() => {
+    const conf = (s: any) => (typeof s?.confidence === "number" && isFinite(s.confidence) ? s.confidence : 0);
+    const isActionable = (s: any) => s?.signal === "Strong Buy" || s?.signal === "Buy" || s?.signal === "Sell" || s?.signal === "Strong Sell";
+
+    // De-duplicate by ticker (ARM appears twice in the backend universe) and rank
+    // actionable calls ahead of Hold. Ranking purely by confidence meant that with
+    // ~99% of the generated set rated Hold, this list - titled "Top Market
+    // Intelligence" - filled up with Hold rows and the actual Buy/Sell calls never
+    // appeared anywhere on the page.
+    const seen = new Set<string>();
+    const unique = signals.filter(s => {
+      const k = String(s?.ticker ?? "").toUpperCase();
+      if (!k || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+
+    const actionable = unique.filter(isActionable).sort((a, b) => conf(b) - conf(a));
+    const holds = unique.filter(s => !isActionable(s)).sort((a, b) => conf(b) - conf(a));
+    const ranked = [...actionable, ...holds];
+
+    return ranked.slice(0, 4).map(s => {
+      // Socket-delivered signals bypass the server's normalisation, so `change`
+      // can be missing — default it instead of calling toFixed on undefined.
+      const ch = typeof s.change === "number" && isFinite(s.change) ? s.change : 0;
+      return {
+        ...s,
+        ticker: s.ticker,
+        name: s.name,
+        signal: s.signal,
+        confidence: conf(s),
+        change: `${ch >= 0 ? "+" : ""}${ch.toFixed(2)}%`,
+        trend: (ch >= 0 ? "up" : "down") as "up" | "down",
+        market: s.market,
+      };
+    });
+  }, [signals]);
 
   return (
     <div className="mx-auto max-w-[1600px] p-4 md:p-6 space-y-6">
@@ -765,7 +803,7 @@ export function DashboardPage() {
           { icon: Banknote, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400", label: "NSE Portfolio", value: fmtKes(enhancedTotals.nseValue), sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
           { icon: Globe2, color: "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400", label: "Global Portfolio", value: fmtUsd(enhancedTotals.globalValue), sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${enhancedTotals.globalCount} pos)`, valColor: "text-foreground" },
           { icon: PieChart, color: "bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} NSE · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
-          { icon: Brain, color: "bg-yellow-100 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400", label: "Market Intelligence", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: "text-foreground" },
+          { icon: Brain, color: "bg-yellow-100 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400", label: "Market Intelligence", value: `${signalSummary.actionable}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: signalSummary.actionable > 0 ? "text-foreground" : "text-muted-foreground" },
           { icon: Scale, color: "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400", label: "vs Benchmarks", value: hasAlpha ? `${sign(benchmarkMetrics.alpha!)}${benchmarkMetrics.alpha!.toFixed(1)}%` : "—", sub: sub || "No benchmark history yet", valColor: hasAlpha ? (benchmarkMetrics.alpha! >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
           ].map((m, i) => (
           <Card key={i} className="border shadow-sm p-5">
@@ -1192,10 +1230,9 @@ export function DashboardPage() {
             ) : (
               <>
                 {/* Signal Distribution */}
-                {signalSummary.total > 0 && (
-                  <div className="bg-white/10 rounded-lg p-3 border border-white/20 mb-3">
+                {signalSummary.total > 0 && (                  <div className="bg-white/10 rounded-lg p-3 border border-white/20 mb-3">
                     <div className="flex items-center justify-between text-[11px] text-white/70 mb-2">
-                      <span>{signalSummary.total} signals</span>
+                      <span>{signalSummary.actionable} calls{signalSummary.hold > 0 ? ` · ${signalSummary.hold} on hold` : ""}</span>
                       <span className="text-white/60">Avg {signalSummary.avgConf}% confidence</span>
                     </div>
                     <div className="flex h-1.5 rounded-full overflow-hidden bg-white/10">
