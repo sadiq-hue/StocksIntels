@@ -294,16 +294,34 @@ export function ComparePage() {
 
   const addTicker = (raw: string) => { add(raw); setSearch(""); setResults([]); };
 
-  // Fetch the normalized comparison payload
+  // Fetch the normalized comparison payload.
+  // The app restores the access token asynchronously from the refresh cookie on
+  // load, so a request fired before that resolves comes back 401. Retry briefly
+  // (and keep "loading") instead of surfacing a bare 401.
   useEffect(() => {
     if (selected.length < 2) { setData([]); setError(null); return; }
     let cancelled = false;
     setLoading(true); setError(null);
-    authFetch(`${API_URL}/compare?symbols=${encodeURIComponent(selKey)}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status === 403 ? "An active subscription is required." : `Request failed (${r.status})`))))
-      .then((j) => { if (!cancelled) setData(Array.isArray(j.stocks) ? j.stocks : []); })
-      .catch((e) => { if (!cancelled) setError(e.message || "Failed to load comparison"); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    (async () => {
+      const path = `${API_URL}/compare?symbols=${encodeURIComponent(selKey)}`;
+      let res: Response | null = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try { res = await authFetch(path); } catch { res = null; }
+        if (!res) break;
+        if (res.status !== 401) break;
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+      if (cancelled) return;
+      if (!res) { setError("Network error while loading the comparison."); setLoading(false); return; }
+      if (!res.ok) {
+        setError(res.status === 403 ? "An active subscription is required." : `Request failed (${res.status})`);
+        setLoading(false);
+        return;
+      }
+      const j = await res.json().catch(() => null);
+      if (!cancelled) setData(Array.isArray(j?.stocks) ? j.stocks : []);
+      setLoading(false);
+    })();
     return () => { cancelled = true; };
   }, [selKey]);
 

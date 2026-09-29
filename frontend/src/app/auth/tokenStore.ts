@@ -9,11 +9,19 @@ export function setToken(token: string | null) {
   _token = token;
 }
 
+// The in-memory token is empty until AuthContext finishes restoring the session
+// (from the refresh cookie) on page load. Fall back to any stored token so an
+// early request isn't sent unauthenticated.
+function resolveToken(): string | null {
+  if (_token) return _token;
+  try { return localStorage.getItem("stockintel_token"); } catch { return null; }
+}
+
 export function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string> || {}),
   };
-  const token = _token;
+  const token = resolveToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
   return fetch(url, { ...options, headers });
 }
@@ -27,7 +35,7 @@ export function patchGlobalFetch() {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.pathname + input.search : 'url' in input ? input.url : '';
     if (url.startsWith('/api/')) {
       const headers: Record<string, string> = { ...(init?.headers as Record<string, string> || {}) };
-      const token = _token;
+      const token = resolveToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
       return originalFetch(input, { ...init, headers, credentials: init?.credentials || 'include' });
     }
