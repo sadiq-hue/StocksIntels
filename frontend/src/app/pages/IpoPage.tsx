@@ -11,7 +11,8 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
-type ViewKey = "calendar" | "lookup" | "statistics" | "news" | "recent";
+type ViewKey = "calendar" | "statistics" | "news" | "lookup";
+type SubTab = "recent" | "upcoming" | "lockups" | "filings" | "withdrawn";
 
 interface Ipo {
   id: number | string;
@@ -51,11 +52,18 @@ interface IpoNewsItem {
 }
 
 const VIEWS: { key: ViewKey; label: string; icon: typeof CalendarDays }[] = [
-  { key: "calendar", label: "IPO Calendar", icon: CalendarDays },
-  { key: "lookup", label: "Lookup", icon: SearchIcon },
+  { key: "calendar", label: "Calendar", icon: CalendarDays },
   { key: "statistics", label: "Statistics", icon: BarChart3 },
-  { key: "news", label: "IPO News", icon: Newspaper },
-  { key: "recent", label: "Recent IPOs", icon: History },
+  { key: "news", label: "News", icon: Newspaper },
+  { key: "lookup", label: "Lookup", icon: SearchIcon },
+];
+
+const SUB_TABS: { key: SubTab; label: string }[] = [
+  { key: "recent", label: "Recent" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "lockups", label: "Lockups" },
+  { key: "filings", label: "Filings" },
+  { key: "withdrawn", label: "Withdrawn" },
 ];
 
 const statusColors: Record<string, string> = {
@@ -76,11 +84,15 @@ function StatusBadge({ status }: { status: string }) {
 
 export function IpoPage() {
   const [view, setView] = useState<ViewKey>("calendar");
+  const [subTab, setSubTab] = useState<SubTab>("recent");
   const [menuOpen, setMenuOpen] = useState(false);
   const [calendar, setCalendar] = useState<Ipo[]>([]);
-  const [recent, setRecent] = useState<Ipo[]>([]);
   const [news, setNews] = useState<IpoNewsItem[]>([]);
   const [stats, setStats] = useState<any>(null);
+  const [lockups, setLockups] = useState<any>({ thisWeek: [], nextWeek: [], after: [], expired: [] });
+  const [lockupLoading, setLockupLoading] = useState(false);
+  const [filings, setFilings] = useState<any[]>([]);
+  const [filingsLoading, setFilingsLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [lookup, setLookup] = useState<Ipo[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -89,14 +101,12 @@ export function IpoPage() {
   const loadCommon = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [cal, rec, nw, st] = await Promise.all([
+      const [cal, nw, st] = await Promise.all([
         fetch(`${API_BASE}/ipo/calendar`).then((r) => r.json()),
-        fetch(`${API_BASE}/ipo/recent`).then((r) => r.json()),
         fetch(`${API_BASE}/ipo/news`).then((r) => r.json()),
         fetch(`${API_BASE}/ipo/statistics`).then((r) => r.json()),
       ]);
       setCalendar(Array.isArray(cal?.ipos) ? cal.ipos : []);
-      setRecent(Array.isArray(rec?.ipos) ? rec.ipos : []);
       setNews(Array.isArray(nw?.items) ? nw.items : []);
       setStats(st || null);
     } catch {
@@ -107,6 +117,22 @@ export function IpoPage() {
   }, []);
 
   useEffect(() => { loadCommon(); }, [loadCommon]);
+
+  // Load lockups / filings lazily when those sub-tabs are opened.
+  useEffect(() => {
+    if (subTab === "lockups" && !lockups.thisWeek?.length && !lockups.after?.length && !lockupLoading) {
+      setLockupLoading(true);
+      fetch(`${API_BASE}/ipo/lockups`).then((r) => r.json()).then((j) => {
+        if (j && !j.error) setLockups(j);
+      }).catch(() => {}).finally(() => setLockupLoading(false));
+    }
+    if (subTab === "filings" && !filings.length && !filingsLoading) {
+      setFilingsLoading(true);
+      fetch(`${API_BASE}/ipo/filings`).then((r) => r.json()).then((j) => {
+        if (Array.isArray(j?.filings)) setFilings(j.filings);
+      }).catch(() => {}).finally(() => setFilingsLoading(false));
+    }
+  }, [subTab]);
 
   const runLookup = useCallback(async () => {
     const q = query.trim();
@@ -248,28 +274,46 @@ export function IpoPage() {
         </Card>
       )}
 
+      {view === "calendar" && (
+        <div className="flex flex-wrap gap-1.5 mb-5">
+          {SUB_TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setSubTab(t.key)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${subTab === t.key ? "bg-[#0D7490] text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading && !calendar.length ? (
         <div className="text-sm text-muted-foreground">Loading IPO data…</div>
       ) : view === "calendar" ? (
-        <div className="space-y-6">
-          {grouped.upcoming.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1.5">
-                <Timer className="size-4" /> Upcoming / Filed ({grouped.upcoming.length})
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{grouped.upcoming.map(renderCard)}</div>
-            </div>
-          )}
-          {grouped.listed.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 mb-2 flex items-center gap-1.5">
-                <Rocket className="size-4" /> Recently Listed ({grouped.listed.length})
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{grouped.listed.map(renderCard)}</div>
-            </div>
-          )}
-          {calendar.length === 0 && <Card className="p-6 text-center border-dashed"><p className="text-sm text-muted-foreground">No IPO data available.</p></Card>}
-        </div>
+        subTab === "recent" ? (
+          grouped.listed.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{grouped.listed.map(renderCard)}</div>
+          ) : <Card className="p-6 text-center border-dashed"><p className="text-sm text-muted-foreground">No recently listed IPOs.</p></Card>
+        ) : subTab === "upcoming" ? (
+          grouped.upcoming.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{grouped.upcoming.map(renderCard)}</div>
+          ) : <Card className="p-6 text-center border-dashed"><p className="text-sm text-muted-foreground">No upcoming IPOs.</p></Card>
+        ) : subTab === "withdrawn" ? (
+          <Card className="p-6 text-center border-dashed"><p className="text-sm text-muted-foreground">No withdrawn IPOs tracked.</p></Card>
+        ) : subTab === "lockups" ? (
+          lockupLoading && !lockups.thisWeek?.length ? (
+            <div className="text-sm text-muted-foreground">Building lock-up calendar from SEC filings (can take ~30s first run)…</div>
+          ) : (
+            <LockupCalendar cal={lockups} />
+          )
+        ) : (
+          filingsLoading && !filings.length ? (
+            <div className="text-sm text-muted-foreground">Loading SEC filings…</div>
+          ) : filings.length > 0 ? (
+            <FilingsTable filings={filings} />
+          ) : <Card className="p-6 text-center border-dashed"><p className="text-sm text-muted-foreground">No recent IPO filings.</p></Card>
+        )
       ) : view === "lookup" ? (
         <div className="space-y-4">
           <div className="relative max-w-md">
@@ -299,7 +343,7 @@ export function IpoPage() {
             <StatCard label="Median Since IPO" value={fmtPct(stats.medianSinceIpoPct)} icon={BarChart3} />
           </div>
         ) : <div className="text-sm text-muted-foreground">Loading statistics…</div>
-      ) : view === "news" ? (
+      ) : (
         news.length > 0 ? (
           <div className="space-y-2">
             {news.map((n) => (
@@ -314,11 +358,108 @@ export function IpoPage() {
             ))}
           </div>
         ) : <Card className="p-6 text-center border-dashed"><p className="text-sm text-muted-foreground">No IPO news right now.</p></Card>
-      ) : (
-        recent.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{recent.map(renderCard)}</div>
-        ) : <Card className="p-6 text-center border-dashed"><p className="text-sm text-muted-foreground">No recent IPOs.</p></Card>
       )}
+    </div>
+  );
+}
+
+function fmtNum(v: number | null | undefined) {
+  if (v == null || !isFinite(v)) return "—";
+  if (v >= 1e9) return (v / 1e9).toFixed(2) + "B";
+  if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
+  if (v >= 1e3) return (v / 1e3).toFixed(1) + "K";
+  return v.toLocaleString();
+}
+
+function LockupRow({ r }: { r: any }) {
+  return (
+    <tr className="border-b border-border/60 hover:bg-muted/40 text-xs">
+      <td className="px-3 py-2 font-mono font-semibold text-foreground">{r.ticker || "—"}</td>
+      <td className="px-3 py-2 text-foreground max-w-[10rem] truncate">{r.name}</td>
+      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{r.expirationDate}</td>
+      <td className="px-3 py-2 text-muted-foreground text-right tabular-nums">{r.days ?? "—"}</td>
+      <td className="px-3 py-2 text-muted-foreground text-right tabular-nums">{fmtNum(r.shares)}</td>
+      <td className="px-3 py-2 text-muted-foreground text-right tabular-nums">{fmtNum(r.marketCap)}</td>
+      <td className="px-3 py-2 text-muted-foreground max-w-[12rem] truncate" title={r.condition}>{r.condition}{r.note ? " · early-release" : ""}</td>
+      <td className="px-3 py-2">
+        {r.docUrl && <a href={r.docUrl} target="_blank" rel="noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap">sec.gov</a>}
+      </td>
+    </tr>
+  );
+}
+
+function LockupTable({ title, rows }: { title: string; rows: any[] }) {
+  if (!rows || rows.length === 0) return null;
+  return (
+    <div className="mb-6">
+      <h2 className="text-sm font-semibold text-foreground mb-2">{title} ({rows.length})</h2>
+      <div className="overflow-x-auto rounded-xl border border-border">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <th className="px-3 py-2 text-left font-medium">Ticker</th>
+              <th className="px-3 py-2 text-left font-medium">Company</th>
+              <th className="px-3 py-2 text-left font-medium">Date</th>
+              <th className="px-3 py-2 text-right font-medium">Day</th>
+              <th className="px-3 py-2 text-right font-medium">Shares</th>
+              <th className="px-3 py-2 text-right font-medium">Mkt Cap</th>
+              <th className="px-3 py-2 text-left font-medium">Condition</th>
+              <th className="px-3 py-2 text-left font-medium">Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => <LockupRow key={`${r.ticker}-${r.expirationDate}-${i}`} r={r} />)}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function LockupCalendar({ cal }: { cal: any }) {
+  const groups = [
+    { title: "This Week", rows: cal.thisWeek },
+    { title: "Next Week", rows: cal.nextWeek },
+    { title: "After Next Week", rows: cal.after },
+    { title: "Recently Expired", rows: cal.expired },
+  ];
+  const total = groups.reduce((s, g) => s + (g.rows?.length || 0), 0);
+  if (total === 0) {
+    return <Card className="p-6 text-center border-dashed"><p className="text-sm text-muted-foreground">No lock-up expirations found in recent SEC prospectuses.</p></Card>;
+  }
+  return (
+    <div>
+      {groups.map((g) => <LockupTable key={g.title} title={g.title} rows={g.rows || []} />)}
+      <p className="text-[10px] text-muted-foreground">Data source: SEC filings. Lock-up dates come from each company's prospectus; early-release provisions can unlock shares earlier.</p>
+    </div>
+  );
+}
+
+function FilingsTable({ filings }: { filings: any[] }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="border-b bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
+            <th className="px-3 py-2 text-left font-medium">Ticker</th>
+            <th className="px-3 py-2 text-left font-medium">Company</th>
+            <th className="px-3 py-2 text-left font-medium">Stage</th>
+            <th className="px-3 py-2 text-left font-medium">Filed</th>
+            <th className="px-3 py-2 text-left font-medium">Form</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filings.map((f, i) => (
+            <tr key={`${f.cik}-${f.accession}-${i}`} className="border-b border-border/60 hover:bg-muted/40 text-xs">
+              <td className="px-3 py-2 font-mono font-semibold text-foreground">{f.ticker || "—"}</td>
+              <td className="px-3 py-2 text-foreground max-w-[12rem] truncate">{f.name}</td>
+              <td className="px-3 py-2 text-muted-foreground">{f.stage}</td>
+              <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{f.prospectusDate}</td>
+              <td className="px-3 py-2 text-muted-foreground">{f.form}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

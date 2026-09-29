@@ -7692,6 +7692,25 @@ app.get('/api/ipo/recent', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to load recent IPOs' }); }
 });
 
+// IPO Lockup Expiration Calendar — real SEC-derived data grouped into
+// This Week / Next Week / After Next Week / Recently Expired.
+app.get('/api/ipo/lockups', async (req, res) => {
+  try {
+    const { getLockupCalendar } = require('./ipoSecService');
+    const cal = await getLockupCalendar();
+    res.json({ success: true, ...cal });
+  } catch (e) { res.status(500).json({ error: 'Failed to build lockup calendar' }); }
+});
+
+// Recent SEC IPO filings (424B4 final prospectuses + S-1 registrations).
+app.get('/api/ipo/filings', async (req, res) => {
+  try {
+    const { getRecentIpoFilings } = require('./ipoSecService');
+    const { filings } = await getRecentIpoFilings();
+    res.json({ success: true, filings, updatedAt: Date.now() });
+  } catch (e) { res.status(500).json({ error: 'Failed to load IPO filings' }); }
+});
+
 // --- Global Corporate Actions ---
 app.get('/api/global/corporate-actions', async (req, res) => {
   try {
