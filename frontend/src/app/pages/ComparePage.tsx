@@ -673,33 +673,6 @@ export function ComparePage() {
 
       {!loading && !error && data.length >= 2 && (
         <>
-          {/* Quick take */}
-          {quickTake.length > 0 && (
-            <Card className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Trophy className="size-4 text-amber-500" />
-                <h2 className="text-sm font-semibold text-foreground">Quick take</h2>
-                <span className="text-[10px] text-muted-foreground italic">best pick per metric</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {quickTake.map((q) => (
-                  <button
-                    key={q.label}
-                    type="button"
-                    onClick={() => navigate(`/app/stock/${q.ticker}?market=${data.find((d) => d.ticker === q.ticker)?.market === "NSE" ? "nse" : "us"}`)}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-left hover:bg-muted transition-colors"
-                  >
-                    <span className="text-[11px] text-muted-foreground">{q.label}</span>
-                    <span className="flex items-center gap-2 shrink-0">
-                      <span className="text-sm font-semibold text-foreground">{q.ticker}</span>
-                      <Badge className="border-0 bg-emerald-100 text-emerald-700">{q.fmt(q.value)}</Badge>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </Card>
-          )}
-
           {/* Chart + Radar */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <Card className={`p-4 ${SHOW_SCORE_PROFILE ? "xl:col-span-2" : "xl:col-span-3"}`}>
@@ -817,6 +790,33 @@ export function ComparePage() {
             </Card>
             )}
           </div>
+
+          {/* Quick take */}
+          {quickTake.length > 0 && (
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Trophy className="size-4 text-amber-500" />
+                <h2 className="text-sm font-semibold text-foreground">Quick take</h2>
+                <span className="text-[10px] text-muted-foreground italic">best pick per metric</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {quickTake.map((q) => (
+                  <button
+                    key={q.label}
+                    type="button"
+                    onClick={() => navigate(`/app/stock/${q.ticker}?market=${data.find((d) => d.ticker === q.ticker)?.market === "NSE" ? "nse" : "us"}`)}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 px-3 py-2.5 text-left hover:bg-muted transition-colors"
+                  >
+                    <span className="text-[11px] text-muted-foreground">{q.label}</span>
+                    <span className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm font-semibold text-foreground">{q.ticker}</span>
+                      <Badge className="border-0 bg-emerald-100 text-emerald-700">{q.fmt(q.value)}</Badge>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Narrative */}
           {(() => {
