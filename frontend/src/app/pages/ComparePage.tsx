@@ -156,6 +156,12 @@ function cutoffTs(months: number): number {
   return d.getTime();
 }
 
+function arrKeyFor(source: MetricSource): string {
+  return source === "keyMetrics" ? "keyMetricsHistory"
+    : source === "income" ? "incomeStatementHistory"
+    : source === "cashflow" ? "cashFlowStatementHistory" : "balanceSheetHistory";
+}
+
 function signalTone(rating: string): string {
   if (rating === "Strong Buy") return "bg-emerald-600 text-white border-emerald-600";
   if (rating === "Buy") return "bg-emerald-100 text-emerald-700 border-emerald-200";
@@ -345,14 +351,20 @@ export function ComparePage() {
           })
         );
       }
-      const arrKey = metricDef.source === "keyMetrics" ? "keyMetricsHistory"
-        : metricDef.source === "income" ? "incomeStatementHistory"
-        : metricDef.source === "cashflow" ? "cashFlowStatementHistory" : "balanceSheetHistory";
+      const arrKey = arrKeyFor(metricDef.source);
       return data.map((s) => {
         const arr = fin[s.ticker]?.[arrKey] || [];
-        const pts = arr
+        // Histories come back newest-first; sort ascending so the base is the
+        // oldest point in the window (correct %-change anchor).
+        const all = arr
           .map((o: any) => ({ date: o.date, v: metricDef.get ? metricDef.get(o) : null }))
-          .filter((p: any) => p.date && p.v != null && isFinite(p.v) && p.v !== 0 && new Date(p.date).getTime() >= cutoff);
+          .filter((p: any) => p.date && p.v != null && isFinite(p.v) && p.v !== 0)
+          .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        // Fundamental history is sparse (annual/quarterly), so a short period can
+        // cut it to a single point; fall back to the full series rather than
+        // showing an empty chart.
+        let pts = all.filter((p: any) => new Date(p.date).getTime() >= cutoff);
+        if (pts.length < 2) pts = all;
         return { t: s.ticker, pts };
       });
     };
@@ -373,7 +385,26 @@ export function ComparePage() {
     }).finally(() => { if (!cancelled) setChartLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, range, metric, selKey]);
+  }, [data, range, metric, selKey, fin]);
+
+  // Latest non-zero value per ticker for the selected metric. Shown as a fallback
+  // when a metric has too little history to plot a line (valuation/return metrics
+  // are sparse upstream), so no dropdown option is ever a dead end.
+  const metricLatest = useMemo(() => {
+    if (metricDef.source === "price") return null;
+    const arrKey = arrKeyFor(metricDef.source);
+    const map: Record<string, number> = {};
+    for (const s of data) {
+      const arr = fin[s.ticker]?.[arrKey] || [];
+      const vals = arr
+        .map((o: any) => ({ d: o.date, v: metricDef.get ? metricDef.get(o) : null }))
+        .filter((p: any) => p.d && p.v != null && isFinite(p.v) && p.v !== 0)
+        .sort((a: any, b: any) => new Date(a.d).getTime() - new Date(b.d).getTime());
+      if (vals.length) map[s.ticker] = vals[vals.length - 1].v;
+    }
+    return Object.keys(map).length ? map : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, metric, fin]);
 
   const hasNse = data.some((s) => s.market === "NSE");
   const visiblePeriods = PERIODS.filter((p) => !hasNse || NSE_OK.has(p.k));
@@ -708,7 +739,25 @@ export function ComparePage() {
                 {chartLoading ? (
                   <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="size-4 animate-spin" /></div>
                 ) : chartData.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No data available for this metric.</div>
+                  metricLatest ? (
+                    <div className="h-full flex flex-col items-center justify-center gap-3">
+                      <p className="text-xs text-muted-foreground">
+                        {metricDef.label} — not enough history to chart. Current values:
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full max-w-md">
+                        {data.map((s) => (
+                          <div key={s.ticker} className="rounded-lg border border-border bg-muted/30 p-2 text-center">
+                            <div className="text-[10px] text-muted-foreground">{s.ticker}</div>
+                            <div className="text-sm font-semibold text-foreground">
+                              {metricLatest[s.ticker] != null ? metricDef.fmt(metricLatest[s.ticker]) : DASH}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No data available for this metric.</div>
+                  )
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 5, right: 12, bottom: 0, left: -12 }}>
