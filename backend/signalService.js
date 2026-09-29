@@ -90,6 +90,13 @@ const schemaReadyPromise = (async () => {
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS sector VARCHAR(50)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS bench_price NUMERIC(15,2)`);
     await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMP WITH TIME ZONE`);
+    // The outcome log needs the reward profile to tell a re-emission of the same
+    // thesis from a genuinely new call. isSameThesis() decides that from
+    // target1/entry, but signal_outcomes only stored entry_price, so a repeated
+    // emission could not be recognised as "the same call" and every re-emission
+    // inserted its own outcome row.
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS target1 NUMERIC(15,2)`);
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS stop_loss NUMERIC(15,2)`);
     // Forward-test dedup in recordForwardPrediction is a SELECT-then-INSERT, which
     // a concurrent signal cycle can race past — two identical theses landed as
     // id 13453/13667 @ NMG 13.65 (Aug 31 + Sep 1), hidden from the UI only by the
@@ -3082,7 +3089,7 @@ function getConfidenceMultiplier() {
 // phantom second win.  One win per trade — the milestone books the win at
 // target1; the final resolution (ultimate target or locked-profit stop) updates
 // exit_price / resolved_at / close_reason on the same row.
-async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result, resolvedAt, signalGeneratedAt, closeReason = null, isMilestoneUpgrade = false) {
+async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPrice, result, resolvedAt, signalGeneratedAt, closeReason = null, isMilestoneUpgrade = false, target1 = null, stopLoss = null) {
   try {
     const prevOutcome = _signalOutcomes.get(symbol);
     const signalGenAtMs = signalGeneratedAt || prevOutcome?.timestamp || Date.now();
@@ -3130,11 +3137,58 @@ async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPri
       }
       // Fall through to plain insert — legacy position without a milestone row.
     }
+
+    // Thesis-level dedup. The engine re-emits an unchanged call on every cycle
+    // with a slightly different reference price, and because a re-emission gets a
+    // fresh signal_generated_at it slipped past the (ticker, signal_generated_at)
+    // conflict target and inserted its own outcome row. In production that let a
+    // single idea be counted up to 19 times: 658 outcome rows came from only ~236
+    // distinct theses, and the forward test reported 57.6% while the de-duplicated
+    // measure was 45-48%.
+    //
+    // Reuse the same isSameThesis() predicate recordForwardPrediction already
+    // applies to forward_predictions, so "same call" means the same thing in both
+    // places. A matching row is UPDATED in place rather than duplicated, which is
+    // also the "one win per trade" model the milestone-upgrade branch above
+    // already implements.
+    if (target1 != null && !isMilestoneUpgrade) {
+      try {
+        const prior = await pool.query(
+          `SELECT id, entry_price, target1, result FROM signal_outcomes
+           WHERE source = 'live' AND ticker = $1 AND signal = $2
+           ORDER BY COALESCE(resolved_at, recorded_at) DESC, id DESC
+           LIMIT 25`,
+          [symbol, signalAction]
+        );
+        const match = prior.rows.find(r => isSameThesis(
+          { price: parseFloat(r.entry_price), target1: r.target1 != null ? parseFloat(r.target1) : null },
+          entryPrice, target1, 'buy'
+        ));
+        if (match) {
+          const upd = await pool.query(
+            `UPDATE signal_outcomes
+             SET exit_price = $3, result = $4, resolved_at = $5, close_reason = $6,
+                 recorded_at = $5, target1 = COALESCE(target1, $7), stop_loss = COALESCE(stop_loss, $8)
+             WHERE id = $1 AND source = 'live'`,
+            [match.id, symbol, currentPrice, result, resolvedAt || now, closeReason, target1, stopLoss]
+          );
+          if ((upd.rowCount || 0) > 0) {
+            // The in-memory _liveTestStore is a capped display cache whose entries
+            // do not carry target1, so it cannot be thesis-compared safely here;
+            // it is left alone. The DB is the source of truth for the forward
+            // test, health and audit numbers.
+            resolvePredictionLogs(symbol, result).catch(() => {});
+            return;
+          }
+        }
+      } catch (e) { /* dedup best-effort: fall through to insert */ }
+    }
+
     await pool.query(
-      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at, signal_generated_at, close_reason, source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'live')
+      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at, signal_generated_at, close_reason, source, target1, stop_loss)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'live', $11, $12)
        ON CONFLICT (ticker, signal_generated_at) DO NOTHING`,
-      [symbol, entryPrice, signalAction, currentPrice, result, posSize, now, resolvedAt || now, signalGenAt, closeReason]
+      [symbol, entryPrice, signalAction, currentPrice, result, posSize, now, resolvedAt || now, signalGenAt, closeReason, target1, stopLoss]
     );
     // Push to live test store
     const store = _liveTestStore.get(symbol);
@@ -4013,12 +4067,13 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal,
           prevOutcome.milestoneExitPrice != null ? prevOutcome.milestoneExitPrice : currentPrice,
           'win', prevOutcome.milestoneWinAt ? new Date(prevOutcome.milestoneWinAt).toISOString() : null,
-          prevOutcome.timestamp, 'target1 milestone', false);
+          prevOutcome.timestamp, 'target1 milestone', false,
+          prevOutcome.target1, prevOutcome.stopLoss);
       }
       if (resolvedNow) {
         // Final resolution: pass isMilestoneUpgrade so the persist function
         // upgrades the T1-milestone row in place when one exists.
-        persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, prevOutcome.exitPrice != null ? prevOutcome.exitPrice : currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null, prevOutcome.timestamp, prevOutcome.closeReason || null, prevOutcome.milestoneWinBooked === true);
+        persistSignalOutcome(symbol, prevOutcome.entryPrice, prevOutcome.signal, prevOutcome.exitPrice != null ? prevOutcome.exitPrice : currentPrice, prevOutcome.result, prevOutcome.resolvedAt ? new Date(prevOutcome.resolvedAt).toISOString() : null, prevOutcome.timestamp, prevOutcome.closeReason || null, prevOutcome.milestoneWinBooked === true, prevOutcome.target1, prevOutcome.stopLoss);
         signalEventBus.emit('signal:resolved', {
           ticker: symbol,
           entryPrice: prevOutcome.entryPrice,
