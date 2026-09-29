@@ -160,7 +160,14 @@ export function DashboardPage() {
   const [movers, setMovers] = useState<{ gainers: any[]; losers: any[] }>({ gainers: [], losers: [] });
   const [activeStocks, setActiveStocks] = useState<any[]>([]);
   const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
-  const [displayCurrency, setDisplayCurrency] = useState<string>(() => localStorage.getItem(PORTFOLIO_CURRENCY_KEY) || "USD");
+  // localStorage access throws in private mode / sandboxed iframes / non-DOM
+  // environments — this initializer runs during render, so guard it (mirrors
+  // PortfolioDataContext) or a SecurityError would take down the whole page.
+  const [displayCurrency, setDisplayCurrency] = useState<string>(() => {
+    try {
+      return (typeof window !== "undefined" ? localStorage.getItem(PORTFOLIO_CURRENCY_KEY) : null) || "USD";
+    } catch { return "USD"; }
+  });
 
   const fxRate = enhancedTotals.fxRate || 130;
   const dc = displayCurrency;
@@ -169,7 +176,7 @@ export function DashboardPage() {
 
   const handleCurrencyChange = (code: string) => {
     setDisplayCurrency(code);
-    localStorage.setItem(PORTFOLIO_CURRENCY_KEY, code);
+    try { localStorage.setItem(PORTFOLIO_CURRENCY_KEY, code); } catch { /* ignore */ }
   };
 
   const fetchPerformance = useCallback(async (period: string) => {
@@ -177,10 +184,18 @@ export function DashboardPage() {
     setPerfLoading(true);
     try {
       const res = await authFetch(`${API_BASE}/portfolio/performance?userId=${user.id}&period=${period}`);
+      if (!res.ok) return;
       const json: PerformanceResponse = await res.json();
-      if (json.data?.length) {
+      // Guard shape: the endpoint is subscription-gated and can return an error
+      // object; only adopt a real array of points.
+      if (Array.isArray(json.data) && json.data.length > 0) {
         setPerfData(json.data);
-        setPerfMeta({ totalReturn: json.totalReturn, totalReturnPercent: json.totalReturnPercent, currentValue: json.currentValue, hasHistory: json.hasHistory });
+        setPerfMeta({
+          totalReturn: json.totalReturn,
+          totalReturnPercent: typeof json.totalReturnPercent === "number" ? json.totalReturnPercent : 0,
+          currentValue: json.currentValue,
+          hasHistory: Boolean(json.hasHistory),
+        });
       }
     } catch {} finally {
       setPerfLoading(false);
@@ -197,8 +212,20 @@ export function DashboardPage() {
     let cancelled = false;
     const fetchPulse = () =>
       authFetch(`${API_BASE}/market/pulse`)
-        .then(r => r.json())
-        .then(data => { if (!cancelled) setPulse(data); })
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => {
+          // The endpoint's error branch returns a partial payload (no `indices`/
+          // `topSector`) and auth errors return an error object — normalise here
+          // so the render below can never dereference a missing field.
+          if (!data || !data.nse || !data.global) return;
+          if (!cancelled) {
+            setPulse({
+              ...data,
+              indices: data.indices || {},
+              topSector: data.topSector || null,
+            });
+          }
+        })
         .catch(() => {});
     fetchPulse();
     const pulseInterval = setInterval(fetchPulse, 60000);
@@ -229,8 +256,10 @@ export function DashboardPage() {
     if (!user?.id) return;
     let cancelled = false;
     authFetch(`${API_BASE}/watchlist?userId=${user.id}`)
-      .then(r => r.json())
-      .then(items => { if (!cancelled) setWatchlistItems(items || []); })
+      .then(r => (r.ok ? r.json() : null))
+      .then(items => {
+        if (!cancelled && Array.isArray(items)) setWatchlistItems(items);
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [user?.id]);
@@ -277,10 +306,12 @@ export function DashboardPage() {
     // Show user's watchlist items first (with live data if available)
     if (watchlistItems.length > 0) {
       for (const item of watchlistItems) {
-        const live = activeMap.get(item.symbol);
+        const symbol = item?.symbol;
+        if (!symbol) continue;
+        const live = activeMap.get(symbol);
         built.push({
-          ticker: item.symbol,
-          name: item.company_name || live?.name || item.symbol,
+          ticker: symbol,
+          name: item.company_name || live?.name || symbol,
           price: live?.price || '-',
           change: live?.change || '-',
           isPositive: live ? live.isPositive : true,
@@ -289,6 +320,9 @@ export function DashboardPage() {
           currency: live?.currency || 'KES',
           volume: live?.volume || '0',
         });
+        // The card renders 6 rows; stop here so a 500-symbol watchlist
+        // doesn't build a 500-row array on every 30s poll.
+        if (built.length >= 6) break;
       }
     }
 
@@ -312,9 +346,9 @@ export function DashboardPage() {
       }
     }
 
-    // Fall back to static universe data
+    // Fall back to static universe data (copy before sort — .sort() mutates)
     if (built.length === 0) {
-      return allStocks
+      return [...allStocks]
         .sort((a, b) => parseVolume(b.volume) - parseVolume(a.volume))
         .slice(0, 6)
         .map(s => ({
@@ -353,7 +387,13 @@ export function DashboardPage() {
       setNewsLoading(true);
       fetchAllNews().then(articles => {
         if (cancelled) return;
-        setNewsItems(articles.length > 0 ? articles.slice(0, 5) : fallbackNews);
+        setNewsItems(Array.isArray(articles) && articles.length > 0 ? articles.slice(0, 5) : fallbackNews);
+        setNewsLoading(false);
+      }).catch(() => {
+        // Always clear the skeleton, even on a rejected fetch, otherwise the
+        // Market News card stays a permanent pulse.
+        if (cancelled) return;
+        setNewsItems(fallbackNews);
         setNewsLoading(false);
       });
     };
@@ -390,8 +430,12 @@ export function DashboardPage() {
     let socket: any;
     socket = connectSocket(user.id, user.full_name || "");
     socket.on("market:update", (quote: any) => { /* triggers re-render via context refresh */ });
+    // The server publishes index updates as a flat array ([...nse, ...global]),
+    // which does NOT match the {nse, sp500} shape the popover reads. Merge only
+    // object-shaped payloads; otherwise let the HTTP poll own `indices`.
     socket.on("indices:update", (indices: any) => {
-      setPulse(prev => prev ? { ...prev, indices } : prev);
+      if (!indices || Array.isArray(indices)) return;
+      setPulse(prev => (prev && indices.nse ? { ...prev, indices } : prev));
     });
     socket.on("signal:batch_update", (batch: any) => {
       if (Array.isArray(batch?.signals)) setSignals(prev => (batch.signals.length > 0 || prev.length === 0) ? batch.signals : prev);
@@ -421,15 +465,17 @@ export function DashboardPage() {
   }, [signals]);
 
   const benchmarkMetrics = useMemo(() => {
-    const d = perfData;
-    if (d.length < 2) return { nseReturn: 0, spReturn: 0, blended: 0, alpha: 0, vsNseAlpha: 0, vsSpAlpha: 0 };
+    const zero = { nseReturn: 0, spReturn: 0, blended: 0, alpha: 0, vsNseAlpha: 0, vsSpAlpha: 0 };
+    const d = Array.isArray(perfData) ? perfData.filter(p => p && typeof p === "object") : [];
+    if (d.length < 2) return zero;
     const first = d[0], last = d[d.length - 1];
-    const nseRet = first.nse20 !== 0 ? ((last.nse20 - first.nse20) / first.nse20) * 100 : 0;
-    const spRet = first.sp500 !== 0 ? ((last.sp500 - first.sp500) / first.sp500) * 100 : 0;
+    const num = (v: any) => (typeof v === "number" && isFinite(v) ? v : 0);
+    const nseRet = first.nse20 !== 0 ? ((num(last.nse20) - num(first.nse20)) / first.nse20) * 100 : 0;
+    const spRet = first.sp500 !== 0 ? ((num(last.sp500) - num(first.sp500)) / first.sp500) * 100 : 0;
     const totalVal = enhancedTotals.nseValue + enhancedTotals.globalValue;
     const nseW = totalVal > 0 ? enhancedTotals.nseValue / totalVal : 0.5;
     const blended = nseW * nseRet + (1 - nseW) * spRet;
-    const portRet = perfMeta.totalReturnPercent;
+    const portRet = typeof perfMeta.totalReturnPercent === "number" && isFinite(perfMeta.totalReturnPercent) ? perfMeta.totalReturnPercent : 0;
     return {
       nseReturn: nseRet, spReturn: spRet, blended,
       alpha: portRet - blended,
@@ -440,18 +486,23 @@ export function DashboardPage() {
 
   const topSignals = useMemo(() =>
     [...signals]
-      .sort((a, b) => b.confidence - a.confidence)
+      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
       .slice(0, 4)
-      .map(s => ({
-        ...s,
-        ticker: s.ticker,
-        name: s.name,
-        signal: s.signal,
-        confidence: s.confidence,
-        change: `${s.change >= 0 ? "+" : ""}${s.change.toFixed(2)}%`,
-        trend: s.change >= 0 ? "up" as const : "down" as const,
-        market: s.market,
-      })),
+      .map(s => {
+        // Socket-delivered signals bypass the server's normalisation, so `change`
+        // can be missing — default it instead of calling toFixed on undefined.
+        const ch = typeof s.change === "number" && isFinite(s.change) ? s.change : 0;
+        return {
+          ...s,
+          ticker: s.ticker,
+          name: s.name,
+          signal: s.signal,
+          confidence: s.confidence,
+          change: `${ch >= 0 ? "+" : ""}${ch.toFixed(2)}%`,
+          trend: (ch >= 0 ? "up" : "down") as "up" | "down",
+          market: s.market,
+        };
+      }),
     [signals]
   );
 
@@ -748,7 +799,7 @@ export function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="month" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis stroke="var(--muted-foreground)" fontSize={11} domain={['dataMin - 5', 'dataMax + 5']} tickLine={false} axisLine={false} tickFormatter={(v) => v.toFixed(0)} />
-                  <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} formatter={(value: number) => value.toFixed(1) + '%'} />
+                  <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} formatter={(value: any) => (Number.isFinite(Number(value)) ? Number(value).toFixed(1) + '%' : '—')} />
                   <Area type="monotone" dataKey="portfolio" name="Portfolio" stroke="#10B981" strokeWidth={2} fill="url(#portfolioGrad)" dot={{ fill: '#10B981', r: 4 }} />
                   <Area type="monotone" dataKey="sp500" name="S&P 500" stroke="#6366F1" strokeWidth={2} strokeDasharray="5 5" fill="url(#spGrad)" dot={{ fill: '#6366F1', r: 3 }} />
                   <Area type="monotone" dataKey="nse20" name="NSE 20" stroke="#6B7280" strokeWidth={2} strokeDasharray="5 5" fill="url(#nseGrad)" dot={{ fill: '#6B7280', r: 3 }} />
@@ -1197,8 +1248,10 @@ export function DashboardPage() {
             <p className="text-sm text-muted-foreground py-4 text-center">No news available.</p>
           ) : (
           <div className="space-y-2">
-            {newsItems.map((item) => (
-              <Link key={item.id} to={item.relatedStocks[0] ? `/app/stock/${item.relatedStocks[0]}` : "/app/news"}>
+            {newsItems.map((item) => {
+              const related = item.relatedStocks || [];
+              return (
+              <Link key={item.id} to={related[0] ? `/app/stock/${related[0]}` : "/app/news"}>
                 <div className="flex items-start gap-3 p-3.5 rounded-lg hover:bg-muted/50 transition-all border border-transparent hover:border-border">
                   <div className="p-2.5 rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 shrink-0">
                     <Newspaper className="size-4 text-[#0D7490]" />
@@ -1209,11 +1262,11 @@ export function DashboardPage() {
                       <span className="font-medium">{item.source}</span>
                       <span className="text-border">|</span>
                       <span>{item.timestamp}</span>
-                      {item.relatedStocks.length > 0 && (
+                      {related.length > 0 && (
                         <>
                           <span className="text-border">|</span>
                           <Badge className="bg-[#0D7490]/10 text-[#0D7490] border-0 text-[11px] font-medium px-2">
-                            {item.relatedStocks[0]}
+                            {related[0]}
                           </Badge>
                         </>
                       )}
@@ -1224,7 +1277,8 @@ export function DashboardPage() {
                   </div>
                 </div>
               </Link>
-            ))}
+              );
+            })}
           </div>
           )}
         </Card>
@@ -1348,8 +1402,8 @@ export function DashboardPage() {
                     <div>
                       <h4 className="text-xs font-semibold text-foreground mb-2">Trading Parameters</h4>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <div className="bg-blue-50 rounded-md p-2 text-center border border-blue-100"><p className="text-[9px] font-medium text-blue-600 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 font-mono">${sig.price.toFixed(2)}</p></div>
-                        <div className="bg-red-50 rounded-md p-2 text-center border border-red-100"><p className="text-[9px] font-medium text-red-600 uppercase">Stop</p><p className="text-xs font-bold text-red-900 font-mono">${sig.price?.toFixed(2)}</p></div>
+                        <div className="bg-blue-50 rounded-md p-2 text-center border border-blue-100"><p className="text-[9px] font-medium text-blue-600 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 font-mono">${sig.price != null ? sig.price.toFixed(2) : '—'}</p></div>
+                        <div className="bg-red-50 rounded-md p-2 text-center border border-red-100"><p className="text-[9px] font-medium text-red-600 uppercase">Stop</p><p className="text-xs font-bold text-red-900 font-mono">${sig.price != null ? sig.price.toFixed(2) : '—'}</p></div>
                         <div className="bg-emerald-50 rounded-md p-2 text-center border border-emerald-100"><p className="text-[9px] font-medium text-emerald-600 uppercase">Conf</p><p className={`text-xs font-bold ${sig.confidence >= 80 ? 'text-emerald-700' : sig.confidence >= 60 ? 'text-yellow-700' : 'text-red-700'}`}>{sig.confidence}%</p></div>
                         <div className="bg-purple-50 rounded-md p-2 text-center border border-purple-100"><p className="text-[9px] font-medium text-purple-600 uppercase">R:R</p><p className="text-xs font-bold text-purple-900 font-mono">1:{sig.riskReward?.toFixed(1) || 'N/A'}</p></div>
                       </div>
@@ -1379,14 +1433,16 @@ export function DashboardPage() {
       })()}
 
       {/* Market Pulse detail popover */}
-      {pulseDetail && pulse && (() => {
+      {pulseDetail && pulse && pulse.nse && pulse.global && (() => {
         const isNse = pulseDetail === 'nse';
         const isGlobal = pulseDetail === 'global';
         const isSector = pulseDetail === 'sector';
         const sent = isNse ? pulse.nse : pulse.global;
-        const idx = isNse ? pulse.indices.nse : pulse.indices.sp500;
-        const sentColor = sent.score >= 65 ? 'text-emerald-600' : sent.score <= 40 ? 'text-red-500' : 'text-yellow-600';
-        const sentBg = sent.score >= 65 ? 'bg-emerald-50 border-emerald-200' : sent.score <= 40 ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200';
+        const idx = isNse ? pulse.indices?.nse : pulse.indices?.sp500;
+        // Coerce: a missing score would render as a NaN/undefined gauge and label.
+        const sentScore = typeof sent?.score === "number" && isFinite(sent.score) ? sent.score : 0;
+        const sentColor = sentScore >= 65 ? 'text-emerald-600' : sentScore <= 40 ? 'text-red-500' : 'text-yellow-600';
+        const sentBg = sentScore >= 65 ? 'bg-emerald-50 border-emerald-200' : sentScore <= 40 ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200';
         return (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setPulseDetail(null)}>
             <div className="bg-card rounded-xl max-w-md w-full shadow-xl border border-border overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -1410,10 +1466,10 @@ export function DashboardPage() {
                     <div className={`rounded-lg p-3 ${sentBg}`}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-semibold text-muted-foreground">Sentiment Score</span>
-                        <span className={`text-sm font-bold ${sentColor}`}>{sent.label} ({sent.score}/100)</span>
+                        <span className={`text-sm font-bold ${sentColor}`}>{sent?.label || '—'} ({sentScore}/100)</span>
                       </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all ${sent.score >= 65 ? 'bg-emerald-500' : sent.score <= 40 ? 'bg-red-500' : 'bg-yellow-500'}`} style={{ width: `${sent.score}%` }} />
+                        <div className={`h-full rounded-full transition-all ${sentScore >= 65 ? 'bg-emerald-500' : sentScore <= 40 ? 'bg-red-500' : 'bg-yellow-500'}`} style={{ width: `${sentScore}%` }} />
                       </div>
                     </div>
 
@@ -1423,7 +1479,7 @@ export function DashboardPage() {
                         <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Index</p>
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-bold text-foreground">{idx.value}</span>
-                          <span className={`text-xs font-semibold ${idx.change.startsWith('+') ? 'text-emerald-600' : 'text-red-600'}`}>{idx.change}</span>
+                          <span className={`text-xs font-semibold ${String(idx.change || "").startsWith('+') ? 'text-emerald-600' : 'text-red-600'}`}>{idx.change}</span>
                         </div>
                       </div>
                     )}

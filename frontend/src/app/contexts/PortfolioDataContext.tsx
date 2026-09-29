@@ -133,8 +133,8 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
             const pnlPct = parseFloat(h.pnl_percent) || (avgC > 0 ? ((livePrice - avgC) / avgC * 100) : 0);
             return {
               id: h.id,
-              ticker: h.ticker,
-              name: h.name || h.ticker,
+              ticker: h.ticker || "UNKNOWN",
+              name: h.name || h.ticker || "Unknown",
               shares,
               avgCost: String(avgC),
               currentPrice: String(livePrice),
@@ -281,13 +281,17 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
   }, [holdings, fxRate]);
 
   const topHoldings = useMemo(() => {
-    const totalValue = holdings.reduce((acc, h) => acc + (parseFloat(h.value) || 0), 0);
-    return [...holdings]
-      .sort((a, b) => parseFloat(b.value) - parseFloat(a.value))
+    const valid = holdings.filter(h => h && h.ticker);
+    const totalValue = valid.reduce((acc, h) => acc + (parseFloat(h.value) || 0), 0);
+    // Copy before sort (`.sort` mutates) and cap the list — the dashboard renders
+    // this as a compact top-N card, an unbounded list can be thousands of rows.
+    return [...valid]
+      .sort((a, b) => (parseFloat(b.value) || 0) - (parseFloat(a.value) || 0))
+      .slice(0, 8)
       .map((h, i) => ({
         ...h,
         color: h.color || ALLOCATION_COLORS[i % ALLOCATION_COLORS.length],
-        weight: totalValue > 0 ? Math.round((parseFloat(h.value) / totalValue) * 100) : 0,
+        weight: totalValue > 0 ? Math.round(((parseFloat(h.value) || 0) / totalValue) * 100) : 0,
       }));
   }, [holdings]);
 
@@ -353,15 +357,33 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
   }, [totals, brokerTotals]);
 
   const allocation = useMemo(() => {
-    const totalKesValue = holdings.reduce((sum, h) => {
+    const valid = holdings.filter(h => h && h.ticker);
+    const totalKesValue = valid.reduce((sum, h) => {
       const val = parseFloat(h.value) || 0;
       return sum + (h.market === "Global" ? val * fxRate : val);
     }, 0);
-    return holdings.map((h, i) => ({
-      name: h.ticker,
-      value: totalKesValue > 0 ? Math.round(((h.market === "Global" ? (parseFloat(h.value) || 0) * fxRate : parseFloat(h.value) || 0) / totalKesValue) * 100) : 0,
-      color: ALLOCATION_COLORS[i % ALLOCATION_COLORS.length],
-    }));
+    const pct = (h: PortfolioHolding) =>
+      totalKesValue > 0
+        ? Math.round(((h.market === "Global" ? (parseFloat(h.value) || 0) * fxRate : parseFloat(h.value) || 0) / totalKesValue) * 100)
+        : 0;
+
+    // Cap the slice count: recharts renders one <Cell> per entry, and the legend
+    // is a plain list, so a 200-holding portfolio is unreadable and slow.
+    // Colors are assigned after ranking so the biggest slices read first in
+    // distinct, adjacent hues.
+    const ranked = [...valid]
+      .map(h => ({ name: h.ticker, value: pct(h) }))
+      .sort((a, b) => b.value - a.value)
+      .map((e, i) => ({ ...e, color: ALLOCATION_COLORS[i % ALLOCATION_COLORS.length] }));
+    const MAX_SLICES = 8;
+    if (ranked.length <= MAX_SLICES) return ranked;
+    const head = ranked.slice(0, MAX_SLICES - 1);
+    const tail = ranked.slice(MAX_SLICES - 1);
+    return [...head, {
+      name: `Other (${tail.length})`,
+      value: tail.reduce((sum, e) => sum + e.value, 0),
+      color: ALLOCATION_COLORS[MAX_SLICES - 1],
+    }];
   }, [holdings, fxRate]);
 
   return (
