@@ -103,8 +103,8 @@ function NotFoundPage() {
         <h1 className="text-6xl font-bold text-gray-300">404</h1>
         <p className="text-xl text-gray-600">Page not found</p>
         <p className="text-sm text-gray-400">The page you're looking for doesn't exist or has been moved.</p>
-        <Link to="/app/dashboard" className="inline-block mt-4 px-6 py-2 bg-[#0D7490] text-white rounded-lg text-sm font-medium hover:bg-[#0A5F7A] transition-colors">
-          Go to Dashboard
+        <Link to="/app" className="inline-block mt-4 px-6 py-2 bg-[#0D7490] text-white rounded-lg text-sm font-medium hover:bg-[#0A5F7A] transition-colors">
+          Go to Home
         </Link>
       </div>
     </div>

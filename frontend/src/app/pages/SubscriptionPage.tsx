@@ -287,7 +287,7 @@ export function SubscriptionPage() {
                 onClick={async () => { await refreshUser(); navigate("/app/dashboard"); }}
                 className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 h-12 font-bold shadow-lg shadow-[#0D7490]/20"
               >
-                Go to Dashboard
+                Go to Home
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Card>

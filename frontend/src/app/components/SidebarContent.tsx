@@ -52,7 +52,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
     {
       title: "Work Space",
       items: [
-        { path: "/app", icon: LayoutGrid, label: "Dashboard" },
+        { path: "/app", icon: LayoutGrid, label: "Home" },
         { path: "/app/portfolio", icon: Briefcase, label: "Portfolio" },
         { path: "/app/watchlist", icon: Star, label: "Watchlist" },
         // { path: "/app/chat", icon: MessageSquare, label: "Chat & Groups" },
