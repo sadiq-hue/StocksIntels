@@ -557,22 +557,43 @@ export function DashboardPage() {
   }, [signals]);
 
   const benchmarkMetrics = useMemo(() => {
-    const zero = { nseReturn: 0, spReturn: 0, blended: 0, alpha: 0, vsNseAlpha: 0, vsSpAlpha: 0 };
+    const numOrNull = (v: any) => (typeof v === "number" && isFinite(v) ? v : null);
     const d = Array.isArray(perfData) ? perfData.filter(p => p && typeof p === "object") : [];
-    if (d.length < 2) return zero;
-    const first = d[0], last = d[d.length - 1];
-    const num = (v: any) => (typeof v === "number" && isFinite(v) ? v : 0);
-    const nseRet = first.nse20 !== 0 ? ((num(last.nse20) - num(first.nse20)) / first.nse20) * 100 : 0;
-    const spRet = first.sp500 !== 0 ? ((num(last.sp500) - num(first.sp500)) / first.sp500) * 100 : 0;
+    const last: any = d.length > 0 ? d[d.length - 1] : null;
+    // /portfolio/performance returns cumulative percent returns measured from the
+    // start of the window, so the LAST point is the period return. This used to
+    // recompute it as (last - first) / first, but the first point of that column
+    // is 0 by construction, so the division short-circuited both benchmarks to
+    // 0.0% and alpha collapsed to the raw portfolio return - which is what
+    // rendered as "vs Benchmarks -0.1% / NSE 20 +0.0% / S&P 500 +0.0%".
+    // The endpoint now sends null for any benchmark it has no real history for
+    // (the NSE 20), so treat null as "unavailable" rather than 0%.
+    const nseReturn = last ? numOrNull(last.nse20) : null;
+    const spReturn = last ? numOrNull(last.sp500) : null;
+    const portRet = numOrNull(perfMeta.totalReturnPercent) ?? 0;
     const totalVal = enhancedTotals.nseValue + enhancedTotals.globalValue;
-    const nseW = totalVal > 0 ? enhancedTotals.nseValue / totalVal : 0.5;
-    const blended = nseW * nseRet + (1 - nseW) * spRet;
-    const portRet = typeof perfMeta.totalReturnPercent === "number" && isFinite(perfMeta.totalReturnPercent) ? perfMeta.totalReturnPercent : 0;
+
+    // Compare against whichever benchmarks are real: blend by portfolio weight
+    // when both exist, otherwise fall back to the single available index.
+    let alpha: number | null = null;
+    let blended: number | null = null;
+    if (nseReturn != null && spReturn != null) {
+      const nseW = totalVal > 0 ? enhancedTotals.nseValue / totalVal : 0.5;
+      blended = nseW * nseReturn + (1 - nseW) * spReturn;
+      alpha = portRet - blended;
+    } else if (spReturn != null) {
+      blended = spReturn;
+      alpha = portRet - spReturn;
+    } else if (nseReturn != null) {
+      blended = nseReturn;
+      alpha = portRet - nseReturn;
+    }
+
     return {
-      nseReturn: nseRet, spReturn: spRet, blended,
-      alpha: portRet - blended,
-      vsNseAlpha: portRet - nseRet,
-      vsSpAlpha: portRet - spRet,
+      nseReturn, spReturn, blended, alpha,
+      vsNseAlpha: nseReturn != null ? portRet - nseReturn : null,
+      vsSpAlpha: spReturn != null ? portRet - spReturn : null,
+      hasBenchmark: alpha != null,
     };
   }, [perfData, perfMeta.totalReturnPercent, enhancedTotals.nseValue, enhancedTotals.globalValue]);
 
@@ -711,13 +732,31 @@ export function DashboardPage() {
           </div>
         </Card>
 
-        {[
-          { icon: Banknote, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400", label: "NSE Portfolio", value: fmtKes(enhancedTotals.nseValue), sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
-          { icon: Globe2, color: "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400", label: "Global Portfolio", value: fmtUsd(enhancedTotals.globalValue), sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${enhancedTotals.globalCount} pos)`, valColor: "text-foreground" },
+        {(() => {
+          // Only mention benchmarks we actually have real history for. The NSE 20
+          // has no free historical feed, so it is reported as unavailable instead
+          // of being shown as a plausible-looking 0.0%.
+          const sign = (v: number) => (v >= 0 ? "+" : "");
+          const parts: string[] = [];
+          if (perfMeta.hasHistory) {
+            parts.push(`Portfolio ${sign(perfMeta.totalReturnPercent)}${perfMeta.totalReturnPercent.toFixed(1)}%`);
+          }
+          if (benchmarkMetrics.spReturn != null) {
+            parts.push(`S&P 500 ${sign(benchmarkMetrics.spReturn!)}${benchmarkMetrics.spReturn!.toFixed(1)}%`);
+          }
+          if (benchmarkMetrics.nseReturn != null) {
+            parts.push(`NSE 20 ${sign(benchmarkMetrics.nseReturn!)}${benchmarkMetrics.nseReturn!.toFixed(1)}%`);
+          } else if (benchmarkMetrics.hasBenchmark) {
+            parts.push("NSE 20 n/a");
+          }
+          const sub = parts.join(" · ");
+          const hasAlpha = perfMeta.hasHistory && benchmarkMetrics.alpha != null;
+          return [
+          { icon: Banknote, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400", label: "NSE Portfolio", value: fmtKes(enhancedTotals.nseValue), sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },          { icon: Globe2, color: "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400", label: "Global Portfolio", value: fmtUsd(enhancedTotals.globalValue), sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${enhancedTotals.globalCount} pos)`, valColor: "text-foreground" },
           { icon: PieChart, color: "bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} NSE · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
           { icon: Brain, color: "bg-yellow-100 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400", label: "Market Intelligence", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: "text-foreground" },
-          { icon: Scale, color: "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400", label: "vs Benchmarks", value: perfMeta.hasHistory ? `${benchmarkMetrics.alpha >= 0 ? '+' : ''}${benchmarkMetrics.alpha.toFixed(1)}%` : '—', sub: perfMeta.hasHistory ? `Portfolio ${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}% · NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%` : `NSE 20 ${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}% · S&P 500 ${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%`, valColor: perfMeta.hasHistory ? (benchmarkMetrics.alpha >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
-        ].map((m, i) => (
+          { icon: Scale, color: "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400", label: "vs Benchmarks", value: hasAlpha ? `${sign(benchmarkMetrics.alpha!)}${benchmarkMetrics.alpha!.toFixed(1)}%` : "—", sub: sub || "No benchmark history yet", valColor: hasAlpha ? (benchmarkMetrics.alpha! >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
+          ].map((m, i) => (
           <Card key={i} className="border shadow-sm p-5">
             <div className="flex items-center gap-2 mb-3">
               <div className={`size-8 rounded-lg flex items-center justify-center ${m.color}`}>
@@ -728,7 +767,8 @@ export function DashboardPage() {
             <div className={`text-xl font-bold ${m.valColor}`}>{m.value}</div>
             <div className="text-xs text-muted-foreground mt-2">{m.sub}</div>
           </Card>
-        ))}
+        ));
+        })()}
       </div>
 
       {beginnerMode && (
@@ -894,7 +934,9 @@ export function DashboardPage() {
                   <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} formatter={(value: any) => (Number.isFinite(Number(value)) ? Number(value).toFixed(1) + '%' : '—')} />
                   <Area type="monotone" dataKey="portfolio" name="Portfolio" stroke="#10B981" strokeWidth={2} fill="url(#portfolioGrad)" dot={{ fill: '#10B981', r: 4 }} />
                   <Area type="monotone" dataKey="sp500" name="S&P 500" stroke="#6366F1" strokeWidth={2} strokeDasharray="5 5" fill="url(#spGrad)" dot={{ fill: '#6366F1', r: 3 }} />
-                  <Area type="monotone" dataKey="nse20" name="NSE 20" stroke="#6B7280" strokeWidth={2} strokeDasharray="5 5" fill="url(#nseGrad)" dot={{ fill: '#6B7280', r: 3 }} />
+                  {benchmarkMetrics.nseReturn != null && (
+                    <Area type="monotone" dataKey="nse20" name="NSE 20" stroke="#6B7280" strokeWidth={2} strokeDasharray="5 5" fill="url(#nseGrad)" dot={{ fill: '#6B7280', r: 3 }} />
+                  )}
                 </AreaChart>
               </ResponsiveContainer>
               <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mt-3 pt-3 border-t border-border">
@@ -903,12 +945,12 @@ export function DashboardPage() {
                   <span className="text-xs text-muted-foreground">Portfolio {perfMeta.hasHistory ? `${perfMeta.totalReturnPercent >= 0 ? '+' : ''}${perfMeta.totalReturnPercent.toFixed(1)}%` : 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="size-3 rounded-full bg-indigo-400"></div>
-                  <span className="text-xs text-muted-foreground">S&P 500 {benchmarkMetrics.spReturn >= 0 ? '+' : ''}{benchmarkMetrics.spReturn.toFixed(1)}%</span>
+                  <div className={`size-3 rounded-full ${benchmarkMetrics.spReturn != null ? "bg-indigo-400" : "bg-muted-foreground/20"}`}></div>
+                  <span className="text-xs text-muted-foreground">S&amp;P 500 {benchmarkMetrics.spReturn != null ? `${benchmarkMetrics.spReturn >= 0 ? '+' : ''}${benchmarkMetrics.spReturn.toFixed(1)}%` : 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="size-3 rounded-full bg-muted-foreground/40"></div>
-                  <span className="text-xs text-muted-foreground">NSE 20 {benchmarkMetrics.nseReturn >= 0 ? '+' : ''}{benchmarkMetrics.nseReturn.toFixed(1)}%</span>
+                  <div className={`size-3 rounded-full ${benchmarkMetrics.nseReturn != null ? "bg-muted-foreground/40" : "bg-muted-foreground/20"}`}></div>
+                  <span className="text-xs text-muted-foreground">NSE 20 {benchmarkMetrics.nseReturn != null ? `${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}%` : 'N/A'}</span>
                 </div>
               </div>
             </>

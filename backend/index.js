@@ -4933,6 +4933,69 @@ app.get('/api/portfolio/statement', requireOwnership, async (req, res) => {
   }
 });
 
+// Real historical benchmark data.
+//
+// There is no free historical feed for the NSE 20: Yahoo carries no NSE
+// coverage, and nseIndexScraper only reads live snapshot pages. The S&P 500 is
+// available as daily closes from the Yahoo chart API, so it is the only
+// benchmark we report as a real number. The NSE 20 is returned as null so the UI
+// can say "unavailable" rather than render a fabricated figure - the previous
+// implementation synthesized both series with Math.random() on every request,
+// so the numbers moved on each poll, and the frontend then divided by a
+// first-point value of 0, collapsing both benchmarks to +0.0%.
+const SP500_HISTORY_CACHE = { data: null, at: 0 };
+const SP500_HISTORY_TTL_MS = 60 * 60 * 1000; // 1h - daily closes change once a day
+
+function yahooRangeForDays(days) {
+  if (days <= 1) return '5d';
+  if (days <= 7) return '1mo';
+  if (days <= 31) return '1mo';
+  if (days <= 93) return '3mo';
+  if (days <= 186) return '6mo';
+  if (days <= 366) return '1y';
+  if (days <= 730) return '2y';
+  return '5y';
+}
+
+/** Real daily S&P 500 closes, ascending. Returns [] if unavailable. */
+async function getSp500History(days) {
+  if (SP500_HISTORY_CACHE.data && Date.now() - SP500_HISTORY_CACHE.at < SP500_HISTORY_TTL_MS) {
+    return SP500_HISTORY_CACHE.data;
+  }
+  try {
+    const { data } = await axios.get(
+      `https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?range=${yahooRangeForDays(days)}&interval=1d`,
+      { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    const result = data?.chart?.result?.[0];
+    const stamps = result?.timestamp || [];
+    const closes = result?.indicators?.quote?.[0]?.close || [];
+    const out = [];
+    for (let i = 0; i < stamps.length; i++) {
+      const c = closes[i];
+      if (c != null && isFinite(c)) out.push({ t: stamps[i] * 1000, c });
+    }
+    if (out.length > 1) {
+      SP500_HISTORY_CACHE.data = out;
+      SP500_HISTORY_CACHE.at = Date.now();
+    }
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+
+/** Resample an ascending [{t, c}] series down to n evenly spaced points. */
+function sampleCloses(series, n) {
+  if (!series || series.length === 0) return [];
+  if (n <= 1) return [series[series.length - 1].c];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push(series[Math.round((i / (n - 1)) * (series.length - 1))].c);
+  }
+  return out;
+}
+
 // ── Portfolio Performance (must be BEFORE :userId param route) ──
 app.get('/api/portfolio/performance', async (req, res) => {
   try {
@@ -4960,55 +5023,57 @@ app.get('/api/portfolio/performance', async (req, res) => {
       ? parseFloat(accountRows[0].initial_capital) + parseFloat(accountRows[0].initial_capital_usd) * fxRate
       : 1000000;
 
-    // Fetch live NSE 20 and S&P 500 index values for benchmark comparison
-    const allIndices = await indicesService.getAllIndices().catch(() => ({}));
-    const nse20Idx = allIndices['NSE:NSE20'];
-    const sp500Idx = allIndices['^GSPC'];
-    const nseCurrent = nse20Idx ? parseFloat(nse20Idx.value) : 1847.56;
-    const spCurrent = sp500Idx ? parseFloat(sp500Idx.value) : 7553.68;
-
-    const benchmarkHistory = generateBenchmarkHistory(nseCurrent, spCurrent, days);
+    // Real S&P 500 daily closes over the same window as the portfolio series.
+    const spHistoryAll = await getSp500History(days).catch(() => []);
+    // Yahoo's range buckets are coarser than our window (a 1D window maps to
+    // "5d"), so trim to the actual cutoff rather than trusting the bucket. The
+    // last bar from BEFORE the cutoff is kept as the baseline - without it a 1D
+    // window holds a single bar and there is nothing to measure against, which
+    // would otherwise report a 5-day move as a 1-day one.
+    const cutoffMs = cutoff.getTime();
+    const spWindow = spHistoryAll.filter(p => p.t >= cutoffMs);
+    const priorBar = spHistoryAll[spHistoryAll.findIndex(p => p.t >= cutoffMs) - 1];
+    const spSeries = priorBar ? [priorBar, ...spWindow] : spWindow;
+    const spHasReal = spSeries.length >= 2;
+    const spFirst = spHasReal ? spSeries[0].c : 0;
+    const spPctOf = (close) => (spFirst > 0 ? ((close - spFirst) / spFirst) * 100 : 0);
 
     const hasHistory = snapshots.length > 0;
-    const numPoints = Math.min(hasHistory ? snapshots.length : 12, benchmarkHistory.length);
+    const numPoints = hasHistory ? Math.max(1, snapshots.length) : 12;
+    const spSamples = spHasReal ? sampleCloses(spSeries, numPoints) : [];
     const data = [];
 
     if (hasHistory) {
       const firstValue = parseFloat(snapshots[0].total_value);
-      const firstNse = benchmarkHistory[0]?.nse || nseCurrent;
-      const firstSp = benchmarkHistory[0]?.sp || spCurrent;
 
       for (let i = 0; i < numPoints; i++) {
         const snap = snapshots[i] || snapshots[snapshots.length - 1];
         const portfolioVal = parseFloat(snap.total_value);
-        const bench = benchmarkHistory[i] || benchmarkHistory[benchmarkHistory.length - 1];
+        const spClose = spSamples[i];
 
         data.push({
           month: formatDateLabel(new Date(snap.snapshot_date), days),
           portfolio: firstValue > 0 ? ((portfolioVal - firstValue) / firstValue) * 100 : 0,
-          nse20: firstNse > 0 ? ((bench.nse - firstNse) / firstNse) * 100 : 0,
-          sp500: firstSp > 0 ? ((bench.sp - firstSp) / firstSp) * 100 : 0,
+          nse20: null, // no real historical NSE 20 series available
+          sp500: spClose != null ? spPctOf(spClose) : null,
           portfolioRaw: portfolioVal,
-          nse20Raw: bench.nse,
-          sp500Raw: bench.sp,
+          nse20Raw: null,
+          sp500Raw: spClose != null ? spClose : null,
         });
       }
     } else {
-      const firstNse = benchmarkHistory[0]?.nse || nseCurrent;
-      const firstSp = benchmarkHistory[0]?.sp || spCurrent;
-
       for (let i = 0; i < numPoints; i++) {
-        const bench = benchmarkHistory[i];
+        const spClose = spSamples[i];
         const d = new Date(Date.now() - (numPoints - i) * (days / numPoints) * 24 * 60 * 60 * 1000);
 
         data.push({
           month: formatDateLabel(d, days),
           portfolio: 0,
-          nse20: firstNse > 0 ? ((bench.nse - firstNse) / firstNse) * 100 : 0,
-          sp500: firstSp > 0 ? ((bench.sp - firstSp) / firstSp) * 100 : 0,
+          nse20: null,
+          sp500: spClose != null ? spPctOf(spClose) : null,
           portfolioRaw: 0,
-          nse20Raw: bench.nse,
-          sp500Raw: bench.sp,
+          nse20Raw: null,
+          sp500Raw: spClose != null ? spClose : null,
         });
       }
     }
@@ -10031,36 +10096,6 @@ app.post('/api/paper/account/init', async (req, res) => {
     res.status(500).json({ error: 'Failed to initialize paper account' });
   }
 });
-
-function generateBenchmarkHistory(nseCurrent, spCurrent, days) {
-  const points = Math.min(60, Math.max(10, Math.ceil(days / (days <= 30 ? 1 : days <= 90 ? 7 : 30))));
-  const result = [];
-  const nseDailyVol = 0.008;
-  const spDailyVol = 0.01;
-  const nseDrift = 0.0003;
-  const spDrift = 0.0004;
-
-  let nseVal = nseCurrent;
-  let spVal = spCurrent;
-
-  // Walk backwards from current to generate history, then reverse
-  const backwards = [];
-  for (let i = points - 1; i >= 0; i--) {
-    backwards.push({ nse: nseVal, sp: spVal });
-    const nseRet = -nseDrift + (Math.random() - 0.5) * nseDailyVol * 2;
-    const spRet = -spDrift + (Math.random() - 0.5) * spDailyVol * 2;
-    nseVal = nseVal / (1 + nseRet);
-    spVal = spVal / (1 + spRet);
-  }
-  backwards.reverse();
-  backwards.forEach(b => { result.push(b.nse); result.push(b.sp); });
-  // Actually just return proper paired values
-  const finalResult = [];
-  for (const b of backwards) {
-    finalResult.push({ nse: b.nse, sp: b.sp });
-  }
-  return finalResult;
-}
 
 function interpolateValue(snapshots, targetDate) {
   if (snapshots.length === 0) return null;
