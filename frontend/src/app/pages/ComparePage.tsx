@@ -4,7 +4,7 @@ import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { X, Search, GitCompare, TrendingUp, TrendingDown, Loader2, Plus, Download, Share2, Check, Trophy } from "lucide-react";
+import { X, Search, GitCompare, TrendingUp, TrendingDown, Loader2, Plus, Download, Share2, Check, Trophy, ChevronDown } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   RadarChart, PolarGrid, PolarAngleAxis, Radar,
@@ -17,18 +17,84 @@ import { formatCompactNumber } from "../utils/format";
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const MAX_STOCKS = 5;
 const CHART_COLORS = ["#0D7490", "#0EA5E9", "#f59e0b", "#8b5cf6", "#ef4444"];
-// MyStocks only serves correct NSE series for 1M, 1Y and 5Y (its 3M/6M/2Y/10Y
-// periods all return ~1 month), so the unsupported ones are hidden whenever a
-// Kenyan stock is in the mix.
-const CHART_RANGES = [
-  { k: "1mo", label: "1M" },
-  { k: "3mo", label: "3M" },
-  { k: "1y", label: "1Y" },
-  { k: "2y", label: "2Y" },
-  { k: "5y", label: "5Y" },
-  { k: "10y", label: "10Y" },
+
+// Chart periods. Each maps a UI period to the history range to fetch and a cutoff
+// (months back; 0 = YTD, -1 = all). MyStocks only serves correct NSE series for
+// 1M/1Y/5Y/MAX, so other periods are hidden when a Kenyan stock is in the mix.
+const PERIODS = [
+  { k: "1m", label: "1M", fetch: "1mo", months: 1 },
+  { k: "3m", label: "3M", fetch: "3mo", months: 3 },
+  { k: "6m", label: "6M", fetch: "6mo", months: 6 },
+  { k: "ytd", label: "YTD", fetch: "1y", months: 0 },
+  { k: "1y", label: "1Y", fetch: "1y", months: 12 },
+  { k: "3y", label: "3Y", fetch: "5y", months: 36 },
+  { k: "5y", label: "5Y", fetch: "5y", months: 60 },
+  { k: "10y", label: "10Y", fetch: "10y", months: 120 },
+  { k: "max", label: "MAX", fetch: "max", months: -1 },
+] as const;
+type PeriodKey = typeof PERIODS[number]["k"];
+const NSE_OK = new Set<PeriodKey>(["1m", "1y", "5y", "max"]);
+
+// Series a chart metric can be built from: daily price bars, or the dated
+// fundamental histories returned by /api/financials.
+type MetricSource = "price" | "keyMetrics" | "income" | "cashflow" | "balance";
+interface ChartMetric {
+  id: string; label: string; source: MetricSource; get?: ((o: any) => number | null | undefined) | null; fmt: (v: number) => string;
+}
+const pctF = (v: number) => pct(v * 100, 2); // fraction (0.0486) -> 4.86%
+const METRIC_GROUPS: { group: string; metrics: ChartMetric[] }[] = [
+  { group: "Price & Return", metrics: [
+    { id: "totalReturn", label: "Total Return (%)", source: "price", get: null, fmt: (v) => signed(v) },
+    { id: "growth10k", label: "Growth of $10K", source: "price", get: null, fmt: (v) => money(v, "USD") },
+    { id: "price", label: "Stock Price (%)", source: "price", get: null, fmt: (v) => signed(v) },
+  ]},
+  { group: "Valuation", metrics: [
+    { id: "marketCap", label: "Market Cap", source: "keyMetrics", get: (k) => k.marketCap, fmt: (v) => formatCompactNumber(v) },
+    { id: "peRatio", label: "PE Ratio", source: "keyMetrics", get: (k) => k.peRatio, fmt: ratio },
+    { id: "psRatio", label: "PS Ratio", source: "keyMetrics", get: (k) => k.priceToSalesRatio, fmt: ratio },
+    { id: "pbRatio", label: "PB Ratio", source: "keyMetrics", get: (k) => k.pbRatio, fmt: ratio },
+    { id: "earningsYield", label: "Earnings Yield", source: "keyMetrics", get: (k) => k.earningsYield, fmt: pctF },
+    { id: "fcfYield", label: "FCF Yield", source: "keyMetrics", get: (k) => k.freeCashFlowYield, fmt: pctF },
+    { id: "payoutRatio", label: "Payout Ratio", source: "keyMetrics", get: (k) => k.payoutRatio, fmt: pctF },
+    { id: "dividendYield", label: "Dividend Yield", source: "keyMetrics", get: (k) => k.dividendYield, fmt: pctF },
+  ]},
+  { group: "Revenue & Earnings", metrics: [
+    { id: "revenue", label: "Revenue", source: "income", get: (k) => k.revenue ?? k.totalRevenue, fmt: (v) => formatCompactNumber(v) },
+    { id: "revenueGrowth", label: "Revenue Growth", source: "keyMetrics", get: (k) => k.revenueGrowth, fmt: pctF },
+    { id: "eps", label: "EPS (Diluted)", source: "income", get: (k) => k.epsdiluted ?? k.eps, fmt: (v) => v.toFixed(2) },
+    { id: "epsGrowth", label: "EPS Growth", source: "keyMetrics", get: (k) => k.epsGrowth, fmt: (v) => (v * 100).toFixed(1) + "%" },
+    { id: "grossProfit", label: "Gross Profit", source: "income", get: (k) => k.grossProfit, fmt: (v) => formatCompactNumber(v) },
+    { id: "operatingIncome", label: "Operating Income", source: "income", get: (k) => k.operatingIncome, fmt: (v) => formatCompactNumber(v) },
+    { id: "netIncome", label: "Net Income", source: "income", get: (k) => k.netIncome, fmt: (v) => formatCompactNumber(v) },
+    { id: "ebitda", label: "EBITDA", source: "income", get: (k) => k.ebitda, fmt: (v) => formatCompactNumber(v) },
+  ]},
+  { group: "Margins", metrics: [
+    { id: "grossMargin", label: "Gross Margin", source: "income", get: (k) => k.grossProfitRatio, fmt: pctF },
+    { id: "operatingMargin", label: "Operating Margin", source: "income", get: (k) => k.operatingIncomeRatio, fmt: pctF },
+    { id: "profitMargin", label: "Profit Margin", source: "income", get: (k) => k.netIncomeRatio, fmt: pctF },
+    { id: "ebitdaMargin", label: "EBITDA Margin", source: "income", get: (k) => (k.revenue ? k.ebitda / k.revenue : null), fmt: pctF },
+  ]},
+  { group: "Cash Flow", metrics: [
+    { id: "operatingCashFlow", label: "Operating Cash Flow", source: "cashflow", get: (k) => k.operatingCashFlow, fmt: (v) => formatCompactNumber(v) },
+    { id: "capex", label: "Capital Expenditures", source: "cashflow", get: (k) => k.capitalExpenditure, fmt: (v) => formatCompactNumber(v) },
+    { id: "freeCashFlow", label: "Free Cash Flow", source: "cashflow", get: (k) => k.freeCashFlow, fmt: (v) => formatCompactNumber(v) },
+    { id: "fcfMargin", label: "Free Cash Flow Margin", source: "cashflow", get: (k) => (k.freeCashFlow && k.revenue ? k.freeCashFlow / k.revenue : null), fmt: pctF },
+  ]},
+  { group: "Returns", metrics: [
+    { id: "roe", label: "Return on Equity (ROE)", source: "keyMetrics", get: (k) => k.roe, fmt: pctF },
+    { id: "roa", label: "Return on Assets (ROA)", source: "keyMetrics", get: (k) => k.roa, fmt: pctF },
+    { id: "roic", label: "Return on Invested Capital (ROIC)", source: "keyMetrics", get: (k) => k.roic, fmt: pctF },
+  ]},
+  { group: "Balance Sheet", metrics: [
+    { id: "totalCash", label: "Total Cash", source: "balance", get: (k) => k.cashAndCashEquivalents, fmt: (v) => formatCompactNumber(v) },
+    { id: "totalDebt", label: "Total Debt", source: "balance", get: (k) => k.totalDebt, fmt: (v) => formatCompactNumber(v) },
+    { id: "netCash", label: "Net Cash", source: "balance", get: (k) => k.netCash ?? (k.cashAndCashEquivalents - k.totalDebt), fmt: (v) => formatCompactNumber(v) },
+    { id: "sharesOutstanding", label: "Shares Outstanding", source: "keyMetrics", get: (k) => k.sharesOutstanding, fmt: (v) => formatCompactNumber(v) },
+  ]},
 ];
-const NSE_RANGE_KEYS = new Set(["1mo", "1y", "5y"]);
+const ALL_METRICS = METRIC_GROUPS.flatMap((g) => g.metrics);
+const metricById = (id: string) => ALL_METRICS.find((m) => m.id === id) || ALL_METRICS[0];
+
 const SUGGESTIONS = ["SCOM", "EQTY", "KCB", "AAPL", "MSFT", "NVDA", "TSLA"];
 
 interface CompareStock {
@@ -69,11 +135,22 @@ interface CompareStock {
 interface SearchResult { ticker: string; name: string; sector?: string; market?: string; }
 
 const DASH = "—";
-const money = (v: number | null | undefined, c: string) =>
-  v == null ? DASH : `${c === "KES" ? "KES " : "$"}${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const ratio = (v: number | null | undefined) => (v == null ? DASH : Number(v).toFixed(2));
-const pct = (v: number | null | undefined, dp = 1) => (v == null ? DASH : `${Number(v).toFixed(dp)}%`);
-const signed = (v: number | null | undefined, dp = 2) => (v == null ? DASH : `${v > 0 ? "+" : ""}${Number(v).toFixed(dp)}%`);
+function money(v: number | null | undefined, c: string) {
+  return v == null ? DASH : `${c === "KES" ? "KES " : "$"}${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+function ratio(v: number | null | undefined) { return v == null ? DASH : Number(v).toFixed(2); }
+function pct(v: number | null | undefined, dp = 1) { return v == null ? DASH : `${Number(v).toFixed(dp)}%`; }
+function signed(v: number | null | undefined, dp = 2) { return v == null ? DASH : `${v > 0 ? "+" : ""}${Number(v).toFixed(dp)}%`; }
+
+// Earliest timestamp to include for a chart period (months back; 0 = YTD, -1 = all).
+function cutoffTs(months: number): number {
+  const now = new Date();
+  if (months < 0) return 0;
+  if (months === 0) return new Date(now.getFullYear(), 0, 1).getTime();
+  const d = new Date(now.getTime());
+  d.setMonth(d.getMonth() - months);
+  return d.getTime();
+}
 
 function signalTone(rating: string): string {
   if (rating === "Strong Buy") return "bg-emerald-600 text-white border-emerald-600";
@@ -172,7 +249,10 @@ export function ComparePage() {
   const [data, setData] = useState<CompareStock[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<string>("1y");
+  const [range, setRange] = useState<PeriodKey>("1y");
+  const [metric, setMetric] = useState<string>("totalReturn");
+  const [metricOpen, setMetricOpen] = useState(false);
+  const [fin, setFin] = useState<Record<string, any>>({});
   const [chartData, setChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -215,40 +295,86 @@ export function ComparePage() {
     return () => { cancelled = true; };
   }, [selKey]);
 
-  // Relative-performance series (normalized to 0% at the first bar)
+  // Fetch each ticker's financial history (dated key-metric / statement points)
+  // when a fundamental metric is selected. Price metrics don't need it.
+  const metricDef = metricById(metric);
+  useEffect(() => {
+    if (metricDef.source === "price") return;
+    const needed = data.map((s) => s.ticker);
+    if (needed.every((t) => fin[t])) return;
+    let cancelled = false;
+    Promise.all(
+      needed.map(async (t) => {
+        if (fin[t]) return [t, fin[t]] as const;
+        try {
+          const r = await authFetch(`${API_URL}/financials/${t}?period=annual&limit=12`);
+          const j = r.ok ? await r.json() : null;
+          return [t, j?.data ?? null] as const;
+        } catch { return [t, null] as const; }
+      })
+    ).then((entries) => { if (!cancelled) setFin((f) => ({ ...f, ...Object.fromEntries(entries) })); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metric, selKey]);
+
+  // Chart series: price-derived (daily bars) or fundamental (dated history points),
+  // each normalized to % change from the window start (or $10K for growth).
   useEffect(() => {
     if (data.length === 0) { setChartData([]); return; }
     let cancelled = false;
     setChartLoading(true);
-    Promise.all(
-      data.map(async (s) => {
-        const sym = s.market === "NSE" ? `${s.ticker}.NSE` : s.ticker;
-        const r = s.market === "NSE" && !NSE_RANGE_KEYS.has(range) ? "1y" : range;
-        try { return { t: s.ticker, bars: await fetchStockHistory(sym, r) }; }
-        catch { return { t: s.ticker, bars: [] as PriceBar[] }; }
-      })
-    ).then((series) => {
+    const period = PERIODS.find((p) => p.k === range) || PERIODS[4];
+    const cutoff = cutoffTs(period.months);
+    const build = async (): Promise<Array<{ t: string; pts: Array<{ date: string; v: number }> }>> => {
+      if (metricDef.source === "price") {
+        return Promise.all(
+          data.map(async (s) => {
+            const sym = s.market === "NSE" ? `${s.ticker}.NSE` : s.ticker;
+            const r = s.market === "NSE" && !NSE_OK.has(range) ? "1y" : period.fetch;
+            try {
+              const bars = await fetchStockHistory(sym, r);
+              const pts = bars
+                .filter((b) => b.close != null && b.date && new Date(b.date).getTime() >= cutoff)
+                .map((b) => ({ date: b.date, v: b.close as number }));
+              return { t: s.ticker, pts };
+            } catch { return { t: s.ticker, pts: [] as Array<{ date: string; v: number }> }; }
+          })
+        );
+      }
+      const arrKey = metricDef.source === "keyMetrics" ? "keyMetricsHistory"
+        : metricDef.source === "income" ? "incomeStatementHistory"
+        : metricDef.source === "cashflow" ? "cashFlowStatementHistory" : "balanceSheetHistory";
+      return data.map((s) => {
+        const arr = fin[s.ticker]?.[arrKey] || [];
+        const pts = arr
+          .map((o: any) => ({ date: o.date, v: metricDef.get ? metricDef.get(o) : null }))
+          .filter((p: any) => p.date && p.v != null && isFinite(p.v) && p.v !== 0 && new Date(p.date).getTime() >= cutoff);
+        return { t: s.ticker, pts };
+      });
+    };
+    build().then((series) => {
       if (cancelled) return;
       const byDate = new Map<string, any>();
-      for (const { t, bars } of series) {
-        if (!bars || bars.length === 0) continue;
-        const base = bars[0].close ?? bars.find((b) => b.close != null)?.close ?? null;
+      for (const { t, pts } of series) {
+        if (!pts || pts.length === 0) continue;
+        const base = pts[0].v;
         if (!base) continue;
-        for (const b of bars) {
-          if (b.close == null || !b.date) continue;
-          if (!byDate.has(b.date)) byDate.set(b.date, { date: b.date });
-          byDate.get(b.date)![t] = ((b.close / base) - 1) * 100;
+        for (const p of pts) {
+          if (!byDate.has(p.date)) byDate.set(p.date, { date: p.date });
+          const growth10k = metricDef.id === "growth10k";
+          byDate.get(p.date)![t] = growth10k ? (10000 * p.v) / base : ((p.v / base) - 1) * 100;
         }
       }
       setChartData([...byDate.values()].sort((a, b) => String(a.date).localeCompare(String(b.date))));
     }).finally(() => { if (!cancelled) setChartLoading(false); });
     return () => { cancelled = true; };
-  }, [data, range]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, range, metric, selKey]);
 
   const hasNse = data.some((s) => s.market === "NSE");
-  const visibleRanges = CHART_RANGES.filter((r) => !hasNse || NSE_RANGE_KEYS.has(r.k));
+  const visiblePeriods = PERIODS.filter((p) => !hasNse || NSE_OK.has(p.k));
   useEffect(() => {
-    if (hasNse && !NSE_RANGE_KEYS.has(range)) setRange("1y");
+    if (hasNse && !NSE_OK.has(range)) setRange("1y");
   }, [hasNse, range]);
 
   const groups = useMemo((): Group[] => ([
@@ -521,17 +647,55 @@ export function ComparePage() {
           {/* Chart + Radar */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <Card className="p-4 xl:col-span-2">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-foreground">Relative Performance <span className="text-muted-foreground font-normal">(% change)</span></h2>
-                <div className="flex flex-wrap gap-1">
-                  {visibleRanges.map((r) => (
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <h2 className="text-sm font-semibold text-foreground">
+                  {metricDef.id === "growth10k" ? "Growth of $10K" : "Relative Performance"}
+                  {metricDef.id !== "growth10k" && <span className="text-muted-foreground font-normal"> (% change)</span>}
+                </h2>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {/* Metric dropdown */}
+                  <div className="relative">
                     <button
-                      key={r.k}
                       type="button"
-                      onClick={() => setRange(r.k)}
-                      className={`rounded-md px-2.5 py-1 text-xs font-medium ${range === r.k ? "bg-[#0D7490] text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+                      onClick={() => setMetricOpen((o) => !o)}
+                      className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
                     >
-                      {r.label}
+                      {metricDef.label}
+                      <ChevronDown className="size-3.5 text-muted-foreground" />
+                    </button>
+                    {metricOpen && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setMetricOpen(false)} />
+                        <div className="absolute right-0 z-40 mt-1 w-64 max-h-80 overflow-auto rounded-lg border border-border bg-popover shadow-lg">
+                          {METRIC_GROUPS.map((g) => (
+                            <div key={g.group}>
+                              <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/40">{g.group}</p>
+                              {g.metrics.map((m) => (
+                                <button
+                                  key={m.id}
+                                  type="button"
+                                  onClick={() => { setMetric(m.id); setMetricOpen(false); }}
+                                  className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs hover:bg-muted ${m.id === metric ? "font-semibold text-[#0D7490]" : "text-foreground"}`}
+                                >
+                                  {m.label}
+                                  {m.id === metric && <Check className="size-3.5" />}
+                                </button>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {/* Period buttons */}
+                  {visiblePeriods.map((p) => (
+                    <button
+                      key={p.k}
+                      type="button"
+                      onClick={() => setRange(p.k)}
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium ${range === p.k ? "bg-[#0D7490] text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+                    >
+                      {p.label}
                     </button>
                   ))}
                 </div>
@@ -540,14 +704,14 @@ export function ComparePage() {
                 {chartLoading ? (
                   <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="size-4 animate-spin" /></div>
                 ) : chartData.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No price history available.</div>
+                  <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No data available for this metric.</div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 5, right: 12, bottom: 0, left: -12 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                       <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={40} />
-                      <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} />
-                      <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)}%`} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }} />
+                      <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => (metricDef.id === "growth10k" ? `$${Math.round(v).toLocaleString()}` : `${Math.round(v)}%`)} />
+                      <Tooltip formatter={(v: any) => (metricDef.id === "growth10k" ? money(v, "USD") : `${Number(v).toFixed(2)}%`)} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid var(--border)" }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       {data.map((s, i) => (
                         <Line key={s.ticker} type="monotone" dataKey={s.ticker} name={s.ticker} stroke={CHART_COLORS[i % CHART_COLORS.length]} dot={false} strokeWidth={2} connectNulls />
