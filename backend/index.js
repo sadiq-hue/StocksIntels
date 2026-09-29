@@ -7482,6 +7482,216 @@ app.get('/api/alpha/ipos', async (req, res) => {
   }
 });
 
+// ─── IPO Hub: calendar · lookup · statistics · news · recent ───────────────
+// One merged feed (NSE + Alpha Vantage) enriched with SEC EDGAR filing data for
+// US names, exposed through the sections the Compare/IPO UI needs. Cached so the
+// sections are fast to load together.
+const _ipoHubCache = { data: null, ts: 0 };
+const IPO_HUB_TTL = 30 * 60 * 1000; // 30 min
+
+function _normalizeIpoStatus(listingDate, hasFiled) {
+  if (!listingDate) return hasFiled ? 'filed' : 'upcoming';
+  const d = new Date(listingDate);
+  if (isNaN(d.getTime())) return 'upcoming';
+  return d.getTime() < Date.now() ? 'listed' : 'upcoming';
+}
+
+// Best-effort SEC enrichment: real filing history for a US ticker already known
+// to the EDGAR CIK map (S-1/F-1/POS AM/424B IPO registration filings).
+async function _enrichWithSec(ipo) {
+  try {
+    const edgarService = require('./edgarService');
+    if (!ipo.ticker || !edgarService.isUsStock(ipo.ticker)) return null;
+    const allFilings = await edgarService.getFilings(ipo.ticker, ['10-K', '10-Q', '8-K'], 30);
+    if (!allFilings || allFilings.length === 0) return null;
+    const ipoForms = /^(S-1|F-1|POS\s*AM|S-1\/A|F-1\/A|424B)/i;
+    const ipoFilings = (allFilings || []).filter((f) => ipoForms.test(String(f.form || '')));
+    const last10k = (allFilings || []).find((f) => String(f.form || '').toUpperCase() === '10-K');
+    return {
+      cik: edgarService.cikLookup(ipo.ticker) || null,
+      filingsCount: allFilings.length,
+      ipoFilings: ipoFilings.slice(0, 6).map((f) => ({ form: f.form, filed: f.filingDate || f.date, url: f.primaryDocumentUrl || f.url })),
+      hasIpoFiling: ipoFilings.length > 0,
+      lastAnnualReport: last10k ? { filed: last10k.filingDate || last10k.date, url: last10k.primaryDocumentUrl || last10k.url } : null,
+    };
+  } catch { return null; }
+}
+
+async function _loadIpoHub() {
+  if (_ipoHubCache.data && Date.now() - _ipoHubCache.ts < IPO_HUB_TTL) return _ipoHubCache.data;
+
+  // Reuse the existing merged feeds, then enrich with SEC.
+  let avBody = { ipos: [], alphaStatus: 'unknown' };
+  const nseIpos = await (async () => {
+    try {
+      const result = await pool.query('SELECT * FROM nse_ipos');
+      return result.rows.map((r) => ({
+        id: 'nse-' + (r.ticker || r.company_name),
+        company_name: r.company_name,
+        ticker: r.ticker,
+        exchange: 'NSE',
+        status: r.status,
+        listing_date: r.listing_date ? (r.listing_date instanceof Date ? r.listing_date.toISOString().slice(0, 10) : r.listing_date) : null,
+        offer_price: r.offer_price,
+        current_price: r.current_price,
+        oversubscription_pct: r.oversubscription_pct,
+        description: r.description,
+        sector: r.sector,
+        price_change_pct: null,
+        price_change: null,
+        market: 'NSE',
+        source: 'nse',
+      }));
+    } catch { return []; }
+  })();
+
+  // Global (Alpha Vantage) — reuse cached fetch if warm.
+  try {
+    const alphaKey = process.env.ALPHA_VANTAGE_API_KEY;
+    if (alphaKey) {
+      const url = `https://www.alphavantage.co/query?function=IPO_CALENDAR&apikey=${alphaKey}`;
+      const response = await axios.get(url, { timeout: 25000, responseType: 'text', transformResponse: [(d) => d], proxy: false });
+      const csv = typeof response.data === 'string' ? response.data : String(response.data || '');
+      const lines = csv.trim().split('\n');
+      if (lines.length >= 2 && !csv.includes('Thank you') && !csv.includes('premium')) {
+        const header = lines[0].split(',').map((h) => h.trim());
+        const idx = (n) => header.indexOf(n);
+        for (let i = 1; i < lines.length; i++) {
+          const c = lines[i].split(',');
+          const symbol = (c[idx('symbol')] || '').trim();
+          if (!symbol || symbol.length > 12) continue;
+          const dateStr = (c[idx('ipoDate')] || '').trim();
+          const listing = dateStr && /^\d{4}-\d{2}-\d{2}/.test(dateStr) ? dateStr : null;
+          const low = parseFloat((c[idx('priceRangeLow')] || '').replace(/[^0-9.]/g, ''));
+          const high = parseFloat((c[idx('priceRangeHigh')] || '').replace(/[^0-9.]/g, ''));
+          const offer = !isNaN(low) && !isNaN(high) ? (low + high) / 2 : (!isNaN(low) ? low : (!isNaN(high) ? high : null));
+          avBody.ipos.push({
+            id: symbol, company_name: (c[idx('name')] || symbol).trim(), ticker: symbol,
+            exchange: (c[idx('exchange')] || '').trim() || null,
+            status: listing && new Date(listing) < new Date() ? 'listed' : 'upcoming',
+            listing_date: listing, offer_price: isNaN(offer) ? null : offer,
+            current_price: null, price_change_pct: null, price_change: null,
+            oversubscription_pct: null,
+            description: (!isNaN(low) && !isNaN(high)) ? `Expected price range $${low}–${high}` : null,
+            sector: null, market: 'GLOBAL', source: 'alpha_vantage',
+          });
+        }
+      }
+    }
+  } catch (e) { console.error('[IPOHub] Alpha Vantage fetch failed:', e.message); }
+
+  // Merge + SEC-enrich US/global names (concurrency-limited).
+  const byTicker = new Map();
+  for (const i of [...nseIpos, ...avBody.ipos]) {
+    const key = (i.ticker || i.company_name).toUpperCase();
+    if (!byTicker.has(key)) byTicker.set(key, i);
+    else {
+      const ex = byTicker.get(key);
+      if (!ex.offer_price && i.offer_price) ex.offer_price = i.offer_price;
+      if (!ex.description && i.description) ex.description = i.description;
+      if (!ex.listing_date && i.listing_date) ex.listing_date = i.listing_date;
+    }
+  }
+  const merged = [...byTicker.values()];
+  const enrichTargets = merged.filter((i) => i.market === 'GLOBAL' && i.ticker).slice(0, 12);
+  await Promise.all(enrichTargets.map(async (i) => {
+    const sec = await _enrichWithSec(i);
+    if (sec) { i.sec = sec; if (!i.status) i.status = _normalizeIpoStatus(i.listing_date, sec.hasIpoFiling); }
+  }));
+
+  // Attach current prices for listed names (so "since IPO" works).
+  const listed = merged.filter((i) => i.status === 'listed' && i.ticker);
+  if (listed.length) {
+    try {
+      const marketService = require('./marketService');
+      const quotes = await marketService.getQuotesBatch(listed.map((i) => i.ticker));
+      for (const i of listed) {
+        const q = (quotes || {})[i.ticker];
+        if (!q) continue;
+        i.current_price = q.price ?? i.current_price;
+        i.price_change_pct = q.changePercent ?? i.price_change_pct;
+        if (i.offer_price && i.current_price) {
+          i.since_ipo_pct = ((i.current_price - i.offer_price) / i.offer_price) * 100;
+        }
+      }
+    } catch {}
+  }
+
+  _ipoHubCache.data = merged;
+  _ipoHubCache.ts = Date.now();
+  return merged;
+}
+
+// IPO Calendar — everything, grouped-ready, sorted by date.
+app.get('/api/ipo/calendar', async (req, res) => {
+  try {
+    const all = await _loadIpoHub();
+    res.json({ ipos: all });
+  } catch (e) { res.status(500).json({ error: 'Failed to load IPO calendar' }); }
+});
+
+// IPO Lookup — find one company by ticker/name.
+app.get('/api/ipo/lookup', async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim().toUpperCase();
+    if (!q) return res.json({ matches: [] });
+    const all = await _loadIpoHub();
+    const matches = all.filter((i) =>
+      (i.ticker && String(i.ticker).toUpperCase() === q) ||
+      String(i.company_name || '').toUpperCase().includes(q)
+    ).slice(0, 20);
+    res.json({ matches });
+  } catch (e) { res.status(500).json({ error: 'Failed to search IPOs' }); }
+});
+
+// IPO Statistics — aggregate counts/averages across the feed.
+app.get('/api/ipo/statistics', async (req, res) => {
+  try {
+    const all = await _loadIpoHub();
+    const byStatus = { upcoming: 0, listed: 0, filed: 0 };
+    const returns = [];
+    let sum = 0, n = 0;
+    for (const i of all) {
+      byStatus[i.status] = (byStatus[i.status] || 0) + 1;
+      if (typeof i.since_ipo_pct === 'number' && isFinite(i.since_ipo_pct)) { sum += i.since_ipo_pct; n++; returns.push(i.since_ipo_pct); }
+    }
+    returns.sort((a, b) => a - b);
+    res.json({
+      total: all.length,
+      byStatus,
+      avgSinceIpoPct: n ? sum / n : null,
+      medianSinceIpoPct: returns.length ? returns[Math.floor(returns.length / 2)] : null,
+      best: returns.length ? returns[returns.length - 1] : null,
+      worst: returns.length ? returns[0] : null,
+    });
+  } catch (e) { res.status(500).json({ error: 'Failed to compute IPO statistics' }); }
+});
+
+// IPO News — filter the aggregated news feed for IPO/listing keywords.
+app.get('/api/ipo/news', async (req, res) => {
+  try {
+    const newsService = require('./newsService');
+    const all = await newsService.getAllNews(120);
+    const re = /\b(ipo|initial public offer(?:ing)?|goes public|going public|direct listing|opens? trading|shares? debut|stock debut|nasdaq debut|nyse debut|price range|listing price|priced (?:its|their) offering)\b/i;
+    const items = (all || []).filter((a) => re.test(`${a.headline || ''} ${a.excerpt || ''}`))
+      .slice(0, 40)
+      .map((a) => ({ id: a.id, headline: a.headline, source: a.source, url: a.url, publishedAt: a.publishedAt, sentiment: a.sentiment, relatedStocks: a.relatedStocks, category: a.category }));
+    res.json({ items });
+  } catch (e) { res.status(500).json({ error: 'Failed to load IPO news' }); }
+});
+
+// Recent IPOs — most recently listed first.
+app.get('/api/ipo/recent', async (req, res) => {
+  try {
+    const all = await _loadIpoHub();
+    const recent = all
+      .filter((i) => i.listing_date)
+      .sort((a, b) => new Date(b.listing_date) - new Date(a.listing_date))
+      .slice(0, 40);
+    res.json({ ipos: recent });
+  } catch (e) { res.status(500).json({ error: 'Failed to load recent IPOs' }); }
+});
+
 // --- Global Corporate Actions ---
 app.get('/api/global/corporate-actions', async (req, res) => {
   try {

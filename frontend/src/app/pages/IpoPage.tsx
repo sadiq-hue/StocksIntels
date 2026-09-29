@@ -1,10 +1,17 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, type ReactNode } from "react";
+import { Link } from "react-router";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Rocket, Calendar, DollarSign, Users, BarChart3, Timer, Globe2, RefreshCw, TrendingUp, TrendingDown, Info } from "lucide-react";
+import {
+  Rocket, CalendarDays, Search, BarChart3, Newspaper, History,
+  ChevronDown, Check, RefreshCw, TrendingUp, TrendingDown, Info,
+  DollarSign, Users, Timer, Globe2, ExternalLink, Search as SearchIcon,
+} from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
+
+type ViewKey = "calendar" | "lookup" | "statistics" | "news" | "recent";
 
 interface Ipo {
   id: number | string;
@@ -20,278 +27,310 @@ interface Ipo {
   sector: string | null;
   price_change_pct: number | null;
   price_change: number | null;
+  since_ipo_pct?: number | null;
+  market?: string;
   source?: string;
+  sec?: {
+    cik: string | null;
+    filingsCount: number;
+    ipoFilings: Array<{ form: string; filed: string; url: string }>;
+    hasIpoFiling: boolean;
+    lastAnnualReport?: { filed: string; url: string } | null;
+  };
 }
+
+interface IpoNewsItem {
+  id: string;
+  headline: string;
+  source: string;
+  url: string;
+  publishedAt: string;
+  sentiment?: string;
+  relatedStocks?: string[];
+  category?: string;
+}
+
+const VIEWS: { key: ViewKey; label: string; icon: typeof CalendarDays }[] = [
+  { key: "calendar", label: "IPO Calendar", icon: CalendarDays },
+  { key: "lookup", label: "Lookup", icon: SearchIcon },
+  { key: "statistics", label: "Statistics", icon: BarChart3 },
+  { key: "news", label: "IPO News", icon: Newspaper },
+  { key: "recent", label: "Recent IPOs", icon: History },
+];
 
 const statusColors: Record<string, string> = {
   upcoming: "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50",
+  filed: "bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/50",
   current: "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50",
   listed: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50",
   withdrawn: "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50",
   info: "bg-muted text-muted-foreground border-border",
 };
 
-export function IpoPage() {
-  const [tab, setTab] = useState<'nse' | 'global'>('nse');
-  const [nseIpos, setNseIpos] = useState<Ipo[]>([]);
-  const [globalIpos, setGlobalIpos] = useState<Ipo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [globalLoading, setGlobalLoading] = useState(false);
-  const [globalError, setGlobalError] = useState<string | null>(null);
-  const [alphaStatus, setAlphaStatus] = useState<string | null>(null);
+const fmtPct = (v: number | null | undefined, dp = 1) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(dp)}%`);
 
-  const fetchGlobalIpos = useCallback(async (showSpinner = true) => {
-    if (showSpinner) setGlobalLoading(true);
-    setGlobalError(null);
-    setAlphaStatus(null);
+function StatusBadge({ status }: { status: string }) {
+  const label = status === "info" ? "" : status.charAt(0).toUpperCase() + status.slice(1);
+  return <Badge className={`text-[10px] px-2 py-0.5 font-medium border ${statusColors[status] || statusColors.info}`}>{label}</Badge>;
+}
+
+export function IpoPage() {
+  const [view, setView] = useState<ViewKey>("calendar");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [calendar, setCalendar] = useState<Ipo[]>([]);
+  const [recent, setRecent] = useState<Ipo[]>([]);
+  const [news, setNews] = useState<IpoNewsItem[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [query, setQuery] = useState("");
+  const [lookup, setLookup] = useState<Ipo[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadCommon = useCallback(async () => {
+    setLoading(true); setError(null);
     try {
-      const res = await fetch(`${API_BASE}/alpha/ipos?refresh=1`);
-      if (!res.ok) {
-        const fb = await fetch(`${API_BASE}/global/ipos`);
-        const data = await fb.json();
-        if (Array.isArray(data)) setGlobalIpos(data);
-        return;
-      }
-      const body = await res.json();
-      if (Array.isArray(body)) {
-        setGlobalIpos(body);
-      } else if (body && Array.isArray(body.ipos)) {
-        setGlobalIpos(body.ipos);
-        if (body.alphaStatus === 'rate_limited') {
-          setAlphaStatus('rate_limited');
-        } else if (body.alphaStatus === 'error') {
-          setAlphaStatus('error');
-        }
-      }
+      const [cal, rec, nw, st] = await Promise.all([
+        fetch(`${API_BASE}/ipo/calendar`).then((r) => r.json()),
+        fetch(`${API_BASE}/ipo/recent`).then((r) => r.json()),
+        fetch(`${API_BASE}/ipo/news`).then((r) => r.json()),
+        fetch(`${API_BASE}/ipo/statistics`).then((r) => r.json()),
+      ]);
+      setCalendar(Array.isArray(cal?.ipos) ? cal.ipos : []);
+      setRecent(Array.isArray(rec?.ipos) ? rec.ipos : []);
+      setNews(Array.isArray(nw?.items) ? nw.items : []);
+      setStats(st || null);
     } catch {
-      try {
-        const fb = await fetch(`${API_BASE}/global/ipos`);
-        const data = await fb.json();
-        if (Array.isArray(data)) setGlobalIpos(data);
-      } catch {
-        setGlobalError("Failed to load global IPO data. Alpha Vantage may not be configured.");
-      }
+      setError("Failed to load IPO data.");
     } finally {
-      setGlobalLoading(false);
+      setLoading(false);
     }
   }, []);
 
+  useEffect(() => { loadCommon(); }, [loadCommon]);
+
+  const runLookup = useCallback(async () => {
+    const q = query.trim();
+    if (!q) { setLookup(null); return; }
+    try {
+      const r = await fetch(`${API_BASE}/ipo/lookup?q=${encodeURIComponent(q)}`).then((x) => x.json());
+      setLookup(Array.isArray(r?.matches) ? r.matches : []);
+    } catch { setLookup([]); }
+  }, [query]);
+
   useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      fetch(`${API_BASE}/nse/ipos`).then(r => r.json()).then(d => { if (Array.isArray(d)) setNseIpos(d); }).catch(() => {}),
-      fetchGlobalIpos(false),
-    ]).finally(() => setLoading(false));
-  }, [fetchGlobalIpos]);
+    if (view === "lookup") runLookup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
-  const ipos = tab === 'nse' ? nseIpos : globalIpos;
+  const activeView = VIEWS.find((v) => v.key === view)!;
+  const ActiveIcon = activeView.icon;
 
-  const { upcoming, current, listed, past } = useMemo(() => {
-    const u: Ipo[] = [], c: Ipo[] = [], l: Ipo[] = [], p: Ipo[] = [];
-    for (const ipo of ipos) {
-      if (ipo.status === 'upcoming') u.push(ipo);
-      else if (ipo.status === 'current') c.push(ipo);
-      else if (ipo.status === 'listed') l.push(ipo);
-      else p.push(ipo);
-    }
-    return { upcoming: u, current: c, listed: l, past: p };
-  }, [ipos]);
-
-  const renderIpoCard = (ipo: Ipo, market: 'nse' | 'global') => {
-    const cur = market === 'nse' ? 'KES ' : '$';
+  const renderCard = (ipo: Ipo) => {
+    const cur = ipo.market === "NSE" ? "KES " : "$";
     return (
       <Card key={ipo.id} className="p-4 border shadow-sm hover:shadow-md transition-shadow">
-        <div className="flex items-start justify-between mb-2">
-          <div>
-            <h3 className="font-semibold text-sm text-foreground">{ipo.company_name}</h3>
-            <div className="flex items-center gap-1.5">
-              {ipo.ticker && <span className="text-xs font-mono text-muted-foreground bg-muted px-1 py-0.5 rounded">{ipo.ticker}</span>}
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="min-w-0">
+            <h3 className="font-semibold text-sm text-foreground truncate">{ipo.company_name}</h3>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {ipo.ticker && (
+                <Link to={`/app/stock/${ipo.ticker}?market=${ipo.market === "NSE" ? "nse" : "us"}`} className="text-xs font-mono text-muted-foreground bg-muted px-1 py-0.5 rounded hover:text-foreground">{ipo.ticker}</Link>
+              )}
               {ipo.exchange && <span className="text-[10px] text-muted-foreground">({ipo.exchange})</span>}
             </div>
           </div>
-          <Badge className={`text-[10px] px-2 py-0.5 font-medium border ${statusColors[ipo.status] || ''}`}>
-            {ipo.status === 'info' ? '' : ipo.status.charAt(0).toUpperCase() + ipo.status.slice(1)}
-          </Badge>
+          <StatusBadge status={ipo.status} />
         </div>
         {ipo.description && <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{ipo.description}</p>}
         <div className="grid grid-cols-2 gap-2 text-xs">
           {ipo.offer_price != null && (
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <DollarSign className="size-3 shrink-0" />
-              <span>Offer: {cur}{ipo.offer_price.toLocaleString()}</span>
-            </div>
+            <div className="flex items-center gap-1.5 text-muted-foreground"><DollarSign className="size-3 shrink-0" /><span>Offer: {cur}{ipo.offer_price.toLocaleString()}</span></div>
           )}
           {ipo.current_price != null && (
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <BarChart3 className="size-3 shrink-0" />
               <span>Current: {cur}{ipo.current_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</span>
-              {ipo.price_change_pct != null && (
-                <span className={`text-[10px] font-semibold flex items-center gap-0.5 ${ipo.price_change_pct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-                  {ipo.price_change_pct >= 0 ? <TrendingUp className="size-2.5" /> : <TrendingDown className="size-2.5" />}
-                  {ipo.price_change_pct >= 0 ? '+' : ''}{ipo.price_change_pct.toFixed(2)}%
-                </span>
-              )}
             </div>
           )}
-          {ipo.offer_price != null && ipo.current_price != null && (
+          {typeof ipo.since_ipo_pct === "number" && (
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <TrendingUp className="size-3 shrink-0" />
-              <span className={`font-medium ${((ipo.current_price - ipo.offer_price) / ipo.offer_price * 100) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-                Since IPO: {((ipo.current_price - ipo.offer_price) / ipo.offer_price * 100) >= 0 ? '+' : ''}{((ipo.current_price - ipo.offer_price) / ipo.offer_price * 100).toFixed(1)}%
-              </span>
+              <span className={`font-medium ${ipo.since_ipo_pct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>Since IPO: {fmtPct(ipo.since_ipo_pct)}</span>
+            </div>
+          )}
+          {ipo.price_change_pct != null && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              {ipo.price_change_pct >= 0 ? <TrendingUp className="size-3 shrink-0 text-emerald-600" /> : <TrendingDown className="size-3 shrink-0 text-red-500" />}
+              <span className={`font-semibold ${ipo.price_change_pct >= 0 ? "text-emerald-600" : "text-red-500"}`}>{fmtPct(ipo.price_change_pct, 2)}</span>
             </div>
           )}
           {ipo.oversubscription_pct != null && (
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <Users className="size-3 shrink-0" />
-              <span>{ipo.oversubscription_pct}x oversubscribed</span>
-            </div>
+            <div className="flex items-center gap-1.5 text-muted-foreground"><Users className="size-3 shrink-0" /><span>{ipo.oversubscription_pct}x oversubscribed</span></div>
           )}
           {ipo.listing_date && (
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <Calendar className="size-3 shrink-0" />
-              <span>{ipo.listing_date}</span>
-            </div>
-          )}
-          {ipo.sector && (
-            <div className="flex items-center gap-1.5 text-muted-foreground col-span-2">
-              <Timer className="size-3 shrink-0" />
-              <span>Sector: {ipo.sector}</span>
-            </div>
+            <div className="flex items-center gap-1.5 text-muted-foreground"><CalendarDays className="size-3 shrink-0" /><span>Lists {ipo.listing_date}</span></div>
           )}
         </div>
+        {ipo.sec && (
+          <div className="mt-3 pt-2.5 border-t border-border space-y-1">
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">SEC EDGAR</p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {ipo.sec.hasIpoFiling ? (
+                ipo.sec.ipoFilings.slice(0, 3).map((f, i) => (
+                  <a key={i} href={f.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50">
+                    {f.form} <ExternalLink className="size-2.5" />
+                  </a>
+                ))
+              ) : (
+                <span className="text-[10px] text-muted-foreground">{ipo.sec.filingsCount} SEC filings{ipo.sec.lastAnnualReport ? " · last 10-K on file" : ""}</span>
+              )}
+            </div>
+          </div>
+        )}
       </Card>
     );
   };
 
+  const grouped = useMemo(() => {
+    const upcoming = calendar.filter((i) => i.status === "upcoming" || i.status === "filed");
+    const listed = calendar.filter((i) => i.status === "listed");
+    return { upcoming, listed };
+  }, [calendar]);
+
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+      <div className="flex flex-wrap items-center gap-3 mb-5">
         <div className="size-8 rounded-lg bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center">
           <Rocket className="size-4 text-blue-600 dark:text-blue-400" />
         </div>
-        <div>
-          <h1 className="text-lg font-bold text-foreground">New Listings & IPOs</h1>
-          <p className="text-xs text-muted-foreground">Track NSE and global IPO offerings</p>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-lg font-bold text-foreground">IPOs & New Listings</h1>
+          <p className="text-xs text-muted-foreground">NSE and global IPOs — calendar, lookup, stats, news and recent listings</p>
         </div>
+        <Button variant="outline" size="sm" onClick={loadCommon} disabled={loading} className="h-8 text-xs gap-1.5">
+          <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} /> Refresh
+        </Button>
       </div>
 
-      {/* Tab Toggle */}
-      <div className="flex items-center gap-2 mb-6">
-        <div className="flex gap-1 bg-muted rounded-lg p-1 w-fit">
-          <button onClick={() => setTab('nse')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${tab === 'nse' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-            NSE IPOs
-          </button>
-          <button onClick={() => setTab('global')} className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${tab === 'global' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-            <Globe2 className="size-3" /> Global IPOs
-          </button>
-        </div>
-        {tab === 'global' && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchGlobalIpos(true)}
-            disabled={globalLoading}
-            className="h-7 text-xs gap-1.5"
-          >
-            <RefreshCw className={`size-3 ${globalLoading ? 'animate-spin' : ''}`} />
-            {globalLoading ? 'Refreshing...' : 'Refresh'}
-          </Button>
+      {/* Section dropdown */}
+      <div className="relative mb-5 w-fit">
+        <button
+          onClick={() => setMenuOpen((o) => !o)}
+          className="flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+        >
+          <ActiveIcon className="size-4 text-[#0D7490]" />
+          {activeView.label}
+          <ChevronDown className={`size-4 text-muted-foreground transition-transform ${menuOpen ? "rotate-180" : ""}`} />
+        </button>
+        {menuOpen && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
+            <div className="absolute left-0 z-40 mt-1 w-56 rounded-lg border border-border bg-popover shadow-lg p-1">
+              {VIEWS.map((v) => (
+                <button
+                  key={v.key}
+                  onClick={() => { setView(v.key); setMenuOpen(false); }}
+                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted ${v.key === view ? "font-semibold text-[#0D7490]" : "text-foreground"}`}
+                >
+                  <v.icon className="size-4 shrink-0" />
+                  {v.label}
+                  {v.key === view && <Check className="ml-auto size-4" />}
+                </button>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
-      {loading ? (
-        <div className="text-sm text-muted-foreground">Loading IPO data...</div>
-      ) : (
-        <>
-          {globalError && tab === 'global' && (
-            <Card className="p-4 mb-6 border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20">
-              <div className="flex items-start gap-2">
-                <Info className="size-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-                <p className="text-xs text-amber-700 dark:text-amber-300">{globalError}</p>
-              </div>
-            </Card>
-          )}
-
-          {alphaStatus === 'rate_limited' && tab === 'global' && (
-            <Card className="p-4 mb-6 border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-950/20">
-              <div className="flex items-start gap-2">
-                <Info className="size-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs font-medium text-blue-700 dark:text-blue-300">Alpha Vantage rate-limited</p>
-                  <p className="text-xs text-blue-600/70 dark:text-blue-400/70 mt-0.5">Showing historic IPOs with live prices. New upcoming listings will appear when the API quota resets (typically within a few minutes).</p>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {current.length > 0 && (
-            <div className="mb-6">
-              <h2 className="text-sm font-semibold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
-                <Timer className="size-4" /> Current / Ongoing
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {current.map(i => renderIpoCard(i, tab))}
-              </div>
-            </div>
-          )}
-
-          {upcoming.length > 0 && (
-            <div className="mb-6">
-              <h2 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1.5">
-                <Calendar className="size-4" /> Upcoming ({upcoming.length})
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {upcoming.map(i => renderIpoCard(i, tab))}
-              </div>
-            </div>
-          )}
-
-          {listed.length > 0 && (
-            <div className="mb-6">
-              <h2 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 mb-2 flex items-center gap-1.5">
-                <Rocket className="size-4" /> Recently Listed ({listed.length})
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {listed.map(i => renderIpoCard(i, tab))}
-              </div>
-            </div>
-          )}
-
-          {past.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold text-muted-foreground mb-2">Other</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {past.map(i => renderIpoCard(i, tab))}
-              </div>
-            </div>
-          )}
-
-          {ipos.length === 0 && !globalError && (
-            <Card className="p-6 text-center border-dashed">
-              <p className="text-sm text-muted-foreground">No IPO data available for this market.</p>
-            </Card>
-          )}
-        </>
+      {error && (
+        <Card className="p-4 mb-5 border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20">
+          <div className="flex items-start gap-2"><Info className="size-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" /><p className="text-xs text-amber-700 dark:text-amber-300">{error}</p></div>
+        </Card>
       )}
 
-      <Card className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-100 dark:border-blue-800/50">
-        <h3 className="text-xs font-semibold text-blue-800 dark:text-blue-300 uppercase tracking-wider mb-2">
-          {tab === 'nse' ? 'About NSE IPOs' : 'About Global IPOs'}
-        </h3>
-        {tab === 'nse' ? (
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Initial Public Offerings (IPOs) on the Nairobi Securities Exchange allow companies to raise capital by listing shares to the public.
-            Notable NSE IPOs include Safaricom (2008), KCB Group, and Co-op Bank. Investors can participate through approved stockbrokers.
-            Oversubscription rates indicate investor demand — rates above 100% signal strong interest.
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Global IPO data sourced from Alpha Vantage and enriched with current market prices. Includes upcoming listings and historical
-            IPOs across NYSE, NASDAQ, and international exchanges. Current prices update in real-time where market data is available.
-          </p>
-        )}
-      </Card>
+      {loading && !calendar.length ? (
+        <div className="text-sm text-muted-foreground">Loading IPO data…</div>
+      ) : view === "calendar" ? (
+        <div className="space-y-6">
+          {grouped.upcoming.length > 0 && (
+            <div>
+              <h2 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1.5">
+                <Timer className="size-4" /> Upcoming / Filed ({grouped.upcoming.length})
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{grouped.upcoming.map(renderCard)}</div>
+            </div>
+          )}
+          {grouped.listed.length > 0 && (
+            <div>
+              <h2 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 mb-2 flex items-center gap-1.5">
+                <Rocket className="size-4" /> Recently Listed ({grouped.listed.length})
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{grouped.listed.map(renderCard)}</div>
+            </div>
+          )}
+          {calendar.length === 0 && <Card className="p-6 text-center border-dashed"><p className="text-sm text-muted-foreground">No IPO data available.</p></Card>}
+        </div>
+      ) : view === "lookup" ? (
+        <div className="space-y-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && runLookup()}
+              placeholder="Search a company or ticker (e.g. KPC, AAPL)…"
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-card text-sm outline-none focus:border-[#0D7490]"
+            />
+          </div>
+          {lookup && lookup.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{lookup.map(renderCard)}</div>
+          )}
+          {lookup && lookup.length === 0 && <Card className="p-6 text-center border-dashed"><p className="text-sm text-muted-foreground">No IPOs match “{query}”.</p></Card>}
+        </div>
+      ) : view === "statistics" ? (
+        stats ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <StatCard label="Total IPOs" value={stats.total} icon={Rocket} />
+            <StatCard label="Upcoming" value={stats.byStatus?.upcoming || 0} icon={CalendarDays} />
+            <StatCard label="Listed" value={stats.byStatus?.listed || 0} icon={History} />
+            <StatCard label="Avg Since IPO" value={fmtPct(stats.avgSinceIpoPct)} icon={TrendingUp} />
+            <StatCard label="Best Since IPO" value={fmtPct(stats.best)} icon={TrendingUp} />
+            <StatCard label="Worst Since IPO" value={fmtPct(stats.worst)} icon={TrendingDown} />
+            <StatCard label="Median Since IPO" value={fmtPct(stats.medianSinceIpoPct)} icon={BarChart3} />
+          </div>
+        ) : <div className="text-sm text-muted-foreground">Loading statistics…</div>
+      ) : view === "news" ? (
+        news.length > 0 ? (
+          <div className="space-y-2">
+            {news.map((n) => (
+              <a key={n.id} href={n.url} target="_blank" rel="noreferrer" className="block rounded-xl border border-border bg-card p-3 hover:shadow-md transition-shadow">
+                <p className="text-sm font-medium text-foreground leading-snug">{n.headline}</p>
+                <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
+                  <span>{n.source}</span>
+                  {n.publishedAt && <span>· {new Date(n.publishedAt).toLocaleDateString()}</span>}
+                  <ExternalLink className="size-3" />
+                </p>
+              </a>
+            ))}
+          </div>
+        ) : <Card className="p-6 text-center border-dashed"><p className="text-sm text-muted-foreground">No IPO news right now.</p></Card>
+      ) : (
+        recent.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">{recent.map(renderCard)}</div>
+        ) : <Card className="p-6 text-center border-dashed"><p className="text-sm text-muted-foreground">No recent IPOs.</p></Card>
+      )}
     </div>
+  );
+}
+
+function StatCard({ label, value, icon: Icon }: { label: string; value: ReactNode; icon: typeof Rocket }) {
+  return (
+    <Card className="p-4">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <Icon className="size-3.5 text-[#0D7490]" />
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      </div>
+      <p className="text-xl font-bold text-foreground">{value}</p>
+    </Card>
   );
 }
