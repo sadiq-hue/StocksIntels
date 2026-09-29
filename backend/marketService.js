@@ -587,6 +587,47 @@ async function getNseBaseQuote(symbol) {
   return null;
 }
 
+/**
+ * Normalise the display fields that individual providers omit, so every quote
+ * leaves this module with the same shape regardless of which feed produced it.
+ *
+ * Only the Yahoo path sets `currency`, and the nseportal path sets neither
+ * `currency` nor `company_name` at all. Consumers reading those fields
+ * (/api/quote, /api/quotes, the market movers snapshot, the dashboard watchlist
+ * card) therefore had to guess, which rendered NSE names with no company name
+ * and let the market badge fall through to "Global". Derive both from the
+ * symbol so no caller has to special-case a provider.
+ */
+function normalizeQuote(symbol, quote) {
+  if (!quote) return null;
+  const sym = String(symbol || '').toUpperCase();
+  const isNse = sym.startsWith('NSE:');
+  const bare = isNse ? sym.slice(4) : sym;
+  const mappedName = getCompanyName(symbol);
+  // The nseportal feed sets company_name to the bare ticker ("SCOM"), which is a
+  // placeholder rather than a real name — a truthy check alone would keep it and
+  // lose the mapped name, so treat "name === bare ticker" as unset.
+  const providerName = String(quote.company_name ?? '').trim();
+  const companyName =
+    providerName && providerName.toUpperCase() !== bare ? providerName : mappedName;
+  return {
+    ...quote,
+    symbol,
+    marketCap: quote.marketCap || 0,
+    currency: quote.currency || (isNse ? 'KES' : 'USD'),
+    company_name: companyName,
+    name: quote.name || companyName,
+  };
+}
+
+/** Normalise, cache, and return a quote. The single write path into quoteCache. */
+function cacheQuote(symbol, quote) {
+  const normalized = normalizeQuote(symbol, quote);
+  if (!normalized) return null;
+  quoteCache.set(symbol, normalized);
+  return normalized;
+}
+
 async function getStockQuote(symbol) {
   if (!symbol) return null;
 
@@ -612,8 +653,7 @@ async function getStockQuote(symbol) {
   }
 
   if (quote) {
-    quoteCache.set(symbol, { ...quote, symbol, marketCap: quote.marketCap || 0 });
-    return quoteCache.get(symbol);
+    return cacheQuote(symbol, quote);
   }
 
   if (cached && Number(cached.price) > 0 && (Date.now() - (cached.timestamp * 1000) < MAX_QUOTE_AGE_MS * 2)) {
@@ -693,8 +733,7 @@ async function getQuotesBatch(symbols) {
       for (const s of Object.keys(bulk)) {
         const q = bulk[s];
         if (q && Number(q.price) > 0) {
-          quoteCache.set(s, { ...q, symbol: s });
-          results[s] = quoteCache.get(s);
+          results[s] = cacheQuote(s, q);
         }
       }
     } catch (e) {
@@ -723,9 +762,8 @@ async function getQuotesBatch(symbols) {
         const ksClose = Number(ksBySymbol.get(clean) && ksBySymbol.get(clean).close);
         const ratio = ksClose > 0 ? q.price / ksClose : 0;
         if (ksClose && (ratio < 0.75 || ratio > 1.35)) continue; // same gate as getNseBaseQuote
-        const full = { ...q, symbol: s, marketCap: q.marketCap || 0 };
-        quoteCache.set(s, full);
-        results[s] = quoteCache.get(s);
+        const full = cacheQuote(s, q);
+        if (full) results[s] = full;
       }
     } catch (e) {
       console.warn(`[getQuotesBatch] bulk NSE warm-up failed: ${e.message}`);
@@ -744,8 +782,8 @@ async function getQuotesBatch(symbols) {
       const quote = r.status === 'fulfilled' ? r.value : null;
 
       if (quote && Number(quote.price) > 0) {
-        quoteCache.set(s, { ...quote, symbol: s });
-        results[s] = quoteCache.get(s);
+        const fresh = cacheQuote(s, quote);
+        if (fresh) results[s] = fresh;
       } else {
         const stale = quoteCache.get(s);
         if (stale && Number(stale.price) > 0) results[s] = stale;
