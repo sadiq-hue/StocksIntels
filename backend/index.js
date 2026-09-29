@@ -4996,6 +4996,66 @@ function sampleCloses(series, n) {
   return out;
 }
 
+// Real NSE benchmark.
+//
+// The NSE 20 has no obtainable history: nse.co.ke publishes index levels but
+// exposes no history API (every /api/ and /wp-json/nse/ path 404s, the pages are
+// static WordPress), and deveintapps' nseticker only has a live POST quote
+// route. AFX does serve a Highcharts StockChart config with real daily closes
+// back to 2016 for the NSE All Share Index (NASI), and its latest close (247.87)
+// matches the live NSE All Share value from the nse.co.ke scraper, so the series
+// is genuine. NASI is also the better benchmark for a broad Kenyan portfolio
+// than the NSE 20, which covers only the 20 largest caps.
+const NASI_HISTORY_CACHE = { data: null, at: 0 };
+const NASI_HISTORY_TTL_MS = 60 * 60 * 1000; // 1h
+const NASI_CHART_URL = 'https://afx.kwayisi.org/chart/nse';
+
+/** Real daily NASI closes, ascending. Returns [] if unavailable. */
+async function getNasiHistory() {
+  if (NASI_HISTORY_CACHE.data && Date.now() - NASI_HISTORY_CACHE.at < NASI_HISTORY_TTL_MS) {
+    return NASI_HISTORY_CACHE.data;
+  }
+  try {
+    const { data: body } = await axios.get(NASI_CHART_URL, {
+      timeout: 10000,
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      transformResponse: [(b) => b],
+    });
+    const html = typeof body === 'string' ? body : '';
+    // Highcharts StockChart config: data:[[d("2016-09-30"),136.75],...]
+    const re = /\[\s*d\(\s*"([^"]+)"\s*\)\s*,\s*(-?[\d.]+(?:[eE][+-]?\d+)?)\s*\]/g;
+    const out = [];
+    let m;
+    while ((m = re.exec(html)) !== null) {
+      const t = Date.parse(m[1]);
+      const c = parseFloat(m[2]);
+      if (isFinite(t) && isFinite(c)) out.push({ t, c });
+    }
+    if (out.length > 1) {
+      NASI_HISTORY_CACHE.data = out;
+      NASI_HISTORY_CACHE.at = Date.now();
+    }
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Slice an ascending [{t, c}] series to the window ending `cutoffDayStart`, and
+ * keep the last bar from before it as the baseline. Day boundaries matter: NASI
+ * bars are stamped at UTC midnight and S&P bars at 13:30 UTC, so a rolling
+ * "now - 1 day" cutoff can exclude today's bar entirely and leave a 1D window
+ * with nothing to measure against (which silently reported a 5-day move as a
+ * 1-day one).
+ */
+function windowSeries(series, cutoffDayStart) {
+  if (!series || series.length === 0) return [];
+  const inWindow = series.filter(p => p.t >= cutoffDayStart);
+  const prior = series[series.findIndex(p => p.t >= cutoffDayStart) - 1];
+  return prior ? [prior, ...inWindow] : inWindow;
+}
+
 // ── Portfolio Performance (must be BEFORE :userId param route) ──
 app.get('/api/portfolio/performance', async (req, res) => {
   try {
@@ -5023,24 +5083,26 @@ app.get('/api/portfolio/performance', async (req, res) => {
       ? parseFloat(accountRows[0].initial_capital) + parseFloat(accountRows[0].initial_capital_usd) * fxRate
       : 1000000;
 
-    // Real S&P 500 daily closes over the same window as the portfolio series.
-    const spHistoryAll = await getSp500History(days).catch(() => []);
-    // Yahoo's range buckets are coarser than our window (a 1D window maps to
-    // "5d"), so trim to the actual cutoff rather than trusting the bucket. The
-    // last bar from BEFORE the cutoff is kept as the baseline - without it a 1D
-    // window holds a single bar and there is nothing to measure against, which
-    // would otherwise report a 5-day move as a 1-day one.
-    const cutoffMs = cutoff.getTime();
-    const spWindow = spHistoryAll.filter(p => p.t >= cutoffMs);
-    const priorBar = spHistoryAll[spHistoryAll.findIndex(p => p.t >= cutoffMs) - 1];
-    const spSeries = priorBar ? [priorBar, ...spWindow] : spWindow;
+    // Real benchmark closes over the same window as the portfolio series.
+    // Windows are cut on UTC day boundaries (see windowSeries) and each keeps
+    // its last pre-window bar as the baseline.
+    const cutoffDayStart = Date.UTC(
+      cutoff.getUTCFullYear(), cutoff.getUTCMonth(), cutoff.getUTCDate()
+    );
+    const spSeries = windowSeries(await getSp500History(days).catch(() => []), cutoffDayStart);
+    const nasiSeries = windowSeries(await getNasiHistory().catch(() => []), cutoffDayStart);
+
     const spHasReal = spSeries.length >= 2;
+    const nasiHasReal = nasiSeries.length >= 2;
     const spFirst = spHasReal ? spSeries[0].c : 0;
+    const nasiFirst = nasiHasReal ? nasiSeries[0].c : 0;
     const spPctOf = (close) => (spFirst > 0 ? ((close - spFirst) / spFirst) * 100 : 0);
+    const nasiPctOf = (close) => (nasiFirst > 0 ? ((close - nasiFirst) / nasiFirst) * 100 : 0);
 
     const hasHistory = snapshots.length > 0;
     const numPoints = hasHistory ? Math.max(1, snapshots.length) : 12;
     const spSamples = spHasReal ? sampleCloses(spSeries, numPoints) : [];
+    const nasiSamples = nasiHasReal ? sampleCloses(nasiSeries, numPoints) : [];
     const data = [];
 
     if (hasHistory) {
@@ -5050,13 +5112,16 @@ app.get('/api/portfolio/performance', async (req, res) => {
         const snap = snapshots[i] || snapshots[snapshots.length - 1];
         const portfolioVal = parseFloat(snap.total_value);
         const spClose = spSamples[i];
+        const nasiClose = nasiSamples[i];
 
         data.push({
           month: formatDateLabel(new Date(snap.snapshot_date), days),
           portfolio: firstValue > 0 ? ((portfolioVal - firstValue) / firstValue) * 100 : 0,
-          nse20: null, // no real historical NSE 20 series available
+          nasi: nasiClose != null ? nasiPctOf(nasiClose) : null,
+          nse20: null, // no obtainable historical NSE 20 series
           sp500: spClose != null ? spPctOf(spClose) : null,
           portfolioRaw: portfolioVal,
+          nasiRaw: nasiClose != null ? nasiClose : null,
           nse20Raw: null,
           sp500Raw: spClose != null ? spClose : null,
         });
@@ -5064,14 +5129,17 @@ app.get('/api/portfolio/performance', async (req, res) => {
     } else {
       for (let i = 0; i < numPoints; i++) {
         const spClose = spSamples[i];
+        const nasiClose = nasiSamples[i];
         const d = new Date(Date.now() - (numPoints - i) * (days / numPoints) * 24 * 60 * 60 * 1000);
 
         data.push({
           month: formatDateLabel(d, days),
           portfolio: 0,
+          nasi: nasiClose != null ? nasiPctOf(nasiClose) : null,
           nse20: null,
           sp500: spClose != null ? spPctOf(spClose) : null,
           portfolioRaw: 0,
+          nasiRaw: nasiClose != null ? nasiClose : null,
           nse20Raw: null,
           sp500Raw: spClose != null ? spClose : null,
         });

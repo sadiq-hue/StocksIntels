@@ -106,11 +106,15 @@ const indices = [
 interface PerformanceDataPoint {
   month: string;
   portfolio: number;
-  nse20: number;
-  sp500: number;
+  // NSE All Share Index — the NSE-side benchmark. Nullable: the endpoint sends
+  // null for any benchmark it has no real daily history for.
+  nasi: number | null;
+  nse20: number | null;
+  sp500: number | null;
   portfolioRaw: number;
-  nse20Raw: number;
-  sp500Raw: number;
+  nasiRaw: number | null;
+  nse20Raw: number | null;
+  sp500Raw: number | null;
 }
 
 interface PerformanceResponse {
@@ -560,15 +564,17 @@ export function DashboardPage() {
     const numOrNull = (v: any) => (typeof v === "number" && isFinite(v) ? v : null);
     const d = Array.isArray(perfData) ? perfData.filter(p => p && typeof p === "object") : [];
     const last: any = d.length > 0 ? d[d.length - 1] : null;
-    // /portfolio/performance returns cumulative percent returns measured from the
-    // start of the window, so the LAST point is the period return. This used to
-    // recompute it as (last - first) / first, but the first point of that column
-    // is 0 by construction, so the division short-circuited both benchmarks to
-    // 0.0% and alpha collapsed to the raw portfolio return - which is what
-    // rendered as "vs Benchmarks -0.1% / NSE 20 +0.0% / S&P 500 +0.0%".
-    // The endpoint now sends null for any benchmark it has no real history for
-    // (the NSE 20), so treat null as "unavailable" rather than 0%.
-    const nseReturn = last ? numOrNull(last.nse20) : null;
+    // The endpoint returns cumulative percent returns measured from the start of
+    // the window, so the LAST point is the period return. This used to recompute
+    // it as (last - first) / first, but the first point of that column is 0 by
+    // construction, so the division short-circuited both benchmarks to 0.0% and
+    // alpha collapsed to the raw portfolio return - which is what rendered as
+    // "vs Benchmarks -0.1% / NSE 20 +0.0% / S&P 500 +0.0%".
+    // The NSE side is the NSE All Share Index (NASI) rather than the NSE 20: no
+    // NSE 20 history is obtainable, and NASI covers all NSE listings.
+    // The endpoint sends null for any benchmark it has no real history for, so
+    // treat null as "unavailable" rather than 0%.
+    const nseReturn = last ? numOrNull(last.nasi) : null;
     const spReturn = last ? numOrNull(last.sp500) : null;
     const portRet = numOrNull(perfMeta.totalReturnPercent) ?? 0;
     const totalVal = enhancedTotals.nseValue + enhancedTotals.globalValue;
@@ -733,9 +739,8 @@ export function DashboardPage() {
         </Card>
 
         {(() => {
-          // Only mention benchmarks we actually have real history for. The NSE 20
-          // has no free historical feed, so it is reported as unavailable instead
-          // of being shown as a plausible-looking 0.0%.
+          // Only mention benchmarks we actually have real history for, so the tile
+          // can never print a plausible-looking 0.0% placeholder.
           const sign = (v: number) => (v >= 0 ? "+" : "");
           const parts: string[] = [];
           if (perfMeta.hasHistory) {
@@ -745,9 +750,7 @@ export function DashboardPage() {
             parts.push(`S&P 500 ${sign(benchmarkMetrics.spReturn!)}${benchmarkMetrics.spReturn!.toFixed(1)}%`);
           }
           if (benchmarkMetrics.nseReturn != null) {
-            parts.push(`NSE 20 ${sign(benchmarkMetrics.nseReturn!)}${benchmarkMetrics.nseReturn!.toFixed(1)}%`);
-          } else if (benchmarkMetrics.hasBenchmark) {
-            parts.push("NSE 20 n/a");
+            parts.push(`NSE All Share ${sign(benchmarkMetrics.nseReturn!)}${benchmarkMetrics.nseReturn!.toFixed(1)}%`);
           }
           const sub = parts.join(" · ");
           const hasAlpha = perfMeta.hasHistory && benchmarkMetrics.alpha != null;
@@ -779,7 +782,7 @@ export function DashboardPage() {
               <span className="font-semibold text-amber-800 dark:text-amber-200">Beginner Mode Active.</span>{' '}
               <strong>Portfolio Value</strong> = total worth of your investments. <strong>NSE / Global</strong> = which market your stocks trade on.
               <strong> Holdings</strong> = number of different stocks you own. <strong>Market Intelligence</strong> = automated buy/sell suggestions.
-              <strong>vs Benchmarks</strong> = how your portfolio compares to market indexes like the NSE 20 or S&P 500.
+              <strong>vs Benchmarks</strong> = how your portfolio compares to market indexes like the NSE All Share index or the S&amp;P 500.
             </div>
           </div>
         </Card>
@@ -888,7 +891,7 @@ export function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Scale className="size-4 text-[#0D7490]" />
-              <h3 className="text-sm font-semibold text-foreground">Portfolio vs NSE 20 &amp; S&P 500</h3>
+              <h3 className="text-sm font-semibold text-foreground">Portfolio vs NSE All Share &amp; S&amp;P 500</h3>
             </div>
             <div className="flex flex-wrap items-center gap-1 bg-muted rounded-lg p-0.5">
               {timeRanges.map((range) => (
@@ -935,7 +938,7 @@ export function DashboardPage() {
                   <Area type="monotone" dataKey="portfolio" name="Portfolio" stroke="#10B981" strokeWidth={2} fill="url(#portfolioGrad)" dot={{ fill: '#10B981', r: 4 }} />
                   <Area type="monotone" dataKey="sp500" name="S&P 500" stroke="#6366F1" strokeWidth={2} strokeDasharray="5 5" fill="url(#spGrad)" dot={{ fill: '#6366F1', r: 3 }} />
                   {benchmarkMetrics.nseReturn != null && (
-                    <Area type="monotone" dataKey="nse20" name="NSE 20" stroke="#6B7280" strokeWidth={2} strokeDasharray="5 5" fill="url(#nseGrad)" dot={{ fill: '#6B7280', r: 3 }} />
+                    <Area type="monotone" dataKey="nasi" name="NSE All Share" stroke="#6B7280" strokeWidth={2} strokeDasharray="5 5" fill="url(#nseGrad)" dot={{ fill: '#6B7280', r: 3 }} />
                   )}
                 </AreaChart>
               </ResponsiveContainer>
@@ -950,7 +953,7 @@ export function DashboardPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`size-3 rounded-full ${benchmarkMetrics.nseReturn != null ? "bg-muted-foreground/40" : "bg-muted-foreground/20"}`}></div>
-                  <span className="text-xs text-muted-foreground">NSE 20 {benchmarkMetrics.nseReturn != null ? `${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}%` : 'N/A'}</span>
+                  <span className="text-xs text-muted-foreground">NSE All Share {benchmarkMetrics.nseReturn != null ? `${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}%` : 'N/A'}</span>
                 </div>
               </div>
             </>
