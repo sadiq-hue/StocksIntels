@@ -263,6 +263,7 @@ export function ComparePage() {
   const [metric, setMetric] = useState<string>("totalReturn");
   const [metricOpen, setMetricOpen] = useState(false);
   const [fin, setFin] = useState<Record<string, any>>({});
+  const [finLoading, setFinLoading] = useState(false);
   const [chartData, setChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -313,6 +314,7 @@ export function ComparePage() {
     const needed = data.map((s) => s.ticker);
     if (needed.every((t) => fin[t])) return;
     let cancelled = false;
+    setFinLoading(true);
     Promise.all(
       needed.map(async (t) => {
         if (fin[t]) return [t, fin[t]] as const;
@@ -322,10 +324,11 @@ export function ComparePage() {
           return [t, j?.data ?? null] as const;
         } catch { return [t, null] as const; }
       })
-    ).then((entries) => { if (!cancelled) setFin((f) => ({ ...f, ...Object.fromEntries(entries) })); });
+    ).then((entries) => { if (!cancelled) setFin((f) => ({ ...f, ...Object.fromEntries(entries) })); })
+      .finally(() => { if (!cancelled) setFinLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metric, selKey]);
+  }, [metric, selKey, data]);
 
   // Chart series: price-derived (daily bars) or fundamental (dated history points),
   // each normalized to % change from the window start (or $10K for growth).
@@ -754,8 +757,11 @@ export function ComparePage() {
                 </div>
               </div>
               <div className="h-64">
-                {chartLoading ? (
-                  <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="size-4 animate-spin" /></div>
+                {chartLoading || (metricDef.source !== "price" && finLoading) ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    <span className="text-xs">Loading {metricDef.label.toLowerCase()} history…</span>
+                  </div>
                 ) : chartData.length > 0 && allSeriesPlottable ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 5, right: 12, bottom: 0, left: -12 }}>
