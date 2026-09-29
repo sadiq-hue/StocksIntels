@@ -7580,9 +7580,18 @@ async function _loadIpoHub() {
     }
   } catch (e) { console.error('[IPOHub] Alpha Vantage fetch failed:', e.message); }
 
-  // Merge + SEC-enrich US/global names (concurrency-limited).
+  // Global IPOs from SEC filings (Alpha Vantage's free tier is rate-limited and
+  // often returns a truncated error, so SEC is the primary global source).
+  let secIpos = [];
+  try {
+    const { getSecIpoPipeline } = require('./ipoSecService');
+    const { items } = await getSecIpoPipeline();
+    secIpos = items || [];
+  } catch (e) { console.error('[IPOHub] SEC pipeline failed:', e.message); }
+
+  // Merge NSE + SEC (primary) + Alpha Vantage (supplement).
   const byTicker = new Map();
-  for (const i of [...nseIpos, ...avBody.ipos]) {
+  for (const i of [...nseIpos, ...secIpos, ...avBody.ipos]) {
     const key = (i.ticker || i.company_name).toUpperCase();
     if (!byTicker.has(key)) byTicker.set(key, i);
     else {
@@ -7590,6 +7599,8 @@ async function _loadIpoHub() {
       if (!ex.offer_price && i.offer_price) ex.offer_price = i.offer_price;
       if (!ex.description && i.description) ex.description = i.description;
       if (!ex.listing_date && i.listing_date) ex.listing_date = i.listing_date;
+      // Prefer the richer description/source if the SEC entry won the slot.
+      if (i.source === 'sec' && ex.source !== 'sec') ex.source = 'sec';
     }
   }
   const merged = [...byTicker.values()];

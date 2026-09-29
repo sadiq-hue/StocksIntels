@@ -261,4 +261,42 @@ async function getRecentIpoFilings() {
   return data;
 }
 
-module.exports = { getLockupCalendar, getRecentIpoFilings };
+// Global IPO pipeline from SEC filings (replaces the Alpha Vantage free-tier
+// calendar, which is heavily rate-limited and often returns a truncated error).
+// Final prospectuses are priced/listed IPOs; S-1 registrations are upcoming.
+const _pipelineCache = { data: null, ts: 0 };
+async function getSecIpoPipeline() {
+  if (_pipelineCache.data && Date.now() - _pipelineCache.ts < CACHE_TTL) return _pipelineCache.data;
+  const { filings } = await getRecentIpoFilings();
+  const today = new Date().toISOString().slice(0, 10);
+  const items = filings
+    .filter((f) => f.ticker) // SPACs with no ticker yet are skipped
+    .map((f) => ({
+      id: 'sec-' + (f.cik || f.accession),
+      company_name: f.name,
+      ticker: f.ticker,
+      exchange: 'US',
+      market: 'GLOBAL',
+      // A final prospectus whose filing date is today is pricing/listing now.
+      status: f.stage === 'Final (424B4)' ? (f.prospectusDate === today ? 'current' : 'listed') : 'upcoming',
+      listing_date: f.prospectusDate,
+      offer_price: null,
+      current_price: null,
+      price_change_pct: null,
+      price_change: null,
+      oversubscription_pct: null,
+      description: f.stage === 'Final (424B4)'
+        ? 'Final IPO prospectus filed with the SEC.'
+        : 'Registration statement (S-1) filed — IPO registration in progress.',
+      sector: null,
+      source: 'sec',
+      form: f.form,
+      stage: f.stage,
+      accession: f.accession,
+    }));
+  const data = { items, updatedAt: Date.now() };
+  _pipelineCache.data = data; _pipelineCache.ts = Date.now();
+  return data;
+}
+
+module.exports = { getLockupCalendar, getRecentIpoFilings, getSecIpoPipeline };
