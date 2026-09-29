@@ -11,9 +11,10 @@ const mystocks = require('./mystocksScraper');
 console.log('[marketService] mystocks.co.ke scraper auto-refresh DISABLED — using Partner API for NSE quotes');
 
 
-// NSE volume data from afx.kwayisi.org
-const nseAfx = require('./nseAfxScraper');
-setTimeout(() => nseAfx.fetchNseQuotes().catch(() => {}), 2000);
+// NSE volume previously came from afx.kwayisi.org, which is unreachable from
+// the production VPS, so the module-level warm-up that used to run here only
+// ever logged a 15s timeout. Volume now comes from the mystocks.africa Partner
+// API history - see enrichVolumeFromMyStocks.
 
 const quoteCache = new Map();
 const MAX_QUOTE_AGE_MS = 5 * 60 * 1000;
@@ -356,19 +357,37 @@ function getCompanyName(symbol) {
   return names[ticker] || KENYAN_STOCKS[ticker] || ticker;
 }
 
-async function enrichVolumeFromAfx(quote, symbol) {
+// Fill in a missing volume from the mystocks.africa Partner API history.
+//
+// This used to call AFX (afx.kwayisi.org), but that host is unreachable from the
+// production VPS: DNS resolves and Yahoo/kenyanstocks work from the same
+// container, but TCP 443 to AFX times out. The logs were full of
+// "[AFX] Scrape attempt 1/1 failed: timeout of 15000ms exceeded", so this
+// enrichment had been silently dead in production. MyStocks history is
+// first-party for us, is already required elsewhere in this file, and carries a
+// per-candle volume.
+async function enrichVolumeFromMyStocks(quote, symbol) {
   if (!quote || !symbol.startsWith('NSE:')) return;
+  if (Number(quote.volume) > 0) return; // already have a volume
+  if (!process.env.MYSTOCKS_AFRICA_API_KEY) return;
   try {
-    await nseAfx.fetchNseQuotes();
-    const afx = nseAfx.getQuoteForSymbol(symbol);
-    if (afx && afx.volume) quote.volume = afx.volume;
-  } catch {}
+    const msa = require('./mystocksAfricaApi');
+    const candles = await msa.fetchHistorical(symbol, '5d');
+    if (Array.isArray(candles) && candles.length > 0) {
+      const latest = candles[candles.length - 1];
+      const vol = Number(latest.volume);
+      if (isFinite(vol) && vol > 0) {
+        quote.volume = vol;
+        quote.volumeProvider = 'mystocksAfrica';
+      }
+    }
+  } catch (e) { /* best-effort */ }
 }
 
 // Resolve an NSE quote by trying multiple sources in order:
 //   mystocks.africa Partner API (authoritative, delayed) -> mystocks.co.ke scraper
-//   -> AFX (afx.kwayisi.org, free) -> Apify (needs key)
-// Lazy-requires each module so a missing/optional scraper never crashes boot.
+//   -> Apify (needs key). AFX was removed: it is unreachable from the production
+//      host, so it could only ever burn a 15s timeout per call.
 async function getNseBaseQuote(symbol) {
   const cleanTicker = symbol.replace('NSE:', '').toUpperCase();
 
@@ -460,16 +479,6 @@ async function getNseBaseQuote(symbol) {
     const enrichTimeout = 10000;
     const cleanTicker = symbol.replace('NSE:', '');
 
-    const afxResult = (async () => {
-      try {
-        const nseAfxMod = require('./nseAfxScraper');
-        await Promise.race([nseAfxMod.fetchNseQuotes(), new Promise((_, r) => setTimeout(() => r(new Error('timeout')), enrichTimeout))]);
-        const afxQ = nseAfxMod.getQuoteForSymbol(symbol);
-        if (afxQ && Number(afxQ.price) > 0 && afxQ.previousClose && afxQ.previousClose !== afxQ.price) return { source: 'afx', prev: afxQ.previousClose };
-      } catch (e) { /* best-effort */ }
-      return null;
-    })();
-
     const histResult = (async () => {
       try {
         const msaHist = require('./mystocksAfricaApi');
@@ -491,7 +500,7 @@ async function getNseBaseQuote(symbol) {
       return null;
     })();
 
-    const winner = await Promise.any([afxResult, histResult, msResult].map(p => p.then(r => r ? Promise.resolve(r) : Promise.reject('no data')))).catch(() => null);
+    const winner = await Promise.any([histResult, msResult].map(p => p.then(r => r ? Promise.resolve(r) : Promise.reject('no data')))).catch(() => null);
     if (winner) {
       const realPrev = winner.prev;
       const derivedChange = msaQuote.price - realPrev;
@@ -503,7 +512,7 @@ async function getNseBaseQuote(symbol) {
       msaQuote.provider = `mystocksAfrica+${winner.source}`;
       console.log(`[NSE enrich] ${symbol}: enriched via ${winner.source}, prevClose=${realPrev}, change=${derivedChange.toFixed(2)}, pct=${derivedPct.toFixed(2)}%`);
     } else {
-      console.warn(`[NSE enrich] ${symbol}: all 3 enrichment sources failed`);
+      console.warn(`[NSE enrich] ${symbol}: all enrichment sources failed`);
     }
   }
 
@@ -536,31 +545,7 @@ async function getNseBaseQuote(symbol) {
     };
   }
 
-  // 2) AFX (afx.kwayisi.org) — free fallback for price/volume (only if mystocks lacked price)
-  let afx = null;
-  try {
-    const nseAfxMod = require('./nseAfxScraper');
-    await nseAfxMod.fetchNseQuotes();
-    afx = nseAfxMod.getQuoteForSymbol(symbol);
-  } catch (e) { /* afx optional */ }
-
-  if (afx && Number(afx.price) > 0) {
-    return {
-      price: afx.price,
-      change: afx.change || 0,
-      changePercent: afx.changePercent || 0,
-      volume: afx.volume || 0,
-      dayHigh: afx.dayHigh || afx.price,
-      dayLow: afx.dayLow || afx.price,
-      previousClose: afx.previousClose || afx.price,
-      company_name: afx.name || afx.ticker || symbol,
-      timestamp: Math.floor(Date.now() / 1000),
-      lastUpdated: new Date().toISOString(),
-      provider: 'afx',
-    };
-  }
-
-  // 3) Apify (requires APIFY_API_KEY) — last-resort price source
+  // 2) Apify (requires APIFY_API_KEY) — last-resort price source
   if (process.env.APIFY_API_KEY) {
     try {
       const apifySvc = require('./apifyNseService');
@@ -638,12 +623,12 @@ async function getStockQuote(symbol) {
 
   let quote = null;
 
-  // For NSE stocks, resolve a quote from mystocks -> AFX -> Apify (price/marketCap)
+  // For NSE stocks, resolve a quote from mystocks -> Apify (price/marketCap)
   if (symbol.startsWith('NSE:')) {
     const nseQuote = await getNseBaseQuote(symbol);
     if (nseQuote) {
       quote = nseQuote;
-      await enrichVolumeFromAfx(quote, symbol);
+      await enrichVolumeFromMyStocks(quote, symbol);
     }
   }
 
@@ -685,8 +670,8 @@ async function fetchQuoteForSymbol(s) {
       const nseQuote = await withTimeout(getNseBaseQuote(s), 12000, s);
       if (nseQuote) {
         quote = nseQuote;
-        try { await withTimeout(enrichVolumeFromAfx(quote, s), 8000, s + ':afx'); }
-        catch (e) { /* afx volume is optional */ }
+        try { await withTimeout(enrichVolumeFromMyStocks(quote, s), 8000, s + ':mystocks'); }
+        catch (e) { /* volume is optional */ }
       }
     } catch (e) {
       console.warn(`[fetchQuoteForSymbol] NSE ${s} failed: ${e.message}`);

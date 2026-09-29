@@ -106,13 +106,11 @@ const indices = [
 interface PerformanceDataPoint {
   month: string;
   portfolio: number;
-  // NSE All Share Index — the NSE-side benchmark. Nullable: the endpoint sends
-  // null for any benchmark it has no real daily history for.
-  nasi: number | null;
+  // NSE 20 — the NSE-side benchmark, accumulated server-side from the live
+  // nse.co.ke index feed. Nullable until enough daily closes exist.
   nse20: number | null;
   sp500: number | null;
   portfolioRaw: number;
-  nasiRaw: number | null;
   nse20Raw: number | null;
   sp500Raw: number | null;
 }
@@ -125,6 +123,9 @@ interface PerformanceResponse {
   totalReturn: number;
   totalReturnPercent: number;
   fxRate: number;
+  // Earliest accumulated NSE 20 close (YYYY-MM-DD) or null when none yet.
+  nseBenchmarkSince: string | null;
+  nseBenchmarkPoints: number;
 }
 
 interface PerformanceMeta {
@@ -132,6 +133,7 @@ interface PerformanceMeta {
   totalReturnPercent: number;
   currentValue: number;
   hasHistory: boolean;
+  nseBenchmarkSince: string | null;
 }
 
 interface MarketPulseData {
@@ -159,7 +161,7 @@ export function DashboardPage() {
   const [selectedTimeRange, setSelectedTimeRange] = useState("6M");
   const [perfData, setPerfData] = useState<PerformanceDataPoint[]>([]);
   const [perfLoading, setPerfLoading] = useState(false);
-  const [perfMeta, setPerfMeta] = useState({ totalReturn: 0, totalReturnPercent: 0, currentValue: 0, hasHistory: false });
+  const [perfMeta, setPerfMeta] = useState({ totalReturn: 0, totalReturnPercent: 0, currentValue: 0, hasHistory: false, nseBenchmarkSince: null as string | null });
   const [pulse, setPulse] = useState<MarketPulseData | null>(null);
   const [movers, setMovers] = useState<{ gainers: any[]; losers: any[] }>({ gainers: [], losers: [] });
   const [activeStocks, setActiveStocks] = useState<any[]>([]);
@@ -200,6 +202,7 @@ export function DashboardPage() {
           totalReturnPercent: typeof json.totalReturnPercent === "number" ? json.totalReturnPercent : 0,
           currentValue: json.currentValue,
           hasHistory: Boolean(json.hasHistory),
+          nseBenchmarkSince: json.nseBenchmarkSince ?? null,
         });
       }
     } catch {} finally {
@@ -570,11 +573,9 @@ export function DashboardPage() {
     // construction, so the division short-circuited both benchmarks to 0.0% and
     // alpha collapsed to the raw portfolio return - which is what rendered as
     // "vs Benchmarks -0.1% / NSE 20 +0.0% / S&P 500 +0.0%".
-    // The NSE side is the NSE All Share Index (NASI) rather than the NSE 20: no
-    // NSE 20 history is obtainable, and NASI covers all NSE listings.
     // The endpoint sends null for any benchmark it has no real history for, so
     // treat null as "unavailable" rather than 0%.
-    const nseReturn = last ? numOrNull(last.nasi) : null;
+    const nseReturn = last ? numOrNull(last.nse20) : null;
     const spReturn = last ? numOrNull(last.sp500) : null;
     const portRet = numOrNull(perfMeta.totalReturnPercent) ?? 0;
     const totalVal = enhancedTotals.nseValue + enhancedTotals.globalValue;
@@ -750,12 +751,19 @@ export function DashboardPage() {
             parts.push(`S&P 500 ${sign(benchmarkMetrics.spReturn!)}${benchmarkMetrics.spReturn!.toFixed(1)}%`);
           }
           if (benchmarkMetrics.nseReturn != null) {
-            parts.push(`NSE All Share ${sign(benchmarkMetrics.nseReturn!)}${benchmarkMetrics.nseReturn!.toFixed(1)}%`);
+            parts.push(`NSE 20 ${sign(benchmarkMetrics.nseReturn!)}${benchmarkMetrics.nseReturn!.toFixed(1)}%`);
           }
-          const sub = parts.join(" · ");
+          let sub = parts.join(" · ");
+          // The NSE 20 history is accumulated server-side (no free NSE history
+          // feed is reachable), so until enough daily closes exist, say when it
+          // started collecting rather than implying a 0.0% return.
+          if (benchmarkMetrics.nseReturn == null && perfMeta.nseBenchmarkSince) {
+            sub = (sub ? sub + " · " : "") + `NSE 20 collecting since ${perfMeta.nseBenchmarkSince}`;
+          }
           const hasAlpha = perfMeta.hasHistory && benchmarkMetrics.alpha != null;
           return [
-          { icon: Banknote, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400", label: "NSE Portfolio", value: fmtKes(enhancedTotals.nseValue), sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },          { icon: Globe2, color: "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400", label: "Global Portfolio", value: fmtUsd(enhancedTotals.globalValue), sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${enhancedTotals.globalCount} pos)`, valColor: "text-foreground" },
+          { icon: Banknote, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400", label: "NSE Portfolio", value: fmtKes(enhancedTotals.nseValue), sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
+          { icon: Globe2, color: "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400", label: "Global Portfolio", value: fmtUsd(enhancedTotals.globalValue), sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${enhancedTotals.globalCount} pos)`, valColor: "text-foreground" },
           { icon: PieChart, color: "bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} NSE · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
           { icon: Brain, color: "bg-yellow-100 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400", label: "Market Intelligence", value: `${signalSummary.total}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: "text-foreground" },
           { icon: Scale, color: "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400", label: "vs Benchmarks", value: hasAlpha ? `${sign(benchmarkMetrics.alpha!)}${benchmarkMetrics.alpha!.toFixed(1)}%` : "—", sub: sub || "No benchmark history yet", valColor: hasAlpha ? (benchmarkMetrics.alpha! >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
@@ -782,7 +790,7 @@ export function DashboardPage() {
               <span className="font-semibold text-amber-800 dark:text-amber-200">Beginner Mode Active.</span>{' '}
               <strong>Portfolio Value</strong> = total worth of your investments. <strong>NSE / Global</strong> = which market your stocks trade on.
               <strong> Holdings</strong> = number of different stocks you own. <strong>Market Intelligence</strong> = automated buy/sell suggestions.
-              <strong>vs Benchmarks</strong> = how your portfolio compares to market indexes like the NSE All Share index or the S&amp;P 500.
+              <strong>vs Benchmarks</strong> = how your portfolio compares to market indexes like the NSE 20 or the S&amp;P 500.
             </div>
           </div>
         </Card>
@@ -891,7 +899,7 @@ export function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Scale className="size-4 text-[#0D7490]" />
-              <h3 className="text-sm font-semibold text-foreground">Portfolio vs NSE All Share &amp; S&amp;P 500</h3>
+              <h3 className="text-sm font-semibold text-foreground">Portfolio vs NSE 20 &amp; S&amp;P 500</h3>
             </div>
             <div className="flex flex-wrap items-center gap-1 bg-muted rounded-lg p-0.5">
               {timeRanges.map((range) => (
@@ -938,7 +946,7 @@ export function DashboardPage() {
                   <Area type="monotone" dataKey="portfolio" name="Portfolio" stroke="#10B981" strokeWidth={2} fill="url(#portfolioGrad)" dot={{ fill: '#10B981', r: 4 }} />
                   <Area type="monotone" dataKey="sp500" name="S&P 500" stroke="#6366F1" strokeWidth={2} strokeDasharray="5 5" fill="url(#spGrad)" dot={{ fill: '#6366F1', r: 3 }} />
                   {benchmarkMetrics.nseReturn != null && (
-                    <Area type="monotone" dataKey="nasi" name="NSE All Share" stroke="#6B7280" strokeWidth={2} strokeDasharray="5 5" fill="url(#nseGrad)" dot={{ fill: '#6B7280', r: 3 }} />
+                    <Area type="monotone" dataKey="nse20" name="NSE 20" stroke="#6B7280" strokeWidth={2} strokeDasharray="5 5" fill="url(#nseGrad)" dot={{ fill: '#6B7280', r: 3 }} />
                   )}
                 </AreaChart>
               </ResponsiveContainer>
@@ -953,7 +961,7 @@ export function DashboardPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`size-3 rounded-full ${benchmarkMetrics.nseReturn != null ? "bg-muted-foreground/40" : "bg-muted-foreground/20"}`}></div>
-                  <span className="text-xs text-muted-foreground">NSE All Share {benchmarkMetrics.nseReturn != null ? `${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}%` : 'N/A'}</span>
+                  <span className="text-xs text-muted-foreground">NSE 20 {benchmarkMetrics.nseReturn != null ? `${benchmarkMetrics.nseReturn >= 0 ? '+' : ''}${benchmarkMetrics.nseReturn.toFixed(1)}%` : perfMeta.nseBenchmarkSince ? `collecting since ${perfMeta.nseBenchmarkSince}` : 'N/A'}</span>
                 </div>
               </div>
             </>
