@@ -2383,14 +2383,16 @@ async function getForwardTestStats() {
               o.recorded_at, o.resolved_at, o.signal_generated_at,
               h.confidence
        FROM signal_outcomes o
-       LEFT JOIN LATERAL (
-         SELECT h.confidence FROM signal_history h
-         WHERE h.ticker = o.ticker
-           AND h.generated_at BETWEEN COALESCE(o.signal_generated_at, o.recorded_at) - interval '5 minutes'
-                                 AND COALESCE(o.signal_generated_at, o.recorded_at) + interval '5 minutes'
-         ORDER BY ABS(EXTRACT(EPOCH FROM (h.generated_at - COALESCE(o.signal_generated_at, o.recorded_at))))
-         LIMIT 1
-       ) h ON true
+        LEFT JOIN LATERAL (
+          SELECT h.confidence FROM signal_history h
+          WHERE h.ticker = o.ticker
+            AND h.generated_at BETWEEN COALESCE(o.signal_generated_at, o.recorded_at) - interval '30 minutes'
+                                  AND COALESCE(o.signal_generated_at, o.recorded_at) + interval '30 minutes'
+          -- nearest cycle wins, so widening the window cannot pull in a
+          -- neighbouring cycle's confidence when one is close by
+          ORDER BY ABS(EXTRACT(EPOCH FROM (h.generated_at - COALESCE(o.signal_generated_at, o.recorded_at))))
+          LIMIT 1
+        ) h ON true
        WHERE o.result IS NOT NULL AND o.source = 'live'
          AND COALESCE(o.signal_generated_at, o.recorded_at) > NOW() - $1::interval
        ORDER BY COALESCE(o.resolved_at, o.recorded_at) DESC`,
@@ -2409,7 +2411,17 @@ async function getForwardTestStats() {
   const log = [];
 
   const bucketOf = (hours) => hours <= 24 ? '1d' : hours <= 360 ? '15d' : hours <= 720 ? '30d' : '60d';
-  const confOf = (c) => c == null ? 'unknown' : c >= 80 ? 'high' : c >= 60 ? 'med' : 'low';
+  // Confidence bands are calibrated to the engine's ACTUAL output range, not to
+  // textbook labels. Confidence is computed as overallScore minus a score-variance
+  // penalty, so across 5,422 signals in 90 days it lands between 0 and 66 with a
+  // median of 40 (p25 32, p75 50, p90 55, p99 64). The old 80/60 cutoffs were
+  // therefore unreachable: the "high" band rendered 0 of 5,422 rows and 96.8% of
+  // signals collapsed into "low", which made the table look like the engine had no
+  // conviction anywhere. Thresholds follow the observed percentiles so all three
+  // bands are populated and the split is readable.
+  const CONF_HIGH = 55; // ~top 12%
+  const CONF_MED = 40;  // median
+  const confOf = (c) => c == null ? 'unknown' : c >= CONF_HIGH ? 'high' : c >= CONF_MED ? 'med' : 'low';
 
   for (const r of rows) {
     if (r.result !== 'win' && r.result !== 'loss') continue;
