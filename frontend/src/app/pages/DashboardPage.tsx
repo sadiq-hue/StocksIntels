@@ -160,6 +160,7 @@ export function DashboardPage() {
   const [movers, setMovers] = useState<{ gainers: any[]; losers: any[] }>({ gainers: [], losers: [] });
   const [activeStocks, setActiveStocks] = useState<any[]>([]);
   const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
+  const [watchlistQuotes, setWatchlistQuotes] = useState<Record<string, any>>({});
   // localStorage access throws in private mode / sandboxed iframes / non-DOM
   // environments — this initializer runs during render, so guard it (mirrors
   // PortfolioDataContext) or a SecurityError would take down the whole page.
@@ -264,6 +265,42 @@ export function DashboardPage() {
     return () => { cancelled = true; };
   }, [user?.id]);
 
+  // Dedicated live quotes for the watchlist. The movers snapshot only carries
+  // the top-10 by volume, which is effectively all US names, so a watched NSE
+  // stock would otherwise never get a price from it.
+  useEffect(() => {
+    const symbols = watchlistItems
+      .map(i => i?.symbol)
+      .filter(Boolean)
+      .slice(0, 6);
+    if (symbols.length === 0) {
+      setWatchlistQuotes({});
+      return;
+    }
+    let cancelled = false;
+    const fetchQuotes = () => {
+      authFetch(`${API_BASE}/quotes?symbols=${encodeURIComponent(symbols.join(","))}`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(rows => {
+          if (cancelled || !Array.isArray(rows)) return;
+          const next: Record<string, any> = {};
+          for (const q of rows) {
+            if (!q?.symbol) continue;
+            // Register under the raw symbol AND the bare ticker so a "NSE:SCOM"
+            // watchlist row and a "SCOM" lookup resolve to the same quote.
+            const up = String(q.symbol).toUpperCase();
+            next[up] = q;
+            if (up.includes(":")) next[up.split(":")[1]] = q;
+          }
+          setWatchlistQuotes(prev => ({ ...prev, ...next }));
+        })
+        .catch(() => {});
+    };
+    fetchQuotes();
+    const interval = setInterval(fetchQuotes, 60000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [watchlistItems]);
+
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const firstName = user?.full_name?.split(" ")[0] || "Trader";
@@ -299,26 +336,80 @@ export function DashboardPage() {
   }, []);
 
 
+  // Watchlist rows are stored with whatever exchange prefix the user added them
+  // by ("NSE:SCOM"), but live quotes are keyed by the BARE ticker ("SCOM") and
+  // carry the full symbol in `symbol`. A raw lookup therefore always missed and
+  // the row rendered as "NSE:SCOM / KES - / - / Global". Normalise both sides so
+  // the row resolves to a real quote and shows a bare ticker, the right market
+  // badge, and the right currency.
   const watchlist = useMemo(() => {
-    const activeMap = new Map(activeStocks.map(s => [s.ticker, s]));
+    const key = (v: any) => String(v ?? "").toUpperCase();
+    // Register live quotes under both the bare ticker and the full symbol.
+    const activeMap = new Map<string, any>();
+    for (const s of activeStocks) {
+      if (s?.ticker) activeMap.set(key(s.ticker), s);
+      if (s?.symbol) activeMap.set(key(s.symbol), s);
+    }
+    const staticMap = new Map<string, any>();
+    for (const s of allStocks) if (s?.ticker) staticMap.set(key(s.ticker), s);
+
+    // Two live sources disagree on shape: the movers snapshot ships `change` as
+    // a pre-formatted string ("+1.68%"), while /api/quotes ships a numeric
+    // absolute `change` plus `changePercent`. Read a percent out of either.
+    const pctOf = (q: any): number | null => {
+      if (!q) return null;
+      if (typeof q.change === "string") {
+        const p = parseFloat(q.change.replace("%", ""));
+        return isFinite(p) ? p : null;
+      }
+      if (typeof q.changePercent === "number" && isFinite(q.changePercent)) return q.changePercent;
+      if (typeof q.changesPercentage === "number" && isFinite(q.changesPercentage)) return q.changesPercentage;
+      if (typeof q.change === "number" && isFinite(q.change)) return q.change;
+      return null;
+    };
+    const fmtPct = (p: number) => `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`;
+
     const built: any[] = [];
 
     // Show user's watchlist items first (with live data if available)
     if (watchlistItems.length > 0) {
       for (const item of watchlistItems) {
-        const symbol = item?.symbol;
-        if (!symbol) continue;
-        const live = activeMap.get(symbol);
+        const raw = item?.symbol;
+        if (!raw) continue;
+        const upper = key(raw);
+        const isNsePrefixed = upper.startsWith("NSE:");
+        const bare = (isNsePrefixed ? upper.slice(4) : upper).trim();
+        if (!bare) continue;
+
+        // Dedicated /api/quotes result first (covers every watchlist symbol),
+        // then the movers snapshot, then the static universe.
+        const live = watchlistQuotes[upper] || watchlistQuotes[bare] ||
+                     activeMap.get(upper) || activeMap.get(bare);
+        const stat = staticMap.get(bare);
+        const isNse =
+          isNsePrefixed ||
+          stat?.market === "nse" ||
+          String(live?.symbol ?? live?.ticker ?? "").startsWith("NSE:") === true;
+
+        const pct = pctOf(live) ?? (typeof stat?.change === "number" ? stat.change : null);
+        // Static prices are numbers; live prices are numbers too. Keep the
+        // number for formatting rather than a pre-stringified one.
+        const rawPrice = live?.price ?? stat?.price;
+        const price =
+          typeof rawPrice === "number" && isFinite(rawPrice) && rawPrice > 0
+            ? rawPrice.toFixed(2)
+            : rawPrice != null ? String(rawPrice) : "-";
+
         built.push({
-          ticker: symbol,
-          name: item.company_name || live?.name || symbol,
-          price: live?.price || '-',
-          change: live?.change || '-',
-          isPositive: live ? live.isPositive : true,
-          alert: live ? Math.abs(parseFloat(live.change)) > 5 : false,
-          market: live?.symbol?.startsWith('NSE:') ? 'nse' : 'global',
-          currency: live?.currency || 'KES',
-          volume: live?.volume || '0',
+          ticker: bare,
+          name: item.company_name || live?.company_name || live?.name || stat?.name || bare,
+          price,
+          change: pct != null && isFinite(pct) ? fmtPct(pct) : "-",
+          isPositive: live?.isPositive ?? (pct != null ? pct >= 0 : true),
+          alert: pct != null && isFinite(pct) && Math.abs(pct) > 5,
+          market: isNse ? "nse" : "global",
+          currency: live?.currency || stat?.currency || (isNse ? "KES" : "USD"),
+          volume: live?.volume || stat?.volume || "0",
         });
         // The card renders 6 rows; stop here so a 500-symbol watchlist
         // doesn't build a 500-row array on every 30s poll.
@@ -327,10 +418,11 @@ export function DashboardPage() {
     }
 
     // Fill remaining slots with most active stocks (avoid duplicates)
-    if (activeStocks.length > 0) {
+    if (built.length < 6 && activeStocks.length > 0) {
       const seen = new Set(built.map(s => s.ticker));
       for (const s of activeStocks) {
-        if (seen.has(s.ticker)) continue;
+        if (!s?.ticker || seen.has(s.ticker)) continue;
+        const isNse = s.symbol?.startsWith("NSE:") === true;
         built.push({
           ticker: s.ticker,
           name: s.name || s.ticker,
@@ -338,9 +430,9 @@ export function DashboardPage() {
           change: s.change,
           isPositive: s.isPositive,
           alert: Math.abs(parseFloat(s.change)) > 5,
-          market: s.symbol?.startsWith('NSE:') ? 'nse' : 'global',
-          currency: s.currency || 'KES',
-          volume: s.volume || '0',
+          market: isNse ? "nse" : "global",
+          currency: s.currency || (isNse ? "KES" : "USD"),
+          volume: s.volume || "0",
         });
         if (built.length >= 6) break;
       }
@@ -364,7 +456,7 @@ export function DashboardPage() {
     }
 
     return built;
-  }, [activeStocks, watchlistItems]);
+  }, [activeStocks, watchlistItems, watchlistQuotes]);
 
   const nseIndices = indices.filter(i => i.market === "NSE");
   const globalIndices = indices.filter(i => i.market === "Global");
