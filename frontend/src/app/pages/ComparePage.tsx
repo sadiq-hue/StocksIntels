@@ -406,6 +406,24 @@ export function ComparePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, metric, fin]);
 
+  // True only when EVERY selected stock has a plottable series (>=2 points) for
+  // the chosen metric. If any stock is too sparse, we show the current-value
+  // comparison for all of them rather than a partial/empty line chart.
+  const allSeriesPlottable = useMemo(() => {
+    if (metricDef.source === "price") return true;
+    const arrKey = arrKeyFor(metricDef.source);
+    if (data.length === 0) return false;
+    return data.every((s) => {
+      const arr = fin[s.ticker]?.[arrKey] || [];
+      const n = arr.filter((o: any) => {
+        const v = metricDef.get ? metricDef.get(o) : null;
+        return o.date && v != null && isFinite(v) && v !== 0;
+      }).length;
+      return n >= 2;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, metric, fin]);
+
   const hasNse = data.some((s) => s.market === "NSE");
   const visiblePeriods = PERIODS.filter((p) => !hasNse || NSE_OK.has(p.k));
   useEffect(() => {
@@ -738,27 +756,7 @@ export function ComparePage() {
               <div className="h-64">
                 {chartLoading ? (
                   <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="size-4 animate-spin" /></div>
-                ) : chartData.length === 0 ? (
-                  metricLatest ? (
-                    <div className="h-full flex flex-col items-center justify-center gap-3">
-                      <p className="text-xs text-muted-foreground">
-                        {metricDef.label} — not enough history to chart. Current values:
-                      </p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full max-w-md">
-                        {data.map((s) => (
-                          <div key={s.ticker} className="rounded-lg border border-border bg-muted/30 p-2 text-center">
-                            <div className="text-[10px] text-muted-foreground">{s.ticker}</div>
-                            <div className="text-sm font-semibold text-foreground">
-                              {metricLatest[s.ticker] != null ? metricDef.fmt(metricLatest[s.ticker]) : DASH}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No data available for this metric.</div>
-                  )
-                ) : (
+                ) : chartData.length > 0 && allSeriesPlottable ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 5, right: 12, bottom: 0, left: -12 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -771,6 +769,24 @@ export function ComparePage() {
                       ))}
                     </LineChart>
                   </ResponsiveContainer>
+                ) : metricLatest ? (
+                  <div className="h-full flex flex-col items-center justify-center gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      {metricDef.label} — not enough history to chart. Current values:
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full max-w-md">
+                      {data.map((s) => (
+                        <div key={s.ticker} className="rounded-lg border border-border bg-muted/30 p-2 text-center">
+                          <div className="text-[10px] text-muted-foreground">{s.ticker}</div>
+                          <div className="text-sm font-semibold text-foreground">
+                            {metricLatest[s.ticker] != null ? metricDef.fmt(metricLatest[s.ticker]) : DASH}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No data available for this metric.</div>
                 )}
               </div>
             </Card>
