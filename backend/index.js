@@ -5599,13 +5599,26 @@ app.get('/api/financials/status', async (req, res) => {
   }
 });
 
+// Assembled financial reports are slow to build (multi-provider, ~10s cold).
+// The compare page requests these for every selected ticker, so memoize the
+// response per symbol/period/limit to keep repeat lookups and metric switches
+// instant.
+const _financialReportCache = new Map();
+const FINANCIAL_REPORT_CACHE_TTL = 6 * 60 * 60 * 1000;
+
 app.get('/api/financials/:symbol', async (req, res) => {
   try {
     const symbol = req.params.symbol.toUpperCase();
     const period = req.query.period || 'annual';
     const limit = parseInt(req.query.limit, 10) || 4;
     const provider = req.query.provider || null;
+    const key = `${symbol}|${period}|${limit}|${provider || ''}`;
+    const hit = _financialReportCache.get(key);
+    if (hit && Date.now() - hit.ts < FINANCIAL_REPORT_CACHE_TTL) {
+      return res.json(hit.data);
+    }
     const report = await getFinancialReport(symbol, period, limit, provider);
+    _financialReportCache.set(key, { ts: Date.now(), data: report });
     res.json(report);
   } catch (error) {
     console.error('[Financial report]', error.message);

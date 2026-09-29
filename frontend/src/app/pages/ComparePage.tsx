@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, Fragment, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useRef, Fragment, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -264,6 +264,7 @@ export function ComparePage() {
   const [metricOpen, setMetricOpen] = useState(false);
   const [fin, setFin] = useState<Record<string, any>>({});
   const [finLoading, setFinLoading] = useState(false);
+  const finPendingRef = useRef<Set<string>>(new Set());
   const [chartData, setChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -306,18 +307,19 @@ export function ComparePage() {
     return () => { cancelled = true; };
   }, [selKey]);
 
-  // Fetch each ticker's financial history (dated key-metric / statement points)
-  // when a fundamental metric is selected. Price metrics don't need it.
+  // Warm each ticker's financial history in the background as soon as stocks are
+  // selected, so picking a fundamental metric renders instantly instead of
+  // waiting on a cold ~10s request.
   const metricDef = metricById(metric);
   useEffect(() => {
-    if (metricDef.source === "price") return;
     const needed = data.map((s) => s.ticker);
-    if (needed.every((t) => fin[t])) return;
+    if (needed.length === 0 || needed.every((t) => fin[t] || finPendingRef.current.has(t))) return;
     let cancelled = false;
     setFinLoading(true);
     Promise.all(
       needed.map(async (t) => {
         if (fin[t]) return [t, fin[t]] as const;
+        finPendingRef.current.add(t);
         try {
           const r = await authFetch(`${API_URL}/financials/${t}?period=annual&limit=12`);
           const j = r.ok ? await r.json() : null;
@@ -328,7 +330,7 @@ export function ComparePage() {
       .finally(() => { if (!cancelled) setFinLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metric, selKey, data]);
+  }, [selKey, data]);
 
   // Chart series: price-derived (daily bars) or fundamental (dated history points),
   // each normalized to % change from the window start (or $10K for growth).
@@ -695,7 +697,7 @@ export function ComparePage() {
                     {metricOpen && (
                       <>
                         <div className="fixed inset-0 z-30" onClick={() => setMetricOpen(false)} />
-                        <div className="absolute right-0 z-40 mt-1 w-64 max-h-80 overflow-auto rounded-lg border border-border bg-popover shadow-lg">
+                        <div className="absolute right-0 z-40 mt-1 w-[min(16rem,calc(100vw-3rem))] max-h-72 overflow-auto rounded-lg border border-border bg-popover shadow-lg">
                           {METRIC_GROUPS.map((g) => (
                             <div key={g.group}>
                               <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/40">{g.group}</p>
@@ -716,17 +718,19 @@ export function ComparePage() {
                       </>
                     )}
                   </div>
-                  {/* Period buttons */}
+                  {/* Period buttons — single scrollable row on phones */}
+                  <div className="flex items-center gap-1 max-w-full overflow-x-auto">
                   {visiblePeriods.map((p) => (
                     <button
                       key={p.k}
                       type="button"
                       onClick={() => setRange(p.k)}
-                      className={`rounded-md px-2.5 py-1 text-xs font-medium ${range === p.k ? "bg-[#0D7490] text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+                      className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-medium ${range === p.k ? "bg-[#0D7490] text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
                     >
                       {p.label}
                     </button>
                   ))}
+                  </div>
                 </div>
               </div>
               <div className="h-64">
@@ -830,9 +834,9 @@ export function ComparePage() {
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="sticky left-0 z-10 bg-card p-3 text-left text-xs font-semibold text-muted-foreground min-w-[7.5rem] sm:min-w-[10rem]">Metric</th>
+                    <th className="sticky left-0 z-10 bg-card p-2.5 sm:p-3 text-left text-[11px] sm:text-xs font-semibold text-muted-foreground min-w-[6.5rem] sm:min-w-[10rem]">Metric</th>
                     {data.map((s) => (
-                      <th key={s.ticker} className="p-3 text-left align-top min-w-[8rem] sm:min-w-[9.5rem]">
+                      <th key={s.ticker} className="p-2.5 sm:p-3 text-left align-top min-w-[7.5rem] sm:min-w-[9.5rem]">
                         <button type="button" onClick={() => navigate(`/app/stock/${s.ticker}?market=${s.market === "NSE" ? "nse" : "us"}`)} className="text-left group">
                           <div className="flex items-center gap-1.5">
                             <span className="font-semibold text-foreground group-hover:text-[#0D7490]">{s.ticker}</span>
