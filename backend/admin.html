@@ -6123,16 +6123,42 @@ async function fetchForwardTest() {
     const dedupNote = collapsed > 0
       ? `<div style="font-size:11px;color:#6b7280;margin:-8px 0 16px">Counted per thesis: ${s.rawOutcomeRows} emitted outcomes collapsed to ${s.totalOutcomes} distinct calls (${collapsed} repeat emissions of an unchanged call folded in). The Outcome Log below lists every row.</div>`
       : '';
+    // Survivorship context. The win rate below only counts signals that travelled
+    // the full stop/target distance and finished. Signals that wander sideways
+    // never resolve and are excluded, so the headline figure on its own
+    // overstates how often a signal is profitable. Show the excluded cohort and
+    // the all-in mark-to-market number next to it.
+    const oMtm = s.openMarkToMarket || null;
+    const oWin = oMtm && oMtm.winRate != null;
+    const all = s.allSignals || null;
+    const allTxt = all && all.profitablePct != null
+      ? `${fmtPct(all.profitablePct)} profitable across ${all.priced} priced signals`
+      : 'not available (quotes unavailable)';
+    const coverageNote = `
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#78350f">
+        <p style="font-weight:600;margin-bottom:4px">What this win rate does and does not measure</p>
+        <p style="line-height:1.5">
+          It counts only signals that <b>finished</b> — they hit target1 or the stop.
+          <b>${s.openSignals != null ? s.openSignals : 0} signals are still open</b> and are excluded entirely,
+          so this is <i>not</i> the rate at which signals are profitable.
+          Only ${s.resolutionRate != null ? s.resolutionRate : '—'}% of issued signals ever resolve.
+        </p>
+        ${oWin ? `<p style="line-height:1.5;margin-top:6px">The ${oMtm.priced} open signals marked to market are <b>${fmtPct(oMtm.winRate)} profitable</b> (median return <b>${oMtm.medianReturn != null ? oMtm.medianReturn.toFixed(2) : '—'}%</b>).</p>` : ''}
+        ${all && all.profitablePct != null ? `<p style="line-height:1.5;margin-top:6px">All signals including open ones: <b>${allTxt}</b>${all.partial ? ' <i>(partial — ' + oMtm.priced + ' of ' + s.openSignals + ' open signals could be priced)</i>' : ''}.</p>` : ''}
+      </div>`;
     el.innerHTML = `
       ${dedupNote}
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
-        <div class="stat-card" title="Distinct calls (theses), after collapsing repeat emissions of an unchanged call"><div class="stat-value" style="color:#111827">${s.totalOutcomes || 0}</div><div class="stat-label">Total Outcomes</div></div>
+        <div class="stat-card" title="Distinct calls (theses) that have finished — after collapsing repeat emissions of an unchanged call"><div class="stat-value" style="color:#111827">${s.totalOutcomes || 0}</div><div class="stat-label">Resolved Outcomes</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#059669">${s.wins || 0}</div><div class="stat-label">Wins</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#dc2626">${s.losses || 0}</div><div class="stat-label">Losses</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:${accColor}">${hasData ? fmtPct(s.winRate) : '—'}</div><div class="stat-label">Win Rate</div></div>
+        <div class="stat-card" title="Among RESOLVED signals only. Signals still open are excluded, so this is not the overall rate at which signals are profitable — see the note below."><div class="stat-value" style="color:${accColor}">${hasData ? fmtPct(s.winRate) : '—'}</div><div class="stat-label">Win Rate (resolved only)</div></div>
       </div>
+      ${coverageNote}
       <div class="grid grid-cols-2 md:grid-cols-2 gap-4" style="margin-bottom:16px">
-        <div class="stat-card"><div class="stat-value" style="color:#d97706">${s.pending != null ? s.pending : 0}</div><div class="stat-label">Monitored Open Positions</div></div>
+        <div class="stat-card" title="Positions currently monitored in memory (live signal tracking)"><div class="stat-value" style="color:#d97706">${s.pending != null ? s.pending : 0}</div><div class="stat-label">Monitored Open Positions</div></div>
+        <div class="stat-card" title="Signals issued but not yet resolved. Excluded from the win rate above."><div class="stat-value" style="color:#d97706">${s.openSignals != null ? s.openSignals : '—'}</div><div class="stat-label">Signals Still Open</div></div>
+        <div class="stat-card" title="Share of issued signals that have reached a resolution"><div class="stat-value" style="color:#111827">${s.resolutionRate != null ? s.resolutionRate + '%' : '—'}</div><div class="stat-label">Resolution Rate</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#111827">${s.avgDaysToResolve != null ? s.avgDaysToResolve.toFixed(1) + ' days' : '—'}</div><div class="stat-label">Avg Days to Resolve</div></div>
       </div>
       ${s.byTimeBucket ? `

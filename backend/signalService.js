@@ -322,6 +322,82 @@ function getOpenPositionCount() {
   return n;
 }
 
+// Mark-to-market view of the signals that have NOT resolved yet.
+//
+// This exists because the headline win rate is survivorship-biased: a trade only
+// counts once it travels the full stop/target distance (median 15% / 30%), so
+// trades that wander a few percent are never scored at all. In production that
+// omitted cohort was 938 signals sitting at a median -4.55% while the reported
+// figure counted only the 245 that finished. Reporting the open cohort marks
+// the gap instead of hiding it.
+//
+// Quotes come from the engine's own cached batch, so this is normally cheap, but
+// a cold cache over ~430 symbols means real network I/O and can take over a
+// minute - hence the TTL cache and a generous timeout. On timeout the open
+// COUNTS are still returned, but the returns are null, and the caller must then
+// withhold the all-in figure rather than silently reporting the resolved-only
+// number as if it covered everything.
+const OPEN_MTM_CACHE = { data: null, at: 0 };
+const OPEN_MTM_TTL_MS = 5 * 60 * 1000;
+const OPEN_MTM_TIMEOUT_MS = 90000;
+
+async function getOpenPositionsMarkToMarket() {
+  if (OPEN_MTM_CACHE.data && Date.now() - OPEN_MTM_CACHE.at < OPEN_MTM_TTL_MS) {
+    return OPEN_MTM_CACHE.data;
+  }
+  const out = { total: 0, priced: 0, profitable: 0, winRate: null, medianReturn: null, avgReturn: null, timedOut: false };
+  try {
+    const res = await pool.query(
+      `SELECT symbol, price FROM forward_predictions WHERE NOT resolved AND price > 0`
+    );
+    const rows = res.rows || [];
+    out.total = rows.length;
+    if (rows.length === 0) {
+      OPEN_MTM_CACHE.data = out; OPEN_MTM_CACHE.at = Date.now();
+      return out;
+    }
+    const symbols = [...new Set(rows.map(r => r.symbol))];
+    const quotes = await Promise.race([
+      getQuotesBatch(symbols),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('quote timeout')), OPEN_MTM_TIMEOUT_MS)),
+    ]).catch(() => null);
+
+    const rets = [];
+    if (quotes) {
+      // Quote keys vary by provider (SCOM / NSE:SCOM / SCOM.KE), so index on a
+      // normalised bare ticker and look up defensively.
+      const byBare = new Map();
+      for (const [k, v] of Object.entries(quotes)) {
+        if (!v) continue;
+        const bare = String(k).toUpperCase().replace(/^NSE:/, '').replace(/\.KE$/, '');
+        if (!byBare.has(bare)) byBare.set(bare, v);
+      }
+      for (const r of rows) {
+        const bare = String(r.symbol).toUpperCase();
+        const q = byBare.get(bare);
+        const p = q ? parseFloat(q.price) : null;
+        const e = parseFloat(r.price);
+        if (!(p > 0) || !(e > 0)) continue;
+        rets.push(((p - e) / e) * 100);
+      }
+    } else {
+      out.timedOut = true;
+    }
+    out.priced = rets.length;
+    if (rets.length > 0) {
+      const s = rets.slice().sort((a, b) => a - b);
+      out.profitable = rets.filter(v => v > 0).length;
+      out.winRate = Math.round((out.profitable / rets.length) * 1000) / 10;
+      out.medianReturn = Math.round(s[Math.floor(s.length / 2)] * 100) / 100;
+      out.avgReturn = Math.round((rets.reduce((a, b) => a + b, 0) / rets.length) * 100) / 100;
+    }
+    OPEN_MTM_CACHE.data = out; OPEN_MTM_CACHE.at = Date.now();
+  } catch (e) {
+    out.timedOut = true;
+  }
+  return out;
+}
+
 // Re-derive a monitored position's holding period from its own levels and the
 // latest cached volatility, so a held card shows the current realistic horizon
 // instead of the label frozen at open. Falls back to the stored label when the
@@ -2592,6 +2668,20 @@ async function getForwardTestStats() {
     buckets[k].winRate = buckets[k].total > 0 ? Math.round((buckets[k].wins / buckets[k].total) * 1000) / 10 : 0;
   }
 
+  // The unresolved cohort, and the all-in figure, so the headline win rate is not
+  // read as "signal accuracy" when it only measures trades that finished.
+  const openMtm = await getOpenPositionsMarkToMarket().catch(() => null);
+  const openTotal = openMtm ? openMtm.total : 0;
+  const allTotal = total + openTotal;
+  // Only publish an all-in figure when the open cohort was actually priced. If it
+  // was not, fall back to null rather than emitting a number whose denominator
+  // silently excludes every unresolved signal - that is precisely the
+  // survivorship bias this field exists to expose.
+  const openPriced = openMtm ? openMtm.priced : 0;
+  const allPriced = openTotal > 0 ? total + openPriced : total;
+  const allProfitable = wins + (openMtm ? openMtm.profitable : 0);
+  const allInAvailable = openTotal === 0 || openPriced > 0;
+
   return {
     totalOutcomes: total,
     wins,
@@ -2607,6 +2697,22 @@ async function getForwardTestStats() {
     // figure silently changing.
     rawOutcomeRows: rawRowCount,
     collapsedFrom: rawRowCount - total,
+    // Coverage / survivorship context for the headline number.
+    openSignals: openTotal,
+    openMonitored: getOpenPositionCount(),
+    resolutionRate: allTotal > 0 ? Math.round((total / allTotal) * 1000) / 10 : null,
+    openMarkToMarket: openMtm,
+    allSignals: allInAvailable
+      ? {
+          total: allPriced,
+          priced: allPriced,
+          profitable: allProfitable,
+          profitablePct: allPriced > 0 ? Math.round((allProfitable / allPriced) * 1000) / 10 : null,
+          // True when the open cohort could not be priced, so the UI can say the
+          // all-in figure is partial rather than present it as complete.
+          partial: openTotal > 0 && openPriced < openTotal,
+        }
+      : null,
     log,
   };
 }
@@ -5352,6 +5458,7 @@ module.exports = {
   getMonitoredAction,
   getMonitoredSignals,
   refreshMonitoredQuotes,
+  getOpenPositionsMarkToMarket,
   collapseToTheses,
   collapseToThesesDetailed,
   OPEN_POSITION_MAX_AGE_HOURS,
