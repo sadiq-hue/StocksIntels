@@ -2142,7 +2142,7 @@ function isSameThesis(p, price, target1, action) {
  * Purely a reporting transform: no rows are deleted, and the raw per-row outcome
  * log is still returned for auditing.
  */
-function collapseToTheses(rows) {
+function collapseToThesesDetailed(rows) {
   const at = (r) => {
     const t = r.resolved_at || r.recorded_at || r.signal_generated_at;
     const v = t ? new Date(t).getTime() : 0;
@@ -2155,7 +2155,8 @@ function collapseToTheses(rows) {
     if (!byThesis.has(k)) byThesis.set(k, []);
     byThesis.get(k).push({ ...r, entryPrice: parseFloat(r.entry_price), target1: r.target1 != null ? parseFloat(r.target1) : null, _at: at(r) });
   }
-  const out = [];
+  const kept = [];
+  const superseded = [];
   for (const chain of byThesis.values()) {
     // Sort chronologically inside the helper so the result does not depend on the
     // caller's ORDER BY. The two callers disagree (Forward Test orders by
@@ -2168,14 +2169,26 @@ function collapseToTheses(rows) {
       const prev = theses[theses.length - 1];
       if (prev && isSameThesis({ price: prev.entryPrice, target1: prev.target1 }, r.entryPrice, r.target1, 'buy')) {
         // Same thesis re-emitted: the newer resolution supersedes the older one.
+        superseded.push(prev);
         theses[theses.length - 1] = r;
       } else {
         theses.push(r);
       }
     }
-    if (theses.length > 0) out.push(theses[theses.length - 1]);
+    if (theses.length > 0) kept.push(theses[theses.length - 1]);
   }
-  return out;
+  return { kept, superseded };
+}
+
+/**
+ * Detailed form of the collapse: also returns the rows that were superseded, i.e.
+ * the repeat emissions of an unchanged call. The reporting callers only need the
+ * survivors; the one-time dedup migration imports the detailed form so the rows it
+ * deletes are chosen by exactly the predicate that produces the reported numbers,
+ * and the two can never drift apart.
+ */
+function collapseToTheses(rows) {
+  return collapseToThesesDetailed(rows).kept;
 }
 
 async function recordForwardPrediction(symbol, signalAction, confidence, price, stopLoss, target1, target2, target3, signalObjAction, tradeType, sector) {
@@ -5350,5 +5363,7 @@ module.exports = {
   getMonitoredAction,
   getMonitoredSignals,
   refreshMonitoredQuotes,
+  collapseToTheses,
+  collapseToThesesDetailed,
   OPEN_POSITION_MAX_AGE_HOURS,
 };
