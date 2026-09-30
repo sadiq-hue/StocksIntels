@@ -1026,16 +1026,26 @@ function computeDynamicWeights(regime) {
 // across a 30-day startup snapshot vs a 90-day live window manufactures a
 // phantom win-rate gap.
 async function refreshPerformanceStats() {
-  const result = await pool.query(
-    `SELECT result, COUNT(*) as cnt FROM signal_outcomes
-     WHERE COALESCE(signal_generated_at, recorded_at) > NOW() - $1::interval AND result IS NOT NULL AND source = 'live'
-     GROUP BY result`,
-    [`${SIGNAL_WINDOW_DAYS} days`]
-  );
+  // Counted per thesis, not per emitted row. The engine re-emits an unchanged
+  // call every cycle, so before the write-path dedup a single idea accumulated
+  // many outcome rows and this raw GROUP BY counted each one - which is what the
+  // Health tab reported as its win rate. The Forward Test tab already measures
+  // per thesis, so collapsing here keeps the two tabs in agreement.
   let wins = 0, losses = 0;
-  for (const row of result.rows) {
-    if (row.result === 'win') wins = parseInt(row.cnt) || 0;
-    if (row.result === 'loss') losses = parseInt(row.cnt) || 0;
+  try {
+    const res = await pool.query(
+      `SELECT o.id, o.ticker, o.signal, o.entry_price, o.target1, o.result
+       FROM signal_outcomes o
+       WHERE COALESCE(o.signal_generated_at, o.recorded_at) > NOW() - $1::interval
+         AND o.result IS NOT NULL AND o.source = 'live'
+       ORDER BY COALESCE(o.signal_generated_at, o.recorded_at) ASC`,
+      [`${SIGNAL_WINDOW_DAYS} days`]
+    );
+    for (const t of collapseToTheses(res.rows)) {
+      if (t.result === 'win') wins++; else if (t.result === 'loss') losses++;
+    }
+  } catch (e) {
+    console.warn('[SignalService] refreshPerformanceStats failed:', e.message);
   }
   _performanceStats.wins = wins;
   _performanceStats.losses = losses;
@@ -2112,6 +2122,62 @@ function isSameThesis(p, price, target1, action) {
   return !profileChanged();
 }
 
+/**
+ * Collapse resolved outcome rows to one row per thesis, keeping the LATEST
+ * resolution of each.
+ *
+ * The engine re-emits an unchanged call on every cycle, so before the write-path
+ * dedup in persistSignalOutcome() a single idea accumulated many outcome rows.
+ * Those rows are not independent trades - they are the same thesis re-priced -
+ * and counting each one inflated every accuracy figure: 658 rows came from ~236
+ * theses, and the forward test reported 57.6% where the thesis-level figure is
+ * ~48%.
+ *
+ * Grouping uses the SAME isSameThesis() predicate the write path now uses, so
+ * the reporting boundaries and the stored data agree by construction, and the
+ * "last resolution wins" rule matches the in-place UPDATE that persistSignalOutcome()
+ * performs going forward. A genuine re-rate (entry >=8% or target drift >=10%)
+ * still starts a new thesis.
+ *
+ * Purely a reporting transform: no rows are deleted, and the raw per-row outcome
+ * log is still returned for auditing.
+ */
+function collapseToTheses(rows) {
+  const at = (r) => {
+    const t = r.resolved_at || r.recorded_at || r.signal_generated_at;
+    const v = t ? new Date(t).getTime() : 0;
+    return isFinite(v) ? v : 0;
+  };
+  const byThesis = new Map();
+  for (const r of rows) {
+    if (!r || (r.result !== 'win' && r.result !== 'loss')) continue;
+    const k = `${r.ticker}|${r.signal}`;
+    if (!byThesis.has(k)) byThesis.set(k, []);
+    byThesis.get(k).push({ ...r, entryPrice: parseFloat(r.entry_price), target1: r.target1 != null ? parseFloat(r.target1) : null, _at: at(r) });
+  }
+  const out = [];
+  for (const chain of byThesis.values()) {
+    // Sort chronologically inside the helper so the result does not depend on the
+    // caller's ORDER BY. The two callers disagree (Forward Test orders by
+    // resolved_at DESC, Health by signal_generated_at ASC), which previously made
+    // them collapse to different winners and report 45.0% vs 38.2% for the same
+    // data. Ties break on id so the pick is still deterministic.
+    chain.sort((a, b) => (a._at - b._at) || ((a.id || 0) - (b.id || 0)));
+    const theses = [];
+    for (const r of chain) {
+      const prev = theses[theses.length - 1];
+      if (prev && isSameThesis({ price: prev.entryPrice, target1: prev.target1 }, r.entryPrice, r.target1, 'buy')) {
+        // Same thesis re-emitted: the newer resolution supersedes the older one.
+        theses[theses.length - 1] = r;
+      } else {
+        theses.push(r);
+      }
+    }
+    if (theses.length > 0) out.push(theses[theses.length - 1]);
+  }
+  return out;
+}
+
 async function recordForwardPrediction(symbol, signalAction, confidence, price, stopLoss, target1, target2, target3, signalObjAction, tradeType, sector) {
   // Dedup: one live prediction per symbol+action+THESIS. A persistent signal that
   // never triggers a decisive move must NOT re-emit a fresh prediction every
@@ -2379,8 +2445,8 @@ async function getForwardTestStats() {
   const rows = [];
   try {
     const res = await pool.query(
-      `SELECT o.ticker, o.signal, o.entry_price, o.exit_price, o.result,
-              o.recorded_at, o.resolved_at, o.signal_generated_at,
+      `SELECT o.id, o.ticker, o.signal, o.entry_price, o.exit_price, o.result,
+              o.recorded_at, o.resolved_at, o.signal_generated_at, o.target1,
               h.confidence
        FROM signal_outcomes o
         LEFT JOIN LATERAL (
@@ -2403,6 +2469,14 @@ async function getForwardTestStats() {
     console.warn('[SignalService] getForwardTestStats outcomes query failed:', e.message);
   }
 
+  // Accuracy is measured per thesis, not per emitted row: before the write-path
+  // dedup the engine re-emitted an unchanged call every cycle and each re-emission
+  // left its own outcome row, so one idea could be counted up to 19 times. The raw
+  // rows are kept for the Outcome Log so an operator can still audit every entry;
+  // every aggregate below is computed from the thesis-level set instead.
+  const thesisRows = collapseToTheses(rows);
+  const rawRowCount = rows.length;
+
   let total = 0, wins = 0, losses = 0;
   let totalHours = 0, hourlyCount = 0;
   const byConfidence = {};
@@ -2423,8 +2497,8 @@ async function getForwardTestStats() {
   const CONF_MED = 40;  // median
   const confOf = (c) => c == null ? 'unknown' : c >= CONF_HIGH ? 'high' : c >= CONF_MED ? 'med' : 'low';
 
-  for (const r of rows) {
-    if (r.result !== 'win' && r.result !== 'loss') continue;
+  // Aggregates: one row per thesis, so a repeatedly re-emitted call is counted once.
+  for (const r of thesisRows) {
     total++;
     if (r.result === 'win') wins++; else losses++;
     const gAt = r.signal_generated_at ? new Date(r.signal_generated_at).getTime() : null;
@@ -2444,8 +2518,17 @@ async function getForwardTestStats() {
       buckets[bk].total++;
       if (r.result === 'win') buckets[bk].wins++; else buckets[bk].losses++;
     }
+  }
+
+  // Audit log: every raw row, including the re-emissions the aggregates above
+  // collapse, so nothing is hidden from an operator checking a specific trade.
+  for (const r of rows) {
+    if (r.result !== 'win' && r.result !== 'loss') continue;
+    const gAt = r.signal_generated_at ? new Date(r.signal_generated_at).getTime() : null;
+    const rAt = r.resolved_at ? new Date(r.resolved_at).getTime() : (r.recorded_at ? new Date(r.recorded_at).getTime() : gAt);
     const entry = r.entry_price != null ? parseFloat(r.entry_price) : null;
     const exit = r.exit_price != null ? parseFloat(r.exit_price) : null;
+    const sym = r.ticker;
     log.push({
       symbol: sym,
       signal: r.signal,
@@ -2517,6 +2600,11 @@ async function getForwardTestStats() {
     bySymbol,
     byConfidence,
     byTimeBucket: buckets,
+    // Accuracy is reported per thesis. rawOutcomeRows is the pre-collapse count,
+    // so the UI can show how many re-emissions were folded in rather than the
+    // figure silently changing.
+    rawOutcomeRows: rawRowCount,
+    collapsedFrom: rawRowCount - total,
     log,
   };
 }

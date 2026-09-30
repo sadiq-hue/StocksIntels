@@ -6114,9 +6114,19 @@ async function fetchForwardTest() {
       ? '<span class="pill bg-emerald-100 text-emerald-700">Win</span>'
       : '<span class="pill bg-red-100 text-red-700">Loss</span>';
     const confLabel = b => b === 'unknown' ? 'Unknown' : b.charAt(0).toUpperCase() + b.slice(1);
+    // Accuracy is counted per thesis. The engine re-emits an unchanged call on
+    // every cycle, so one idea could leave many outcome rows; those are collapsed
+    // here. Surface the raw count so the drop in "Total Outcomes" is explained
+    // rather than looking like data loss. The Outcome Log below still lists every
+    // raw row.
+    const collapsed = (s.collapsedFrom || 0);
+    const dedupNote = collapsed > 0
+      ? `<div style="font-size:11px;color:#6b7280;margin:-8px 0 16px">Counted per thesis: ${s.rawOutcomeRows} emitted outcomes collapsed to ${s.totalOutcomes} distinct calls (${collapsed} repeat emissions of an unchanged call folded in). The Outcome Log below lists every row.</div>`
+      : '';
     el.innerHTML = `
+      ${dedupNote}
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
-        <div class="stat-card"><div class="stat-value" style="color:#111827">${s.totalOutcomes || 0}</div><div class="stat-label">Total Outcomes</div></div>
+        <div class="stat-card" title="Distinct calls (theses), after collapsing repeat emissions of an unchanged call"><div class="stat-value" style="color:#111827">${s.totalOutcomes || 0}</div><div class="stat-label">Total Outcomes</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#059669">${s.wins || 0}</div><div class="stat-label">Wins</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#dc2626">${s.losses || 0}</div><div class="stat-label">Losses</div></div>
         <div class="stat-card"><div class="stat-value" style="color:${accColor}">${hasData ? fmtPct(s.winRate) : '—'}</div><div class="stat-label">Win Rate</div></div>
