@@ -565,23 +565,57 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
     }
   }
 
-  if (signalOutcomes.size > 500) {
-    // Evict resolved or Hold entries first — never evict a monitored position
-    // that hasn't resolved yet. A live monitored Buy that gets evicted by the
-    // FIFO flush becomes a zombie: its stop/target is forgotten and the position
-    // can never resolve. Only as a last resort do we trim the oldest entry.
-    let evicted = false;
-    for (const [key, val] of signalOutcomes) {
-      if (val.result) { signalOutcomes.delete(key); evicted = true; break; }
-    }
-    if (!evicted && signalOutcomes.size > 500) {
+  // Evict down to the cap, never orphaning a live position.
+  //
+  // Two defects fixed here:
+  //
+  // 1. It evicted ONE entry per call. With additions outpacing calls the map sat
+  //    permanently over the cap (519 monitored positions against a 500 cap), so
+  //    the cap was not actually a cap.
+  //
+  // 2. The last-resort pass deleted the oldest entry unconditionally. That entry
+  //    is very often a LIVE monitored buy - which the comment directly above warns
+  //    about: its stop and target are forgotten, so it can never resolve, and it
+  //    vanishes from the accuracy stats without ever being booked as a win or a
+  //    loss. 479 open positions were in exactly that state - present in the DB,
+  //    absent from memory, unresolvable.
+  //
+  // Now it loops until the map is at or under the cap, and only ever evicts a
+  // non-monitored entry. If everything left is a live monitored position the map
+  // is allowed to exceed 500: reporting a position we can still resolve is
+  // strictly better than silently dropping it, because a tracked position
+  // eventually books a real outcome and an evicted one never does.
+  const MAX_TRACKED_POSITIONS = 500;
+  if (signalOutcomes.size > MAX_TRACKED_POSITIONS) {
+    const isLiveMonitored = (v) =>
+      v && !v.result && v.action !== 'hold' && v.stopLoss != null && v.target1 != null;
+
+    let guard = 0;
+    while (signalOutcomes.size > MAX_TRACKED_POSITIONS && guard++ < signalOutcomes.size + 10) {
+      // Pass 1: resolved entries are safe to drop - their outcome is already booked.
+      let removed = false;
       for (const [key, val] of signalOutcomes) {
-        if (val.action === 'hold' || !val.stopLoss) { signalOutcomes.delete(key); evicted = true; break; }
+        if (val.result) { signalOutcomes.delete(key); removed = true; break; }
       }
+      if (removed) continue;
+
+      // Pass 2: Hold / level-less entries carry nothing to resolve.
+      for (const [key, val] of signalOutcomes) {
+        if (val.action === 'hold' || !val.stopLoss || !val.target1) {
+          signalOutcomes.delete(key); removed = true; break;
+        }
+      }
+      if (removed) continue;
+
+      // Pass 3: the OLDEST ENTRY THAT IS NOT A LIVE MONITORED POSITION. The old
+      // code took the oldest entry outright, which is usually a live buy.
+      for (const [key, val] of signalOutcomes) {
+        if (!isLiveMonitored(val)) { signalOutcomes.delete(key); removed = true; break; }
+      }
+      if (!removed) break; // everything is live - stop rather than orphan a position
     }
-    if (!evicted && signalOutcomes.size > 500) {
-      const oldest = signalOutcomes.keys().next().value;
-      signalOutcomes.delete(oldest);
+    if (signalOutcomes.size > MAX_TRACKED_POSITIONS) {
+      console.warn(`[RiskManager] tracked positions at ${signalOutcomes.size} (over the ${MAX_TRACKED_POSITIONS} cap) - every remaining entry is a live monitored position, so none were evicted`);
     }
   }
   return performanceStats;
