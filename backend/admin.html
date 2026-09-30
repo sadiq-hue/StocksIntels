@@ -6134,6 +6134,28 @@ async function fetchForwardTest() {
     const allTxt = all && all.profitablePct != null
       ? `${fmtPct(all.profitablePct)} profitable across ${all.priced} priced signals`
       : 'not available (quotes unavailable)';
+    // Kenyan evidence is a small slice of the pool, so it is reported on its own
+    // rather than hidden inside a US-dominated average. Below the sample floor
+    // the percentage is withheld - at n=16 a "56% win rate" is indistinguishable
+    // from noise and is worse than useless to an operator.
+    const bm = s.byMarket || null;
+    const marketBlock = bm ? `
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
+        <p style="font-size:13px;font-weight:600;margin-bottom:2px">By Market</p>
+        <p style="font-size:11px;color:#6b7280;margin-bottom:10px">Kenyan and global names behave very differently and are never meaningful pooled together.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          ${[['NSE', bm.NSE, 'Nairobi Securities Exchange (KES)'], ['US', bm.US, 'US / Global (USD)']].map(([k, b, sub]) => `
+            <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px">
+                <span style="font-size:13px;font-weight:600">${k === 'NSE' ? 'NSE (Kenya)' : 'US / Global'}</span>
+                <span style="font-size:18px;font-weight:700;color:${b.total === 0 ? '#9ca3af' : (b.winRate >= 50 ? '#059669' : '#dc2626')}">${b.total > 0 && (k !== 'NSE' || s.nseSampleSufficient) ? fmtPct(b.winRate) : (b.total > 0 ? 'too few' : '—')}</span>
+              </div>
+              <div style="font-size:11px;color:#6b7280">${sub}</div>
+              <div style="font-size:11px;color:#6b7280;margin-top:4px">${b.wins} wins / ${b.total} resolved calls</div>
+              ${k === 'NSE' && b.total > 0 && !s.nseSampleSufficient ? `<div style="font-size:11px;color:#b45309;margin-top:6px">Only ${b.total} Kenyan calls have resolved (need ${s.nseMinSample}+ to be meaningful). NSE names move less, so they reach the ${'15%'} stop / 30% target far less often — this fills in with time rather than by loosening the levels.</div>` : ''}
+            </div>`).join('')}
+        </div>
+      </div>` : '';
     const coverageNote = `
       <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#78350f">
         <p style="font-weight:600;margin-bottom:4px">What this win rate does and does not measure</p>
@@ -6155,6 +6177,7 @@ async function fetchForwardTest() {
         <div class="stat-card" title="Among RESOLVED signals only. Signals still open are excluded, so this is not the overall rate at which signals are profitable — see the note below."><div class="stat-value" style="color:${accColor}">${hasData ? fmtPct(s.winRate) : '—'}</div><div class="stat-label">Win Rate (resolved only)</div></div>
       </div>
       ${coverageNote}
+      ${marketBlock}
       <div class="grid grid-cols-2 md:grid-cols-2 gap-4" style="margin-bottom:16px">
         <div class="stat-card" title="Positions currently monitored in memory (live signal tracking)"><div class="stat-value" style="color:#d97706">${s.pending != null ? s.pending : 0}</div><div class="stat-label">Monitored Open Positions</div></div>
         <div class="stat-card" title="Signals issued but not yet resolved. Excluded from the win rate above."><div class="stat-value" style="color:#d97706">${s.openSignals != null ? s.openSignals : '—'}</div><div class="stat-label">Signals Still Open</div></div>

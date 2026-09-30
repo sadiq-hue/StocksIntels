@@ -2682,6 +2682,28 @@ async function getForwardTestStats() {
   const allProfitable = wins + (openMtm ? openMtm.profitable : 0);
   const allInAvailable = openTotal === 0 || openPriced > 0;
 
+  // Market split. Kenyan names are a small slice of the resolved set (their
+  // 15%/30% levels are reached far less often than on volatile US names), so
+  // pooling them with 229 US trades hides how little Kenyan evidence exists.
+  // Reporting them separately keeps the NSE number honest instead of letting it
+  // disappear inside a US-dominated pool. Market is derived from the ticker so
+  // no schema change is needed and historical rows are covered too.
+  const byMarket = { NSE: { total: 0, wins: 0, winRate: null }, US: { total: 0, wins: 0, winRate: null } };
+  for (const r of thesisRows) {
+    if (r.result !== 'win' && r.result !== 'loss') continue;
+    const isNse = NSE_SYMBOLS.includes(String(r.ticker).toUpperCase());
+    const bucket = isNse ? byMarket.NSE : byMarket.US;
+    bucket.total++;
+    if (r.result === 'win') bucket.wins++;
+  }
+  for (const k of ['NSE', 'US']) {
+    const b = byMarket[k];
+    b.winRate = b.total > 0 ? Math.round((b.wins / b.total) * 1000) / 10 : null;
+  }
+  // Below ~30 samples a win rate is not distinguishable from noise, so the UI
+  // needs to say "too few to conclude" rather than print a percentage.
+  const NSE_MIN_SAMPLE = 30;
+
   return {
     totalOutcomes: total,
     wins,
@@ -2692,6 +2714,9 @@ async function getForwardTestStats() {
     bySymbol,
     byConfidence,
     byTimeBucket: buckets,
+    byMarket,
+    nseSampleSufficient: byMarket.NSE.total >= NSE_MIN_SAMPLE,
+    nseMinSample: NSE_MIN_SAMPLE,
     // Accuracy is reported per thesis. rawOutcomeRows is the pre-collapse count,
     // so the UI can show how many re-emissions were folded in rather than the
     // figure silently changing.
