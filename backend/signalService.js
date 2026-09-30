@@ -2099,28 +2099,17 @@ async function _loadForwardPredictionsFromDb() {
 // latest SCOM signal still reaches the forward test. A stale/resolved row must
 // never hide a genuinely new call. Sells carry no target levels, so
 // near-identical price alone decides.
-const THESIS_ENTRY_DELTA = 0.08;      // >=8% price re-rate = materially new entry -> distinct thesis
-const THESIS_ENTRY_IDENTICAL = 0.005; // near-identical entry (<=0.5%): same thesis unless profile changed
-const THESIS_PROFILE_DELTA = 0.10;    // reward-profile (T1/entry) drift of >=10% = a different call
-
-function isSameThesis(p, price, target1, action) {
-  if (action === 'sell') {
-    return p.price > 0 && price > 0 && Math.abs(p.price - price) / price < THESIS_ENTRY_IDENTICAL;
-  }
-  if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price >= THESIS_ENTRY_DELTA) return false; // re-rated >=8% -> distinct thesis
-  const profileChanged = () => {
-    if (!p.target1 || !target1 || !p.price || !price) return false;
-    const profile = p.target1 / p.price;
-    const profileNow = target1 / price;
-    return Math.abs(profile - profileNow) / profileNow >= THESIS_PROFILE_DELTA;
-  };
-  if (p.price > 0 && price > 0 && Math.abs(p.price - price) / price < THESIS_ENTRY_IDENTICAL) {
-    // near-identical entry: same thesis unless the reward profile is materially different
-    return !profileChanged();
-  }
-  // entry band [0.5%, 8%): the reward profile decides
-  return !profileChanged();
-}
+//
+// The predicate itself now lives in thesisUtils.js so riskManager can share it.
+// trackSignalOutcomes() has to make the same judgement when deciding whether to
+// re-open a position after one resolves, and riskManager is required BY this
+// module - so a copy here would be unreachable from there and would drift.
+const {
+  isSameThesis,
+  THESIS_ENTRY_DELTA,
+  THESIS_ENTRY_IDENTICAL,
+  THESIS_PROFILE_DELTA,
+} = require('./thesisUtils');
 
 /**
  * Collapse resolved outcome rows to one row per thesis, keeping the LATEST

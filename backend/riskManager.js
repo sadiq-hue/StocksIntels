@@ -2,6 +2,7 @@
 // Functions are stateless and take all required state as parameters.
 const { calculateATR, findResistanceLevels } = require('./technicalIndicators');
 const { kellyFraction, monteCarloVaR } = require('./portfolioOptimizer');
+const { isSameThesis } = require('./thesisUtils');
 
 // ─── Kelly Criterion Position Sizing ────────────────────────────────────────
 // Uses ML-predicted win probability + historical win/loss ratio.
@@ -496,12 +497,27 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
           ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;
       }
     }
-    // Clear the resolved entry; re-seed only if the fresh signal is itself a new
-    // monitored position (a Buy re-rating). Hold/Sell-after-close means the symbol
-    // is no longer tracked rather than lingering as a stale entry.
+    // Clear the resolved entry; re-seed only if the fresh signal is a GENUINELY NEW
+    // call. Hold/Sell-after-close means the symbol is no longer tracked rather than
+    // lingering as a stale entry.
+    //
+    // The re-seed used to fire for any monitorable Buy, which chained one idea into
+    // an endless series of positions: resolve -> immediately re-open at the new
+    // price -> the monitor-first gate blocks a fresh signal until it resolves ->
+    // repeat. In production that left 998 open positions across only 428 distinct
+    // symbols (2.3 each), 419 of them older than 14 days, and it starved signal
+    // generation down to 7 tickers/day from a peak of 88. It was also the source of
+    // the outcome-row duplication fixed in persistSignalOutcome().
+    //
+    // isSameThesis() is the same predicate recordForwardPrediction and
+    // persistSignalOutcome use, so an unchanged call is not re-opened here either.
     if (previous.result) {
+      const sameThesisAsClosed = isSameThesis(
+        { price: previous.entryPrice, target1: previous.target1 },
+        currentPrice, newSignal.target1, newSignal.action
+      );
       signalOutcomes.delete(symbol);
-      if (monitorable) {
+      if (monitorable && !sameThesisAsClosed) {
         signalOutcomes.set(symbol, {
           entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
           stopLoss: enforceStopFloor(currentPrice, newSignal.stopLoss),
@@ -515,14 +531,24 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
           confidence: newSignal.confidence != null ? newSignal.confidence : null,
           timeframe: newSignal.timeframe || null,
         });
+      } else if (monitorable) {
+        console.log(`[RiskManager] ${symbol} ${newSignal.signal} is the same thesis that just resolved (entry=${previous.entryPrice}->${currentPrice}, t1=${previous.target1}) - not re-opening; waiting for a genuinely new call`);
       }
     }
   } else {
     // Covers: no previous entry, a non-monitored entry, or an entry already resolved
     // by the monitor gate before this call. Drop a stale resolved entry and only
-    // store a fresh position when the new signal is itself monitorable.
-    if (previous && previous.result) signalOutcomes.delete(symbol);
-    if (monitorable) {
+    // store a fresh position when the new signal is itself monitorable - and, as
+    // above, not when it merely restates the call that just closed.
+    let sameThesisAsClosed = false;
+    if (previous && previous.result) {
+      sameThesisAsClosed = isSameThesis(
+        { price: previous.entryPrice, target1: previous.target1 },
+        currentPrice, newSignal.target1, newSignal.action
+      );
+      signalOutcomes.delete(symbol);
+    }
+    if (monitorable && !sameThesisAsClosed) {
       signalOutcomes.set(symbol, {
         entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
         stopLoss: enforceStopFloor(currentPrice, newSignal.stopLoss),
