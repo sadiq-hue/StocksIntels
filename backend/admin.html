@@ -6129,11 +6129,17 @@ async function fetchForwardTest() {
     // overstates how often a signal is profitable. Show the excluded cohort and
     // the all-in mark-to-market number next to it.
     const oMtm = s.openMarkToMarket || null;
-    const oWin = oMtm && oMtm.winRate != null;
+    const oWin = oMtm && oMtm.profitablePct != null;
     const all = s.allSignals || null;
     const allTxt = all && all.profitablePct != null
       ? `${fmtPct(all.profitablePct)} profitable across ${all.priced} priced signals`
       : 'not available (quotes unavailable)';
+    // Open positions are counted as POSITIONS, not rows - a ticker can hold
+    // several open rows. This is provisional profitability, NOT a win rate: these
+    // trades have not closed, and one that is green now can still reach its stop.
+    const openLine = oWin
+      ? `<p style="line-height:1.5;margin-top:6px">The <b>${s.openSignals}</b> still-open positions, marked to market, are <b>${fmtPct(oMtm.profitablePct)} profitable</b> (median <b>${oMtm.medianReturn != null ? oMtm.medianReturn.toFixed(2) : '-'}%</b>, worst <b>${oMtm.worstReturn != null ? oMtm.worstReturn.toFixed(1) : '-'}%</b>). This is provisional: none of them have closed, so one that is green now can still reach its stop.${oMtm.priced < oMtm.positions ? ' <i>Based on ' + oMtm.priced + ' of ' + oMtm.positions + ' positions that could be priced (' + (oMtm.coveragePct != null ? oMtm.coveragePct : '-') + '% coverage).</i>' : ''}</p>`
+      : '';
     // Kenyan evidence is a small slice of the pool, so it is reported on its own
     // rather than hidden inside a US-dominated average. Below the sample floor
     // the percentage is withheld - at n=16 a "56% win rate" is indistinguishable
@@ -6158,15 +6164,14 @@ async function fetchForwardTest() {
       </div>` : '';
     const coverageNote = `
       <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#78350f">
-        <p style="font-weight:600;margin-bottom:4px">What this win rate does and does not measure</p>
+        <p style="font-weight:600;margin-bottom:4px">What these numbers measure</p>
         <p style="line-height:1.5">
-          It counts only signals that <b>finished</b> — they hit target1 or the stop.
-          <b>${s.openSignals != null ? s.openSignals : 0} signals are still open</b> and are excluded entirely,
-          so this is <i>not</i> the rate at which signals are profitable.
-          Only ${s.resolutionRate != null ? s.resolutionRate : '—'}% of issued signals ever resolve.
+          <b>Win rate</b> above counts only positions that <b>finished</b> &mdash; they hit target1 or the stop.
+          <b>${s.openSignals != null ? s.openSignals : 0} positions are still open</b> and are excluded, so that figure is
+          <i>not</i> the rate at which signals are profitable. Only ${s.resolutionRate != null ? s.resolutionRate : '-'}% of issued signals ever resolve.
         </p>
-        ${oWin ? `<p style="line-height:1.5;margin-top:6px">The ${oMtm.priced} open signals marked to market are <b>${fmtPct(oMtm.winRate)} profitable</b> (median return <b>${oMtm.medianReturn != null ? oMtm.medianReturn.toFixed(2) : '—'}%</b>).</p>` : ''}
-        ${all && all.profitablePct != null ? `<p style="line-height:1.5;margin-top:6px">All signals including open ones: <b>${allTxt}</b>${all.partial ? ' <i>(partial — ' + oMtm.priced + ' of ' + s.openSignals + ' open signals could be priced)</i>' : ''}.</p>` : ''}
+        ${openLine}
+        ${all && all.profitablePct != null ? `<p style="line-height:1.5;margin-top:6px">All signals including open ones: <b>${allTxt}</b>${all.partial ? ' <i>(partial &mdash; ' + oMtm.priced + ' of ' + s.openSignals + ' open positions could be priced)</i>' : ''}.</p>` : ''}
       </div>`;
     el.innerHTML = `
       ${dedupNote}
@@ -6180,7 +6185,7 @@ async function fetchForwardTest() {
       ${marketBlock}
       <div class="grid grid-cols-2 md:grid-cols-2 gap-4" style="margin-bottom:16px">
         <div class="stat-card" title="Positions currently monitored in memory (live signal tracking)"><div class="stat-value" style="color:#d97706">${s.pending != null ? s.pending : 0}</div><div class="stat-label">Monitored Open Positions</div></div>
-        <div class="stat-card" title="Signals issued but not yet resolved. Excluded from the win rate above."><div class="stat-value" style="color:#d97706">${s.openSignals != null ? s.openSignals : '—'}</div><div class="stat-label">Signals Still Open</div></div>
+        <div class="stat-card" title="Distinct positions issued but not yet resolved. Excluded from the win rate above. (Underlying rows: ${s.openRows != null ? s.openRows : '-'} — one ticker can hold several, so positions are counted once each.)"><div class="stat-value" style="color:#d97706">${s.openSignals != null ? s.openSignals : '—'}</div><div class="stat-label">Open Positions</div></div>
         <div class="stat-card" title="Share of issued signals that have reached a resolution"><div class="stat-value" style="color:#111827">${s.resolutionRate != null ? s.resolutionRate + '%' : '—'}</div><div class="stat-label">Resolution Rate</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#111827">${s.avgDaysToResolve != null ? s.avgDaysToResolve.toFixed(1) + ' days' : '—'}</div><div class="stat-label">Avg Days to Resolve</div></div>
       </div>

@@ -326,10 +326,17 @@ function getOpenPositionCount() {
 //
 // This exists because the headline win rate is survivorship-biased: a trade only
 // counts once it travels the full stop/target distance (median 15% / 30%), so
-// trades that wander a few percent are never scored at all. In production that
-// omitted cohort was 938 signals sitting at a median -4.55% while the reported
-// figure counted only the 245 that finished. Reporting the open cohort marks
-// the gap instead of hiding it.
+// trades that wander a few percent are never scored at all.
+//
+// IMPORTANT: counted ONCE PER POSITION, not per row. A ticker can hold several
+// open forward_prediction rows (up to 7 observed) because rows accumulated for
+// one position before the re-seed was fixed. Row-weighting gave every one of
+// those rows a vote and produced 25.1% where the per-position figure is 27.8% -
+// i.e. the duplication was silently skewing the number we present to users.
+//
+// This is a PROVISIONAL profitability measure, not a win rate: an open position
+// has not closed, and one that is currently green can still hit its stop. The UI
+// labels it accordingly.
 //
 // Quotes come from the engine's own cached batch, so this is normally cheap, but
 // a cold cache over ~430 symbols means real network I/O and can take over a
@@ -345,51 +352,96 @@ async function getOpenPositionsMarkToMarket() {
   if (OPEN_MTM_CACHE.data && Date.now() - OPEN_MTM_CACHE.at < OPEN_MTM_TTL_MS) {
     return OPEN_MTM_CACHE.data;
   }
-  const out = { total: 0, priced: 0, profitable: 0, winRate: null, medianReturn: null, avgReturn: null, timedOut: false };
+  const out = { positions: 0, rows: 0, priced: 0, coveragePct: null, profitable: 0, profitablePct: null,
+                medianReturn: null, avgReturn: null, worstReturn: null, timedOut: false };
   try {
     const res = await pool.query(
-      `SELECT symbol, price FROM forward_predictions WHERE NOT resolved AND price > 0`
+      `SELECT DISTINCT ON (UPPER(symbol)) UPPER(symbol) AS sym, symbol, price
+       FROM forward_predictions
+       WHERE NOT resolved AND price > 0
+       ORDER BY UPPER(symbol), generated_at DESC`
     );
     const rows = res.rows || [];
-    out.total = rows.length;
+    out.positions = rows.length;
+    const countAll = await pool.query(
+      `SELECT COUNT(*)::int n FROM forward_predictions WHERE NOT resolved AND price > 0`
+    ).catch(() => ({ rows: [{ n: rows.length }] }));
+    out.rows = countAll.rows[0] ? countAll.rows[0].n : rows.length;
     if (rows.length === 0) {
       OPEN_MTM_CACHE.data = out; OPEN_MTM_CACHE.at = Date.now();
       return out;
     }
-    const symbols = [...new Set(rows.map(r => r.symbol))];
+    const symbols = rows.map(r => r.symbol);
     const quotes = await Promise.race([
       getQuotesBatch(symbols),
       new Promise((_, rej) => setTimeout(() => rej(new Error('quote timeout')), OPEN_MTM_TIMEOUT_MS)),
     ]).catch(() => null);
 
     const rets = [];
+    if (!quotes) out.timedOut = true;
+    const priceOf = (sym) => {
+      if (!quotes) return null;
+      const bare = String(sym).toUpperCase().replace(/^NSE:/, '').replace(/\.KE$/, '');
+      const q = byBare.get(bare);
+      const p = q ? parseFloat(q.price) : null;
+      return p > 0 ? p : null;
+    };
+    // Quote keys vary by provider (SCOM / NSE:SCOM / SCOM.KE), so index on a
+    // normalised bare ticker and look up defensively.
+    const byBare = new Map();
     if (quotes) {
-      // Quote keys vary by provider (SCOM / NSE:SCOM / SCOM.KE), so index on a
-      // normalised bare ticker and look up defensively.
-      const byBare = new Map();
       for (const [k, v] of Object.entries(quotes)) {
         if (!v) continue;
         const bare = String(k).toUpperCase().replace(/^NSE:/, '').replace(/\.KE$/, '');
         if (!byBare.has(bare)) byBare.set(bare, v);
       }
-      for (const r of rows) {
-        const bare = String(r.symbol).toUpperCase();
-        const q = byBare.get(bare);
-        const p = q ? parseFloat(q.price) : null;
-        const e = parseFloat(r.price);
-        if (!(p > 0) || !(e > 0)) continue;
-        rets.push(((p - e) / e) * 100);
+    }
+    for (const r of rows) {
+      const bare = String(r.sym || r.symbol).toUpperCase();
+      const p = priceOf(bare);
+      const e = parseFloat(r.price);
+      if (!(p > 0) || !(e > 0)) continue;
+      rets.push(((p - e) / e) * 100);
+    }
+
+    // One retry pass for anything the batch could not price. A partial batch is
+    // common under load (upstream rate limits), and it silently moved this
+    // figure between 25.4% and 27.8% purely on quote availability - a number
+    // that must not wobble for reasons unrelated to how the trades are doing.
+    if (!out.timedOut && rets.length < rows.length) {
+      const missing = rows.filter(r => !(priceOf(String(r.sym || r.symbol).toUpperCase()) > 0));
+      if (missing.length > 0 && missing.length <= 120) {
+        try {
+          const retry = await Promise.race([
+            getQuotesBatch(missing.map(r => r.symbol)),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('retry timeout')), 30000)),
+          ]).catch(() => null);
+          if (retry) {
+            for (const [k, v] of Object.entries(retry)) {
+              if (!v) continue;
+              const bare = String(k).toUpperCase().replace(/^NSE:/, '').replace(/\.KE$/, '');
+              if (!byBare.has(bare)) byBare.set(bare, v);
+            }
+            rets.length = 0;
+            for (const r of rows) {
+              const p = priceOf(String(r.sym || r.symbol).toUpperCase());
+              const e = parseFloat(r.price);
+              if (!(p > 0) || !(e > 0)) continue;
+              rets.push(((p - e) / e) * 100);
+            }
+          }
+        } catch (e) { /* retry best-effort */ }
       }
-    } else {
-      out.timedOut = true;
     }
     out.priced = rets.length;
+    out.coveragePct = rows.length > 0 ? Math.round((rets.length / rows.length) * 1000) / 10 : null;
     if (rets.length > 0) {
       const s = rets.slice().sort((a, b) => a - b);
       out.profitable = rets.filter(v => v > 0).length;
-      out.winRate = Math.round((out.profitable / rets.length) * 1000) / 10;
+      out.profitablePct = Math.round((out.profitable / rets.length) * 1000) / 10;
       out.medianReturn = Math.round(s[Math.floor(s.length / 2)] * 100) / 100;
       out.avgReturn = Math.round((rets.reduce((a, b) => a + b, 0) / rets.length) * 100) / 100;
+      out.worstReturn = Math.round(s[0] * 100) / 100;
     }
     OPEN_MTM_CACHE.data = out; OPEN_MTM_CACHE.at = Date.now();
   } catch (e) {
@@ -2671,16 +2723,44 @@ async function getForwardTestStats() {
   // The unresolved cohort, and the all-in figure, so the headline win rate is not
   // read as "signal accuracy" when it only measures trades that finished.
   const openMtm = await getOpenPositionsMarkToMarket().catch(() => null);
-  const openTotal = openMtm ? openMtm.total : 0;
+  // Everything below counts POSITIONS, not rows. A ticker can hold several open
+  // forward_prediction rows (up to 7 observed), so row-weighting inflated the
+  // open count (998 vs 428 positions) and understated the resolution rate
+  // (19.3% vs 35.7%).
+  const openTotal = openMtm ? openMtm.positions : 0;
   const allTotal = total + openTotal;
-  // Only publish an all-in figure when the open cohort was actually priced. If it
-  // was not, fall back to null rather than emitting a number whose denominator
-  // silently excludes every unresolved signal - that is precisely the
-  // survivorship bias this field exists to expose.
   const openPriced = openMtm ? openMtm.priced : 0;
-  const allPriced = openTotal > 0 ? total + openPriced : total;
-  const allProfitable = wins + (openMtm ? openMtm.profitable : 0);
+  const openProfitable = openMtm ? openMtm.profitable : 0;
+  const allPriced = total + openPriced;
+  const allProfitable = wins + openProfitable;
+  // Withhold rather than emit a number whose denominator silently excludes the
+  // unresolved cohort - that is precisely the survivorship bias this field
+  // exists to expose.
   const allInAvailable = openTotal === 0 || openPriced > 0;
+  const resolutionRate = allTotal > 0 ? Math.round((total / allTotal) * 1000) / 10 : null;
+  const allSignals = allInAvailable
+    ? {
+        total: allPriced,
+        priced: allPriced,
+        profitable: allProfitable,
+        profitablePct: allPriced > 0 ? Math.round((allProfitable / allPriced) * 1000) / 10 : null,
+        // True when the open cohort could not be priced, so the UI can say the
+        // all-in figure is partial rather than present it as complete.
+        partial: openTotal > 0 && openPriced < openTotal,
+      }
+    : null;
+
+  // Tie-out guard. These figures sit side by side as "the" accuracy numbers, so
+  // a silent divergence is exactly the failure mode being guarded against: open
+  // rows must always be >= distinct open positions (duplicates inflate rows),
+  // and the all-in denominator must equal resolved plus open positions. Log
+  // loudly rather than let two tabs quietly disagree.
+  if (openMtm && openMtm.rows < openMtm.positions) {
+    console.warn(`[SignalService] open rows (${openMtm.rows}) < open positions (${openMtm.positions}) - position dedup is wrong`);
+  }
+  if (allSignals && !allSignals.partial && allSignals.total !== allPriced) {
+    console.warn(`[SignalService] all-signals denominator ${allSignals.total} != resolved+open ${allPriced}`);
+  }
 
   // Market split. Kenyan names are a small slice of the resolved set (their
   // 15%/30% levels are reached far less often than on volatile US names), so
@@ -2722,22 +2802,15 @@ async function getForwardTestStats() {
     // figure silently changing.
     rawOutcomeRows: rawRowCount,
     collapsedFrom: rawRowCount - total,
-    // Coverage / survivorship context for the headline number.
+    // Coverage / survivorship context for the headline number. openSignals counts
+    // POSITIONS; openRows is the underlying row count including the historical
+    // duplicates a ticker accumulated before the re-seed was fixed.
     openSignals: openTotal,
+    openRows: openMtm ? openMtm.rows : null,
     openMonitored: getOpenPositionCount(),
-    resolutionRate: allTotal > 0 ? Math.round((total / allTotal) * 1000) / 10 : null,
+    resolutionRate,
     openMarkToMarket: openMtm,
-    allSignals: allInAvailable
-      ? {
-          total: allPriced,
-          priced: allPriced,
-          profitable: allProfitable,
-          profitablePct: allPriced > 0 ? Math.round((allProfitable / allPriced) * 1000) / 10 : null,
-          // True when the open cohort could not be priced, so the UI can say the
-          // all-in figure is partial rather than present it as complete.
-          partial: openTotal > 0 && openPriced < openTotal,
-        }
-      : null,
+    allSignals,
     log,
   };
 }
