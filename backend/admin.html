@@ -6182,12 +6182,21 @@ async function fetchForwardTest() {
       : '';
     const thinWarn = specThin
       ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#991b1b">
-           <b>Sample too small to be a win rate.</b> Only ${spec.retained} outcomes currently meet the current signal spec (${spec.minSample} needed). Almost all history was generated with narrower stops, so it is excluded; the qualifying sample rebuilds as those older rows age out of the ${180}-day window. Treat this percentage as provisional.
+           <b>Sample too small to be a win rate.</b> Only ${spec.retained} outcomes currently meet the current signal spec (${spec.minSample} needed). Almost all history was generated with narrower stops, so it is excluded; the qualifying sample rebuilds as those older rows age out of the window. Treat this percentage as provisional.
          </div>`
+      : '';
+    // Secondary figure: every resolved outcome, whatever stop configuration
+    // produced it. Kept visible so the spec-compliant headline does not discard
+    // the evidence that fails the spec - the two answer different questions and
+    // are deliberately not combined.
+    const allCfg = s.allConfigs || null;
+    const allCfgNote = allCfg && allCfg.total > 0
+      ? `<div style="font-size:11px;color:#6b7280;margin:-8px 0 16px">For comparison, across <b>all</b> ${allCfg.total} resolved outcomes regardless of stop configuration: <b>${fmtPct(allCfg.winRate)}</b> win rate (${allCfg.wins}/${allCfg.total}). That figure pools signals with very different risk profiles, which is why it is not the headline.</div>`
       : '';
     el.innerHTML = `
       ${specNote}
       ${thinWarn}
+      ${allCfgNote}
       ${dedupNote}
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
         <div class="stat-card" title="Distinct calls (theses) that have finished — after collapsing repeat emissions of an unchanged call"><div class="stat-value" style="color:#111827">${s.totalOutcomes || 0}</div><div class="stat-label">Resolved Outcomes</div></div>

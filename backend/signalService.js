@@ -2792,6 +2792,12 @@ async function getForwardTestStats() {
     buckets[k].winRate = buckets[k].total > 0 ? Math.round((buckets[k].wins / buckets[k].total) * 1000) / 10 : 0;
   }
 
+  // The unfiltered view, kept alongside the spec-compliant one. Mixing risk
+  // configurations in the headline is inaccurate, but discarding them entirely
+  // throws away most of the sample, so the UI shows both and labels them.
+  const allConfigsWins = thesisRows.filter(r => r.result === 'win').length;
+  const allConfigsTotal = thesisRows.filter(r => r.result === 'win' || r.result === 'loss').length;
+
   // The unresolved cohort, and the all-in figure, so the headline win rate is not
   // read as "signal accuracy" when it only measures trades that finished.
   const openMtm = await getOpenPositionsMarkToMarket().catch(() => null);
@@ -2874,6 +2880,14 @@ async function getForwardTestStats() {
     // figure silently changing.
     rawOutcomeRows: rawRowCount,
     collapsedFrom: rawRowCount - total,
+    // Every resolved outcome regardless of which stop configuration produced
+    // it. Shown as a secondary figure so the spec-compliant headline does not
+    // throw away the evidence that does not meet the current spec.
+    allConfigs: {
+      total: allConfigsTotal,
+      wins: allConfigsWins,
+      winRate: allConfigsTotal > 0 ? Math.round((allConfigsWins / allConfigsTotal) * 1000) / 10 : null,
+    },
     // Coverage / survivorship context for the headline number. openSignals counts
     // POSITIONS; openRows is the underlying row count including the historical
     // duplicates a ticker accumulated before the re-seed was fixed.
