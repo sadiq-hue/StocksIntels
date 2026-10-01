@@ -1154,15 +1154,19 @@ function computeDynamicWeights(regime) {
 // across a 30-day startup snapshot vs a 90-day live window manufactures a
 // phantom win-rate gap.
 async function refreshPerformanceStats() {
-  // Counted per thesis, not per emitted row. The engine re-emits an unchanged
-  // call every cycle, so before the write-path dedup a single idea accumulated
-  // many outcome rows and this raw GROUP BY counted each one - which is what the
-  // Health tab reported as its win rate. The Forward Test tab already measures
-  // per thesis, so collapsing here keeps the two tabs in agreement.
+  // Counted per thesis and restricted to outcomes that meet the current signal
+  // spec (stop at least SPEC_MIN_STOP_PCT below entry, real target1 above it).
+  // The engine re-emits an unchanged call every cycle, so before the write-path
+  // dedup a single idea accumulated many outcome rows and this raw GROUP BY
+  // counted each one. It also used to pool signals generated with 0-10% stops
+  // alongside today's, comparing different risk configurations in one number.
+  // The Forward Test tab measures exactly this, so the two tabs agree.
   let wins = 0, losses = 0;
   try {
     const res = await pool.query(
-      `SELECT o.id, o.ticker, o.signal, o.entry_price, o.target1, o.result
+      `SELECT o.id, o.ticker, o.signal, o.entry_price, o.exit_price, o.stop_loss,
+              o.target1, o.result, o.close_reason, o.recorded_at, o.resolved_at,
+              o.signal_generated_at
        FROM signal_outcomes o
        WHERE COALESCE(o.signal_generated_at, o.recorded_at) > NOW() - $1::interval
          AND o.result IS NOT NULL AND o.source = 'live'
@@ -1170,6 +1174,7 @@ async function refreshPerformanceStats() {
       [`${SIGNAL_WINDOW_DAYS} days`]
     );
     for (const t of collapseToTheses(res.rows)) {
+      if (!meetsSignalSpec(t).ok) continue;
       if (t.result === 'win') wins++; else if (t.result === 'loss') losses++;
     }
   } catch (e) {
@@ -2297,6 +2302,59 @@ function collapseToThesesDetailed(rows) {
   return { kept, superseded };
 }
 
+// Reasons an exit is known to be a genuine target1 hit. For any other exit the
+// exit price is NOT the target (it may be a trailing stop, a score flip or a
+// fade), so a target cannot be derived from it.
+const SPEC_TARGET_HIT_REASONS = ['target reached', 'target1 milestone', 'ultimate target reached'];
+// Audit spec: only count outcomes generated under the current risk profile.
+// The stop floor is a floor, so live stops are >= this; older signals were
+// generated with 0-10% stops and mixing those with today's would compare
+// different risk configurations in one win rate.
+const SPEC_MIN_STOP_PCT = 0.15;
+const SPEC_STOP_TOLERANCE = 0.005;
+
+/**
+ * Does this resolved outcome meet the current signal spec (stop at least
+ * SPEC_MIN_STOP_PCT below entry, and a real target1 above entry)?
+ *
+ * Levels come from the stored stop_loss/target1 columns when present. Legacy
+ * rows predate those columns, so they are derived: a LOSS exits exactly at its
+ * stop, and a WIN exits at target1 only when the exit reason says a target was
+ * hit. Anything else is rejected rather than guessed, because a wrong stop or
+ * target would silently distort the win rate.
+ */
+function meetsSignalSpec(row) {
+  const entry = parseFloat(row.entry_price);
+  const exit = parseFloat(row.exit_price);
+  if (!(entry > 0) || !(exit > 0)) {
+    return { ok: false, reason: 'no usable entry/exit' };
+  }
+  let stop, target1, derived = false;
+  if (row.stop_loss != null && row.target1 != null) {
+    stop = parseFloat(row.stop_loss);
+    target1 = parseFloat(row.target1);
+  } else if (row.result === 'loss') {
+    stop = exit;
+    target1 = null;
+    derived = true;
+  } else if (SPEC_TARGET_HIT_REASONS.includes(row.close_reason || '')) {
+    target1 = exit;
+    // target1 is anchored at 2x risk, so the stop sits half the gain below entry
+    stop = entry - (target1 - entry) / 2;
+    derived = true;
+  } else {
+    return { ok: false, reason: 'no reliable target1' };
+  }
+  if (!(target1 > entry)) {
+    return { ok: false, reason: 'no valid target1' };
+  }
+  const stopDist = (entry - stop) / entry;
+  if (!(stopDist >= SPEC_MIN_STOP_PCT - SPEC_STOP_TOLERANCE)) {
+    return { ok: false, reason: `stop ${(stopDist * 100).toFixed(1)}% < ${SPEC_MIN_STOP_PCT * 100}%` };
+  }
+  return { ok: true, stop, target1, stopDist, derived };
+}
+
 /**
  * Detailed form of the collapse: also returns the rows that were superseded, i.e.
  * the repeat emissions of an unchanged call. The reporting callers only need the
@@ -2627,8 +2685,22 @@ async function getForwardTestStats() {
   const CONF_MED = 40;  // median
   const confOf = (c) => c == null ? 'unknown' : c >= CONF_HIGH ? 'high' : c >= CONF_MED ? 'med' : 'low';
 
-  // Aggregates: one row per thesis, so a repeatedly re-emitted call is counted once.
+  // Only count outcomes that meet the current signal spec. Older signals were
+  // generated with 0-10% stops, so pooling them with today's signals compares
+  // different risk configurations in a single win rate. Exclusions are counted
+  // and surfaced rather than applied silently.
+  const specRows = [];
+  const specExcluded = { 'no reliable target1': 0, 'no valid target1': 0, 'no usable entry/exit': 0, 'stop below floor': 0 };
   for (const r of thesisRows) {
+    if (r.result !== 'win' && r.result !== 'loss') continue;
+    const v = meetsSignalSpec(r);
+    if (v.ok) { specRows.push(r); continue; }
+    if (v.reason.startsWith('stop ')) specExcluded['stop below floor']++;
+    else specExcluded[v.reason] = (specExcluded[v.reason] || 0) + 1;
+  }
+
+  // Aggregates: one row per thesis, so a repeatedly re-emitted call is counted once.
+  for (const r of specRows) {
     total++;
     if (r.result === 'win') wins++; else losses++;
     const gAt = r.signal_generated_at ? new Date(r.signal_generated_at).getTime() : null;
@@ -2769,7 +2841,7 @@ async function getForwardTestStats() {
   // disappear inside a US-dominated pool. Market is derived from the ticker so
   // no schema change is needed and historical rows are covered too.
   const byMarket = { NSE: { total: 0, wins: 0, winRate: null }, US: { total: 0, wins: 0, winRate: null } };
-  for (const r of thesisRows) {
+  for (const r of specRows) {
     if (r.result !== 'win' && r.result !== 'loss') continue;
     const isNse = NSE_SYMBOLS.includes(String(r.ticker).toUpperCase());
     const bucket = isNse ? byMarket.NSE : byMarket.US;
@@ -2809,6 +2881,20 @@ async function getForwardTestStats() {
     openRows: openMtm ? openMtm.rows : null,
     openMonitored: getOpenPositionCount(),
     resolutionRate,
+    // Which outcomes the headline win rate is allowed to count, and why the rest
+    // were dropped. Shown in the UI so the sample size is never a surprise.
+    spec: {
+      minStopPct: SPEC_MIN_STOP_PCT,
+      retained: total,
+      totalResolved: thesisRows.length,
+      excluded: specExcluded,
+      // Almost all history predates the current stop floor, so the qualifying
+      // sample starts very small and rebuilds as legacy rows age out of the
+      // window. Below this floor a percentage is noise, so the UI must say so
+      // rather than present it as a win rate.
+      minSample: 30,
+      sampleSufficient: total >= 30,
+    },
     openMarkToMarket: openMtm,
     allSignals,
     log,

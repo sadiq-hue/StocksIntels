@@ -6173,7 +6173,21 @@ async function fetchForwardTest() {
         ${openLine}
         ${all && all.profitablePct != null ? `<p style="line-height:1.5;margin-top:6px">All signals including open ones: <b>${allTxt}</b>${all.partial ? ' <i>(partial &mdash; ' + oMtm.priced + ' of ' + s.openSignals + ' open positions could be priced)</i>' : ''}.</p>` : ''}
       </div>`;
+    const spec = s.spec || null;
+    const specThin = spec && spec.sampleSufficient === false;
+    const specNote = spec && spec.excluded && (spec.totalResolved - spec.retained) > 0
+      ? `<div style="font-size:11px;color:#6b7280;margin:-8px 0 16px">Counted against the current signal spec (stop at least ${Math.round(spec.minStopPct * 100)}% below entry, real target1 above it): <b>${spec.retained}</b> of ${spec.totalResolved} resolved outcomes qualify.
+         ${Object.entries(spec.excluded).filter(([, v]) => v > 0).map(([k, v]) => `${v} excluded &mdash; ${k}`).join('; ')}.
+         Earlier signals were generated with narrower stops, so they are not comparable and are left out.</div>`
+      : '';
+    const thinWarn = specThin
+      ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#991b1b">
+           <b>Sample too small to be a win rate.</b> Only ${spec.retained} outcomes currently meet the current signal spec (${spec.minSample} needed). Almost all history was generated with narrower stops, so it is excluded; the qualifying sample rebuilds as those older rows age out of the ${180}-day window. Treat this percentage as provisional.
+         </div>`
+      : '';
     el.innerHTML = `
+      ${specNote}
+      ${thinWarn}
       ${dedupNote}
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4" style="margin-bottom:16px">
         <div class="stat-card" title="Distinct calls (theses) that have finished — after collapsing repeat emissions of an unchanged call"><div class="stat-value" style="color:#111827">${s.totalOutcomes || 0}</div><div class="stat-label">Resolved Outcomes</div></div>
