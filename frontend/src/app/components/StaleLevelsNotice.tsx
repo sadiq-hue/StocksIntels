@@ -56,8 +56,13 @@ export function StaleLevelsNotice({ selected }: { selected: any }) {
 
   useEffect(() => {
     if (!ticker) return;
+    // Kenyan listings must be requested as NSE:SYM. A bare "CGEN" resolves to an
+    // unrelated US listing on the quote feed, so the drift would be computed
+    // against the wrong instrument entirely.
+    const isNse = selected?.market === "NSE" || selected?.currency === "KES";
+    const sym = isNse ? `NSE:${ticker}` : ticker;
     let cancelled = false;
-    fetch(`${API_URL}/quote/${encodeURIComponent(String(ticker).startsWith("NSE:") ? ticker : ticker)}`)
+    fetch(`${API_URL}/quote/${encodeURIComponent(sym)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no quote"))))
       .then((q) => {
         if (cancelled) return;
@@ -67,7 +72,7 @@ export function StaleLevelsNotice({ selected }: { selected: any }) {
       })
       .catch(() => { if (!cancelled) setLiveFailed(true); });
     return () => { cancelled = true; };
-  }, [ticker]);
+  }, [ticker, selected?.market, selected?.currency]);
 
   const price = live ?? cached;
   if (!entry || !price) return null;

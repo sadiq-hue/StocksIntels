@@ -136,13 +136,19 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
   const [live, setLive] = useState<{ price: number | null; at: number }>({ price: null, at: 0 });
   useEffect(() => {
     if (!s.ticker) return;
+    // Kenyan listings MUST be requested with the NSE: prefix. A bare "CGEN"
+    // resolves to a different company on the US feed (it returned 2.31 against a
+    // true KES 284) and "SCOM" 404s entirely, which would have put a wrong live
+    // price into the levels table and a meaningless drift on every NSE holding.
+    const isNse = s.market === "NSE" || s.currency === "KES";
+    const sym = isNse ? `NSE:${s.ticker}` : s.ticker;
     let dead = false;
-    fetch(`${API_URL}/quote/${encodeURIComponent(s.ticker)}`)
+    fetch(`${API_URL}/quote/${encodeURIComponent(sym)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("q"))))
       .then((q) => { const p = pos(q?.price); if (!dead && p) setLive({ price: p, at: Date.now() }); })
       .catch(() => { });
     return () => { dead = true; };
-  }, [s.ticker]);
+  }, [s.ticker, s.market, s.currency]);
 
   const price = live.price ?? pos(s.price);
   const priceIsLive = live.price != null;
