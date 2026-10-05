@@ -43,7 +43,6 @@ import {
 import { fetchStockHistory, type PriceBar } from "../services/marketDataService";
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import type { Signal as SharedSignal } from "../types/signals";
-import { StockIntelligencePanel } from "../components/StockIntelligencePanel";
 import { SignalContextExtras } from "../components/SignalContext";
 
 import { FinancialMetrics } from "../components/FinancialMetrics";
@@ -1417,19 +1416,13 @@ export function StockAnalysisPage() {
             </Card>
           )}
 
-          {/* ── Intelligence Score (pillar 1: what matters, and why) ── */}
-          {!loadingData && stockSignal && (
-            <StockIntelligencePanel
-              signal={stockSignal}
-              pe={
-                financialReport?.data?.quote?.pe
-                ?? financialReport?.data?.keyMetrics?.peRatio
-                ?? (activeSelection.pe > 0 ? activeSelection.pe : null)
-              }
-              volatility={(stockSignal as any)?.risk?.volatility ?? null}
-              maxDrawdown={(stockSignal as any)?.risk?.maxDrawdown1y ?? null}
-            />
-          )}
+          {/* No Intelligence Score panel here by design: the Signals page already
+              carries the full score breakdown (fundamental / technical / financial
+              / macro / insider / overall) with the same evidence behind it. A
+              second copy here duplicated it and, because this page's signal can
+              arrive without an analysis block, rendered every dimension as
+              "Not scored" - worse than no panel at all. Canonical home for the
+              score is the Signals page. */}
 
           {/* ── Analytics Grid ── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
