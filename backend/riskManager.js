@@ -331,6 +331,11 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
   // gate, every stale-signal-on-restart becomes an instant ±10% / ±20% resolved
   // outcome with zero real market participation.
   const MIN_SIGNAL_AGE_MS = 5 * 60 * 1000; // 5 minutes
+// Max age of a position that may stay open before it is closed at market and
+// booked as 'expired'. A year is a legitimate long-term hold, so nothing closes
+// sooner; this only guarantees the position book is finite and that every exit
+// is recorded rather than silently forgotten. 0 disables the horizon.
+const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DAYS || '365', 10) || 365) * 24 * 60 * 60 * 1000;
 
   // Legacy sub-floor stops (pre-MIN_STOP_PCT) must not resolve on ordinary noise.
   // Normalize BEFORE any resolution check so the effective exit level is the floor
@@ -354,9 +359,28 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
     // entry (broken/inverted levels) or when the price hasn't actually moved past the
     // level (stale/identical cached quote). Otherwise every broken position resolves
     // as an instant loss with entry == exit on the next cycle.
-    const entry = previous.entryPrice;
-    const signalAge = Date.now() - (previous.timestamp || 0);
-    if (signalAge < MIN_SIGNAL_AGE_MS) {
+      const entry = previous.entryPrice;
+      const signalAge = Date.now() - (previous.timestamp || 0);
+
+      // Horizon reached. A position runs until it hits its stop or its target -
+      // there is no shorter timer, because this is a long-horizon engine and a
+      // year is a legitimate holding period. But it cannot run for ever: nothing
+      // else was bounding these, and unbounded open positions eventually overflow
+      // the tracking map, at which point the monitor-first gate stops those
+      // symbols producing any signal at all. (In production: 969 open positions,
+      // none of which had reached either level, with signal generation down to
+      // 7 tickers/day from a peak of 88.)
+      //
+      // Closed at market and BOOKED as 'expired'. Forgetting the position instead
+      // would leave the trade counted as neither a win nor a loss, quietly
+      // distorting the forward test - so the exit is recorded either way.
+      if (POSITION_HORIZON_MS > 0 && signalAge >= POSITION_HORIZON_MS) {
+        exitPrice = currentPrice;
+        const pnl = (currentPrice - entry) / entry * 100;
+        resultStr = pnl > 0 ? 'win' : 'loss';
+        closeReason = 'expired';
+        console.log(`[RiskManager] ${symbol} ${previous.signal} HORIZON reached after ${Math.round(signalAge / 86400000)}d - closing at market ${currentPrice} (${pnl.toFixed(1)}%)`);
+      } else if (signalAge < MIN_SIGNAL_AGE_MS) {
       // Young signals (freshly created this cycle or restored moments ago) cannot
       // resolve via stop/target — their entry price may not yet reflect a
       // confirmed live-market level. A defer here is a no-op; the position

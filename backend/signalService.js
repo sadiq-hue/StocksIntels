@@ -149,9 +149,25 @@ const schemaReadyPromise = (async () => {
 // fill and positions run until stop/target (no expiry), so a 180-day window keeps
 // monitored signals, live/forward test stats, and the auto backtest aligned with
 // the full signal lifecycle instead of only the last day. Open positions restore
-// within this same window (see restoreStateFromDb) and OPEN_POSITION_MAX_AGE_HOURS
-// below is derived from it so stats and position-restore can never drift apart.
-const SIGNAL_WINDOW_DAYS = 180;
+// within this same window (see restoreStateFromDb) and the position horizon
+// below, so stats and position-restore can never drift apart.
+// Max age of a position that may stay open. A position runs until it hits its
+// stop or its target - there is deliberately no shorter timer, because the
+// engine is a long-horizon tool and a year is a legitimate holding period.
+//
+// Past this horizon the position is closed at market and the exit is BOOKED as
+// 'expired', rather than being quietly forgotten. Forgetting it is worse than
+// closing it: the trade then appears in neither the wins nor the losses, which
+// silently distorts the forward test.
+//
+// This replaces OPEN_POSITION_MAX_AGE_HOURS, which was defined and exported but
+// never actually consumed anywhere - the restore query has no age filter. So in
+// practice nothing was bounding open positions at all.
+const POSITION_HORIZON_DAYS = Math.max(
+  30,
+  parseInt(process.env.POSITION_HORIZON_DAYS || '365', 10) || 365
+);
+const SIGNAL_WINDOW_DAYS = Math.max(365, POSITION_HORIZON_DAYS);
 // Physical retention is decoupled from the display/backtest window: the runtime
 // window (SIGNAL_WINDOW_DAYS) decides what the stats, live/forward test and auto
 // backtest show, while retentionDays (engine config, default 365; env override
@@ -173,7 +189,6 @@ const RETENTION_DAYS = Math.max(90, parseInt(process.env.RETENTION_DAYS || '365'
 // full SIGNAL_WINDOW_DAYS evaluation window. The resolved-outcome check
 // (9c1ebea fix) already prevents re-monitoring resolved positions, so there
 // is no harm in restoring more — every open position gets its fair chance.
-const OPEN_POSITION_MAX_AGE_HOURS = Math.max(1, parseInt(process.env.OPEN_POSITION_MAX_AGE_HOURS || String(SIGNAL_WINDOW_DAYS * 24), 10) || (SIGNAL_WINDOW_DAYS * 24)); // default = SIGNAL_WINDOW_DAYS days, so position restore matches the evaluation window
 // Restore performance stats and portfolio state from DB on startup
 var _lastRestoreFailed = false;
 // Boot restore with a self-healing retry. If the DB is briefly unreachable at
@@ -5677,5 +5692,5 @@ module.exports = {
   getOpenPositionsMarkToMarket,
   collapseToTheses,
   collapseToThesesDetailed,
-  OPEN_POSITION_MAX_AGE_HOURS,
+  POSITION_HORIZON_DAYS,
 };
