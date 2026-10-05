@@ -4,15 +4,17 @@ import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { X, Search, GitCompare, TrendingUp, TrendingDown, Loader2, Plus, Download, Share2, Check, Trophy, ChevronDown } from "lucide-react";
+import { X, Search, GitCompare, TrendingUp, TrendingDown, Loader2, Plus, Download, Share2, Check, Trophy, ChevronDown, Calculator, Sparkles } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   RadarChart, PolarGrid, PolarAngleAxis, Radar,
+  BarChart, Bar, ReferenceLine,
 } from "recharts";
 import { authFetch } from "../auth/tokenStore";
 import { useCompare } from "../contexts/CompareContext";
 import { fetchStockHistory, type PriceBar } from "../services/marketDataService";
 import { formatCompactNumber } from "../utils/format";
+import { FairValueCalculator, DcfCalculator, type DcfSeed } from "../components/ValuationCalculators";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const MAX_STOCKS = 5;
@@ -250,6 +252,49 @@ function buildQuickTake(data: CompareStock[]): Quick[] {
   ].filter((x): x is Quick => x != null);
 }
 
+// Pull the inputs the valuation calculators need out of the comparison payload
+// plus the warmed /api/financials history. Everything is best-effort: a missing
+// figure simply leaves that field blank for the user to type.
+function buildCalcSeed(s: CompareStock, finRow: any): DcfSeed {
+  const income: any[] = finRow?.incomeStatementHistory || [];
+  const cash: any[] = finRow?.cashFlowStatementHistory || [];
+  const balance: any[] = finRow?.balanceSheetHistory || [];
+  const km: any = finRow?.keyMetricsHistory?.[0] || finRow?.keyMetrics || {};
+
+  const byDateDesc = (a: any[]) => [...a].sort(
+    (x, y) => new Date(y.date || 0).getTime() - new Date(x.date || 0).getTime()
+  );
+  const incomeNew = byDateDesc(income);
+  const cashNew = byDateDesc(cash);
+  const balanceNew = byDateDesc(balance);
+
+  const eps =
+    km.eps ?? incomeNew.find((o) => o.epsdiluted ?? o.eps)?.epsdiluted ??
+    incomeNew.find((o) => o.epsdiluted ?? o.eps)?.eps ?? null;
+  const fcf =
+    cashNew.find((o) => o.freeCashFlow)?.freeCashFlow ??
+    (cashNew.find((o) => o.operatingCashFlow) && cashNew.find((o) => o.capitalExpenditure)
+      ? (cashNew.find((o) => o.operatingCashFlow)!.operatingCashFlow || 0) +
+        (cashNew.find((o) => o.capitalExpenditure)!.capitalExpenditure || 0)
+      : null);
+  const shares = km.sharesOutstanding ?? null;
+  const cash0 = balanceNew.find((o) => o.cashAndCashEquivalents)?.cashAndCashEquivalents ?? null;
+  const debt0 = balanceNew.find((o) => o.totalDebt)?.totalDebt ?? null;
+
+  return {
+    ticker: s.ticker,
+    currency: s.currency || "USD",
+    price: s.quote.price,
+    eps: typeof eps === "number" && isFinite(eps) ? eps : null,
+    pe: s.metrics.pe && s.metrics.pe > 0 ? s.metrics.pe : null,
+    epsGrowth: typeof s.metrics.epsGrowth === "number" ? s.metrics.epsGrowth : null,
+    fcf: typeof fcf === "number" && isFinite(fcf) ? fcf : null,
+    shares: typeof shares === "number" && shares > 0 ? shares : null,
+    netCash: cash0 != null || debt0 != null ? (cash0 ?? 0) - (debt0 ?? 0) : null,
+    fcfYield: typeof s.metrics.fcfYield === "number" ? s.metrics.fcfYield : null,
+  };
+}
+
 export function ComparePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -268,6 +313,11 @@ export function ComparePage() {
   const [chartData, setChartData] = useState<any[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Valuation calculators: which panel is open, and the ticker they are seeded
+  // from. Seeded from the comparison payload so the assumptions start from real
+  // company figures rather than round numbers.
+  const [calcOpen, setCalcOpen] = useState({ fair: false, dcf: false });
+  const [calcSeed, setCalcSeed] = useState<DcfSeed | null>(null);
 
   const selKey = selected.join(",");
 
@@ -578,6 +628,14 @@ export function ComparePage() {
 
   const quickTake = useMemo(() => buildQuickTake(data), [data]);
 
+  // Seed the calculators from the first selected stock as soon as one is opened,
+  // so the panel is never empty after the user clicks the toggle.
+  useEffect(() => {
+    if (!calcOpen.fair && !calcOpen.dcf) return;
+    if (calcSeed || data.length === 0) return;
+    setCalcSeed(buildCalcSeed(data[0], fin[data[0].ticker]));
+  }, [calcOpen.fair, calcOpen.dcf, data, fin, calcSeed]);
+
   const exportCsv = () => {
     const header = ["Metric", ...data.map((s) => `${s.ticker} (${s.currency})`)];
     const lines = [header.map((h) => `"${h}"`).join(",")];
@@ -845,6 +903,58 @@ export function ComparePage() {
             const narrative = buildPerfNarrative(data);
             return narrative ? <Card className="p-4 text-sm text-muted-foreground leading-relaxed">{narrative}</Card> : null;
           })()}
+
+          {/* Valuation calculators */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCalcOpen((v) => ({ ...v, fair: !v.fair }))}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${calcOpen.fair ? "border-[#0D7490]/40 bg-[#0D7490]/10 text-[#0D7490]" : "border-border text-muted-foreground hover:bg-muted"}`}
+            >
+              <Calculator className="size-3.5" /> Fair Value
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalcOpen((v) => ({ ...v, dcf: !v.dcf }))}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${calcOpen.dcf ? "border-violet-500/40 bg-violet-500/10 text-violet-600" : "border-border text-muted-foreground hover:bg-muted"}`}
+            >
+              <Sparkles className="size-3.5" /> DCF
+            </button>
+            {calcSeed && (
+              <span className="text-[11px] text-muted-foreground">
+                Pre-filled from <span className="font-medium text-foreground">{calcSeed.ticker}</span> — edit any assumption.
+              </span>
+            )}
+            <div className="relative ml-auto">
+              <select
+                value={calcSeed?.ticker || ""}
+                onChange={(e) => {
+                  const t = e.target.value;
+                  if (!t) { setCalcSeed(null); return; }
+                  const s = data.find((d) => d.ticker === t);
+                  if (s) setCalcSeed(buildCalcSeed(s, fin[s.ticker]));
+                }}
+                className="rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground"
+              >
+                <option value="">Select a ticker…</option>
+                {data.map((s) => (
+                  <option key={s.ticker} value={s.ticker}>{s.ticker} — {s.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {calcOpen.fair && calcSeed && (
+            <FairValueCalculator seed={calcSeed} onClose={() => setCalcOpen((v) => ({ ...v, fair: false }))} />
+          )}
+          {calcOpen.dcf && calcSeed && (
+            <DcfCalculator seed={calcSeed} onClose={() => setCalcOpen((v) => ({ ...v, dcf: false }))} />
+          )}
+          {(calcOpen.fair || calcOpen.dcf) && !calcSeed && (
+            <Card className="p-6 text-center text-xs text-muted-foreground">
+              Choose a ticker above to pre-fill the calculator with the company's figures.
+            </Card>
+          )}
 
           {/* Metric matrix */}
           <Card className="p-0 overflow-hidden">
