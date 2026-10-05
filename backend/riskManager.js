@@ -192,10 +192,23 @@ function updatePortfolioRisk(portfolioState, symbol, currentPrice, priceHistory,
     cvar95 = mc.cvar95 / 100;
   }
 
+  // Throttle conviction after a losing streak. The floor matters: confidence is
+  // multiplied by this value, so a 0 here mutes every Buy in the universe
+  // (0 non-Hold) and the streak can never clear, because consecutiveLosses is
+  // only reset by a booked WIN - which a muted engine can never open a
+  // position to earn. That self-lock sat at 0 for 4 days in production.
+  // 0.25 is the same multiplier the 5-loss tier already uses: conviction is
+  // cut hard after a bad run, but generation always recovers.
   let circuitBreaker = 1;
-  if (portfolioState.consecutiveLosses >= 3) circuitBreaker = 0.5;
-  if (portfolioState.consecutiveLosses >= 5) circuitBreaker = 0.25;
-  if (portfolioState.consecutiveLosses >= 8) circuitBreaker = 0;
+  const streak = portfolioState.consecutiveLosses || 0;
+  if (streak >= 3) circuitBreaker = 0.5;
+  if (streak >= 5) circuitBreaker = 0.25;
+  if (streak >= 8) {
+    if (circuitBreaker !== 0.25) {
+      console.warn(`[RiskManager] Loss streak ${streak} - conviction throttled to 0.25x (floor, not 0)`);
+    }
+    circuitBreaker = 0.25;
+  }
 
   return { var95: Math.round(var95 * 1000) / 10, var99: Math.round(var99 * 1000) / 10, cvar95: Math.round(cvar95 * 1000) / 10, circuitBreaker, sharpe: null };
 }
