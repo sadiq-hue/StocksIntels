@@ -408,38 +408,30 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
       {/* 4. rationale, with insufficient data separated from neutral */}
       <Section title="Position Rationale" sub="why the model takes this view">
         <div className="space-y-2.5">
-          <div>
-            <p className="mb-1 text-[11px] font-semibold text-emerald-700">Supporting factors</p>
-            {supporting.length ? (
-              <ul className="space-y-0.5">
-                {supporting.map((c) => (
-                  <li key={c.name} className="flex flex-wrap items-baseline gap-x-2 text-[11.5px]">
-                    <span className="font-medium text-foreground">{c.name}</span>
-                    <span className="text-muted-foreground">{c.rating || ""}</span>
-                    <span className="text-emerald-600">· Positive</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-[11.5px] text-muted-foreground">No factor met the model's positive threshold.</p>
-            )}
-          </div>
-          <div>
-            <p className="mb-1 text-[11px] font-semibold text-red-700">Working against</p>
-            {headwinds.length ? (
-              <ul className="space-y-0.5">
-                {headwinds.map((c) => (
-                  <li key={c.name} className="flex flex-wrap items-baseline gap-x-2 text-[11.5px]">
-                    <span className="font-medium text-foreground">{c.name}</span>
-                    <span className="text-muted-foreground">{c.rating || ""}</span>
-                    <span className="text-red-600">· Negative</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-[11.5px] text-muted-foreground">No factor met the model's negative threshold.</p>
-            )}
-          </div>
+          {/* Structured factor rows. The metric name appeared twice before -
+              once as a label and again inside the rating text
+              ("EV/EBITDA" / "EV/EBITDA 5.3 below industry median 12"). */}
+          {([["Supporting factors", supporting, "Positive"],
+             ["Working against", headwinds, "Negative"]] as const).map(([title, items, tone]) => (
+            <div key={title}>
+              <p className={`mb-1 text-[11px] font-semibold ${tone === "Positive" ? "text-emerald-700" : "text-red-700"}`}>
+                {title}
+              </p>
+              {items.length ? (
+                <ul className="space-y-0.5">
+                  {items.map((c) => (
+                    <li key={c.name} className="flex flex-wrap items-baseline gap-x-2 text-[11.5px]">
+                      <span className="font-medium text-foreground">{c.name}</span>
+                      <span className="text-muted-foreground">{c.rating || ""}</span>
+                      <span className={tone === "Positive" ? "text-emerald-600" : "text-red-600"}>· {tone}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[11.5px] text-muted-foreground">No factor met the model's {tone.toLowerCase()} threshold.</p>
+              )}
+            </div>
+          ))}
           {insufficient.length > 0 && (
             <div>
               <p className="mb-1 text-[11px] font-semibold text-slate-600">Not included in the assessment</p>
@@ -518,20 +510,81 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
               </tbody>
             </table>
           </div>
-          {technicalSummary(technicals) && (
-            <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground">{technicalSummary(technicals)}</p>
+          {technicalSummary(technicals, ti.rsiSignal) && (
+            <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground">
+              Technical interpretation: {technicalSummary(technicals, ti.rsiSignal)}
+            </p>
           )}
         </Section>
       )}
 
-      {/* 7. macro: verdict first, factors on demand */}
+      {/* 7. news and sentiment */}
+      {(() => {
+        const ns = s.newsSummary;
+        const news = Array.isArray(s.news) ? s.news : [];
+        const net = String(ns?.net || "").toLowerCase();
+        const tone = net === "positive" ? "Positive" : net === "negative" ? "Negative" : "Neutral";
+        const judgement = news.length < 3;
+        if (!ns && news.length === 0) return null;
+        return (
+          <Section
+            title="News & Sentiment"
+            sub={`${ns ? ns.count : news.length} tracked stor${(ns ? ns.count : news.length) === 1 ? "y" : "ies"}`}
+            right={
+              <Badge className={`text-[10px] ${judgement ? VERDICT_STYLE["Insufficient data"] : VERDICT_STYLE[tone as Verdict]}`}>
+                {judgement ? "Insufficient data" : tone}
+              </Badge>
+            }
+          >
+            {ns && (
+              <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-[11.5px]">
+                <span className="text-emerald-600">{ns.positive} positive</span>
+                <span className="text-muted-foreground">{ns.neutral} neutral</span>
+                <span className="text-red-600">{ns.negative} negative</span>
+              </div>
+            )}
+            <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+              {judgement
+                ? "Too few tracked stories to read a reliable tone from coverage of this stock."
+                : net === "positive"
+                  ? "Recent coverage leans positive, with no dominant negative catalyst identified."
+                  : net === "negative"
+                    ? "Recent coverage leans negative. Treat this as an active risk to the current view."
+                    : "Recent coverage is broadly balanced, with no dominant catalyst in either direction."}
+            </p>
+            {news.length > 0 && (
+              <details className="group mt-2">
+                <summary className="cursor-pointer list-none text-[11px] font-medium text-[#0D7490] hover:underline">
+                  <span className="inline-flex items-center gap-1">
+                    <ChevronDown className="size-3 transition-transform group-open:rotate-180" />
+                    View the {news.length} tracked {news.length === 1 ? "story" : "stories"}
+                  </span>
+                </summary>
+                <ul className="mt-1.5 space-y-1">
+                  {news.slice(0, 6).map((h: any, i: number) => (
+                    <li key={i} className="border-b border-border/40 pb-1 text-[11px] leading-relaxed last:border-0">
+                      <span className="font-medium text-foreground">{h.headline}</span>
+                      <span className="ml-1.5 text-muted-foreground">
+                        {h.source}
+                        {h.publishedAt ? ` · ${new Date(h.publishedAt).toLocaleDateString()}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </Section>
+        );
+      })()}
+
+      {/* 8. macro: verdict first, factors on demand */}
       {macro && (
         <Section
           title="Macro Environment"
           sub={macro.country ? `${macro.country} · ${macro.score}/100` : undefined}
           right={
-            <Badge className={`text-[10px] ${macroPos > macroNeg ? VERDICT_STYLE.Positive : macroNeg > macroPos ? VERDICT_STYLE.Negative : VERDICT_STYLE.Neutral}`}>
-              {macroPos > macroNeg ? "Supportive" : macroNeg > macroPos ? "Headwind" : "Neutral"}
+            <Badge className={`text-[10px] ${macroBadge(macro, macroFactors).tone}`}>
+              {macroBadge(macro, macroFactors).label}
             </Badge>
           }
         >
@@ -641,30 +694,59 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
   );
 }
 
-function technicalSummary(rows: { label: string; reading: string; read: string | null }[]): string {
+/**
+ * Macro badge.
+ *
+ * Previously this counted supportive vs adverse factors and labelled the result
+ * "Supportive" while the summary sentence directly beneath it read "neutral",
+ * because the two used different sources of truth. The engine's own `macro.signal`
+ * is the verdict the rest of the product uses, so the badge follows it; the
+ * factor counts are used only as a tiebreak when the engine has no signal.
+ */
+function macroBadge(macro: any, factors: { verdict: Verdict }[]): { label: string; tone: string } {
+  const engine = String(macro?.signal || "").toLowerCase();
+  if (/bull|support|positive/.test(engine)) return { label: "Supportive", tone: VERDICT_STYLE.Positive };
+  if (/bear|headwind|negative|caution/.test(engine)) return { label: "Headwind", tone: VERDICT_STYLE.Negative };
+  if (engine) return { label: "Neutral", tone: VERDICT_STYLE.Neutral };
+  const p = factors.filter((f) => f.verdict === "Positive").length;
+  const n = factors.filter((f) => f.verdict === "Negative").length;
+  if (p > n) return { label: "Supportive", tone: VERDICT_STYLE.Positive };
+  if (n > p) return { label: "Headwind", tone: VERDICT_STYLE.Negative };
+  return { label: "Neutral", tone: VERDICT_STYLE.Neutral };
+}
+
+function technicalSummary(rows: { label: string; reading: string; read: string | null }[], rsiSignal?: any): string {
   const rsi = rows.find((x) => x.label === "RSI");
   const trend = rows.find((x) => x.label === "Trend");
+  const macd = rows.find((x) => x.label === "MACD");
   const bits: string[] = [];
-  if (trend?.reading) bits.push(`trend is ${String(trend.reading).toLowerCase()}`);
-  if (rsi?.reading) {
-    const v = Number(rsi.reading);
-    if (isFinite(v) && v > 70) bits.push("though the RSI indicates the stock may be extended in the short term");
-    else if (isFinite(v) && v < 30) bits.push("though the RSI indicates the stock may be approaching oversold");
-    else bits.push("with RSI in a neutral range");
+  if (trend?.reading) bits.push(`the broader trend is ${String(trend.reading).toLowerCase()}`);
+  // Prefer the engine's own RSI interpretation. Hardcoded thresholds said
+  // "neutral range" for an RSI the engine had already labelled "Approaching
+  // Oversold", which contradicted the Technical Picture table right above it.
+  const rs = String(rsiSignal || rsi?.read || "").toLowerCase();
+  if (rs) bits.push(`RSI is ${rs}`);
+  else if (rsi?.reading) bits.push("with RSI in a neutral range");
+  const macdRead = String(macd?.reading || "").toLowerCase();
+  if (macdRead === "bullish" && /down|bear/.test(String(trend?.reading || "").toLowerCase())) {
+    bits.push("although the MACD is turning bullish, which can precede stabilisation");
   }
-  return bits.length ? `Technical momentum is ${bits.join(", ")}.` : "";
+  return bits.length ? `${cap(bits.join(", "))}.` : "";
 }
+function cap(s: string) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 function macroSummary(macro: any, factors: { label: string; verdict: Verdict }[]): string {
   const p = factors.filter((f) => f.verdict === "Positive").map((f) => f.label);
   const n = factors.filter((f) => f.verdict === "Negative").map((f) => f.label);
   const neu = factors.filter((f) => f.verdict === "Neutral").length;
   const where = macro?.country ? `The ${macro.country} ` : "The ";
-  let t = `${where}macro environment is ${macro?.signal ? String(macro.signal).toLowerCase() : "mixed"} for this position (${macro?.score}/100). `;
+  const stance = macro?.signal ? String(macro.signal).toLowerCase() : "mixed";
+  let t = `${where}macro environment is ${stance} for this position (${macro?.score}/100). `;
+  // "X and Y supportive" was missing its verb.
   const bits: string[] = [];
-  if (p.length) bits.push(`${listOf(p)} supportive`);
-  if (n.length) bits.push(`${listOf(n)} a headwind`);
-  if (neu) bits.push(`${neu} factor${neu === 1 ? "" : "s"} neutral`);
-  if (bits.length) t += `${bits.join(", ")}.`;
+  if (p.length) bits.push(`${listOf(p)} ${p.length === 1 ? "is" : "are"} supportive`);
+  if (n.length) bits.push(`${listOf(n)} ${n.length === 1 ? "is" : "are"} a headwind`);
+  if (neu) bits.push(`${neu} factor${neu === 1 ? " is" : "s are"} neutral`);
+  if (bits.length) t += `${cap(bits.join(", "))}.`;
   return t;
 }

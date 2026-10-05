@@ -217,13 +217,27 @@ async function _persistSignalCache(signals) {
 async function _loadSignalCacheFromDb() {
   try {
     const result = await pool.query(
-      `SELECT cache_value FROM app_cache WHERE cache_key = 'signals_cache'`
+      `SELECT cache_value, updated_at FROM app_cache WHERE cache_key = 'signals_cache'`
     );
     if (result.rows.length && result.rows[0].cache_value) {
-      _signalsCache = _normalizeSignalCurrency(result.rows[0].cache_value);
-      _signalsCacheTime = 0;
-      console.log(`[SignalService] Loaded ${_signalsCache.length} signals from cache DB (will regenerate in background)`);
-      return;
+      const cached = _normalizeSignalCurrency(result.rows[0].cache_value);
+      // Shape check, not a TTL check. app_cache is a durable snapshot that
+      // survives deploys, so a payload field added later is absent from every
+      // cached entry until a full cycle happens to repopulate it - the UI then
+      // renders "time not recorded" for every signal even though freshly
+      // generated ones carry it. A single missing marker means the cache was
+      // written by an older build, so drop it and force a rebuild instead of
+      // serving a stale shape to users.
+      const hasMarker = Array.isArray(cached) && cached.length > 0 && cached.some(s => s && s.generatedAt);
+      if (!hasMarker) {
+        console.log('[SignalService] Cached signals predate the current payload shape (no generatedAt) - discarding and rebuilding');
+        await pool.query(`DELETE FROM app_cache WHERE cache_key = 'signals_cache'`).catch(() => {});
+      } else {
+        _signalsCache = cached;
+        _signalsCacheTime = 0;
+        console.log(`[SignalService] Loaded ${_signalsCache.length} signals from cache DB (will regenerate in background)`);
+        return;
+      }
     }
   } catch { /* table may not exist */ }
 
