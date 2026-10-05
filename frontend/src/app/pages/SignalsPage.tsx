@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
@@ -16,6 +16,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../auth/AuthContext";
 import type { Signal as StockSignal } from "../types/signals";
 import { StaleLevelsNotice } from "../components/StaleLevelsNotice";
+import { MarketIntelligenceCard } from "../components/MarketIntelligenceCard";
 import { authFetch } from "../auth/tokenStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
@@ -53,7 +54,7 @@ const TYPE_STYLES: Record<string, string> = {
   Avoid: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
-// ── Signal condition definitions ─────────────────────────────────────────────
+// â”€â”€ Signal condition definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 interface ConditionDef {
   key: string; name: string; category: string;
 }
@@ -124,17 +125,17 @@ function fmtPrice(
   s: { currency?: string; market?: string; country?: string },
   v: number | null | undefined
 ): string {
-  if (v == null || Number.isNaN(v)) return "—";
+  if (v == null || Number.isNaN(v)) return "â€”";
   return curSym(s) + formatCurrency(v);
 }
 
 function fmtNum(v: number | null | undefined): string {
-  if (v == null || Number.isNaN(v)) return "—";
+  if (v == null || Number.isNaN(v)) return "â€”";
   return formatCurrency(v);
 }
 
 function changeDisplay(s: { price: number | null | undefined; change: number }): string {
-  if (s.price == null || Number.isNaN(s.price)) return "—";
+  if (s.price == null || Number.isNaN(s.price)) return "â€”";
   return `${s.change >= 0 ? "+" : ""}${s.change.toFixed(2)}%`;
 }
 
@@ -143,45 +144,25 @@ function insiderPositive(ins: { netShares: number | null; buyCount: number; sell
   return ins.netShares != null ? ins.netShares >= 0 : ins.buyCount >= ins.sellCount;
 }
 
-// ── Plain-language explanations ──────────────────────────────────────────────
+// â”€â”€ Plain-language explanations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const CONDITION_PLAIN: Record<string, string> = {
-  peSignal: "Price compared to the company's earnings, vs similar companies — is the stock cheap or expensive?",
-  evSignal: "What you pay for the whole business vs its earnings — a cheaper multiple is usually better.",
-  pbSignal: "Price vs the value of the company's assets — how much you pay per dollar of assets.",
+  peSignal: "Price compared to the company's earnings, vs similar companies â€” is the stock cheap or expensive?",
+  evSignal: "What you pay for the whole business vs its earnings â€” a cheaper multiple is usually better.",
+  pbSignal: "Price vs the value of the company's assets â€” how much you pay per dollar of assets.",
   divSignal: "Cash the company pays shareholders each year as a % of the share price.",
   revSignal: "How fast sales are growing compared to the same period last year.",
-  epsSignal: "Whether the latest profit report beat analyst expectations — surprises can move the stock.",
+  epsSignal: "Whether the latest profit report beat analyst expectations â€” surprises can move the stock.",
   mgnSignal: "Whether the company's profit margins are widening or shrinking over time.",
-  fcfSignal: "Cash left after expenses and reinvestment — the real money the business actually generates.",
-  deSignal: "How much debt the company carries vs shareholder money — lower is safer.",
+  fcfSignal: "Cash left after expenses and reinvestment â€” the real money the business actually generates.",
+  deSignal: "How much debt the company carries vs shareholder money â€” lower is safer.",
   crSignal: "Can it pay its short-term bills with short-term assets? Above 1.5 is generally healthy.",
-  roeSignal: "Profit earned per dollar of shareholder money — how efficiently it uses investors' capital.",
+  roeSignal: "Profit earned per dollar of shareholder money â€” how efficiently it uses investors' capital.",
   altSignal: "Bankruptcy-risk score. Above 3 = low risk; below 1.8 = danger zone.",
   insiderSignal: "Are the company's own directors and executives buying or selling its shares?",
-  newsSignal: "The overall tone of recent news coverage — positive, negative, or mixed.",
+  newsSignal: "The overall tone of recent news coverage â€” positive, negative, or mixed.",
 };
 
-const MACRO_LABELS: Record<string, string> = {
-  pmi: "Manufacturing Activity",
-  gdp: "GDP Growth",
-  gdpGrowth: "GDP Growth",
-  inflation: "Inflation",
-  creditRating: "Credit Rating",
-  politicalRisk: "Political Risk",
-  currentAccount: "Current Account",
-  interestRateDifferential: "Interest Rates vs Fed",
-};
 
-const MACRO_PLAIN: Record<string, string> = {
-  pmi: "Business activity gauge — above 50 means the economy is growing, below 50 it's shrinking.",
-  gdp: "How fast the whole economy is growing — steady growth supports company earnings.",
-  gdpGrowth: "How fast the whole economy is growing — steady growth supports company earnings.",
-  inflation: "How fast prices are rising — high inflation squeezes margins and consumer spending.",
-  creditRating: "The country's creditworthiness — investment grade means a safer backdrop for business.",
-  politicalRisk: "Political stability — a low score means a very stable environment.",
-  currentAccount: "Trade and income balance with the rest of the world — a large deficit can weaken the currency.",
-  interestRateDifferential: "Local interest rates vs the US Federal Reserve — affects currency strength and borrowing costs.",
-};
 
 function macroAsOfLabel(meta?: { live: boolean; sources: string[]; asOf: Record<string, string> }): string {
   if (!meta) return '';
@@ -191,8 +172,8 @@ function macroAsOfLabel(meta?: { live: boolean; sources: string[]; asOf: Record<
       .map((v) => String(v).match(/\d{4}/)?.[0])
       .filter(Boolean)
   )].sort();
-  const span = years.length ? ` · ${years[0]}${years.length > 1 ? `–${years[years.length - 1]}` : ''}` : '';
-  return `Live · ${(meta.sources || []).join(', ') || 'World Bank'}${span}`;
+  const span = years.length ? ` Â· ${years[0]}${years.length > 1 ? `â€“${years[years.length - 1]}` : ''}` : '';
+  return `Live Â· ${(meta.sources || []).join(', ') || 'World Bank'}${span}`;
 }
 
 function isReferenceField(meta: { referenceFields?: string[] } | undefined, key: string): boolean {
@@ -234,19 +215,19 @@ function influentialNews<T extends { headline: string; catalystDirection?: strin
 
 function ratingPlain(signal: string): string {
   switch (signal) {
-    case 'BUY': return "Positive — helps this stock";
-    case 'STRONG BUY': return "Strongly positive — a clear tailwind";
-    case 'SELL': return "Negative — a headwind to watch";
-    case 'WATCH': return "Watch closely — could go either way";
-    case 'SUPPRESS': return "A red-flag override — this one metric alone blocks a buy";
-    default: return "Neutral — no strong impact";
+    case 'BUY': return "Positive â€” helps this stock";
+    case 'STRONG BUY': return "Strongly positive â€” a clear tailwind";
+    case 'SELL': return "Negative â€” a headwind to watch";
+    case 'WATCH': return "Watch closely â€” could go either way";
+    case 'SUPPRESS': return "A red-flag override â€” this one metric alone blocks a buy";
+    default: return "Neutral â€” no strong impact";
   }
 }
 
 function confidencePlain(conf: number): string {
   if (conf >= 80) return "high conviction";
   if (conf >= 60) return "moderate conviction";
-  if (conf >= 40) return "balanced — the model sees real pros and cons";
+  if (conf >= 40) return "balanced â€” the model sees real pros and cons";
   return "low conviction";
 }
 
@@ -259,9 +240,9 @@ function plainSummary(s: StockSignal): string {
     : s.signal;
   const conf = s.confidence;
   let tail: string;
-  if (conf >= 60) tail = "This is a relatively strong signal — but always check the levels below.";
-  else if (conf >= 40) tail = "Treat this as a starting point, not a certainty — the model is fairly balanced.";
-  else tail = "Be cautious — the model is not very confident about this one.";
+  if (conf >= 60) tail = "This is a relatively strong signal â€” but always check the levels below.";
+  else if (conf >= 40) tail = "Treat this as a starting point, not a certainty â€” the model is fairly balanced.";
+  else tail = "Be cautious â€” the model is not very confident about this one.";
   return `The model rates this ${verb} with ${conf}% confidence (${confidencePlain(conf)}). ${tail}`;
 }
 
@@ -283,93 +264,10 @@ function gradePlain(grade: string): string {
 
 function timeframePlain(timeframe: string | null | undefined): string {
   const t = (timeframe || '').toLowerCase();
-  if (t.includes('intraday') || t.includes('day')) return "an intraday trade — opened and closed within the same trading day";
-  if (t.includes('week')) return "a short-term trade, entered and exited within a few weeks — not a long-term investment";
+  if (t.includes('intraday') || t.includes('day')) return "an intraday trade â€” opened and closed within the same trading day";
+  if (t.includes('week')) return "a short-term trade, entered and exited within a few weeks â€” not a long-term investment";
   if (t.includes('month')) return "a medium-term position, meant to be held over months";
   return "a longer-term position, meant to be held for months or more";
-}
-
-interface PlainReasonItem {
-  group: 'for' | 'against' | 'note';
-  label: string;
-  text: string;
-}
-
-// Real technical readout from the signal's own computed indicators (RSI, MACD,
-// trend/SMA, Bollinger, momentum, volume) instead of scraping keywords out of
-// the prose reason, which mislabeled non-technical items as "Chart / Technicals".
-function buildTechnicalNotes(ind: Record<string, any> | undefined): { label: string; text: string }[] {
-  if (!ind) return [];
-  const ok = (v: any) => v != null && v !== 'N/A' && v !== 'No Data' && v !== 'Insufficient Data';
-  const notes: { label: string; text: string }[] = [];
-
-  if (ok(ind.rsi)) notes.push({ label: 'RSI', text: `${ind.rsi} — ${ind.rsiSignal || 'Neutral'}` });
-
-  if (ok(ind.macdSignal)) {
-    notes.push({ label: 'MACD', text: `${ind.macdSignal}${ok(ind.macd) ? ` (MACD ${ind.macd})` : ''}` });
-  }
-
-  if (ok(ind.trendSignal)) {
-    const sma = ok(ind.smaFast) && ok(ind.smaSlow)
-      ? ` (SMA${ind.smaFastPeriod || 20} ${ind.smaFast} vs SMA${ind.smaSlowPeriod || 50} ${ind.smaSlow})`
-      : '';
-    notes.push({ label: 'Trend', text: `${ind.trendSignal}${sma}` });
-  }
-
-  if (ok(ind.bbSignal)) notes.push({ label: 'Bollinger Bands', text: ind.bbSignal });
-
-  if (ok(ind.momentum)) notes.push({ label: 'Momentum', text: `${ind.momentum} — ${ind.momentumSignal || 'Neutral'}` });
-
-  if (ok(ind.volumeSignal)) {
-    const vol = ok(ind.volume) ? ` (${ind.volume}${ok(ind.volRatio) ? `, ${ind.volRatio}x avg` : ''})` : '';
-    notes.push({ label: 'Volume', text: `${ind.volumeSignal}${vol}` });
-  }
-
-  return notes;
-}
-
-function buildPlainReason(s: StockSignal): PlainReasonItem[] {
-  const items: PlainReasonItem[] = [];
-  const metrics = s.analysis?.fundamental?.metrics || {};
-
-  getConditionSignals(metrics).forEach(c => {
-    const sig = c.signal;
-    if (!sig || sig === 'NEUTRAL') return;
-    const group = (sig === 'BUY' || sig === 'STRONG BUY') ? 'for' : 'against';
-    items.push({ group, label: c.name, text: `${c.rating} — ${ratingPlain(sig).toLowerCase()}.` });
-  });
-
-  const techIndicators = (s.analysis?.technical as any)?.indicators;
-  buildTechnicalNotes(techIndicators).forEach(t => items.push({ group: 'note', label: t.label, text: t.text }));
-
-  const macro = s.analysis?.macro;
-  if (macro?.conditions) {
-    Object.entries(macro.conditions).forEach(([k, c]) => {
-      const sig = (c as any).signal;
-      if (sig !== 'BUY' && sig !== 'SELL') return;
-      items.push({
-        group: sig === 'BUY' ? 'for' : 'against',
-        label: MACRO_LABELS[k] || k,
-        text: `${(c as any).detail} — ${ratingPlain(sig).toLowerCase()}.`,
-      });
-    });
-  }
-
-  const insTop = s.insider;
-  const insSec = s.analysis?.insider as any;
-  const insScore = insTop?.score ?? insSec?.score;
-  const insActive = insTop?.hasActivity || (insSec && insSec.hasActivity) || (insScore != null && insScore < 45);
-  if (insActive) {
-    const insSummary = insTop?.summary || insSec?.summary || '';
-    const insPositive = (insTop ? insiderPositive(insTop) : false) || (insScore != null && insScore >= 50);
-    items.push({
-      group: insPositive ? 'for' : 'against',
-      label: 'Insider Activity',
-      text: `${insSummary || (insScore != null ? `score ${insScore}/100` : 'insiders selling more than buying')} — they know the business best.`,
-    });
-  }
-
-  return items;
 }
 
 function overallVerdict(s: StockSignal): string {
@@ -381,9 +279,9 @@ function overallVerdict(s: StockSignal): string {
     ? `the stock scores an overall ${overall.grade} (${score}) and ${rated}`
     : `the model ${rated}`;
   let tail: string;
-  if (conf >= 60) tail = `${conf}% confidence — a relatively strong signal.`;
-  else if (conf >= 40) tail = `${conf}% confidence — balanced, so treat it as a starting point, not a certainty.`;
-  else tail = `${conf}% confidence — a cautious call.`;
+  if (conf >= 60) tail = `${conf}% confidence â€” a relatively strong signal.`;
+  else if (conf >= 40) tail = `${conf}% confidence â€” balanced, so treat it as a starting point, not a certainty.`;
+  else tail = `${conf}% confidence â€” a cautious call.`;
   return `After weighing everything, ${lead} with ${tail}`;
 }
 
@@ -557,7 +455,7 @@ export function SignalsPage() {
         </Select>
         <Select value={sortBy} onValueChange={v => setSortBy(v as "confidence" | "change" | "ticker")}>
           <SelectTrigger className="w-[160px] h-9 text-sm border-border"><ArrowUpDown className="w-3.5 h-3.5 mr-2" /><SelectValue placeholder="Sort" /></SelectTrigger>
-          <SelectContent><SelectItem value="confidence">Confidence ↓</SelectItem><SelectItem value="change">Change ↓</SelectItem><SelectItem value="ticker">Ticker A–Z</SelectItem></SelectContent>
+          <SelectContent><SelectItem value="confidence">Confidence â†“</SelectItem><SelectItem value="change">Change â†“</SelectItem><SelectItem value="ticker">Ticker Aâ€“Z</SelectItem></SelectContent>
         </Select>
         <Badge className="h-9 px-3.5 flex items-center gap-1.5 rounded-full bg-[#0D7490] text-white border-0 text-xs">{filtered.length} signal{filtered.length !== 1 ? "s" : ""}</Badge>
         {hasActiveFilters && (
@@ -598,7 +496,7 @@ export function SignalsPage() {
                 <span className="text-muted-foreground">|</span>
                 <span>Sector: {s.sector}</span>
                 <span className="text-muted-foreground">|</span>
-                <span>Holding Period: {s.timeframe || "—"}</span>
+                <span>Holding Period: {s.timeframe || "â€”"}</span>
                 {s.country && (
                   <>
                     <span className="text-muted-foreground">|</span>
@@ -642,17 +540,17 @@ export function SignalsPage() {
                 {s.regime && <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">{s.regime}</span>}
                 {s.weeklyTrend && <span className={`px-1.5 py-0.5 rounded font-medium ${s.weeklyTrend === "Bullish" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>{s.weeklyTrend}</span>}
                 {s.speculative && <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-semibold">SPECULATIVE</span>}
-                {s.catalyst?.direction && <span className={`px-1.5 py-0.5 rounded font-semibold border ${s.catalyst.direction === "positive" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>{s.catalyst.direction === "positive" ? "CATALYST +" : "CATALYST −"}</span>}
+                {s.catalyst?.direction && <span className={`px-1.5 py-0.5 rounded font-semibold border ${s.catalyst.direction === "positive" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>{s.catalyst.direction === "positive" ? "CATALYST +" : "CATALYST âˆ’"}</span>}
                 {s.insider?.hasActivity && s.insider.score !== 50 && (
                   <span className={`px-1.5 py-0.5 rounded font-semibold border ${insiderPositive(s.insider) ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                    INSIDER {insiderPositive(s.insider) ? "+" : "−"}
+                    INSIDER {insiderPositive(s.insider) ? "+" : "âˆ’"}
                   </span>
                 )}
               </div>
 
               {s.speculative && (
                 <div className="mx-4 mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
-                  <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wide">Speculative Rally — Not a Buy</p>
+                  <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wide">Speculative Rally â€” Not a Buy</p>
                   <p className="text-[11px] text-amber-800 leading-snug mt-0.5">+{s.speculative.momentumPct}% run over ~{s.speculative.lookbackSessions} sessions on sentiment/catalyst while fundamentals stay weak (Altman Z {s.speculative.altmanZ != null ? s.speculative.altmanZ : "n/a"}). Composite capped at Hold.</p>
                 </div>
               )}
@@ -660,8 +558,8 @@ export function SignalsPage() {
               {s.catalyst?.headline && (
                 <div className="px-4 pb-3 -mt-1">
                   <p className="text-[11px] leading-snug">
-                    <span className={`font-semibold ${s.catalyst.direction === "positive" ? "text-emerald-700" : "text-red-700"}`}>{s.catalyst.direction === "positive" ? "▲" : "▼"} {s.catalyst.type}</span>
-                    <span className="text-muted-foreground"> — {s.catalyst.headline.slice(0, 90)}{s.catalyst.headline.length > 90 ? "…" : ""}</span>
+                    <span className={`font-semibold ${s.catalyst.direction === "positive" ? "text-emerald-700" : "text-red-700"}`}>{s.catalyst.direction === "positive" ? "â–²" : "â–¼"} {s.catalyst.type}</span>
+                    <span className="text-muted-foreground"> â€” {s.catalyst.headline.slice(0, 90)}{s.catalyst.headline.length > 90 ? "â€¦" : ""}</span>
                   </p>
                 </div>
               )}
@@ -669,10 +567,10 @@ export function SignalsPage() {
               {s.insider?.hasActivity && (
                 <div className="px-4 pb-3 -mt-1">
                   <p className="text-[11px] leading-snug">
-                    <span className={`font-semibold ${insiderPositive(s.insider) ? "text-emerald-700" : "text-red-700"}`}>{insiderPositive(s.insider) ? "▲" : "▼"} {s.insider.summary}</span>
-                    {s.insider.latestDate && <span className="text-muted-foreground"> · latest {s.insider.latestDate}</span>}
-                    {s.insider.score != null && <span className="text-muted-foreground"> · insider score {s.insider.score}/100</span>}
-                    {s.insider.shortFloatPct != null && <span className="text-muted-foreground"> · short float {s.insider.shortFloatPct}%</span>}
+                    <span className={`font-semibold ${insiderPositive(s.insider) ? "text-emerald-700" : "text-red-700"}`}>{insiderPositive(s.insider) ? "â–²" : "â–¼"} {s.insider.summary}</span>
+                    {s.insider.latestDate && <span className="text-muted-foreground"> Â· latest {s.insider.latestDate}</span>}
+                    {s.insider.score != null && <span className="text-muted-foreground"> Â· insider score {s.insider.score}/100</span>}
+                    {s.insider.shortFloatPct != null && <span className="text-muted-foreground"> Â· short float {s.insider.shortFloatPct}%</span>}
                   </p>
                 </div>
               )}
@@ -682,7 +580,7 @@ export function SignalsPage() {
                 <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div className={`h-full rounded-full transition-all ${s.confidence >= 80 ? "bg-emerald-500" : s.confidence >= 70 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${s.confidence}%` }} />
                 </div>
-                <span className="text-xs text-muted-foreground">R:R 1:{s.riskReward != null && !Number.isNaN(s.riskReward) ? s.riskReward.toFixed(1) : "—"}</span>
+                <span className="text-xs text-muted-foreground">R:R 1:{s.riskReward != null && !Number.isNaN(s.riskReward) ? s.riskReward.toFixed(1) : "â€”"}</span>
               </div>
 
               {/* Condition summary + Reason */}
@@ -722,7 +620,7 @@ export function SignalsPage() {
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Gauge className="w-8 h-8 mb-3 opacity-30" />
             <p className="text-sm font-medium text-muted-foreground">No signals available right now</p>
-            <p className="text-xs mt-1 text-muted-foreground">Signals regenerate every few minutes — markets may be closed or the engine is still warming up.</p>
+            <p className="text-xs mt-1 text-muted-foreground">Signals regenerate every few minutes â€” markets may be closed or the engine is still warming up.</p>
             <Button onClick={fetchSignals} disabled={loading} variant="outline" size="sm" className="border-border mt-4">
               <RefreshCw className={`w-3.5 h-3.5 mr-2 ${loading ? "animate-spin" : ""}`} />Refresh
             </Button>
@@ -750,389 +648,8 @@ export function SignalsPage() {
       {selected && (
         <div className="fixed inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelected(null)}>
           <div className="bg-white/70 dark:bg-white/[0.08] backdrop-blur-xl rounded-[24px] max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 dark:border-white/[0.08]" onClick={e => e.stopPropagation()}>
-            <div className="p-6 space-y-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                    <h2 className="text-xl font-bold text-foreground">{selected.ticker}</h2>
-                    {(() => { const s = SIGNAL_STYLES[selected.signal]; const I = s.icon; return <Badge className={`${s.bg} ${s.text} border-0`}><I className="w-3 h-3 mr-1" />{selected.signal}</Badge>; })()}
-                  </div>
-                  <p className="text-sm text-muted-foreground truncate">{selected.name}</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed mt-1.5 max-w-md">{plainSummary(selected)}</p>
-                </div>
-                <button onClick={() => setSelected(null)} className="p-1.5 hover:bg-black/10 dark:hover:bg-white/10 rounded-full transition-colors shrink-0"><X className="w-5 h-5 text-muted-foreground" /></button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-muted rounded-lg p-3 border border-border"><p className="text-xs text-muted-foreground">Price</p><p className="text-lg font-bold text-foreground">{fmtPrice(selected, selected.price)}</p></div>
-                <div className={`rounded-lg p-3 border ${selected.change >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}><p className="text-xs text-muted-foreground">Change</p><p className={`text-lg font-bold flex items-center gap-1 ${selected.change >= 0 ? "text-emerald-700" : "text-red-700"}`}>{selected.change >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}{changeDisplay(selected)}</p></div>
-                <div className="bg-muted rounded-lg p-3 border border-border"><p className="text-xs text-muted-foreground">Confidence</p><p className={`text-lg font-bold ${selected.confidence >= 80 ? "text-emerald-600" : selected.confidence >= 70 ? "text-yellow-600" : "text-red-600"}`}>{selected.confidence}%</p></div>
-              </div>
-
-              <div>
-                <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
-                  <h3 className="text-sm font-semibold text-foreground">Trade Parameters</h3>
-                  <p className="text-[10px] text-muted-foreground italic">The action plan — what to do, step by step</p>
-                </div>
-                <div className={`grid grid-cols-2 gap-2 ${selected.target3 ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
-                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 text-center"><p className="text-[10px] font-medium text-blue-600 uppercase">Entry</p><p className="text-sm font-bold text-blue-900 font-mono">{fmtPrice(selected, selected.entry)}</p></div>
-                  <div className="bg-red-50 rounded-lg p-3 border border-red-100 text-center"><p className="text-[10px] font-medium text-red-600 uppercase">Stop</p><p className="text-sm font-bold text-red-900 font-mono">{fmtPrice(selected, selected.stopLoss)}</p></div>
-                  <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">Target 1</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target1)}</p></div>
-                  {selected.target3 && <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">Ultimate Target</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target3)}</p></div>}
-                </div>
-                <div className="mt-2 space-y-1 text-[11px] text-muted-foreground leading-relaxed">
-                  <StaleLevelsNotice selected={selected} />
-                  <p><span className="font-semibold text-blue-700">Entry {fmtPrice(selected, selected.entry)}</span> — the market price when the signal was generated, used as the reference to size the stop and targets. Buy at the current market price — you don't need to wait for this exact level.</p>
-                  {selected.stopLoss != null && selected.entry != null && selected.stopLoss >= selected.entry ? (
-                    <p><span className="font-semibold text-emerald-700">Stop {fmtPrice(selected, selected.stopLoss)}</span> — the stop has moved above your entry price to lock in profit. If the stock pulls back to this level, you exit with a guaranteed gain.</p>
-                  ) : (
-                    <p><span className="font-semibold text-red-700">Stop {fmtPrice(selected, selected.stopLoss)}</span> — the safety-net price. If the stock drops to this level, sell immediately to prevent further losses.</p>
-                  )}
-                  {selected.target1 && <p><span className="font-semibold text-emerald-700">Price Target 1 {fmtPrice(selected, selected.target1)}</span> — first profit goal. Many investors take some profit here.</p>}
-                  {selected.target3 && <p><span className="font-semibold text-emerald-700">Ultimate Target {fmtPrice(selected, selected.target3)}</span> — maximum upside target. The full win if the stock reaches its highest potential.</p>}
-                  {selected.riskReward != null && !Number.isNaN(selected.riskReward) && (
-                    <p><span className="font-semibold text-foreground">Risk-to-reward {selected.riskReward.toFixed(1)}:1</span> — for every {curSym(selected)}1 you risk, the plan targets {curSym(selected)}{formatCurrency(selected.riskReward)} in profit.</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Risk / ML detail row */}
-              {(selected.positionSize || selected.var95 || selected.var99 || selected.cvar95 || selected.mlWinProb || selected.regime) && (
-                <div>
-                  <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
-                    <h3 className="text-sm font-semibold text-foreground">Risk & ML</h3>
-                    <p className="text-[10px] text-muted-foreground italic">How risky this trade is, and how big a slice of your money it should be</p>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                    {selected.positionSize && parseInt(selected.positionSize) > 0 && <div className="bg-purple-50 rounded-lg p-2.5 border border-purple-100 text-center"><p className="text-[9px] font-medium text-purple-600 uppercase">Size</p><p className="text-sm font-bold text-purple-900">{selected.positionSize}</p></div>}
-                    {selected.var95 && <div className="bg-orange-50 rounded-lg p-2.5 border border-orange-100 text-center"><p className="text-[9px] font-medium text-orange-600 uppercase">VaR 95%</p><p className="text-sm font-bold text-orange-900">{selected.var95}</p></div>}
-                    {selected.var99 && <div className="bg-orange-50 rounded-lg p-2.5 border border-orange-100 text-center"><p className="text-[9px] font-medium text-orange-600 uppercase">VaR 99%</p><p className="text-sm font-bold text-orange-900">{selected.var99}</p></div>}
-                    {selected.cvar95 && <div className="bg-red-50 rounded-lg p-2.5 border border-red-100 text-center"><p className="text-[9px] font-medium text-red-600 uppercase">CVaR</p><p className="text-sm font-bold text-red-900">{selected.cvar95}</p></div>}
-                    {selected.mlWinProb && <div className="bg-blue-50 rounded-lg p-2.5 border border-blue-100 text-center"><p className="text-[9px] font-medium text-blue-600 uppercase">ML Win Prob</p><p className="text-sm font-bold text-blue-900">{selected.mlWinProb}</p></div>}
-                    {selected.regime && <div className="bg-muted rounded-lg p-2.5 border border-border text-center"><p className="text-[9px] font-medium text-muted-foreground uppercase">Regime</p><p className={`text-sm font-bold ${selected.regime === 'bull' ? 'text-emerald-600' : selected.regime === 'bear' ? 'text-red-600' : 'text-foreground'}`}>{selected.regime}</p></div>}
-                  </div>
-                  <div className="mt-2 space-y-1 text-[11px] text-muted-foreground leading-relaxed">
-                    {selected.positionSize && parseInt(selected.positionSize) > 0 && <p><span className="font-semibold text-purple-700">Size {selected.positionSize}</span> — the suggested share of your investment money for this single trade.</p>}
-                    {selected.var95 && <p><span className="font-semibold text-orange-700">VaR 95% {selected.var95}</span> — the worst loss expected on a normal bad day (only about 5% of days lose more).</p>}
-                    {selected.var99 && <p><span className="font-semibold text-orange-700">VaR 99% {selected.var99}</span> — the worst loss expected on a rare, extreme day.</p>}
-                    {selected.cvar95 && <p><span className="font-semibold text-red-700">CVaR {selected.cvar95}</span> — the average loss in the worst 5% of scenarios.</p>}
-                    {selected.mlWinProb && <p><span className="font-semibold text-blue-700">ML Win Prob {selected.mlWinProb}</span> — how often this machine-learning model has been right on similar setups in the past.</p>}
-                    {selected.regime && <p><span className="font-semibold text-foreground">Regime: {selected.regime}</span> — the broad market state the model detects. Bull = prices generally rising, Bear = falling, Neutral = sideways.</p>}
-                  </div>
-                </div>
-              )}
-
-              {selected.analysis && (
-                <>
-                  {/* ── Why This Signal ── */}
-                  <div>
-                    <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
-                      <h3 className="text-sm font-semibold text-foreground">Why This Signal</h3>
-                      <p className="text-[10px] text-muted-foreground italic">The company health check — how the business itself looks</p>
-                    </div>
-                    <div className="space-y-2">
-                      {(() => {
-                        const condSignals = getConditionSignals(selected.analysis?.fundamental?.metrics || {});
-                        const grouped: Record<string, typeof condSignals> = {};
-                        condSignals.forEach(c => {
-                          if (!grouped[c.category]) grouped[c.category] = [];
-                          grouped[c.category].push(c);
-                        });
-                        return CATEGORY_ORDER.filter(cat => grouped[cat]).map(cat => (
-                          <div key={cat} className="bg-muted rounded-lg p-3 border border-border">
-                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{cat}</p>
-                            <div className="space-y-1.5">
-                              {grouped[cat].map(c => {
-                                const signal = c.signal || 'NEUTRAL';
-                                const style = CONDITION_SIGNAL_STYLES[signal] || CONDITION_SIGNAL_STYLES['NEUTRAL'];
-                                return (
-                                  <div key={c.key} className="text-xs">
-                                    <div className="flex items-start gap-2">
-                                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${style}`}>{signal}</span>
-                                      <span className="font-medium text-foreground min-w-0 sm:min-w-[7rem]">{c.name}</span>
-                                      <span className="text-muted-foreground leading-tight">{c.rating}</span>
-                                    </div>
-                                    <p className="pl-6 sm:pl-[4.25rem] text-[10px] text-muted-foreground/80 leading-snug mt-0.5">
-                                      <span className="font-medium text-foreground/70">What it means:</span> {CONDITION_PLAIN[c.key] || 'See the detail above.'} <span className="font-medium text-foreground/70">Verdict:</span> {ratingPlain(signal).toLowerCase()}.
-                                    </p>
-                                    {c.key === 'newsSignal' && (() => {
-                                      const items = influentialNews(selected.news, 5);
-                                      if (items.length === 0) return null;
-                                      return (
-                                        <div className="pl-6 sm:pl-[4.25rem] mt-1.5 space-y-1.5">
-                                          {items.map((n, i) => (
-                                            <a key={`${n.url}-${i}`} href={n.url} target="_blank" rel="noopener noreferrer" className="block group">
-                                              <div className="flex items-start gap-1.5">
-                                                <span className={`mt-1 size-1.5 rounded-full shrink-0 ${n.sentiment === 'positive' ? 'bg-emerald-500' : n.sentiment === 'negative' ? 'bg-red-500' : 'bg-muted-foreground/40'}`} />
-                                                <p className="text-[10px] text-foreground/90 leading-snug group-hover:text-[#0D7490]">
-                                                  {n.headline}
-                                                  {n.hot && <span className="text-orange-600 font-semibold"> · Hot</span>}
-                                                  {n.catalystDirection && (
-                                                    <span className={n.catalystDirection === 'positive' ? 'text-emerald-600' : 'text-red-600'}> · {n.catalystDirection} catalyst</span>
-                                                  )}
-                                                </p>
-                                              </div>
-                                              <p className="pl-3 text-[9px] text-muted-foreground">{n.source}{n.timestamp ? ` · ${n.timestamp}` : ''}</p>
-                                            </a>
-                                          ))}
-                                        </div>
-                                      );
-                                    })()}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ));
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* ── Macro Conditions ── */}
-                  {selected.analysis?.macro && (
-                    <div>
-                      <div className="flex items-baseline justify-between flex-wrap gap-2 mb-1">
-                        <h3 className="text-sm font-semibold text-foreground">
-                          Macro Conditions — {selected.analysis.macro.country}{' '}
-                          <span className={`ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                            selected.analysis.macro.signal === 'Bullish' || selected.analysis.macro.signal === 'Favorable'
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : selected.analysis.macro.signal === 'Caution' || selected.analysis.macro.signal === 'Bearish'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-muted text-muted-foreground'
-                          }`}>{selected.analysis.macro.signal} ({selected.analysis.macro.score})</span>
-                        </h3>
-                        <p className="text-[10px] text-muted-foreground italic">The big economic picture around this stock</p>
-                      </div>
-                      <p className="text-[10px] mb-3 text-muted-foreground">
-                        <span className={`font-semibold ${selected.analysis.macro.meta?.live ? 'text-emerald-600' : 'text-amber-600'}`}>
-                          {macroAsOfLabel(selected.analysis.macro.meta)}
-                        </span>
-                        {selected.analysis.macro.meta?.live
-                          ? ' — figures refresh from official sources'
-                          : selected.analysis.macro.meta
-                          ? ' — some figures are reference estimates'
-                          : ' — snapshot taken when this position opened'}
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {Object.entries(selected.analysis.macro.conditions).map(([key, cond]) => {
-                          const sig = (cond as any).signal || 'NEUTRAL';
-                          const style = sig === 'BUY' ? 'bg-emerald-50 border-emerald-200' :
-                            sig === 'SELL' ? 'bg-red-50 border-red-200' : 'bg-muted border-border';
-                          // Without `meta` we cannot prove a field is live, so default
-                          // to REF rather than mislabelling everything as LIVE.
-                          const meta = selected.analysis!.macro!.meta;
-                          const ref = !meta || !meta.live || isReferenceField(meta, key);
-                          return (
-                            <div key={key} className={`rounded-lg p-2.5 border ${style}`}>
-                              <div className="flex items-center justify-between mb-1 gap-1">
-                                <span className="text-[10px] font-semibold text-muted-foreground uppercase">
-                                  {MACRO_LABELS[key] || key.replace(/([A-Z])/g, ' $1').trim()}
-                                </span>
-                                <span className="flex items-center gap-1 shrink-0">
-                                  {ref ? (
-                                    <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-amber-100 text-amber-700" title="Reference estimate — no free live source">REF</span>
-                                  ) : (
-                                    <span className="text-[8px] font-semibold px-1 py-0.5 rounded bg-emerald-100 text-emerald-700" title={`Live — ${meta?.sources?.join(', ') || 'official data'}${meta?.asOf?.[key] ? ` (${meta.asOf[key]})` : ''}`}>LIVE</span>
-                                  )}
-                                  <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${
-                                    sig === 'BUY' ? 'bg-emerald-100 text-emerald-700' :
-                                    sig === 'SELL' ? 'bg-red-100 text-red-700' : 'bg-muted text-muted-foreground'
-                                  }`}>{sig}</span>
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-muted-foreground leading-tight">{(cond as any).detail}</p>
-                              <p className="mt-1 text-[10px] text-muted-foreground/80 leading-snug">
-                                <span className="font-medium text-foreground/70">What it means:</span> {MACRO_PLAIN[key] || ''} <span className="font-medium text-foreground/70">Verdict:</span> {ratingPlain(sig).toLowerCase()}.
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── Score Breakdown ── */}
-                  <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
-                    <h3 className="text-sm font-semibold text-foreground">Score Breakdown</h3>
-                    <p className="text-[10px] text-muted-foreground italic">The grade card — how the stock scores in each area</p>
-                  </div>
-                  <div className="space-y-2">
-                    {(["fundamental", "technical", "financial", "macro", "insider", "overall"] as const).map(key => {
-                      const section = selected.analysis![key] as any;
-                      if (!section) return null;
-                      if (section.score == null) return null;
-                      const label = key === 'overall' ? 'Overall' : key.charAt(0).toUpperCase() + key.slice(1);
-                      return (
-                        <div key={key} className="flex items-center gap-3">
-                          <span className="text-xs text-muted-foreground w-20 shrink-0">{label}</span>
-                          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${section.score >= 70 ? 'bg-emerald-500' : section.score >= 45 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${section.score}%` }} />
-                          </div>
-                          <Badge className={`shrink-0 border-0 ${section.score >= 70 ? 'bg-emerald-100 text-emerald-700' : section.score >= 45 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>{section.grade} ({section.score}){gradePlain(section.grade) ? ` · ${gradePlain(section.grade)}` : ''}</Badge>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-2 text-[10px] text-muted-foreground leading-snug">
-                    Each area is graded 0–100 (A–F). <span className="text-emerald-600">A–B</span> = strong, <span className="text-yellow-600">C</span> = average, <span className="text-red-600">D–F</span> = weak.
-                  </p>
-                  {(() => {
-                    const overall = selected.analysis!.overall as any;
-                    if (!overall || overall.score == null) return null;
-                    const insiderSec = selected.analysis!.insider as any;
-                    const insiderWeak = insiderSec && insiderSec.score != null && insiderSec.score < 45;
-                    return (
-                      <div className="mt-3 rounded-lg border border-border bg-muted/50 p-3 text-[11px] text-muted-foreground leading-relaxed space-y-1">
-                        <p>
-                          <span className="font-semibold text-foreground">In plain words:</span> mixing all the strengths and weaknesses together, the overall grade is{" "}
-                          <span className="font-semibold text-foreground">{overall.grade} ({overall.score})</span> — {gradePlain(overall.grade) || 'average'}.
-                        </p>
-                        {insiderWeak && (() => {
-                          const insSummary = selected.insider?.summary || insiderSec?.summary || '';
-                          return (
-                            <p>
-                              <span className="font-semibold text-red-700">Why the insider score is low:</span> {insSummary || 'insiders are selling more than they buy.'}{insSummary ? ' — ' : ' '}They know the business best, so heavy selling is a caution flag.
-                            </p>
-                          );
-                        })()}
-                        <p>
-                          <span className="font-semibold text-foreground">Holding Period:</span> {selected.timeframe || '—'} — {timeframePlain(selected.timeframe)}.
-                        </p>
-                      </div>
-                    );
-                  })()}
-                </>
-              )}
-
-              {selected.speculative && (
-                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
-                  <p className="text-xs font-bold text-amber-800 uppercase tracking-wide mb-1">Speculative Rally — Not a Buy</p>
-                  <p className="text-xs text-amber-800 leading-relaxed">{selected.speculative.warning || "Sentiment/catalyst-driven run on weak fundamentals — composite capped at Hold, high reversal risk."}</p>
-                  <p className="text-[11px] text-amber-700 mt-2">+{selected.speculative.momentumPct}% momentum over ~{selected.speculative.lookbackSessions} sessions{selected.speculative.altmanZ != null ? ` · Altman Z ${selected.speculative.altmanZ}` : ""}</p>
-                </div>
-              )}
-
-              {selected.catalyst && (
-                <div className={`rounded-lg border p-4 ${selected.catalyst.direction === "positive" ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
-                  <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${selected.catalyst.direction === "positive" ? "text-emerald-800" : "text-red-800"}`}>{selected.catalyst.direction === "positive" ? "Positive" : "Negative"} Catalyst</p>
-                  <p className="text-sm font-semibold text-foreground">{selected.catalyst.type}</p>
-                  {selected.catalyst.headline && <p className="text-xs text-muted-foreground leading-relaxed mt-1">{selected.catalyst.headline}</p>}
-                  <p className="text-[11px] text-muted-foreground/80 mt-1.5">
-                    What this means: a {selected.catalyst.direction === "positive" ? "positive" : "negative"} news event that can move the stock — weigh it together with the fundamentals above.
-                  </p>
-                  <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground flex-wrap">
-                    {selected.catalyst.source && <span>Source: {selected.catalyst.source}</span>}
-                    {selected.catalyst.publishedAt && <span>Published: {new Date(selected.catalyst.publishedAt).toLocaleDateString()}</span>}
-                    {selected.catalyst.strength != null && <span>Strength: {selected.catalyst.strength}/5</span>}
-                  </div>
-                </div>
-              )}
-
-              {selected.insider?.hasActivity && (
-                <div className={`rounded-lg border p-4 ${insiderPositive(selected.insider) ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}>
-                  <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${insiderPositive(selected.insider) ? "text-emerald-800" : "text-red-800"}`}>
-                    {insiderPositive(selected.insider) ? "Insider Buying" : "Insider Selling"} {selected.insider.score != null ? `· Score ${selected.insider.score}/100` : ""}
-                  </p>
-                  <p className="text-sm text-foreground leading-relaxed">{selected.insider.summary}</p>
-                  <p className="text-[11px] text-muted-foreground/80 mt-1.5">
-                    Insiders know the business best — when they sell more than they buy (or vice versa), it's often a clue about how they see the company's prospects.
-                  </p>
-                  <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground flex-wrap">
-                    {selected.insider.latestDate && <span>Latest: {selected.insider.latestDate}</span>}
-                    {selected.insider.latestText && <span>Last: {selected.insider.latestText}</span>}
-                    {selected.insider.shortFloatPct != null && <span>Short float: {selected.insider.shortFloatPct}%</span>}
-                  </div>
-                </div>
-              )}
-
-              <div className="bg-[#0D7490]/5 rounded-lg p-4 border border-[#0D7490]/20">
-                <div className="flex items-start gap-2">
-                  <Info className="w-4 h-4 text-[#0D7490] shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline justify-between flex-wrap gap-2 mb-2">
-                      <p className="text-sm font-medium text-foreground">Signal Reason</p>
-                      <p className="text-[10px] text-muted-foreground italic">The full story behind the rating, in one place</p>
-                    </div>
-                    {(() => {
-                      const plainItems = buildPlainReason(selected);
-                      const forItems = plainItems.filter(i => i.group === 'for');
-                      const againstItems = plainItems.filter(i => i.group === 'against');
-                      const noteItems = plainItems.filter(i => i.group === 'note');
-                      return (
-                        <div className="space-y-2.5">
-                          {forItems.length > 0 && (
-                            <div>
-                              <p className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider">What's working in favor</p>
-                              <ul className="mt-1 space-y-1">
-                                {forItems.map((it, i) => (
-                                  <li key={i} className="text-xs text-muted-foreground leading-relaxed flex gap-1.5">
-                                    <span className="text-emerald-600 shrink-0">✓</span>
-                                    <span><span className="font-medium text-foreground">{it.label}</span> — {it.text}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                          {againstItems.length > 0 && (
-                            <div>
-                              <p className="text-[10px] font-semibold text-red-700 uppercase tracking-wider">What's working against</p>
-                              <ul className="mt-1 space-y-1">
-                                {againstItems.map((it, i) => (
-                                  <li key={i} className="text-xs text-muted-foreground leading-relaxed flex gap-1.5">
-                                    <span className="text-red-600 shrink-0">✕</span>
-                                    <span><span className="font-medium text-foreground">{it.label}</span> — {it.text}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                          {noteItems.length > 0 && (
-                            <div>
-                              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Technicals</p>
-                              <ul className="mt-1 space-y-1">
-                                {noteItems.map((it, i) => (
-                                  <li key={i} className="text-xs text-muted-foreground leading-relaxed flex gap-1.5">
-                                    <span className="text-[#0D7490] shrink-0">•</span>
-                                    <span><span className="font-medium text-foreground">{it.label}</span> — {it.text}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                          <p className="pt-1.5 border-t border-[#0D7490]/10 text-xs text-muted-foreground leading-relaxed">
-                            <span className="font-semibold text-foreground">The verdict:</span> {overallVerdict(selected)}
-                          </p>
-                        </div>
-                      );
-                    })()}
-                    <details className="mt-2">
-                      <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground">Model's original reasoning (technical details)</summary>
-                      <ul className="list-disc pl-4 space-y-1 mt-1">
-                        {reasonBullets(selected.reason || "").map((b, i) => (
-                          <li key={i} className="text-[11px] text-muted-foreground/70 leading-relaxed">{b}</li>
-                        ))}
-                      </ul>
-                    </details>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge className={TYPE_STYLES[selected.type]}>{selected.type}</Badge>
-                  <span title={timeframePlain(selected.timeframe)}>Holding Period: {selected.timeframe}</span>
-                  <span className="text-muted-foreground">|</span>
-                  <span>Sector: {selected.sector}</span>
-                  {selected.country && (
-                    <>
-                      <span className="text-muted-foreground">|</span>
-                      <span className="font-medium text-[#0D7490]">Market: {selected.country}</span>
-                    </>
-                  )}
-                </div>
-                <span>R:R 1:{selected.riskReward != null && !Number.isNaN(selected.riskReward) ? selected.riskReward.toFixed(1) : "—"}</span>
-              </div>
+            <div className="p-6">
+              <MarketIntelligenceCard signal={selected} />
             </div>
           </div>
         </div>
