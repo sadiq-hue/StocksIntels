@@ -44,6 +44,7 @@ import { fetchStockHistory, type PriceBar } from "../services/marketDataService"
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import type { Signal as SharedSignal } from "../types/signals";
 import { StockIntelligencePanel } from "../components/StockIntelligencePanel";
+import { SignalContextExtras } from "../components/SignalContext";
 
 import { FinancialMetrics } from "../components/FinancialMetrics";
 import { TradingViewChart } from "../components/TradingViewChart";
@@ -1515,45 +1516,21 @@ export function StockAnalysisPage() {
                         </div>
                       </div>
 
-                      {/* Trade Parameters — mirrors the Market Intelligence page
-                          exactly: Entry, Stop, Target 1, Ultimate Target. */}
-                      {(stockSignal?.entry || stockSignal?.stopLoss || stockSignal?.target1) && (
-                        <>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                            {stockSignal?.entry && (
-                              <div className="bg-blue-50 rounded-lg p-2 border border-blue-100 text-center">
-                                <div className="text-[9px] font-medium text-blue-600 uppercase">Entry</div>
-                                <div className="text-sm font-bold text-blue-900">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.entry)}</div>
-                              </div>
-                            )}
-                            {stockSignal?.stopLoss && (
-                              <div className="bg-red-50 rounded-lg p-2 border border-red-100 text-center">
-                                <div className="text-[9px] font-medium text-red-600 uppercase">Stop</div>
-                                <div className="text-sm font-bold text-red-900">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.stopLoss)}</div>
-                              </div>
-                            )}
-                            {stockSignal?.target1 && (
-                              <div className="bg-emerald-50 rounded-lg p-2 border border-emerald-100 text-center">
-                                <div className="text-[9px] font-medium text-emerald-600 uppercase">Target 1</div>
-                                <div className="text-sm font-bold text-emerald-900">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target1)}</div>
-                              </div>
-                            )}
-                            {stockSignal?.target3 && (
-                              <div className="bg-emerald-50 rounded-lg p-2 border border-emerald-100 text-center">
-                                <div className="text-[9px] font-medium text-emerald-600 uppercase">Ultimate Target</div>
-                                <div className="text-sm font-bold text-emerald-900">{formatCurrency(activeSelection, liveQuote?.currency)}{formatPrice(stockSignal.target3)}</div>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                            {stockSignal?.riskReward != null && (
-                              <span>Risk-to-reward <span className="font-semibold text-foreground">1:{stockSignal.riskReward.toFixed(1)}</span></span>
-                            )}
-                            {stockSignal?.timeframe && (
-                              <span>Holding Period: <span className="font-semibold text-foreground">{stockSignal.timeframe}</span></span>
-                            )}
-                          </div>
-                        </>
+                      {/* Trade levels. Supersedes the old price-only tiles: the
+                          ladder shows the same Entry / Stop / Target 1 / Ultimate
+                          Target prices but adds each level as a % of entry, marks
+                          where the live price currently sits, and adds the
+                          catalyst, speculative flag and data provenance. The
+                          holding-period line is kept from the previous block. */}
+                      <SignalContextExtras
+                        signal={stockSignal}
+                        price={liveQuote?.price ?? stockSignal?.price ?? null}
+                        currency={liveQuote?.currency || activeSelection.currency}
+                      />
+                      {stockSignal?.timeframe && (
+                        <div className="text-[11px] text-muted-foreground">
+                          Holding Period: <span className="font-semibold text-foreground">{stockSignal.timeframe}</span>
+                        </div>
                       )}
 
                       {/* Tags */}
