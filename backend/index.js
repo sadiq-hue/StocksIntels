@@ -8370,6 +8370,53 @@ app.get('/api/market/indices', async (req, res) => {
   }
 });
 
+// Daily Market Intelligence.
+//
+// generateDailyBriefContent() already builds this narrative for the email
+// digest, but it was only ever reachable from a scheduled mailer - there was no
+// route and no on-site surface, so the best interpretation logic in the codebase
+// was invisible to anyone browsing the app.
+//
+// It fans out to several upstream feeds and can take up to 60s, so the result is
+// cached for 15 minutes and served stale rather than regenerated per page load.
+// A cold call still resolves; ?refresh=1 bypasses the cache for a manual retry.
+const DAILY_BRIEF_CACHE_TTL_MS = 15 * 60 * 1000;
+const DAILY_BRIEF_TIMEOUT_MS = 90000;
+let dailyBriefCache = { data: null, at: 0, inFlight: null };
+
+app.get('/api/market/daily-brief', async (req, res) => {
+  const force = String(req.query.refresh || '') === '1';
+  if (!force && dailyBriefCache.data && Date.now() - dailyBriefCache.at < DAILY_BRIEF_CACHE_TTL_MS) {
+    return res.json({ ...dailyBriefCache.data, cached: true, generatedAt: dailyBriefCache.at });
+  }
+  try {
+    // Collapse concurrent callers onto one generation - a cold dashboard plus a
+    // pre-warm would otherwise fire two 60s fan-outs at the same upstreams.
+    if (!dailyBriefCache.inFlight) {
+      dailyBriefCache.inFlight = (async () => {
+        const out = await withTimeout(
+          generateDailyBriefContent(),
+          DAILY_BRIEF_TIMEOUT_MS,
+          'daily brief generation'
+        );
+        dailyBriefCache.data = out;
+        dailyBriefCache.at = Date.now();
+        return out;
+      })().finally(() => { dailyBriefCache.inFlight = null; });
+    }
+    const data = await dailyBriefCache.inFlight;
+    res.json({ ...data, cached: false, generatedAt: dailyBriefCache.at });
+  } catch (e) {
+    console.warn('[daily-brief] generation failed:', e.message);
+    // A failed regeneration must not blank a panel the user could previously
+    // read: fall back to the last good payload and mark it stale.
+    if (dailyBriefCache.data) {
+      return res.json({ ...dailyBriefCache.data, cached: true, stale: true, generatedAt: dailyBriefCache.at });
+    }
+    res.status(503).json({ error: 'Daily brief unavailable' });
+  }
+});
+
 app.get('/api/market/premarket', async (req, res) => {
   try {
     const symbols = req.query.symbols ? req.query.symbols.split(',').map(s => s.trim()).filter(Boolean) : [];

@@ -16,6 +16,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { usePortfolioData } from "../contexts/PortfolioDataContext";
 import { useBeginnerMode } from "../contexts/BeginnerModeContext";
+import { DailyIntelligencePanel } from "../components/DailyIntelligencePanel";
 import { kenyanStocks, globalStocks } from "../data/stockUniverses";
 import { fetchAllNews, type NewsArticle } from "../services/newsService";
 import { connectSocket } from "../services/socketService";
@@ -1005,6 +1006,10 @@ export function DashboardPage() {
             </>
           )}
         </Card>
+
+        {/* Today's Market Intelligence — the digest narrative that previously
+            existed only as an email, now readable on the dashboard. */}
+        <DailyIntelligencePanel />
 
         <Card className="border shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
