@@ -43,6 +43,7 @@ import {
 import { fetchStockHistory, type PriceBar } from "../services/marketDataService";
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import type { Signal as SharedSignal } from "../types/signals";
+import { StockIntelligencePanel } from "../components/StockIntelligencePanel";
 
 import { FinancialMetrics } from "../components/FinancialMetrics";
 import { TradingViewChart } from "../components/TradingViewChart";
@@ -1413,6 +1414,20 @@ export function StockAnalysisPage() {
                 ) : null}
               </div>
             </Card>
+          )}
+
+          {/* ── Intelligence Score (pillar 1: what matters, and why) ── */}
+          {!loadingData && stockSignal && (
+            <StockIntelligencePanel
+              signal={stockSignal}
+              pe={
+                financialReport?.data?.quote?.pe
+                ?? financialReport?.data?.keyMetrics?.peRatio
+                ?? (activeSelection.pe > 0 ? activeSelection.pe : null)
+              }
+              volatility={(stockSignal as any)?.risk?.volatility ?? null}
+              maxDrawdown={(stockSignal as any)?.risk?.maxDrawdown1y ?? null}
+            />
           )}
 
           {/* ── Analytics Grid ── */}
