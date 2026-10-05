@@ -5440,6 +5440,10 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     cvar95: riskMetrics.cvar95 ? riskMetrics.cvar95 + '%' : null,
     mlWinProb: mlWinProb != null ? Math.round(mlWinProb * 100) + '%' : null,
     reason,
+    // When these levels were sized. The UI compares price against `entry` and, if
+    // they have drifted, has to say so - otherwise it advertises a risk-to-reward
+    // derived from a stale entry while telling the reader to buy at today's price.
+    generatedAt: new Date().toISOString(),
     dataSource: stock.dataSource || 'fallback',
     progress: getSignalProgress(symbol, currentPrice),
     analysis: {

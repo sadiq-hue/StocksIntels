@@ -15,6 +15,7 @@ import {
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../auth/AuthContext";
 import type { Signal as StockSignal } from "../types/signals";
+import { StaleLevelsNotice } from "../components/StaleLevelsNotice";
 import { authFetch } from "../auth/tokenStore";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
@@ -780,6 +781,7 @@ export function SignalsPage() {
                   {selected.target3 && <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 text-center"><p className="text-[10px] font-medium text-emerald-600 uppercase">Ultimate Target</p><p className="text-sm font-bold text-emerald-900 font-mono">{fmtPrice(selected, selected.target3)}</p></div>}
                 </div>
                 <div className="mt-2 space-y-1 text-[11px] text-muted-foreground leading-relaxed">
+                  <StaleLevelsNotice selected={selected} />
                   <p><span className="font-semibold text-blue-700">Entry {fmtPrice(selected, selected.entry)}</span> — the market price when the signal was generated, used as the reference to size the stop and targets. Buy at the current market price — you don't need to wait for this exact level.</p>
                   {selected.stopLoss != null && selected.entry != null && selected.stopLoss >= selected.entry ? (
                     <p><span className="font-semibold text-emerald-700">Stop {fmtPrice(selected, selected.stopLoss)}</span> — the stop has moved above your entry price to lock in profit. If the stock pulls back to this level, you exit with a guaranteed gain.</p>
