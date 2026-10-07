@@ -4254,12 +4254,22 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   }
   const weights = computeDynamicWeights(regime.regime);
   updateSectorAverages();
+
+  // NSE coverage gate: block signals for NSE symbols that only have hardcoded
+  // fundamentals (dataSource !== 'live'). The fundamental dimension carries 30%
+  // of the weight, so scoring on fabricated numbers is not acceptable.
+  const requireRealFundNse = engineConfig.getConfig().quality?.require_real_fundamentals_nse !== false;
+  const blockedNoFundamentals = [];
   
   const BATCH_SIZE = 20;
   console.log(`[SignalService] generateSymbols: ${symbols.length} symbols, marketData=${!!marketData}, quick=${quick}, force=${force}`);
   const processSymbol = async (symbol) => {
     let stock = getFundamentals(symbol);
     if (!stock) return null;
+    if (requireRealFundNse && NSE_SYMBOLS.includes(symbol) && stock.dataSource !== 'live') {
+      blockedNoFundamentals.push(symbol);
+      return null;
+    }
     let currentPrice;
     let priceChange;
     let volume;
@@ -4639,6 +4649,9 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   }
   
   console.log(`[SignalService] Generated ${signals.length} raw signals before constraints (${signals.filter(s => s.signal !== 'Hold').length} non-Hold)`);
+  if (blockedNoFundamentals.length) {
+    console.log(`[SignalService] NSE coverage gate: skipped ${blockedNoFundamentals.length} symbol(s) without filing-derived fundamentals: ${blockedNoFundamentals.join(', ')}`);
+  }
 
   // Sort by confidence and signal strength
   signals.sort((a, b) => {
@@ -4748,6 +4761,11 @@ async function generateSingleSignal(symbol) {
     let stock = getFundamentals(symbol);
     if (!stock) {
       console.warn(`[SignalService] Cannot generate signal for ${symbol} — no fundamentals`);
+      return null;
+    }
+    if (engineConfig.getConfig().quality?.require_real_fundamentals_nse !== false
+        && NSE_SYMBOLS.includes(symbol) && stock.dataSource !== 'live') {
+      console.warn(`[SignalService] ${symbol}: no filing-derived fundamentals — signal suppressed (NSE coverage gate)`);
       return null;
     }
     const marketSymbol = NSE_SYMBOLS.includes(symbol) ? `NSE:${symbol}` : symbol;

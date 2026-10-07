@@ -1,5 +1,6 @@
 const { pool } = require('./db');
 const { NSE_FUNDAMENTALS, KNOWN_FUNDAMENTALS } = require('./stockData');
+const { ingestNseFundamentals } = require('./nseFundamentalsIngest');
 
 const SEED_INTERVAL = 4 * 60 * 60 * 1000;
 let seedTimer = null;
@@ -44,9 +45,10 @@ async function seedFundamentals() {
       const setClause = keys.map(k => `${k} = EXCLUDED.${k}`).join(', ');
 
       await pool.query(
-        `INSERT INTO stock_fundamentals (symbol, ${keys.join(', ')})
-         VALUES ($1, ${vals})
-         ON CONFLICT (symbol) DO UPDATE SET ${setClause}`,
+        `INSERT INTO stock_fundamentals (symbol, ${keys.join(', ')}, data_source)
+         VALUES ($1, ${vals}, 'static')
+         ON CONFLICT (symbol) DO UPDATE SET ${setClause}, data_source = 'static'
+         WHERE stock_fundamentals.data_source IS DISTINCT FROM 'filings'`,
         [ticker, ...keys.map(k => row[k])]
       );
       count++;
@@ -58,10 +60,17 @@ async function seedFundamentals() {
 }
 
 function startAutoSeed() {
-  seedFundamentals().catch(() => {});
+  const run = async () => {
+    // Real filing-derived fundamentals first; the hardcoded table is only a
+    // fallback for symbols that still have no filings (and those are now blocked
+    // from scoring by the NSE coverage gate anyway).
+    try { await ingestNseFundamentals(); } catch (e) { console.warn('[NSE-Fundamentals] ingest failed:', e.message); }
+    await seedFundamentals().catch(() => {});
+  };
+  run();
   if (seedTimer) clearInterval(seedTimer);
-  seedTimer = setInterval(() => seedFundamentals().catch(() => {}), SEED_INTERVAL);
-  console.log('[NSE-Fundamentals] Auto-seed every 4 hours');
+  seedTimer = setInterval(() => run().catch(() => {}), SEED_INTERVAL);
+  console.log('[NSE-Fundamentals] Real ingest + static fallback every 4 hours');
 }
 
 function stopAutoSeed() {

@@ -155,6 +155,11 @@ const DEFAULTS = {
       enabled: true,
       min_expectancy: 0.2,
     },
+    // NSE symbols whose fundamentals are only the hardcoded fallback must not
+    // produce signals: the fundamental dimension (30% of the weight) would be
+    // advice on fabricated numbers. Only filing-derived (dataSource='live')
+    // NSE fundamentals qualify. US symbols are unaffected.
+    require_real_fundamentals_nse: true,
   },
 
   // Scoring deltas — all hardcoded score adjustments are now configurable
