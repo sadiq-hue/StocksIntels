@@ -18,60 +18,72 @@ import { trackEvent, MetaEvents } from "../utils/metaPixel";
 
 const plans = [
   {
-    name: "Starter",
-    description: "For retail investors",
-    monthlyPrice: 9.9,
-    yearlyPrice: 99,
-    icon: Zap,
+    name: "Core",
+    description: "Understand the market",
+    monthlyPrice: 9.83,
+    yearlyPrice: 79,
+    icon: Shield,
     popular: false,
     features: [
-      { text: "Real-time African + global data", included: true },
-      { text: "5 AI signals per day", included: true },
-      { text: "Stock screener", included: true },
+      { text: "AI market intelligence", included: true },
+      { text: "Essential fundamentals analysis", included: true },
+      { text: "Basic technical intelligence", included: true },
+      { text: "News & sentiment (Basic)", included: true },
       { text: "Portfolio tracking", included: true },
-      { text: "Email support", included: true },
-      { text: "Advanced charting", included: false },
-      { text: "Risk analysis tools", included: false },
-      { text: "Unlimited signals", included: false },
+      { text: "AI stock comparison", included: false },
+      { text: "Advanced stock screening", included: false },
+      { text: "Investment thesis & analysis", included: false },
+      { text: "Advanced portfolio risk analysis", included: false },
+      { text: "Priority support", included: false },
     ],
     cta: "Start 7-Day Trial",
     ctaVariant: "default" as const,
   },
   {
     name: "Pro",
-    description: "For active traders",
-    monthlyPrice: 19.9,
-    yearlyPrice: 199,
+    description: "Research better",
+    monthlyPrice: 19.78,
+    yearlyPrice: 159,
     icon: Shield,
     popular: true,
     features: [
-      { text: "Unlimited AI signals", included: true },
-      { text: "All African + global market data", included: true },
-      { text: "Advanced charting", included: true },
-      { text: "Risk scoring & analysis", included: true },
+      { text: "AI market intelligence", included: true },
+      { text: "Advanced fundamentals analysis", included: true },
+      { text: "Advanced technical intelligence", included: true },
+      { text: "News & sentiment", included: true },
+      { text: "Insider activity intelligence", included: true },
+      { text: "AI stock comparison", included: true },
+      { text: "Advanced stock screening", included: true },
+      { text: "Investment thesis & analysis", included: true },
+      { text: "Bull / Bear case analysis", included: true },
+      { text: "Advanced portfolio risk analysis", included: true },
       { text: "Priority support", included: true },
-      { text: "Stock screener", included: true },
-      { text: "API access", included: false },
-      { text: "White-label analytics", included: false },
     ],
     cta: "Start 7-Day Trial",
     ctaVariant: "default" as const,
   },
   {
     name: "Premium",
-    description: "For professional traders",
-    monthlyPrice: 49.9,
-    yearlyPrice: 499,
+    description: "Operate like a serious investor",
+    monthlyPrice: 49.63,
+    yearlyPrice: 399,
     icon: Shield,
     popular: false,
     features: [
-      { text: "Unlimited AI signals", included: true },
-      { text: "All African + global market data", included: true },
-      { text: "Advanced NSE screener", included: true },
-      { text: "NSE technical analysis", included: true },
-      { text: "Advanced charting", included: true },
-      { text: "Risk scoring & analysis", included: true },
-      { text: "API access", included: true },
+      { text: "AI market intelligence", included: true },
+      { text: "Advanced fundamentals analysis", included: true },
+      { text: "Advanced technical intelligence", included: true },
+      { text: "News & sentiment", included: true },
+      { text: "Insider activity intelligence", included: true },
+      { text: "AI stock comparison", included: true },
+      { text: "AI multi-market stock screening", included: true },
+      { text: "Investment thesis & analysis", included: true },
+      { text: "Bull / Bear case analysis", included: true },
+      { text: "Advanced portfolio risk analysis", included: true },
+      { text: "Cross-market intelligence", included: true },
+      { text: "Human analyst insights & research", included: true },
+      { text: "Analyst market commentary", included: true },
+      { text: "Analyst Q&A support", included: true },
       { text: "Dedicated support", included: true },
     ],
     cta: "Start 7-Day Trial",
@@ -98,7 +110,11 @@ const faqs = [
   },
   {
     question: "What's the difference between Premium and Pro?",
-    answer: "Premium is built for NSE-focused traders — unlimited NSE signals + 10 global signals/day, NSE advanced screener and technical analysis. Pro gives you unlimited everything across all markets plus advanced charting, risk scoring, and priority support.",
+    answer: "Premium includes all Pro features plus AI multi-market stock screening, cross-market intelligence, human analyst insights and research, analyst market commentary, and priority analyst Q&A support. Pro is designed for active researchers while Premium is for serious investors who need institutional-grade tools.",
+  },
+  {
+    question: "What's the difference between Pro and Core?",
+    answer: "Pro includes all Core features plus advanced fundamentals and technical analysis, insider activity intelligence, AI stock comparison, advanced stock screening, investment thesis and bull/bear case analysis, and portfolio risk analysis. Core is ideal for beginners while Pro is for active researchers.",
   },
   {
     question: "Can I cancel my subscription?",
@@ -108,10 +124,10 @@ const faqs = [
 
 export function PricingPage() {
   useSEO({
-    title: "Pricing – Affordable Stock Market Intelligence Plans",
-    description: "Choose a StocksIntels plan. Starter from $9.90/mo for African and global stock data, AI signals, and portfolio tracking. 7-day free trial on all plans.",
+    title: "Pricing – StocksIntels Investment Plans",
+    description: "Choose from Core, Pro, or Premium plans. Get AI-powered market intelligence, advanced analytics, and expert insights. Starting at $79/year with a 7-day free trial.",
     canonical: "/pricing",
-    keywords: "stock market intelligence pricing, African stock trading plans, NSE stock analysis pricing, AI stock signals subscription",
+    keywords: "stock market intelligence pricing, investment research plans, AI stock analysis, portfolio management tools, stock screening software",
   });
 
   useEffect(() => {
@@ -256,16 +272,16 @@ export function PricingPage() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="pt-32 pb-16">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">Pricing</p>
-          <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4">
-            Simple, transparent pricing
-          </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10">
-            Choose the plan that fits your trading style. All plans include a 7-day free trial.
-          </p>
+       {/* Hero */}
+       <section className="pt-32 pb-16">
+         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+           <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">Pricing</p>
+           <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4">
+             Investment plans for every level
+           </h1>
+           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10">
+             Choose the plan that matches your investment journey. All plans include a 7-day free trial.
+           </p>
 
           {/* Billing Toggle */}
           <div className="inline-flex items-center gap-3 bg-muted rounded-full p-1.5">
@@ -288,9 +304,9 @@ export function PricingPage() {
               }`}
             >
               Yearly
-              <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-semibold">
-                Save 17%
-              </span>
+               <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-semibold">
+                 Save 33%+
+               </span>
             </button>
           </div>
         </div>
@@ -333,19 +349,19 @@ export function PricingPage() {
                     </p>
                   </div>
 
-                  <div className="mb-6">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-bold">${price}</span>
-                      <span className={`text-sm ${plan.popular ? "text-gray-400" : "text-muted-foreground"}`}>
-                        /{isYearly ? "year" : "month"}
-                      </span>
+                    <div className="mb-6">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-4xl font-bold">${isYearly ? plan.yearlyPrice : plan.monthlyPrice.toFixed(2)}</span>
+                        <span className={`text-sm ${plan.popular ? "text-gray-400" : "text-muted-foreground"}`}>
+                          /{isYearly ? "year" : "mo"}
+                        </span>
+                      </div>
+                      {isYearly && price > 0 && (
+                        <p className="text-green-600 text-sm font-medium mt-1">
+                          Save 33%+
+                        </p>
+                      )}
                     </div>
-                    {isYearly && price > 0 && (
-                      <p className="text-green-600 text-sm font-medium mt-1">
-                        Save ${plan.monthlyPrice * 12 - plan.yearlyPrice}/year
-                      </p>
-                    )}
-                  </div>
 
                   <Button
                     onClick={() => handlePlanClick(plan.name)}
@@ -419,35 +435,52 @@ export function PricingPage() {
           <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-4 px-6 text-sm font-semibold text-foreground">Feature</th>
-                    <th className="text-center py-4 px-6 text-sm font-semibold text-foreground">Starter</th>
-                    <th className="text-center py-4 px-6 text-sm font-semibold text-[#0D7490] bg-[#0D7490]/5">Pro</th>
-                    <th className="text-center py-4 px-6 text-sm font-semibold text-foreground">Premium</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { name: "Market data", starter: "African + Global", pro: "All markets", premium: "All markets" },
-                    { name: "AI signals", starter: "5/day", pro: "Unlimited", premium: "Unlimited" },
-                    { name: "NSE screener", starter: "Basic", pro: "Standard", premium: "Advanced" },
-                    { name: "Technical analysis", starter: "Basic", pro: "Advanced", premium: "Advanced + NSE" },
-                    { name: "Charting", starter: "Basic", pro: "Advanced", premium: "Advanced" },
-                    { name: "Portfolio tracking", starter: "Basic", pro: "Advanced", premium: "Advanced" },
-                    { name: "Risk scoring", starter: "—", pro: "✓", premium: "✓" },
-                    { name: "API access", starter: "—", pro: "—", premium: "✓" },
-                    { name: "White-label analytics", starter: "—", pro: "—", premium: "✓" },
-                    { name: "Support", starter: "Email", pro: "Priority", premium: "Dedicated" },
-                    { name: "Price", starter: "$9.9/mo", pro: "$19.9/mo", premium: "$49.9/mo" },
-                  ].map((row, idx) => (
-                    <tr key={row.name} className={idx % 2 === 0 ? "bg-muted/50" : ""}>
-                      <td className="py-4 px-6 text-sm text-muted-foreground">{row.name}</td>
-                      <td className="py-4 px-6 text-center text-sm text-muted-foreground">{row.starter}</td>
-                      <td className="py-4 px-6 text-center text-sm font-medium text-[#0D7490] bg-[#0D7490]/5">{row.pro}</td>
-                      <td className="py-4 px-6 text-center text-sm text-muted-foreground">{row.premium}</td>
-                    </tr>
-                  ))}
+                 <thead>
+                   <tr className="border-b border-border">
+                     <th className="text-left py-4 px-6 text-sm font-semibold text-foreground">Feature</th>
+                     <th className="text-center py-4 px-6 text-sm font-semibold text-foreground">Core</th>
+                     <th className="text-center py-4 px-6 text-sm font-semibold text-[#0D7490] bg-[#0D7490]/5">Pro</th>
+                     <th className="text-center py-4 px-6 text-sm font-semibold text-foreground">Premium</th>
+                   </tr>
+                 </thead>
+                 <tbody>
+                   {[
+                     { name: "Core promise", starter: "Understand the market", pro: "Research better", premium: "Operate like a serious investor" },
+                     { name: "AI Analyst Chat", starter: "Basic", pro: "Advanced / Unlimited", premium: "Advanced research chat" },
+                     { name: "AI market intelligence", starter: "Essential", pro: "Advanced", premium: "Advanced" },
+                     { name: "Market coverage", starter: "African + Global", pro: "African + Global", premium: "African + Global + Cross-market" },
+                     { name: "Fundamentals", starter: "Basic", pro: "Advanced", premium: "Advanced" },
+                     { name: "Financials & Financial Health", starter: "Basic", pro: "Advanced", premium: "Advanced" },
+                     { name: "Valuation analysis", starter: "Basic", pro: "Advanced", premium: "Advanced" },
+                     { name: "Technical intelligence", starter: "Basic", pro: "Advanced", premium: "Advanced" },
+                     { name: "News & sentiment", starter: "Basic", pro: "Advanced", premium: "Advanced" },
+                     { name: "Insider activity", starter: "Basic", pro: "Advanced", premium: "Advanced" },
+                     { name: "AI stock comparison", starter: "—", pro: "Yes", premium: "Advanced" },
+                     { name: "Stock screening", starter: "Basic", pro: "Advanced", premium: "AI multi-market" },
+                     { name: "Investment thesis", starter: "—", pro: "Yes", premium: "Advanced" },
+                     { name: "Bull / Bear case analysis", starter: "—", pro: "Yes", premium: "Advanced" },
+                     { name: "Market & sector analysis", starter: "Basic", pro: "Advanced", premium: "Advanced" },
+                     { name: "Portfolio tracking", starter: "Yes", pro: "Yes", premium: "Yes" },
+                     { name: "Portfolio intelligence", starter: "Basic", pro: "Advanced", premium: "Advanced" },
+                     { name: "Portfolio risk analysis", starter: "—", pro: "Basic", premium: "Advanced" },
+                     { name: "Alerts", starter: "Basic", pro: "Advanced", premium: "Priority" },
+                     { name: "AI research", starter: "Limited", pro: "Unlimited", premium: "Advanced" },
+                     { name: "AI-powered opportunity discovery", starter: "Basic", pro: "Advanced", premium: "Advanced multi-market" },
+                     { name: "Cross-market intelligence", starter: "—", pro: "Limited", premium: "Core" },
+                     { name: "Human analyst insights", starter: "—", pro: "—", premium: "Yes" },
+                     { name: "Analyst research", starter: "—", pro: "—", premium: "Yes" },
+                     { name: "Analyst market commentary", starter: "—", pro: "—", premium: "Yes" },
+                     { name: "Analyst Q&A", starter: "—", pro: "—", premium: "Priority" },
+                     { name: "Priority intelligence", starter: "—", pro: "—", premium: "Yes" },
+                      { name: "Price", starter: `${isYearly ? '$79/year' : '$6.58/mo'}`, pro: `${isYearly ? '$159/year' : '$13.25/mo'}`, premium: `${isYearly ? '$399/year' : '$33.25/mo'}` },
+                   ].map((row, idx) => (
+                     <tr key={row.name} className={idx % 2 === 0 ? "bg-muted/50" : ""}>
+                       <td className="py-4 px-6 text-sm text-muted-foreground">{row.name}</td>
+                       <td className="py-4 px-6 text-center text-sm text-muted-foreground">{row.starter}</td>
+                       <td className="py-4 px-6 text-center text-sm font-medium text-[#0D7490] bg-[#0D7490]/5">{row.pro}</td>
+                       <td className="py-4 px-6 text-center text-sm text-muted-foreground">{row.premium}</td>
+                     </tr>
+                   ))}
                 </tbody>
               </table>
             </div>
