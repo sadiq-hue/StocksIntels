@@ -5692,24 +5692,42 @@ setInterval(() => {
 
 // ─── Auto-Optimization Scheduler ─────────────────────────────────────────────
 let _optimizeHandle = null;
+let _refitHandle = null;
+
+// Auto weight optimization is OFF unless weights.auto_optimize is explicitly
+// true. When enabled it delegates to the real walk-forward re-fit and applies a
+// suggestion only if it beat a coin flip out-of-sample. The previous
+// implementation could not re-score history and was effectively a no-op that
+// silently overwrote weights.
 function startAutoOptimize() {
   if (_optimizeHandle) clearInterval(_optimizeHandle);
+  if (engineConfig.getConfig().weights?.auto_optimize !== true) {
+    console.log('[SignalService] Auto-weight optimization disabled (weights.auto_optimize=false)');
+    return;
+  }
   const hours = engineConfig.getConfig().weights?.optimize_frequency_hours || 24;
-  const ms = hours * 60 * 60 * 1000;
   console.log(`[SignalService] Auto-weight optimization every ${hours}h`);
   _optimizeHandle = setInterval(() => {
-    optimizeWeights().then(result => {
-      if (result.best && result.best.score > 0.5) {
-        engineConfig.updateConfig({ weights: { fundamental: result.best.fundamental, technical: result.best.technical, financial: result.best.financial, macro: result.best.macro } });
-        logAuditEvent('weight_optimization', 'Auto-optimized weights', { result });
-      }
-    }).catch(() => {});
-  }, ms);
+    require('./paramRefit').refitParameters({ apply: true })
+      .then(r => { if (r.ok) logAuditEvent('weight_optimization', 'walk-forward re-fit applied', { r }); })
+      .catch(() => {});
+  }, hours * 60 * 60 * 1000);
   _optimizeHandle.unref && _optimizeHandle.unref();
 }
 
-// Start auto-optimization after a short delay to let DB restore complete
+// Walk-forward re-fit for operator review — never auto-applies. Runs daily and
+// no-ops until enough v2 outcomes accumulate (see MIN_SAMPLES in paramRefit.js).
+function startParamRefit() {
+  if (_refitHandle) clearInterval(_refitHandle);
+  const run = () => require('./paramRefit').refitParameters().catch(() => {});
+  setTimeout(run, 60000);
+  _refitHandle = setInterval(run, 24 * 60 * 60 * 1000);
+  _refitHandle.unref && _refitHandle.unref();
+}
+
+// Start after a short delay to let DB restore complete
 setTimeout(startAutoOptimize, 10000);
+setTimeout(startParamRefit, 15000);
 
 module.exports = { 
   generateSignals, 

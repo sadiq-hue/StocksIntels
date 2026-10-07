@@ -16,6 +16,7 @@ const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
 const marketHours = require('./marketHours');
+const { refitParameters } = require('./paramRefit');
 const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
 const signalPublisher = require('./signalPublisher');
@@ -4484,6 +4485,26 @@ app.put('/api/signals/engine/config', authenticateToken, requireAdmin, async (re
   try {
     const config = updateEngineConfig(req.body);
     res.json({ success: true, config });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+// Walk-forward parameter re-fit: GET returns the latest suggestion (never
+// auto-applied); POST runs a fresh fit. Sample-gated; see paramRefit.js.
+app.get('/api/signals/engine/refit', async (req, res) => {
+  try {
+    const r = await pool.query(`SELECT config_value, updated_at FROM engine_config WHERE config_key = 'param_suggestions'`);
+    res.json({ success: true, suggestion: r.rows[0]?.config_value || null, updatedAt: r.rows[0]?.updated_at || null });
+  } catch (error) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+app.post('/api/signals/engine/refit', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await refitParameters({ apply: req.body?.apply === true });
+    res.json({ success: true, result });
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
   }

@@ -405,7 +405,27 @@ signal as `diagnostics.expectancy` / `diagnostics.expectancyGate`.
 
 ---
 
-## 14. Key constants
+## 14. Parameter re-fit & ML acceptance
+
+Both are **walk-forward / out-of-sample gated** and inert until enough v2
+outcomes accumulate (the v1 cohort was archived at the reset).
+
+- **Re-fit (`paramRefit.js`).** Grid-searches the four real weights and the
+  buy/sell thresholds against realized outcomes, using the per-signal component
+  scores recorded in `signal_history.analysis_data` joined to `signal_outcomes`
+  (v2 only). 5-fold walk-forward — parameters chosen on earlier folds, scored on
+  later folds — so the reported accuracy is out-of-sample. Sample-gated
+  (`MIN_SAMPLES = 200`). It **never auto-applies**; it stores a suggestion in
+  `engine_config.param_suggestions`, viewable at `GET /api/signals/engine/refit`
+  and runnable at `POST /api/signals/engine/refit` (admin). Auto-apply only if
+  `weights.auto_optimize = true`, and then only when the suggestion beat a coin
+  flip out-of-sample.
+- **ML acceptance gate (`mlSignalModel.js`).** After training, the model is kept
+  only if its accuracy on the held-out validation split beats the majority-class
+  baseline by ≥3pp (and ≥50%). Otherwise weights are discarded and ML abstains
+  (`mlWinProb = 0.5`). This is why ML stays neutral until it has proven edge.
+
+## 15. Key constants
 
 | Constant | Value | Where |
 |---|---|---|

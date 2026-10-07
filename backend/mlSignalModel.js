@@ -543,10 +543,36 @@ async function _runBackgroundTraining() {
       }
     }
 
+    // Out-of-sample acceptance gate: keep the model only if it beats the
+    // majority-class baseline on the held-out validation split by a margin.
+    // Otherwise ML abstains (weights null -> predictWinProbability returns 0.5)
+    // rather than injecting noise into the composite.
+    const valAcc = XVal.length > 0 ? valCorrect / XVal.length : null;
+    const valWins = yVal.filter(v => v === 1).length;
+    const baseRate = yVal.length > 0 ? Math.max(valWins, yVal.length - valWins) / yVal.length : null;
+    const ACCEPT_MARGIN = 0.03;
+    if (valAcc == null || baseRate == null || valAcc < baseRate + ACCEPT_MARGIN || valAcc < 0.5 + ACCEPT_MARGIN) {
+      _weights = null;
+      _bias = 0;
+      _trainingStats = {
+        samples: n,
+        accuracy: Math.round((correct / X.length) * 1000) / 10,
+        valAccuracy: valAcc != null ? Math.round(valAcc * 1000) / 10 : null,
+        baseline: baseRate != null ? Math.round(baseRate * 1000) / 10 : null,
+        accepted: false,
+        lastTraining: Date.now(),
+        weights: null, bias: 0, featureStats: null,
+      };
+      console.warn(`[ML] Model rejected: OOS accuracy ${valAcc != null ? (valAcc * 100).toFixed(1) : 'n/a'}% vs baseline ${baseRate != null ? (baseRate * 100).toFixed(1) : 'n/a'}% (need +${(ACCEPT_MARGIN * 100).toFixed(0)}pp) — ML abstains`);
+      return;
+    }
+
     _trainingStats = {
       samples: n,
       accuracy: Math.round((correct / X.length) * 1000) / 10,
-      valAccuracy: XVal.length > 0 ? Math.round((valCorrect / XVal.length) * 1000) / 10 : null,
+      valAccuracy: valAcc != null ? Math.round(valAcc * 1000) / 10 : null,
+      baseline: baseRate != null ? Math.round(baseRate * 1000) / 10 : null,
+      accepted: true,
       lastTraining: Date.now(),
       weights: _weights.map(v => Math.round(v * 1000) / 1000),
       bias: Math.round(_bias * 1000) / 1000,
