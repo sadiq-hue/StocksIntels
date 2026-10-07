@@ -5,6 +5,7 @@ import {
   X,
   Zap,
   Shield,
+  ShieldCheck,
   Crown,
   ArrowRight,
   HelpCircle,
@@ -16,7 +17,7 @@ import { useAuth, getTrialInfo } from "../auth/AuthContext";
 import { toast } from "sonner";
 import { useSEO } from "../hooks/useSEO";
 import { trackEvent, MetaEvents } from "../utils/metaPixel";
-import { PLANS, YEARLY_SAVINGS_LABEL } from "../data/plans";
+import { PLANS, YEARLY_SAVINGS_LABEL, MONEY_BACK_GUARANTEE } from "../data/plans";
 
 // Cards render from the shared plan config. Icon and CTA variant are the only
 // page-specific presentation choices.
@@ -58,6 +59,10 @@ const faqs = [
   {
     question: "Can I cancel my subscription?",
     answer: "You can cancel anytime from your account settings. You'll retain access until the end of your current billing period.",
+  },
+  {
+    question: "Is there a money-back guarantee?",
+    answer: `Yes. Every plan comes with a ${MONEY_BACK_GUARANTEE}. If StocksIntels isn't right for you, contact support within 30 days of your payment and we'll refund you in full.`,
   },
 ];
 
@@ -218,9 +223,10 @@ export function PricingPage() {
            <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4">
              Investment plans for every level
            </h1>
-           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10">
-             Choose the plan that matches your investment journey. All plans include a 7-day free trial.
-           </p>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10">
+            Choose the plan that matches your investment journey. All plans include a 7-day free trial
+            and a {MONEY_BACK_GUARANTEE}.
+          </p>
 
           {/* Billing Toggle */}
           <div className="inline-flex items-center gap-3 bg-muted rounded-full p-1.5">
@@ -305,7 +311,7 @@ export function PricingPage() {
                   <Button
                     onClick={() => handlePlanClick(plan.name)}
                     disabled={plan.name !== "Free" && startingTrial === plan.name}
-                    className={`w-full py-6 text-base font-semibold mb-8 transition-all hover:-translate-y-0.5 ${
+                    className={`w-full py-6 text-base font-semibold mb-2 transition-all hover:-translate-y-0.5 ${
                       plan.popular
                         ? "bg-white dark:bg-white/[0.04] text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-white/10 dark:hover:bg-white/10 shadow-xl"
                         : plan.ctaVariant === "default"
@@ -326,6 +332,13 @@ export function PricingPage() {
                       </>
                     )}
                   </Button>
+
+                  <p className={`mb-6 flex items-center justify-center gap-1.5 text-center text-[11px] font-medium ${
+                    plan.popular ? "text-gray-400" : "text-muted-foreground"
+                  }`}>
+                    <ShieldCheck className="size-3.5 shrink-0" />
+                    {MONEY_BACK_GUARANTEE}
+                  </p>
 
                   <div className="space-y-4">
                     <p className={`text-sm font-semibold ${plan.popular ? "text-gray-300" : "text-foreground"}`}>

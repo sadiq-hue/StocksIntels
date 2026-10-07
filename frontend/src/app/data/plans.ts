@@ -138,3 +138,6 @@ export function kesPrice(monthlyUsd: number): number {
 }
 
 export const YEARLY_SAVINGS_LABEL = "Save 33%+";
+
+/** Shown on every plan card and in the pricing FAQ. */
+export const MONEY_BACK_GUARANTEE = "30-day money-back guarantee";

@@ -10,7 +10,7 @@ import { Button } from "../components/ui/button";
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from "../services/marketDataService";
 import { useSEO } from "../hooks/useSEO";
-import { PLANS, YEARLY_SAVINGS_LABEL } from "../data/plans";
+import { PLANS, YEARLY_SAVINGS_LABEL, MONEY_BACK_GUARANTEE } from "../data/plans";
 
 const HERO_SYMBOLS = ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "NSE:EABL", "AAPL", "TSLA", "MSFT", "GOOGL", "NVDA"];
 
@@ -868,7 +868,7 @@ export function LandingPage() {
         <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(7) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
           <div className="text-center max-w-3xl mx-auto mb-14">
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Simple pricing. Start your trial today.</h2>
-            <p className="text-lg text-muted-foreground">Less than a coffee a day. Try any plan free for 7 days.</p>
+            <p className="text-lg text-muted-foreground">Less than a coffee a day. Try any plan free for 7 days — every plan includes a {MONEY_BACK_GUARANTEE}.</p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
