@@ -40,11 +40,21 @@ let _calibrationSamples = 0;
     if (rows[0] && rows[0].config_value) {
       const saved = rows[0].config_value;
       if (saved.w && Array.isArray(saved.w) && saved.w.length > 0) {
-        _weights = saved.w;
-        _bias = typeof saved.b === 'number' ? saved.b : 0;
-        if (saved.fs && saved.fs.means && saved.fs.stds) _featureStats = saved.fs;
-        console.log(`[ML] Restored weights from engine_config (${saved.n || '?'} samples, ${saved.acc || '?'}% acc, saved ${saved.ts ? new Date(saved.ts).toISOString() : '?'})`);
-        _trainingStats = { samples: saved.n || 0, accuracy: saved.acc || 0, lastTraining: saved.ts || 0, weights: _weights.map(v => Math.round(v * 1000) / 1000), bias: Math.round(_bias * 1000) / 1000 };
+        // Reject a numerically corrupt stored model. A model whose weights are
+        // non-finite or absurdly large (|w| > 50) can only saturate the sigmoid
+        // to a constant — exactly the failure that made every win-prob 1.0.
+        const sane = saved.w.every(v => Number.isFinite(v) && Math.abs(v) <= 50);
+        if (!sane) {
+          _weights = null;
+          _bias = 0;
+          console.warn('[ML] Ignoring degenerate stored model (non-finite or |w|>50) - ML abstains until a clean retrain');
+        } else {
+          _weights = saved.w;
+          _bias = typeof saved.b === 'number' ? saved.b : 0;
+          if (saved.fs && saved.fs.means && saved.fs.stds) _featureStats = saved.fs;
+          console.log(`[ML] Restored weights from engine_config (${saved.n || '?'} samples, ${saved.acc || '?'}% acc, saved ${saved.ts ? new Date(saved.ts).toISOString() : '?'})`);
+          _trainingStats = { samples: saved.n || 0, accuracy: saved.acc || 0, lastTraining: saved.ts || 0, weights: _weights.map(v => Math.round(v * 1000) / 1000), bias: Math.round(_bias * 1000) / 1000 };
+        }
       }
     }
   } catch (e) { /* table may not exist on first deploy */ }
@@ -64,6 +74,47 @@ function extractFeatures(signal) {
     signal.tradeType === 'Aggressive Buy' ? 0.8 : signal.tradeType === 'Swing Trade' ? 0.5 : 0.3,
     regimeMap[signal.regime] || 0,
   ];
+}
+
+// Sane bounds per raw feature, so a corrupt indicator (a broken Bollinger band
+// span, a near-zero SMA denominator, a garbage volume ratio) can never explode
+// the feature vector. Out-of-range values are clamped; non-finite input falls
+// back to the neutral default. Without this, training absorbed means of ~1e14
+// and the sigmoid saturated to a constant.
+const FEATURE_BOUNDS = {
+  rsi: [0, 100],
+  macd_hist: [-50, 50],
+  bb_pct_b: [0, 1],
+  sma_ratio: [0.5, 2],
+  atr_ratio: [0, 0.5],
+  volume_ratio: [0, 20],
+  momentum_5d: [-100, 300],
+  pe_ratio: [0, 300],
+  revenue_growth: [-100, 1000],
+  macro_score: [0, 1],
+  technical_score: [0, 1],
+  fundamental_score: [0, 1],
+  volume_raw: [0, 1e12],
+};
+const DEFAULT_FEATURE = {
+  rsi: 50, macd_hist: 0, bb_pct_b: 0.5, sma_ratio: 1, atr_ratio: 0.02,
+  volume_ratio: 1, momentum_5d: 0, pe_ratio: 18, revenue_growth: 0,
+  macro_score: 0.5, technical_score: 0.5, fundamental_score: 0.5, volume_raw: 0,
+};
+
+function clampValue(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function sanitizeFeature(name, v) {
+  if (typeof v !== 'number' || !Number.isFinite(v)) {
+    if (DEFAULT_FEATURE[name] !== undefined) return DEFAULT_FEATURE[name];
+    return /_accuracy$|_win_rate$/.test(name) ? 0.5 : 0;
+  }
+  const b = FEATURE_BOUNDS[name];
+  if (b) return clampValue(v, b[0], b[1]);
+  if (/_accuracy$|_win_rate$/.test(name)) return clampValue(v, 0, 1);
+  if (/_samples$/.test(name)) return clampValue(v, 0, 10);
+  if (/_days_to_resolve$/.test(name)) return clampValue(v, 0, 5);
+  return clampValue(v, -1e6, 1e6);
 }
 
 // Extract raw indicator features from analysis objects for the ML model
@@ -178,13 +229,16 @@ function extractRawIndicators({ fundamental, technical, macro, priceHistory, cur
   }
 
   const cfgFeatures = cfg.feature_list || FEATURES;
-  const featureVector = cfgFeatures.map(name => featMap[name] !== undefined ? featMap[name] : 0);
+  const featureVector = cfgFeatures.map(name =>
+    sanitizeFeature(name, featMap[name] !== undefined ? featMap[name] : DEFAULT_FEATURE[name])
+  );
 
   if (cfg.normalization === 'z-score' && _featureStats) {
     return featureVector.map((v, i) => {
-      const mean = _featureStats.means[i] || 0;
-      const std = _featureStats.stds[i] || 1;
-      return std > 0 ? (v - mean) / std : 0;
+      const mean = Number.isFinite(_featureStats.means[i]) ? _featureStats.means[i] : 0;
+      const std = (Number.isFinite(_featureStats.stds[i]) && _featureStats.stds[i] > 1e-9) ? _featureStats.stds[i] : 1;
+      // Clamp z so a single outlier feature cannot pin the sigmoid at 0 or 1.
+      return clampValue((v - mean) / std, -5, 5);
     });
   }
 
@@ -197,14 +251,23 @@ function updateFeatureStats(X) {
   if (!X || X.length === 0) return;
   const dim = X[0].length;
   const means = new Array(dim).fill(0);
-  const stds = new Array(dim).fill(0);
+  const stds = new Array(dim).fill(1);
   for (let j = 0; j < dim; j++) {
     let sum = 0;
-    for (let i = 0; i < X.length; i++) sum += X[i][j];
-    means[j] = sum / X.length;
+    let count = 0;
+    for (let i = 0; i < X.length; i++) {
+      const v = X[i][j];
+      if (Number.isFinite(v)) { sum += v; count++; }
+    }
+    if (count === 0) { means[j] = 0; stds[j] = 1; continue; }
+    means[j] = sum / count;
     let sqSum = 0;
-    for (let i = 0; i < X.length; i++) sqSum += (X[i][j] - means[j]) ** 2;
-    stds[j] = Math.sqrt(sqSum / X.length) || 1;
+    for (let i = 0; i < X.length; i++) {
+      const v = X[i][j];
+      if (Number.isFinite(v)) sqSum += (v - means[j]) ** 2;
+    }
+    const std = Math.sqrt(sqSum / count);
+    stds[j] = std > 1e-9 ? std : 1;
   }
   _featureStats = { means, stds };
 }
@@ -212,6 +275,7 @@ function updateFeatureStats(X) {
 function predictProbability(signal) {
   if (!_weights) return 0.5;
   const x = extractFeatures(signal);
+  if (x.length !== _weights.length) return 0.5;
   let z = _bias;
   for (let i = 0; i < _weights.length; i++) z += _weights[i] * x[i];
   return sigmoid(z);
@@ -380,7 +444,7 @@ async function _runBackgroundTraining() {
           volume: 0,
         });
       }
-      if (!feats || feats.length === 0) continue;
+      if (!feats || feats.length === 0 || feats.some(v => !Number.isFinite(v))) continue;
       X.push(feats);
       y.push(row.result === 'win' ? 1 : 0);
 
@@ -451,13 +515,19 @@ async function _runBackgroundTraining() {
       }
     }
 
-    if (XVal.length > 0) {
-      _weights = bestW;
-      _bias = bestB;
-    } else {
-      _weights = w;
-      _bias = b;
+    const candidateW = XVal.length > 0 ? bestW : w;
+    const candidateB = XVal.length > 0 ? bestB : b;
+    const degenerate =
+      !candidateW.every(v => Number.isFinite(v) && Math.abs(v) <= 50) || !Number.isFinite(candidateB);
+    if (degenerate) {
+      _weights = null;
+      _bias = 0;
+      _trainingStats = { samples: n, accuracy: 0, valAccuracy: null, lastTraining: Date.now(), weights: null, bias: 0, featureStats: null };
+      console.warn('[ML] Trained weights degenerate (non-finite or |w|>50) - discarding model, ML abstains until clean data');
+      return;
     }
+    _weights = candidateW;
+    _bias = candidateB;
 
     let correct = 0;
     for (let i = 0; i < X.length; i++) {

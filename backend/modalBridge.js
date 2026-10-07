@@ -4,11 +4,22 @@ const MODAL_URL = process.env.MODAL_URL || '';
 const REQUEST_TIMEOUT = 120000;
 const TRAIN_TIMEOUT = 600000;
 
+// A Modal endpoint that 404s (or is otherwise down) must not be retried on
+// every single signal — that is thousands of failed calls per cycle. After a
+// few consecutive failures the bridge opens for a cooldown and abstains
+// immediately, then retries once the cooldown elapses.
+const FAIL_THRESHOLD = 3;
+const COOLDOWN_MS = 10 * 60 * 1000;
+let _failures = 0;
+let _openUntil = 0;
+
 let _lastStatus = { models_loaded: 0, total_samples: 0, last_training: 0 };
 
 async function _request(endpoint, data = null, timeout = REQUEST_TIMEOUT) {
   if (!MODAL_URL) {
-    console.warn('[ModalBridge] MODAL_URL not set, skipping ML request');
+    return null;
+  }
+  if (Date.now() < _openUntil) {
     return null;
   }
   const url = `${MODAL_URL.replace(/\/+$/, '')}/${endpoint}`;
@@ -19,10 +30,18 @@ async function _request(endpoint, data = null, timeout = REQUEST_TIMEOUT) {
   try {
     const method = data ? 'post' : 'get';
     const response = await axios[method](url, data || {}, config);
+    _failures = 0;
     return response.data;
   } catch (e) {
     const msg = e.response?.data?.message || e.message;
-    console.warn(`[ModalBridge] ${endpoint} failed: ${msg}`);
+    _failures++;
+    if (_failures >= FAIL_THRESHOLD) {
+      _openUntil = Date.now() + COOLDOWN_MS;
+      console.warn(`[ModalBridge] ${_failures} consecutive failures (${msg}) - pausing Modal for ${COOLDOWN_MS / 60000} min`);
+      _failures = 0;
+    } else {
+      console.warn(`[ModalBridge] ${endpoint} failed: ${msg}`);
+    }
     return null;
   }
 }
