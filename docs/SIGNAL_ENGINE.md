@@ -135,7 +135,22 @@ cyclical sectors.
 ratio, volume ratio, 5d momentum, P/E, revenue growth, the three sub-score
 levels, plus forward/live-test outcomes. Predicted via Modal serverless
 (`modalBridge.js`) or a JS logistic regression fallback; `mlProbScore =
-round(mlWinProb·100)`, default 50 when unavailable (`signalService.js:5258`).
+round(mlWinProb·100)`, default 50 when unavailable.
+
+**Saturation fix (Oct 2026).** The stored JS model had been fitted on garbage
+feature values (4 of 9 features with training means ~10¹¹–10¹⁵), producing
+weights up to 8.7e13 and a sigmoid pinned at 1.0 for every stock — so the
+`ml_probability` weight was a constant lift, not a signal. Now:
+- `extractRawIndicators` clamps every feature to a sane bound and replaces
+  non-finite input with a neutral default; z-scores are clamped to [-5, 5].
+- training drops non-finite rows and refuses to persist weights that are
+  non-finite or |w| > 50; a degenerate stored model is ignored on load.
+- `modalBridge` circuit-breaks after 3 consecutive failures (10-min cooldown)
+  instead of retrying a dead endpoint on every signal.
+
+Until a clean model retrains, ML **abstains** (`mlWinProb = 0.5`, neutral), so
+the composite is driven by fundamental/technical/financial/macro only. This is
+visible in `diagnostics.subScores.ml = 50`.
 
 ---
 
@@ -283,7 +298,7 @@ mismatch (now centralized in `backend/marketHours.js`), the misleading "primary"
 comment on the MyStocks Africa source, the unused `mlProb` parameter on
 `calibrateConfidence`, and the mis-scoped `portfolio.stopLoss` (renamed to
 `portfolio.holdStopLoss`, which is honestly scoped to Hold references only — buy
-stops come from `MIN_STOP_PCT`).
+stops come from `MIN_STOP_PCT`). The ML saturation bug (see §3) is also fixed.
 
 Remaining design notes (not bugs):
 
