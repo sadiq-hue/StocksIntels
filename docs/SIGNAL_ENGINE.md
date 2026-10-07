@@ -152,6 +152,27 @@ Until a clean model retrains, ML **abstains** (`mlWinProb = 0.5`, neutral), so
 the composite is driven by fundamental/technical/financial/macro only. This is
 visible in `diagnostics.subScores.ml = 50`.
 
+### NSE fundamentals & the coverage gate
+
+NSE fundamentals come from real parsed corporate filings
+(`financial_statements.parsed_data`, `nseFundamentalsIngest.js`), not the
+hardcoded `NSE_FUNDAMENTALS` table:
+
+- `buildLocalNseReport` derives P/E, P/B, dividend yield, ROE, D/E and current
+  ratio from the filings; growth is computed **annual-to-annual** (interim vs
+  annual comparisons are rejected), and current ratio is neutralised for
+  banks/insurers (their statements map total→current liabilities).
+- `nseFundamentalsIngest` writes price-independent ratios (ROE, D/E, current
+  ratio, net margin, payout, annual growth) into the symbol-keyed
+  `stock_fundamentals` table (migration 008 + `data_source='filings'`).
+- **Coverage gate** (`quality.require_real_fundamentals_nse`, default true):
+  an NSE symbol whose fundamentals resolve to the hardcoded fallback
+  (`stock.dataSource !== 'live'`) produces **no signal** in either the batch or
+  on-demand path. The fundamental dimension is 30% of the weight, so advice on
+  fabricated numbers is not acceptable. US symbols are unaffected.
+- The static `NSE_FUNDAMENTALS` seeder now runs only as a fallback and never
+  overwrites `data_source='filings'`.
+
 ---
 
 ## 4. Score → label
