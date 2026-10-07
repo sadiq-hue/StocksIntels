@@ -316,11 +316,12 @@ When `diagnostics.enabled` is true (config, default true) every signal carries a
 
 ```jsonc
 "diagnostics": {
+  "engineVersion": "v2",
   "regime": "bull",
   "weights": { "fundamental": 0.30, "technical": 0.25, "financial": 0.10,
                "macro": 0.05, "ml_probability": 0.15, "confidence": 0.15 },
-  "subScores": { "fundamental": 62, "technical": 55, "financial": 60, "macro": 55, "ml": 64 },
-  "mlWinProb": 0.64,
+  "subScores": { "fundamental": 62, "technical": 55, "financial": 60, "macro": 55, "ml": 50 },
+  "mlWinProb": 0.5,
   "compositeBase": 60.1,                       // weighted average, pre-overlay
   "overlays": { "sparse": 0, "news": 5, "catalyst": 0, "insider": 1.2 },
   "scoreBeforeCap": 66.3,
@@ -329,6 +330,8 @@ When `diagnostics.enabled` is true (config, default true) every signal carries a
   "scoreVariance": 8,
   "labelBeforeGate": "Buy",
   "labelFinal": "Buy",
+  "expectancy": 0.6,
+  "expectancyGate": null,
   "confidence": { "raw": 64, "afterDegFactor": 64, "afterCircuitBreaker": 64,
                   "afterCalibration": 61, "afterDrawdown": 61,
                   "drawdownThrottled": false, "gate": null },
@@ -343,7 +346,45 @@ to drop the field from the payload and silence the summary.
 
 ---
 
-## 12. Key constants
+## 12. Engine version & the v2 reset
+
+Signals are versioned (`engineVersion.js`, `ENGINE_VERSION`) so cohorts from
+different parameterizations never mix in reporting, calibration or ML.
+
+**v2 (Oct 2026)** — the fixes that made v1 non-representative: the constant-50
+composite term removed, the ML saturation fixed (model abstains), market hours
+centralized. Because v1 signals were scored by that different engine, the v1
+cohort was **archived, not deleted** (`migrations/007_engine_v2_reset.js`):
+
+| live table | archived to |
+|---|---|
+| `signal_history` | `signal_history_legacy_v1` |
+| `signal_outcomes` | `signal_outcomes_legacy_v1` |
+| `forward_predictions` | `forward_predictions_legacy_v1` |
+| `prediction_log` | `prediction_log_legacy_v1` |
+
+The live tables were then emptied, so **every existing reader reports v2 without
+a query change**, and future rows are tagged `engine_version='v2'`. The reset
+uses `TRUNCATE` (not `DELETE`) because `prediction_log` holds a 1.6M-row
+unindexed FK to `signal_history` that makes row-by-row deletes pathologically
+slow. Reversible via `INSERT INTO <live> SELECT * FROM <legacy>`.
+
+## 13. Expectancy gate
+
+An actionable Buy must clear a positive risk-adjusted expectancy, not just a
+score bar (`engineConfig.quality.expectancy_gate`, default on):
+
+```
+E = p · R − (1 − p)        p = calibrated confidence, R = reward:risk of the levels
+```
+
+A signal is demoted to Hold when `E < min_expectancy` (default `0.2` R). With the
+platform's ~2:1 levels this requires roughly confidence ≥ 40%. Recorded per
+signal as `diagnostics.expectancy` / `diagnostics.expectancyGate`.
+
+---
+
+## 14. Key constants
 
 | Constant | Value | Where |
 |---|---|---|
@@ -363,3 +404,6 @@ to drop the field from the payload and silence the summary.
 | Target multiples | 2 / 4 / 6 × risk | `riskManager.js:72-74` |
 | Circuit breaker | ×0.5 @3, ×0.25 @5+ (floored) | `riskManager.js:202-211` |
 | MAX_TRACKED_POSITIONS | 500 | `riskManager.js:625` |
+| Engine version | v2 | `engineVersion.js` |
+| Expectancy gate | E = p·R−(1−p) ≥ 0.2R, else Hold | `engineConfig.js` `quality.expectancy_gate` |
+| Market hours | NSE 09:30–15:00 EAT; US 09:30–16:00 ET | `marketHours.js` |

@@ -27,6 +27,7 @@
  *   signal_history      -> signal_history_legacy_v1      (<empty>)
  *   signal_outcomes     -> signal_outcomes_legacy_v1     (<empty>)
  *   forward_predictions -> forward_predictions_legacy_v1 (<empty>)
+ *   prediction_log      -> prediction_log_legacy_v1      (<empty>)
  *
  * Reversible:
  *   psql -c "INSERT INTO signal_history      SELECT * FROM signal_history_legacy_v1"
@@ -46,7 +47,8 @@ const { pool } = require('../db');
 const { ENGINE_VERSION } = require('../engineVersion');
 
 const APPLY = process.argv.includes('--apply');
-const TABLES = ['signal_history', 'signal_outcomes', 'forward_predictions'];
+const TABLES = ['signal_history', 'signal_outcomes', 'forward_predictions', 'prediction_log'];
+const ENGINE_TAG_TABLES = ['signal_history', 'signal_outcomes', 'forward_predictions'];
 const LEGACY_SUFFIX = '_legacy_v1';
 
 async function tableExists(name) {
@@ -86,14 +88,19 @@ async function main() {
       await pool.query(`CREATE TABLE ${legacy} AS SELECT * FROM ${t}`);
       console.log(`  archived ${t} -> ${legacy}`);
     }
-    const del = await pool.query(`DELETE FROM ${t}`);
-    console.log(`  emptied ${t} (${del.rowCount} rows removed)`);
   }
 
-  for (const t of TABLES) {
+  // TRUNCATE, not DELETE. prediction_log holds a multi-million-row UNINDEXED
+  // foreign key to signal_history, so deleting history row-by-row makes Postgres
+  // scan the whole child table per row — it stalls the DB for minutes. TRUNCATE
+  // is instant and skips row-level FK checks.
+  await pool.query(`TRUNCATE ${TABLES.join(', ')} CASCADE`);
+  console.log(`  truncated ${TABLES.join(', ')}`);
+
+  for (const t of ENGINE_TAG_TABLES) {
     await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS engine_version VARCHAR(20) DEFAULT '${ENGINE_VERSION}'`);
   }
-  console.log(`  tagged ${TABLES.join(', ')} with engine_version default '${ENGINE_VERSION}'`);
+  console.log(`  tagged ${ENGINE_TAG_TABLES.join(', ')} with engine_version default '${ENGINE_VERSION}'`);
 
   const cache = await pool.query(`DELETE FROM app_cache WHERE cache_key = 'signals_cache'`);
   console.log(`  cleared app_cache.signals_cache (${cache.rowCount} row)`);
