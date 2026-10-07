@@ -77,7 +77,7 @@ const TEMPLATES = {
       ` : ''}
       <div style="background:linear-gradient(135deg,${BRAND_COLOR}08,${BRAND_COLOR}03);border:1px solid ${BRAND_COLOR}20;border-radius:10px;padding:18px 20px;margin:0 0 24px">
         <div style="font-size:13px;color:${TEXT_MED};line-height:1.6">
-          <strong style="color:${BRAND_COLOR}">Your free trial</strong> gives you access to delayed data, basic snapshots, and a limited watchlist. When you're ready to go deeper — real-time signals, full AI analysis, and multi-exchange comparison — Pro is waiting for you at <strong>KES 2,599/month ($19.9/mo)</strong>.
+          <strong style="color:${BRAND_COLOR}">Your free trial</strong> gives you access to delayed data, basic snapshots, and a limited watchlist. When you're ready to go deeper — real-time signals, full AI analysis, and multi-exchange comparison — Pro is waiting for you at <strong>KES 2,571/month ($19.78/mo)</strong>.
         </div>
       </div>
       <div style="text-align:center;margin:0 0 20px">${ctaButton('EXPLORE YOUR DASHBOARD \u2192', APP_URL + '/app/dashboard')}</div>
@@ -145,9 +145,9 @@ const TEMPLATES = {
         <div style="font-size:13px;color:${TEXT_MED};line-height:1.7">Want to compare how Kenyan banking stocks are performing relative to their Nigerian peers? Or benchmark a JSE-listed company against the S&P 500? Pro gives you the cross-exchange lens that no single-market tool can offer — African and global, side by side.</div>
       </div>
       <div style="background:linear-gradient(135deg,${BRAND_COLOR}10,${BRAND_COLOR}05);border:1px solid ${BRAND_COLOR}30;border-radius:10px;padding:18px 20px;margin:0 0 24px;text-align:center">
-        <div style="font-size:13px;color:${TEXT_MED};line-height:1.6">Pro is <strong>KES 2,599/month ($19.9/mo)</strong>. That's less than a single brokerage commission on most exchanges — for a month of intelligence that helps you make every decision sharper.</div>
+        <div style="font-size:13px;color:${TEXT_MED};line-height:1.6">Pro is <strong>KES 2,571/month ($19.78/mo)</strong>. That's less than a single brokerage commission on most exchanges — for a month of intelligence that helps you make every decision sharper.</div>
       </div>
-      <div style="text-align:center;margin:0 0 20px">${ctaButton('UPGRADE TO PRO \u2192 KES 2,599/MONTH ($19.9/MO)', APP_URL + '/pricing')}</div>
+      <div style="text-align:center;margin:0 0 20px">${ctaButton('UPGRADE TO PRO \u2192 KES 2,571/MONTH ($19.78/MO)', APP_URL + '/pricing')}</div>
       <div style="border-top:1px solid ${BORDER};padding-top:16px;margin-top:20px">
         <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:0">More soon,</p>
         <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:4px 0 0"><strong>StocksIntels Team</strong></p>
@@ -213,7 +213,7 @@ const TEMPLATES = {
           <div style="margin-bottom:6px"><strong style="color:${TEXT_DARK}">→ Multi-exchange comparison</strong> — compare stocks across the NSE, NGX, NYSE, and more side by side</div>
         </div>
       </div>
-      <p style="font-size:14px;color:${TEXT_MED};line-height:1.7;margin:0 0 16px">Pro is <strong>KES 2,599/month ($19.90/mo)</strong> — less than a single brokerage commission for a month of institutional-grade market intelligence.</p>
+      <p style="font-size:14px;color:${TEXT_MED};line-height:1.7;margin:0 0 16px">Pro is <strong>KES 2,571/month ($19.78/mo)</strong> — less than a single brokerage commission for a month of institutional-grade market intelligence.</p>
       <div style="text-align:center;margin:0 0 20px">${ctaButton('UPGRADE TO PRO \u2192', APP_URL + '/pricing')}</div>
       <div style="border-top:1px solid ${BORDER};padding-top:16px;margin-top:20px">
         <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:0">Here for your investing journey,</p>
@@ -248,14 +248,14 @@ const TEMPLATES = {
             <div style="margin-bottom:4px">\u2192 Technical indicator signals</div>
           </div>
         </div>
-        <p style="font-size:14px;color:${TEXT_MED};line-height:1.7;margin:0 0 16px">All of it. For <strong>KES 2,599/month ($19.9/mo)</strong>.</p>
+        <p style="font-size:14px;color:${TEXT_MED};line-height:1.7;margin:0 0 16px">All of it. For <strong>KES 2,571/month ($19.78/mo)</strong>.</p>
         <div style="background:${BG_LIGHT};border-radius:10px;padding:18px;margin:0 0 20px">
           <div style="font-size:13px;color:${TEXT_MED};line-height:1.7">If you're not sure it's worth it — here's how to think about it: one better-informed investment decision per month, on a position of KES 50,000 (~$385), that earns you even 2% more than it would have without the intelligence? That's KES 1,000 (~$7.70) better than break-even on your subscription. Most Pro users make that case in the first week.</div>
         </div>
         <div style="background:linear-gradient(135deg,${BRAND_COLOR}15,${BRAND_COLOR}08);border:1px solid ${BRAND_COLOR}30;border-radius:10px;padding:18px 20px;margin:0 0 24px;text-align:center">
           <div style="font-size:14px;color:${TEXT_DARK};line-height:1.6">If African and global markets are part of how you're building wealth — StocksIntels Pro is the sharpest tool you can have in your corner.</div>
         </div>
-        <div style="text-align:center;margin:0 0 20px">${ctaButton('UPGRADE TO PRO \u2192 KES 2,599/MONTH ($19.9/MO)', APP_URL + '/pricing')}</div>
+        <div style="text-align:center;margin:0 0 20px">${ctaButton('UPGRADE TO PRO \u2192 KES 2,571/MONTH ($19.78/MO)', APP_URL + '/pricing')}</div>
         <div style="border-top:1px solid ${BORDER};padding-top:16px;margin-top:20px">
           <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:0">Here when you need it,</p>
           <p style="font-size:13px;color:${TEXT_MED};line-height:1.6;margin:4px 0 0"><strong>StocksIntels Team</strong></p>

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useAuth } from "../auth/AuthContext";
 import { trackEvent, MetaEvents } from "../utils/metaPixel";
 import { trackXEvent, XEvents } from "../utils/xPixel";
+import { PLANS, planById } from "../data/plans";
 
 const cryptoOptions = [
   { ticker: "BTC", name: "Bitcoin", networks: ["Bitcoin", "Lightning network"] },
@@ -16,36 +17,21 @@ const cryptoOptions = [
   { ticker: "USDC", name: "USD Coin", networks: ["ERC20"] },
 ];
 
-const planDetails = {
-  starter: {
-    name: "Starter",
-    monthlyPrice: 9.9,
-    yearlyPrice: 99,
-    icon: Zap,
-    features: ["Real-time African + global data", "5 AI signals per day", "Stock screener", "Portfolio tracking", "Email support"],
-  },
-  premium: {
-    name: "Premium",
-    monthlyPrice: 49,
-    yearlyPrice: 499,
-    icon: Shield,
-    features: ["Unlimited NSE AI signals", "10 global signals per day", "African + global market data", "Advanced NSE screener", "NSE technical analysis", "Email support"],
-  },
-  pro: {
-    name: "Pro",
-    monthlyPrice: 20,
-    yearlyPrice: 199,
-    icon: Shield,
-    features: ["Unlimited AI signals", "All African + global market data", "Advanced charting", "Risk scoring & analysis", "Priority support"],
-  },
-  institutional: {
-    name: "Institutional",
-    monthlyPrice: 200,
-    yearlyPrice: 2000,
-    icon: Crown,
-    features: ["API access", "White-label analytics", "Dedicated support 24/7", "Team seats", "Custom data feeds", "Everything in Pro"],
-  },
-};
+const PLAN_ICONS: Record<string, typeof Shield> = { core: Zap, pro: Shield, premium: Crown };
+
+// Checkout reads the same config the marketing pages render, so the amount
+// charged can never drift from the advertised price. Legacy slugs
+// (e.g. /subscribe/starter) resolve through planById.
+const planDetails: Record<string, { name: string; monthlyPrice: number; yearlyPrice: number; icon: typeof Shield; features: string[] }> =
+  Object.fromEntries(
+    PLANS.map((p) => [p.id, {
+      name: p.name,
+      monthlyPrice: p.monthlyPrice,
+      yearlyPrice: p.yearlyPrice,
+      icon: PLAN_ICONS[p.id],
+      features: p.highlights,
+    }])
+  );
 
 export function SubscriptionPage() {
   const { planId } = useParams<{ planId: string }>();
@@ -101,7 +87,7 @@ export function SubscriptionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planId]);
   
-  const selectedPlan = planDetails[planId?.toLowerCase() as keyof typeof planDetails] || planDetails.starter;
+  const selectedPlan = planDetails[planId?.toLowerCase() || ""] || planDetails[planById(planId).id];
   const PlanIcon = selectedPlan.icon;
   const { user, refreshUser } = useAuth();
   const navigate = useNavigate();

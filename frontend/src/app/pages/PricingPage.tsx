@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router";
-import { 
-  Check, 
-  X, 
-  Zap, 
-  Shield, 
+import {
+  Check,
+  X,
+  Zap,
+  Shield,
+  Crown,
   ArrowRight,
   HelpCircle,
   Loader2
@@ -15,81 +16,19 @@ import { useAuth, getTrialInfo } from "../auth/AuthContext";
 import { toast } from "sonner";
 import { useSEO } from "../hooks/useSEO";
 import { trackEvent, MetaEvents } from "../utils/metaPixel";
+import { PLANS, YEARLY_SAVINGS_LABEL } from "../data/plans";
 
-const plans = [
-  {
-    name: "Core",
-    description: "Understand the market",
-    monthlyPrice: 9.83,
-    yearlyPrice: 79,
-    icon: Shield,
-    popular: false,
-    features: [
-      { text: "AI market intelligence", included: true },
-      { text: "Essential fundamentals analysis", included: true },
-      { text: "Basic technical intelligence", included: true },
-      { text: "News & sentiment (Basic)", included: true },
-      { text: "Portfolio tracking", included: true },
-      { text: "AI stock comparison", included: false },
-      { text: "Advanced stock screening", included: false },
-      { text: "Investment thesis & analysis", included: false },
-      { text: "Advanced portfolio risk analysis", included: false },
-      { text: "Priority support", included: false },
-    ],
-    cta: "Start 7-Day Trial",
-    ctaVariant: "default" as const,
-  },
-  {
-    name: "Pro",
-    description: "Research better",
-    monthlyPrice: 19.78,
-    yearlyPrice: 159,
-    icon: Shield,
-    popular: true,
-    features: [
-      { text: "AI market intelligence", included: true },
-      { text: "Advanced fundamentals analysis", included: true },
-      { text: "Advanced technical intelligence", included: true },
-      { text: "News & sentiment", included: true },
-      { text: "Insider activity intelligence", included: true },
-      { text: "AI stock comparison", included: true },
-      { text: "Advanced stock screening", included: true },
-      { text: "Investment thesis & analysis", included: true },
-      { text: "Bull / Bear case analysis", included: true },
-      { text: "Advanced portfolio risk analysis", included: true },
-      { text: "Priority support", included: true },
-    ],
-    cta: "Start 7-Day Trial",
-    ctaVariant: "default" as const,
-  },
-  {
-    name: "Premium",
-    description: "Operate like a serious investor",
-    monthlyPrice: 49.63,
-    yearlyPrice: 399,
-    icon: Shield,
-    popular: false,
-    features: [
-      { text: "AI market intelligence", included: true },
-      { text: "Advanced fundamentals analysis", included: true },
-      { text: "Advanced technical intelligence", included: true },
-      { text: "News & sentiment", included: true },
-      { text: "Insider activity intelligence", included: true },
-      { text: "AI stock comparison", included: true },
-      { text: "AI multi-market stock screening", included: true },
-      { text: "Investment thesis & analysis", included: true },
-      { text: "Bull / Bear case analysis", included: true },
-      { text: "Advanced portfolio risk analysis", included: true },
-      { text: "Cross-market intelligence", included: true },
-      { text: "Human analyst insights & research", included: true },
-      { text: "Analyst market commentary", included: true },
-      { text: "Analyst Q&A support", included: true },
-      { text: "Dedicated support", included: true },
-    ],
-    cta: "Start 7-Day Trial",
-    ctaVariant: "outline" as const,
-  },
-];
+// Cards render from the shared plan config. Icon and CTA variant are the only
+// page-specific presentation choices.
+const PLAN_ICONS: Record<string, typeof Shield> = { core: Zap, pro: Shield, premium: Crown };
+
+const plans = PLANS.map((p) => ({
+  ...p,
+  description: p.tagline,
+  icon: PLAN_ICONS[p.id],
+  cta: "Start 7-Day Trial",
+  ctaVariant: (p.id === "premium" ? "outline" : "default") as "default" | "outline",
+}));
 
 const faqs = [
   {
@@ -305,7 +244,7 @@ export function PricingPage() {
             >
               Yearly
                <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-semibold">
-                 Save 33%+
+                 {YEARLY_SAVINGS_LABEL}
                </span>
             </button>
           </div>
@@ -358,7 +297,7 @@ export function PricingPage() {
                       </div>
                       {isYearly && price > 0 && (
                         <p className="text-green-600 text-sm font-medium mt-1">
-                          Save 33%+
+                          {YEARLY_SAVINGS_LABEL}
                         </p>
                       )}
                     </div>
@@ -472,7 +411,7 @@ export function PricingPage() {
                      { name: "Analyst market commentary", starter: "—", pro: "—", premium: "Yes" },
                      { name: "Analyst Q&A", starter: "—", pro: "—", premium: "Priority" },
                      { name: "Priority intelligence", starter: "—", pro: "—", premium: "Yes" },
-                      { name: "Price", starter: `${isYearly ? '$79/year' : '$6.58/mo'}`, pro: `${isYearly ? '$159/year' : '$13.25/mo'}`, premium: `${isYearly ? '$399/year' : '$33.25/mo'}` },
+                      { name: "Price", starter: isYearly ? `$${PLANS[0].yearlyPrice}/year` : `$${PLANS[0].monthlyPrice}/mo`, pro: isYearly ? `$${PLANS[1].yearlyPrice}/year` : `$${PLANS[1].monthlyPrice}/mo`, premium: isYearly ? `$${PLANS[2].yearlyPrice}/year` : `$${PLANS[2].monthlyPrice}/mo` },
                    ].map((row, idx) => (
                      <tr key={row.name} className={idx % 2 === 0 ? "bg-muted/50" : ""}>
                        <td className="py-4 px-6 text-sm text-muted-foreground">{row.name}</td>

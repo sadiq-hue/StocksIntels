@@ -10,6 +10,7 @@ import { Button } from "../components/ui/button";
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from "../services/marketDataService";
 import { useSEO } from "../hooks/useSEO";
+import { PLANS, YEARLY_SAVINGS_LABEL } from "../data/plans";
 
 const HERO_SYMBOLS = ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "NSE:EABL", "AAPL", "TSLA", "MSFT", "GOOGL", "NVDA"];
 
@@ -871,89 +872,60 @@ export function LandingPage() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
-            {/* Starter */}
-              <div className="bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
-                style={{ animation: `fade-in-up 0.5s ease-out 0s forwards`, opacity: 0 }}>
-                <h3 className="text-xl font-bold text-foreground mb-1">Starter</h3>
-                <p className="text-sm text-muted-foreground mb-4">Retail investors</p>
-                <div className="mb-4">
-                  <span className="text-3xl font-bold text-foreground">$9.9</span>
-                  <span className="text-muted-foreground text-sm">/mo</span>
-                  <p className="text-xs text-muted-foreground/50 mt-1">≈ $0.33/day</p>
-                </div>
-                <Link to="/pricing">
-                  <Button variant="outline" className="w-full mb-4 border-border text-foreground hover:bg-muted cursor-pointer">
-                    Start Trial
-                  </Button>
-                </Link>
-                <div className="space-y-2">
-                  {["Real-time African + global data", "5 AI insights per day", "Stock screener", "Portfolio tracking"].map((f) => (
-                    <div key={f} className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                      <span className="text-xs text-muted-foreground">{f}</span>
+            {PLANS.map((plan, i) => {
+              const popular = plan.popular;
+              return (
+                <div
+                  key={plan.id}
+                  className={
+                    popular
+                      ? "bg-[#111827] dark:bg-[#1e293b] text-white rounded-xl p-6 border border-gray-800 dark:border-gray-700 shadow-xl lg:scale-[1.02] z-10 hover:shadow-2xl transition-all duration-500"
+                      : "bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
+                  }
+                  style={{ animation: `fade-in-up 0.5s ease-out ${i * 0.1}s forwards`, opacity: 0 }}
+                >
+                  {popular && (
+                    <div className="mb-2">
+                      <span className="bg-[#0D7490] text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                        Most Popular
+                      </span>
+                    </div>
+                  )}
+                  <h3 className={`text-xl font-bold mb-1 ${popular ? "" : "text-foreground"}`}>{plan.name}</h3>
+                  <p className={`text-sm mb-4 ${popular ? "text-white/50" : "text-muted-foreground"}`}>{plan.tagline}</p>
+                  <div className="mb-4">
+                    <div className="flex items-baseline gap-2">
+                      <span className={`text-3xl font-bold ${popular ? "" : "text-foreground"}`}>${plan.monthlyPrice}</span>
+                      <span className={`text-sm ${popular ? "text-white/50" : "text-muted-foreground"}`}>/mo</span>
+                    </div>
+                    <p className={`text-xs mt-1 ${popular ? "text-white/50" : "text-muted-foreground/50"}`}>
+                      ≈ ${(plan.monthlyPrice / 30).toFixed(2)}/day &middot; {YEARLY_SAVINGS_LABEL} on yearly
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Pro */}
-            <div className="bg-[#111827] dark:bg-[#1e293b] text-white rounded-xl p-6 border border-gray-800 dark:border-gray-700 shadow-xl lg:scale-[1.02] z-10 hover:shadow-2xl transition-all duration-500"
-              style={{ animation: `fade-in-up 0.5s ease-out 0.1s forwards`, opacity: 0 }}>
-              <div className="mb-2">
-                <span className="bg-[#0D7490] text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                  Most Popular
-                </span>
-              </div>
-              <h3 className="text-xl font-bold mb-1">Pro</h3>
-              <p className="text-sm text-white/50 mb-4">Active traders</p>
-              <div className="mb-4">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold">$19.9</span>
-                  <span className="text-white/50 text-sm">/mo</span>
-                  <span className="text-xs font-semibold text-emerald-400 line-through decoration-white/30">$49.9</span>
-                </div>
-                <p className="text-xs text-white/50 mt-1">≈ $0.66/day &middot; <span className="text-emerald-400 font-semibold">Save 60% vs Premium</span></p>
-              </div>
-              <Link to="/pricing">
-                <Button className="w-full mb-4 bg-[#0D7490] text-white hover:bg-[#0A5F7A] shadow-xl font-semibold cursor-pointer">
-                  Start Trial
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </Link>
-              <div className="space-y-2">
-                {["Unlimited AI insights", "African + global data", "Advanced charting", "Risk scoring"].map((f) => (
-                  <div key={f} className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                    <span className="text-xs text-white/70">{f}</span>
+                  <Link to="/pricing">
+                    <Button
+                      variant={popular ? "default" : "outline"}
+                      className={
+                        popular
+                          ? "w-full mb-4 bg-[#0D7490] text-white hover:bg-[#0A5F7A] shadow-xl font-semibold cursor-pointer"
+                          : "w-full mb-4 border-border text-foreground hover:bg-muted cursor-pointer"
+                      }
+                    >
+                      Start Trial
+                      {popular && <ArrowRight className="ml-2 w-4 h-4" />}
+                    </Button>
+                  </Link>
+                  <div className="space-y-2">
+                    {plan.highlights.map((f) => (
+                      <div key={f} className="flex items-center gap-2">
+                        <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${popular ? "text-emerald-400" : "text-green-500"}`} />
+                        <span className={`text-xs ${popular ? "text-white/70" : "text-muted-foreground"}`}>{f}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Premium */}
-              <div className="bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
-                style={{ animation: `fade-in-up 0.5s ease-out 0.2s forwards`, opacity: 0 }}>
-                <h3 className="text-xl font-bold text-foreground mb-1">Premium</h3>
-                <p className="text-sm text-muted-foreground mb-4">Serious & professional traders</p>
-                <div className="mb-4">
-                  <span className="text-3xl font-bold text-foreground">$49.9</span>
-                  <span className="text-muted-foreground text-sm">/mo</span>
-                  <p className="text-xs text-muted-foreground/50 mt-1">≈ $1.66/day</p>
                 </div>
-                <Link to="/pricing">
-                  <Button variant="outline" className="w-full mb-4 border-border text-foreground hover:bg-muted cursor-pointer">
-                    Start Trial
-                  </Button>
-                </Link>
-                <div className="space-y-2">
-                  {["Unlimited African + global insights", "Priority AI analysis & alerts", "Advanced multi-market screener", "Technical analysis & risk scoring"].map((f) => (
-                    <div key={f} className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                      <span className="text-xs text-muted-foreground">{f}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+              );
+            })}
           </div>
 
           <div className="text-center mt-10">
