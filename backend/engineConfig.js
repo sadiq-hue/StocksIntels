@@ -131,7 +131,19 @@ const DEFAULTS = {
   portfolio: {
     maxConcentration: 0.25,
     maxDrawdown: 0.20,
-    stopLoss: 0.05,
+    // Reference stop used only for Hold signals (no position is opened). Buy
+    // stops are ATR/floor-derived (MIN_STOP_PCT = 0.18 in riskManager.js) and
+    // are deliberately NOT governed by this key.
+    holdStopLoss: 0.05,
+  },
+
+  // Per-signal audit trail. When enabled, each signal carries a `diagnostics`
+  // object naming the regime, the weights used, every input sub-score, each
+  // overlay delta, the score before/after the speculative cap, and the full
+  // confidence chain — so live output can be checked against docs/SIGNAL_ENGINE.md.
+  diagnostics: {
+    enabled: true,
+    log_actionable: true,
   },
 
   // Scoring deltas — all hardcoded score adjustments are now configurable
@@ -295,7 +307,7 @@ const PRESET_SIMPLE_KEYS = [
   'enabled', 'signalInterval', 'maxSymbols', 'minConfidence', 'preset',
   'weights', 'thresholds', 'alerts',
   'training.retrain_frequency_hours', 'training.min_samples',
-  'portfolio.maxConcentration', 'portfolio.maxDrawdown', 'portfolio.stopLoss',
+  'portfolio.maxConcentration', 'portfolio.maxDrawdown', 'portfolio.holdStopLoss',
   'python_ml.enabled',
   'indicator_params.rsi_period', 'indicator_params.vol_lookback',
 ];

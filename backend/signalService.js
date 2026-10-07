@@ -5230,8 +5230,11 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const portfolioCfg = engineConfig.getConfig().portfolio || {};
   const maxConcentration = portfolioCfg.maxConcentration || 0.25;
   const maxDrawdownThreshold = portfolioCfg.maxDrawdown || 0.20;
-  const stopLossPct = portfolioCfg.stopLoss || 0.05;
+  // Reference stop for Hold signals only; buy stops use MIN_STOP_PCT in riskManager.
+  const holdStopLossPct = portfolioCfg.holdStopLoss ?? 0.05;
   const regimePenaltyCrash = sc.regime_penalty_crash ?? 0.5;
+  const diagCfg = engineConfig.getConfig().diagnostics || {};
+  const diagEnabled = diagCfg.enabled !== false;
 
   // Compute ML win probability BEFORE weighted score so it can contribute
   let mlWinProb = null;
@@ -5253,7 +5256,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // which is why removing it shifts the distribution down. Renormalize over the
   // components that actually contribute.
   const w = weights;
-  let adjScore =
+  const compositeBase =
     (fundamental.score * (w.fundamental || 0)) +
     (technical.score   * (w.technical || 0)) +
     (financial.score   * (w.financial || 0)) +
@@ -5262,21 +5265,22 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const weightSum =
     (w.fundamental || 0) + (w.technical || 0) + (w.financial || 0) +
     (w.macro || 0) + (w.ml_probability || 0);
-  if (weightSum > 0) adjScore = adjScore / weightSum;
+  let adjScore = weightSum > 0 ? compositeBase / weightSum : compositeBase;
 
   const sparseFund = fundamental.metrics?.dataQuality === 'Very sparse data';
   const sparseTech = technical.indicators?.dataQuality === 'Insufficient history';
   const sparseFin = financial.analysis?.financialHealth === 'Limited financial data';
-  if (sparseFund && sparseTech) adjScore += sparseFT;
-  if (sparseFund && sparseFin) adjScore += sparseFF;
-  if (newsSent === 'positive') adjScore += newsPos;
-  else if (newsSent === 'negative') adjScore += newsNeg;
+  const overlaySparse =
+    (sparseFund && sparseTech ? sparseFT : 0) + (sparseFund && sparseFin ? sparseFF : 0);
+  adjScore += overlaySparse;
+  const overlayNews = newsSent === 'positive' ? newsPos : newsSent === 'negative' ? newsNeg : 0;
+  adjScore += overlayNews;
   // Deal/narrative catalyst overlay (M&A talk, capital injection, crisis...).
   // A positive catalyst lifts the composite so a fundamentals-Sell can be
   // downgraded to a catalyst-aware reading; a negative one deepens it.
   const cat = catalyst || {};
-  const catDelta = cat.direction === 'positive' ? catPos : cat.direction === 'negative' ? catNeg : 0;
-  if (catDelta !== 0) adjScore += catDelta;
+  const overlayCatalyst = cat.direction === 'positive' ? catPos : cat.direction === 'negative' ? catNeg : 0;
+  adjScore += overlayCatalyst;
 
   // Insider-activity overlay: deliberate, informed transactions shift the
   // composite the same way a catalyst does — insider accumulation lifts it,
@@ -5286,7 +5290,10 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // US symbols score from Yahoo ownership transactions; NSE symbols (no Yahoo
   // insider coverage) score from director/insider dealings reported in news.
   const insider = scoreInsiderActivity(stock.ownership) || scoreNewsInsider(insiderNews || null);
-  if (insider) adjScore += ((insider.score - 50) / 50) * INSIDER_MAX_DELTA;
+  const overlayInsider = insider ? ((insider.score - 50) / 50) * INSIDER_MAX_DELTA : 0;
+  adjScore += overlayInsider;
+
+  const scoreBeforeCap = adjScore;
 
   // Speculative-rally gate: a large run-up on distressed fundamentals is a
   // sentiment/catalyst story, not earnings support. Cap the composite at Hold
@@ -5332,17 +5339,22 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     Math.abs(financial.score - overallScore),
     Math.abs(macro.score - overallScore)
   );
-  let confidence = Math.min(confMax, Math.max(confMin, Math.round(overallScore - scoreVariance * varMult)));
-  confidence = Math.round(confidence * degFactor);
+  const confRaw = Math.min(confMax, Math.max(confMin, Math.round(overallScore - scoreVariance * varMult)));
+  let confidence = Math.round(confRaw * degFactor);
+  const confAfterDegFactor = confidence;
   const riskMetrics = updatePortfolioRisk(_portfolioState, symbol, currentPrice, priceHistory, sig.action);
   confidence = Math.round(confidence * riskMetrics.circuitBreaker);
-  // Apply calibration
-  confidence = mlModel.calibrateConfidence(confidence, mlWinProb);
+  const confAfterCircuitBreaker = confidence;
+  // Apply calibration (ML does not enter here — see mlSignalModel.calibrateConfidence).
+  confidence = mlModel.calibrateConfidence(confidence);
+  const confAfterCalibration = confidence;
 
   // Enforce max drawdown — reduce confidence if portfolio is underwater
-  if (_portfolioState.maxDrawdown > maxDrawdownThreshold) {
+  const drawdownThrottled = _portfolioState.maxDrawdown > maxDrawdownThreshold;
+  if (drawdownThrottled) {
     confidence = Math.round(confidence * 0.7);
   }
+  const confFinal = confidence;
 
   // ── Confidence gate: label must be backed by scaled conviction ───────
   // The bucket label comes from overallScore alone; after variance/skew
@@ -5366,7 +5378,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   }
 
   const tradeType = sig.action === 'sell' ? 'Avoid' : determineTradeType(technical.score, fundamental.score);
-  const tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, stopLossPct, tradeType);
+  const tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType);
 
   const regimePenalty = regime.regime === 'crash' ? regimePenaltyCrash : 1;
 
@@ -5424,6 +5436,48 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // stock, so the list travels with the signal and is rendered per stock.
   const newsList = Array.isArray(news) ? news.slice(0, 10) : [];
   const newsSummary = summarizeNews(newsList);
+
+  // Per-signal audit trail: names every input and every intermediate, so live
+  // output can be checked against docs/SIGNAL_ENGINE.md. Gated by the
+  // `diagnostics.enabled` config; gated off it is omitted entirely.
+  const diagnostics = diagEnabled ? {
+    regime: regime.regime,
+    weights: {
+      fundamental: w.fundamental, technical: w.technical, financial: w.financial,
+      macro: w.macro, ml_probability: w.ml_probability, confidence: w.confidence,
+    },
+    subScores: {
+      fundamental: fundamental.score, technical: technical.score,
+      financial: financial.score, macro: macro.score, ml: mlProbScore,
+    },
+    mlWinProb: mlWinProb != null ? Math.round(mlWinProb * 1000) / 1000 : null,
+    compositeBase: Math.round(compositeBase * 1000) / 1000,
+    overlays: { sparse: overlaySparse, news: overlayNews, catalyst: overlayCatalyst, insider: overlayInsider },
+    scoreBeforeCap: Math.round(scoreBeforeCap * 1000) / 1000,
+    speculativeCapApplied: !!speculative,
+    overallScore,
+    scoreVariance,
+    labelBeforeGate: _origSignalLabel,
+    labelFinal: sig.signal,
+    confidence: {
+      raw: confRaw,
+      afterDegFactor: confAfterDegFactor,
+      afterCircuitBreaker: confAfterCircuitBreaker,
+      afterCalibration: confAfterCalibration,
+      afterDrawdown: confFinal,
+      drawdownThrottled,
+      gate: _confidenceGateNote,
+    },
+    thresholds: {
+      strong_buy: thresholds.strong_buy, buy: thresholds.buy,
+      hold: thresholds.hold, sell: thresholds.sell,
+    },
+  } : undefined;
+
+  if (diagnostics && diagCfg.log_actionable !== false && sig.action !== 'hold') {
+    console.log(`[SignalService][diag] ${symbol} ${sig.signal} score=${overallScore} (base=${diagnostics.compositeBase} ov: news=${overlayNews} cat=${overlayCatalyst} ins=${overlayInsider} sparse=${overlaySparse}) regime=${regime.regime} conf=${confRaw}->${confFinal} ml=${diagnostics.mlWinProb} gate=${_confidenceGateNote || 'none'}`);
+  }
+
   const obj = {
     id: `signal-${symbol}-${Date.now()}`, ticker: symbol, name: stock.name,
     price: Math.round(currentPrice * 100) / 100, change: Math.round(priceChange * 100) / 100,
@@ -5462,6 +5516,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     var99: riskMetrics.var99 ? riskMetrics.var99 + '%' : null,
     cvar95: riskMetrics.cvar95 ? riskMetrics.cvar95 + '%' : null,
     mlWinProb: mlWinProb != null ? Math.round(mlWinProb * 100) + '%' : null,
+    diagnostics,
     reason,
     // When these levels were sized. The UI compares price against `entry` and, if
     // they have drifted, has to say so - otherwise it advertises a risk-to-reward

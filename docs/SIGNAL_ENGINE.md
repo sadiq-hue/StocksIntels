@@ -276,25 +276,59 @@ fills.
 
 ## 10. Known quirks / caveats
 
-Fixed Oct 2026 (see the composite note in §2): the constant-50 `confidence`
-composite term, the missing `insider_activity` config block, the unused
-`volatility_lookback` key, the dead `determineSignal()`, the NSE session
-mismatch (now centralized in `backend/marketHours.js`), and the misleading
-"primary" comment on the MyStocks Africa source.
+All of the originally documented quirks are now fixed (Oct 2026): the constant-50
+`confidence` composite term, the missing `insider_activity` config block, the
+unused `volatility_lookback` key, the dead `determineSignal()`, the NSE session
+mismatch (now centralized in `backend/marketHours.js`), the misleading "primary"
+comment on the MyStocks Africa source, the unused `mlProb` parameter on
+`calibrateConfidence`, and the mis-scoped `portfolio.stopLoss` (renamed to
+`portfolio.holdStopLoss`, which is honestly scoped to Hold references only — buy
+stops come from `MIN_STOP_PCT`).
 
-Still open:
+Remaining design notes (not bugs):
 
-1. **`mlWinProb` is passed to `calibrateConfidence` but ignored** inside it
-   (`mlSignalModel.js:260`); ML reaches confidence only via outcome-bin
-   calibration. Harmless (ML already contributes through the composite), but the
-   unused parameter is misleading.
-2. `portfolio.stopLoss = 0.05` only governs Hold-signal levels; buy stops come
-   from `MIN_STOP_PCT = 0.18`, so the config value does not affect tradeable
-   setups.
+1. Buy stops are floored at `MIN_STOP_PCT = 0.18`; the wide levels are
+   intentional (long-horizon investing), so targets are 2/4/6× that risk.
+2. The composite is a weighted average of five inputs, so a single extreme
+   sub-score is damped by the others.
 
 ---
 
-## 11. Key constants
+## 11. Per-signal diagnostics (audit trail)
+
+When `diagnostics.enabled` is true (config, default true) every signal carries a
+`diagnostics` object, so live output can be checked against this document:
+
+```jsonc
+"diagnostics": {
+  "regime": "bull",
+  "weights": { "fundamental": 0.30, "technical": 0.25, "financial": 0.10,
+               "macro": 0.05, "ml_probability": 0.15, "confidence": 0.15 },
+  "subScores": { "fundamental": 62, "technical": 55, "financial": 60, "macro": 55, "ml": 64 },
+  "mlWinProb": 0.64,
+  "compositeBase": 60.1,                       // weighted average, pre-overlay
+  "overlays": { "sparse": 0, "news": 5, "catalyst": 0, "insider": 1.2 },
+  "scoreBeforeCap": 66.3,
+  "speculativeCapApplied": false,
+  "overallScore": 66,
+  "scoreVariance": 8,
+  "labelBeforeGate": "Buy",
+  "labelFinal": "Buy",
+  "confidence": { "raw": 64, "afterDegFactor": 64, "afterCircuitBreaker": 64,
+                  "afterCalibration": 61, "afterDrawdown": 61,
+                  "drawdownThrottled": false, "gate": null },
+  "thresholds": { "strong_buy": 68, "buy": 55, "hold": 30, "sell": 18 }
+}
+```
+
+Actionable (non-Hold) signals also log a one-line summary
+(`[SignalService][diag] ...`) when `diagnostics.log_actionable` is true. Turn both
+off via `PUT /api/signals/engine/config` with `{ "diagnostics": { "enabled": false } }`
+to drop the field from the payload and silence the summary.
+
+---
+
+## 12. Key constants
 
 | Constant | Value | Where |
 |---|---|---|

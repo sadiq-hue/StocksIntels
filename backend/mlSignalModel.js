@@ -257,7 +257,11 @@ let _plattB = null;
 // Calibrate confidence based on historical accuracy — blend toward the measured
 // accuracy instead of flat-replacing so a confidence band never collapses to one
 // identical number for every stock in it.
-function calibrateConfidence(rawConfidence, mlProb) {
+//
+// ML does NOT enter here: the win probability already contributes to the
+// composite score (ml_probability weight), so blending it in again would double
+// count. `rawConfidence` is the only input.
+function calibrateConfidence(rawConfidence) {
   const cfg = engineConfig.getConfig().calibration;
   if (!cfg || !cfg.enabled) return rawConfidence;
 
