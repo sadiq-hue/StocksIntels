@@ -770,8 +770,8 @@ async function buildLocalNseReport(symbol) {
         pbRatio: price > 0 && pBvps > 0 ? price / pBvps : (f?.pb_ratio || 0),
         dividendYield: divYield, dividendYieldPercentage: divYield * 100,
         roe: p.net_income && pEquity ? p.net_income / pEquity : (f?.roe || 0),
-        revenueGrowth: f?.revenue_growth || 0,
-        epsGrowth: f?.eps_growth || p.eps || 0,
+        revenueGrowth: 0,
+        epsGrowth: 0,
         sharesOutstanding: Math.round(pShares),
         earningsYield: price > 0 && p.eps > 0 ? p.eps / price : 0,
         revenuePerShare: pShares > 0 && p.total_revenue ? p.total_revenue / pShares : 0,
@@ -784,6 +784,30 @@ async function buildLocalNseReport(symbol) {
 
     const metHistory = gridParsed.map(v => buildKmItem(v.parsed, v.periodDate, v.periodType)).filter(Boolean);
     const kmItem = metHistory[0] || null;
+
+    // YoY growth must compare like-for-like periods: an interim figure
+    // (half_year, q1..) is roughly half a full year and cannot be compared to an
+    // annual one — doing so produced e.g. KCB "eps growth 22.45" (the raw EPS)
+    // and a nonsense -48% revenue growth. Compute annual-to-annual growth as a
+    // fraction (the scorer scales by 100); fall back to stock_fundamentals.
+    const annualPeriods = validParsed
+      .filter(v => (v.periodType || '').toLowerCase() === 'annual' && v.parsed)
+      .sort((a, b) => String(b.periodDate).localeCompare(String(a.periodDate)));
+    let revGrowth = null, epsGrowthAnnual = null;
+    if (annualPeriods.length >= 2) {
+      const curP = annualPeriods[0].parsed, prevP = annualPeriods[1].parsed;
+      const curRev = curP.total_revenue ?? curP.revenue, prevRev = prevP.total_revenue ?? prevP.revenue;
+      if (curRev > 0 && prevRev > 0) revGrowth = (curRev - prevRev) / prevRev;
+      if (curP.eps > 0 && prevP.eps > 0) epsGrowthAnnual = (curP.eps - prevP.eps) / prevP.eps;
+    }
+    if (kmItem) {
+      kmItem.revenueGrowth = revGrowth != null ? revGrowth : (f?.revenue_growth || 0);
+      kmItem.epsGrowth = epsGrowthAnnual != null ? epsGrowthAnnual : (f?.eps_growth || 0);
+      // Banks/insurers have no meaningful current ratio, and their statement
+      // parsers map total_liabilities into current_liabilities (KCB -> 0.056).
+      // Neutralise it so the scorer neither rewards nor penalises on noise.
+      if (/bank|insur|financ/i.test(stock.sector || '')) kmItem.currentRatio = 0;
+    }
 
     return {
       success: true, symbol: ticker, source: 'nse-upload',

@@ -918,12 +918,15 @@ async function fetchRealFinancialMetrics(symbol) {
     if (km.pbRatio > 0) metrics.pbRatio = Math.round(km.pbRatio * 10) / 10;
     if (km.dividendYieldPercentage > 0) metrics.dividendYield = Math.round(km.dividendYieldPercentage * 10) / 10;
     else if (km.dividendYield > 0) metrics.dividendYield = Math.round(km.dividendYield * 1000) / 10;
-    if (km.returnOnEquity > 0) metrics.roe = Math.round(km.returnOnEquity * 1000) / 10;
+    const roeRaw = km.roe != null ? km.roe : km.returnOnEquity;
+    if (roeRaw > 0) metrics.roe = Math.round(roeRaw * 1000) / 10;
     if (km.debtToEquity > 0) metrics.debtToEquity = Math.round(km.debtToEquity * 100) / 100;
     if (km.currentRatio > 0) metrics.currentRatio = Math.round(km.currentRatio * 100) / 100;
     if (km.revenueGrowth != null) metrics.revenueGrowth = Math.round(km.revenueGrowth * 1000) / 10;
-    if (km.earningsGrowth != null) metrics.epsGrowth = Math.round(km.earningsGrowth * 1000) / 10;
+    const epsGRaw = km.epsGrowth != null ? km.epsGrowth : km.earningsGrowth;
+    if (epsGRaw != null) metrics.epsGrowth = Math.round(epsGRaw * 1000) / 10;
     if (km.forwardPE > 0 && !metrics.peRatio) metrics.peRatio = Math.round(km.forwardPE * 10) / 10;
+    else if (km.peRatio > 0 && !metrics.peRatio) metrics.peRatio = Math.round(km.peRatio * 10) / 10;
     if (km.profitMargin != null) metrics.profitMargin = Math.round(km.profitMargin * 1000) / 10;
     if (km.operatingMargin != null) metrics.operatingMargin = Math.round(km.operatingMargin * 1000) / 10;
 
@@ -944,11 +947,14 @@ async function fetchRealFinancialMetrics(symbol) {
       // YoY growth
       if (inc.length >= 2) {
         const prev = inc[1];
-        if (cur.revenue && prev.revenue > 0) {
+        // Only compare like-for-like periods; an interim vs annual comparison
+        // (e.g. half-year revenue against a full year) is meaningless.
+        const samePeriod = (cur.periodType || '') === (prev.periodType || '');
+        if (samePeriod && cur.revenue && prev.revenue > 0) {
           const rg = ((cur.revenue - prev.revenue) / prev.revenue) * 100;
           metrics.revenueGrowth = Math.round(rg * 10) / 10;
         }
-        if (cur.eps && prev.eps > 0) {
+        if (samePeriod && cur.eps && prev.eps > 0) {
           const eg = ((cur.eps - prev.eps) / prev.eps) * 100;
           metrics.epsGrowth = Math.round(eg * 10) / 10;
         }
