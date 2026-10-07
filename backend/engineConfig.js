@@ -146,6 +146,17 @@ const DEFAULTS = {
     log_actionable: true,
   },
 
+  // Quality gate. An actionable Buy must clear a positive risk-adjusted
+  // expectancy, not merely a score bar. Expectancy in R units:
+  //   E = p * R - (1 - p)     p = calibrated confidence, R = reward:risk
+  // A signal is demoted to Hold when E < min_expectancy.
+  quality: {
+    expectancy_gate: {
+      enabled: true,
+      min_expectancy: 0.2,
+    },
+  },
+
   // Scoring deltas — all hardcoded score adjustments are now configurable
   scoring: {
     signal_confidence: {

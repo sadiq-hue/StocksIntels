@@ -19,6 +19,7 @@ const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels,
 const mlModel = require('./mlSignalModel');
 const engineConfig = require('./engineConfig');
 const marketHours = require('./marketHours');
+const { ENGINE_VERSION } = require('./engineVersion');
 const { trackSignalQuality, logHealth, detectSignalDrift, getQualityScore } = require('./monitorService');
 const PersistentCache = require('./cacheService');
 const { EventEmitter } = require('events');
@@ -5235,6 +5236,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const regimePenaltyCrash = sc.regime_penalty_crash ?? 0.5;
   const diagCfg = engineConfig.getConfig().diagnostics || {};
   const diagEnabled = diagCfg.enabled !== false;
+  const qualityCfg = engineConfig.getConfig().quality?.expectancy_gate || {};
 
   // Compute ML win probability BEFORE weighted score so it can contribute
   let mlWinProb = null;
@@ -5380,6 +5382,24 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const tradeType = sig.action === 'sell' ? 'Avoid' : determineTradeType(technical.score, fundamental.score);
   const tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType);
 
+  // ── Expectancy gate: the score bar is not enough ─────────────────────
+  // A Buy must also clear a positive risk-adjusted expectancy, else it is a
+  // low-conviction call that the score alone would wave through. E = p*R - (1-p)
+  // with p = calibrated confidence and R = the reward:risk of the levels.
+  let expectancy = null;
+  let _expectancyGateNote = null;
+  if (sig.action === 'buy' && qualityCfg.enabled !== false) {
+    const R = Number(tradeLevels.riskReward) || 0;
+    const p = confidence / 100;
+    expectancy = Math.round((p * R - (1 - p)) * 1000) / 1000;
+    const minE = qualityCfg.min_expectancy ?? 0.2;
+    if (expectancy < minE) {
+      _expectancyGateNote = `${sig.signal} (expectancy ${expectancy}R < ${minE}R: p=${Math.round(p * 100)}%, R=${R})`;
+      sig = { ...sig, signal: 'Hold', action: 'hold', strength: 'neutral' };
+      console.log(`[SignalService] ${symbol} expectancy-gate: ${_expectancyGateNote}`);
+    }
+  }
+
   const regimePenalty = regime.regime === 'crash' ? regimePenaltyCrash : 1;
 
   let kellyPct = null;
@@ -5441,6 +5461,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // output can be checked against docs/SIGNAL_ENGINE.md. Gated by the
   // `diagnostics.enabled` config; gated off it is omitted entirely.
   const diagnostics = diagEnabled ? {
+    engineVersion: ENGINE_VERSION,
     regime: regime.regime,
     weights: {
       fundamental: w.fundamental, technical: w.technical, financial: w.financial,
@@ -5459,6 +5480,8 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     scoreVariance,
     labelBeforeGate: _origSignalLabel,
     labelFinal: sig.signal,
+    expectancy,
+    expectancyGate: _expectancyGateNote,
     confidence: {
       raw: confRaw,
       afterDegFactor: confAfterDegFactor,
