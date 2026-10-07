@@ -6,20 +6,10 @@ const { generateSignals } = require('./signalService');
 const { connect, publishBatchSignalUpdate, publishSignalNotifications } = require('./queueService');
 const { pool } = require('./db');
 const engineConfig = require('./engineConfig');
+const marketHours = require('./marketHours');
 
-function isMarketOpenNow() {
-  const now = new Date();
-  const day = now.getDay();
-  if (day === 0 || day === 6) return false;
-  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  // NSE (Nairobi): 09:00-15:00 EAT = 06:00-12:00 UTC
-  if (utcMinutes >= 360 && utcMinutes < 720) return true;
-  // US markets: 09:30-16:00 ET
-  const month = now.getMonth();
-  const isDST = month >= 2 && month <= 9;
-  const etOffset = isDST ? -4 : -5;
-  const etMinutes = ((utcMinutes + etOffset * 60) % 1440 + 1440) % 1440;
-  return etMinutes >= 570 && etMinutes < 960;
+function isMarketOpenNow(now = new Date()) {
+  return marketHours.nseOpen(now) || marketHours.usOpen(now);
 }
 
 function getSignalIntervalMs() {
@@ -37,7 +27,7 @@ async function generateAndPublish() {
   try {
     const skipMarketHours = process.env.SIGNAL_PUBLISHER_SKIP_MARKET_HOURS === 'true';
     if (!skipMarketHours && !isMarketOpenNow()) {
-      console.log(`[SignalPublisher] All tracked exchanges closed (NSE 06:00-12:00 UTC, US 13:30-20:00 UTC), skipping cycle. Set SIGNAL_PUBLISHER_SKIP_MARKET_HOURS=true to bypass.`);
+      console.log(`[SignalPublisher] All tracked exchanges closed (NSE 06:30-12:00 UTC, US 13:30-20:00 UTC), skipping cycle. Set SIGNAL_PUBLISHER_SKIP_MARKET_HOURS=true to bypass.`);
       return;
     }
 

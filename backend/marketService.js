@@ -447,7 +447,8 @@ async function getNseBaseQuote(symbol) {
       };
   }
 
-  // 0b) mystocks.africa Partner API — primary, authoritative live (delayed) quotes
+  // 0b) mystocks.africa Partner API — a fallback after the NSE portal ticker and
+  //     the KenyanStocks EOD baseline above. Quotes are delayed ~15 min.
   let msaQuote = null;
   if (process.env.MYSTOCKS_AFRICA_API_KEY) {
     try {

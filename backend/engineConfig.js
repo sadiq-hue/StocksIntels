@@ -44,7 +44,6 @@ const DEFAULTS = {
     detection: {
       trend_fast: 20,
       trend_slow: 100,
-      volatility_lookback: 20,
       thresholds: {
         bull_strong: 15,
         bull_moderate: 5,
@@ -160,6 +159,14 @@ const DEFAULTS = {
       direction_buy_threshold: 55,
       direction_sell_threshold: 45,
       kelly_wlr_default: 1.5,
+      // Insider-activity overlay. Previously absent from DEFAULTS, so the code
+      // fallbacks below were the only values in force; declared here so it is
+      // explicit and tunable in the admin config.
+      insider_activity: {
+        enabled: true,
+        max_age_months: 12,
+        news_per_event: 6,
+      },
     },
     fundamentals: {
       baseline: 40,

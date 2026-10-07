@@ -14,10 +14,11 @@ const { calculateSMA, calculateATR } = require('./technicalIndicators');
 const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL_SYMBOLS, SECTOR_AVG_PE, INDUSTRY_MEDIAN_EV_EBITDA, TBILI_RATE, KNOWN_FUNDAMENTALS, NSE_FUNDAMENTALS } = require('./stockData');
 const financialReportsService = require('./financialReportsService');
 const edgarService = require('./edgarService');
-const { getEffectiveSectorPE, getGrade, determineSignal, determineTradeType, getSectorMacroAdjustment, analyzeFundamentals, analyzeTechnicals, analyzeFinancials, generateReason } = require('./analysisEngine');
+const { getEffectiveSectorPE, getGrade, determineTradeType, getSectorMacroAdjustment, analyzeFundamentals, analyzeTechnicals, analyzeFinancials, generateReason } = require('./analysisEngine');
 const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, estimateHoldingDays, MIN_STOP_PCT, enforceStopFloor, isPlausibleBuyLevels, qualifyingTargets, activeStageIndex, activeStageTarget, ultimateTargetOf, targetLockFloor, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
 const mlModel = require('./mlSignalModel');
 const engineConfig = require('./engineConfig');
+const marketHours = require('./marketHours');
 const { trackSignalQuality, logHealth, detectSignalDrift, getQualityScore } = require('./monitorService');
 const PersistentCache = require('./cacheService');
 const { EventEmitter } = require('events');
@@ -668,26 +669,16 @@ const INSIDER_MAX_DELTA = 8;   // max composite swing from insider-activity conv
 // Stop/target resolution is only valid while the exchange's live session is open;
 // resolving on after-hours/stale quotes fabricates stop-fills and entries.
 function isExchangeOpen(symbol, now = new Date()) {
-  const day = now.getDay();
-  if (day === 0 || day === 6) return false;
-  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  if (NSE_SYMBOLS.includes(symbol)) {
-    // Nairobi Stock Exchange: 09:00-15:00 EAT (UTC+3) = 06:00-12:00 UTC
-    return utcMinutes >= 360 && utcMinutes < 720;
-  }
-  // US markets: 09:30-16:00 ET
-  const isDST = now.getMonth() >= 2 && now.getMonth() <= 9;
-  const etMinutes = ((utcMinutes + (isDST ? -4 : -5) * 60) % 1440 + 1440) % 1440;
-  return etMinutes >= 570 && etMinutes < 960;
+  return NSE_SYMBOLS.includes(symbol) ? marketHours.nseOpen(now) : marketHours.usOpen(now);
 }
 
-// Whether any exchange the engine tracks (NSE 06:00-12:00 UTC, US 13:30-20:00
+// Whether any exchange the engine tracks (NSE 06:30-12:00 UTC, US 13:30-20:00
 // UTC) has a live session right now. Drives the dynamic generation guard: outside
 // exchange hours quotes are static last-close values, so regenerating would only
 // burn API quota and churn the feed. Pure clock math — no network calls.
 function anyTrackedExchangeOpen(now = new Date()) {
-  const nseOpen = NSE_SYMBOLS.length > 0 && isExchangeOpen(NSE_SYMBOLS[0], now);
-  const usOpen = isExchangeOpen('AAPL', now);
+  const nseOpen = NSE_SYMBOLS.length > 0 && marketHours.nseOpen(now);
+  const usOpen = marketHours.usOpen(now);
   return nseOpen || usOpen;
 }
 
@@ -5226,7 +5217,6 @@ function formatHoldingPeriod(days, tradeType) {
 async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, catalyst, insiderNews, news = [], priceHistory, degFactor }) {
   // Read scoring and portfolio config once at the top
   const sc = engineConfig.getConfig().scoring?.signal_confidence || {};
-  const baselineConf = sc.baseline ?? 50;
   const confMin = sc.min ?? 10;
   const confMax = sc.max ?? 95;
   const varMult = sc.variance_multiplier ?? 0.3;
@@ -5257,17 +5247,21 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   } catch { /* indicators not available */ }
   const mlProbScore = mlWinProb != null ? Math.round(mlWinProb * 100) : 50;
 
-  // Weighted composite score including ML probability and confidence
+  // Weighted composite over the five real inputs. The old code also added a
+  // constant 50 x w.confidence: confidence is derived FROM this score, so that
+  // term was never an input — it just inflated every score by ~6.5-10 points,
+  // which is why removing it shifts the distribution down. Renormalize over the
+  // components that actually contribute.
   const w = weights;
   let adjScore =
     (fundamental.score * (w.fundamental || 0)) +
     (technical.score   * (w.technical || 0)) +
     (financial.score   * (w.financial || 0)) +
     (macro.score       * (w.macro || 0)) +
-    (mlProbScore       * (w.ml_probability || 0)) +
-    (baselineConf      * (w.confidence || 0));
-  // Normalize: if weights don't sum to 1, scale accordingly
-  const weightSum = Object.values(w).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
+    (mlProbScore       * (w.ml_probability || 0));
+  const weightSum =
+    (w.fundamental || 0) + (w.technical || 0) + (w.financial || 0) +
+    (w.macro || 0) + (w.ml_probability || 0);
   if (weightSum > 0) adjScore = adjScore / weightSum;
 
   const sparseFund = fundamental.metrics?.dataQuality === 'Very sparse data';

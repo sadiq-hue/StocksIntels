@@ -15,6 +15,7 @@ const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, NSE_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, refreshPerformanceStats, computeBacktestStats, getForwardTestStats,
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
+const marketHours = require('./marketHours');
 const { pool, testConnection } = require('./db');
 const queueService = require('./queueService');
 const signalPublisher = require('./signalPublisher');
@@ -2321,24 +2322,20 @@ function formatMinutes(minutes) {
 function isMarketOpen(market) {
   const now = new Date();
   const day = now.getDay();
-  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const month = now.getMonth();
-  const isWeekend = day === 0 || day === 6;
+  const isWeekend = marketHours.isWeekend(now);
 
   let currentMinutes, openStart, openEnd, nextOpen, nextClose;
 
   if (market === 'NSE') {
-    // NSE: Mon-Fri 9:30 AM - 3:30 PM EAT (UTC+3)
-    currentMinutes = utcMinutes + 180;
-    openStart = 570;
-    openEnd = 930;
+    // NSE: Mon-Fri 09:30 - 15:00 EAT (UTC+3) — shared with the signal engine.
+    currentMinutes = marketHours.eatMinutes(now);
+    openStart = marketHours.NSE_OPEN_EAT_MIN;
+    openEnd = marketHours.NSE_CLOSE_EAT_MIN;
   } else {
-    // US Markets (Global): Mon-Fri 9:30 AM - 4:00 PM ET
-    const isDST = month >= 2 && month <= 9;
-    const etOffset = isDST ? -4 : -5;
-    currentMinutes = ((utcMinutes + etOffset * 60) % 1440 + 1440) % 1440;
-    openStart = 570;
-    openEnd = 960;
+    // US Markets (Global): Mon-Fri 09:30 - 16:00 ET
+    currentMinutes = marketHours.etMinutes(now);
+    openStart = marketHours.US_OPEN_ET_MIN;
+    openEnd = marketHours.US_CLOSE_ET_MIN;
   }
 
   const isOpen = !isWeekend && currentMinutes >= openStart && currentMinutes < openEnd;
@@ -2374,7 +2371,7 @@ function isMarketOpen(market) {
     timeToClose: isOpen ? nextClose : null,
     timeToOpen: isOpen ? null : nextOpen,
     openTime: '9:30 AM',
-    closeTime: market === 'NSE' ? '3:30 PM' : '4:00 PM',
+    closeTime: market === 'NSE' ? '3:00 PM' : '4:00 PM',
   };
 }
 
@@ -3115,7 +3112,7 @@ const FAQ_ITEMS = [
   { question: "Is dark mode available?", answer: "Yes! Go to **Settings > Appearance** and toggle Dark Mode. You can also enable Compact View for a denser layout. Your preference is saved across sessions.", category: "account" },
   { question: "How do I see what other traders are doing?", answer: "The **People** page shows trader profiles with their trader type, expertise, and top picks. Follow traders to track their activity. You can also see online status and start direct conversations.", category: "social" },
   { question: "How do I start a direct message?", answer: "Go to **Chat & Groups** and search for a user, or go to **People** and click on a trader's profile. From there you can send a direct message. You can also click the chat icon next to their name anywhere in the app.", category: "social" },
-  { question: "What is the NSE market schedule?", answer: "The **NSE** trades Monday to Friday, 9:30 AM to 3:30 PM East Africa Time (EAT). Closed on weekends and Kenyan public holidays. The **Dashboard** shows live market status (Open/Closed).", category: "markets" },
+  { question: "What is the NSE market schedule?", answer: "The **NSE** trades Monday to Friday, 9:30 AM to 3:00 PM East Africa Time (EAT). Closed on weekends and Kenyan public holidays. The **Dashboard** shows live market status (Open/Closed).", category: "markets" },
   { question: "What is the US market schedule?", answer: "**US markets** (NYSE, NASDAQ) trade Monday to Friday, 9:30 AM to 4:00 PM Eastern Time (ET). Pre-market 4:00-9:30 AM, after-hours 4:00-8:00 PM. Closed on US public holidays.", category: "markets" },
   { question: "How does the AI chat assistant work?", answer: "The **AI Chat Assistant** on the AI Insights page uses natural language understanding to answer your market questions. Try asking 'Analyze Safaricom trend', 'Best NSE momentum stocks', or 'What is the outlook for the banking sector?'", category: "signals" },
   { question: "How do I register an account?", answer: "Click 'Sign Up' on the login page, enter your name, email, and password. You'll receive a verification email. Once verified, you can start using the app with a free trial.", category: "account" },
@@ -3357,7 +3354,7 @@ const KNOWLEDGE_BASE = [
   },
   {
     keywords: ['market hours', 'trading hours', 'market open', 'market close', 'when does market open', 'when does market close', 'nse hours', 'nse schedule', 'us market hours'],
-    answer: '**NSE:** Mon-Fri, 9:30 AM - 3:30 PM EAT\n**US Markets (NYSE/NASDAQ):** Mon-Fri, 9:30 AM - 4:00 PM ET\n**Pre-market:** 4:00-9:30 AM ET\n**After-hours:** 4:00-8:00 PM ET\nBoth closed on weekends and public holidays. Check the **Dashboard** for live market status.',
+    answer: '**NSE:** Mon-Fri, 9:30 AM - 3:00 PM EAT\n**US Markets (NYSE/NASDAQ):** Mon-Fri, 9:30 AM - 4:00 PM ET\n**Pre-market:** 4:00-9:30 AM ET\n**After-hours:** 4:00-8:00 PM ET\nBoth closed on weekends and public holidays. Check the **Dashboard** for live market status.',
     category: 'markets',
   },
   {
@@ -3422,7 +3419,7 @@ const KNOWLEDGE_BASE = [
   },
   {
     keywords: ['data', 'price not loading', 'stale data', 'rate limit', 'refresh', 'not updating', 'delayed'],
-    answer: 'Market data comes from **third-party APIs** with rate limits. If data appears stale, wait a few minutes and refresh the page. NSE stocks update during market hours (9:30 AM - 3:30 PM EAT). US stocks update during US hours. The system caches data for 60 seconds to reduce API calls.',
+    answer: 'Market data comes from **third-party APIs** with rate limits. If data appears stale, wait a few minutes and refresh the page. NSE stocks update during market hours (9:30 AM - 3:00 PM EAT). US stocks update during US hours. The system caches data for 60 seconds to reduce API calls.',
     category: 'data',
   },
   {
@@ -3462,7 +3459,7 @@ const KNOWLEDGE_BASE = [
   },
   {
     keywords: ['nse', 'nairobi', 'kenya', 'nse market', 'nse stocks', 'nairobi securities exchange'],
-    answer: 'The **NSE** (Nairobi Securities Exchange) section tracks 22+ Kenyan stocks including Safaricom, Equity Bank, KCB, and more. See real-time prices, market status, turnover, top movers, sector performance, and AI market summary. NSE trades Mon-Fri, 9:30 AM - 3:30 PM EAT.',
+    answer: 'The **NSE** (Nairobi Securities Exchange) section tracks 22+ Kenyan stocks including Safaricom, Equity Bank, KCB, and more. See real-time prices, market status, turnover, top movers, sector performance, and AI market summary. NSE trades Mon-Fri, 9:30 AM - 3:00 PM EAT.',
     category: 'markets',
   },
   {

@@ -35,16 +35,6 @@ function getGrade(score) {
   return 'F';
 }
 
-function determineSignal(overallScore) {
-  if (overallScore >= 68) return { signal: 'Strong Buy', action: 'buy', strength: 'strong' };
-  if (overallScore >= 60) return { signal: 'Buy', action: 'buy', strength: 'moderate' };
-  if (overallScore >= 50) return { signal: 'Accumulate', action: 'buy', strength: 'weak' };
-  if (overallScore >= 40) return { signal: 'Hold', action: 'hold', strength: 'neutral' };
-  if (overallScore >= 30) return { signal: 'Reduce', action: 'sell', strength: 'weak' };
-  if (overallScore >= 18) return { signal: 'Sell', action: 'sell', strength: 'moderate' };
-  return { signal: 'Strong Sell', action: 'sell', strength: 'strong' };
-}
-
 function determineTradeType(technicalScore, fundamentalScore) {
   const tt = getScoring('trade_type', {});
   const abTech = tt.aggressive_buy_tech_min ?? 65;
@@ -770,7 +760,6 @@ function extractFundamentalFeatures(fundamentalResult) {
 module.exports = {
   getEffectiveSectorPE,
   getGrade,
-  determineSignal,
   determineTradeType,
   getSectorMacroAdjustment,
   analyzeFundamentals,

@@ -16,17 +16,21 @@ editable via `GET/PUT /api/signals/engine/config` (persisted to the
 ## 1. The pipeline
 
 ```
-generateSignals()            signalService.js:4162   // cache + market-hours + universe guards
+generateSignals()            signalService.js:4153   // cache + market-hours + universe guards
   └─ detectMarketRegime()    signalService.js:1091   // bull / bear / sideways / crash
-  └─ processSymbol()         signalService.js:4262   // per stock, batched 20 at a time
+  └─ processSymbol()         signalService.js:4253   // per stock, batched 20 at a time
        ├─ analyzeFundamentals  analysisEngine.js:101
        ├─ analyzeTechnicals    analysisEngine.js:354
        ├─ analyzeFinancials    analysisEngine.js:584
        ├─ getMacroScore        macroService.js:469
-       └─ _buildSignal()       signalService.js:5226  // composite, confidence, levels
+       └─ _buildSignal()       signalService.js:5217  // composite, confidence, levels
   └─ applyPortfolioConstraints riskManager.js:216
-  └─ filter minConfidence      signalService.js:4680
+  └─ filter minConfidence      signalService.js:4672
 ```
+
+Market open/closed is decided in **`backend/marketHours.js`** (single source of
+truth for the engine, the publisher, and the API/UI): NSE 09:30–15:00 EAT
+(06:30–12:00 UTC), US 09:30–16:00 ET.
 
 `generateSingleSignal(symbol)` (`signalService.js:4748`) is the on-demand twin
 and calls the same `_buildSignal`.
@@ -43,8 +47,7 @@ adjScore = fundamental.score · w.fundamental
          + financial.score   · w.financial
          + macro.score       · w.macro
          + mlProbScore       · w.ml_probability
-         + 50 (constant)     · w.confidence        // NOTE: constant, not the stock's confidence
-adjScore /= sum(weights)
+adjScore /= (w.fundamental + w.technical + w.financial + w.macro + w.ml_probability)
 
 adjScore += sparseFund&sparseTech ? -4 : 0        // engineConfig.js:158
 adjScore += sparseFund&sparseFin  ? -3 : 0        // engineConfig.js:159
@@ -52,8 +55,17 @@ adjScore += news positive? +5 : negative? -5 : 0  // engineConfig.js:146-147
 adjScore += catalyst ±10                          // engineConfig.js:148-149
 adjScore += (insider.score-50)/50 · 8             // INSIDER_MAX_DELTA, signalService.js:666
 // then: speculative-rally cap, clamp 0-100
-overallScore = max(0, min(100, round(adjScore)))  // signalService.js:5310
+overallScore = max(0, min(100, round(adjScore)))
 ```
+
+> **Fixed Oct 2026.** The composite previously included a sixth term
+> `50 · w.confidence`. Confidence is *derived from* this score, so that term was
+> a constant, not an input — it shrank every score toward 50. It is removed and
+> the weighting renormalized over the five real inputs. Effect: for every unit of
+> `w.confidence` (0.13 base … 0.20 sideways), a name whose five-component average
+> is `a` moves by `w.conf · (a − 50)` — i.e. stronger names score slightly higher,
+> weaker ones slightly lower, unchanged at 50. Near the Buy bar (55) the shift is
+> under a point.
 
 ### Weights (`engineConfig.js:22-31`)
 
@@ -188,7 +200,7 @@ they are multiples of an 18–30% stop.
 
 | Gate | Where | Effect |
 |---|---|---|
-| Market-hours | `isExchangeOpen` `signalService.js:670` | no full regen unless open |
+| Market-hours | `marketHours.nseOpen/usOpen` | no full regen unless open (NSE 09:30–15:00 EAT; US 09:30–16:00 ET) |
 | Monitor-first | `signalService.js:4406-4457` | a symbol with an open position emits no new signal until it closes (6h min-age) |
 | `meetsSignalConditions` | `signalService.js:5506` | needs ≥20 bars, volume>0, finite sub-scores, monotonic stop<entry<target1, R/R≥1.2 |
 | Speculative-rally cap | `signalService.js:5297` | >40% momentum on fund≤40 capped at 54 (cannot Buy) |
@@ -264,23 +276,21 @@ fills.
 
 ## 10. Known quirks / caveats
 
-1. **The `confidence` weight multiplies a constant 50**, not a per-stock
-   confidence, adding a fixed ~5–10 pts to every score (`signalService.js:5268`).
-2. **`mlWinProb` is passed to `calibrateConfidence` but ignored** inside it
+Fixed Oct 2026 (see the composite note in §2): the constant-50 `confidence`
+composite term, the missing `insider_activity` config block, the unused
+`volatility_lookback` key, the dead `determineSignal()`, the NSE session
+mismatch (now centralized in `backend/marketHours.js`), and the misleading
+"primary" comment on the MyStocks Africa source.
+
+Still open:
+
+1. **`mlWinProb` is passed to `calibrateConfidence` but ignored** inside it
    (`mlSignalModel.js:260`); ML reaches confidence only via outcome-bin
-   calibration.
-3. **`scoring.signal_confidence.insider_activity` is absent** from
-   `engineConfig.js`, so insider scoring always uses code fallbacks.
-4. **`regime_adaptation.detection.volatility_lookback`** is defined but unused.
-5. **Market-hours mismatch:** the engine treats NSE as 09:00–15:00 EAT
-   (`signalService.js:676`); the UI/market-status says 09:30–15:30 EAT
-   (`index.js:2330`).
-6. **`determineSignal()`** (`analysisEngine.js:38`) is dead on the live path,
-   superseded by `classifySignalBucket`, with different thresholds.
-7. NSE source order in code doesn't match the comments (KenyanStocks returns
-   third, not "primary").
-8. `portfolio.stopLoss = 0.05` is effectively overridden by `MIN_STOP_PCT = 0.18`
-   for buy setups.
+   calibration. Harmless (ML already contributes through the composite), but the
+   unused parameter is misleading.
+2. `portfolio.stopLoss = 0.05` only governs Hold-signal levels; buy stops come
+   from `MIN_STOP_PCT = 0.18`, so the config value does not affect tradeable
+   setups.
 
 ---
 
