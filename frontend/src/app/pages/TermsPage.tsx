@@ -18,22 +18,26 @@ const sections = [
   },
   {
     title: "4. Subscription and Billing",
-    content: "Paid subscriptions are billed monthly or annually. You may cancel at any time; cancellations take effect at the end of the current billing period. No refunds are issued for partial months.",
+    content: "Paid subscriptions are billed monthly or annually. You may cancel at any time; cancellations take effect at the end of the current billing period. Monthly subscriptions run to the end of the paid period, and partial months are not refunded.",
   },
   {
-    title: "5. Intellectual Property",
+    title: "5. Money-Back Guarantee (Yearly Subscriptions)",
+    content: "Yearly subscriptions are covered by a 30-day money-back guarantee. If StocksIntels is not right for you, contact support@stocksintels.com within 30 days of your initial annual payment and we will refund that payment in full to the original payment method. This guarantee applies to yearly subscriptions only; monthly subscriptions are not eligible for a refund under this section.",
+  },
+  {
+    title: "6. Intellectual Property",
     content: "All platform content, AI models, signal methodologies, and data visualizations are the intellectual property of StocksIntels. Unauthorized reproduction is prohibited.",
   },
   {
-    title: "6. Limitation of Liability",
+    title: "7. Limitation of Liability",
     content: "StocksIntels shall not be liable for any trading losses, missed opportunities, or financial damages arising from use of the platform, signal errors, or data interruptions. Your use of the platform is entirely at your own risk.",
   },
   {
-    title: "7. Governing Law",
+    title: "8. Governing Law",
     content: "These Terms are governed by the laws of the Republic of Kenya. Disputes shall be resolved in the courts of Nairobi, Kenya.",
   },
   {
-    title: "8. Changes",
+    title: "9. Changes",
     content: "We may update these Terms at any time. Continued use of the platform after changes constitutes acceptance of the revised Terms.",
   },
 ];
@@ -71,7 +75,7 @@ export function TermsPage() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <p className="text-[#0D7490] font-semibold text-sm uppercase tracking-wider mb-3">Terms of Service</p>
           <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-2">Terms of Service</h1>
-          <p className="text-muted-foreground text-sm mb-12">Last updated: January 2026</p>
+          <p className="text-muted-foreground text-sm mb-12">Last updated: October 2026</p>
 
           <div className="space-y-10">
             {sections.map((section) => (

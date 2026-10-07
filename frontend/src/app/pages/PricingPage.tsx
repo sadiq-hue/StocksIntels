@@ -62,7 +62,7 @@ const faqs = [
   },
   {
     question: "Is there a money-back guarantee?",
-    answer: `Yes. Every plan comes with a ${MONEY_BACK_GUARANTEE}. If StocksIntels isn't right for you, contact support within 30 days of your payment and we'll refund you in full.`,
+    answer: `Yes. Yearly subscriptions are covered by a ${MONEY_BACK_GUARANTEE}: request a refund within 30 days of your annual payment and we'll refund you in full. Monthly subscriptions can be cancelled at any time and run to the end of the paid period; partial months are not refunded.`,
   },
 ];
 
