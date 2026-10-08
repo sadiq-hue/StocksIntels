@@ -593,34 +593,17 @@ function analyzeFinancials(stock, fundamentalResult = null) {
   let score = fBaseline;
   const analysis = {};
 
-  let strengthScore = 0;
-  if (stock.debtToEquity != null && stock.debtToEquity < (deCfg.low_threshold || 0.5)) strengthScore += (deCfg.low_delta || 2);
-  else if (stock.debtToEquity != null && stock.debtToEquity > (deCfg.high_threshold || 3.0)) strengthScore += (deCfg.high_delta || -2);
-  if (stock.currentRatio != null && stock.currentRatio > (crCfg.good_threshold || 2.0)) strengthScore += (crCfg.good_delta || 2);
-  else if (stock.currentRatio != null && stock.currentRatio < (crCfg.poor_threshold || 0.8)) strengthScore += (crCfg.poor_delta || -2);
-  if (stock.altmanZ != null && stock.altmanZ > 3.5) strengthScore += 2;
-  else if (stock.altmanZ != null && stock.altmanZ < 1.5) strengthScore -= 3;
-  if (stock.roe != null && stock.roe > (roeCfg.good_threshold || 20)) strengthScore += (roeCfg.good_delta || 2);
-  else if (stock.roe != null && stock.roe < (roeCfg.poor_threshold || 3)) strengthScore += (roeCfg.poor_delta || -1);
-
-  // Penalize sparse financial data
+  // Leverage / liquidity / solvency (debtToEquity, currentRatio, altmanZ, roe)
+  // are scored in analyzeFundamentals. They are deliberately NOT re-scored here
+  // — doing so double-weighted the same fields across two sub-scores. This
+  // dimension adds only what fundamentals does not: cross-metric agreement
+  // (below) and hard distress suppression at the end.
   const finDataCount = [stock.debtToEquity, stock.currentRatio, stock.altmanZ, stock.roe].filter(d => d != null).length;
-  if (finDataCount < 2) { score += (finCfg.sparse_penalty || -8); analysis.financialHealth = 'Limited financial data'; }
-
-  if (strengthScore >= 4) {
-    score += 15;
-    analysis.financialHealth = 'Excellent financial strength';
-  } else if (strengthScore >= 2) {
-    score += 8;
-    analysis.financialHealth = 'Good financial strength';
-  } else if (strengthScore <= -4) {
-    score += (finCfg.poor_strength_delta || -20);
-    analysis.financialHealth = 'Poor financial strength - high risk';
-  } else if (strengthScore <= -2) {
-    score += (finCfg.weak_strength_delta || -12);
-    analysis.financialHealth = 'Weak financial strength';
+  if (finDataCount < 2) {
+    score += (finCfg.sparse_penalty || -8);
+    analysis.financialHealth = 'Limited financial data';
   } else {
-    analysis.financialHealth = 'Adequate financial strength';
+    analysis.financialHealth = 'Balance-sheet data present';
   }
 
   let buySignals = 0;

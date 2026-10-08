@@ -13,9 +13,11 @@ const { newsapi, finnhub: finnhubClient, generic } = require('./apiClient');
 const sentimentHistory = require('./sentimentHistoryService');
 const { US_SYMBOLS } = require('./stockData');
 
-// API Keys - can be overridden by environment variables
-const NEWSAPI_KEY = process.env.VITE_NEWSAPI_KEY || '16eb777bdf469c92f9522c287a7e4d';
-const FINNHUB_KEY = process.env.VITE_FINNHUB_KEY || 'd7ji2ihr01qhf13euuvgd7ji2ihr01qhf13euv00';
+// API keys must come from the environment — no hardcoded fallbacks. Without
+// them the NewsAPI/Finnhub sources are skipped and the RSS/KWS scrapers carry
+// the news pipeline.
+const NEWSAPI_KEY = process.env.VITE_NEWSAPI_KEY || process.env.NEWSAPI_KEY || '';
+const FINNHUB_KEY = process.env.VITE_FINNHUB_KEY || process.env.FINNHUB_KEY || '';
 const BENZINGA_KEY = process.env.VITE_BENZINGA_API_KEY || process.env.BENZINGA_API_KEY || '';
 
 // Cache

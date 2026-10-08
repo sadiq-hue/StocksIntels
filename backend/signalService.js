@@ -5284,15 +5284,22 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // which is why removing it shifts the distribution down. Renormalize over the
   // components that actually contribute.
   const w = weights;
+  // News & sentiment is a first-class weighted dimension (it was only a flat
+  // ±5 overlay before). Insufficient coverage (<3 stories) abstains at 50 so
+  // thin coverage never fabricates a directional view.
+  const newsCountForScore = Array.isArray(news) ? news.length : 0;
+  const newsScore = (newsCountForScore < 3 || !newsSent) ? 50
+    : newsSent === 'positive' ? 70 : newsSent === 'negative' ? 30 : 50;
   const compositeBase =
     (fundamental.score * (w.fundamental || 0)) +
     (technical.score   * (w.technical || 0)) +
     (financial.score   * (w.financial || 0)) +
     (macro.score       * (w.macro || 0)) +
-    (mlProbScore       * (w.ml_probability || 0));
+    (mlProbScore       * (w.ml_probability || 0)) +
+    (newsScore         * (w.news || 0));
   const weightSum =
     (w.fundamental || 0) + (w.technical || 0) + (w.financial || 0) +
-    (w.macro || 0) + (w.ml_probability || 0);
+    (w.macro || 0) + (w.ml_probability || 0) + (w.news || 0);
   let adjScore = weightSum > 0 ? compositeBase / weightSum : compositeBase;
 
   const sparseFund = fundamental.metrics?.dataQuality === 'Very sparse data';
@@ -5301,8 +5308,8 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const overlaySparse =
     (sparseFund && sparseTech ? sparseFT : 0) + (sparseFund && sparseFin ? sparseFF : 0);
   adjScore += overlaySparse;
-  const overlayNews = newsSent === 'positive' ? newsPos : newsSent === 'negative' ? newsNeg : 0;
-  adjScore += overlayNews;
+  // News sentiment is applied through the weighted `newsScore` term above, not
+  // as a flat overlay (that double-counted one label).
   // Deal/narrative catalyst overlay (M&A talk, capital injection, crisis...).
   // A positive catalyst lifts the composite so a fundamentals-Sell can be
   // downgraded to a catalyst-aware reading; a negative one deepens it.
@@ -5495,11 +5502,11 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     },
     subScores: {
       fundamental: fundamental.score, technical: technical.score,
-      financial: financial.score, macro: macro.score, ml: mlProbScore,
+      financial: financial.score, macro: macro.score, ml: mlProbScore, news: newsScore,
     },
     mlWinProb: mlWinProb != null ? Math.round(mlWinProb * 1000) / 1000 : null,
     compositeBase: Math.round(compositeBase * 1000) / 1000,
-    overlays: { sparse: overlaySparse, news: overlayNews, catalyst: overlayCatalyst, insider: overlayInsider },
+    overlays: { sparse: overlaySparse, catalyst: overlayCatalyst, insider: overlayInsider },
     scoreBeforeCap: Math.round(scoreBeforeCap * 1000) / 1000,
     speculativeCapApplied: !!speculative,
     overallScore,
@@ -5524,7 +5531,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   } : undefined;
 
   if (diagnostics && diagCfg.log_actionable !== false && sig.action !== 'hold') {
-    console.log(`[SignalService][diag] ${symbol} ${sig.signal} score=${overallScore} (base=${diagnostics.compositeBase} ov: news=${overlayNews} cat=${overlayCatalyst} ins=${overlayInsider} sparse=${overlaySparse}) regime=${regime.regime} conf=${confRaw}->${confFinal} ml=${diagnostics.mlWinProb} gate=${_confidenceGateNote || 'none'}`);
+    console.log(`[SignalService][diag] ${symbol} ${sig.signal} score=${overallScore} (base=${diagnostics.compositeBase} news=${newsScore} ov: cat=${overlayCatalyst} ins=${overlayInsider} sparse=${overlaySparse}) regime=${regime.regime} conf=${confRaw}->${confFinal} ml=${diagnostics.mlWinProb} gate=${_confidenceGateNote || 'none'}`);
   }
 
   const obj = {
