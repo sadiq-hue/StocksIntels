@@ -932,9 +932,8 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Portfolio vs Benchmarks — commented out; the digest fills the width */}
-      <div className="grid grid-cols-1 gap-6">
-        {/*
+      {/* Portfolio vs Benchmarks — commented out */}
+      {/*
         <Card className="border shadow-sm p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -1009,10 +1008,6 @@ export function DashboardPage() {
         </Card>
         */}
 
-        {/* Today's Market Intelligence — the digest narrative that previously
-            existed only as an email, now readable on the dashboard. */}
-        <DailyIntelligencePanel />
-
         {/*
         <Card className="border shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
@@ -1056,7 +1051,6 @@ export function DashboardPage() {
           </div>
         </Card>
         */}
-      </div>
 
       {/* Top Movers — Combined NSE & Global */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-tour="top-movers">
@@ -1147,8 +1141,8 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Watchlist & Market Intelligence */}
-      <div className="grid grid-cols-1 gap-6">
+      {/* Watchlist & Today's Market Intelligence — side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="border shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -1204,6 +1198,10 @@ export function DashboardPage() {
             })}
           </div>
         </Card>
+
+        {/* Today's Market Intelligence — the digest narrative that previously
+            existed only as an email, now readable on the dashboard. */}
+        <DailyIntelligencePanel />
 
         {/*
         <Card className="border-0 bg-gradient-to-br from-[#0D7490] via-[#0B6A87] to-[#0A5F7A] p-5 text-white relative overflow-hidden shadow-lg shadow-[#0D7490]/20" data-tour="ai-signals-section">
