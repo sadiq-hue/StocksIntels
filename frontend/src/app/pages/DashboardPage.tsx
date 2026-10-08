@@ -932,8 +932,9 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Portfolio vs Benchmarks */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Portfolio vs Benchmarks — commented out; the digest fills the width */}
+      <div className="grid grid-cols-1 gap-6">
+        {/*
         <Card className="border shadow-sm p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -1006,11 +1007,13 @@ export function DashboardPage() {
             </>
           )}
         </Card>
+        */}
 
         {/* Today's Market Intelligence — the digest narrative that previously
             existed only as an email, now readable on the dashboard. */}
         <DailyIntelligencePanel />
 
+        {/*
         <Card className="border shadow-sm p-5">
           <div className="flex items-center gap-2 mb-4">
             <Activity className="size-4 text-[#0D7490]" />
@@ -1052,6 +1055,7 @@ export function DashboardPage() {
             </Link>
           </div>
         </Card>
+        */}
       </div>
 
       {/* Top Movers — Combined NSE & Global */}
@@ -1144,7 +1148,7 @@ export function DashboardPage() {
       </div>
 
       {/* Watchlist & Market Intelligence */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         <Card className="border shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -1201,13 +1205,12 @@ export function DashboardPage() {
           </div>
         </Card>
 
+        {/*
         <Card className="border-0 bg-gradient-to-br from-[#0D7490] via-[#0B6A87] to-[#0A5F7A] p-5 text-white relative overflow-hidden shadow-lg shadow-[#0D7490]/20" data-tour="ai-signals-section">
-          {/* Floating bubbles */}
           <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/5 rounded-full animate-bubble-float" />
           <div className="absolute top-4 right-20 w-8 h-8 bg-white/10 rounded-full animate-bubble-float" style={{ animationDelay: "2s" }} />
           <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-emerald-300/10 rounded-full animate-bubble-float" style={{ animationDelay: "3.5s" }} />
           <div className="absolute bottom-6 left-24 w-5 h-5 bg-white/10 rounded-full animate-bubble-float" style={{ animationDelay: "1s" }} />
-          {/* Soft radial glow */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_60%)]" />
 
           <div className="relative z-10">
@@ -1234,7 +1237,6 @@ export function DashboardPage() {
               </div>
             ) : (
               <>
-                {/* Signal Distribution */}
                 {signalSummary.total > 0 && (                  <div className="bg-white/10 rounded-lg p-3 border border-white/20 mb-3">
                     <div className="flex items-center justify-between text-[11px] text-white/70 mb-2">
                       <span>{signalSummary.actionable} calls{signalSummary.hold > 0 ? ` · ${signalSummary.hold} on hold` : ""}</span>
@@ -1306,6 +1308,7 @@ export function DashboardPage() {
             )}
           </div>
         </Card>
+        */}
       </div>
 
       {/* Holdings & Allocation */}
