@@ -4073,8 +4073,10 @@ setInterval(() => {
   generateSignals(null, false).catch(() => {});
 }, SIGNALS_CACHE_TTL);
 
-// Live macro data (World Bank/IMF): warm on boot and refresh every 6h so the
-// Macro Conditions cards reflect current official figures, not frozen values.
+// Live macro data (World Bank/IMF/CBK/BLS/Fed): warm on boot and refresh on
+// macroService.CACHE_TTL (1h) so the Macro Conditions cards reflect current
+// official figures, not frozen values. (PMI/credit-rating/political-risk have
+// no live source and remain reference estimates.)
 startMacroRefresh();
 
 // Historical backtest is now an explicit operator tool only (admin

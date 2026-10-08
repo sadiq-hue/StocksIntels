@@ -93,6 +93,7 @@ const DEFAULTS = {
     sma_slow: 200,
     atr_period: 14,
     vol_lookback: 10,
+    momentum_lookback: 20,
     auto_optimize: false,
     optimize_interval_days: 7,
   },
@@ -243,6 +244,10 @@ const DEFAULTS = {
     financials: {
       baseline: 50,
       cap: 25,
+      sparse_penalty: -8,
+      weak_strength_delta: -12,
+      poor_strength_delta: -20,
+      bearish_consistency_delta: -10,
       de: { low_threshold: 0.5, low_delta: 15, high_threshold: 2.0, high_delta: -15 },
       cr: { good_threshold: 2.0, good_delta: 10, poor_threshold: 1.0, poor_delta: -10 },
       roe: { good_threshold: 15, good_delta: 15, poor_threshold: 5, poor_delta: -5 },

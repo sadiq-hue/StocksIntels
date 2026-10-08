@@ -156,12 +156,15 @@ function analyzeFundamentals(stock, currentPrice, overrideNewsSentiment = null, 
   }
 
   if (stock.dividendYield > 0) {
-    const tbillThreshold = TBILI_RATE * 2;
-    if (stock.dividendYield > tbillThreshold && (stock.payoutRatio < 80 || stock.payoutRatio === 0)) {
+    // TBILI_RATE is a fraction (0.16 = 16%), but dividendYield is a percent
+    // (e.g. 7.1). The old comparison (yield > 0.32) was true for essentially
+    // every dividend payer, handing out +10 unconditionally.
+    const tbillPct = TBILI_RATE * 100;
+    if (stock.dividendYield > tbillPct * 2 && (stock.payoutRatio < 80 || stock.payoutRatio === 0)) {
       score += 10;
       metrics.divSignal = 'BUY';
       metrics.divRating = `Income BUY: yield ${stock.dividendYield}% > 2x T-bill rate, payout ${stock.payoutRatio}%`;
-    } else if (stock.dividendYield > TBILI_RATE) {
+    } else if (stock.dividendYield > tbillPct) {
       score += 5;
       metrics.divSignal = 'NEUTRAL';
       metrics.divRating = `Dividend ${stock.dividendYield}% above T-bill rate`;
@@ -314,14 +317,15 @@ function analyzeFundamentals(stock, currentPrice, overrideNewsSentiment = null, 
     metrics.altRating = `Altman Z ${stock.altmanZ} - grey zone`;
   }
 
-  const newsCfg = getScoring('fundamentals.news_sentiment', { positive_delta: 5, negative_delta: -5 });
+  // News sentiment is applied ONCE, as the composite news overlay in
+  // _buildSignal. It previously ALSO shifted the fundamental sub-score here, so
+  // a single positive/negative label moved the score twice. Keep the label
+  // metrics for display only.
   const newsSent = overrideNewsSentiment || stock.newsSentiment;
   if (newsSent === 'positive') {
-    score += newsCfg.positive_delta;
     metrics.newsSignal = 'BUY';
     metrics.newsRating = 'Positive news sentiment';
   } else if (newsSent === 'negative') {
-    score += newsCfg.negative_delta;
     metrics.newsSignal = 'SELL';
     metrics.newsRating = 'Negative news sentiment';
   } else {
@@ -539,7 +543,12 @@ function analyzeTechnicals(symbol, currentPrice, priceHistory = null, volume = n
     indicators.volumeSignal = 'No Data';
   }
 
-  const priceChange = ((currentPrice - priceHistory[0]) / priceHistory[0]) * 100;
+  // Fixed lookback so momentum is comparable across markets. NSE history is
+  // ~1 year and US ~3 months; measuring from the whole array made the two
+  // non-comparable and tied the reading to how much history was fetched.
+  const momLookback = ip.momentum_lookback || 20;
+  const momStart = priceHistory[Math.max(0, priceHistory.length - 1 - momLookback)] || priceHistory[0];
+  const priceChange = momStart > 0 ? ((currentPrice - momStart) / momStart) * 100 : 0;
   indicators.momentum = priceChange.toFixed(1) + '%';
   if (priceChange > 20) {
     score += (momCfg.strong_positive || 15);
@@ -604,12 +613,12 @@ function analyzeFinancials(stock, fundamentalResult = null) {
   } else if (strengthScore >= 2) {
     score += 8;
     analysis.financialHealth = 'Good financial strength';
-  } else if (strengthScore <= -2) {
-    score += (finCfg.weak_strength_delta || -12);
-    analysis.financialHealth = 'Weak financial strength';
   } else if (strengthScore <= -4) {
     score += (finCfg.poor_strength_delta || -20);
     analysis.financialHealth = 'Poor financial strength - high risk';
+  } else if (strengthScore <= -2) {
+    score += (finCfg.weak_strength_delta || -12);
+    analysis.financialHealth = 'Weak financial strength';
   } else {
     analysis.financialHealth = 'Adequate financial strength';
   }
