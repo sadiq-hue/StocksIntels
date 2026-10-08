@@ -4134,7 +4134,7 @@ const _normHeadline = (h) => String(h || '').toLowerCase().replace(/[^a-z0-9]+/g
 async function buildNewsBySymbol(articles, perSymbol = 10) {
   const map = groupNewsBySymbol(articles, perSymbol);
   try {
-    const hist = await sentimentHistory.getRecentArticlesBySymbol(7, perSymbol);
+    const hist = await sentimentHistory.getRecentArticlesBySymbol(sentimentHistory.HISTORY_WINDOW_DAYS || 14, perSymbol);
     for (const [sym, list] of Object.entries(hist)) {
       const existing = map[sym] || [];
       const seen = new Set(existing.map(n => _normHeadline(n.headline)));
