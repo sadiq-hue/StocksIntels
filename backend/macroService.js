@@ -5,92 +5,17 @@ const { generic } = require('./apiClient');
 const { NSE_SYMBOLS } = require('./stockData');
 const cheerio = require('cheerio');
 
-// ─── Static Reference Data (used when APIs are unavailable) ────────────────
+// ─── Country metadata ──────────────────────────────────────────────────────
+// Names / currency / central bank only. Every numeric macro value comes from a
+// live source (World Bank / IMF / CBK / BLS / Fed) — there is deliberately NO
+// curated numeric fallback, so a country with no live data contributes nothing
+// to the macro score instead of a stale estimate.
 const COUNTRY_MACRO = {
-  US: {
-    name: 'United States',
-    code: 'us',
-    currency: 'USD',
-    centralBank: 'Federal Reserve (Fed)',
-    interestRate: 4.50,
-    gdpGrowth: 2.5,
-    inflation: 5.1,
-    currentAccount: -3.2,
-    politicalRisk: 15,
-    creditRating: 'AA+',
-    creditScore: 90,
-    pmi: 48.0,
-    newsSentiment: 'neutral'
-  },
-  KE: {
-    name: 'Kenya',
-    code: 'ke',
-    currency: 'KES',
-    centralBank: 'Central Bank of Kenya (CBK)',
-    interestRate: 12.0,
-    gdpGrowth: 5.0,
-    inflation: 5.5,
-    currentAccount: -4.5,
-    politicalRisk: 45,
-    creditRating: 'B+',
-    creditScore: 35,
-    pmi: 49.5,
-    newsSentiment: 'neutral'
-  },
-  EU: {
-    name: 'Eurozone',
-    code: 'eu',
-    currency: 'EUR',
-    centralBank: 'European Central Bank (ECB)',
-    interestRate: 3.75,
-    gdpGrowth: 1.0,
-    inflation: 2.5,
-    currentAccount: 2.8,
-    politicalRisk: 20,
-    creditRating: 'AAA',
-    creditScore: 95,
-    pmi: 48.5,
-    newsSentiment: 'neutral'
-  },
-  JP: {
-    name: 'Japan',
-    code: 'jp',
-    currency: 'JPY',
-    centralBank: 'Bank of Japan (BoJ)',
-    interestRate: 0.25,
-    gdpGrowth: 1.2,
-    inflation: 2.0,
-    currentAccount: 3.5,
-    politicalRisk: 15,
-    creditRating: 'A+',
-    creditScore: 75,
-    pmi: 49.8,
-    newsSentiment: 'neutral'
-  },
-  UK: {
-    name: 'United Kingdom',
-    code: 'gb',
-    currency: 'GBP',
-    centralBank: 'Bank of England (BoE)',
-    interestRate: 5.25,
-    gdpGrowth: 1.5,
-    inflation: 3.5,
-    currentAccount: -3.8,
-    politicalRisk: 18,
-    creditRating: 'AA',
-    creditScore: 85,
-    pmi: 51.2,
-    newsSentiment: 'neutral'
-  }
-};
-
-const CREDIT_SCORE_MAP = {
-  'AAA': 95, 'AA+': 90, 'AA': 85, 'AA-': 80,
-  'A+': 75, 'A': 70, 'A-': 65,
-  'BBB+': 60, 'BBB': 55, 'BBB-': 50,
-  'BB+': 45, 'BB': 40, 'BB-': 35,
-  'B+': 30, 'B': 25, 'B-': 20,
-  'CCC': 10, 'CC': 5, 'C': 3, 'D': 0
+  US: { name: 'United States', code: 'us', currency: 'USD', centralBank: 'Federal Reserve (Fed)' },
+  KE: { name: 'Kenya', code: 'ke', currency: 'KES', centralBank: 'Central Bank of Kenya (CBK)' },
+  EU: { name: 'Eurozone', code: 'eu', currency: 'EUR', centralBank: 'European Central Bank (ECB)' },
+  JP: { name: 'Japan', code: 'jp', currency: 'JPY', centralBank: 'Bank of Japan (BoJ)' },
+  UK: { name: 'United Kingdom', code: 'gb', currency: 'GBP', centralBank: 'Bank of England (BoE)' },
 };
 
 // ─── Country Mapping ───────────────────────────────────────────────────────
@@ -103,10 +28,11 @@ function getCountryForSymbol(symbol) {
 function getMacroBundle(country) {
   const live = liveMacro.get(country);
   if (live) return live;
+  // No live data yet — return metadata only, never a numeric estimate.
   const base = COUNTRY_MACRO[country] || COUNTRY_MACRO.US;
   return {
     data: { ...base },
-    meta: { live: false, sources: ['Reference estimate'], asOf: {}, referenceFields: ALL_CONDITION_KEYS.slice(), fetchedAt: null },
+    meta: { live: false, sources: [], asOf: {}, referenceFields: ALL_CONDITION_KEYS.slice(), fetchedAt: null },
   };
 }
 
@@ -137,10 +63,11 @@ function cacheSet(key, data, ttl = CACHE_TTL) {
 // ─── Live macro overlay ────────────────────────────────────────────────────
 // Official data pulled from the World Bank (no API key); IMF supplies a GDP
 // cross-check when the World Bank has no fresh value; CBK supplies Kenya's
-// monthly CPI and policy rate. Refreshed on boot and every hour. Fields that
-// have no free live source (PMI, sovereign credit rating, political risk) keep
-// the curated COUNTRY_MACRO value and are listed in `meta.referenceFields` so
-// the UI can label them as reference estimates.
+// monthly CPI and policy rate; BLS/Fed supply the US CPI and policy rate.
+// Refreshed on boot and every hour. There is NO curated numeric fallback:
+// conditions without a live value are excluded from the score, and the three
+// conditions with no free live source (PMI, sovereign credit rating, political
+// risk) were removed entirely.
 const worldBankCountry = { US: 'US', KE: 'KE', EU: 'XC', JP: 'JP', UK: 'GB' };
 const imfCountry = { US: 'USA', KE: 'KEN', EU: 'EU', JP: 'JPN', UK: 'GBR' };
 
@@ -151,8 +78,10 @@ const WB_FIELDS = {
   interestRate: 'FR.INR.LEND',
 };
 
-// The condition keys that appear in `getMacroScore().conditions`.
-const ALL_CONDITION_KEYS = ['interestRateDifferential', 'gdpGrowth', 'inflation', 'currentAccount', 'politicalRisk', 'creditRating', 'pmi'];
+// The condition keys that appear in `getMacroScore().conditions`. Only these
+// have a live source. Political risk, sovereign credit rating and PMI were
+// removed — they were hardcoded reference values, never live data.
+const ALL_CONDITION_KEYS = ['interestRateDifferential', 'gdpGrowth', 'inflation', 'currentAccount'];
 
 const liveMacro = new Map(); // country -> { data, meta }
 
@@ -403,53 +332,10 @@ function scoreCurrentAccount(countryData) {
   }
 }
 
-function scorePoliticalRisk(countryData) {
-  const risk = countryData.politicalRisk;
-
-  if (risk < 20) {
-    return { score: 85, signal: 'BUY', detail: `Political risk ${risk}/100 — very stable` };
-  } else if (risk < 35) {
-    return { score: 65, signal: 'NEUTRAL', detail: `Political risk ${risk}/100 — low` };
-  } else if (risk < 50) {
-    return { score: 45, signal: 'NEUTRAL', detail: `Political risk ${risk}/100 — moderate, monitor elections` };
-  } else if (risk < 70) {
-    return { score: 25, signal: 'SELL', detail: `Political risk ${risk}/100 — elevated, instability concerns` };
-  } else {
-    return { score: 10, signal: 'SELL', detail: `Political risk ${risk}/100 — critical, capital flight risk` };
-  }
-}
-
-function scoreCreditRating(countryData) {
-  const score = countryData.creditScore;
-  const rating = countryData.creditRating;
-
-  if (score >= 80) {
-    return { score: 85, signal: 'BUY', detail: `Sovereign rating ${rating} — investment grade, safe haven` };
-  } else if (score >= 60) {
-    return { score: 65, signal: 'NEUTRAL', detail: `Sovereign rating ${rating} — upper investment grade` };
-  } else if (score >= 40) {
-    return { score: 45, signal: 'NEUTRAL', detail: `Sovereign rating ${rating} — lower investment grade` };
-  } else if (score >= 20) {
-    return { score: 25, signal: 'SELL', detail: `Sovereign rating ${rating} — speculative, high yield risk` };
-  } else {
-    return { score: 10, signal: 'SELL', detail: `Sovereign rating ${rating} — distressed, default risk` };
-  }
-}
-
-function scorePMI(countryData) {
-  const pmi = countryData.pmi;
-
-  if (pmi >= 55) {
-    return { score: 85, signal: 'BUY', detail: `PMI ${pmi} — strong expansion` };
-  } else if (pmi >= 50) {
-    return { score: 65, signal: 'NEUTRAL', detail: `PMI ${pmi} — expansion` };
-  } else if (pmi >= 45) {
-    return { score: 40, signal: 'NEUTRAL', detail: `PMI ${pmi} — contraction, monitor` };
-  } else {
-    return { score: 20, signal: 'SELL', detail: `PMI ${pmi} — recession territory` };
-  }
-}
-
+// scorePoliticalRisk / scoreCreditRating / scorePMI removed: they scored
+// hardcoded reference values, never live data. Macro is now built only from
+// conditions with a live source (rate differential, GDP, inflation, current
+// account).
 // ─── Composite Macro Score ─────────────────────────────────────────────────
 function getGrade(score) {
   if (score >= 85) return 'A+';
@@ -469,33 +355,43 @@ function getGrade(score) {
 function getMacroScore(country) {
   const { data, meta } = getMacroBundle(country);
 
-  // Reference rate for the "vs Fed" differential is the live US policy rate
-  // when available (NY Fed EFFR), else the curated Fed rate. For the US itself
-  // this makes the differential ~0 ("aligned"), and for other countries it
-  // compares against the real current Fed rate instead of a frozen 4.50.
+  // Reference rate for the "vs Fed" differential is the live US policy rate. If
+  // it is unavailable the differential condition is skipped rather than compared
+  // against a hardcoded Fed rate.
   const usRate = getMacroBundle('US').data.interestRate;
-  const referenceRate = (isFinite(usRate) && usRate > 0) ? usRate : 4.50;
-  const rateDiff = scoreInterestRateDifferential(data, referenceRate);
-  const gdp = scoreGDPGrowth(data);
-  const inflation = scoreInflation(data);
-  const currentAcc = scoreCurrentAccount(data);
-  const political = scorePoliticalRisk(data);
-  const credit = scoreCreditRating(data);
-  const pmiScore = scorePMI(data);
+  const referenceRate = (isFinite(usRate) && usRate > 0) ? usRate : null;
 
-  const conditions = { rateDiff, gdp, inflation, currentAcc, political, credit, pmi: pmiScore };
-  const rawScore = Object.values(conditions).reduce((sum, c) => sum + c.score, 0) / Object.values(conditions).length;
+  // Only conditions with a live value are scored. Anything missing is excluded
+  // from the average, never substituted with a reference estimate.
+  const conditions = {};
+  const add = (key, cond) => { if (cond) conditions[key] = cond; };
+  if (isFinite(data.interestRate) && referenceRate != null) add('interestRateDifferential', scoreInterestRateDifferential(data, referenceRate));
+  if (isFinite(data.gdpGrowth)) add('gdpGrowth', scoreGDPGrowth(data));
+  if (isFinite(data.inflation)) add('inflation', scoreInflation(data));
+  if (isFinite(data.currentAccount)) add('currentAccount', scoreCurrentAccount(data));
+
+  const vals = Object.values(conditions);
+  if (vals.length === 0) {
+    // No live macro for this country — abstain at neutral, never a stale estimate.
+    return {
+      score: 50, grade: getGrade(50), signal: 'Neutral',
+      country: data.name, countryCode: country,
+      summary: `${data.name}: no live macro data`,
+      meta: { ...meta, live: false, insufficientData: true },
+      conditions: {},
+    };
+  }
+
+  const rawScore = vals.reduce((sum, c) => sum + c.score, 0) / vals.length;
   const score = Math.round(Math.max(0, Math.min(100, rawScore)));
-
-  // Count BUY/SELL signals
-  const buyCount = Object.values(conditions).filter(c => c.signal === 'BUY').length;
-  const sellCount = Object.values(conditions).filter(c => c.signal === 'SELL').length;
+  const buyCount = vals.filter(c => c.signal === 'BUY').length;
+  const sellCount = vals.filter(c => c.signal === 'SELL').length;
 
   let signal;
-  if (buyCount >= 5) signal = 'Bullish';
-  else if (buyCount >= 3) signal = 'Favorable';
-  else if (sellCount >= 5) signal = 'Bearish';
-  else if (sellCount >= 3) signal = 'Caution';
+  if (buyCount >= 3) signal = 'Bullish';
+  else if (buyCount >= 2) signal = 'Favorable';
+  else if (sellCount >= 3) signal = 'Bearish';
+  else if (sellCount >= 2) signal = 'Caution';
   else if (score >= 60) signal = 'Favorable';
   else if (score <= 40) signal = 'Caution';
   else signal = 'Neutral';
@@ -506,17 +402,9 @@ function getMacroScore(country) {
     signal,
     country: data.name,
     countryCode: country,
-    summary: `${data.name}: ${buyCount} bullish / ${sellCount} bearish macro signals`,
+    summary: `${data.name}: ${buyCount} bullish / ${sellCount} bearish macro signals (${vals.length} live conditions)`,
     meta,
-    conditions: {
-      interestRateDifferential: rateDiff,
-      gdpGrowth: gdp,
-      inflation,
-      currentAccount: currentAcc,
-      politicalRisk: political,
-      creditRating: credit,
-      pmi: pmiScore,
-    }
+    conditions,
   };
 }
 
@@ -634,7 +522,7 @@ async function refreshCountryData(country) {
 
   // Every scored condition that did not receive live data is a reference value.
   meta.referenceFields = ALL_CONDITION_KEYS.filter((k) => !liveConds.has(k));
-  if (!meta.live) meta.sources.push('Reference estimate');
+  if (!meta.live) meta.sources.push('No live macro data');
   return { data, meta };
 }
 
@@ -688,20 +576,13 @@ function getCachedIndicators() {
 function generateMacroReason(macro) {
   if (!macro) return '';
   const reasons = [];
-  const cond = macro.conditions;
+  const cond = macro.conditions || {};
+  const push = (c) => { if (c && (c.signal === 'BUY' || c.signal === 'SELL')) reasons.push(c.detail); };
 
-  if (cond.gdpGrowth.signal === 'BUY') reasons.push(cond.gdpGrowth.detail);
-  if (cond.gdpGrowth.signal === 'SELL') reasons.push(cond.gdpGrowth.detail);
-  if (cond.inflation.signal === 'BUY') reasons.push(cond.inflation.detail);
-  if (cond.inflation.signal === 'SELL') reasons.push(cond.inflation.detail);
-  if (cond.pmi.signal === 'BUY') reasons.push(cond.pmi.detail);
-  if (cond.pmi.signal === 'SELL') reasons.push(cond.pmi.detail);
-  if (cond.interestRateDifferential.signal === 'BUY') reasons.push(cond.interestRateDifferential.detail);
-  if (cond.interestRateDifferential.signal === 'SELL') reasons.push(cond.interestRateDifferential.detail);
-  if (cond.creditRating.signal === 'BUY') reasons.push(cond.creditRating.detail);
-  if (cond.creditRating.signal === 'SELL') reasons.push(cond.creditRating.detail);
-  if (cond.politicalRisk.signal === 'SELL') reasons.push(cond.politicalRisk.detail);
-  if (cond.currentAccount.signal === 'SELL') reasons.push(cond.currentAccount.detail);
+  push(cond.gdpGrowth);
+  push(cond.inflation);
+  push(cond.interestRateDifferential);
+  push(cond.currentAccount);
 
   return reasons.length > 0 ? reasons.slice(0, 3).join('; ') + '.' : '';
 }

@@ -124,11 +124,15 @@ D/E <0.5 +15 / >2 −15; current ratio >2 +10 / <1 −10; ROE >15 +15 / <5 −5;
 Altman Z >3.5 +2 / <1.5 −3; sparse penalty −8; strength aggregate ±8...±20;
 signal-agreement ±10; Altman <1.81 caps at 40.
 
-### Macro — average of 7 conditions, 0–100 (`macroService.js:469`)
-Interest-rate differential vs the live Fed rate, GDP growth, inflation, current
-account, political risk, credit rating, PMI. A sector overlay
-(`analysisEngine.js:82`) adds +5/−3/+8 etc. for rate-sensitive / defensive /
-cyclical sectors.
+### Macro — average of the LIVE conditions, 0–100 (`macroService.js`)
+Interest-rate differential vs the live US policy rate, GDP growth, inflation and
+current account — all from live sources (World Bank, IMF, CBK for Kenya, BLS/Fed
+for the US), refreshed hourly. There is **no curated numeric fallback**: a
+condition without a live value is excluded from the average, and if none are live
+the macro score abstains at neutral (50). The three conditions with no free live
+source (sovereign credit rating, political risk, PMI) were **removed**, not
+hardcoded. A sector overlay (`analysisEngine.js:82`) adds +5/−3/+8 etc. for
+rate-sensitive / defensive / cyclical sectors.
 
 ### ML (`mlSignalModel.js`)
 24 features (`mlSignalModel.js:6-16`): RSI, MACD hist, BB %B, SMA ratio, ATR
