@@ -185,7 +185,7 @@ const whyChoose = [
 
 const faqs = [
   { q: "Which NSE stocks does StocksIntels cover?", a: "We cover all actively traded NSE stocks including Safaricom (SCOM), Equity Group (EQTY), KCB Group (KCB), EABL (EABL), Co-op Bank (COOP), Absa Kenya (ABSA), BAT Kenya (BAT), and 50+ more. Global stocks on NYSE and NASDAQ are also available." },
-  { q: "How accurate is the AI market intelligence?", a: "Our models achieve around 70-75% directional accuracy on African and global stocks. We do not claim 92% — no honest provider does. We show you our reasoning and let you decide." },
+  { q: "How accurate is the AI market intelligence?", a: "We publish our forward-test accuracy inside the app and update it as new outcomes resolve, so you can judge performance for yourself. No model is always right — accuracy varies with market conditions and we make no guarantee of any specific level. We show you the reasoning behind every rating and let you decide." },
   { q: "Can I try before I pay?", a: "Yes. Every paid plan comes with a 7-day trial. You'll get full access to your chosen plan for 7 days." },
   { q: "Do I need a broker account?", a: "Not to start. The paper trading feature gives you $10,000 in virtual cash to practice. When you are ready, you can connect your broker or trade manually based on the recommendations." },
   { q: "Is there a mobile app?", a: "The web app works on mobile browsers. We do not have an iOS or Android app yet but the site is fully responsive and works on phone screens." },
