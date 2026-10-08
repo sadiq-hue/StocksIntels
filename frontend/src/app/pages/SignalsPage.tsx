@@ -10,7 +10,7 @@ import {
   TrendingUp, TrendingDown, Search, Zap,
   Activity, Star, RefreshCw, Info, ChevronLeft, ChevronRight,
   ArrowUpRight, ArrowDownRight, BarChart3, Clock, Gauge, FilterX, ArrowUpDown, X, Target,
-  Brain, Signal, Flame, ShieldAlert,
+  Brain, Signal, Flame,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../auth/AuthContext";
@@ -374,17 +374,6 @@ export function SignalsPage() {
 
   return (
     <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6">
-
-      {/* Ratings are informational, not advice. Kept at the top of the feed. */}
-      <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-[12px] leading-relaxed text-amber-900">
-        <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-        <p>
-          These are automated, informational ratings on public data — <strong>not investment advice</strong>, not a
-          personalized recommendation, and not an offer to buy or sell any security. Verify independently and consult a
-          licensed adviser before acting.{" "}
-          <Link to="/disclaimer" className="font-semibold underline hover:text-amber-950">Full disclaimer</Link>
-        </p>
-      </div>
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
