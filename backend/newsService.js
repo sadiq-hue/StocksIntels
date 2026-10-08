@@ -438,6 +438,32 @@ function extractRelatedStocks(text) {
   return [...found];
 }
 
+// ─── Pan-African source stock relevance ──────────────────────────────────────
+// The pan-African business feeds (Nairametrics, BusinessDay NG, Premium Times,
+// MyJoyOnline, Enterprise, IOL) publish a lot of general business/macro copy
+// that has no bearing on any listed security, and their companies are not in our
+// NSE/US tag map so `relatedStocks` can't flag them. Keep only items that read
+// as equity / capital-markets news so the Africa tab stays a stock feed rather
+// than a general business wire. Word-boundary matched so "stake" won't match
+// "stakeholder" and "shares" won't match random substrings.
+const AFRICA_STOCK_KEYWORDS = [
+  'share price', 'share prices', 'shares', 'shareholder', 'stock', 'stocks',
+  'equity', 'equities', 'listed', 'listing', 'delist', 'bourse', 'stock exchange',
+  'ngx', 'jse', 'egx', 'nse', 'gse', 'market capitalisation', 'market capitalization',
+  'market cap', 'dividend', 'earnings', 'financial results', 'half-year', 'full-year',
+  'revenue', 'profit', 'profit warning', 'turnover', 'ipo', 'initial public offering',
+  'rights issue', 'bonus issue', 'buyback', 'share buyback', 'merger', 'acquisition',
+  'acquire', 'acquires', 'acquired', 'merges', 'merged', 'takeover', 'stake', 'valuation',
+  'insider', 'broker', 'bullish', 'bearish',
+  'rally', 'selloff', 'sell-off', 'all-share index', 'all share index',
+  'capital market', 'capital markets', 'brokerage', 'market regulator',
+];
+const AFRICA_STOCK_RE = new RegExp(`\\b(${AFRICA_STOCK_KEYWORDS.map(escapeRe).join('|')})\\b`, 'i');
+
+function isAfricanStockNews(title, excerpt) {
+  return AFRICA_STOCK_RE.test(`${title || ''} ${excerpt || ''}`);
+}
+
 // Cache aggregated sentiment to avoid repeated API calls
 let sentimentCache = null;
 let sentimentCacheTime = 0;
@@ -1021,6 +1047,12 @@ async function fetchFromGlobalRSS() {
 
       const pubDate = item.isoDate ? new Date(item.isoDate) : (item.pubDate ? new Date(item.pubDate) : new Date());
       const relatedStocks = extractRelatedStocks(title + ' ' + excerpt);
+      // Pan-African feeds are gated to stock-affecting news: drop general
+      // business/macro stories that name no listed security and carry no
+      // equity/capital-markets signal.
+      if (feed.category === 'africa' && relatedStocks.length === 0 && !isAfricanStockNews(title, excerpt)) {
+        continue;
+      }
       articles.push({
         id: `rss-${feed.source.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         headline: title.substring(0, 200),
