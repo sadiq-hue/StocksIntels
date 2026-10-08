@@ -193,6 +193,9 @@ const DEFAULTS = {
         enabled: true,
         max_age_months: 12,
         news_per_event: 6,
+        // Max composite swing from insider conviction (the overlay magnitude).
+        // Configurable so the walk-forward re-fit can size it from outcomes.
+        max_delta: 8,
       },
     },
     fundamentals: {

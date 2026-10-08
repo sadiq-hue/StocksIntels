@@ -5143,6 +5143,7 @@ function scoreInsiderActivity(ownership) {
   const now = Date.now();
   const maxAgeMs = (cfg.max_age_months ?? 12) * 30 * 24 * 60 * 60 * 1000;
   let buys = 0, sells = 0, neutral = 0, buyShares = 0, sellShares = 0;
+  const buyOwners = new Set();
   let latestDate = null, latestText = null, latestTs = 0;
   for (const t of txns) {
     let ts = 0;
@@ -5176,7 +5177,7 @@ function scoreInsiderActivity(ownership) {
     }
     if (ts > 0 && now - ts > maxAgeMs) continue;
     if (isSell) { sells++; sellShares += shares; }
-    else if (isBuy) { buys++; buyShares += shares; }
+    else if (isBuy) { buys++; buyShares += shares; const owner = t.owner ?? t.insider ?? t.name; if (owner) buyOwners.add(String(owner).toLowerCase()); }
     else neutral++;
   }
   if (buys + sells === 0) {
@@ -5197,9 +5198,14 @@ function scoreInsiderActivity(ownership) {
   // not a differentiator. So: reward net buying; hold routine selling at
   // neutral; penalise only broad, heavy selling.
   let base;
+  const distinctBuyers = buyOwners.size || buys;
   if (buyShares > sellShares && buys > 0) {
-    const breadth = Math.min(buys, 5);
-    base = 50 + Math.min(45, netRatio * 45 + breadth * 3);
+    // Cluster buying (>=2 distinct insiders) is the high-conviction signal; a
+    // lone buyer gets half the lift. Yahoo transactions often omit the owner
+    // name, so fall back to the buy-transaction count.
+    const breadth = Math.min(distinctBuyers, 5);
+    const dev = Math.min(45, netRatio * 45 + breadth * 3);
+    base = 50 + dev * (distinctBuyers >= 2 ? 1 : 0.5);
   } else if (sells > 0) {
     const pervasive = netRatio <= -0.85 && sells >= 3;
     const heavy = netRatio <= -0.6 && sells >= 5;
@@ -5217,7 +5223,7 @@ function scoreInsiderActivity(ownership) {
   const score = Math.max(5, Math.min(95, Math.round(50 + (base - 50) * recency)));
   return {
     score, hasActivity: true, netShares, netShareRatio: Math.round(netRatio * 100) / 100,
-    buyCount: buys, sellCount: sells, neutralCount: neutral,
+    buyCount: buys, buyerCount: distinctBuyers, sellCount: sells, neutralCount: neutral,
     latestDate, latestText,
     summary: netShares >= 0
       ? `Insiders net bought ${netShares.toLocaleString()} shares (${buys} buys / ${sells} sells)`
@@ -5250,7 +5256,10 @@ function scoreNewsInsider(info) {
   // as near-neutral, and only penalise broad selling.
   let base;
   if (buys > sells && buys > 0) {
-    base = 50 + Math.min(45, (buys - sells) * perEvent + Math.min(buys, 5) * 2);
+    // Cluster buying (>=2 reported events) is high-conviction; a single report
+    // gets half the lift.
+    const dev = Math.min(45, (buys - sells) * perEvent + Math.min(buys, 5) * 2);
+    base = 50 + dev * (buys >= 2 ? 1 : 0.5);
   } else if (sells > 0) {
     const pervasive = sells >= 3 && sells > buys * 3;
     base = pervasive ? 40 : 48;
@@ -5378,7 +5387,8 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // US symbols score from Yahoo ownership transactions; NSE symbols (no Yahoo
   // insider coverage) score from director/insider dealings reported in news.
   const insider = scoreInsiderActivity(stock.ownership) || scoreNewsInsider(insiderNews || null);
-  const overlayInsider = insider ? ((insider.score - 50) / 50) * INSIDER_MAX_DELTA : 0;
+  const insiderMaxDelta = sc.insider_activity?.max_delta ?? INSIDER_MAX_DELTA;
+  const overlayInsider = insider ? ((insider.score - 50) / 50) * insiderMaxDelta : 0;
   adjScore += overlayInsider;
 
   const scoreBeforeCap = adjScore;

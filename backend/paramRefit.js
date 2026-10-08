@@ -56,7 +56,8 @@ async function loadRows() {
     if (![f, t, fin, m].every(Number.isFinite)) continue;
     const action = a.overall ? (r.signal || '').toLowerCase().includes('sell') ? 'sell' : (r.signal || '').toLowerCase().includes('buy') ? 'buy' : 'hold' : 'hold';
     if (action === 'hold') continue;
-    out.push({ action, y: r.result === 'win' ? 1 : 0, sub: { f, t, fin, m } });
+    const ins = Number.isFinite(a.insider?.score) ? a.insider.score : null;
+    out.push({ action, y: r.result === 'win' ? 1 : 0, sub: { f, t, fin, m }, ins });
   }
   return out;
 }
@@ -65,9 +66,13 @@ async function loadRows() {
 // predicted direction match the realized direction? (buy win = up; sell win = down)
 function evaluate(rows, params) {
   const { wf, wt, wfin, wm, buy, sell } = params;
+  const insMult = params.insiderMult != null ? params.insiderMult : 1;
   let called = 0, correct = 0;
   for (const r of rows) {
-    const s = composite(r.sub, wf, wt, wfin, wm);
+    let s = composite(r.sub, wf, wt, wfin, wm);
+    // Insider is an overlay (not a weighted average); size it by a searched
+    // multiplier over the engine's base magnitude of 8.
+    if (r.ins != null) s += insMult * ((r.ins - 50) / 50) * 8;
     let pred = null;
     if (s >= buy) pred = 1;
     else if (s <= sell) pred = 0;
@@ -81,14 +86,19 @@ function evaluate(rows, params) {
   return { coverage, accuracy, called };
 }
 
+// Candidate multipliers on the insider overlay magnitude (0 = ignore insider).
+const INSIDER_MULT = [0, 0.5, 1, 1.5, 2];
+
 function gridSearch(train) {
   let best = null;
   for (const wf of FUND) for (const wt of TECH) for (const wfin of FIN) for (const wm of MACRO) {
-    for (const buy of BUY_TH) for (const sell of SELL_TH) {
-      const params = { wf, wt, wfin, wm, buy, sell };
-      const m = evaluate(train, params);
-      if (m.accuracy == null || m.coverage < MIN_COVERAGE) continue;
-      if (!best || m.accuracy > best.m.accuracy) best = { params, m };
+    for (const insiderMult of INSIDER_MULT) {
+      for (const buy of BUY_TH) for (const sell of SELL_TH) {
+        const params = { wf, wt, wfin, wm, buy, sell, insiderMult };
+        const m = evaluate(train, params);
+        if (m.accuracy == null || m.coverage < MIN_COVERAGE) continue;
+        if (!best || m.accuracy > best.m.accuracy) best = { params, m };
+      }
     }
   }
   return best;
@@ -125,6 +135,8 @@ async function refitParameters({ apply = false } = {}) {
     folds: oos.length,
     meanOOSAccuracy: meanOOS != null ? Math.round(meanOOS * 1000) / 10 : null,
     suggestion,
+    // Insider overlay magnitude the fit prefers (base 8 x multiplier).
+    suggestedInsiderMaxDelta: suggestion ? Math.round(suggestion.insiderMult * 8 * 10) / 10 : null,
   };
   console.log(`[ParamRefit] ${rows.length} v2 outcomes | mean OOS accuracy ${result.meanOOSAccuracy}% | suggestion ${suggestion ? JSON.stringify(suggestion) : 'none'}`);
 
@@ -141,8 +153,9 @@ async function refitParameters({ apply = false } = {}) {
     await engineConfig.updateConfig({
       weights: { fundamental: suggestion.wf, technical: suggestion.wt, financial: suggestion.wfin, macro: suggestion.wm },
       thresholds: { buy: suggestion.buy, sell: suggestion.sell },
+      scoring: { signal_confidence: { insider_activity: { max_delta: result.suggestedInsiderMaxDelta } } },
     });
-    console.log('[ParamRefit] applied suggestion to engine config');
+    console.log(`[ParamRefit] applied suggestion to engine config (insider max_delta=${result.suggestedInsiderMaxDelta})`);
   }
   return result;
 }
