@@ -115,6 +115,40 @@ async function getHistorical(days = HISTORY_WINDOW_DAYS) {
   return result;
 }
 
+// Per-symbol recent articles over the last `days`, newest first, de-duplicated
+// by headline and capped per symbol. Lets the news dimension build coverage
+// across quiet days instead of abstaining on a thin daily batch.
+async function getRecentArticlesBySymbol(days = 7, perSymbol = 10) {
+  const { rows } = await pool.query(
+    `SELECT symbol, headline, source, sentiment, sentiment_score, published_at
+     FROM news_sentiment_history
+     WHERE published_at >= now() - ($1::int * interval '1 day')
+     ORDER BY published_at DESC`,
+    [days]
+  );
+  const out = {};
+  const seen = {};
+  for (const r of rows) {
+    const sym = String(r.symbol || '').toUpperCase();
+    if (!sym) continue;
+    if (!out[sym]) { out[sym] = []; seen[sym] = new Set(); }
+    if (out[sym].length >= perSymbol) continue;
+    const norm = String(r.headline || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (!norm || seen[sym].has(norm)) continue;
+    seen[sym].add(norm);
+    out[sym].push({
+      headline: r.headline,
+      source: r.source,
+      url: null,
+      sentiment: r.sentiment,
+      sentimentScore: r.sentiment_score,
+      publishedAt: r.published_at,
+      timestamp: r.published_at ? new Date(r.published_at).getTime() : null,
+    });
+  }
+  return out;
+}
+
 // Per-symbol strongest catalyst over the last `days` (recency-weighted).
 // Returns { [SYMBOL]: { direction, type, strength, headline, source, publishedAt } }.
 async function getCatalystHistorical(days = HISTORY_WINDOW_DAYS) {
@@ -195,4 +229,4 @@ async function prune(days = PRUNE_AFTER_DAYS) {
   return res.rowCount || 0;
 }
 
-module.exports = { ensureTable, persist, getHistorical, getCatalystHistorical, getInsiderHistorical, mergeSentimentMaps, ageWeight, prune, HISTORY_WINDOW_DAYS };
+module.exports = { ensureTable, persist, getHistorical, getCatalystHistorical, getInsiderHistorical, getRecentArticlesBySymbol, mergeSentimentMaps, ageWeight, prune, HISTORY_WINDOW_DAYS };

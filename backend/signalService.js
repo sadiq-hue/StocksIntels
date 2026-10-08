@@ -9,6 +9,7 @@ const { fetchHistoricalQuotes } = require('./globalScraper');
 const nseHistory = require('./nseHistoryService');
 const { getMacroScore, getCountryForSymbol, generateMacroReason, startMacroRefresh } = require('./macroService');
 const { getAggregatedSentiment, getCatalysts, getInsiderNewsSignals, initNewsHistory, getAllNews } = require('./newsService');
+const sentimentHistory = require('./sentimentHistoryService');
 const { getKeyMetrics, getQuote, getCompanyProfile } = require('./financialReportsService');
 const { calculateSMA, calculateATR } = require('./technicalIndicators');
 const { guessSector, resolveStockName, KNOWN_NAMES, NSE_SYMBOLS, US_SYMBOLS, ALL_SYMBOLS, SECTOR_AVG_PE, INDUSTRY_MEDIAN_EV_EBITDA, TBILI_RATE, KNOWN_FUNDAMENTALS, NSE_FUNDAMENTALS } = require('./stockData');
@@ -4126,9 +4127,32 @@ function groupNewsBySymbol(articles, perSymbol = 10) {
   return bySymbol;
 }
 
+// Merge the durable per-symbol article history into today's live grouping so the
+// news dimension has enough stories to score even on quiet news days. The
+// sentiment label already merges history; the article list did not.
+const _normHeadline = (h) => String(h || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+async function buildNewsBySymbol(articles, perSymbol = 10) {
+  const map = groupNewsBySymbol(articles, perSymbol);
+  try {
+    const hist = await sentimentHistory.getRecentArticlesBySymbol(7, perSymbol);
+    for (const [sym, list] of Object.entries(hist)) {
+      const existing = map[sym] || [];
+      const seen = new Set(existing.map(n => _normHeadline(n.headline)));
+      for (const h of list) {
+        if (existing.length >= perSymbol) break;
+        const k = _normHeadline(h.headline);
+        if (!k || seen.has(k)) continue;
+        seen.add(k);
+        existing.push(h);
+      }
+      map[sym] = existing;
+    }
+  } catch { /* history optional */ }
+  return map;
+}
+
 // Positive/negative/neutral tally + net tone for a news list.
-function summarizeNews(newsList) {
-  if (!Array.isArray(newsList) || newsList.length === 0) return null;
+function summarizeNews(newsList) {  if (!Array.isArray(newsList) || newsList.length === 0) return null;
   const counts = newsList.reduce((acc, n) => {
     const s = n.sentiment === 'positive' ? 'positive' : n.sentiment === 'negative' ? 'negative' : 'neutral';
     acc[s] += 1;
@@ -4239,7 +4263,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         getAllNews(400),
         new Promise(resolve => setTimeout(() => resolve([]), 15000)),
       ]);
-      newsBySymbol = groupNewsBySymbol(allNews);
+      newsBySymbol = await buildNewsBySymbol(allNews);
     } catch { /* silent */ }
     await Promise.all([
       prefetchPriceHistories(symbols).catch(() => {}),
@@ -4797,7 +4821,7 @@ async function generateSingleSignal(symbol) {
     let signalNews = [];
     try {
       const allNews = await getAllNews(400);
-      signalNews = groupNewsBySymbol(allNews)[String(symbol).toUpperCase()] || [];
+      signalNews = (await buildNewsBySymbol(allNews))[String(symbol).toUpperCase()] || [];
     } catch { /* silent */ }
     const priceHistory = await getPriceHistory(symbol).catch(() => null);
     const reportMetrics = _financialReportCache.get(symbol);
