@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "react-router";
 import { ScrollArea } from "../components/ui/scroll-area";
 import {
   Building2, CalendarDays, BarChart3, Star, Trophy,
@@ -33,11 +32,7 @@ const sections: TabSection[] = [
 ];
 
 export function StocksPage() {
-  const [searchParams] = useSearchParams();
-  const requestedTab = searchParams.get("tab") as TabId | null;
-  const [activeTab, setActiveTab] = useState<TabId>(
-    requestedTab && sections.some((s) => s.id === requestedTab) ? requestedTab : "screener"
-  );
+  const [activeTab, setActiveTab] = useState<TabId>("screener");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const ActiveIcon = sections.find(s => s.id === activeTab)?.icon || LineChart;

@@ -6,8 +6,7 @@ import {
   TrendingUp, TrendingDown, Activity, ArrowUpRight, ArrowDownRight,
   DollarSign, PieChart, BarChart3, Newspaper, Star, Wallet,
   Globe2, ChevronRight, ArrowUp, Layers, X, Lightbulb,
-  LayoutGrid, Briefcase, Brain, Scale, Banknote, Clock,
-  SlidersHorizontal, CalendarDays, Landmark, GraduationCap
+  LayoutGrid, Briefcase, Brain, Scale, Banknote
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -18,7 +17,6 @@ import { useAuth } from "../auth/AuthContext";
 import { usePortfolioData } from "../contexts/PortfolioDataContext";
 import { useBeginnerMode } from "../contexts/BeginnerModeContext";
 import { DailyIntelligencePanel } from "../components/DailyIntelligencePanel";
-import { StockSearchBar } from "../components/StockSearchBar";
 import { kenyanStocks, globalStocks } from "../data/stockUniverses";
 import { fetchAllNews, type NewsArticle } from "../services/newsService";
 import { connectSocket } from "../services/socketService";
@@ -170,9 +168,6 @@ export function DashboardPage() {
   const [activeStocks, setActiveStocks] = useState<any[]>([]);
   const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
   const [watchlistQuotes, setWatchlistQuotes] = useState<Record<string, any>>({});
-  const [moversUpdatedAt, setMoversUpdatedAt] = useState<string | null>(null);
-  const [liveIndices, setLiveIndices] = useState<any[]>([]);
-  const [indicesUpdatedAt, setIndicesUpdatedAt] = useState<string | null>(null);
   // localStorage access throws in private mode / sandboxed iframes / non-DOM
   // environments — this initializer runs during render, so guard it (mirrors
   // PortfolioDataContext) or a SecurityError would take down the whole page.
@@ -259,47 +254,10 @@ export function DashboardPage() {
           losers: (combined.losers || []).slice(0, 5).map((s: any) => normalizeMover(s)),
         });
         setActiveStocks((data.active || []).slice(0, 6));
-        setMoversUpdatedAt(new Date().toLocaleTimeString());
       } catch {}
     };
     fetchMovers();
     const interval = setInterval(fetchMovers, 30000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, []);
-
-  // Live index feed — the same /market/indices endpoint the Markets page uses.
-  // Normalised into the shape the index cards render, and stamped with the
-  // fetch time so the "Updated" label reflects real freshness. On failure the
-  // cards keep the bundled static snapshot and no timestamp is shown.
-  useEffect(() => {
-    let cancelled = false;
-    const fetchIndices = () => {
-      authFetch(`${API_BASE}/market/indices`)
-        .then(r => (r.ok ? r.json() : null))
-        .then(rows => {
-          if (cancelled || !Array.isArray(rows) || rows.length === 0) return;
-          const normalized = rows
-            .filter((idx: any) => idx && (idx.name || idx.symbol))
-            .map((idx: any) => {
-              const change = String(idx.change ?? "").trim();
-              const numeric = parseFloat(change.replace("%", ""));
-              return {
-                symbol: idx.symbol,
-                name: idx.name || idx.symbol,
-                value: idx.value ?? "—",
-                change: change || "—",
-                isPositive: change.startsWith("+") || (!change.startsWith("-") && (!isFinite(numeric) || numeric >= 0)),
-                volume: idx.volume ?? "—",
-              };
-            });
-          if (normalized.length === 0) return;
-          setLiveIndices(normalized);
-          setIndicesUpdatedAt(new Date().toLocaleTimeString());
-        })
-        .catch(() => {});
-    };
-    fetchIndices();
-    const interval = setInterval(fetchIndices, 60000);
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
@@ -357,16 +315,6 @@ export function DashboardPage() {
 
   const timeRanges = ["1D", "1W", "1M", "3M", "6M", "1Y", "ALL"];
 
-  const quickLinks = [
-    { label: "Watchlist", to: "/app/watchlist", icon: Star, color: "bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400" },
-    { label: "Screener", to: "/app/stocks", icon: SlidersHorizontal, color: "bg-[#0D7490]/10 text-[#0D7490]" },
-    { label: "Market Movers", to: "/app/markets", icon: TrendingUp, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" },
-    { label: "Earnings", to: "/app/stocks?tab=earnings", icon: CalendarDays, color: "bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400" },
-    { label: "ETFs", to: "/app/etfs", icon: Layers, color: "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400" },
-    { label: "Bonds", to: "/app/bonds", icon: Landmark, color: "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400" },
-    { label: "Derivatives", to: "/app/derivatives", icon: GraduationCap, color: "bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400" },
-  ];
-
   const topGainers = useMemo(() =>
     movers.gainers.length > 0 ? movers.gainers
       : allStocks.filter(s => s.change > 0).sort((a, b) => b.change - a.change).slice(0, 5),
@@ -378,23 +326,6 @@ export function DashboardPage() {
       : allStocks.filter(s => s.change < 0).sort((a, b) => a.change - b.change).slice(0, 5),
     [movers.losers]
   );
-
-  // Trending = the day's biggest movers then the most-active names, de-duped.
-  const trending = useMemo(() => {
-    const seen = new Set<string>();
-    const out: { ticker: string; market: "nse" | "global"; change: number }[] = [];
-    const add = (ticker: any, market: any, change: any) => {
-      const k = String(ticker || "").toUpperCase();
-      if (!k || seen.has(k)) return;
-      const n = typeof change === "number" ? change : parseFloat(String(change ?? "").replace("%", ""));
-      seen.add(k);
-      out.push({ ticker: k, market: market === "nse" ? "nse" : "global", change: isFinite(n) ? n : 0 });
-    };
-    topGainers.forEach((s: any) => add(s.ticker, s.market, s.change));
-    activeStocks.forEach((s: any) => add(s.ticker, s.symbol?.startsWith("NSE:") ? "nse" : "global", parseFloat(String(s.change ?? "").replace("%", ""))));
-    topLosers.forEach((s: any) => add(s.ticker, s.market, s.change));
-    return out.slice(0, 8);
-  }, [topGainers, topLosers, activeStocks]);
 
   const sectorData = useMemo(() => {
     const map = new Map<string, { totalChange: number; count: number }>();
@@ -535,20 +466,8 @@ export function DashboardPage() {
     return built;
   }, [activeStocks, watchlistItems, watchlistQuotes]);
 
-  // Prefer the live index feed; fall back to the bundled static snapshot when
-  // it is unavailable (in which case no "Updated" stamp is shown, since the
-  // static values carry no fresh timestamp).
-  const isNseIndex = (i: any) => {
-    const symbol = String(i?.symbol ?? "").toUpperCase();
-    const name = String(i?.name ?? "").toLowerCase();
-    return symbol.startsWith("NSE") || name.includes("nse") || name.includes("all share") || name.includes("nasi");
-  };
-  const indexRows: any[] = liveIndices.length > 0 ? liveIndices : indices;
-  const nseIndices = indexRows.filter(isNseIndex);
-  const globalIndices = indexRows.filter((i: any) => !isNseIndex(i));
-  const indexUpdatedLabel = liveIndices.length > 0 ? indicesUpdatedAt : null;
-  const bannerNse = nseIndices.find((i: any) => /20/.test(String(i?.name))) || nseIndices[0];
-  const bannerSp = globalIndices.find((i: any) => /s&p 500/i.test(String(i?.name))) || globalIndices[0];
+  const nseIndices = indices.filter(i => i.market === "NSE");
+  const globalIndices = indices.filter(i => i.market === "Global");
 
   const [newsItems, setNewsItems] = useState<NewsArticle[]>(fallbackNews);
   const [newsLoading, setNewsLoading] = useState(true);
@@ -776,32 +695,6 @@ export function DashboardPage() {
         ))}
       </div>
 
-      {/* Search & Trending */}
-      <Card className="border shadow-sm p-4 sm:p-5">
-        <StockSearchBar />
-        {trending.length > 0 && (
-          <div className="mt-3 flex items-center gap-x-2 gap-y-2 flex-wrap">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1 shrink-0">
-              <TrendingUp className="size-3.5 text-[#0D7490]" /> Trending
-            </span>
-            {trending.map((t) => (
-              <button
-                key={t.ticker}
-                onClick={() => navigate(`/app/stock/${t.ticker}?market=${t.market === "nse" ? "nse" : "us"}`)}
-                className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors hover:border-[#0D7490] hover:bg-[#0D7490]/5"
-              >
-                <span className="text-foreground">{t.ticker}</span>
-                {t.change !== 0 && (
-                  <span className={t.change >= 0 ? "text-emerald-600" : "text-red-500"}>
-                    {t.change >= 0 ? "+" : ""}{t.change.toFixed(2)}%
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </Card>
-
       {/* Welcome Banner */}
       <div className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] rounded-xl p-6 text-white relative overflow-hidden">
         <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/[0.15] rounded-full blur-xl animate-bubble-float" />
@@ -823,7 +716,7 @@ export function DashboardPage() {
             </p>
             <h2 className="text-lg sm:text-xl font-bold">Your portfolio is {enhancedTotals.pnlPercent >= 0 ? 'up' : 'down'} <span className={enhancedTotals.pnlPercent >= 0 ? 'text-green-300' : 'text-red-300'}>{enhancedTotals.pnlPercent >= 0 ? '+' : ''}{enhancedTotals.pnlPercent}%</span> today</h2>
             <p className="text-white/70 text-sm mt-1">
-              NSE 20: {bannerNse?.value ?? "—"} ({bannerNse?.change ?? "—"}) &middot; S&amp;P 500: {bannerSp?.value ?? "—"} ({bannerSp?.change ?? "—"})
+              NSE 20: {indices[0].value} ({indices[0].change}) &middot; S&P 500: {indices[1].value} ({indices[1].change})
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -845,22 +738,6 @@ export function DashboardPage() {
             </Link>
           </div>
         </div>
-      </div>
-
-      {/* Quick Links */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-        {quickLinks.map((item) => (
-          <Link
-            key={item.label}
-            to={item.to}
-            className="group flex items-center gap-2.5 rounded-xl border bg-card p-3 transition-all hover:border-[#0D7490] hover:shadow-sm"
-          >
-            <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 ${item.color}`}>
-              <item.icon className="size-4" />
-            </div>
-            <span className="text-xs font-medium text-foreground truncate">{item.label}</span>
-          </Link>
-        ))}
       </div>
 
       {/* Key Metrics */}
@@ -966,14 +843,7 @@ export function DashboardPage() {
               <div className="size-8 rounded-lg bg-[#0D7490]/10 flex items-center justify-center">
                 <BarChart3 className="size-4 text-[#0D7490]" />
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">NSE Indices</h3>
-                {indexUpdatedLabel && (
-                  <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <Clock className="size-2.5" /> Updated {indexUpdatedLabel}
-                  </p>
-                )}
-              </div>
+              <h3 className="text-sm font-semibold text-foreground">NSE Indices</h3>
             </div>
             <Link to="/app/markets" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
               All markets <ChevronRight className="size-3.5" />
@@ -1006,14 +876,7 @@ export function DashboardPage() {
               <div className="size-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center">
                 <Globe2 className="size-4 text-indigo-600 dark:text-indigo-400" />
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">Global Indices</h3>
-                {indexUpdatedLabel && (
-                  <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <Clock className="size-2.5" /> Updated {indexUpdatedLabel}
-                  </p>
-                )}
-              </div>
+              <h3 className="text-sm font-semibold text-foreground">Global Indices</h3>
             </div>
             <Link to="/app/markets" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
               View all <ChevronRight className="size-3.5" />
@@ -1197,14 +1060,7 @@ export function DashboardPage() {
               <div className="size-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
                 <TrendingUp className="size-4 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">Top Gainers</h3>
-                {moversUpdatedAt && (
-                  <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <Clock className="size-2.5" /> Updated {moversUpdatedAt}
-                  </p>
-                )}
-              </div>
+              <h3 className="text-sm font-semibold text-foreground">Top Gainers</h3>
             </div>
             <Link to="/app/markets" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
               All gainers <ChevronRight className="size-3.5" />
@@ -1247,14 +1103,7 @@ export function DashboardPage() {
               <div className="size-8 rounded-lg bg-red-100 dark:bg-red-950/40 flex items-center justify-center">
                 <TrendingDown className="size-4 text-red-600 dark:text-red-400" />
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-foreground">Top Losers</h3>
-                {moversUpdatedAt && (
-                  <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                    <Clock className="size-2.5" /> Updated {moversUpdatedAt}
-                  </p>
-                )}
-              </div>
+              <h3 className="text-sm font-semibold text-foreground">Top Losers</h3>
             </div>
             <Link to="/app/markets" className="text-xs font-medium text-[#0D7490] hover:underline flex items-center gap-0.5">
               All losers <ChevronRight className="size-3.5" />
