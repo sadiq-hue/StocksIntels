@@ -5187,16 +5187,34 @@ function scoreInsiderActivity(ownership) {
     };
   }
   const netShares = buyShares - sellShares;
-  const netRatio = (buyShares + sellShares) > 0 ? (buyShares - sellShares) / (buyShares + sellShares) : 0;
-  const countDiff = buys - sells;
-  const raw = 50 + netRatio * 40 + countDiff * 1.5;
-  // Recency: recent transactions (<=3 months) carry ~2x the weight of older ones.
+  const totalShares = buyShares + sellShares;
+  const netRatio = totalShares > 0 ? (buyShares - sellShares) / totalShares : 0;
+
+  // Asymmetric by design. Open-market insider BUYS are rare and informative;
+  // the typical insider transaction is a routine/planned SALE (10b5-1, RSU,
+  // diversification) and is a weak signal. Scoring buys and sells symmetrically
+  // made ~83% of US names read "extreme sell" — a near-constant bearish drag,
+  // not a differentiator. So: reward net buying; hold routine selling at
+  // neutral; penalise only broad, heavy selling.
+  let base;
+  if (buyShares > sellShares && buys > 0) {
+    const breadth = Math.min(buys, 5);
+    base = 50 + Math.min(45, netRatio * 45 + breadth * 3);
+  } else if (sells > 0) {
+    const pervasive = netRatio <= -0.85 && sells >= 3;
+    const heavy = netRatio <= -0.6 && sells >= 5;
+    base = pervasive ? 38 : heavy ? 45 : 50;
+  } else {
+    base = 50;
+  }
+
+  // Recency scales the deviation from neutral (recent conviction matters more).
   let recency = 1;
   if (latestTs > 0 && now > latestTs) {
     const ageMonths = (now - latestTs) / (30 * 24 * 60 * 60 * 1000);
     recency = ageMonths <= 3 ? 1.25 : ageMonths <= 6 ? 1.1 : 1;
   }
-  const score = Math.max(3, Math.min(97, Math.round(50 + (raw - 50) * recency)));
+  const score = Math.max(5, Math.min(95, Math.round(50 + (base - 50) * recency)));
   return {
     score, hasActivity: true, netShares, netShareRatio: Math.round(netRatio * 100) / 100,
     buyCount: buys, sellCount: sells, neutralCount: neutral,
@@ -5227,14 +5245,25 @@ function scoreNewsInsider(info) {
   const sells = Number(info.sells) || 0;
   if (buys + sells === 0) return null;
   const perEvent = cfg.news_per_event ?? 6;
-  const raw = 50 + (buys - sells) * perEvent;
+  // Same asymmetry as scoreInsiderActivity: director BUYING is the informative
+  // signal; routine selling is weak. Reward net buying, treat ordinary selling
+  // as near-neutral, and only penalise broad selling.
+  let base;
+  if (buys > sells && buys > 0) {
+    base = 50 + Math.min(45, (buys - sells) * perEvent + Math.min(buys, 5) * 2);
+  } else if (sells > 0) {
+    const pervasive = sells >= 3 && sells > buys * 3;
+    base = pervasive ? 40 : 48;
+  } else {
+    base = 50;
+  }
   // Recency: a fresh report (<=7 days) carries more weight than a stale one.
   let recency = 1;
   if (info.latestTs) {
     const ageDays = (Date.now() - Number(info.latestTs)) / 864e5;
     recency = ageDays <= 7 ? 1.3 : ageDays <= 21 ? 1.1 : 1;
   }
-  const score = Math.max(5, Math.min(95, Math.round(50 + (raw - 50) * recency)));
+  const score = Math.max(5, Math.min(95, Math.round(50 + (base - 50) * recency)));
   return {
     score, hasActivity: true, netShares: null, netShareRatio: null,
     buyCount: buys, sellCount: sells, neutralCount: 0,
