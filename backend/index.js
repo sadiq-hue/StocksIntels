@@ -2236,7 +2236,7 @@ async function snapshotPortfolioValue(userId) {
 }
 
 async function getMarketSnapshot() {
-  const NSE_TICKERS = ['SCOM', 'EQTY', 'KCB', 'EABL', 'ABSA', 'SBIC', 'KLG', 'OLYM', 'CRAY', 'BAMB', 'UMEM', 'KPLC', 'NMG', 'TOTL', 'STAN', 'COOP', 'JUB', 'KNRE', 'LKL', 'CIC', 'HFCK', 'IMH', 'NCBA', 'BAT', 'KUKZ', 'SASN', 'SCBK', 'KEGN', 'CTUM', 'BRIT', 'CARB', 'KQ', 'PORT', 'WTK', 'KAPC', 'CGEN', 'CABL', 'UMME', 'REA', 'EGAD', 'LBTY', 'SLAM', 'BOC', 'MSC', 'UNGA', 'FTGH', 'TPS', 'HAFR', 'EVRD', 'KPC'];
+  const NSE_TICKERS = ['SCOM', 'EQTY', 'KCB', 'EABL', 'ABSA', 'SBIC', 'KLG', 'OLYM', 'CRAY', 'BAMB', 'UMEM', 'KPLC', 'NMG', 'TOTL', 'STAN', 'COOP', 'JUB', 'KNRE', 'LKL', 'CIC', 'HFCK', 'IMH', 'NCBA', 'BAT', 'KUKZ', 'SASN', 'SCBK', 'KEGN', 'CTUM', 'BRIT', 'CARB', 'KQ', 'PORT', 'WTK', 'KAPC', 'CGEN', 'CABL', 'UMME', 'REA', 'EGAD', 'LBTY', 'SLAM', 'BOC', 'MSC', 'UNGA', 'FTGH', 'TPS', 'HAFR', 'EVRD', 'KPC', 'FMLY'];
   const GLOBAL_TICKERS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'NFLX', 'JPM', 'V', 'WMT', 'JNJ', 'PG', 'XOM', 'BAC', 'HD', 'DIS', 'CSCO', 'ADBE', 'CRM', 'INTC', 'AMD', 'PYPL', 'UBER', 'SQ', 'MA', 'UNH', 'COST', 'ABBV', 'CVX', 'PFE', 'TMO', 'ORCL', 'IBM', 'QCOM', 'AVGO', 'NKE', 'MRK', 'KO', 'PEP', 'MCD', 'BA', 'C', 'GS', 'MS', 'BK', 'AXP', 'CAT', 'GE', 'HON', 'LMT'];
   const indexSymbols = ['NSE:NSE20', 'NSE:NSEASI', 'NSE:NSE25', 'NSE:NSE10'];  const stockSymbols = [...NSE_TICKERS.map(t => 'NSE:' + t), ...GLOBAL_TICKERS];
   const allQuotes = await getQuotesBatch([...indexSymbols, ...stockSymbols]);
@@ -8567,6 +8567,7 @@ app.get('/api/ai/recommendations', async (req, res) => {
         { ticker: 'EQTY', name: 'Equity Group Holdings PLC', sector: 'Banking', market: 'NSE', currency: 'KES' },
         { ticker: 'KCB', name: 'KCB Group PLC', sector: 'Banking', market: 'NSE', currency: 'KES' },
         { ticker: 'EABL', name: 'East African Breweries PLC', sector: 'Manufacturing', market: 'NSE', currency: 'KES' },
+        { ticker: 'FMLY', name: 'Family Bank PLC', sector: 'Banking', market: 'NSE', currency: 'KES' },
         { ticker: 'AAPL', name: 'Apple Inc.', sector: 'Technology', market: 'Global', currency: 'USD' },
         { ticker: 'MSFT', name: 'Microsoft Corporation', sector: 'Technology', market: 'Global', currency: 'USD' },
         { ticker: 'NVDA', name: 'NVIDIA Corporation', sector: 'Technology', market: 'Global', currency: 'USD' },
@@ -12089,6 +12090,7 @@ async function initDatabase() {
         { ticker: 'LKL', name: 'Longhorn Publishers Ltd', sector: 'Media', market: 'NSE', currency: 'KES' },
         { ticker: 'UCHM', name: 'Uchumi Supermarkets PLC', sector: 'Commercial Services', market: 'NSE', currency: 'KES' },
         { ticker: 'AMAC', name: 'Africa Mega Agricorp PLC', sector: 'Manufacturing', market: 'NSE', currency: 'KES' },
+        { ticker: 'FMLY', name: 'Family Bank PLC', sector: 'Banking', market: 'NSE', currency: 'KES' },
         // ===== S&P 500 + NASDAQ GLOBAL STOCKS =====
         // Technology
         { ticker: 'AAPL', name: 'Apple Inc.', sector: 'Technology Hardware', market: 'Global', currency: 'USD' },
@@ -12474,6 +12476,15 @@ async function initDatabase() {
     } else {
       console.log('Stocks table already contains data, skipping seed');
     }
+
+    // Ensure recently-listed NSE tickers are searchable even on an already-seeded
+    // database (the seed block above only runs on a fresh, empty table). Family
+    // Bank listed as FMLY (ISIN KE9930006987).
+    await pool.query(
+      `INSERT INTO stocks (ticker, name, sector, market, currency) VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (ticker) DO UPDATE SET name = EXCLUDED.name, market = EXCLUDED.market, currency = EXCLUDED.currency`,
+      ['FMLY', 'Family Bank PLC', 'Banking', 'NSE', 'KES']
+    ).catch((err) => console.warn('ensure FMLY stock:', err.message));
 
     await pool.query(`CREATE TABLE IF NOT EXISTS subscription_plans (
       id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE,

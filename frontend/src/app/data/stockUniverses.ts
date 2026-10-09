@@ -115,6 +115,7 @@ export const kenyanStocks: StockListItem[] = [
   { ticker: "SCBK", name: "Standard Chartered Bank Kenya Ltd", price: 215.0, change: 1.8, volume: "0.4M", marketCap: "55B", sector: "Banking", pe: 11.5, dividend: 7.5, market: "nse", currency: "KES" },
   { ticker: "BKG", name: "BK Group PLC", price: 38.5, change: 0.7, volume: "0.3M", marketCap: "32B", sector: "Banking", pe: 10.8, dividend: 4.5, market: "nse", currency: "KES" },
   { ticker: "HFCK", name: "HF Group PLC", price: 5.85, change: -0.1, volume: "0.4M", marketCap: "4.5B", sector: "Banking", pe: 22.5, dividend: 0, market: "nse", currency: "KES" },
+  { ticker: "FMLY", name: "Family Bank PLC", price: 24.5, change: 0, volume: "0.1M", marketCap: "15B", sector: "Banking", pe: 0, dividend: 0, market: "nse", currency: "KES" },
 
   // COMMERCIAL AND SERVICES
   { ticker: "NMG", name: "Nation Media Group PLC", price: 185.0, change: -3.1, volume: "0.4M", marketCap: "15B", sector: "Media", pe: 9.4, dividend: 4.5, market: "nse", currency: "KES" },

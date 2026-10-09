@@ -156,7 +156,7 @@ const KNOWN_NAMES = {
   'SKL': 'Shri Krishana Overseas Ltd', 'SMWF': 'Satrix MSCI World Feeder ETF',
   'TCL': 'TransCentury Plc',
   'TOTL': 'Total Energies Kenya', 'JUB': 'Jubilee Insurance', 'KNRE': 'Kenya Reinsurance',
-  'CIC': 'CIC Insurance', 'HFCK': 'HF Group', 'IMH': 'I&M Holdings',
+  'CIC': 'CIC Insurance', 'HFCK': 'HF Group', 'FMLY': 'Family Bank PLC', 'IMH': 'I&M Holdings',
   'KLG': 'Kengen', 'OLYM': 'Olympia Capital', 'STAN': 'Standard Chartered Kenya',
   'SPCX': 'SpaceX Inc.',
   'NOK': 'Nokia Corp.', 'SMCI': 'Super Micro Computer Inc.', 'RKLB': 'Rocket Lab USA Inc.',
@@ -550,7 +550,7 @@ const NSE_SYMBOLS = [
   'KUKZ','KAPC','LIMT','WTK','SASN','REA','EGAD','CGEN','EQTY','KCB','COOP','ABSA','SBIC','NCBA','IMH','DTK','SCBK','BKG','HFCK',
   'NMG','SGL','TPSE','SCAN','KQ','XPRS','SMER','BAMB','PORT','CRWN','ARM','KPLC','KEGN','TOTL','UMME','JUB','KNRE','CIC','BRIT','LBTY','SLAM',
   'CTUM','OCH','HAFR','NSE','AMAC','EABL','BAT','BOC','CARB','UNGA','MSC','FTGH','EVRD','SCOM',
-  'LKL','NBV','UCHM','ALP','CABL','DCON','GLD','HBE','KPC','KURV','LAPR','SKL','SMWF','TCL',
+  'LKL','NBV','UCHM','ALP','CABL','DCON','GLD','HBE','KPC','KURV','LAPR','SKL','SMWF','TCL','FMLY',
 ];
 
 const US_SYMBOLS = [
