@@ -26,6 +26,24 @@ const planDetails: Record<string, { name: string; monthlyPrice: number; yearlyPr
     }])
   );
 
+// Small brand marks for the Bachs method rows (dependency-free, inline).
+function BrandChip({ label, className = "" }: { label: string; className?: string }) {
+  return (
+    <span className={`inline-flex items-center justify-center rounded px-1 h-4 text-[8px] font-extrabold tracking-tight leading-none ${className}`}>
+      {label}
+    </span>
+  );
+}
+
+function MastercardMark() {
+  return (
+    <span className="inline-flex items-center h-4" aria-label="Mastercard" title="Mastercard">
+      <span className="size-4 rounded-full bg-[#EB001B]" />
+      <span className="-ml-1.5 size-4 rounded-full bg-[#F79E1B] mix-blend-multiply" />
+    </span>
+  );
+}
+
 export function SubscriptionPage() {
   const { planId } = useParams<{ planId: string }>();
   const [searchParams] = useSearchParams();
@@ -388,31 +406,46 @@ export function SubscriptionPage() {
                         You'll be redirected to the Bachs secure checkout and can pay with any of these:
                       </p>
                       <div className="space-y-2">
-                        <div className="flex items-center gap-3 rounded-lg bg-white/70 border border-teal-100 p-3">
+                        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-white/70 border border-teal-100 p-3">
                           <div className="size-9 rounded-lg bg-[#0D7490]/10 flex items-center justify-center shrink-0">
                             <CreditCard className="size-4 text-[#0D7490]" />
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="text-sm font-bold text-teal-900">Card</p>
                             <p className="text-[11px] text-teal-700">Visa, Mastercard &amp; more</p>
                           </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <BrandChip label="VISA" className="bg-[#1A1F71] text-white" />
+                            <MastercardMark />
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 rounded-lg bg-white/70 border border-teal-100 p-3">
+                        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-white/70 border border-teal-100 p-3">
                           <div className="size-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
                             <Smartphone className="size-4 text-emerald-600" />
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="text-sm font-bold text-teal-900">Mobile Money</p>
                             <p className="text-[11px] text-teal-700">M-Pesa, Airtel Money &amp; more</p>
                           </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <BrandChip label="M-PESA" className="bg-[#43B02A] text-white" />
+                            <BrandChip label="Airtel" className="bg-[#E40000] text-white" />
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 rounded-lg bg-white/70 border border-teal-100 p-3">
+                        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-white/70 border border-teal-100 p-3">
                           <div className="size-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
                             <Bitcoin className="size-4 text-amber-600" />
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="text-sm font-bold text-teal-900">Crypto</p>
                             <p className="text-[11px] text-teal-700">USDT, USDC, ETH, SOL &amp; BNB</p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1 shrink-0">
+                            <span className="inline-flex items-center justify-center size-4 rounded-full bg-[#26A17B] text-white text-[9px] font-bold leading-none" title="Tether">₮</span>
+                            <span className="inline-flex items-center justify-center size-4 rounded-full bg-[#2775CA] text-white text-[9px] font-bold leading-none" title="USD Coin">$</span>
+                            <BrandChip label="ETH" className="bg-[#627EEA] text-white" />
+                            <BrandChip label="SOL" className="bg-black text-white" />
+                            <BrandChip label="BNB" className="bg-[#F3BA2F] text-black" />
                           </div>
                         </div>
                       </div>
