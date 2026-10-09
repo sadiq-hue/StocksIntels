@@ -37,9 +37,8 @@ export const PLANS: Plan[] = [
     id: "core",
     name: "Core",
     tagline: "Understand the market",
-    // TEMP TEST PRICE — revert to monthlyPrice: 9.83, yearlyPrice: 79.
-    monthlyPrice: 1,
-    yearlyPrice: 1,
+    monthlyPrice: 9.83,
+    yearlyPrice: 79,
     popular: false,
     highlights: [
       "AI market intelligence",
