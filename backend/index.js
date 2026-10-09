@@ -37,6 +37,7 @@ const payheroService = require('./payheroService');
 const paypalService = require('./paypalService');
 const nowPaymentsService = require('./nowPaymentsService');
 const pesapalService = require('./pesapalService');
+const bachsService = require('./bachsService');
 const indicesService = require('./indicesService');
 const { kellyFraction, computeCovarianceMatrix, monteCarloVaR, meanVarianceOptimize } = require('./portfolioOptimizer');
 const { generalLimiter, authLimiter, marketDataLimiter, aiLimiter } = require('./rateLimiter');
@@ -11322,6 +11323,176 @@ app.all('/api/payments/pesapal-ipn', express.urlencoded({ extended: true }), asy
   } catch (error) {
     console.error('[PESAPAL] IPN error:', error.message);
     res.status(200).send('OK');
+  }
+});
+
+// --- Bachs Checkout (cards + mobile money + crypto, one hosted session) ---
+// Activate a paid Bachs transaction: mark it success, create the subscription
+// for the purchased duration, and send the receipt. Idempotent — the guarded
+// UPDATE only fires while the row is still 'pending'.
+async function activateBachsTransaction(reference, callbackData) {
+  const txResult = await pool.query(
+    `UPDATE payment_transactions SET status = 'success', callback_data = $1, updated_at = NOW()
+     WHERE external_reference = $2 AND status = 'pending'
+     RETURNING id, user_id, plan_name, duration_months, amount, currency`,
+    [JSON.stringify(callbackData || {}), reference]
+  );
+  const tx = txResult.rows[0];
+  if (!tx) return false;
+  if (!tx.user_id) {
+    console.log(`[BACHS] Payment confirmed but no user_id on transaction: ref=${reference}`);
+    return true;
+  }
+  const tier = (tx.plan_name || 'pro').toLowerCase();
+  const months = parseInt(tx.duration_months) || 1;
+  const startDate = new Date();
+  const endDate = new Date(startDate);
+  endDate.setMonth(endDate.getMonth() + months);
+  const planRes = await pool.query('SELECT id FROM subscription_plans WHERE LOWER(name) = $1 LIMIT 1', [tier]);
+  const planId = planRes.rows[0]?.id || null;
+  const subRes = await pool.query(
+    `INSERT INTO subscriptions (user_id, plan_id, status, start_date, end_date)
+     VALUES ($1, $2, 'active', $3, $4) RETURNING id`,
+    [tx.user_id, planId, startDate, endDate]
+  );
+  const subscriptionId = subRes.rows[0]?.id || null;
+  await pool.query(
+    `UPDATE users SET subscription_tier = $1, subscription_status = 'active', subscription_start_date = $2, subscription_end_date = $3 WHERE id = $4`,
+    [tier, startDate, endDate, tx.user_id]
+  );
+  if (subscriptionId) {
+    await pool.query('UPDATE payment_transactions SET subscription_id = $1 WHERE id = $2', [subscriptionId, tx.id]);
+  }
+  console.log(`[BACHS] Subscription activated: user=${tx.user_id} tier=${tier} months=${months}`);
+  try { await awardCommission(tx.user_id, tier); } catch (e) { console.error('[BACHS] commission error:', e.message); }
+  try {
+    const userRes = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [tx.user_id]);
+    const { full_name: uName, email: uEmail } = userRes.rows[0] || {};
+    if (uEmail) {
+      await sendPaymentReceiptEmail(uEmail, {
+        userName: uName,
+        planName: tx.plan_name || 'Pro',
+        amount: tx.amount,
+        currency: tx.currency || 'USD',
+        period: months === 12 ? 'yearly' : 'monthly',
+        durationMonths: months,
+        paymentMethod: 'Bachs',
+        transactionRef: reference,
+        paidAt: new Date(),
+        startDate,
+        endDate,
+      });
+    }
+  } catch (mailErr) {
+    console.error('[RECEIPT] Failed to send receipt email:', mailErr.message);
+  }
+  return true;
+}
+
+app.post('/api/payments/bachs', async (req, res) => {
+  try {
+    const { amount, currency = 'USD', plan, userId, durationMonths, email, name, customerEmail, customerName } = req.body;
+    if (!amount) return res.status(400).json({ error: 'Amount is required' });
+    if (!bachsService.isConfigured()) return res.status(503).json({ error: 'Bachs is not configured' });
+
+    const planName = plan || 'Subscription';
+    const months = durationMonths || 1;
+    const externalRef = `BACHS-${Date.now()}-${String(Math.random()).slice(2, 8)}`;
+
+    const result = await bachsService.createCheckout({
+      amount,
+      currency,
+      reference: externalRef,
+      plan: planName,
+      durationMonths: months,
+      userId: userId || null,
+      email: email || customerEmail,
+      name: name || customerName,
+    });
+
+    await pool.query(
+      `INSERT INTO payment_transactions (user_id, amount, currency, provider, external_reference, status, plan_name, duration_months, callback_data)
+       VALUES ($1, $2, $3, 'bachs', $4, 'pending', $5, $6, $7)
+       ON CONFLICT (external_reference) DO NOTHING`,
+      [userId || null, amount, currency || 'USD', externalRef, planName, months, JSON.stringify({ checkout_id: result.checkoutId })]
+    );
+
+    res.json({ success: true, checkoutUrl: result.checkoutUrl, reference: externalRef, checkoutId: result.checkoutId });
+  } catch (error) {
+    const detail = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+    console.error('[BACHS] Checkout error:', detail);
+    res.status(500).json({ error: 'Failed to create Bachs checkout' });
+  }
+});
+
+// Bachs webhook. We do not have a signing secret by default, so the payload is
+// NOT trusted on its own: the checkout is re-queried from the Bachs API with
+// our key and only a verified paid session activates a subscription.
+app.post('/api/payments/bachs-webhook', async (req, res) => {
+  try {
+    const raw = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body);
+    if (!bachsService.verifyWebhook(raw, req.headers)) {
+      console.warn('[BACHS] webhook signature verification failed');
+      return res.status(400).json({ error: 'Invalid signature' });
+    }
+
+    const event = req.body || {};
+    const data = event.data || {};
+    if (event.type !== 'collection.succeeded') return res.json({ received: true, ignored: event.type });
+
+    const checkoutId = data.checkout_id || null;
+    const reference = data.reference || null;
+    if (!checkoutId && !reference) return res.json({ received: true });
+
+    // Trust-but-verify: confirm with the Bachs API before fulfilling.
+    let session = null;
+    if (checkoutId) {
+      try { session = await bachsService.getCheckout(checkoutId); } catch (e) { console.warn('[BACHS] re-query failed:', e.message); }
+    }
+    if (!bachsService.isPaid(session)) {
+      console.warn(`[BACHS] collection.succeeded not verified as paid (ref=${reference || '-'} checkout=${checkoutId || '-'})`);
+      return res.json({ received: true, verified: false });
+    }
+
+    const ref = reference || session.reference;
+    if (ref) await activateBachsTransaction(ref, { event: event.id || null, session_status: session.status, payment_status: session.payment_status, checkout_id: checkoutId, amount: data.amount, currency: data.currency });
+    res.json({ received: true });
+  } catch (error) {
+    console.error('[BACHS] webhook error:', error.message);
+    res.json({ received: true });
+  }
+});
+
+// Return-page confirmation / sweep: re-query the session and activate if paid,
+// so a lost webhook or a closed tab still ends in the right state.
+app.get('/api/payments/bachs-status', async (req, res) => {
+  try {
+    const { reference } = req.query;
+    if (!reference) return res.status(400).json({ error: 'reference required' });
+    const txRes = await pool.query(
+      `SELECT id, status, callback_data FROM payment_transactions WHERE external_reference = $1`,
+      [reference]
+    );
+    const tx = txRes.rows[0];
+    if (!tx) return res.json({ found: false });
+    if (tx.status === 'success') return res.json({ found: true, status: 'success' });
+
+    const checkoutId = tx.callback_data?.checkout_id;
+    if (checkoutId && bachsService.isConfigured()) {
+      try {
+        const session = await bachsService.getCheckout(checkoutId);
+        if (bachsService.isPaid(session)) {
+          await activateBachsTransaction(reference, { sweep: true, checkout_id: checkoutId, payment_status: session.payment_status });
+          return res.json({ found: true, status: 'success' });
+        }
+      } catch (e) {
+        console.warn('[BACHS] status re-query failed:', e.message);
+      }
+    }
+    return res.json({ found: true, status: tx.status });
+  } catch (error) {
+    console.error('[BACHS] status error:', error.message);
+    res.status(500).json({ error: 'Failed to check Bachs status' });
   }
 });
 

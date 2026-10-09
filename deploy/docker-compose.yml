@@ -67,6 +67,10 @@ services:
       PAYHERO_AUTH_TOKEN: ${PAYHERO_AUTH_TOKEN:-}
       PAYHERO_CHANNEL_ID: ${PAYHERO_CHANNEL_ID:-}
       PAYHERO_CALLBACK_URL: ${PAYHERO_CALLBACK_URL:-}
+      # Bachs (cards + mobile money + crypto)
+      BACHS_API_KEY: ${BACHS_API_KEY:-}
+      BACHS_API_URL: ${BACHS_API_URL:-https://sandbox-api.bachs.io}
+      BACHS_WEBHOOK_SECRET: ${BACHS_WEBHOOK_SECRET:-}
       FRONTEND_URL: ${FRONTEND_URL:-https://admin.stocksintels.com}
       APP_URL: ${APP_URL:-https://stocksintels.com}
       SMTP_HOST: ${SMTP_HOST:-}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, Navigate, useNavigate, useSearchParams } from "react-router";
-import { Check, CreditCard, Landmark, ArrowRight, Shield, Zap, Crown, Loader2, CheckCircle2, X, Bitcoin } from "lucide-react";
+import { Check, CreditCard, Landmark, ArrowRight, Shield, Zap, Crown, Loader2, CheckCircle2, X, Bitcoin, Wallet } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -37,7 +37,7 @@ export function SubscriptionPage() {
   const { planId } = useParams<{ planId: string }>();
   const [searchParams] = useSearchParams();
   const period = searchParams.get("period") === "yearly" ? "yearly" : "monthly";
-  const [paymentMethod, setPaymentMethod] = useState<"mpesa" | "crypto" | "card">("card");
+  const [paymentMethod, setPaymentMethod] = useState<"mpesa" | "crypto" | "card" | "bachs">("card");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -45,11 +45,14 @@ export function SubscriptionPage() {
   const [pollStatus, setPollStatus] = useState<"idle" | "waiting" | "success" | "failed">("idle");
   const [selectedCrypto, setSelectedCrypto] = useState<{ ticker: string; network: string }>({ ticker: "USDT", network: "ERC20" });
 
-  // Handle Crypto & Pesapal return redirects
+  // Handle Crypto, Pesapal & Bachs return redirects
   useEffect(() => {
     const cryptoStatus = searchParams.get("crypto");
     const pesapalStatus = searchParams.get("pesapal");
-    if (cryptoStatus === "success" || pesapalStatus === "success") {
+    const bachsStatus = searchParams.get("bachs") || "";
+    const bachsSuccess = bachsStatus.startsWith("success") || Boolean(searchParams.get("checkout_id"));
+    const bachsRef = searchParams.get("ref");
+    if (cryptoStatus === "success" || pesapalStatus === "success" || bachsSuccess) {
       setIsSuccess(true);
       trackEvent(MetaEvents.Purchase, {
         value: period === "yearly" ? selectedPlan.yearlyPrice : selectedPlan.monthlyPrice,
@@ -57,7 +60,7 @@ export function SubscriptionPage() {
         content_name: selectedPlan.name,
         content_type: "product",
         billing_period: period,
-        payment_method: cryptoStatus ? "crypto" : "card",
+        payment_method: bachsSuccess ? "bachs" : cryptoStatus ? "crypto" : "card",
       });
       trackXEvent(XEvents.Purchase, {
         value: (period === "yearly" ? selectedPlan.yearlyPrice : selectedPlan.monthlyPrice).toString(),
@@ -65,12 +68,17 @@ export function SubscriptionPage() {
         content_name: selectedPlan.name,
       });
       toast.success(`Successfully subscribed to ${selectedPlan.name}!`);
+      // Confirm the Bachs session server-side (covers a webhook that lagged or
+      // never arrived), then refresh the user while it settles.
+      if (bachsRef) {
+        fetch(`${import.meta.env.VITE_API_URL || "/api"}/payments/bachs-status?reference=${encodeURIComponent(bachsRef)}`).catch(() => {});
+      }
       let attempts = 0;
       const poll = setInterval(() => {
         refreshUser();
         if (++attempts >= 10) clearInterval(poll);
       }, 2000);
-    } else if (cryptoStatus === "cancelled" || pesapalStatus === "cancelled") {
+    } else if (cryptoStatus === "cancelled" || pesapalStatus === "cancelled" || bachsStatus.startsWith("cancelled")) {
       toast.error("Checkout was cancelled.");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -226,6 +234,27 @@ export function SubscriptionPage() {
         }
 
         window.location.href = data.checkoutUrl;
+      } else if (paymentMethod === "bachs") {
+        const res = await fetch(`${API_URL}/payments/bachs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: price,
+            currency: "USD",
+            plan: selectedPlan.name,
+            userId: user?.id,
+            durationMonths,
+            email: user?.email,
+            name: user?.full_name,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Failed to create Bachs checkout");
+        }
+
+        window.location.href = data.checkoutUrl;
       }
     } catch (error) {
       console.error("Subscription error:", error);
@@ -356,7 +385,7 @@ export function SubscriptionPage() {
                 Payment Method
               </h2>
               
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
                 <button
                   onClick={() => setPaymentMethod("mpesa")}
                   className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
@@ -383,6 +412,16 @@ export function SubscriptionPage() {
                 >
                   <CreditCard className={`w-6 h-6 ${paymentMethod === "card" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                   <span className={`text-sm font-bold ${paymentMethod === "card" ? "text-[#0D7490]" : "text-muted-foreground"}`}>Card</span>
+                </button>
+                <button
+                  onClick={() => setPaymentMethod("bachs")}
+                  className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
+                    paymentMethod === "bachs" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-muted hover:border-border"
+                  }`}
+                >
+                  <Wallet className={`w-6 h-6 ${paymentMethod === "bachs" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
+                  <span className={`text-sm font-bold ${paymentMethod === "bachs" ? "text-[#0D7490]" : "text-muted-foreground"}`}>Bachs</span>
+                  <span className="text-[9px] text-muted-foreground -mt-1 text-center leading-tight">Card · Mobile Money · Crypto</span>
                 </button>
               </div>
 
@@ -413,6 +452,16 @@ export function SubscriptionPage() {
                       <p className="text-[11px] text-indigo-800 leading-relaxed font-medium">
                         1. You will be redirected to the Pesapal secure checkout (a Kenyan gateway — cards &amp; M-Pesa, no business license required).<br />
                         2. Enter your debit/credit card details to pay.<br />
+                        3. Your subscription activates automatically once the payment is confirmed.
+                      </p>
+                    </div>
+                  </div>
+                ) : paymentMethod === "bachs" ? (
+                  <div className="space-y-4 animate-in fade-in duration-300">
+                    <div className="p-4 bg-teal-50 rounded-lg border border-teal-100">
+                      <p className="text-[11px] text-teal-800 leading-relaxed font-medium">
+                        1. You will be redirected to the Bachs secure checkout.<br />
+                        2. Pay with card, mobile money (M-Pesa, Airtel &amp; more), or crypto (USDT, USDC, ETH...).<br />
                         3. Your subscription activates automatically once the payment is confirmed.
                       </p>
                     </div>
