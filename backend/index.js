@@ -12486,6 +12486,14 @@ async function initDatabase() {
       ['FMLY', 'Family Bank PLC', 'Banking', 'NSE', 'KES']
     ).catch((err) => console.warn('ensure FMLY stock:', err.message));
 
+    // Family Bank was previously mis-keyed as FABL (which is Faysal Bank,
+    // Pakistan) in the stocks table. Deactivate that stale row so search returns
+    // only the correct FMLY listing.
+    await pool.query(
+      `UPDATE stocks SET is_active = false WHERE ticker = $1 AND name ILIKE $2`,
+      ['FABL', '%family bank%']
+    ).catch(() => {});
+
     await pool.query(`CREATE TABLE IF NOT EXISTS subscription_plans (
       id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE,
       description TEXT, price_kes NUMERIC(15,2) NOT NULL DEFAULT 0,
