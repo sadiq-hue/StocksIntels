@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, Navigate, useNavigate, useSearchParams } from "react-router";
-import { Check, CreditCard, Landmark, ArrowRight, Shield, Zap, Crown, Loader2, CheckCircle2, X, Bitcoin, Wallet } from "lucide-react";
+import { Check, CreditCard, Landmark, ArrowRight, Shield, Zap, Crown, Loader2, CheckCircle2, X, Bitcoin, Wallet, Smartphone } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { ThemeToggle } from "../components/ThemeToggle";
@@ -9,13 +9,6 @@ import { useAuth } from "../auth/AuthContext";
 import { trackEvent, MetaEvents } from "../utils/metaPixel";
 import { trackXEvent, XEvents } from "../utils/xPixel";
 import { PLANS, planById } from "../data/plans";
-
-const cryptoOptions = [
-  { ticker: "BTC", name: "Bitcoin", networks: ["Bitcoin", "Lightning network"] },
-  { ticker: "ETH", name: "Ethereum", networks: ["Ethereum network"] },
-  { ticker: "USDT", name: "Tether", networks: ["ERC20", "TRC20"] },
-  { ticker: "USDC", name: "USD Coin", networks: ["ERC20"] },
-];
 
 const PLAN_ICONS: Record<string, typeof Shield> = { core: Zap, pro: Shield, premium: Crown };
 
@@ -37,13 +30,12 @@ export function SubscriptionPage() {
   const { planId } = useParams<{ planId: string }>();
   const [searchParams] = useSearchParams();
   const period = searchParams.get("period") === "yearly" ? "yearly" : "monthly";
-  const [paymentMethod, setPaymentMethod] = useState<"mpesa" | "crypto" | "card" | "bachs">("card");
+  const [paymentMethod, setPaymentMethod] = useState<"mpesa" | "bachs">("bachs");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [paymentRef, setPaymentRef] = useState("");
   const [pollStatus, setPollStatus] = useState<"idle" | "waiting" | "success" | "failed">("idle");
-  const [selectedCrypto, setSelectedCrypto] = useState<{ ticker: string; network: string }>({ ticker: "USDT", network: "ERC20" });
 
   // Handle Crypto, Pesapal & Bachs return redirects
   useEffect(() => {
@@ -194,46 +186,6 @@ export function SubscriptionPage() {
         };
 
         await poll();
-      } else if (paymentMethod === "crypto") {
-        const res = await fetch(`${API_URL}/payments/crypto`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: price,
-            currency: "USD",
-            plan: selectedPlan.name,
-            userId: user?.id,
-            durationMonths,
-            cryptoTicker: selectedCrypto.ticker,
-            cryptoNetwork: selectedCrypto.network,
-          }),
-        });
-
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || "Failed to create crypto checkout");
-        }
-
-        window.location.href = data.checkoutUrl;
-      } else if (paymentMethod === "card") {
-        const res = await fetch(`${API_URL}/payments/pesapal`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: price,
-            currency: "USD",
-            plan: selectedPlan.name,
-            userId: user?.id,
-            durationMonths,
-          }),
-        });
-
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || "Failed to create card checkout");
-        }
-
-        window.location.href = data.checkoutUrl;
       } else if (paymentMethod === "bachs") {
         const res = await fetch(`${API_URL}/payments/bachs`, {
           method: "POST",
@@ -385,43 +337,26 @@ export function SubscriptionPage() {
                 Payment Method
               </h2>
               
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-                <button
-                  onClick={() => setPaymentMethod("mpesa")}
-                  className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
-                    paymentMethod === "mpesa" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-muted hover:border-border"
-                  }`}
-                >
-                  <Landmark className={`w-6 h-6 ${paymentMethod === "mpesa" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
-                  <span className={`text-sm font-bold ${paymentMethod === "mpesa" ? "text-[#0D7490]" : "text-muted-foreground"}`}>M-Pesa</span>
-                </button>
-                <button
-                  onClick={() => setPaymentMethod("crypto")}
-                  className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
-                    paymentMethod === "crypto" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-muted hover:border-border"
-                  }`}
-                >
-                  <Bitcoin className={`w-6 h-6 ${paymentMethod === "crypto" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
-                  <span className={`text-sm font-bold ${paymentMethod === "crypto" ? "text-[#0D7490]" : "text-muted-foreground"}`}>Crypto</span>
-                </button>
-                <button
-                  onClick={() => setPaymentMethod("card")}
-                  className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
-                    paymentMethod === "card" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-muted hover:border-border"
-                  }`}
-                >
-                  <CreditCard className={`w-6 h-6 ${paymentMethod === "card" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
-                  <span className={`text-sm font-bold ${paymentMethod === "card" ? "text-[#0D7490]" : "text-muted-foreground"}`}>Card</span>
-                </button>
+              <div className="grid grid-cols-2 gap-3 mb-8">
                 <button
                   onClick={() => setPaymentMethod("bachs")}
-                  className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${
+                  className={`p-4 border-2 rounded-xl flex flex-col items-center gap-1.5 transition-all ${
                     paymentMethod === "bachs" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-muted hover:border-border"
                   }`}
                 >
                   <Wallet className={`w-6 h-6 ${paymentMethod === "bachs" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
                   <span className={`text-sm font-bold ${paymentMethod === "bachs" ? "text-[#0D7490]" : "text-muted-foreground"}`}>Bachs</span>
-                  <span className="text-[9px] text-muted-foreground -mt-1 text-center leading-tight">Card · Mobile Money · Crypto</span>
+                  <span className="text-[9px] text-muted-foreground text-center leading-tight">Cards · Mobile Money · Crypto</span>
+                </button>
+                <button
+                  onClick={() => setPaymentMethod("mpesa")}
+                  className={`p-4 border-2 rounded-xl flex flex-col items-center gap-1.5 transition-all ${
+                    paymentMethod === "mpesa" ? "border-[#0D7490] bg-[#0D7490]/5" : "border-muted hover:border-border"
+                  }`}
+                >
+                  <Landmark className={`w-6 h-6 ${paymentMethod === "mpesa" ? "text-[#0D7490]" : "text-muted-foreground"}`} />
+                  <span className={`text-sm font-bold ${paymentMethod === "mpesa" ? "text-[#0D7490]" : "text-muted-foreground"}`}>M-Pesa</span>
+                  <span className="text-[9px] text-muted-foreground text-center leading-tight">PayHero STK push</span>
                 </button>
               </div>
 
@@ -446,107 +381,45 @@ export function SubscriptionPage() {
                       </p>
                     </div>
                   </div>
-                ) : paymentMethod === "card" ? (
-                  <div className="space-y-4 animate-in fade-in duration-300">
-                    <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
-                      <p className="text-[11px] text-indigo-800 leading-relaxed font-medium">
-                        1. You will be redirected to the Pesapal secure checkout (a Kenyan gateway — cards &amp; M-Pesa, no business license required).<br />
-                        2. Enter your debit/credit card details to pay.<br />
-                        3. Your subscription activates automatically once the payment is confirmed.
-                      </p>
-                    </div>
-                  </div>
-                ) : paymentMethod === "bachs" ? (
-                  <div className="space-y-4 animate-in fade-in duration-300">
-                    <div className="p-4 bg-teal-50 rounded-lg border border-teal-100">
-                      <p className="text-[11px] text-teal-800 leading-relaxed font-medium">
-                        1. You will be redirected to the Bachs secure checkout.<br />
-                        2. Pay with card, mobile money (M-Pesa, Airtel &amp; more), or crypto (USDT, USDC, ETH...).<br />
-                        3. Your subscription activates automatically once the payment is confirmed.
-                      </p>
-                    </div>
-                  </div>
                 ) : (
                   <div className="space-y-4 animate-in fade-in duration-300">
-                    <div className="p-4 bg-amber-50 rounded-lg border border-amber-100">
-                      <p className="text-xs text-amber-800 leading-relaxed font-medium mb-3">
-                        Use the same network to deposit and withdraw funds. This is needed to avoid payment loss. Note, the lowest-fee option isn't always the best choice for you.
+                    <div className="rounded-xl border border-teal-100 bg-teal-50 p-4">
+                      <p className="text-[11px] text-teal-800 leading-relaxed font-medium mb-3">
+                        You'll be redirected to the Bachs secure checkout and can pay with any of these:
                       </p>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="border-b border-amber-200">
-                              <th className="w-8 py-2" />
-                              <th className="text-left py-2 pr-4 font-bold text-amber-900">Ticker</th>
-                              <th className="text-left py-2 pr-4 font-bold text-amber-900">Name</th>
-                              <th className="text-left py-2 font-bold text-amber-900">Network</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {cryptoOptions.map((c) => {
-                              const isSelected = selectedCrypto.ticker === c.ticker;
-                              return c.networks.length === 1 ? (
-                                <tr
-                                  key={c.ticker}
-                                  className={`border-b border-amber-100 cursor-pointer transition-colors ${isSelected ? "bg-amber-100" : "hover:bg-amber-50"}`}
-                                  onClick={() => setSelectedCrypto({ ticker: c.ticker, network: c.networks[0] })}
-                                >
-                                  <td className="py-2 pr-2">
-                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-[#0D7490]" : "border-border"}`}>
-                                       {isSelected && <div className="w-2 h-2 rounded-full bg-[#0D7490]" />}
-                                    </div>
-                                  </td>
-                                  <td className="py-2 pr-4 font-bold text-amber-900">{c.ticker}</td>
-                                  <td className="py-2 pr-4 text-amber-800">{c.name}</td>
-                                  <td className="py-2 text-amber-800">{c.networks[0]}</td>
-                                </tr>
-                              ) : (
-                                <tr key={c.ticker}>
-                                  <td className="py-2 pr-2 align-top pt-3">
-                                    <div
-                                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center cursor-pointer ${isSelected ? "border-[#0D7490]" : "border-border"}`}
-                                      onClick={() => setSelectedCrypto({ ticker: c.ticker, network: c.networks[0] })}
-                                    >
-                                      {isSelected && <div className="w-2 h-2 rounded-full bg-[#0D7490]" />}
-                                    </div>
-                                  </td>
-                                  <td className="py-2 pr-4 align-top pt-3 font-bold text-amber-900">{c.ticker}</td>
-                                  <td className="py-2 pr-4 align-top pt-3 text-amber-800">{c.name}</td>
-                                  <td className="py-2 text-amber-800">
-                                    {c.networks.length > 1 ? (
-                                      <div className="flex flex-col gap-1">
-                                        {c.networks.map((net) => {
-                                          const netSelected = isSelected && selectedCrypto.network === net;
-                                          return (
-                                            <button
-                                              key={net}
-                                              type="button"
-                                              className={`text-left px-2 py-1 rounded text-[11px] font-medium transition-colors ${
-                                                netSelected
-                                                  ? "bg-[#0D7490] text-white"
-                                                  : "bg-amber-100 text-amber-800 hover:bg-amber-200"
-                                              }`}
-                                              onClick={() => setSelectedCrypto({ ticker: c.ticker, network: net })}
-                                            >
-                                              {net}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    ) : (
-                                      c.networks[0]
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 rounded-lg bg-white/70 border border-teal-100 p-3">
+                          <div className="size-9 rounded-lg bg-[#0D7490]/10 flex items-center justify-center shrink-0">
+                            <CreditCard className="size-4 text-[#0D7490]" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-teal-900">Card</p>
+                            <p className="text-[11px] text-teal-700">Visa, Mastercard &amp; more</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 rounded-lg bg-white/70 border border-teal-100 p-3">
+                          <div className="size-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                            <Smartphone className="size-4 text-emerald-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-teal-900">Mobile Money</p>
+                            <p className="text-[11px] text-teal-700">M-Pesa, Airtel Money &amp; more</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 rounded-lg bg-white/70 border border-teal-100 p-3">
+                          <div className="size-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                            <Bitcoin className="size-4 text-amber-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-teal-900">Crypto</p>
+                            <p className="text-[11px] text-teal-700">USDT, USDC, ETH, SOL &amp; BNB</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
-                      <p className="text-[11px] text-purple-800 leading-relaxed font-medium">
-                        You'll be redirected to NowPayments to complete your purchase with <strong>{selectedCrypto.ticker}</strong> on <strong>{selectedCrypto.network}</strong>.
+                    <div className="p-4 bg-teal-50 rounded-lg border border-teal-100">
+                      <p className="text-[11px] text-teal-800 leading-relaxed font-medium">
+                        After you subscribe, your account activates automatically once the payment is confirmed.
                       </p>
                     </div>
                   </div>
