@@ -45,7 +45,7 @@ async function createCheckout({ amount, currency = 'USD', reference, plan, durat
   const payload = {
     pricing: { currency, amount: Number(amount).toFixed(2) },
     reference: String(reference).slice(0, 128),
-    success_url: `${FRONTEND_URL}/subscribe/${slug}?period=${period}&bachs=success`,
+    success_url: `${FRONTEND_URL}/subscribe/${slug}?period=${period}&bachs=success&ref=${encodeURIComponent(String(reference))}`,
     cancel_url: `${FRONTEND_URL}/subscribe/${slug}?period=${period}&bachs=cancelled`,
     expires_in_minutes: 60,
     metadata: {
