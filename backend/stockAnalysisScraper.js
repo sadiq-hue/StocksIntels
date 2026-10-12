@@ -160,6 +160,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
     const divYieldPct = rnum(['Dividend Yield']);
     const fcfYieldPct = rnum(['Free Cash Flow Yield', 'FCF Yield']);
     const earnYieldPct = rnum(['Earnings Yield']);
+    const mcapRaw = rnum(['Market Capitalization', 'Market Cap']);
 
     const incomeStatement = {
       date: i0.date,
@@ -186,6 +187,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
     };
     const keyMetrics = {
       date: i0.date,
+      marketCap: mcapRaw != null ? mcapRaw * M : null,
       peRatio: rnum(['PE Ratio', 'P/E Ratio']),
       pbRatio: rnum(['PB Ratio', 'P/B Ratio', 'Price/Book']),
       priceToSalesRatio: rnum(['PS Ratio', 'Price/Sales']),
