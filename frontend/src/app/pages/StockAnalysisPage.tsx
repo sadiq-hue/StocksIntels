@@ -668,7 +668,7 @@ export function StockAnalysisPage() {
       >
         <TabsList className="bg-muted/60 border border-border/60 p-1 rounded-xl w-full sm:w-auto">
           <TabsTrigger value="nse" className="flex-1 sm:flex-none data-[state=active]:bg-[#0D7490] data-[state=active]:text-white rounded-lg transition-all">
-            Kenyan Stocks
+            African Stocks
           </TabsTrigger>
           <TabsTrigger value="global" className="flex-1 sm:flex-none data-[state=active]:bg-[#0D7490] data-[state=active]:text-white rounded-lg transition-all">
             Global Stocks
@@ -721,7 +721,7 @@ export function StockAnalysisPage() {
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-sm text-foreground">
-                  {activeMarket === "nse" ? "Kenyan Stocks" : "Global Stocks"}
+                  {activeMarket === "nse" ? "African Stocks" : "Global Stocks"}
                 </h3>
                 <Badge variant="secondary" className="rounded-full text-xs font-medium">
                   {stockUniverse.length}
