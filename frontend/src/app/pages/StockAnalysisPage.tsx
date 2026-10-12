@@ -509,6 +509,13 @@ export function StockAnalysisPage() {
     let cancelled = false;
     setFinancialReport(null);
     setStockSignal(null);
+    // Market intelligence is only produced for the covered (NSE/US) universe.
+    // Skip the fetch for African exchanges (NGX/JSE) so no placeholder rating is
+    // ever shown for a market the engine does not analyse.
+    if (activeSelection.market === 'ngx' || activeSelection.market === 'jse') {
+      setLoadingData(false);
+      return;
+    }
     const fetchData = async () => {
       setLoadingData(true);
       const userIdParam = user?.id ? `?userId=${user.id}` : '';
@@ -533,7 +540,7 @@ export function StockAnalysisPage() {
     };
     fetchData();
     return () => { cancelled = true; };
-  }, [activeSelection.ticker, user?.id]);
+  }, [activeSelection.ticker, activeSelection.market, user?.id]);
 
   const displayPrice = regularPrice;
   const displayChange = liveQuote?.changePercent ?? activeSelection.change;
