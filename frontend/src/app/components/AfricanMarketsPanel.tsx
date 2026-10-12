@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router";
-import { Card } from "./ui/card";
-import { TrendingUp, TrendingDown, Loader2, Search, Globe2 } from "lucide-react";
+import { Link } from "react-router";
+import { TrendingUp, TrendingDown, Loader2, Search } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL || "/api";
 
@@ -28,10 +27,9 @@ function fmt(currency: string, v: number) {
   return `${prefix}${(Number.isFinite(v) ? v : 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function AfricanMarketsPanel() {
-  const [searchParams] = useSearchParams();
-  const wanted = (searchParams.get("exchange") || "").toUpperCase();
-  const [exchange, setExchange] = useState<Ex>(wanted === "JSE" ? "JSE" : "NGX");
+// Content-only NGX/JSE view (no header/tabs) — rendered inside the Markets
+// page's consolidated "African Activities" section.
+export function AfricanMarketsPanel({ exchange }: { exchange: Ex }) {
   const [stocks, setStocks] = useState<Row[]>([]);
   const [gainers, setGainers] = useState<Row[]>([]);
   const [losers, setLosers] = useState<Row[]>([]);
@@ -74,33 +72,10 @@ export function AfricanMarketsPanel() {
   const open = status ? status[exchange === "NGX" ? "ngx" : "jse"] : null;
 
   return (
-    <Card className="border shadow-sm p-4 md:p-5">
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="size-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center">
-            <Globe2 className="size-4 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">African Markets</h3>
-            <p className="text-[11px] text-muted-foreground">Nigeria &amp; South Africa &middot; delayed ~15 min</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1 ml-auto rounded-lg border p-1">
-          {(["NGX", "JSE"] as Ex[]).map(ex => (
-            <button
-              key={ex}
-              onClick={() => setExchange(ex)}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${exchange === ex ? "bg-[#0D7490] text-white" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              {ex}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 mb-4 text-xs">
+    <div className="p-4 md:p-5">
+      <div className="flex flex-wrap items-center gap-2 mb-3 text-xs">
         <span className="font-semibold text-foreground">{meta.flag} {meta.name}</span>
-        <span className="text-muted-foreground">&middot; {meta.currency} &middot; {meta.country}</span>
+        <span className="text-muted-foreground">&middot; {meta.currency} &middot; delayed ~15 min</span>
         {open != null && (
           <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium border ${open ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-muted text-muted-foreground"}`}>
             <span className={`size-1.5 rounded-full ${open ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`} />
@@ -193,6 +168,6 @@ export function AfricanMarketsPanel() {
           </div>
         </>
       )}
-    </Card>
+    </div>
   );
 }

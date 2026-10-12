@@ -75,6 +75,10 @@ const MarketPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [africaTab, setAfricaTab] = useState<'nse' | 'ngx' | 'jse'>(() => {
+    const ex = (searchParams.get('exchange') || '').toUpperCase();
+    return ex === 'NGX' ? 'ngx' : ex === 'JSE' ? 'jse' : 'nse';
+  });
   const [showSettings, setShowSettings] = useState(false);
   const [emailAlerts, setEmailAlerts] = useState(() => {
     return localStorage.getItem('market_sentiment_emails') === 'true';
@@ -170,6 +174,9 @@ const MarketPage: React.FC = () => {
     if (searchParams.get('settings') === 'true') {
       setShowSettings(true);
     }
+    const ex = (searchParams.get('exchange') || '').toUpperCase();
+    if (ex === 'NGX') setAfricaTab('ngx');
+    else if (ex === 'JSE') setAfricaTab('jse');
   }, [searchParams]);
 
   // Load sentiment preference from backend on mount (if logged in)
@@ -634,31 +641,57 @@ const MarketPage: React.FC = () => {
         </div>
       </div>
 
-      {/* NGX (Nigeria) & JSE (South Africa) */}
-      <AfricanMarketsPanel />
-
-      {/* Dual Windows */}
+      {/* African Activities (NSE / NGX / JSE) + US & Global */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <MarketWindow
-            title="NSE Activity"
-            icon={Landmark}
-            stocks={paginatedNse}
-            search={nseSearch}
-            setSearch={setNseSearch}
-            sort={nseSort}
-            setSort={setNseSort}
-            accentColor="#0D7490"
-            currency="KES"
-            favorites={favorites}
-            toggleFavorite={toggleFavorite}
-            page={nsePage}
-            setPage={setNsePage}
-            totalPages={nsePages}
-            totalCount={filteredNse.length}
-            yahooResults={nseYahooResults}
-            yahooSearching={nseYahooSearching}
-            onStockClick={(stock: any) => navigate(`/app/stock/${stock.symbol?.replace(/^(NSE|NYSE|NASDAQ|AMEX):/, '')}?market=nse`)}
-          />
+        <div className="bg-card rounded-xl border shadow-sm overflow-hidden flex flex-col">
+          <div className="px-5 py-4 border-b bg-muted/30 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-[#0D7490]/15 flex items-center justify-center">
+                <Landmark className="size-4 text-[#0D7490]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">African Activities</h3>
+                <span className="text-xs text-muted-foreground">NSE Kenya &middot; NGX Nigeria &middot; JSE South Africa</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 rounded-lg border p-1">
+              {(["nse", "ngx", "jse"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setAfricaTab(t)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${africaTab === t ? "bg-[#0D7490] text-white" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {t.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+          {africaTab === "nse" ? (
+            <MarketWindow
+              embedded
+              hideHeader
+              title="NSE"
+              stocks={paginatedNse}
+              search={nseSearch}
+              setSearch={setNseSearch}
+              sort={nseSort}
+              setSort={setNseSort}
+              accentColor="#0D7490"
+              currency="KES"
+              favorites={favorites}
+              toggleFavorite={toggleFavorite}
+              page={nsePage}
+              setPage={setNsePage}
+              totalPages={nsePages}
+              totalCount={filteredNse.length}
+              yahooResults={nseYahooResults}
+              yahooSearching={nseYahooSearching}
+              onStockClick={(stock: any) => navigate(`/app/stock/${stock.symbol?.replace(/^(NSE|NYSE|NASDAQ|AMEX):/, '')}?market=nse`)}
+            />
+          ) : (
+            <AfricanMarketsPanel exchange={africaTab === "ngx" ? "NGX" : "JSE"} />
+          )}
+        </div>
         <MarketWindow
             title="US & Global Activity"
             icon={Globe2}
@@ -836,14 +869,17 @@ const MarketWindow = ({
   totalCount,
   yahooResults,
   yahooSearching,
-  onStockClick
+  onStockClick,
+  embedded,
+  hideHeader
 }: any) => {
   const displayStocks = stocks.length > 0 ? stocks : (yahooResults || []);
   const isShowingYahoo = stocks.length === 0 && yahooResults?.length > 0;
 
   return (
-  <div className="flex flex-col h-full bg-card rounded-xl border shadow-sm overflow-hidden">
+  <div className={`flex flex-col h-full overflow-hidden ${embedded ? '' : 'bg-card rounded-xl border shadow-sm'}`}>
     {/* Header */}
+    {!hideHeader && (
     <div className="px-5 py-4 border-b bg-muted/30 flex items-center justify-between">
       <div className="flex items-center gap-3">
         <div className="size-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accentColor}15` }}>
@@ -858,6 +894,7 @@ const MarketWindow = ({
         {currency}
       </Badge>
     </div>
+    )}
 
     {/* Search & Sort */}
     <div className="px-3 sm:px-4 py-3 border-b flex items-center gap-1.5 sm:gap-2">
