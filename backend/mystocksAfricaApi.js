@@ -255,6 +255,8 @@ async function listMovers(exchange, direction) {
       currency: r.currency || (EXCHANGES[exchange] || EXCHANGES.NSE).currency,
       assetType: r.assetType || r.asset_type || null,
       listingStatus: r.listingStatus || r.listing_status || null,
+      stale: Boolean(r.stale),
+      asOf: r.asOf || r.timestamp || null,
       price: Number(r.price) || 0,
       changePct: (Number(r.changePct) || 0) * 100,
       volume: Number(r.volume) || 0,
