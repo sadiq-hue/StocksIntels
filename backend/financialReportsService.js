@@ -864,6 +864,19 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
       return await sa.getFinancialReport(symbol, period, limit);
     }
 
+    // JSE: Yahoo (.JO) covers most large caps; small caps it misses fall back to
+    // the stockanalysis.com scraper (which also serves JSE).
+    if (/^JSE:/i.test(symbol)) {
+      const ticker = symbol.slice(4).toUpperCase();
+      const yahoo = await yahooFinanceScraper.getFinancialReport(`${ticker}.JO`, period, limit).catch(() => null);
+      if (yahoo && yahoo.success && (yahoo.data?.incomeStatementHistory || []).length > 0) {
+        if (yahoo.data.profile) { yahoo.data.profile.currency = 'ZAR'; yahoo.data.profile.exchange = 'JSE'; }
+        return yahoo;
+      }
+      const sa = require('./stockAnalysisScraper');
+      return await sa.getFinancialReport(symbol, period, limit);
+    }
+
     const isUs = edgarService.isUsStock(symbol);
 
     // NSE-listed stocks: serve local NSE data only. Yahoo Finance / SEC EDGAR have

@@ -281,7 +281,7 @@ export function StockAnalysisPage() {
   const activeSelection = stockUniverse.find((s) => s.ticker === selectedStock.ticker) || selectedStock;
   // Financial statements live under different providers per market: JSE via Yahoo
   // (TICKER.JO), NGX via the stockanalysis.com scraper (NGX:TICKER), NSE/US as-is.
-  const finSymbol = activeSelection.market === 'jse' ? `${activeSelection.ticker}.JO`
+  const finSymbol = activeSelection.market === 'jse' ? `JSE:${activeSelection.ticker}`
     : activeSelection.market === 'ngx' ? `NGX:${activeSelection.ticker}`
     : activeSelection.ticker;
 
