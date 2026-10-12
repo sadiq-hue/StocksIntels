@@ -864,17 +864,22 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
       return await sa.getFinancialReport(symbol, period, limit);
     }
 
-    // JSE: Yahoo (.JO) covers most large caps; small caps it misses fall back to
-    // the stockanalysis.com scraper (which also serves JSE).
+    // JSE: the stockanalysis.com scraper is the primary source — it returns the
+    // full statement singletons, ratios AND market cap the frontend needs. Yahoo
+    // (.JO) is the fallback for names the scraper doesn't cover.
     if (/^JSE:/i.test(symbol)) {
       const ticker = symbol.slice(4).toUpperCase();
+      const sa = require('./stockAnalysisScraper');
+      const saReport = await sa.getFinancialReport(symbol, period, limit).catch(() => null);
+      if (saReport && saReport.success && (saReport.data?.incomeStatementHistory || []).length > 0) {
+        return saReport;
+      }
       const yahoo = await yahooFinanceScraper.getFinancialReport(`${ticker}.JO`, period, limit).catch(() => null);
       if (yahoo && yahoo.success && (yahoo.data?.incomeStatementHistory || []).length > 0) {
         if (yahoo.data.profile) { yahoo.data.profile.currency = 'ZAR'; yahoo.data.profile.exchange = 'JSE'; }
         return yahoo;
       }
-      const sa = require('./stockAnalysisScraper');
-      return await sa.getFinancialReport(symbol, period, limit);
+      return saReport || yahoo || { success: false, symbol: ticker, error: `No financial data for ${ticker}` };
     }
 
     const isUs = edgarService.isUsStock(symbol);
