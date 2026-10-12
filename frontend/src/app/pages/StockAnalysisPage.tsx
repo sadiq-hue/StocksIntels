@@ -137,7 +137,11 @@ export function StockAnalysisPage() {
   const initialUrl = resolveUrlTicker();
 
   const [activeMarket, setActiveMarket] = useState<StockMarket>(initialUrl?.market || "nse");
-  const stockUniverse = activeMarket === "nse" ? kenyanStocks : globalStocks;
+  const [africaUniverse, setAfricaUniverse] = useState<StockListItem[]>([]);
+  const stockUniverse = useMemo(
+    () => (activeMarket === "nse" ? [...kenyanStocks, ...africaUniverse] : globalStocks),
+    [activeMarket, africaUniverse]
+  );
   const [selectedStock, setSelectedStock] = useState<StockListItem>(initialUrl?.stock || stockUniverse[0]);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"ticker" | "price" | "change" | "volume">("ticker");
@@ -225,6 +229,34 @@ export function StockAnalysisPage() {
       }
     }
   }, [urlTicker]);
+
+  // Load NGX (Nigeria) & JSE (South Africa) listings into the African Stocks tab,
+  // alongside the Kenyan NSE universe.
+  useEffect(() => {
+    let dead = false;
+    Promise.all([
+      fetch(`${API_URL}/africa/stocks?exchange=NGX&limit=200`).then(r => (r.ok ? r.json() : null)),
+      fetch(`${API_URL}/africa/stocks?exchange=JSE&limit=200`).then(r => (r.ok ? r.json() : null)),
+    ]).then(([ngx, jse]) => {
+      if (dead) return;
+      const map = (d: any, market: StockMarket, currency: string): StockListItem[] =>
+        (Array.isArray(d?.data) ? d.data : []).map((r: any) => ({
+          ticker: r.ticker,
+          name: r.name,
+          price: Number(r.price) || 0,
+          change: Number(r.changePct) || 0,
+          volume: String(r.volume ?? '0'),
+          marketCap: '—',
+          sector: r.sector || 'Other',
+          pe: 0,
+          dividend: 0,
+          market,
+          currency,
+        }));
+      setAfricaUniverse([...map(ngx, 'ngx', 'NGN'), ...map(jse, 'jse', 'ZAR')]);
+    }).catch(() => {});
+    return () => { dead = true; };
+  }, []);
 
   // Live data states
   const [liveQuote, setLiveQuote] = useState<LiveQuote | null>(null);
@@ -768,8 +800,9 @@ export function StockAnalysisPage() {
                 filteredStocks.map((stock) => {
                   const isActive = activeSelection.ticker === stock.ticker;
                   const live = getQuote(stock.ticker);
-                  const listPrice = live?.price && live.price > 0 ? live.price : null;
-                  const listChange = live?.changePercent != null && listPrice != null ? live.changePercent : null;
+                  const isAfrica = stock.market === "ngx" || stock.market === "jse";
+                  const listPrice = live?.price && live.price > 0 ? live.price : (isAfrica && stock.price > 0 ? stock.price : null);
+                  const listChange = live?.changePercent != null && listPrice != null ? live.changePercent : (isAfrica ? stock.change : null);
                   return (
                     <button
                       key={stock.ticker}
