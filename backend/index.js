@@ -2289,7 +2289,7 @@ async function fetchRealTopMovers() {
 
   const { listMovers } = require('./mystocksAfricaApi');
   const africa = { nse: { gainers: [], losers: [] }, ngx: { gainers: [], losers: [] }, jse: { gainers: [], losers: [] } };
-  const keepStock = (r) => (!r.assetType || String(r.assetType).toUpperCase() === 'STOCK') && !r.stale;
+  const keepStock = (r) => (!r.assetType || String(r.assetType).toUpperCase() === 'STOCK') && !/suspend/i.test(String(r.listingStatus || ''));
   for (const ex of ['NSE', 'NGX', 'JSE']) {
     const map = (r) => {
       const c = Number(r.changePct) || 0;
