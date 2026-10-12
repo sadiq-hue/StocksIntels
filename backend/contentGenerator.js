@@ -466,15 +466,19 @@ async function generateDailyBriefContent() {
     { label: 'USD/KES', value: usdKesStr, change: '--' },
   ];
 
-  const combinedMovers = enrichedSignals
-    .filter(s => s.change != null && s.change !== 0)
-    .sort((a, b) => Math.abs(b.change || 0) - Math.abs(a.change || 0))
-    .slice(0, 6);
+  // "Stocks requiring attention": a balanced set — the day's 3 biggest gainers
+  // and 3 biggest losers among the tracked universe, so it is never all one
+  // direction. `market` lets the UI link each row to the right exchange.
+  const withChange = enrichedSignals.filter(s => s.change != null && s.change !== 0);
+  const topGainers = withChange.filter(s => s.change > 0).sort((a, b) => b.change - a.change).slice(0, 3);
+  const topLosers = withChange.filter(s => s.change < 0).sort((a, b) => a.change - b.change).slice(0, 3);
+  const combinedMovers = [...topGainers, ...topLosers];
   const yesterdayTopMovers = combinedMovers.map(m => ({
     symbol: m.ticker || '--',
     company: m.name || '',
     change: (m.change > 0 ? '+' : '') + (Math.round((m.change || 0) * 100) / 100) + '%',
     volume: m.volume && m.volume !== '0' && m.volume !== '--' ? m.volume : '--',
+    market: (NSE_SET.has(m.ticker) || m.market === 'NSE') ? 'NSE' : 'Global',
   }));
 
   const signalOfDay = enrichedSignals

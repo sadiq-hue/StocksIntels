@@ -9,7 +9,7 @@ const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 // Mirrors the email digest payload from generateDailyBriefContent().
 interface BriefIndex { label: string; value: string; change: string; keyDriver?: string | null }
-interface BriefMover { symbol: string; company: string; change: string; volume: string }
+interface BriefMover { symbol: string; company: string; change: string; volume: string; market?: string }
 export interface DailyBrief {
   indices?: BriefIndex[];
   globalIndices?: BriefIndex[];
@@ -171,7 +171,7 @@ export function DailyIntelligencePanel() {
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
               {movers.map((m) => {
                 const t = changeTone(m.change);
-                const isNse = /^(NSE:|KES)/i.test(m.symbol) || m.volume?.includes("KES");
+                const isNse = m.market === "NSE" || /^(NSE:|KES)/i.test(m.symbol) || m.volume?.includes("KES");
                 const sym = m.symbol.replace(/^NSE:/i, "");
                 return (
                   <Link
