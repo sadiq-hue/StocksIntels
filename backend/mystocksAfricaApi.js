@@ -236,18 +236,26 @@ async function listStocks(exchange, { limit = 200, search = '', cursor = '' } = 
 }
 
 // Top movers for an exchange. `direction` is 'gainers' (default) or 'losers'
-// — the partner endpoint returns one side per call.
+// — the partner endpoint returns one side per call, padded with 0% rows.
+// The endpoint is rate-limited, so results are cached in-process per side.
+const moversCache = new Map(); // `${exchange}:${direction}` -> { value, time }
+const MOVERS_TTL_MS = 5 * 60 * 1000;
+
 async function listMovers(exchange, direction) {
   if (!API_KEY) return [];
+  const dir = direction === 'losers' ? 'losers' : 'gainers';
+  const key = `${exchange}:${dir}`;
+  const cached = moversCache.get(key);
+  if (cached && Date.now() - cached.time < MOVERS_TTL_MS) return cached.value;
   try {
     const resp = await axios.get(`${API_BASE}/market/movers`, {
       timeout: FETCH_TIMEOUT * 2,
       headers: { Authorization: `Bearer ${API_KEY}`, Accept: 'application/json' },
-      params: { exchange, ...(direction === 'losers' ? { direction: 'losers' } : {}) },
+      params: { exchange, direction: dir },
     });
     const d = resp.data || {};
     const rows = Array.isArray(d.data) ? d.data : (Array.isArray(d) ? d : []);
-    return rows.map(r => ({
+    const out = rows.map(r => ({
       symbol: r.symbol || null,
       ticker: bareTicker(r.symbol),
       name: r.name || r.symbol || '',
@@ -261,9 +269,11 @@ async function listMovers(exchange, direction) {
       changePct: (Number(r.changePct) || 0) * 100,
       volume: Number(r.volume) || 0,
     }));
+    moversCache.set(key, { value: out, time: Date.now() });
+    return out;
   } catch (e) {
-    console.warn(`[myStocksAfrica] movers ${exchange} failed: ${e.message}`);
-    return [];
+    console.warn(`[myStocksAfrica] movers ${exchange} ${dir} failed: ${e.message}`);
+    return cached ? cached.value : [];
   }
 }
 
