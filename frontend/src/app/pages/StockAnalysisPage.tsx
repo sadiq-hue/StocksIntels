@@ -118,17 +118,18 @@ export function StockAnalysisPage() {
       const inGlobal = globalStocks.find(s => s.ticker.toUpperCase() === urlTicker.toUpperCase());
       if (inNse) return { stock: inNse, market: "nse" as StockMarket };
       if (inGlobal) return { stock: inGlobal, market: "global" as StockMarket };
-      const isNseFromUrl = urlMarket === "nse";
+      const marketFromUrl: StockMarket = urlMarket === "nse" ? "nse" : urlMarket === "ngx" ? "ngx" : urlMarket === "jse" ? "jse" : "global";
+      const currencyFromUrl = marketFromUrl === "nse" ? "KES" : marketFromUrl === "ngx" ? "NGN" : marketFromUrl === "jse" ? "ZAR" : "USD";
       return {
         stock: {
           ticker: urlTicker.toUpperCase(),
           name: urlTicker.toUpperCase(),
           price: 0, change: 0, volume: "—", marketCap: "—",
           sector: "Other", pe: 0, dividend: 0,
-          market: isNseFromUrl ? "nse" as StockMarket : "global" as StockMarket,
-          currency: isNseFromUrl ? "KES" : "USD",
+          market: marketFromUrl,
+          currency: currencyFromUrl,
         },
-        market: isNseFromUrl ? "nse" as StockMarket : "global" as StockMarket,
+        market: marketFromUrl,
       };
     }
     return null;
@@ -212,13 +213,14 @@ export function StockAnalysisPage() {
       if (inNse) { setActiveMarket("nse"); setSelectedStock(inNse); }
       else if (inGlobal) { setActiveMarket("global"); setSelectedStock(inGlobal); }
       else {
-        const isNse = urlMarket === "nse";
-        setActiveMarket(isNse ? "nse" : "global");
+        const marketFromUrl: StockMarket = urlMarket === "nse" ? "nse" : urlMarket === "ngx" ? "ngx" : urlMarket === "jse" ? "jse" : "global";
+        setActiveMarket(marketFromUrl);
         setSelectedStock({
           ticker: urlTicker.toUpperCase(), name: urlTicker.toUpperCase(),
           price: 0, change: 0, volume: "—", marketCap: "—",
           sector: "Other", pe: 0, dividend: 0,
-          market: isNse ? "nse" : "global", currency: isNse ? "KES" : "USD",
+          market: marketFromUrl,
+          currency: marketFromUrl === "nse" ? "KES" : marketFromUrl === "ngx" ? "NGN" : marketFromUrl === "jse" ? "ZAR" : "USD",
         });
       }
     }
@@ -287,7 +289,7 @@ export function StockAnalysisPage() {
   // Direct fallback: poll stock-specific endpoint for live data (bypasses context)
   useEffect(() => {
     const ticker = activeSelection.ticker;
-    const market = activeSelection.market === "nse" ? "nse" : "us";
+    const market = activeSelection.market === "global" ? "us" : activeSelection.market;
     let active = true;
     setLiveQuote(null);
     const pollLive = async () => {
@@ -525,9 +527,12 @@ export function StockAnalysisPage() {
     let cancelled = false;
     setTvFailed(false);
     setChartLoading(true);
-    const symbol = activeSelection.market === "nse"
+    const m = activeSelection.market;
+    const symbol = m === "nse"
       ? `${activeSelection.ticker}.NSE`
-      : activeSelection.ticker;
+      : (m === "ngx" || m === "jse")
+        ? `${m.toUpperCase()}:${activeSelection.ticker}`
+        : activeSelection.ticker;
     const fetchHistory = async () => {
       try {
         const bars = await fetchStockHistory(symbol, periodToRange(chartPeriod));
@@ -539,7 +544,7 @@ export function StockAnalysisPage() {
     };
     fetchHistory();
     return () => { cancelled = true; };
-  }, [activeSelection.ticker, chartPeriod]);
+  }, [activeSelection.ticker, activeSelection.market, chartPeriod]);
 
   const chartData = useMemo(() => {
     if (chartHistory.length === 0) return [];

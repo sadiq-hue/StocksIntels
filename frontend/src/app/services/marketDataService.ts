@@ -50,7 +50,10 @@ const globalSymbols = new Set(
 );
 
 export function inferStockMarket(symbol: string): StockMarket {
-  return globalSymbols.has(symbol.toUpperCase()) ? "global" : "nse";
+  const s = symbol.toUpperCase();
+  if (s.startsWith("NGX:") || s.endsWith(".NG")) return "ngx";
+  if (s.startsWith("JSE:") || s.endsWith(".ZA")) return "jse";
+  return globalSymbols.has(s) ? "global" : "nse";
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -63,7 +66,7 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 export function fetchRealtimeStockQuote(symbol: string, market: StockMarket = "nse") {
-  const marketParam = market === "global" ? "us" : "nse";
+  const marketParam = market === "global" ? "us" : market;
   return fetchJson<RealtimeStockQuote>(
     `${API_BASE}/stock/${encodeURIComponent(symbol)}?market=${marketParam}`
   );

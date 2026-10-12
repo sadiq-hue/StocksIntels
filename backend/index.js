@@ -7046,11 +7046,12 @@ app.get('/api/stock/:symbol', async (req, res) => {
     const { symbol } = req.params;
     const { market } = req.query;
     const upper = symbol.toUpperCase();
-    const lookup = market === 'nse' ? `NSE:${upper}` : upper;
+    const prefix = market === 'nse' ? 'NSE:' : market === 'ngx' ? 'NGX:' : market === 'jse' ? 'JSE:' : '';
+    const lookup = prefix ? `${prefix}${upper}` : upper;
     const quote = await getStockQuote(lookup);
     if (!quote) return res.status(404).json({ error: 'Stock not found' });
-    const isNse = lookup.startsWith('NSE:');
-    const marketOpen = isMarketOpen(isNse ? 'NSE' : 'Global').open;
+    const mk = lookup.startsWith('NSE:') ? 'nse' : lookup.startsWith('NGX:') ? 'ngx' : lookup.startsWith('JSE:') ? 'jse' : 'global';
+    const marketOpen = mk === 'nse' ? marketHours.nseOpen() : mk === 'ngx' ? marketHours.ngxOpen() : mk === 'jse' ? marketHours.jseOpen() : isMarketOpen('Global').open;
     res.json({
       symbol: quote.symbol || upper,
       company_name: quote.company_name || upper,
@@ -7063,9 +7064,9 @@ app.get('/api/stock/:symbol', async (req, res) => {
       dayLow: quote.dayLow || quote.low || 0,
       previousClose: quote.previousClose || quote.previous_close || 0,
       marketCap: quote.marketCap || 0,
-      currency: quote.currency || (isNse ? 'KES' : 'USD'),
+      currency: quote.currency || (mk === 'nse' ? 'KES' : mk === 'ngx' ? 'NGN' : mk === 'jse' ? 'ZAR' : 'USD'),
       provider: quote.provider || 'synthetic',
-      exchange: quote.exchange || (isNse ? 'NSE' : 'Global'),
+      exchange: quote.exchange || (mk === 'nse' ? 'NSE' : mk === 'ngx' ? 'NGX' : mk === 'jse' ? 'JSE' : 'Global'),
       marketState: marketOpen ? 'REGULAR' : 'CLOSED',
       timestamp: quote.timestamp ? (typeof quote.timestamp === 'number' ? quote.timestamp : Math.floor(new Date(quote.timestamp).getTime() / 1000)) : Math.floor(Date.now() / 1000),
       lastUpdated: quote.lastUpdated || new Date().toISOString(),
@@ -7083,11 +7084,13 @@ app.get('/api/stock/:symbol/history', async (req, res) => {
     const upper = symbol.toUpperCase();
 
     const isNse = upper.startsWith('NSE:') || upper.endsWith('.NSE') || upper.endsWith('.KE');
+    const isNgx = upper.startsWith('NGX:') || upper.endsWith('.NG');
+    const isJse = upper.startsWith('JSE:') || upper.endsWith('.ZA');
 
     let bars = null;
 
-    // NSE Kenya: use MyStocks Africa directly (Yahoo has no NSE historical data).
-    if (isNse) {
+    // African exchanges: use MyStocks Africa directly (Yahoo has no coverage).
+    if (isNse || isNgx || isJse) {
       try {
         const msa = require('./mystocksAfricaApi');
         bars = await msa.fetchHistorical(upper, range || '6mo');

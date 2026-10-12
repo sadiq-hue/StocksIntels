@@ -17,6 +17,7 @@ import { useRealtimeQuotes } from '../contexts/RealtimeQuotesContext';
 import { fetchAllNews, type NewsArticle } from '../services/newsService';
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from '../services/marketDataService';
 import { useAuth } from '../auth/AuthContext';
+import { AfricanMarketsPanel } from '../components/AfricanMarketsPanel';
 
 function formatCompactNumber(value: number) {
   if (!Number.isFinite(value) || value === 0) return "0";
@@ -632,6 +633,9 @@ const MarketPage: React.FC = () => {
           <span>Both markets update in real-time</span>
         </div>
       </div>
+
+      {/* NGX (Nigeria) & JSE (South Africa) */}
+      <AfricanMarketsPanel />
 
       {/* Dual Windows */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

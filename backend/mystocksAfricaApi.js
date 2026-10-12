@@ -78,6 +78,7 @@ function normalize(summary, rawSymbol, exchange) {
     company_name: summary.name || summary.symbol || rawSymbol,
     currency: ex.currency,
     market: ex.market,
+    exchange: ex.market,
     sector: summary.sector || null,
     asOf: summary.lastPriceUpdate || summary.asOf || null,
     stale: Boolean(summary.stale),
@@ -222,7 +223,7 @@ async function listStocks(exchange, { limit = 200, search = '', cursor = '' } = 
         currency: r.currency || (EXCHANGES[exchange] || EXCHANGES.NSE).currency,
         sector: r.sector || null,
         price: Number(r.price) || 0,
-        changePct: Number(r.changePct) || 0,
+        changePct: (Number(r.changePct) || 0) * 100,
         volume: Number(r.volume) || 0,
       })),
       hasMore: !!d.hasMore,
@@ -252,7 +253,7 @@ async function listMovers(exchange) {
       exchange: r.exchange || exchange,
       currency: r.currency || (EXCHANGES[exchange] || EXCHANGES.NSE).currency,
       price: Number(r.price) || 0,
-      changePct: Number(r.changePct) || 0,
+      changePct: (Number(r.changePct) || 0) * 100,
       volume: Number(r.volume) || 0,
     }));
   } catch (e) {

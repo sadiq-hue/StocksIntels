@@ -1,4 +1,4 @@
-export type StockMarket = "nse" | "global";
+export type StockMarket = "nse" | "global" | "ngx" | "jse";
 
 export interface QuickStockSymbol {
   symbol: string;
