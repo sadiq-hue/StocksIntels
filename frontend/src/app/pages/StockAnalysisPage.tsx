@@ -1112,7 +1112,7 @@ export function StockAnalysisPage() {
                   <p className="text-xs text-muted-foreground mt-1">
                     {chartPeriod} price movement
                     {historySource === 'none' ? ' (no historical data)' : ''}
-                    {historySource === 'live' ? ' — Yahoo Finance' : ''}
+                    {historySource === 'live' ? (activeSelection.market === 'global' ? ' — Yahoo Finance' : ' — MyStocks Africa') : ''}
                   </p>
                 </div>
                 <div className="flex gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
@@ -1480,6 +1480,16 @@ export function StockAnalysisPage() {
                     <div className="flex flex-1 items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
                   ) : (
                     <div className="flex-1 space-y-3">
+                      {!stockSignal ? (
+                        <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-center">
+                          <p className="text-sm font-medium text-foreground">No market intelligence yet</p>
+                          <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                            There is no rated signal for this stock. Market intelligence is currently generated for
+                            NSE and US-listed names, so none is shown here rather than a placeholder rating.
+                          </p>
+                        </div>
+                      ) : (
+                      <>
                       {/* Signal + Confidence Gauge */}
                       <div className={`rounded-2xl border p-3 flex items-center gap-3 ${
                         signalTone === "emerald"
@@ -1546,6 +1556,8 @@ export function StockAnalysisPage() {
                           ))}
                         </div>
                       </div>
+                      </>
+                      )}
 
                       {/* Trade levels. Supersedes the old price-only tiles: the
                           ladder shows the same Entry / Stop / Target 1 / Ultimate
