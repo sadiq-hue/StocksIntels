@@ -2242,29 +2242,50 @@ async function snapshotPortfolioValue(userId) {
 // Falls back to the fixed-universe computation in getMarketSnapshot on failure.
 async function fetchRealTopMovers() {
   const fmt = (v) => formatVolume(v);
-  const yahooScreener = async (scrId) => {
-    try {
-      const r = await axios.get(
-        `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&scrIds=${scrId}&count=20`,
-        { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }
-      );
-      return r.data?.finance?.result?.[0]?.quotes || [];
-    } catch { return []; }
-  };
-  const mapYahoo = (x) => {
-    const c = Number(x.regularMarketChangePercent) || 0;
+
+  // Global: stockanalysis.com full-market gainers/losers — includes the
+  // micro-cap / low-float movers the Yahoo predefined screeners filter out.
+  let global = { gainers: [], losers: [] };
+  const mapSA = (x) => {
+    const c = Number(x.changePercent) || 0;
     return {
-      ticker: x.symbol, symbol: x.symbol, name: x.shortName || x.longName || x.symbol,
-      price: Number(x.regularMarketPrice) || 0, currency: 'USD',
+      ticker: x.ticker, symbol: x.ticker, name: x.name,
+      price: Number(x.price) || 0, currency: 'USD',
       change: (c >= 0 ? '+' : '') + c.toFixed(2) + '%', changePercent: c, isPositive: c >= 0,
-      volume: fmt(Number(x.regularMarketVolume) || 0), marketCap: Number(x.marketCap) || 0, market: 'Global',
+      volume: fmt(Number(x.volume) || 0), marketCap: Number(x.marketCap) || 0, market: 'Global',
     };
   };
-  const [yG, yL] = await Promise.all([yahooScreener('day_gainers'), yahooScreener('day_losers')]);
-  const global = {
-    gainers: yG.map(mapYahoo).slice(0, 10),
-    losers: yL.map(mapYahoo).slice(0, 10),
-  };
+  try {
+    const saMovers = require('./stockAnalysisMovers');
+    const [g, l] = await Promise.all([saMovers.getGainers(15), saMovers.getLosers(15)]);
+    if (g.length || l.length) {
+      global = { gainers: g.map(mapSA).slice(0, 10), losers: l.map(mapSA).slice(0, 10) };
+    }
+  } catch (e) { console.warn('[movers] stockanalysis global failed:', e.message); }
+
+  // Fallback: Yahoo predefined screeners if the scrape returned nothing.
+  if (!global.gainers.length && !global.losers.length) {
+    const yahooScreener = async (scrId) => {
+      try {
+        const r = await axios.get(
+          `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&scrIds=${scrId}&count=20`,
+          { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+        );
+        return r.data?.finance?.result?.[0]?.quotes || [];
+      } catch { return []; }
+    };
+    const mapYahoo = (x) => {
+      const c = Number(x.regularMarketChangePercent) || 0;
+      return {
+        ticker: x.symbol, symbol: x.symbol, name: x.shortName || x.longName || x.symbol,
+        price: Number(x.regularMarketPrice) || 0, currency: 'USD',
+        change: (c >= 0 ? '+' : '') + c.toFixed(2) + '%', changePercent: c, isPositive: c >= 0,
+        volume: fmt(Number(x.regularMarketVolume) || 0), marketCap: Number(x.marketCap) || 0, market: 'Global',
+      };
+    };
+    const [yG, yL] = await Promise.all([yahooScreener('day_gainers'), yahooScreener('day_losers')]);
+    global = { gainers: yG.map(mapYahoo).slice(0, 10), losers: yL.map(mapYahoo).slice(0, 10) };
+  }
 
   const { listMovers } = require('./mystocksAfricaApi');
   const africa = { nse: { gainers: [], losers: [] }, ngx: { gainers: [], losers: [] }, jse: { gainers: [], losers: [] } };
