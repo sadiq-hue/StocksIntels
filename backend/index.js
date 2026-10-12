@@ -2312,11 +2312,26 @@ async function fetchRealTopMovers() {
     };
   }
 
+  const africaGainers = [...africa.nse.gainers, ...africa.ngx.gainers, ...africa.jse.gainers]
+    .sort((a, b) => b.changePercent - a.changePercent);
+  const africaLosers = [...africa.nse.losers, ...africa.ngx.losers, ...africa.jse.losers]
+    .sort((a, b) => a.changePercent - b.changePercent);
+
+  // Interleave the two markets (Global, African, Global, African, …) so the top
+  // of the list always covers BOTH — otherwise Global micro-cap movers (+400%+)
+  // fill every slot and African names never appear.
+  const interleave = (g, a, total) => {
+    const out = [];
+    let gi = 0, ai = 0;
+    while (out.length < total && (gi < g.length || ai < a.length)) {
+      if (gi < g.length) out.push(g[gi++]);
+      if (out.length < total && ai < a.length) out.push(a[ai++]);
+    }
+    return out;
+  };
   const combined = {
-    gainers: [...global.gainers, ...africa.nse.gainers, ...africa.ngx.gainers, ...africa.jse.gainers]
-      .sort((a, b) => b.changePercent - a.changePercent).slice(0, 15),
-    losers: [...global.losers, ...africa.nse.losers, ...africa.ngx.losers, ...africa.jse.losers]
-      .sort((a, b) => a.changePercent - b.changePercent).slice(0, 15),
+    gainers: interleave(global.gainers, africaGainers, 15),
+    losers: interleave(global.losers, africaLosers, 15),
   };
   return { global, nse: africa.nse, ngx: africa.ngx, jse: africa.jse, combined };
 }
@@ -8368,6 +8383,8 @@ app.get('/api/top-stocks', async (req, res) => {
 });
 
 app.get('/api/market/movers', async (req, res) => {
+  // Always reflect the live feed — never let a browser/CDN cache the movers.
+  res.set('Cache-Control', 'no-store, max-age=0');
   try {
     const period = req.query.period || '1d';
     // For non-daily periods, compute period returns from historical bars.
