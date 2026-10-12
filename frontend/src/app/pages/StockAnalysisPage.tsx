@@ -237,8 +237,8 @@ export function StockAnalysisPage() {
     const load = (url: string) =>
       fetch(url, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null));
     Promise.all([
-      load(`${API_URL}/africa/stocks?exchange=NGX&limit=100`),
-      load(`${API_URL}/africa/stocks?exchange=JSE&limit=100`),
+      load(`${API_URL}/africa/stocks?exchange=NGX&all=1&limit=500`),
+      load(`${API_URL}/africa/stocks?exchange=JSE&all=1&limit=500`),
     ]).then(([ngx, jse]) => {
       if (dead) return;
       const map = (d: any, market: StockMarket, currency: string): StockListItem[] =>
