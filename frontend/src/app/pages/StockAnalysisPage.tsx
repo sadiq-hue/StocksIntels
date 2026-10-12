@@ -516,15 +516,17 @@ export function StockAnalysisPage() {
     let cancelled = false;
     setFinancialReport(null);
     setStockSignal(null);
-    // Market intelligence is only produced for the covered (NSE/US) universe.
-    // Skip the fetch for African exchanges (NGX/JSE) so no placeholder rating is
-    // ever shown for a market the engine does not analyse.
-    if (activeSelection.market === 'ngx' || activeSelection.market === 'jse') {
-      setLoadingData(false);
-      return;
-    }
+    // Market intelligence is only produced for the covered (NSE/US) universe, so
+    // NGX/JSE never request a signal. They DO still load financial statements
+    // (market cap, P/E, Financial Health), so only the signal fetch is skipped.
+    const isAfrica = activeSelection.market === 'ngx' || activeSelection.market === 'jse';
     const fetchData = async () => {
       setLoadingData(true);
+      if (isAfrica) {
+        const fin = await fetchFinancialReport(finSymbol, "annual", 2).catch(() => null);
+        if (!cancelled) { if (fin) setFinancialReport(fin); setLoadingData(false); }
+        return;
+      }
       const userIdParam = user?.id ? `?userId=${user.id}` : '';
       const [signalsRes, finRes] = await Promise.allSettled([
         authFetch(`${API_URL}/signals${userIdParam}`).then(r => r.ok ? r.json() : null),
