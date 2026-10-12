@@ -73,9 +73,14 @@ function normalizeMover(s: any) {
     change: isNaN(changeVal) ? 0 : changeVal,
     volume: s.volume || '0',
     currency: s.currency || 'KES',
-    market: (s.symbol?.startsWith('NSE:') || s.market === 'NSE' || s.market === 'nse') ? 'nse' as const : 'global' as const,
+    market: (s.symbol?.startsWith('NSE:') || s.market === 'NSE' || s.market === 'nse') ? 'nse' as const
+      : (s.symbol?.startsWith('NGX:') || s.market === 'NGX' || s.market === 'ngx') ? 'ngx' as const
+      : (s.symbol?.startsWith('JSE:') || s.market === 'JSE' || s.market === 'jse') ? 'jse' as const
+      : 'global' as const,
   };
 }
+
+const MARKET_LABEL: Record<string, string> = { nse: "NSE", ngx: "NGX", jse: "JSE", global: "Global" };
 
 function parseVolume(vol: string): number {
   const num = parseFloat(vol.replace("M", "").replace("K", "").replace("B", ""));
@@ -1073,7 +1078,7 @@ export function DashboardPage() {
                   <div key={stock.ticker} onClick={() => setSelectedStock({
                     ticker: stock.ticker, name: stock.name, price: stock.price,
                     change: stock.change, volume: stock.volume,
-                    market: stock.market === 'nse' ? 'nse' : 'global',
+                    market: stock.market,
                     currency: stock.currency || 'KES', signal: sig,
                   })} className="flex items-center justify-between p-3 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 transition-all border border-transparent hover:border-emerald-200 dark:hover:border-emerald-800/50 cursor-pointer gap-3">
                     <div className="flex items-center gap-3 min-w-0">
@@ -1085,7 +1090,7 @@ export function DashboardPage() {
                         <div className="text-[11px] text-muted-foreground truncate">
                           {currencyPrefix(stock.currency)}{stock.price} &middot; Vol: {stock.volume}
                           <span className={`ml-1.5 text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
-                            {stock.market === "nse" ? "NSE" : "Global"}
+                            {MARKET_LABEL[stock.market] || "Global"}
                           </span>
                         </div>
                       </div>
@@ -1128,7 +1133,7 @@ export function DashboardPage() {
                         <div className="text-[11px] text-muted-foreground truncate">
                           {currencyPrefix(stock.currency)}{stock.price} &middot; Vol: {stock.volume}
                           <span className={`ml-1.5 text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
-                            {stock.market === "nse" ? "NSE" : "Global"}
+                            {MARKET_LABEL[stock.market] || "Global"}
                           </span>
                         </div>
                       </div>
@@ -1166,7 +1171,7 @@ export function DashboardPage() {
                     price: parseFloat(stock.price),
                     change: parseFloat(stock.change),
                     volume: stock.volume || fullStock?.volume || '0',
-                    market: stock.market === 'nse' ? 'nse' : 'global',
+                    market: stock.market,
                     currency: stock.currency || 'KES',
                     signal: sig,
                   })} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-all border border-transparent hover:border-border cursor-pointer gap-3">

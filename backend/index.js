@@ -2236,6 +2236,70 @@ async function snapshotPortfolioValue(userId) {
   } catch {}
 }
 
+// Real top gainers/losers across the tracked markets, like stockanalysis.com:
+//   - Global: Yahoo's predefined day_gainers / day_losers screeners (whole US market)
+//   - African: the MyStocks partner /market/movers feed (NSE, NGX, JSE)
+// Falls back to the fixed-universe computation in getMarketSnapshot on failure.
+async function fetchRealTopMovers() {
+  const fmt = (v) => formatVolume(v);
+  const yahooScreener = async (scrId) => {
+    try {
+      const r = await axios.get(
+        `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&scrIds=${scrId}&count=20`,
+        { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+      );
+      return r.data?.finance?.result?.[0]?.quotes || [];
+    } catch { return []; }
+  };
+  const mapYahoo = (x) => {
+    const c = Number(x.regularMarketChangePercent) || 0;
+    return {
+      ticker: x.symbol, symbol: x.symbol, name: x.shortName || x.longName || x.symbol,
+      price: Number(x.regularMarketPrice) || 0, currency: 'USD',
+      change: (c >= 0 ? '+' : '') + c.toFixed(2) + '%', changePercent: c, isPositive: c >= 0,
+      volume: fmt(Number(x.regularMarketVolume) || 0), marketCap: Number(x.marketCap) || 0, market: 'Global',
+    };
+  };
+  const [yG, yL] = await Promise.all([yahooScreener('day_gainers'), yahooScreener('day_losers')]);
+  const global = {
+    gainers: yG.map(mapYahoo).slice(0, 10),
+    losers: yL.map(mapYahoo).slice(0, 10),
+  };
+
+  const { listMovers } = require('./mystocksAfricaApi');
+  const africa = { nse: { gainers: [], losers: [] }, ngx: { gainers: [], losers: [] }, jse: { gainers: [], losers: [] } };
+  for (const ex of ['NSE', 'NGX', 'JSE']) {
+    let rows = [];
+    try { rows = await listMovers(ex); } catch { rows = []; }
+    rows = rows.filter(r =>
+      (!r.assetType || String(r.assetType).toUpperCase() === 'STOCK') &&
+      !/suspend/i.test(String(r.listingStatus || ''))
+    );
+    const sorted = [...rows].sort((a, b) => (b.changePct || 0) - (a.changePct || 0));
+    const map = (r) => {
+      const c = Number(r.changePct) || 0;
+      return {
+        ticker: r.ticker, symbol: (ex === 'NSE' ? 'NSE:' : ex + ':') + r.ticker, name: r.name,
+        price: Number(r.price) || 0, currency: r.currency,
+        change: (c >= 0 ? '+' : '') + c.toFixed(2) + '%', changePercent: c, isPositive: c >= 0,
+        volume: fmt(Number(r.volume) || 0), marketCap: 0, market: ex,
+      };
+    };
+    africa[ex.toLowerCase()] = {
+      gainers: sorted.filter(r => (r.changePct || 0) >= 0).slice(0, 10).map(map),
+      losers: sorted.filter(r => (r.changePct || 0) < 0).reverse().slice(0, 10).map(map),
+    };
+  }
+
+  const combined = {
+    gainers: [...global.gainers, ...africa.nse.gainers, ...africa.ngx.gainers, ...africa.jse.gainers]
+      .sort((a, b) => b.changePercent - a.changePercent).slice(0, 15),
+    losers: [...global.losers, ...africa.nse.losers, ...africa.ngx.losers, ...africa.jse.losers]
+      .sort((a, b) => a.changePercent - b.changePercent).slice(0, 15),
+  };
+  return { global, nse: africa.nse, ngx: africa.ngx, jse: africa.jse, combined };
+}
+
 async function getMarketSnapshot() {
   const NSE_TICKERS = ['SCOM', 'EQTY', 'KCB', 'EABL', 'ABSA', 'SBIC', 'KLG', 'OLYM', 'CRAY', 'BAMB', 'UMEM', 'KPLC', 'NMG', 'TOTL', 'STAN', 'COOP', 'JUB', 'KNRE', 'LKL', 'CIC', 'HFCK', 'IMH', 'NCBA', 'BAT', 'KUKZ', 'SASN', 'SCBK', 'KEGN', 'CTUM', 'BRIT', 'CARB', 'KQ', 'PORT', 'WTK', 'KAPC', 'CGEN', 'CABL', 'UMME', 'REA', 'EGAD', 'LBTY', 'SLAM', 'BOC', 'MSC', 'UNGA', 'FTGH', 'TPS', 'HAFR', 'EVRD', 'KPC', 'FMLY'];
   const GLOBAL_TICKERS = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'AMZN', 'GOOGL', 'META', 'NFLX', 'JPM', 'V', 'WMT', 'JNJ', 'PG', 'XOM', 'BAC', 'HD', 'DIS', 'CSCO', 'ADBE', 'CRM', 'INTC', 'AMD', 'PYPL', 'UBER', 'SQ', 'MA', 'UNH', 'COST', 'ABBV', 'CVX', 'PFE', 'TMO', 'ORCL', 'IBM', 'QCOM', 'AVGO', 'NKE', 'MRK', 'KO', 'PEP', 'MCD', 'BA', 'C', 'GS', 'MS', 'BK', 'AXP', 'CAT', 'GE', 'HON', 'LMT'];
@@ -2277,12 +2341,15 @@ async function getMarketSnapshot() {
     return { gainers: sorted.filter(s => s.isPositive).slice(0, 10), losers: sorted.filter(s => !s.isPositive).reverse().slice(0, 10) };
   };
   const getActive = (stockList) => [...stockList].sort((a, b) => parseVolume(b.volume) - parseVolume(a.volume)).slice(0, 10);
+  let realMovers = null;
+  try { realMovers = await fetchRealTopMovers(); } catch (e) { console.warn('[movers] real fetch failed:', e.message); }
+  const hasReal = realMovers && (realMovers.combined.gainers.length || realMovers.combined.losers.length);
   return {
     indices,
-    nse: { active: getActive(nseStocks), movers: getMovers(nseStocks) },
-    global: { active: getActive(globalStocks), movers: getMovers(globalStocks) },
+    nse: { active: getActive(nseStocks), movers: hasReal ? realMovers.nse : getMovers(nseStocks) },
+    global: { active: getActive(globalStocks), movers: hasReal ? realMovers.global : getMovers(globalStocks) },
     active: getActive(stocks),
-    movers: getMovers(stocks),
+    movers: hasReal ? realMovers.combined : getMovers(stocks),
     updatedAt: new Date().toISOString(),
   };
 }
