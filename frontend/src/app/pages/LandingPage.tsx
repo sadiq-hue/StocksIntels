@@ -191,11 +191,11 @@ const faqs = [
   { q: "Is there a mobile app?", a: "The web app works on mobile browsers. We do not have an iOS or Android app yet but the site is fully responsive and works on phone screens." },
 ];
 
-function LiveTickerItem({ sym, fallback, fallbackChange, up: fallbackUp, isNse, quotes }: { sym: string; fallback: string; fallbackChange: string; up: boolean; isNse: boolean; quotes: Record<string, RealtimeStockQuote> }) {
+function LiveTickerItem({ sym, isNse, quotes }: { sym: string; isNse: boolean; quotes: Record<string, RealtimeStockQuote> }) {
   const q = quotes[sym] || quotes[`NSE:${sym}`];
-  const price = q?.price ? q.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : fallback;
-  const change = q?.changePercent != null ? `${q.changePercent >= 0 ? '+' : ''}${q.changePercent.toFixed(1)}%` : fallbackChange;
-  const up = q?.changePercent != null ? q.changePercent >= 0 : fallbackUp;
+  const price = q?.price ? q.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+  const change = q?.changePercent != null ? `${q.changePercent >= 0 ? '+' : ''}${q.changePercent.toFixed(1)}%` : "—";
+  const up = q?.changePercent != null ? q.changePercent >= 0 : true;
   const currency = isNse ? "KSh" : "$";
 
   const prev = useRef<string>(price);
@@ -222,15 +222,15 @@ function LiveTickerItem({ sym, fallback, fallbackChange, up: fallbackUp, isNse, 
 
 function HeroStockCard({ quotes }: { quotes: Record<string, RealtimeStockQuote> }) {
   const scom = quotes["SCOM"] || quotes["NSE:SCOM"];
-  const price = scom?.price ?? 17.50;
-  const chg = scom?.changePercent ?? 2.3;
-  const isUp = chg >= 0;
+  const price = scom?.price ?? null;
+  const chg = scom?.changePercent ?? null;
+  const isUp = (chg ?? 0) >= 0;
 
-  const prev = useRef<number>(price);
+  const prev = useRef<number | null>(price);
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
   useEffect(() => {
     if (prev.current !== price) {
-      setFlash(price > prev.current ? "up" : "down");
+      setFlash((price ?? 0) > (prev.current ?? 0) ? "up" : "down");
       prev.current = price;
       const t = setTimeout(() => setFlash(null), 700);
       return () => clearTimeout(t);
@@ -250,8 +250,8 @@ function HeroStockCard({ quotes }: { quotes: Record<string, RealtimeStockQuote> 
           </div>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-bold text-foreground transition-colors duration-300">KES {price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-          <p className={`text-sm font-semibold ${isUp ? 'text-emerald-600' : 'text-red-600'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}% today</p>
+          <p className="text-2xl font-bold text-foreground transition-colors duration-300">KES {price != null ? price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"}</p>
+          <p className={`text-sm font-semibold ${isUp ? 'text-emerald-600' : 'text-red-600'}`}>{chg != null ? `${isUp ? '+' : ''}${chg.toFixed(1)}% today` : '—'}</p>
         </div>
       </div>
       <svg className="w-full h-24" viewBox="0 0 400 80">
@@ -284,8 +284,8 @@ function FloatingMiniCards({ quotes }: { quotes: Record<string, RealtimeStockQuo
   ];
   const MiniCard = ({ c }: { c: typeof cards[number] }) => {
     const q = quotes[c.sym];
-    const chg = q?.changePercent ?? parseFloat(c.fallback);
-    const isUp = chg >= 0;
+    const chg = q?.changePercent ?? null;
+    const isUp = (chg ?? 0) >= 0;
     return (
         <div className="flex items-center gap-2 bg-card rounded-xl border border-border shadow-md p-2.5">
           <div className={`w-7 h-7 ${c.iconBg} rounded-lg flex items-center justify-center`}>
@@ -293,7 +293,7 @@ function FloatingMiniCards({ quotes }: { quotes: Record<string, RealtimeStockQuo
           </div>
           <div>
             <p className="text-xs font-bold text-foreground">{c.sym}</p>
-          <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}%</p>
+          <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{chg != null ? `${isUp ? '+' : ''}${chg.toFixed(1)}%` : '—'}</p>
         </div>
       </div>
     );
@@ -304,8 +304,8 @@ function FloatingMiniCards({ quotes }: { quotes: Record<string, RealtimeStockQuo
       <div className="hidden lg:block">
         {cards.map(c => {
           const q = quotes[c.sym];
-          const chg = q?.changePercent ?? parseFloat(c.fallback);
-          const isUp = chg >= 0;
+          const chg = q?.changePercent ?? null;
+          const isUp = (chg ?? 0) >= 0;
           return (
             <div key={c.sym} className={`absolute ${c.pos} bg-card rounded-xl border border-border shadow-xl p-3 ${c.anim}`}>
               <div className="flex items-center gap-2">
@@ -314,7 +314,7 @@ function FloatingMiniCards({ quotes }: { quotes: Record<string, RealtimeStockQuo
                 </div>
                 <div>
                   <p className="text-xs font-bold text-foreground">{c.sym}</p>
-                  <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{isUp ? '+' : ''}{chg.toFixed(1)}%</p>
+                  <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{chg != null ? `${isUp ? '+' : ''}${chg.toFixed(1)}%` : '—'}</p>
                 </div>
               </div>
             </div>
@@ -575,19 +575,19 @@ export function LandingPage() {
           <div className="flex whitespace-nowrap animate-[ticker_30s_linear_infinite]">
             {(() => {
               const tickerSymbols = [
-                { sym: "SCOM", fallback: "17.50", fallbackChange: "+0.0%", up: true, isNse: true },
-                { sym: "EQTY", fallback: "87.00", fallbackChange: "+0.3%", up: true, isNse: true },
-                { sym: "KCB", fallback: "82.00", fallbackChange: "+0.4%", up: true, isNse: true },
-                { sym: "EABL", fallback: "269.00", fallbackChange: "-0.1%", up: false, isNse: true },
-                { sym: "AAPL", fallback: "327.74", fallbackChange: "+0.4%", up: true, isNse: false },
-                { sym: "TSLA", fallback: "378.93", fallbackChange: "+2.5%", up: true, isNse: false },
-                { sym: "MSFT", fallback: "377.86", fallbackChange: "+2.9%", up: true, isNse: false },
-                { sym: "GOOGL", fallback: "347.11", fallbackChange: "-0.7%", up: false, isNse: false },
-                { sym: "NVDA", fallback: "192.87", fallbackChange: "+0.0%", up: true, isNse: false },
+                { sym: "SCOM", isNse: true },
+                { sym: "EQTY", isNse: true },
+                { sym: "KCB", isNse: true },
+                { sym: "EABL", isNse: true },
+                { sym: "AAPL", isNse: false },
+                { sym: "TSLA", isNse: false },
+                { sym: "MSFT", isNse: false },
+                { sym: "GOOGL", isNse: false },
+                { sym: "NVDA", isNse: false },
               ];
               const items = [...tickerSymbols, ...tickerSymbols];
               return items.map((t, i) => (
-                <LiveTickerItem key={i} sym={t.sym} fallback={t.fallback} fallbackChange={t.fallbackChange} up={t.up} isNse={t.isNse} quotes={heroQuotes} />
+                <LiveTickerItem key={i} sym={t.sym} isNse={t.isNse} quotes={heroQuotes} />
               ));
             })()}
           </div>

@@ -455,7 +455,7 @@ export function FinancialsPage() {
   const baseQuote: CompanyQuote = reportQuote || { symbol: selectedSymbol, price: 0, change: 0, changesPercentage: 0, dayLow: 0, dayHigh: 0, yearLow: 0, yearHigh: 0, marketCap: 0, volume: 0, avgVolume: 0, open: 0, previousClose: 0, eps: 0, pe: 0, sharesOutstanding: 0, lastUpdated: "" };
   const quote = liveQuote
     ? { ...baseQuote, symbol: liveQuote.symbol, price: liveQuote.price, change: liveQuote.change, changesPercentage: liveQuote.changePercent, volume: liveQuote.volume, dayHigh: liveQuote.dayHigh, dayLow: liveQuote.dayLow, previousClose: liveQuote.previousClose, lastUpdated: new Date(liveQuote.timestamp * 1000).toISOString() }
-    : (reportQuote || (staticStock ? { ...baseQuote, symbol: contextSymbol, price: Number(staticStock.price) || 0, change: Number(staticStock.change) || 0, changesPercentage: 0, marketCap: 0, volume: 0, lastUpdated: "" } : undefined));
+    : reportQuote;
   const yahooData = (yahooPremarket && selectedSymbol ? yahooPremarket[selectedSymbol] : null) || null;
   const prePrice = yahooData?.preMarketPrice ?? null;
   const postPrice = yahooData?.postMarketPrice ?? null;

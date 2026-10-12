@@ -80,18 +80,6 @@ const ALLOCATION_COLORS = [
 
 const PortfolioDataContext = createContext<PortfolioDataContextValue | null>(null);
 
-function getDemoHoldings(): PortfolioHolding[] {
-  return [
-    { ticker: "SCOM", name: "Safaricom PLC", shares: 500, avgCost: "24.50", currentPrice: "28.50", value: "14250", pnl: "+16.3%", isPositive: true, sector: "Telecom", market: "NSE" },
-    { ticker: "EQTY", name: "Equity Group", shares: 200, avgCost: "48.00", currentPrice: "52.75", value: "10550", pnl: "+9.9%", isPositive: true, sector: "Financial", market: "NSE" },
-    { ticker: "KCB", name: "KCB Group", shares: 180, avgCost: "44.00", currentPrice: "45.20", value: "8136", pnl: "+2.7%", isPositive: true, sector: "Financial", market: "NSE" },
-    { ticker: "EABL", name: "East African Breweries", shares: 40, avgCost: "162.00", currentPrice: "165.00", value: "6600", pnl: "+1.9%", isPositive: true, sector: "Consumer", market: "NSE" },
-    { ticker: "AAPL", name: "Apple Inc.", shares: 30, avgCost: "178.50", currentPrice: "198.25", value: "5947", pnl: "+11.1%", isPositive: true, sector: "Technology", market: "Global" },
-    { ticker: "NVDA", name: "NVIDIA Corp.", shares: 15, avgCost: "485.00", currentPrice: "624.50", value: "9367", pnl: "+28.8%", isPositive: true, sector: "Technology", market: "Global" },
-    { ticker: "MSFT", name: "Microsoft Corp.", shares: 20, avgCost: "390.00", currentPrice: "425.30", value: "8506", pnl: "+9.1%", isPositive: true, sector: "Technology", market: "Global" },
-  ];
-}
-
 export function PortfolioDataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { nseStocks, globalStocks } = useStockData();

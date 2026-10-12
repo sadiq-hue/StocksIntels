@@ -59,8 +59,8 @@ const formatCurrency = (stock: StockListItem, liveCurrency?: string) => {
   return cur === "USD" ? "$" : cur === "KES" ? "KES " : `${cur} `;
 };
 
-function formatPrice(value: number) {
-  if (!Number.isFinite(value) || value === 0) return "0.00";
+function formatPrice(value?: number | null) {
+  if (value == null || !Number.isFinite(value) || value === 0) return "—";
   const abs = Math.abs(value);
   if (abs < 0.0001) return value.toFixed(6);
   if (abs < 0.01) return value.toFixed(4);
@@ -168,12 +168,16 @@ export function StockAnalysisPage() {
       })
       .sort((a, b) => {
         if (sortBy === "price") {
-          const pa = getQuote(a.ticker)?.price || a.price;
-          const pb = getQuote(b.ticker)?.price || b.price;
+          const pa = getQuote(a.ticker)?.price || 0;
+          const pb = getQuote(b.ticker)?.price || 0;
           return pb - pa;
         }
-        if (sortBy === "change") return b.change - a.change;
-        if (sortBy === "volume") return parseVolume(b.volume) - parseVolume(a.volume);
+        if (sortBy === "change") {
+          return (getQuote(b.ticker)?.changePercent ?? 0) - (getQuote(a.ticker)?.changePercent ?? 0);
+        }
+        if (sortBy === "volume") {
+          return (getQuote(b.ticker)?.volume || 0) - (getQuote(a.ticker)?.volume || 0);
+        }
         return a.ticker.localeCompare(b.ticker);
       });
   }, [stockUniverse, searchTerm, filterSector, sortBy, quotes]);
@@ -431,7 +435,7 @@ export function StockAnalysisPage() {
   const isRegular = isNse ? isNseMarketOpen() : marketState === 'REGULAR';
   const isPreMarket = !isNse && marketState === 'PRE';
   const isPostMarket = !isNse && marketState === 'POST';
-  const regularPrice = yahooRegularPrice ?? liveQuote?.regularMarketPrice ?? liveQuote?.price ?? liveQuote?.previousClose ?? activeSelection.price;
+  const regularPrice = yahooRegularPrice ?? liveQuote?.regularMarketPrice ?? liveQuote?.price ?? liveQuote?.previousClose ?? null;
   const prePrice = yahooData?.preMarketPrice ?? liveQuote?.preMarketPrice ?? null;
   const postPrice = yahooData?.postMarketPrice ?? liveQuote?.postMarketPrice ?? null;
   // Show the extended-hours session from the latest available data — even when the
@@ -551,8 +555,13 @@ export function StockAnalysisPage() {
     return () => { cancelled = true; };
   }, [activeSelection.ticker, activeSelection.market, user?.id]);
 
-  const displayPrice = regularPrice;
-  const displayChange = liveQuote?.changePercent ?? activeSelection.change;
+  const displayPrice = regularPrice ?? 0;
+  const displayChange = liveQuote?.changePercent ?? 0;
+  // No static fallback: when there is no live change, render an em-dash rather
+  // than a hardcoded/zero percentage that looks like real data.
+  const changeDisplay = liveQuote?.changePercent != null && Number.isFinite(displayChange)
+    ? `${displayChange > 0 ? "+" : ""}${displayChange.toFixed(2)}%`
+    : "—";
 
   // Chart data — live from Yahoo Finance
   const [chartHistory, setChartHistory] = useState<PriceBar[]>([]);
@@ -666,8 +675,8 @@ export function StockAnalysisPage() {
 
   const statStrip = [
     { label: "Sector", value: activeSelection.sector, icon: Layers },
-    { label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : activeSelection.volume, icon: BarChart3 },
-    { label: "Market Cap", value: (() => { const cur = liveQuote?.currency || activeSelection.currency; const cap = financialReport?.data?.quote?.marketCap || financialReport?.data?.keyMetrics?.marketCap || liveQuote?.marketCap || 0; return cap > 0 ? formatMarketCap(cap, cur) : activeSelection.marketCap; })(), icon: PieChart },
+    { label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : "—", icon: BarChart3 },
+    { label: "Market Cap", value: (() => { const cur = liveQuote?.currency || activeSelection.currency; const cap = financialReport?.data?.quote?.marketCap || financialReport?.data?.keyMetrics?.marketCap || liveQuote?.marketCap || 0; return cap > 0 ? formatMarketCap(cap, cur) : "—"; })(), icon: PieChart },
     { label: "P/E Ratio", value: financialReport?.data?.quote?.pe?.toFixed(1) || financialReport?.data?.keyMetrics?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A"), icon: Percent },
   ];
 
@@ -1035,7 +1044,7 @@ export function StockAnalysisPage() {
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
                         isPositive ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
                       }`}>
-                        {displayChange > 0 ? "+" : ""}{displayChange.toFixed(2)}%
+                        {changeDisplay}
                       </span>
                       <span className="text-[11px] text-muted-foreground">today</span>
                     </div>
@@ -1157,7 +1166,7 @@ export function StockAnalysisPage() {
                   </div>
                   <div className={`text-xs font-semibold mt-0.5 ${isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
                     {isPositive ? <ChevronUp className="size-3 inline-block" /> : <ChevronDown className="size-3 inline-block" />}
-                    {' '}{displayChange > 0 ? "+" : ""}{displayChange.toFixed(2)}%
+                    {' '}{changeDisplay}
                   </div>
                 </div>
                 <div className="rounded-xl bg-muted/40 p-3 border border-border/50">
@@ -1329,7 +1338,7 @@ export function StockAnalysisPage() {
                     <div>
                       <div className="text-[11px] font-medium text-muted-foreground">CHANGE</div>
                       <div className={`text-sm font-semibold ${isPositive ? 'text-emerald-600' : 'text-red-500'}`}>
-                        {displayChange >= 0 ? '+' : ''}{displayChange.toFixed(2)}%
+                        {changeDisplay}
                       </div>
                     </div>
                   </div>
@@ -1777,7 +1786,7 @@ export function StockAnalysisPage() {
                         <div className="flex justify-between text-xs text-muted-foreground px-1">
                           <span>Gap</span>
                           <span className="font-medium text-foreground">
-                            {formatPrice(Math.abs(sma20 - sma50))} ({(Math.abs(sma20 - sma50) / displayPrice * 100).toFixed(1)}%)
+                            {formatPrice(Math.abs(sma20 - sma50))} ({(Math.abs(sma20 - sma50) / (displayPrice || 1) * 100).toFixed(1)}%)
                           </span>
                         </div>
                       </div>

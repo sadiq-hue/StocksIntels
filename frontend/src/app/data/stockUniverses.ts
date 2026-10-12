@@ -951,23 +951,4 @@ export function formatMarketCap(value: string | number, currency: string = "USD"
   return `${prefix}${value.toLocaleString()}`;
 }
 
-export const watchlistStocks: WatchlistStockItem[] = [
-  { ticker: "SCOM", name: "Safaricom PLC", price: "28.50", change: "+5.2%", volume: "15.2M", signal: "Buy", isPositive: true, marketCap: "1.12T", peRatio: "12.4", market: "nse" },
-  { ticker: "EQTY", name: "Equity Group Holdings", price: "52.75", change: "+3.8%", volume: "8.4M", signal: "Buy", isPositive: true, marketCap: "220B", peRatio: "8.9", market: "nse" },
-  { ticker: "KCB", name: "KCB Group", price: "45.20", change: "+2.1%", volume: "6.7M", signal: "Hold", isPositive: true, marketCap: "185B", peRatio: "9.2", market: "nse" },
-  { ticker: "EABL", name: "East African Breweries", price: "165.00", change: "+1.5%", volume: "3.2M", signal: "Buy", isPositive: true, marketCap: "145B", peRatio: "18.7", market: "nse" },
-  { ticker: "AAPL", name: "Apple Inc.", price: "270.10", change: "+1.2%", volume: "58.2M", signal: "Buy", isPositive: true, marketCap: "3.2T", peRatio: "31.4", market: "global" },
-  { ticker: "MSFT", name: "Microsoft Corp.", price: "428.16", change: "+0.9%", volume: "21.4M", signal: "Buy", isPositive: true, marketCap: "3.1T", peRatio: "35.6", market: "global" },
-  { ticker: "NVDA", name: "NVIDIA Corp.", price: "118.74", change: "+2.8%", volume: "287.1M", signal: "Buy", isPositive: true, marketCap: "2.9T", peRatio: "58.2", market: "global" },
-  { ticker: "GOOGL", name: "Alphabet Inc.", price: "171.54", change: "+0.6%", volume: "26.8M", signal: "Buy", isPositive: true, marketCap: "2.1T", peRatio: "26.2", market: "global" },
-  { ticker: "AMZN", name: "Amazon.com Inc.", price: "182.21", change: "+0.7%", volume: "44.9M", signal: "Buy", isPositive: true, marketCap: "1.9T", peRatio: "41.3", market: "global" },
-  { ticker: "META", name: "Meta Platforms", price: "498.62", change: "+1.7%", volume: "13.6M", signal: "Buy", isPositive: true, marketCap: "1.3T", peRatio: "28.7", market: "global" },
-  { ticker: "TSLA", name: "Tesla Inc.", price: "176.43", change: "-1.6%", volume: "103.6M", signal: "Hold", isPositive: false, marketCap: "562B", peRatio: "52.1", market: "global" },
-  { ticker: "LLY", name: "Eli Lilly & Co.", price: "485.00", change: "+1.5%", volume: "5.2M", signal: "Buy", isPositive: true, marketCap: "720B", peRatio: "48.5", market: "global" },
-  { ticker: "AVGO", name: "Broadcom Inc.", price: "150.00", change: "+1.8%", volume: "18.5M", signal: "Buy", isPositive: true, marketCap: "650B", peRatio: "38.2", market: "global" },
-  { ticker: "JPM", name: "JPMorgan Chase", price: "198.74", change: "+0.4%", volume: "9.2M", signal: "Buy", isPositive: true, marketCap: "570B", peRatio: "12.8", market: "global" },
-  { ticker: "V", name: "Visa Inc.", price: "281.15", change: "+0.6%", volume: "6.8M", signal: "Buy", isPositive: true, marketCap: "575B", peRatio: "31.8", market: "global" },
-  { ticker: "UNH", name: "UnitedHealth Group", price: "550.00", change: "+0.8%", volume: "4.2M", signal: "Buy", isPositive: true, marketCap: "480B", peRatio: "22.5", market: "global" },
-  { ticker: "PLTR", name: "Palantir Technologies", price: "22.00", change: "+3.8%", volume: "35.2M", signal: "Buy", isPositive: true, marketCap: "45B", peRatio: "85.2", market: "global" },
-  { ticker: "COIN", name: "Coinbase Global", price: "200.00", change: "+4.2%", volume: "10.2M", signal: "Hold", isPositive: true, marketCap: "50B", peRatio: "0", market: "global" },
-];
+export const watchlistStocks: WatchlistStockItem[] = [];

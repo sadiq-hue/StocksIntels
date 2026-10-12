@@ -82,7 +82,7 @@ export const SectorsPage: React.FC = () => {
       const live = getQuote(`NSE:${stock.ticker}`);
       if (!live || live.changePercent == null) continue;
       const change = live.changePercent;
-      const volume = live.volume ?? parseVolume(stock.volume);
+      const volume = live.volume ?? 0;
       const key = `NSE ${stock.sector}`;
       if (!map.has(key)) map.set(key, { changes: [], totalVolume: 0, stocks: [], market: "NSE" });
       const entry = map.get(key)!;
@@ -95,7 +95,7 @@ export const SectorsPage: React.FC = () => {
       const live = getQuote(stock.ticker);
       if (!live || live.changePercent == null) continue;
       const change = live.changePercent;
-      const volume = live.volume ?? parseVolume(stock.volume);
+      const volume = live.volume ?? 0;
       const key = stock.sector;
       if (!map.has(key)) map.set(key, { changes: [], totalVolume: 0, stocks: [], market: "Global" });
       const entry = map.get(key)!;
@@ -124,6 +124,13 @@ export const SectorsPage: React.FC = () => {
       })
       .sort((a, b) => b.change - a.change);
   }, [quotes]);
+
+  const overallSentiment = useMemo(() => {
+    if (allSectors.length === 0) return null;
+    const avg = allSectors.reduce((a, s) => a + s.change, 0) / allSectors.length;
+    const label = avg > 1 ? "BULLISH" : avg < -1 ? "BEARISH" : "NEUTRAL";
+    return { label, avg, leader: allSectors[0]?.displayName || "" };
+  }, [allSectors]);
 
   const filteredSectors = useMemo(() => {
     return allSectors.filter(s => {
@@ -312,7 +319,13 @@ export const SectorsPage: React.FC = () => {
               <Activity size={16} /> Market Sentiment
             </h3>
             <p className="text-xs text-white/80 leading-relaxed mb-4">
-              The overall market posture remains <span className="font-black text-white">BULLISH</span>. Capital is rotating from Energy into Technology and Banking sectors across both global and local exchanges.
+              {overallSentiment ? (
+                <>
+                  The overall market posture is <span className="font-black text-white">{overallSentiment.label}</span> — a {overallSentiment.avg >= 0 ? "+" : ""}{overallSentiment.avg.toFixed(2)}% average move across {allSectors.length} tracked sectors{overallSentiment.leader ? <>; <span className="font-semibold text-white">{overallSentiment.leader}</span> leads.</> : "."}
+                </>
+              ) : (
+                "No live sector data available."
+              )}
             </p>
             <Button variant="outline" className="w-full bg-card/10 border-white/20 hover:bg-card/20 text-white font-bold text-xs">
               View Signal Details <ChevronRight size={14} className="ml-1" />

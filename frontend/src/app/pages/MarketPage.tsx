@@ -90,10 +90,12 @@ const MarketPage: React.FC = () => {
   const [sentimentPrefLoaded, setSentimentPrefLoaded] = useState(false);
   const [marketData, setMarketData] = useState<{
     movers: { nse: any, global: any },
-    indices: any[]
+    indices: any[],
+    sectors: any[]
   }>({
     movers: { nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] } },
     indices: [],
+    sectors: [],
   });
   const [fetchingMovers, setFetchingMovers] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -252,15 +254,18 @@ const MarketPage: React.FC = () => {
   const fetchMarketData = async () => {
     setFetchingMovers(true);
     try {
-      const [moversRes, indicesRes] = await Promise.all([
+      const [moversRes, indicesRes, sectorsRes] = await Promise.all([
         fetch(`${API_BASE_URL}/market/movers?period=${moverPeriod}`),
         fetch(`${API_BASE_URL}/market/indices`),
+        fetch(`${API_BASE_URL}/market/sectors`),
       ]);
-      const [movers, indicesRaw] = await Promise.all([
+      const [movers, indicesRaw, sectorsRaw] = await Promise.all([
         moversRes.json().catch(() => ({ nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] } })),
         indicesRes.json().catch(() => []),
+        sectorsRes.json().catch(() => []),
       ]);
       const indices = Array.isArray(indicesRaw) ? indicesRaw : [];
+      const sectors = Array.isArray(sectorsRaw) ? sectorsRaw : [];
       const normalize = (items: any[]) => (items || []).map((s: any) => ({
         symbol: s.symbol,
         ticker: s.ticker,
@@ -276,6 +281,7 @@ const MarketPage: React.FC = () => {
       setMarketData({
         movers: { nse: nseMovers, global: globalMovers },
         indices,
+        sectors,
       });
     } catch (err) {
       console.error("API fetch failed, using local stock data", err);
@@ -771,17 +777,18 @@ const MarketPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SidebarWidget title="Sector Performance" link="/app/sectors">
           <div className="space-y-3">
-            {[
-              { name: 'NSE Banking', change: '+2.1%' },
-              { name: 'Global Tech', change: '+3.4%' },
-              { name: 'NSE Telecom', change: '+5.2%' },
-              { name: 'Global Energy', change: '-0.8%' },
-            ].map(sector => (
-              <div className="flex justify-between items-center" key={sector.name}>
-                <span className="text-xs font-medium text-muted-foreground">{sector.name}</span>
-                <span className={`text-xs font-semibold ${sector.change.startsWith('+') ? 'text-emerald-600' : 'text-red-500'}`}>{sector.change}</span>
-              </div>
-            ))}
+            {marketData.sectors.length === 0 && (
+              <div className="text-xs text-muted-foreground">No live sector data available</div>
+            )}
+            {marketData.sectors.slice(0, 4).map((sector: any) => {
+              const chg = Number(sector.avgChange ?? sector.change ?? 0) || 0;
+              return (
+                <div className="flex justify-between items-center" key={sector.sector}>
+                  <span className="text-xs font-medium text-muted-foreground">{sector.sector}</span>
+                  <span className={`text-xs font-semibold ${chg >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{chg >= 0 ? '+' : ''}{chg.toFixed(2)}%</span>
+                </div>
+              );
+            })}
           </div>
         </SidebarWidget>
 

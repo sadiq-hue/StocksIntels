@@ -408,7 +408,7 @@ export function DashboardPage() {
           alert: pct != null && isFinite(pct) && Math.abs(pct) > 5,
           market: isNse ? "nse" : "global",
           currency: live?.currency || stat?.currency || (isNse ? "KES" : "USD"),
-          volume: live?.volume || stat?.volume || "0",
+          volume: live?.volume || "0",
         });
         // The card renders 6 rows; stop here so a 500-symbol watchlist
         // doesn't build a 500-row array on every 30s poll.
@@ -435,23 +435,6 @@ export function DashboardPage() {
         });
         if (built.length >= 6) break;
       }
-    }
-
-    // Fall back to static universe data (copy before sort — .sort() mutates)
-    if (built.length === 0) {
-      return [...allStocks]
-        .sort((a, b) => parseVolume(b.volume) - parseVolume(a.volume))
-        .slice(0, 6)
-        .map(s => ({
-          ticker: s.ticker,
-          name: s.name,
-          price: s.price.toFixed(2),
-          change: `${s.change > 0 ? "+" : ""}${s.change.toFixed(2)}%`,
-          isPositive: s.change >= 0,
-          alert: Math.abs(s.change) > 5,
-          market: s.market,
-          currency: s.currency || "KES",
-        }));
     }
 
     return built;
@@ -1159,6 +1142,9 @@ export function DashboardPage() {
             </Link>
           </div>
           <div className="space-y-1">
+            {watchlist.length === 0 && (
+              <div className="p-6 text-center text-xs text-muted-foreground">No live watchlist data available</div>
+            )}
             {watchlist.map((stock) => {
               const fullStock = allStocks.find(s => s.ticker === stock.ticker);
               const sig = signals.find(s => s.ticker === stock.ticker);
