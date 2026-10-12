@@ -588,7 +588,10 @@ function normalizeQuote(symbol, quote) {
   if (!quote) return null;
   const sym = String(symbol || '').toUpperCase();
   const isNse = sym.startsWith('NSE:');
-  const bare = isNse ? sym.slice(4) : sym;
+  const isNgx = sym.startsWith('NGX:');
+  const isJse = sym.startsWith('JSE:');
+  const isAfrica = isNse || isNgx || isJse;
+  const bare = isAfrica ? sym.slice(4) : sym;
   const mappedName = getCompanyName(symbol);
   // The nseportal feed sets company_name to the bare ticker ("SCOM"), which is a
   // placeholder rather than a real name — a truthy check alone would keep it and
@@ -600,7 +603,7 @@ function normalizeQuote(symbol, quote) {
     ...quote,
     symbol,
     marketCap: quote.marketCap || 0,
-    currency: quote.currency || (isNse ? 'KES' : 'USD'),
+    currency: quote.currency || (isNse ? 'KES' : isNgx ? 'NGN' : isJse ? 'ZAR' : 'USD'),
     company_name: companyName,
     name: quote.name || companyName,
   };
@@ -631,10 +634,18 @@ async function getStockQuote(symbol) {
       quote = nseQuote;
       await enrichVolumeFromMyStocks(quote, symbol);
     }
+  } else if (symbol.startsWith('NGX:') || symbol.startsWith('JSE:')) {
+    // NGX / JSE resolve directly from the MyStocks Africa partner API.
+    try {
+      const msa = require('./mystocksAfricaApi');
+      quote = await msa.getQuoteForSymbol(symbol);
+    } catch (e) {
+      console.warn(`[marketService] ${symbol} mystocksAfrica failed: ${e.message}`);
+    }
   }
 
-  // Fallback: Yahoo Finance (skipped for NSE — Yahoo has no NSE data)
-  if (!quote && !symbol.startsWith('NSE:')) {
+  // Fallback: Yahoo Finance (skipped for African exchanges — no Yahoo coverage)
+  if (!quote && !symbol.startsWith('NSE:') && !symbol.startsWith('NGX:') && !symbol.startsWith('JSE:')) {
     quote = await yahooService.fetchQuote(symbol);
   }
 
@@ -676,6 +687,13 @@ async function fetchQuoteForSymbol(s) {
       }
     } catch (e) {
       console.warn(`[fetchQuoteForSymbol] NSE ${s} failed: ${e.message}`);
+    }
+  } else if (s.startsWith('NGX:') || s.startsWith('JSE:')) {
+    try {
+      const msa = require('./mystocksAfricaApi');
+      quote = await withTimeout(msa.getQuoteForSymbol(s), 12000, s);
+    } catch (e) {
+      console.warn(`[fetchQuoteForSymbol] ${s} mystocksAfrica failed: ${e.message}`);
     }
   } else {
     try {
@@ -753,6 +771,27 @@ async function getQuotesBatch(symbols) {
       }
     } catch (e) {
       console.warn(`[getQuotesBatch] bulk NSE warm-up failed: ${e.message}`);
+    }
+  }
+
+  // Bulk NGX/JSE warm-up: one MyStocks Africa batch request per exchange fills
+  // every missing NGX/JSE symbol in a single call.
+  const missingAfrica = missing.filter(s => (s.startsWith('NGX:') || s.startsWith('JSE:')) && !results[s]);
+  if (missingAfrica.length > 0) {
+    const msa = require('./mystocksAfricaApi');
+    for (const ex of ['NGX', 'JSE']) {
+      if (timedOut) break;
+      const syms = missingAfrica.filter(s => s.startsWith(ex + ':')).map(s => s.slice(4));
+      if (!syms.length) continue;
+      try {
+        const map = await msa.getBatchQuotes(syms, ex);
+        for (const [bare, q] of Object.entries(map)) {
+          const full = cacheQuote(`${ex}:${bare}`, q);
+          if (full) results[`${ex}:${bare}`] = full;
+        }
+      } catch (e) {
+        console.warn(`[getQuotesBatch] bulk ${ex} warm-up failed: ${e.message}`);
+      }
     }
   }
 

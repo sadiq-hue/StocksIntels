@@ -6149,6 +6149,83 @@ app.get('/api/market/status', async (req, res) => {
   });
 });
 
+// ─── African markets: NGX (Nigeria) & JSE (South Africa) ─────────────────────
+// Same MyStocks Africa partner platform that powers NSE. Delayed ~15 min.
+const AFRICA_EXCHANGES = ['NGX', 'JSE'];
+
+app.get('/api/africa/exchanges', async (_req, res) => {
+  try {
+    const { getExchanges } = require('./mystocksAfricaApi');
+    const all = await getExchanges();
+    const exchanges = all.filter(e => AFRICA_EXCHANGES.includes(String(e.code || e.exchange || '').toUpperCase()));
+    res.json({ success: true, exchanges });
+  } catch (e) {
+    console.error('[africa] exchanges error:', e.message);
+    res.json({ success: false, exchanges: [] });
+  }
+});
+
+app.get('/api/africa/status', (_req, res) => {
+  res.json({ ngx: marketHours.ngxOpen(), jse: marketHours.jseOpen() });
+});
+
+app.get('/api/africa/stocks', async (req, res) => {
+  try {
+    const exchange = String(req.query.exchange || 'NGX').toUpperCase();
+    if (!AFRICA_EXCHANGES.includes(exchange)) return res.status(400).json({ error: 'Unsupported exchange' });
+    const { listStocks } = require('./mystocksAfricaApi');
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    const data = await listStocks(exchange, { limit, search: req.query.search || '' });
+    res.json({ success: true, exchange, ...data });
+  } catch (e) {
+    console.error('[africa] stocks error:', e.message);
+    res.json({ success: false, data: [], hasMore: false, nextCursor: null });
+  }
+});
+
+app.get('/api/africa/movers', async (req, res) => {
+  try {
+    const exchange = String(req.query.exchange || 'NGX').toUpperCase();
+    if (!AFRICA_EXCHANGES.includes(exchange)) return res.status(400).json({ error: 'Unsupported exchange' });
+    const { listMovers } = require('./mystocksAfricaApi');
+    const rows = await listMovers(exchange);
+    const gainers = rows.filter(r => r.changePct >= 0).sort((a, b) => b.changePct - a.changePct).slice(0, 10);
+    const losers = rows.filter(r => r.changePct < 0).sort((a, b) => a.changePct - b.changePct).slice(0, 10);
+    res.json({ success: true, exchange, gainers, losers });
+  } catch (e) {
+    console.error('[africa] movers error:', e.message);
+    res.json({ success: false, gainers: [], losers: [] });
+  }
+});
+
+app.get('/api/africa/quotes', async (req, res) => {
+  try {
+    const exchange = String(req.query.exchange || 'NGX').toUpperCase();
+    if (!AFRICA_EXCHANGES.includes(exchange)) return res.status(400).json({ error: 'Unsupported exchange' });
+    const symbols = String(req.query.symbols || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (!symbols.length) return res.json({ success: true, exchange, quotes: {} });
+    const { getBatchQuotes } = require('./mystocksAfricaApi');
+    const quotes = await getBatchQuotes(symbols, exchange);
+    res.json({ success: true, exchange, quotes });
+  } catch (e) {
+    console.error('[africa] quotes error:', e.message);
+    res.json({ success: false, quotes: {} });
+  }
+});
+
+app.get('/api/africa/history/:exchange/:symbol', async (req, res) => {
+  try {
+    const exchange = String(req.params.exchange || 'NGX').toUpperCase();
+    if (!AFRICA_EXCHANGES.includes(exchange)) return res.status(400).json({ error: 'Unsupported exchange' });
+    const { fetchHistorical } = require('./mystocksAfricaApi');
+    const bars = await fetchHistorical(req.params.symbol, String(req.query.range || '6mo'), exchange);
+    res.json({ success: true, exchange, symbol: req.params.symbol, bars: bars || [] });
+  } catch (e) {
+    console.error('[africa] history error:', e.message);
+    res.json({ success: false, bars: [] });
+  }
+});
+
 // Market intelligence feed from MyStocks Africa — curated editorial articles
 // across African exchanges (macro, sector reports, earnings, announcements).
 app.get('/api/market-intel', async (req, res) => {

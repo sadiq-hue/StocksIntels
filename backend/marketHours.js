@@ -10,7 +10,16 @@ const NSE_CLOSE_EAT_MIN = 15 * 60;      // 15:00 EAT = 12:00 UTC
 const US_OPEN_ET_MIN = 9 * 60 + 30;     // 09:30 ET
 const US_CLOSE_ET_MIN = 16 * 60;        // 16:00 ET
 
+// NGX (Lagos, WAT = UTC+1, no DST): continuous 09:30-16:00.
+const NGX_OPEN_WAT_MIN = 9 * 60 + 30;   // 09:30 WAT = 08:30 UTC
+const NGX_CLOSE_WAT_MIN = 16 * 60;       // 16:00 WAT = 15:00 UTC
+// JSE (Johannesburg, SAST = UTC+2, no DST): continuous 09:00-16:50.
+const JSE_OPEN_SAST_MIN = 9 * 60;        // 09:00 SAST = 07:00 UTC
+const JSE_CLOSE_SAST_MIN = 16 * 60 + 50; // 16:50 SAST = 14:50 UTC
+
 const EAT_OFFSET_MIN = 180;             // UTC+3, Kenya has no DST
+const WAT_OFFSET_MIN = 60;              // UTC+1, Nigeria has no DST
+const SAST_OFFSET_MIN = 120;            // UTC+2, South Africa has no DST
 
 function isWeekend(now = new Date()) {
   const d = now.getDay();
@@ -43,16 +52,46 @@ function usOpen(now = new Date()) {
   return m >= US_OPEN_ET_MIN && m < US_CLOSE_ET_MIN;
 }
 
+function watMinutes(now = new Date()) {
+  return (((utcMinutes(now) + WAT_OFFSET_MIN) % 1440) + 1440) % 1440;
+}
+
+function sastMinutes(now = new Date()) {
+  return (((utcMinutes(now) + SAST_OFFSET_MIN) % 1440) + 1440) % 1440;
+}
+
+function ngxOpen(now = new Date()) {
+  if (isWeekend(now)) return false;
+  const m = watMinutes(now);
+  return m >= NGX_OPEN_WAT_MIN && m < NGX_CLOSE_WAT_MIN;
+}
+
+function jseOpen(now = new Date()) {
+  if (isWeekend(now)) return false;
+  const m = sastMinutes(now);
+  return m >= JSE_OPEN_SAST_MIN && m < JSE_CLOSE_SAST_MIN;
+}
+
 module.exports = {
   NSE_OPEN_EAT_MIN,
   NSE_CLOSE_EAT_MIN,
   US_OPEN_ET_MIN,
   US_CLOSE_ET_MIN,
+  NGX_OPEN_WAT_MIN,
+  NGX_CLOSE_WAT_MIN,
+  JSE_OPEN_SAST_MIN,
+  JSE_CLOSE_SAST_MIN,
   EAT_OFFSET_MIN,
+  WAT_OFFSET_MIN,
+  SAST_OFFSET_MIN,
   isWeekend,
   utcMinutes,
   eatMinutes,
   etMinutes,
+  watMinutes,
+  sastMinutes,
   nseOpen,
   usOpen,
+  ngxOpen,
+  jseOpen,
 };
