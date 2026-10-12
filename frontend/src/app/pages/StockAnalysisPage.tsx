@@ -1492,10 +1492,6 @@ export function StockAnalysisPage() {
                       {!stockSignal ? (
                         <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-center">
                           <p className="text-sm font-medium text-foreground">No market intelligence yet</p>
-                          <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-                            There is no rated signal for this stock. Market intelligence is currently generated for
-                            NSE and US-listed names, so none is shown here rather than a placeholder rating.
-                          </p>
                         </div>
                       ) : (
                       <>
@@ -1667,7 +1663,7 @@ export function StockAnalysisPage() {
                 <div className="flex h-full flex-col p-5">
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4">
                     <span className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white shadow-sm"><LineChart className="size-3.5" /></span>
-                    Key Indicators
+                    Technical Analysis
                   </h3>
                   <div className="flex flex-1 flex-col">
                     <div className="flex-1 space-y-4">
