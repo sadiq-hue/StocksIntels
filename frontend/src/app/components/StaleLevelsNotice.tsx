@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { AlertTriangle, Radio } from "lucide-react";
+import { currencyPrefix } from "../utils/currency";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 const n = (v: any): number | null => {
@@ -41,7 +42,7 @@ export function StaleLevelsNotice({ selected }: { selected: any }) {
   const t1 = n(selected?.target1);
   const cached = n(selected?.price);
   const ticker = selected?.ticker;
-  const cur = selected?.currency === "KES" ? "KES " : "$";
+  const cur = currencyPrefix(selected?.currency);
 
   const [live, setLive] = useState<number | null>(null);
   const [liveAt, setLiveAt] = useState<number | null>(null);

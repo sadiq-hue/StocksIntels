@@ -17,7 +17,7 @@ import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area
 import { useAuth } from "../auth/AuthContext";
 import { usePortfolioData } from "../contexts/PortfolioDataContext";
 import { usePaperTrading, type PaperPosition, type PaperTrade } from "../contexts/PaperTradingContext";
-import { CURRENCIES, toDisplayCurrency, formatCurrencyValue, formatCompactCurrency, PORTFOLIO_CURRENCY_KEY } from "../utils/currency";
+import { CURRENCIES, toDisplayCurrency, formatCurrencyValue, formatCompactCurrency, PORTFOLIO_CURRENCY_KEY, currencyPrefix } from "../utils/currency";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -1234,7 +1234,7 @@ export function PortfolioPage() {
                       </div>
                       <div className="flex justify-between text-muted-foreground">
                         <span>Est. commission & fees</span>
-                        <span className="text-foreground">{currencyLabel === "KES" ? "KES " : "$"}Calculated at execution</span>
+                        <span className="text-foreground">{currencyPrefix(currencyLabel)}Calculated at execution</span>
                       </div>
                     </div>
                   );
@@ -1462,10 +1462,10 @@ export function PortfolioPage() {
                                 </span>
                               </td>
                               <td className="text-right py-1 px-1">{t.shares}</td>
-                              <td className="text-right py-1 px-1">{t.currency === 'USD' ? '$' : 'KES '}{t.price.toFixed(2)}</td>
-                              <td className="text-right py-1 px-1 font-medium">{t.currency === 'USD' ? '$' : 'KES '}{t.totalValue.toFixed(2)}</td>
-                              <td className="text-right py-1 px-1 text-muted-foreground">{t.currency === 'USD' ? '$' : 'KES '}{t.commission.toFixed(2)}</td>
-                              <td className="text-right py-1 px-1 text-muted-foreground">{t.currency === 'USD' ? '$' : 'KES '}{t.fees.toFixed(2)}</td>
+                              <td className="text-right py-1 px-1">{currencyPrefix(t.currency)}{t.price.toFixed(2)}</td>
+                              <td className="text-right py-1 px-1 font-medium">{currencyPrefix(t.currency)}{t.totalValue.toFixed(2)}</td>
+                              <td className="text-right py-1 px-1 text-muted-foreground">{currencyPrefix(t.currency)}{t.commission.toFixed(2)}</td>
+                              <td className="text-right py-1 px-1 text-muted-foreground">{currencyPrefix(t.currency)}{t.fees.toFixed(2)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1495,10 +1495,10 @@ export function PortfolioPage() {
                               <tr key={i} className="border-b border-border">
                                 <td className="py-1 px-1 font-medium text-foreground">{p.ticker}</td>
                                 <td className="text-right py-1 px-1">{p.shares}</td>
-                                <td className="text-right py-1 px-1">{p.market === 'NSE' ? 'KES ' : '$'}{p.avgCost.toFixed(2)}</td>
-                                <td className="text-right py-1 px-1">{p.market === 'NSE' ? 'KES ' : '$'}{p.currentPrice.toFixed(2)}</td>
-                                <td className="text-right py-1 px-1 font-medium">{p.market === 'NSE' ? 'KES ' : '$'}{p.value.toFixed(2)}</td>
-                                <td className={`text-right py-1 px-1 ${p.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{p.market === 'NSE' ? 'KES ' : '$'}{p.pnl.toFixed(2)}</td>
+                                <td className="text-right py-1 px-1">{currencyPrefix(p.market === 'NSE' ? 'KES' : 'USD')}{p.avgCost.toFixed(2)}</td>
+                                <td className="text-right py-1 px-1">{currencyPrefix(p.market === 'NSE' ? 'KES' : 'USD')}{p.currentPrice.toFixed(2)}</td>
+                                <td className="text-right py-1 px-1 font-medium">{currencyPrefix(p.market === 'NSE' ? 'KES' : 'USD')}{p.value.toFixed(2)}</td>
+                                <td className={`text-right py-1 px-1 ${p.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{currencyPrefix(p.market === 'NSE' ? 'KES' : 'USD')}{p.pnl.toFixed(2)}</td>
                                 <td className={`text-right py-1 px-1 ${p.pnlPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>{p.pnlPercent.toFixed(1)}%</td>
                               </tr>
                             ))}
@@ -1867,7 +1867,7 @@ export function PortfolioPage() {
                       </div>
                     </div>
                     {rec.reason && <p className="text-muted-foreground text-xs mt-1 line-clamp-2">{rec.reason}</p>}
-                    {rec.target1 && <p className="text-muted-foreground text-xs mt-1">Target: {rec.currency === "USD" ? "$" : "KES "}{rec.target1}</p>}
+                    {rec.target1 && <p className="text-muted-foreground text-xs mt-1">Target: {currencyPrefix(rec.currency)}{rec.target1}</p>}
                   </div>
                 );
               })}
@@ -2388,19 +2388,19 @@ export function PortfolioPage() {
                 {selectedRec.price && (
                   <div className="p-3 rounded-lg border text-center">
                     <div className="text-xs text-muted-foreground mb-1">Current</div>
-                    <div className="text-lg font-bold text-foreground">{selectedRec.currency === "USD" ? "$" : "KES "}{selectedRec.price}</div>
+                    <div className="text-lg font-bold text-foreground">{currencyPrefix(selectedRec.currency)}{selectedRec.price}</div>
                   </div>
                 )}
                 {selectedRec.target1 && (
                   <div className="p-3 rounded-lg border text-center border-green-200 bg-green-50">
                     <div className="text-xs text-muted-foreground mb-1">Target 1</div>
-                    <div className="text-lg font-bold text-green-700">{selectedRec.currency === "USD" ? "$" : "KES "}{selectedRec.target1}</div>
+                    <div className="text-lg font-bold text-green-700">{currencyPrefix(selectedRec.currency)}{selectedRec.target1}</div>
                   </div>
                 )}
                 {selectedRec.target2 && (
                   <div className="p-3 rounded-lg border text-center border-emerald-200 bg-emerald-50">
                     <div className="text-xs text-muted-foreground mb-1">Target 2</div>
-                    <div className="text-lg font-bold text-emerald-700">{selectedRec.currency === "USD" ? "$" : "KES "}{selectedRec.target2}</div>
+                    <div className="text-lg font-bold text-emerald-700">{currencyPrefix(selectedRec.currency)}{selectedRec.target2}</div>
                   </div>
                 )}
               </div>
@@ -3146,7 +3146,7 @@ export function PortfolioPage() {
                           <div key={p.ticker} className="flex items-center justify-between text-xs">
                             <span className="font-medium text-foreground">{p.ticker}</span>
                             <div className="flex items-center gap-2">
-                              <span className="text-muted-foreground">{p.market === 'NSE' ? 'KES ' : '$'}{p.pnl.toFixed(2)}</span>
+                              <span className="text-muted-foreground">{currencyPrefix(p.market === 'NSE' ? 'KES' : 'USD')}{p.pnl.toFixed(2)}</span>
                               <span className="text-green-600 font-medium">{p.pnlPercent >= 0 ? '+' : ''}{p.pnlPercent}%</span>
                             </div>
                           </div>
@@ -3162,7 +3162,7 @@ export function PortfolioPage() {
                           <div key={p.ticker} className="flex items-center justify-between text-xs">
                             <span className="font-medium text-foreground">{p.ticker}</span>
                             <div className="flex items-center gap-2">
-                              <span className="text-muted-foreground">{p.market === 'NSE' ? 'KES ' : '$'}{p.pnl.toFixed(2)}</span>
+                              <span className="text-muted-foreground">{currencyPrefix(p.market === 'NSE' ? 'KES' : 'USD')}{p.pnl.toFixed(2)}</span>
                               <span className="text-red-600 font-medium">{p.pnlPercent}%</span>
                             </div>
                           </div>
@@ -3214,10 +3214,10 @@ export function PortfolioPage() {
                             <td className="p-2 font-semibold text-foreground text-xs">{h.ticker}</td>
                             <td className="p-2 text-muted-foreground text-[11px] max-w-[120px] truncate">{h.name}</td>
                             <td className="p-2 text-right text-foreground text-xs">{h.shares}</td>
-                            <td className="p-2 text-right text-xs">{h.market === 'NSE' ? 'KES ' : '$'}{h.avgCost.toFixed(2)}</td>
-                            <td className="p-2 text-right text-xs">{h.market === 'NSE' ? 'KES ' : '$'}{h.currentPrice.toFixed(2)}</td>
-                            <td className="p-2 text-right font-medium text-xs">{h.market === 'NSE' ? 'KES ' : '$'}{h.value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td className={`p-2 text-right font-medium text-xs ${h.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{h.market === 'NSE' ? 'KES ' : '$'}{h.pnl.toFixed(2)}</td>
+                            <td className="p-2 text-right text-xs">{currencyPrefix(h.market === 'NSE' ? 'KES' : 'USD')}{h.avgCost.toFixed(2)}</td>
+                            <td className="p-2 text-right text-xs">{currencyPrefix(h.market === 'NSE' ? 'KES' : 'USD')}{h.currentPrice.toFixed(2)}</td>
+                            <td className="p-2 text-right font-medium text-xs">{currencyPrefix(h.market === 'NSE' ? 'KES' : 'USD')}{h.value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-2 text-right font-medium text-xs ${h.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>{currencyPrefix(h.market === 'NSE' ? 'KES' : 'USD')}{h.pnl.toFixed(2)}</td>
                             <td className={`p-2 text-right font-medium text-xs ${h.pnlPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>{h.pnlPercent.toFixed(1)}%</td>
                             <td className="p-2">
                               <Badge variant="outline" className={`text-[9px] ${h.market === 'NSE' ? 'border-[#0D7490] text-[#0D7490]' : 'border-purple-300 text-purple-600'}`}>{h.sector}</Badge>

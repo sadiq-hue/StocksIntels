@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Badge } from "./ui/badge";
 import { AlertTriangle, ChevronDown, Radio, ShieldCheck } from "lucide-react";
+import { currencyPrefix } from "../utils/currency";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -153,7 +154,7 @@ function Fact({ label, value, assess }: { label: string; value: ReactNode; asses
 export function MarketIntelligenceCard({ signal }: { signal: any }) {
   const s = signal || {};
   const a = s.analysis || {};
-  const cur = s.currency === "KES" ? "KES " : "$";
+  const cur = currencyPrefix(s.currency);
   const money = (v: any) => {
     const n = pos(v);
     return n == null ? "—" : `${cur}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

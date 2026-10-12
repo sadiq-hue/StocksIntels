@@ -10,6 +10,7 @@ import { kenyanStocks, globalStocks, type StockListItem } from "../data/stockUni
 import { useAuth } from "../auth/AuthContext";
 import type { Signal } from "../types/signals";
 import { authFetch } from "../auth/tokenStore";
+import { currencyPrefix } from "../utils/currency";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -302,7 +303,7 @@ export function WatchlistPage() {
                         </div>
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right font-semibold text-foreground text-sm">
-                        {stock.symbol.startsWith('NSE:') ? 'KES' : '$'} {shownPrice != null ? shownPrice.toFixed(2) : '—'}
+                        {currencyPrefix((stock as any).currency || s?.currency || (stock.symbol.startsWith('NSE:') ? 'KES' : 'USD'))} {shownPrice != null ? shownPrice.toFixed(2) : '—'}
                         {livePrice != null && <span className="ml-1 inline-block size-1.5 rounded-full bg-emerald-500 align-middle" title="Live price" />}
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right hidden sm:table-cell">
@@ -315,16 +316,16 @@ export function WatchlistPage() {
                         </span>
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-foreground">
-                        {s?.entry ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.entry.toFixed(2)}` : '-'}
+                        {s?.entry ? `${currencyPrefix((stock as any).currency || s?.currency || (stock.symbol.startsWith('NSE:') ? 'KES' : 'USD'))} ${s.entry.toFixed(2)}` : '-'}
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm text-red-600 font-semibold hidden md:table-cell">
-                        {s?.stopLoss ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.stopLoss.toFixed(2)}` : '-'}
+                        {s?.stopLoss ? `${currencyPrefix((stock as any).currency || s?.currency || (stock.symbol.startsWith('NSE:') ? 'KES' : 'USD'))} ${s.stopLoss.toFixed(2)}` : '-'}
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-emerald-600 hidden md:table-cell">
-                        {s?.target1 ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.target1.toFixed(2)}` : '-'}
+                        {s?.target1 ? `${currencyPrefix((stock as any).currency || s?.currency || (stock.symbol.startsWith('NSE:') ? 'KES' : 'USD'))} ${s.target1.toFixed(2)}` : '-'}
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-emerald-600 hidden lg:table-cell">
-                        {s?.target3 ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.target3.toFixed(2)}` : '-'}
+                        {s?.target3 ? `${currencyPrefix((stock as any).currency || s?.currency || (stock.symbol.startsWith('NSE:') ? 'KES' : 'USD'))} ${s.target3.toFixed(2)}` : '-'}
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right text-sm font-bold text-foreground hidden lg:table-cell">
                         {s?.riskReward ? `1:${s.riskReward.toFixed(1)}` : '-'}

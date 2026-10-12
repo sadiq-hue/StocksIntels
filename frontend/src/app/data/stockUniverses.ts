@@ -1,3 +1,5 @@
+import { currencyPrefix } from "../utils/currency";
+
 export type StockMarket = "nse" | "global" | "ngx" | "jse";
 
 export interface QuickStockSymbol {
@@ -942,7 +944,7 @@ export function getTickerLogoUrl(ticker: string): string {
 
 export function formatMarketCap(value: string | number, currency: string = "USD"): string {
   if (typeof value === 'string') return value;
-  const prefix = currency === "KES" ? "KES " : "$";
+  const prefix = currencyPrefix(currency);
   if (value >= 1e12) return `${prefix}${(value / 1e12).toFixed(1)}T`;
   if (value >= 1e9) return `${prefix}${(value / 1e9).toFixed(1)}B`;
   if (value >= 1e6) return `${prefix}${(value / 1e6).toFixed(1)}M`;

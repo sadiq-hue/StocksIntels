@@ -22,7 +22,7 @@ import { fetchAllNews, type NewsArticle } from "../services/newsService";
 import { connectSocket } from "../services/socketService";
 import type { Signal } from "../types/signals";
 import { authFetch } from "../auth/tokenStore";
-import { CURRENCIES, toDisplayCurrency, formatCurrencyValue, PORTFOLIO_CURRENCY_KEY } from "../utils/currency";
+import { CURRENCIES, toDisplayCurrency, formatCurrencyValue, PORTFOLIO_CURRENCY_KEY, currencyPrefix } from "../utils/currency";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -1083,7 +1083,7 @@ export function DashboardPage() {
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-foreground truncate">{stock.name}</div>
                         <div className="text-[11px] text-muted-foreground truncate">
-                          {stock.currency === "USD" ? "$" : "KES "}{stock.price} &middot; Vol: {stock.volume}
+                          {currencyPrefix(stock.currency)}{stock.price} &middot; Vol: {stock.volume}
                           <span className={`ml-1.5 text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
                             {stock.market === "nse" ? "NSE" : "Global"}
                           </span>
@@ -1126,7 +1126,7 @@ export function DashboardPage() {
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-foreground truncate">{stock.name}</div>
                         <div className="text-[11px] text-muted-foreground truncate">
-                          {stock.currency === "USD" ? "$" : "KES "}{stock.price} &middot; Vol: {stock.volume}
+                          {currencyPrefix(stock.currency)}{stock.price} &middot; Vol: {stock.volume}
                           <span className={`ml-1.5 text-[10px] font-medium uppercase ${stock.market === "nse" ? "text-[#0D7490]" : "text-indigo-500"}`}>
                             {stock.market === "nse" ? "NSE" : "Global"}
                           </span>
@@ -1180,7 +1180,7 @@ export function DashboardPage() {
                       <div className="min-w-0">
                         <div className="text-sm font-semibold text-foreground truncate">{stock.name || stock.ticker}</div>
                         <div className="text-[11px] text-muted-foreground truncate">
-                          {stock.currency === "USD" ? "$" : "KES "}{stock.price}
+                          {currencyPrefix(stock.currency)}{stock.price}
                           {stock.volume && stock.volume !== '0' && <span className="ml-1.5">· Vol: {stock.volume}</span>}
                         </div>
                       </div>
@@ -1569,7 +1569,7 @@ export function DashboardPage() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="bg-muted rounded-lg p-3 border border-border">
                     <p className="text-[10px] text-muted-foreground font-medium">Price</p>
-                    <p className="text-lg font-bold text-foreground">{s.currency === 'USD' ? '$' : 'KES '}{s.price.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-foreground">{currencyPrefix(s.currency)}{s.price.toFixed(2)}</p>
                   </div>
                   <div className={`rounded-lg p-3 border ${s.change >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
                     <p className="text-[10px] text-muted-foreground font-medium">Change</p>

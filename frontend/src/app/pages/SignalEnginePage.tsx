@@ -3,6 +3,7 @@ import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
+import { currencyPrefix } from "../utils/currency";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -388,8 +389,8 @@ function ForwardTestPanel() {
                   <tr key={p.symbol} className="border-b border-border hover:bg-accent">
                     <td className="py-2 px-3 font-medium text-foreground">{p.symbol}</td>
                     <td className="py-2 px-3 capitalize text-muted-foreground">{p.action}</td>
-                    <td className="py-2 px-3 text-right text-muted-foreground">{p.currency === 'KES' ? 'KES ' : '$'}{p.entryPrice.toFixed(2)}</td>
-                    <td className="py-2 px-3 text-right text-muted-foreground">{p.currency === 'KES' ? 'KES ' : '$'}{p.lastPrice.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right text-muted-foreground">{currencyPrefix(p.currency)}{p.entryPrice.toFixed(2)}</td>
+                    <td className="py-2 px-3 text-right text-muted-foreground">{currencyPrefix(p.currency)}{p.lastPrice.toFixed(2)}</td>
                     <td className={`py-2 px-3 text-right font-medium ${p.unrealizedPct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                       {p.unrealizedPct >= 0 ? "+" : ""}{p.unrealizedPct.toFixed(2)}%
                     </td>
@@ -536,7 +537,7 @@ function ForwardTestPanel() {
                     </Badge>
                   </td>
                   <td className="py-2 px-3 text-right text-muted-foreground">{p.confidence}%</td>
-                  <td className="py-2 px-3 text-right text-muted-foreground">{p.currency === 'KES' ? 'KES ' : '$'}{p.price?.toFixed(2)}</td>
+                  <td className="py-2 px-3 text-right text-muted-foreground">{currencyPrefix(p.currency)}{p.price?.toFixed(2)}</td>
                   <td className={`py-2 px-3 text-right font-medium ${p.actualReturn !== null ? (p.actualReturn > 0 ? "text-emerald-600" : "text-red-600") : "text-muted-foreground"}`}>
                     {p.actualReturn !== null ? `${p.actualReturn > 0 ? "+" : ""}${p.actualReturn.toFixed(1)}%` : "—"}
                   </td>

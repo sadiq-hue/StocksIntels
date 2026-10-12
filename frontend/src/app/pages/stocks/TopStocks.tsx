@@ -9,6 +9,7 @@ import {
   Banknote, BarChart3,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
+import { currencyPrefix } from "../../utils/currency";
 import { parseVolume, formatVolume } from "../../utils/format";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
@@ -201,7 +202,7 @@ export function TopStocks() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="text-sm font-bold text-foreground font-mono">
-                        {stock.currency === "USD" ? "$" : "KES "}{(stock.price || 0).toFixed(2)}
+                        {currencyPrefix(stock.currency)}{(stock.price || 0).toFixed(2)}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right">

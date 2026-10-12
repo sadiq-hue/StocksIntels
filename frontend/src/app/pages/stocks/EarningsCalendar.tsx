@@ -7,6 +7,7 @@ import {
   Building2, Globe, ExternalLink, X,
 } from "lucide-react";
 import { useNavigate } from "react-router";
+import { currencyPrefix } from "../../utils/currency";
 import {
   fetchUpcomingEarnings, fetchEarningsCriteria,
   type EarningsEvent, type EarningsResult, type EarningsCriteria,
@@ -15,7 +16,7 @@ import {
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function formatMarketCap(mcap: number, currency?: string): string {
-  const sym = currency === "KES" ? "KES " : "$";
+  const sym = currencyPrefix(currency);
   if (mcap >= 1e12) return `${sym}${(mcap / 1e12).toFixed(2)}T`;
   if (mcap >= 1e9) return `${sym}${(mcap / 1e9).toFixed(1)}B`;
   if (mcap >= 1e6) return `${sym}${(mcap / 1e6).toFixed(1)}M`;
@@ -87,12 +88,12 @@ function EarningDetail({ event, onClose }: { event: EarningsEvent; onClose: () =
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-center">
                 <p className="text-[10px] text-blue-600 font-semibold uppercase mb-1">Estimated</p>
-                <p className="text-lg font-black text-blue-700">{event.currency === "KES" ? "KES " : "$"}{event.estEPS.toFixed(2)}</p>
+                <p className="text-lg font-black text-blue-700">{currencyPrefix(event.currency)}{event.estEPS.toFixed(2)}</p>
               </div>
               <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-3 text-center">
                 <p className="text-[10px] text-emerald-600 font-semibold uppercase mb-1">Actual</p>
                 <p className="text-lg font-black text-emerald-700">
-                  {isUpcoming ? "\u2014\u2014" : `${event.currency === "KES" ? "KES " : "$"}${event.actualEPS.toFixed(2)}`}
+                  {isUpcoming ? "\u2014\u2014" : `${currencyPrefix(event.currency)}${event.actualEPS.toFixed(2)}`}
                 </p>
               </div>
               <div className={`rounded-lg border p-3 text-center ${isUpcoming ? "bg-muted border-border" : event.isBeat ? "bg-emerald-50 border-emerald-100" : "bg-red-50 border-red-100"}`}>
@@ -370,7 +371,7 @@ export function EarningsCalendar() {
                       </div>
                       <div className="text-right">
                         <p className="text-[10px] text-muted-foreground uppercase font-semibold">Act.</p>
-                        <p className="text-sm font-mono font-bold">{e.actualEPS === 0 ? "\u2014\u2014" : `${e.currency === "KES" ? "KES " : "$"}${e.actualEPS.toFixed(2)}`}</p>
+                        <p className="text-sm font-mono font-bold">{e.actualEPS === 0 ? "\u2014\u2014" : `${currencyPrefix(e.currency)}${e.actualEPS.toFixed(2)}`}</p>
                       </div>
                       <div className={`px-2.5 py-1.5 rounded-lg text-center ${e.actualEPS === 0 ? "bg-muted" : e.isBeat ? "bg-emerald-50" : "bg-red-50"}`}>
                         <p className={`text-xs font-bold flex items-center gap-0.5 ${e.actualEPS === 0 ? "text-gray-400" : e.isBeat ? "text-emerald-700" : "text-red-700"}`}>

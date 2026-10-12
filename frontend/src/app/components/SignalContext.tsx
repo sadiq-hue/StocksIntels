@@ -2,6 +2,7 @@
 import { Badge } from "./ui/badge";
 import { AlertTriangle, Info, Newspaper, Database } from "lucide-react";
 import type { Signal } from "../types/signals";
+import { currencyPrefix } from "../utils/currency";
 
 // Everything here is best-effort: the engine omits levels for Hold ratings and
 // for stocks whose levels failed validation, so each block renders only when its
@@ -38,7 +39,7 @@ export function TradeLevelLadder(props: {
   if (!entry) return null;
 
   const pctOf = (lvl: number) => ((lvl - entry) / entry) * 100;
-  const sym = (props.currency || "USD") === "KES" ? "KES " : "$";
+  const sym = currencyPrefix(props.currency || "USD");
 
   // Ladder geometry: place stop at 0% and the far target at 100%, then map any
   // level (or the live price) into that span.

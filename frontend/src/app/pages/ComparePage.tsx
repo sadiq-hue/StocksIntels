@@ -4,6 +4,7 @@ import { Card } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { currencyPrefix } from "../utils/currency";
 import { X, Search, GitCompare, TrendingUp, TrendingDown, Loader2, Plus, Download, Share2, Check, Trophy, ChevronDown, Calculator, Sparkles } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -142,7 +143,7 @@ interface SearchResult { ticker: string; name: string; sector?: string; market?:
 
 const DASH = "—";
 function money(v: number | null | undefined, c: string) {
-  return v == null ? DASH : `${c === "KES" ? "KES " : "$"}${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return v == null ? DASH : `${currencyPrefix(c)}${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function ratio(v: number | null | undefined) { return v == null ? DASH : Number(v).toFixed(2); }
 function pct(v: number | null | undefined, dp = 1) { return v == null ? DASH : `${Number(v).toFixed(dp)}%`; }

@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { useNavigate } from "react-router";
+import { currencyPrefix } from "../../utils/currency";
 import {
   fetchScreenerResults, fetchScreenerCriteria,
   type ScreenerFilters, type ScreenerStock, type ScreenerResult, type ScreenerCriteria,
@@ -375,7 +376,7 @@ export function StockScreener() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="text-sm font-bold text-foreground font-mono">
-                          {stock.currency === "USD" ? "$" : "KES "}{(stock.price ?? 0).toFixed(2)}
+                          {currencyPrefix(stock.currency)}{(stock.price ?? 0).toFixed(2)}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -472,7 +473,7 @@ export function StockScreener() {
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-bold font-mono text-foreground">
-                      {stock.currency === "USD" ? "$" : "KES "}{stock.price.toFixed(2)}
+                      {currencyPrefix(stock.currency)}{stock.price.toFixed(2)}
                     </div>
                     <div className={`flex items-center justify-end gap-0.5 text-xs font-bold ${isPositive ? "text-emerald-600" : "text-rose-600"}`}>
                       {isPositive ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}

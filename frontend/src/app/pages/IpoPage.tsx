@@ -8,6 +8,7 @@ import {
   ChevronDown, Check, RefreshCw, TrendingUp, TrendingDown, Info,
   DollarSign, Users, Timer, Globe2, ExternalLink, Search as SearchIcon,
 } from "lucide-react";
+import { currencyPrefix } from "../utils/currency";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -152,7 +153,7 @@ export function IpoPage() {
   const ActiveIcon = activeView.icon;
 
   const renderCard = (ipo: Ipo) => {
-    const cur = ipo.market === "NSE" ? "KES " : "$";
+    const cur = currencyPrefix(ipo.market === "NSE" ? "KES" : "USD");
     return (
       <Card key={ipo.id} className="p-4 border shadow-sm hover:shadow-md transition-shadow">
         <div className="flex items-start justify-between gap-2 mb-2">

@@ -72,3 +72,15 @@ export function formatCompactCurrency(amount: number, currencyCode: string): str
 }
 
 export const PORTFOLIO_CURRENCY_KEY = "portfolio_display_currency";
+
+/**
+ * Currency prefix in the app's display style: "$" for USD, "KES "/"₦ "/"R "
+ * for the rest. Use this instead of binary `currency === "USD" ? "$" : "KES "`
+ * checks so NGN (₦), ZAR (R), GHS (GH₵) etc. never mislabel as KES.
+ */
+export function currencyPrefix(code?: string): string {
+  const c = String(code || "USD").toUpperCase();
+  const opt = CURRENCIES.find(x => x.code === c);
+  if (!opt) return `${c} `;
+  return c === "USD" ? "$" : `${opt.symbol} `;
+}

@@ -3,6 +3,7 @@ import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import { Info, Calculator, Sparkles, BookOpen, X } from "lucide-react";
+import { currencyPrefix } from "../utils/currency";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, Cell, ReferenceLine,
@@ -24,7 +25,7 @@ function num(v: string): number | null {
 /** Per-share values in a large cap's currency. */
 function money(v: number | null | undefined, cur: string, dp = 2): string {
   if (v == null || !isFinite(v)) return DASH;
-  return `${cur === "KES" ? "KES " : "$"}${v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
+  return `${currencyPrefix(cur)}${v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
 }
 function pct(v: number | null | undefined, dp = 1): string {
   return v == null || !isFinite(v) ? DASH : `${v.toFixed(dp)}%`;
