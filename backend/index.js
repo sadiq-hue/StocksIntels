@@ -2289,14 +2289,8 @@ async function fetchRealTopMovers() {
 
   const { listMovers } = require('./mystocksAfricaApi');
   const africa = { nse: { gainers: [], losers: [] }, ngx: { gainers: [], losers: [] }, jse: { gainers: [], losers: [] } };
+  const keepStock = (r) => (!r.assetType || String(r.assetType).toUpperCase() === 'STOCK') && !/suspend/i.test(String(r.listingStatus || ''));
   for (const ex of ['NSE', 'NGX', 'JSE']) {
-    let rows = [];
-    try { rows = await listMovers(ex); } catch { rows = []; }
-    rows = rows.filter(r =>
-      (!r.assetType || String(r.assetType).toUpperCase() === 'STOCK') &&
-      !/suspend/i.test(String(r.listingStatus || ''))
-    );
-    const sorted = [...rows].sort((a, b) => (b.changePct || 0) - (a.changePct || 0));
     const map = (r) => {
       const c = Number(r.changePct) || 0;
       return {
@@ -2306,9 +2300,12 @@ async function fetchRealTopMovers() {
         volume: fmt(Number(r.volume) || 0), marketCap: 0, market: ex,
       };
     };
+    let gRows = [], lRows = [];
+    try { gRows = await listMovers(ex); } catch { gRows = []; }
+    try { lRows = await listMovers(ex, 'losers'); } catch { lRows = []; }
     africa[ex.toLowerCase()] = {
-      gainers: sorted.filter(r => (r.changePct || 0) >= 0).slice(0, 10).map(map),
-      losers: sorted.filter(r => (r.changePct || 0) < 0).reverse().slice(0, 10).map(map),
+      gainers: gRows.filter(keepStock).sort((a, b) => (b.changePct || 0) - (a.changePct || 0)).slice(0, 10).map(map),
+      losers: lRows.filter(keepStock).sort((a, b) => (a.changePct || 0) - (b.changePct || 0)).slice(0, 10).map(map),
     };
   }
 

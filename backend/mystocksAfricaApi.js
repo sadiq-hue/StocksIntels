@@ -235,14 +235,15 @@ async function listStocks(exchange, { limit = 200, search = '', cursor = '' } = 
   }
 }
 
-// Top movers (gainers/losers) for an exchange.
-async function listMovers(exchange) {
+// Top movers for an exchange. `direction` is 'gainers' (default) or 'losers'
+// — the partner endpoint returns one side per call.
+async function listMovers(exchange, direction) {
   if (!API_KEY) return [];
   try {
     const resp = await axios.get(`${API_BASE}/market/movers`, {
       timeout: FETCH_TIMEOUT * 2,
       headers: { Authorization: `Bearer ${API_KEY}`, Accept: 'application/json' },
-      params: { exchange },
+      params: { exchange, ...(direction === 'losers' ? { direction: 'losers' } : {}) },
     });
     const d = resp.data || {};
     const rows = Array.isArray(d.data) ? d.data : (Array.isArray(d) ? d : []);
