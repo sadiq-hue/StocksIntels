@@ -234,13 +234,15 @@ export function StockAnalysisPage() {
   // alongside the Kenyan NSE universe.
   useEffect(() => {
     let dead = false;
+    const load = (url: string) =>
+      fetch(url, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null));
     Promise.all([
-      fetch(`${API_URL}/africa/stocks?exchange=NGX&limit=200`).then(r => (r.ok ? r.json() : null)),
-      fetch(`${API_URL}/africa/stocks?exchange=JSE&limit=200`).then(r => (r.ok ? r.json() : null)),
+      load(`${API_URL}/africa/stocks?exchange=NGX&limit=100`),
+      load(`${API_URL}/africa/stocks?exchange=JSE&limit=100`),
     ]).then(([ngx, jse]) => {
       if (dead) return;
       const map = (d: any, market: StockMarket, currency: string): StockListItem[] =>
-        (Array.isArray(d?.data) ? d.data : []).map((r: any) => ({
+        (Array.isArray(d?.data) ? d.data : Array.isArray(d?.stocks) ? d.stocks : Array.isArray(d) ? d : []).map((r: any) => ({
           ticker: r.ticker,
           name: r.name,
           price: Number(r.price) || 0,
@@ -254,7 +256,7 @@ export function StockAnalysisPage() {
           currency,
         }));
       setAfricaUniverse([...map(ngx, 'ngx', 'NGN'), ...map(jse, 'jse', 'ZAR')]);
-    }).catch(() => {});
+    }).catch((e) => { console.error('[africa universe] load failed:', e); });
     return () => { dead = true; };
   }, []);
 
