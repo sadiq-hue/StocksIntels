@@ -17,7 +17,6 @@ import { useRealtimeQuotes } from '../contexts/RealtimeQuotesContext';
 import { fetchAllNews, type NewsArticle } from '../services/newsService';
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from '../services/marketDataService';
 import { useAuth } from '../auth/AuthContext';
-import { AfricanMarketsPanel } from '../components/AfricanMarketsPanel';
 
 function formatCompactNumber(value: number) {
   if (!Number.isFinite(value) || value === 0) return "0";
@@ -79,6 +78,11 @@ const MarketPage: React.FC = () => {
     const ex = (searchParams.get('exchange') || '').toUpperCase();
     return ex === 'NGX' ? 'ngx' : ex === 'JSE' ? 'jse' : 'nse';
   });
+  const [africaStocks, setAfricaStocks] = useState<any[]>([]);
+  const [africaSearch, setAfricaSearch] = useState("");
+  const [africaSort, setAfricaSort] = useState<'symbol' | 'price' | 'change'>('symbol');
+  const [africaPage, setAfricaPage] = useState(1);
+  const [africaLoading, setAfricaLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [emailAlerts, setEmailAlerts] = useState(() => {
     return localStorage.getItem('market_sentiment_emails') === 'true';
@@ -407,6 +411,9 @@ const MarketPage: React.FC = () => {
 
   const paginatedNse = useMemo(() => filteredNse.slice((nsePage - 1) * itemsPerPage, nsePage * itemsPerPage), [filteredNse, nsePage]);
   const paginatedGlobal = useMemo(() => filteredGlobal.slice((globalPage - 1) * itemsPerPage, globalPage * itemsPerPage), [filteredGlobal, globalPage]);
+  const filteredAfrica = useMemo(() => filterAndSort(africaStocks, africaSearch, africaSort), [africaStocks, africaSearch, africaSort]);
+  const paginatedAfrica = useMemo(() => filteredAfrica.slice((africaPage - 1) * itemsPerPage, africaPage * itemsPerPage), [filteredAfrica, africaPage]);
+  const africaPages = Math.max(1, Math.ceil(filteredAfrica.length / itemsPerPage));
 
   // Derive the exact set of symbols we need to fetch: the symbols on the
   // currently visible pages plus any favorited symbols — not the whole universe.
@@ -445,6 +452,32 @@ const MarketPage: React.FC = () => {
 
   useEffect(() => { setNsePage(1); }, [nseSearch, nseSort]);
   useEffect(() => { setGlobalPage(1); }, [globalSearch, globalSort]);
+  useEffect(() => { setAfricaPage(1); }, [africaSearch, africaSort, africaTab]);
+
+  // NGX/JSE listings (MyStocks Africa) for the African Activities tabs.
+  useEffect(() => {
+    if (africaTab !== 'ngx' && africaTab !== 'jse') return;
+    let dead = false;
+    setAfricaLoading(true);
+    fetch(`${API_BASE_URL}/africa/stocks?exchange=${africaTab.toUpperCase()}&limit=200`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (dead) return;
+        const rows = (Array.isArray(d?.data) ? d.data : []).map((r: any) => ({
+          symbol: r.ticker,
+          currency: r.currency,
+          company_name: r.name,
+          price: Number(r.price) || 0,
+          changePercent: Number(r.changePct) || 0,
+          volume: Number(r.volume) || 0,
+          provider: 'mystocksAfrica',
+        }));
+        setAfricaStocks(rows);
+      })
+      .catch(() => {})
+      .finally(() => { if (!dead) setAfricaLoading(false); });
+    return () => { dead = true; };
+  }, [africaTab]);
 
   // Debounced Yahoo search when local results are empty
   useEffect(() => {
@@ -689,7 +722,27 @@ const MarketPage: React.FC = () => {
               onStockClick={(stock: any) => navigate(`/app/stock/${stock.symbol?.replace(/^(NSE|NYSE|NASDAQ|AMEX):/, '')}?market=nse`)}
             />
           ) : (
-            <AfricanMarketsPanel exchange={africaTab === "ngx" ? "NGX" : "JSE"} />
+            <MarketWindow
+              embedded
+              hideHeader
+              title={africaTab.toUpperCase()}
+              stocks={paginatedAfrica}
+              search={africaSearch}
+              setSearch={setAfricaSearch}
+              sort={africaSort}
+              setSort={setAfricaSort}
+              accentColor="#0D7490"
+              currency={africaTab === "ngx" ? "NGN" : "ZAR"}
+              favorites={favorites}
+              toggleFavorite={toggleFavorite}
+              page={africaPage}
+              setPage={setAfricaPage}
+              totalPages={africaPages}
+              totalCount={filteredAfrica.length}
+              yahooResults={[]}
+              yahooSearching={africaLoading}
+              onStockClick={(stock: any) => navigate(`/app/stock/${stock.symbol}?market=${africaTab}`)}
+            />
           )}
         </div>
         <MarketWindow
