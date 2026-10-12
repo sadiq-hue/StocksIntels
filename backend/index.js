@@ -2304,8 +2304,8 @@ async function fetchRealTopMovers() {
     try { gRows = await listMovers(ex); } catch { gRows = []; }
     try { lRows = await listMovers(ex, 'losers'); } catch { lRows = []; }
     africa[ex.toLowerCase()] = {
-      gainers: gRows.filter(keepStock).sort((a, b) => (b.changePct || 0) - (a.changePct || 0)).slice(0, 10).map(map),
-      losers: lRows.filter(keepStock).sort((a, b) => (a.changePct || 0) - (b.changePct || 0)).slice(0, 10).map(map),
+      gainers: gRows.filter(keepStock).filter(r => (r.changePct || 0) > 0).sort((a, b) => (b.changePct || 0) - (a.changePct || 0)).slice(0, 10).map(map),
+      losers: lRows.filter(keepStock).filter(r => (r.changePct || 0) < 0).sort((a, b) => (a.changePct || 0) - (b.changePct || 0)).slice(0, 10).map(map),
     };
   }
 
