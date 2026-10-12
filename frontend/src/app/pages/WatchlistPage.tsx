@@ -24,6 +24,7 @@ interface WatchlistItem {
 export function WatchlistPage() {
   const { user } = useAuth();
   const [stocks, setStocks] = useState<WatchlistItem[]>([]);
+  const [quotes, setQuotes] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [newTicker, setNewTicker] = useState("");
   const [isAdding, setIsAdding] = useState(false);
@@ -41,13 +42,18 @@ export function WatchlistPage() {
       .slice(0, 5);
   }, [newTicker, allAvailableStocks]);
 
-  const fetchData = async () => {
+  // Resolve each row from the SAME signal source the Market Intelligence card
+  // renders. The bulk /signals feed is the card's source too; a symbol the feed
+  // did not surface (e.g. a Hold, or an open monitored position) is fetched from
+  // the per-symbol endpoint so the row still shows the intelligence's entry/stop/
+  // targets instead of blank cells. Live prices come from the same /quotes source
+  // the card's "Market Price" reads, so the Price column tracks the market.
+  const loadData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const userId = user?.id;
       if (!userId) {
-        toast.error("Please log in to view your watchlist.");
-        setLoading(false);
+        if (!silent) toast.error("Please log in to view your watchlist.");
         return;
       }
       const [watchlistRes, signalsRes] = await Promise.all([
@@ -56,28 +62,66 @@ export function WatchlistPage() {
       ]);
 
       if (!watchlistRes.ok) {
-        const errData = await watchlistRes.json();
+        const errData = await watchlistRes.json().catch(() => ({}));
         throw new Error(errData.error || "Failed to fetch watchlist");
       }
 
       const watchlist = await watchlistRes.json();
-      const signalsData = await signalsRes.json();
+      const signalsData = signalsRes.ok ? await signalsRes.json().catch(() => ({})) : {};
+      const list = Array.isArray(signalsData.signals) ? signalsData.signals : [];
+      const byTicker = new Map(list.map((s: any) => [String(s.ticker).toUpperCase(), s]));
 
-      const enriched = watchlist.map((item: any) => {
-        const signal = Array.isArray(signalsData.signals) ? signalsData.signals.find((s: any) => s.ticker === item.symbol.replace('NSE:', '')) : undefined;
+      const items = Array.isArray(watchlist) ? watchlist : [];
+      const enriched = await Promise.all(items.map(async (item: any) => {
+        const bare = String(item.symbol || '').replace('NSE:', '').toUpperCase();
+        let signal = byTicker.get(bare);
+        if (!signal && bare) {
+          try {
+            const r = await authFetch(`${API_BASE_URL}/signal/${encodeURIComponent(bare)}`);
+            if (r.ok) { const d = await r.json(); if (d && d.found) signal = d; }
+          } catch { /* row renders without a signal */ }
+        }
         return { ...item, signal };
-      });
-      
+      }));
+
       setStocks(enriched);
+
+      // Live quotes (best-effort) for every watched symbol.
+      const syms = items.map((i: any) => i.symbol).filter(Boolean).slice(0, 50);
+      if (syms.length) {
+        try {
+          const qr = await authFetch(`${API_BASE_URL}/quotes?symbols=${encodeURIComponent(syms.join(','))}`);
+          if (qr.ok) {
+            const rows = await qr.json();
+            if (Array.isArray(rows)) {
+              const next: Record<string, any> = {};
+              for (const q of rows) {
+                if (!q?.symbol) continue;
+                const up = String(q.symbol).toUpperCase();
+                next[up] = q;
+                if (up.includes(':')) next[up.split(':')[1]] = q;
+              }
+              setQuotes(next);
+            }
+          }
+        } catch { /* keep the signal snapshot price */ }
+      }
     } catch (err) {
       console.error("Failed to fetch watchlist:", err);
-      toast.error("Could not connect to the market server.");
+      if (!silent) toast.error("Could not connect to the market server.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { loadData(false); }, []);
+
+  // Keep targets/prices in step with the Market Intelligence page, which
+  // auto-refreshes. Silent so the table never blinks.
+  useEffect(() => {
+    const id = setInterval(() => { loadData(true); }, 60000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = () => setShowSuggestions(false);
@@ -100,7 +144,7 @@ export function WatchlistPage() {
       if (res.ok) {
         setNewTicker("");
         setShowSuggestions(false);
-        await fetchData();
+        await loadData(false);
         toast.success(`${symbol} added to watchlist!`);
       }
       else {
@@ -232,6 +276,11 @@ export function WatchlistPage() {
                 <tbody className="divide-y divide-gray-50">
                   {stocks.map((stock) => {
                     const s = stock.signal;
+                    const bare = stock.symbol.replace('NSE:', '').toUpperCase();
+                    const q = quotes[stock.symbol.toUpperCase()] || quotes[bare];
+                    const qPrice = q ? (typeof q.price === 'number' ? q.price : parseFloat(q.price)) : NaN;
+                    const livePrice = Number.isFinite(qPrice) && qPrice > 0 ? qPrice : null;
+                    const shownPrice = livePrice != null ? livePrice : (typeof s?.price === 'number' ? s.price : null);
                     return (
                     <tr key={stock.id} className="hover:bg-accent/50 transition-colors group">
                       <td className="px-3 py-3 md:px-6 md:py-4">
@@ -254,7 +303,8 @@ export function WatchlistPage() {
                         </div>
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right font-semibold text-foreground text-sm">
-                        {stock.symbol.startsWith('NSE:') ? 'KES' : '$'} {s?.price?.toFixed(2) || '0.00'}
+                        {stock.symbol.startsWith('NSE:') ? 'KES' : '$'} {shownPrice != null ? shownPrice.toFixed(2) : '—'}
+                        {livePrice != null && <span className="ml-1 inline-block size-1.5 rounded-full bg-emerald-500 align-middle" title="Live price" />}
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right hidden sm:table-cell">
                         <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
