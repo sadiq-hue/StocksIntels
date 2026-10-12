@@ -7,6 +7,7 @@ import type { FinancialReport } from "../services/financialsService";
 interface FinancialMetricsProps {
   symbol: string;
   sector: string;
+  instrumentName?: string;
 }
 
 function formatLargeNum(n: number): string {
@@ -33,7 +34,7 @@ function badgeColor(value: number | null | undefined, good: (v: number) => boole
   return good(value) ? "text-emerald-600" : "text-red-500";
 }
 
-export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
+export function FinancialMetrics({ symbol, sector, instrumentName }: FinancialMetricsProps) {
   const [report, setReport] = useState<FinancialReport | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -62,12 +63,17 @@ export function FinancialMetrics({ symbol, sector }: FinancialMetricsProps) {
   }
 
   if (!report?.success || !report.data) {
+    const isFund = /ETF|ETN|Feeder|AMETF|Index Fund/i.test(instrumentName || '') || /ETF|Fund/i.test(sector || '');
     return (
       <Card className="relative overflow-hidden border border-border shadow-sm h-full">
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0D7490] via-[#0EA5E9] to-[#0D7490]" />
         <div className="p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-4"><span className="flex size-6 items-center justify-center rounded-md bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] text-white"><Activity className="size-3.5" /></span> Financial Health</h3>
-          <p className="text-xs text-muted-foreground text-center py-8">No financial data available for {symbol}</p>
+          <p className="text-xs text-muted-foreground text-center py-8">
+            {isFund
+              ? 'This instrument is a fund/ETF — it does not report company financial statements.'
+              : 'No financial statements are available for this instrument.'}
+          </p>
         </div>
       </Card>
     );

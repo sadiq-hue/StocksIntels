@@ -1838,7 +1838,7 @@ export function StockAnalysisPage() {
 
             {/* Right column: Financial Health */}
             <div className="flex flex-col gap-6">
-              <FinancialMetrics symbol={finSymbol} sector={activeSelection.sector} />
+              <FinancialMetrics symbol={finSymbol} sector={activeSelection.sector} instrumentName={activeSelection.name} />
             </div>
           </div>
 
