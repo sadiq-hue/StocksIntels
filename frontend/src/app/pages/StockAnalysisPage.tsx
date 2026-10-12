@@ -279,6 +279,11 @@ export function StockAnalysisPage() {
   const [etfHolders, setEtfHolders] = useState<Holder[]>([]);
 
   const activeSelection = stockUniverse.find((s) => s.ticker === selectedStock.ticker) || selectedStock;
+  // Financial statements live under different providers per market: JSE via Yahoo
+  // (TICKER.JO), NGX via the stockanalysis.com scraper (NGX:TICKER), NSE/US as-is.
+  const finSymbol = activeSelection.market === 'jse' ? `${activeSelection.ticker}.JO`
+    : activeSelection.market === 'ngx' ? `NGX:${activeSelection.ticker}`
+    : activeSelection.ticker;
 
   const sectors = useMemo(
     () => ["All", ...Array.from(new Set(stockUniverse.map((s) => s.sector)))],
@@ -523,7 +528,7 @@ export function StockAnalysisPage() {
       const userIdParam = user?.id ? `?userId=${user.id}` : '';
       const [signalsRes, finRes] = await Promise.allSettled([
         authFetch(`${API_URL}/signals${userIdParam}`).then(r => r.ok ? r.json() : null),
-        fetchFinancialReport(ticker, "annual", 2),
+        fetchFinancialReport(finSymbol, "annual", 2),
       ]);
       let sig: any = null;
       if (signalsRes.status === 'fulfilled' && signalsRes.value?.signals) {
@@ -1833,7 +1838,7 @@ export function StockAnalysisPage() {
 
             {/* Right column: Financial Health */}
             <div className="flex flex-col gap-6">
-              <FinancialMetrics symbol={activeSelection.ticker} sector={activeSelection.sector} />
+              <FinancialMetrics symbol={finSymbol} sector={activeSelection.sector} />
             </div>
           </div>
 

@@ -857,6 +857,13 @@ async function isNseStock(symbol) {
 
 async function getFinancialReport(symbol, period = 'annual', limit = 4, providerOverride = null) {
   try {
+    // Exchanges not covered by Yahoo Finance / SEC EDGAR (currently NGX Nigeria):
+    // use the stockanalysis.com scraper. Symbol arrives qualified ("NGX:DANGCEM").
+    if (/^NGX:/i.test(symbol)) {
+      const sa = require('./stockAnalysisScraper');
+      return await sa.getFinancialReport(symbol, period, limit);
+    }
+
     const isUs = edgarService.isUsStock(symbol);
 
     // NSE-listed stocks: serve local NSE data only. Yahoo Finance / SEC EDGAR have
