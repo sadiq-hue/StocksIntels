@@ -265,8 +265,7 @@ export function WatchlistPage() {
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right">Entry</th>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden md:table-cell">Stop</th>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden md:table-cell">Target 1</th>
-                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden lg:table-cell">Target 2</th>
-                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden xl:table-cell">Target 3</th>
+                    <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden lg:table-cell">Extended Target</th>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider text-right hidden lg:table-cell">R:R</th>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">Signal</th>
                     <th className="px-3 py-3 md:px-6 md:py-4 text-xs font-bold text-muted-foreground uppercase tracking-wider hidden lg:table-cell">Holding Period</th>
@@ -325,9 +324,6 @@ export function WatchlistPage() {
                         {s?.target1 ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.target1.toFixed(2)}` : '-'}
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-emerald-600 hidden lg:table-cell">
-                        {s?.target2 ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.target2.toFixed(2)}` : '-'}
-                      </td>
-                      <td className="px-3 py-3 md:px-4 md:py-4 text-right font-mono text-sm font-semibold text-emerald-600 hidden xl:table-cell">
                         {s?.target3 ? `${stock.symbol.startsWith('NSE:') ? 'KES' : '$'} ${s.target3.toFixed(2)}` : '-'}
                       </td>
                       <td className="px-3 py-3 md:px-4 md:py-4 text-right text-sm font-bold text-foreground hidden lg:table-cell">
