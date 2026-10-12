@@ -478,7 +478,7 @@ async function generateDailyBriefContent() {
     company: m.name || '',
     change: (m.change > 0 ? '+' : '') + (Math.round((m.change || 0) * 100) / 100) + '%',
     volume: m.volume && m.volume !== '0' && m.volume !== '--' ? m.volume : '--',
-    market: (NSE_SET.has(m.ticker) || m.market === 'NSE') ? 'NSE' : 'Global',
+    market: (NSE_SYMBOLS.includes(m.ticker) || m.market === 'NSE') ? 'NSE' : 'Global',
   }));
 
   const signalOfDay = enrichedSignals
