@@ -212,7 +212,7 @@ async function listStocks(exchange, { limit = 200, search = '', cursor = '' } = 
       params: { exchange, limit, ...(search ? { search } : {}), ...(cursor ? { cursor } : {}) },
     });
     const d = resp.data || {};
-    const rows = Array.isArray(d.data) ? d.data : (Array.isArray(d) ? d : []);
+    const rows = Array.isArray(d.stocks) ? d.stocks : (Array.isArray(d.data) ? d.data : (Array.isArray(d) ? d : []));
     return {
       data: rows.map(r => ({
         symbol: r.symbol || null,
