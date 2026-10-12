@@ -100,15 +100,6 @@ function formatCompactNumber(value: number) {
 
 const allStocks = [...kenyanStocks, ...globalStocks];
 
-const indices = [
-  { name: "NSE 20", value: "1,847.56", change: "+0.87%", isPositive: true, volume: "156M", market: "NSE" },
-  { name: "S&P 500", value: "5,204.34", change: "+1.15%", isPositive: true, volume: "3.8B", market: "Global" },
-  { name: "NASDAQ", value: "16,332.24", change: "+1.54%", isPositive: true, volume: "4.2B", market: "Global" },
-  { name: "NYSE Composite", value: "17,842.15", change: "+0.72%", isPositive: true, volume: "2.1B", market: "Global" },
-  { name: "FTSE 100", value: "8,245.60", change: "+0.53%", isPositive: true, volume: "1.8B", market: "Global" },
-  { name: "NSE All Share", value: "112.45", change: "+1.08%", isPositive: true, volume: "450M", market: "NSE" },
-];
-
 interface PerformanceDataPoint {
   month: string;
   portfolio: number;
@@ -150,13 +141,7 @@ interface MarketPulseData {
   topSector: { name: string; change: string } | null;
 }
 
-const fallbackNews: NewsArticle[] = [
-  { id: "fallback-1", headline: "Safaricom reports record M-Pesa growth", source: "Business Daily", timestamp: "2h ago", publishedAt: new Date().toISOString(), category: "nse", relatedStocks: ["SCOM"], sentiment: "positive", excerpt: "", url: "#" },
-  { id: "fallback-2", headline: "Central Bank holds rates steady at 10.5%", source: "Reuters", timestamp: "4h ago", publishedAt: new Date().toISOString(), category: "nse", relatedStocks: [], sentiment: "neutral", excerpt: "", url: "#" },
-  { id: "fallback-3", headline: "Nvidia gains 4.5% after AI summit highlights", source: "CNBC", timestamp: "3h ago", publishedAt: new Date().toISOString(), category: "global", relatedStocks: ["NVDA"], sentiment: "positive", excerpt: "", url: "#" },
-  { id: "fallback-4", headline: "Equity Group Q2 profit up 23%", source: "NSE", timestamp: "6h ago", publishedAt: new Date().toISOString(), category: "nse", relatedStocks: ["EQTY"], sentiment: "positive", excerpt: "", url: "#" },
-  { id: "fallback-5", headline: "New regulations for digital lenders announced", source: "Capital FM", timestamp: "8h ago", publishedAt: new Date().toISOString(), category: "nse", relatedStocks: [], sentiment: "neutral", excerpt: "", url: "#" },
-];
+const fallbackNews: NewsArticle[] = [];
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -169,6 +154,8 @@ export function DashboardPage() {
   const [perfLoading, setPerfLoading] = useState(false);
   const [perfMeta, setPerfMeta] = useState({ totalReturn: 0, totalReturnPercent: 0, currentValue: 0, hasHistory: false, nseBenchmarkSince: null as string | null });
   const [pulse, setPulse] = useState<MarketPulseData | null>(null);
+  const [liveIndices, setLiveIndices] = useState<any[]>([]);
+  const [liveSectors, setLiveSectors] = useState<any[]>([]);
   const [movers, setMovers] = useState<{ gainers: any[]; losers: any[] }>({ gainers: [], losers: [] });
   const [activeStocks, setActiveStocks] = useState<any[]>([]);
   const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
@@ -267,6 +254,27 @@ export function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    const fetchIndices = () => {
+      authFetch(`${API_BASE}/market/indices`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(rows => { if (!cancelled && Array.isArray(rows)) setLiveIndices(rows); })
+        .catch(() => {});
+    };
+    const fetchSectors = () => {
+      authFetch(`${API_BASE}/market/sectors`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(rows => { if (!cancelled && Array.isArray(rows)) setLiveSectors(rows); })
+        .catch(() => {});
+    };
+    fetchIndices();
+    fetchSectors();
+    const indicesInterval = setInterval(fetchIndices, 60000);
+    const sectorsInterval = setInterval(fetchSectors, 60000);
+    return () => { cancelled = true; clearInterval(indicesInterval); clearInterval(sectorsInterval); };
+  }, []);
+
+  useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
     authFetch(`${API_BASE}/watchlist?userId=${user.id}`)
@@ -320,33 +328,11 @@ export function DashboardPage() {
 
   const timeRanges = ["1D", "1W", "1M", "3M", "6M", "1Y", "ALL"];
 
-  const topGainers = useMemo(() =>
-    movers.gainers.length > 0 ? movers.gainers
-      : allStocks.filter(s => s.change > 0).sort((a, b) => b.change - a.change).slice(0, 5),
-    [movers.gainers]
-  );
+  const topGainers = useMemo(() => movers.gainers, [movers.gainers]);
 
-  const topLosers = useMemo(() =>
-    movers.losers.length > 0 ? movers.losers
-      : allStocks.filter(s => s.change < 0).sort((a, b) => a.change - b.change).slice(0, 5),
-    [movers.losers]
-  );
+  const topLosers = useMemo(() => movers.losers, [movers.losers]);
 
-  const sectorData = useMemo(() => {
-    const map = new Map<string, { totalChange: number; count: number }>();
-    for (const s of allStocks) {
-      const existing = map.get(s.sector) || { totalChange: 0, count: 0 };
-      existing.totalChange += s.change;
-      existing.count += 1;
-      map.set(s.sector, existing);
-    }
-    return Array.from(map.entries()).map(([sector, data]) => ({
-      sector,
-      change: (data.totalChange / data.count).toFixed(1),
-      avgChange: data.totalChange / data.count,
-      count: data.count,
-    })).sort((a, b) => b.avgChange - a.avgChange);
-  }, []);
+  const sectorData = useMemo(() => liveSectors, [liveSectors]);
 
 
   // Watchlist rows are stored with whatever exchange prefix the user added them
@@ -404,10 +390,10 @@ export function DashboardPage() {
           stat?.market === "nse" ||
           String(live?.symbol ?? live?.ticker ?? "").startsWith("NSE:") === true;
 
-        const pct = pctOf(live) ?? (typeof stat?.change === "number" ? stat.change : null);
-        // Static prices are numbers; live prices are numbers too. Keep the
-        // number for formatting rather than a pre-stringified one.
-        const rawPrice = live?.price ?? stat?.price;
+        const pct = pctOf(live);
+        // Only live prices are shown — no static/universe fallback, so an
+        // unquoted symbol renders as "-" rather than a stale hardcoded value.
+        const rawPrice = live?.price;
         const price =
           typeof rawPrice === "number" && isFinite(rawPrice) && rawPrice > 0
             ? rawPrice.toFixed(2)
@@ -471,8 +457,8 @@ export function DashboardPage() {
     return built;
   }, [activeStocks, watchlistItems, watchlistQuotes]);
 
-  const nseIndices = indices.filter(i => i.market === "NSE");
-  const globalIndices = indices.filter(i => i.market === "Global");
+  const nseIndices = liveIndices.filter(i => i.market === "NSE");
+  const globalIndices = liveIndices.filter(i => i.market === "Global");
 
   const [newsItems, setNewsItems] = useState<NewsArticle[]>(fallbackNews);
   const [newsLoading, setNewsLoading] = useState(true);
@@ -721,7 +707,7 @@ export function DashboardPage() {
             </p>
             <h2 className="text-lg sm:text-xl font-bold">Your portfolio is {enhancedTotals.pnlPercent >= 0 ? 'up' : 'down'} <span className={enhancedTotals.pnlPercent >= 0 ? 'text-green-300' : 'text-red-300'}>{enhancedTotals.pnlPercent >= 0 ? '+' : ''}{enhancedTotals.pnlPercent}%</span> today</h2>
             <p className="text-white/70 text-sm mt-1">
-              NSE 20: {indices[0].value} ({indices[0].change}) &middot; S&P 500: {indices[1].value} ({indices[1].change})
+              NSE 20: {pulse?.indices?.nse?.value ?? '--'} ({pulse?.indices?.nse?.change ?? '--'}) &middot; S&P 500: {pulse?.indices?.sp500?.value ?? '--'} ({pulse?.indices?.sp500?.change ?? '--'})
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -855,6 +841,9 @@ export function DashboardPage() {
             </Link>
           </div>
           <div className="space-y-3">
+            {nseIndices.length === 0 && (
+              <div className="p-6 text-center text-xs text-muted-foreground">No live index data available</div>
+            )}
             {nseIndices.map((index) => (
               <div key={index.name} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 dark:bg-muted/30 hover:bg-muted/80 dark:hover:bg-muted/50 transition-colors">
                 <div>
@@ -888,6 +877,9 @@ export function DashboardPage() {
             </Link>
           </div>
           <div className="space-y-3">
+            {globalIndices.length === 0 && (
+              <div className="p-6 text-center text-xs text-muted-foreground">No live index data available</div>
+            )}
             {globalIndices.map((index) => (
               <div key={index.name} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 dark:bg-muted/30 hover:bg-muted/80 dark:hover:bg-muted/50 transition-colors">
                 <div>
@@ -1072,6 +1064,9 @@ export function DashboardPage() {
             </Link>
           </div>
           <div className="space-y-1">
+            {topGainers.length === 0 && (
+              <div className="p-6 text-center text-xs text-muted-foreground">No live gainers available</div>
+            )}
             {topGainers.map((stock) => {
               const sig = signals.find(s => s.ticker === stock.ticker);
               return (
@@ -1115,6 +1110,9 @@ export function DashboardPage() {
             </Link>
           </div>
           <div className="space-y-1">
+            {topLosers.length === 0 && (
+              <div className="p-6 text-center text-xs text-muted-foreground">No live losers available</div>
+            )}
             {topLosers.map((stock) => {
               const sig = signals.find(s => s.ticker === stock.ticker);
               return (
