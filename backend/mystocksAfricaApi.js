@@ -278,13 +278,17 @@ async function listMovers(exchange, direction) {
 }
 
 // ── Market Intelligence Feed ──────────────────────────────────────────────────
-const intelCache = { data: null, time: 0 };
+// Cache per exchange — a single global cache meant the first call (e.g. JSE)
+// was served for every later exchange (NGX), hiding NGX coverage entirely.
+const intelCache = new Map(); // exchange|ALL -> { data, time }
 const INTEL_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
 
 async function fetchMarketIntel(exchange, limit = 10) {
   if (!API_KEY) return null;
+  const key = exchange ? String(exchange).toUpperCase() : 'ALL';
+  const cached = intelCache.get(key);
   const now = Date.now();
-  if (intelCache.data && now - intelCache.time < INTEL_CACHE_TTL_MS) return intelCache.data;
+  if (cached && now - cached.time < INTEL_CACHE_TTL_MS) return cached.data;
 
   try {
     const resp = await axios.get(`${API_BASE}/market-intel`, {
@@ -294,8 +298,7 @@ async function fetchMarketIntel(exchange, limit = 10) {
     });
     const articles = resp.data?.articles || resp.data?.data || resp.data;
     const result = Array.isArray(articles) ? articles : [];
-    intelCache.data = result;
-    intelCache.time = now;
+    intelCache.set(key, { data: result, time: now });
     return result;
   } catch (e) {
     console.warn(`[myStocksAfrica] market-intel failed: ${e.message}`);

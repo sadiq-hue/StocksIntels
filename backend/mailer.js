@@ -2011,6 +2011,7 @@ async function sendStockInsightsEmail(email, data, options = {}) {
     thematicIntro = '',
     bigStory = null,
     stockDeepDives = [],
+    africaNews = [],
     weekAhead = [],
     bottomLine = [],
     yourTake = '',
@@ -2120,6 +2121,27 @@ async function sendStockInsightsEmail(email, data, options = {}) {
     </tr>`;
   }).join('');
 
+  // ── Pan-African editorial news (mirrors the site's #insights feed) ──
+  const africaNewsHtml = (africaNews || []).length ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <div style="background:linear-gradient(135deg,#0f766e 0%,#14b8a6 100%);color:#ffffff;padding:8px 16px;font-size:12px;font-weight:600">
+        African Market News
+      </div>
+      <div style="padding:8px 16px">
+        ${(africaNews || []).slice(0, 6).map(n => {
+          const tag = String(n.exchange || '').toUpperCase();
+          const badge = ['NSE', 'NGX', 'JSE'].includes(tag) ? ` <span style="background:${BRAND_COLOR}1a;color:${BRAND_COLOR};padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700">${tag}</span>` : '';
+          const title = esc(n.title || '');
+          const link = n.url ? `<a href="${esc(n.url)}" style="color:${TEXT_DARK};text-decoration:none">${title}</a>` : title;
+          const dateStr2 = n.publishedAt ? new Date(n.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+          return `<div style="padding:7px 0;border-bottom:1px solid ${BORDER}">
+            <div style="font-size:13px;font-weight:600;color:${TEXT_DARK};line-height:1.4">${link}${badge}</div>
+            <div style="font-size:11px;color:${TEXT_LIGHT};margin-top:2px">${esc(n.source || '')}${dateStr2 ? ' &middot; ' + dateStr2 : ''}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
   // ── Separate NSE and Global stocks for section headers ──
   const nseStocks = stockDeepDives.filter(d => d.market !== 'Global' && d.exchange === 'NSE');
   const globalStocks = stockDeepDives.filter(d => d.market === 'Global' || d.exchange !== 'NSE');
@@ -2156,6 +2178,8 @@ async function sendStockInsightsEmail(email, data, options = {}) {
     </div>
     ${deepDiveCards}
     ` : ''}
+
+    ${africaNewsHtml}
 
     ${weekAhead.length ? `
     <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:16px">

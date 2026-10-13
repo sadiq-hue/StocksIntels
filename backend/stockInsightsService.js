@@ -66,13 +66,39 @@ async function fetchJson(url, fallback = null) {
 }
 
 // Pan-African editorial feed (MyStocks market-intel) that powers the public
-// site's "#insights" section. JSE/NGX SENS & company reports live here with an
-// explicit `exchange` and (often) `symbols`, which the Kenya/US-tagged general
-// news feed never carries.
+// site's "#insights" section — JSE/NGX/NSE SENS & company reports. Fetched per
+// exchange (the feed cache is keyed per exchange) and normalised so it can feed
+// both the picker (via `symbols`) and the newsletter's African news section.
 async function getAfricaNewsArticles() {
-  const res = await fetchJson(`${BASE}/api/market-intel?limit=60`, []);
-  const arr = Array.isArray(res) ? res : (res?.articles || res?.data || []);
-  return Array.isArray(arr) ? arr : [];
+  const fetchList = async (ex) => {
+    const res = await fetchJson(`${BASE}/api/market-intel?limit=20${ex ? `&exchange=${ex}` : ''}`, []);
+    return Array.isArray(res) ? res : (res?.articles || res?.data || []);
+  };
+  const [all, ngx, jse] = await Promise.all([
+    fetchList(null).catch(() => []),
+    fetchList('NGX').catch(() => []),
+    fetchList('JSE').catch(() => []),
+  ]);
+  const seen = new Set();
+  const out = [];
+  for (const arr of [ngx, jse, all]) {
+    for (const a of arr) {
+      if (!a) continue;
+      const id = a.id || a.slug || a.title;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push({
+        title: a.title || '',
+        summary: a.summary || '',
+        source: a.source || 'MyStocks',
+        exchange: String(a.exchange || '').toUpperCase() || null,
+        url: a.url || a.sourceUrl || (a.slug ? `https://mystocks.africa/market-intel/${a.slug}` : ''),
+        publishedAt: a.publishedAt || a.createdAt || null,
+        symbols: Array.isArray(a.symbols) ? a.symbols : [],
+      });
+    }
+  }
+  return out;
 }
 
 // ── Classify ticker as NSE or Global ──────────────────────────────
@@ -374,9 +400,11 @@ async function pickHotStocks(forceFresh = false) {
   if (picked.length < PICKS_PER_ISSUE) {
     for (const s of forSelection) {
       if (picked.length >= PICKS_PER_ISSUE) break;
+      const g = groupOf(s.market);
+      if (marketCount[g] >= PICKS_PER_MARKET) continue;
       if (picked.find(p => p.ticker === s.ticker)) continue;
       picked.push(s);
-      marketCount[groupOf(s.market)]++;
+      marketCount[g]++;
       if (s.repeatCount > 0) repeatsUsed++;
     }
   }
@@ -1162,6 +1190,13 @@ async function generateDailyInsights(force = false) {
   // 6b. Generate editorial summary
   const summary = generateEditorialSummary(deepDives, marketOverview);
 
+  // 6c. Pan-African editorial headlines (JSE/NGX/NSE SENS & company reports),
+  // mirroring the public site's "#insights" section so the newsletter carries
+  // African-market coverage even when no NGX/JSE name makes the deep-dive list.
+  const africaNews = await getAfricaNewsArticles()
+    .then(list => list.filter(n => n.title).slice(0, 6))
+    .catch(() => []);
+
   // 7. Build content object
   const dateStr = new Date().toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -1170,6 +1205,7 @@ async function generateDailyInsights(force = false) {
   const content = {
     dateStr,
     marketOverview,
+    africaNews,
     editorsNote,
     thematicIntro,
     bigStory,
