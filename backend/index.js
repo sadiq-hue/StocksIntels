@@ -8467,6 +8467,14 @@ app.get('/api/market/movers', async (req, res) => {
   }
 });
 
+// Pre-warm the movers cache shortly after boot so the first dashboard load
+// doesn't wait on the slow (10-80s) upstream build.
+setTimeout(() => {
+  buildDailyMovers()
+    .then(d => { if (d.combined.gainers.length || d.combined.losers.length) { moversCache.data = d; moversCache.at = Date.now(); } })
+    .catch(() => {});
+}, 8000);
+
 // Real-time total turnover by market (price * volume) — uses direct Yahoo chart API for global, BASE_QUOTES for NSE
 let turnoverCache = { nse: 0, global: 0, nseVolume: 0, globalVolume: 0, nse: { turnover: 0, volume: 0, count: 0 }, global: { turnover: 0, volume: 0, count: 0 } };
 let turnoverCacheTime = 0;
