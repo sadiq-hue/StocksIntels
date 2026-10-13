@@ -1,6 +1,7 @@
 const { generic } = require('./apiClient');
 
-let cachedRate = null;
+let cachedRate = null;      // USD -> KES (legacy single-rate callers)
+let cachedRates = null;     // { USDKES, USDNGN, USDZAR, USDGHS }
 let lastFetch = 0;
 const CACHE_TTL_MS = parseInt(process.env.FX_CACHE_TTL_MS || '300000', 10); // 5 min default
 
@@ -10,42 +11,50 @@ const FX_API_URLS = [
   'https://api.exchangerate-api.com/v4/latest/USD',
 ].filter(Boolean);
 
-async function fetchFromUrl(url) {
-  const { data } = await generic.get(url, { timeout: 8000 });
-  const rate = data?.rates?.KES;
-  if (rate && rate > 0) return rate;
-  return null;
-}
-
-async function fetchRate() {
+async function fetchRates() {
   const now = Date.now();
-  if (cachedRate && (now - lastFetch) < CACHE_TTL_MS) {
-    return cachedRate;
+  if (cachedRates && (now - lastFetch) < CACHE_TTL_MS) {
+    return cachedRates;
   }
 
   for (const url of FX_API_URLS) {
     try {
-      const rate = await fetchFromUrl(url);
-      if (rate && rate > 0) {
-        cachedRate = rate;
+      const { data } = await generic.get(url, { timeout: 8000 });
+      const r = data && data.rates;
+      if (r && r.KES > 0) {
+        cachedRates = {
+          USDKES: r.KES,
+          USDNGN: r.NGN || null,
+          USDZAR: r.ZAR || null,
+          USDGHS: r.GHS || null,
+        };
+        cachedRate = r.KES;
         lastFetch = now;
-        return rate;
+        return cachedRates;
       }
     } catch (err) {
       console.error(`[FXService] Fetch error from ${url}: ${err.message}`);
     }
   }
 
-  if (cachedRate) return cachedRate;
-  return 130; // ultimate fallback
+  if (cachedRates) return cachedRates;
+  return { USDKES: cachedRate || 130, USDNGN: null, USDZAR: null, USDGHS: null };
 }
 
 async function getRate() {
-  return fetchRate();
+  const rates = await fetchRates();
+  return rates.USDKES;
+}
+
+// Rates for every currency the app can hold, so a mixed-currency portfolio
+// (KES/NGN/ZAR/GHS/USD) can be aggregated into KES.
+async function getRates() {
+  return fetchRates();
 }
 
 function getCachedRate() {
+  if (cachedRates) return cachedRates.USDKES;
   return cachedRate || 130;
 }
 
-module.exports = { getRate, getCachedRate };
+module.exports = { getRate, getRates, getCachedRate };

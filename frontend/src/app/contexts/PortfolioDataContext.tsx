@@ -8,6 +8,30 @@ import { getSocket, connectSocket } from "../services/socketService";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
+// The "African" book spans every African exchange we cover (NSE Kenya, NGX
+// Nigeria, JSE South Africa). Everything else is the Global (USD) book.
+// Each market quotes in its own currency, so African holdings are converted to
+// KES before aggregation.
+export const AFRICAN_MARKETS = new Set(["NSE", "NGX", "JSE", "GSE", "BRVM"]);
+const MARKET_CURRENCY: Record<string, string> = { NSE: "KES", NGX: "NGN", JSE: "ZAR", GSE: "GHS", Global: "USD" };
+export function isAfricanMarket(market?: string): boolean {
+  return AFRICAN_MARKETS.has(String(market || "").toUpperCase());
+}
+interface FxRates { USDKES: number; USDNGN?: number | null; USDZAR?: number | null; USDGHS?: number | null }
+function toKes(value: number, market: string | undefined, rates: FxRates): number {
+  if (!value) return 0;
+  const cur = MARKET_CURRENCY[String(market || "Global").toUpperCase()] || "USD";
+  const usdKes = rates?.USDKES || 130;
+  switch (cur) {
+    case "KES": return value;
+    case "NGN": return rates?.USDNGN ? value * (usdKes / rates.USDNGN) : value;
+    case "ZAR": return rates?.USDZAR ? value * (usdKes / rates.USDZAR) : value;
+    case "GHS": return rates?.USDGHS ? value * (usdKes / rates.USDGHS) : value;
+    case "USD": return value * usdKes;
+    default: return value;
+  }
+}
+
 export interface PortfolioHolding {
   id?: number;
   ticker: string;
@@ -20,7 +44,7 @@ export interface PortfolioHolding {
   pnlAmount?: string;
   isPositive: boolean;
   sector: string;
-  market: "NSE" | "Global";
+  market: "NSE" | "NGX" | "JSE" | "Global";
   color?: string;
   weight?: number;
   brokerConnectionId?: number;
@@ -101,6 +125,7 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
   }, [nseStocks, globalStocks]);
 
   const [fxRate, setFxRate] = useState(130);
+  const [fxRates, setFxRates] = useState<FxRates>({ USDKES: 130, USDNGN: null, USDZAR: null, USDGHS: null });
 
   const fetchHoldings = useCallback(async () => {
     if (!user) return;
@@ -111,6 +136,7 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
         const data = await res.json();
         const holdingsArr = Array.isArray(data) ? data : (data.holdings || []);
         if (data.fxRate) setFxRate(data.fxRate);
+        if (data.fxRates) setFxRates(prev => ({ ...prev, ...data.fxRates }));
         if (holdingsArr.length > 0) {
           const enriched = holdingsArr.map((h: any) => {
             const livePrice = h.live_price || h.current_price || parseFloat(h.current_price) || parseFloat(h.avg_cost) || 0;
@@ -131,7 +157,7 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
               pnlAmount: Math.abs(pnl).toFixed(2),
               isPositive: h.is_positive !== undefined ? h.is_positive : pnl >= 0,
               sector: h.sector || "Other",
-              market: (h.market || "NSE") as "NSE" | "Global",
+              market: (h.market || "NSE") as PortfolioHolding["market"],
               brokerConnectionId: h.broker_connection_id || 0,
             };
           });
@@ -232,11 +258,12 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
   const totals = useMemo(() => {
     // Exclude broker-synced holdings (they are counted via brokerTotals in enhancedTotals)
     const manualHoldings = holdings.filter(h => !h.brokerConnectionId || h.brokerConnectionId === 0);
-    const nseH = manualHoldings.filter(h => h.market === "NSE");
-    const globalH = manualHoldings.filter(h => h.market === "Global");
+    const africanH = manualHoldings.filter(h => isAfricanMarket(h.market));
+    const globalH = manualHoldings.filter(h => !isAfricanMarket(h.market));
 
-    const nseValue = nseH.reduce((sum, h) => sum + (parseFloat(h.value) || 0), 0);
-    const nseCost = nseH.reduce((sum, h) => sum + ((parseFloat(h.avgCost) || 0) * (h.shares || 0)), 0);
+    // African book reported in KES (NGX/JSE holdings converted via FX); Global in USD.
+    const nseValue = africanH.reduce((sum, h) => sum + toKes(parseFloat(h.value) || 0, h.market, fxRates), 0);
+    const nseCost = africanH.reduce((sum, h) => sum + toKes((parseFloat(h.avgCost) || 0) * (h.shares || 0), h.market, fxRates), 0);
     const nsePnL = nseValue - nseCost;
 
     const globalValue = globalH.reduce((sum, h) => sum + (parseFloat(h.value) || 0), 0);
@@ -261,12 +288,12 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
       globalPnL: Math.round(globalPnL),
       nsePnLPercent: nseCost > 0 ? Math.round((nsePnL / nseCost) * 1000) / 10 : 0,
       globalPnLPercent: globalCost > 0 ? Math.round((globalPnL / globalCost) * 1000) / 10 : 0,
-      nseCount: nseH.length,
+      nseCount: africanH.length,
       globalCount: globalH.length,
       combinedKesValue: Math.round(combinedKesValue),
       fxRate,
     };
-  }, [holdings, fxRate]);
+  }, [holdings, fxRate, fxRates]);
 
   const topHoldings = useMemo(() => {
     const valid = holdings.filter(h => h && h.ticker);
@@ -346,13 +373,10 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
 
   const allocation = useMemo(() => {
     const valid = holdings.filter(h => h && h.ticker);
-    const totalKesValue = valid.reduce((sum, h) => {
-      const val = parseFloat(h.value) || 0;
-      return sum + (h.market === "Global" ? val * fxRate : val);
-    }, 0);
+    const totalKesValue = valid.reduce((sum, h) => sum + toKes(parseFloat(h.value) || 0, h.market, fxRates), 0);
     const pct = (h: PortfolioHolding) =>
       totalKesValue > 0
-        ? Math.round(((h.market === "Global" ? (parseFloat(h.value) || 0) * fxRate : parseFloat(h.value) || 0) / totalKesValue) * 100)
+        ? Math.round((toKes(parseFloat(h.value) || 0, h.market, fxRates) / totalKesValue) * 100)
         : 0;
 
     // Cap the slice count: recharts renders one <Cell> per entry, and the legend
@@ -372,7 +396,7 @@ export function PortfolioDataProvider({ children }: { children: ReactNode }) {
       value: tail.reduce((sum, e) => sum + e.value, 0),
       color: ALLOCATION_COLORS[MAX_SLICES - 1],
     }];
-  }, [holdings, fxRate]);
+  }, [holdings, fxRate, fxRates]);
 
   return (
     <PortfolioDataContext.Provider value={{ holdings, totals, enhancedTotals, allocation, topHoldings, loading, refresh: fetchHoldings, brokerTotals, brokerConnections, brokerLoading, setBrokerConnections }}>

@@ -33,7 +33,7 @@ interface Holding {
   pnlAmount?: string;
   isPositive: boolean;
   sector: string;
-  market: "NSE" | "Global";
+  market: "NSE" | "NGX" | "JSE" | "Global";
   brokerConnectionId?: number;
 }
 
@@ -1604,10 +1604,10 @@ export function PortfolioPage() {
         <Card className="bg-card border-border p-4">
           <div className="text-muted-foreground text-xs mb-1">Total Value</div>
           <div className="text-foreground text-xl font-bold">{dcFmt(enhancedTotals.combinedKesValue)}</div>
-          <div className="text-muted-foreground text-xs mt-1">NSE + Global in {dc}</div>
+          <div className="text-muted-foreground text-xs mt-1">African + Global in {dc}</div>
         </Card>
         <Card className="bg-card border-border p-4">
-          <div className="text-muted-foreground text-xs mb-1">NSE Portfolio</div>
+          <div className="text-muted-foreground text-xs mb-1">African Portfolio</div>
           <div className="text-foreground text-xl font-bold">{dcFmt(totals.nseValue)}</div>
           {dc !== "KES" && <div className="text-muted-foreground text-[10px] mt-0.5">KES {totals.nseValue.toLocaleString()}</div>}
           <div className={`text-xs mt-1 flex items-center gap-1 ${totals.nsePnLPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -1637,7 +1637,7 @@ export function PortfolioPage() {
         <Card className="bg-card border-border p-4">
           <div className="text-muted-foreground text-xs mb-1">Holdings</div>
           <div className="text-foreground text-xl font-bold">{mergedHoldings.length}</div>
-          <div className="text-muted-foreground text-xs mt-1">{totals.nseCount} NSE · {enhancedTotals.globalCount} Global</div>
+          <div className="text-muted-foreground text-xs mt-1">{totals.nseCount} African · {enhancedTotals.globalCount} Global</div>
         </Card>
         <Card className="bg-card border-border p-4">
           <div className="text-muted-foreground text-xs mb-1">Connected</div>
@@ -3098,7 +3098,7 @@ export function PortfolioPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="p-3 rounded-lg border bg-gradient-to-br from-[#0D7490]/5 to-white">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-muted-foreground">NSE Portfolio</span>
+                      <span className="text-xs font-medium text-muted-foreground">African Portfolio</span>
                       <Badge variant="outline" className="text-[9px] border-[#0D7490] text-[#0D7490]">{realStatementData.summary.nseCount} holdings</Badge>
                     </div>
                     <div className="text-lg font-bold text-foreground">KES {realStatementData.summary.nseValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>

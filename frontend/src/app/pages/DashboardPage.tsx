@@ -775,9 +775,9 @@ export function DashboardPage() {
           }
           const hasAlpha = perfMeta.hasHistory && benchmarkMetrics.alpha != null;
           return [
-          { icon: Banknote, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400", label: "NSE Portfolio", value: fmtKes(enhancedTotals.nseValue), sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
+          { icon: Banknote, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400", label: "African Portfolio", value: fmtKes(enhancedTotals.nseValue), sub: `${enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}${enhancedTotals.nsePnLPercent}% (${enhancedTotals.nseCount} holdings)`, valColor: "text-foreground" },
           { icon: Globe2, color: "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400", label: "Global Portfolio", value: fmtUsd(enhancedTotals.globalValue), sub: `${enhancedTotals.globalPnLPercent >= 0 ? '+' : ''}${enhancedTotals.globalPnLPercent}% (${enhancedTotals.globalCount} pos)`, valColor: "text-foreground" },
-          { icon: PieChart, color: "bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} NSE · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
+          { icon: PieChart, color: "bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400", label: "Holdings", value: `${enhancedTotals.holdingsCount}`, sub: `${enhancedTotals.nseCount} African · ${enhancedTotals.globalCount} Global stocks`, valColor: "text-foreground" },
           { icon: Brain, color: "bg-yellow-100 dark:bg-yellow-950/40 text-yellow-600 dark:text-yellow-400", label: "Market Intelligence", value: `${signalSummary.actionable}`, sub: `${signalSummary.strongBuy} Buy · ${signalSummary.strongSell} Sell · peak ${signalSummary.peakConf}%`, valColor: signalSummary.actionable > 0 ? "text-foreground" : "text-muted-foreground" },
           { icon: Scale, color: "bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400", label: "vs Benchmarks", value: hasAlpha ? `${sign(benchmarkMetrics.alpha!)}${benchmarkMetrics.alpha!.toFixed(1)}%` : "—", sub: sub || "No benchmark history yet", valColor: hasAlpha ? (benchmarkMetrics.alpha! >= 0 ? "text-emerald-600" : "text-red-500") : "text-muted-foreground" },
           ].map((m, i) => (
@@ -801,7 +801,7 @@ export function DashboardPage() {
             <Lightbulb className="size-4 text-amber-600 mt-0.5 shrink-0" />
             <div className="text-xs text-muted-foreground leading-relaxed">
               <span className="font-semibold text-amber-800 dark:text-amber-200">Beginner Mode Active.</span>{' '}
-              <strong>Portfolio Value</strong> = total worth of your investments. <strong>NSE / Global</strong> = which market your stocks trade on.
+              <strong>Portfolio Value</strong> = total worth of your investments. <strong>African / Global</strong> = which market your stocks trade on.
               <strong> Holdings</strong> = number of different stocks you own. <strong>Market Intelligence</strong> = automated buy/sell suggestions.
               <strong>vs Benchmarks</strong> = how your portfolio compares to market indexes like the NSE 20 or the S&amp;P 500.
             </div>
@@ -1480,7 +1480,7 @@ export function DashboardPage() {
                   <span className="font-medium">{fmtKes(enhancedTotals.totalValue)}</span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span>NSE Value</span>
+                  <span>African Value</span>
                   <span className="font-medium">{fmtKes(enhancedTotals.nseValue)} ({enhancedTotals.nsePnLPercent >= 0 ? '+' : ''}{enhancedTotals.nsePnLPercent}%)</span>
                 </div>
                 <div className="flex justify-between py-1">
@@ -1493,7 +1493,7 @@ export function DashboardPage() {
                 </div>
               <div className="flex justify-between py-1">
                 <span>Holdings</span>
-                <span className="font-medium">{enhancedTotals.holdingsCount} ({enhancedTotals.nseCount} NSE · {enhancedTotals.globalCount} Global)</span>
+                <span className="font-medium">{enhancedTotals.holdingsCount} ({enhancedTotals.nseCount} African · {enhancedTotals.globalCount} Global)</span>
               </div>
               </div>
             </div>

@@ -10178,8 +10178,21 @@ app.get('/api/holdings', authenticateToken, requireOwnership, async (req, res) =
        FROM portfolio_holdings WHERE user_id = $1 ORDER BY ticker`,
       [userId]
     );
-    const fxRate = await getFxRate();
-    let nseValue = 0, globalValue = 0;
+    const fxRates = await fxService.getRates().catch(() => ({ USDKES: 130 }));
+    const fxRate = fxRates.USDKES || 130;
+    // African book = every African exchange we cover; everything else is Global.
+    const AFRICAN_MARKETS = new Set(['NSE', 'NGX', 'JSE', 'GSE', 'BRVM']);
+    const MARKET_CURRENCY = { NSE: 'KES', NGX: 'NGN', JSE: 'ZAR', GSE: 'GHS', Global: 'USD' };
+    const toKes = (v, market) => {
+      if (!v) return 0;
+      const cur = MARKET_CURRENCY[market] || 'USD';
+      if (cur === 'KES') return v;
+      if (cur === 'NGN') return fxRates.USDNGN ? v * (fxRate / fxRates.USDNGN) : v;
+      if (cur === 'ZAR') return fxRates.USDZAR ? v * (fxRate / fxRates.USDZAR) : v;
+      if (cur === 'GHS') return fxRates.USDGHS ? v * (fxRate / fxRates.USDGHS) : v;
+      return v * fxRate;
+    };
+    let africanValueKes = 0, globalValue = 0;
     const enrichedRows = [];
     // Deduplicate: if broker-synced holding exists for a ticker, exclude manual one
     const brokerTickers = new Set(rows.filter(r => r.broker_connection_id > 0).map(r => r.ticker));
@@ -10211,20 +10224,22 @@ app.get('/api/holdings', authenticateToken, requireOwnership, async (req, res) =
       const pnlPct = (isBroker && !isNaN(brokerPnl) && pnlCost > 0)
         ? (brokerPnl / pnlCost * 100)
         : (avgC > 0 ? ((livePrice - avgC) / avgC * 100) : 0);
-      if (r.market === 'NSE') nseValue += val;
+      if (AFRICAN_MARKETS.has(r.market)) africanValueKes += toKes(val, r.market);
       else globalValue += val;
       enrichedRows.push({
         ...r,
+        currency: MARKET_CURRENCY[r.market] || 'USD',
         current_price: String(livePrice.toFixed(2)),
         live_price: String(livePrice.toFixed(2)),
         value: String(val.toFixed(2)),
+        value_kes: String(toKes(val, r.market).toFixed(2)),
         pnl: String(pnl.toFixed(2)),
         pnl_percent: String(pnlPct.toFixed(1)),
         is_positive: pnl >= 0,
       });
     });
-    const combinedValueKes = nseValue + globalValue * fxRate;
-    res.json({ holdings: enrichedRows, fxRate, combinedValueKes: Math.round(combinedValueKes * 100) / 100 });
+    const combinedValueKes = africanValueKes + globalValue * fxRate;
+    res.json({ holdings: enrichedRows, fxRate, fxRates, combinedValueKes: Math.round(combinedValueKes * 100) / 100 });
   } catch (err) {
     console.error('Error fetching holdings:', err.message);
     res.status(500).json({ error: 'Failed to fetch holdings' });
