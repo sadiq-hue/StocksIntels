@@ -426,7 +426,7 @@ async function computeAfricaMarketSummary(exchange) {
   const fmt = (m) => m ? { symbol: m.ticker, company: m.name, change: `${m.changePct > 0 ? '+' : ''}${m.changePct.toFixed(2)}%` } : null;
   return {
     exchange,
-    currency: exchange === 'NGX' ? 'NGN' : 'ZAR',
+    currency: exchange === 'NSE' ? 'KES' : exchange === 'NGX' ? 'NGN' : 'ZAR',
     total, advancers, decliners, unchanged,
     topGainer: fmt(topGainer),
     topLoser: fmt(topLoser),
@@ -434,15 +434,16 @@ async function computeAfricaMarketSummary(exchange) {
 }
 
 async function generateDailyBriefContent() {
-  const [summary, allIndices, sectors, signals, ngxMarket, jseMarket] = await Promise.all([
+  const [summary, allIndices, sectors, signals, nseMarket, ngxMarket, jseMarket] = await Promise.all([
     fetchJson(`${BASE}/api/ai/market-summary`, { sentiment: 'Neutral', signals: { total: 0, strongBuys: 0, buys: 0, sells: 0 } }),
     fetchJson(`${BASE}/api/indices/all`, {}),
     getSectorPerformance().catch(() => []),
     generateSignals(null, true).catch(() => []),
+    computeAfricaMarketSummary('NSE').catch(() => null),
     computeAfricaMarketSummary('NGX').catch(() => null),
     computeAfricaMarketSummary('JSE').catch(() => null),
   ]);
-  const africaMarkets = [ngxMarket, jseMarket].filter(Boolean);
+  const africaMarkets = [nseMarket, ngxMarket, jseMarket].filter(Boolean);
 
   const byTicker = new Map();
   (Array.isArray(signals) ? signals : []).forEach(s => byTicker.set(s.ticker, s));
@@ -524,6 +525,7 @@ async function generateDailyBriefContent() {
   // every market we cover, not just NSE/US.
   const africanMovers = [];
   for (const mkt of africaMarkets) {
+    if (mkt.exchange === 'NSE') continue; // NSE movers already come from the signal universe
     if (mkt.topGainer) africanMovers.push({ ...mkt.topGainer, volume: '--', market: mkt.exchange });
     if (mkt.topLoser) africanMovers.push({ ...mkt.topLoser, volume: '--', market: mkt.exchange });
   }
