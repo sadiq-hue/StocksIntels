@@ -176,6 +176,8 @@ const MarketPage: React.FC = () => {
   // Real-time turnover from API (Yahoo real volumes for global, seeded for NSE)
   const [turnoverData, setTurnoverData] = useState<{
     nse: { turnover: number; volume: number; count: number };
+    ngx: { turnover: number; volume: number; count: number };
+    jse: { turnover: number; volume: number; count: number };
     global: { turnover: number; volume: number; count: number };
   } | null>(null);
 
@@ -356,6 +358,16 @@ const MarketPage: React.FC = () => {
   const nseStats = useMemo(() => {
     if (!turnoverData?.nse) return { volume: '--', turnover: '--', count: '--' };
     return { volume: formatCompactNumber(turnoverData.nse.volume || 0), turnover: formatCompactNumber(turnoverData.nse.turnover || 0), count: turnoverData.nse.count ?? '--' };
+  }, [turnoverData]);
+
+  const ngxStats = useMemo(() => {
+    if (!turnoverData?.ngx) return { volume: '--', turnover: '--', count: '--' };
+    return { volume: formatCompactNumber(turnoverData.ngx.volume || 0), turnover: formatCompactNumber(turnoverData.ngx.turnover || 0), count: turnoverData.ngx.count ?? '--' };
+  }, [turnoverData]);
+
+  const jseStats = useMemo(() => {
+    if (!turnoverData?.jse) return { volume: '--', turnover: '--', count: '--' };
+    return { volume: formatCompactNumber(turnoverData.jse.volume || 0), turnover: formatCompactNumber(turnoverData.jse.turnover || 0), count: turnoverData.jse.count ?? '--' };
   }, [turnoverData]);
 
   const globalStats = useMemo(() => {
@@ -588,12 +600,20 @@ const MarketPage: React.FC = () => {
         </Card>
         <Card className="p-4 border shadow-sm">
           <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Total Turnover</div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2">
             <div className="min-w-0">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">NSE (KES)</div>
               <div className="text-lg font-bold text-foreground tabular-nums truncate">{nseStats.turnover}</div>
             </div>
             <div className="border-l border-border pl-3 min-w-0">
+              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">NGX (NGN)</div>
+              <div className="text-lg font-bold text-foreground tabular-nums truncate">{ngxStats.turnover}</div>
+            </div>
+            <div className="border-t border-border pt-2 min-w-0">
+              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">JSE (ZAR)</div>
+              <div className="text-lg font-bold text-foreground tabular-nums truncate">{jseStats.turnover}</div>
+            </div>
+            <div className="border-l border-t border-border pl-3 pt-2 min-w-0">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Global (USD)</div>
               <div className="text-lg font-bold text-foreground tabular-nums truncate">{globalStats.turnover}</div>
             </div>
@@ -601,13 +621,23 @@ const MarketPage: React.FC = () => {
         </Card>
         <Card className="p-4 border shadow-sm">
           <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2">Volume</div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2">
             <div className="min-w-0">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">NSE</div>
               <div className="text-lg font-bold text-foreground tabular-nums truncate">{nseStats.volume}</div>
               <div className="text-[10px] text-muted-foreground">shares</div>
             </div>
             <div className="border-l border-border pl-3 min-w-0">
+              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">NGX</div>
+              <div className="text-lg font-bold text-foreground tabular-nums truncate">{ngxStats.volume}</div>
+              <div className="text-[10px] text-muted-foreground">shares</div>
+            </div>
+            <div className="border-t border-border pt-2 min-w-0">
+              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">JSE</div>
+              <div className="text-lg font-bold text-foreground tabular-nums truncate">{jseStats.volume}</div>
+              <div className="text-[10px] text-muted-foreground">shares</div>
+            </div>
+            <div className="border-l border-t border-border pl-3 pt-2 min-w-0">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Global</div>
               <div className="text-lg font-bold text-foreground tabular-nums truncate">{globalStats.volume}</div>
               <div className="text-[10px] text-muted-foreground">shares</div>

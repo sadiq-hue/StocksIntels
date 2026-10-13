@@ -8482,8 +8482,36 @@ async function computeTurnover() {
       globalVolume += r.value.volume || 0;
     }
   }
+
+  // NGX & JSE: sum price x volume across every listed stock (MyStocks Africa).
+  const { listStocks } = require('./mystocksAfricaApi');
+  const computeAfricaTurnover = async (exchange) => {
+    let turnover = 0, volume = 0, count = 0, cursor = '';
+    try {
+      for (let page = 0; page < 4; page++) {
+        const { data, hasMore, nextCursor } = await listStocks(exchange, { limit: 200, cursor });
+        for (const s of data) {
+          const p = Number(s.price) || 0;
+          const v = Number(s.volume) || 0;
+          if (p > 0 && v > 0) { turnover += p * v; volume += v; count++; }
+        }
+        if (!hasMore || !nextCursor) break;
+        cursor = nextCursor;
+      }
+    } catch (e) {
+      console.warn(`[turnover] ${exchange} failed:`, e.message);
+    }
+    return { turnover, volume, count };
+  };
+  const [ngxRes, jseRes] = await Promise.allSettled([
+    computeAfricaTurnover('NGX'),
+    computeAfricaTurnover('JSE'),
+  ]);
+
   return {
     nse: { turnover: nseTurnover, volume: nseVolume, count: nseCount },
+    ngx: ngxRes.status === 'fulfilled' ? ngxRes.value : { turnover: 0, volume: 0, count: 0 },
+    jse: jseRes.status === 'fulfilled' ? jseRes.value : { turnover: 0, volume: 0, count: 0 },
     global: { turnover: globalTurnover, volume: globalVolume, count: GLOBAL_TURNOVER_TICKERS.length },
   };
 }
