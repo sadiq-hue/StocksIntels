@@ -232,24 +232,31 @@ async function pickHotStocks(forceFresh = false) {
   for (const article of allNews) {
     const stocks = article.relatedStocks || [];
     const isNseContext = article.category === 'nse';
-    for (const ticker of stocks) {
-      if (!ticker || ticker.length < 2 || ticker.length > 6) continue;
+    for (const rawTicker of stocks) {
+      if (!rawTicker) continue;
+      const up = String(rawTicker).toUpperCase();
+      // Qualified symbols ("NGX:MTNN", "JSE:NPN") carry their exchange; bare
+      // symbols are NSE/US and resolved later.
+      const hasEx = up.includes(':');
+      const market = hasEx ? up.split(':')[0] : null;
+      const bare = hasEx ? up.split(':')[1] : up;
+      if (bare.length < 2 || bare.length > 12) continue;
       // Skip global articles that tag a ticker which exists in NSE DB
       // (e.g. Benzinga tags US Hasbro as HAS, which also exists as Kenyan Housing Finance)
-      if (!isNseContext && nseTickers.has(ticker.toUpperCase())) continue;
-      if (!tickerSentiment[ticker]) {
-        tickerSentiment[ticker] = { positive: 0, negative: 0, neutral: 0, articles: [], total: 0, recencySum: 0, hot: 0, urgent: 0 };
+      if (!isNseContext && !hasEx && nseTickers.has(bare)) continue;
+      if (!tickerSentiment[up]) {
+        tickerSentiment[up] = { positive: 0, negative: 0, neutral: 0, articles: [], total: 0, recencySum: 0, hot: 0, urgent: 0, market };
       }
       const sent = article.sentiment || 'neutral';
       const ageHours = assignAgeHours(article);
       const recency = Math.max(0, 1 - ageHours / 72); // 72h; fresh news outranks the tail
-      tickerSentiment[ticker][sent]++;
-      tickerSentiment[ticker].total++;
-      tickerSentiment[ticker].recencySum += recency;
-      if (article.hot) tickerSentiment[ticker].hot++;
-      if (article.catalystStrength === 'high') tickerSentiment[ticker].urgent++;
-      if (tickerSentiment[ticker].articles.length < 6) {
-        tickerSentiment[ticker].articles.push({
+      tickerSentiment[up][sent]++;
+      tickerSentiment[up].total++;
+      tickerSentiment[up].recencySum += recency;
+      if (article.hot) tickerSentiment[up].hot++;
+      if (article.catalystStrength === 'high') tickerSentiment[up].urgent++;
+      if (tickerSentiment[up].articles.length < 6) {
+        tickerSentiment[up].articles.push({
           headline: article.headline || article.title || '',
           source: article.source || article.sourceName || '',
           sentiment: sent,
@@ -309,13 +316,15 @@ async function pickHotStocks(forceFresh = false) {
   // boosts + a live-engine conviction boost, plus a tiny random nudge so ties
   // don't always resolve in cache/alphabetical order.
   const scored = [];
-  for (const [ticker, data] of Object.entries(tickerSentiment)) {
-    if (!ticker || ticker.length < 2 || ticker.length > 12) continue;
+  for (const [symbol, data] of Object.entries(tickerSentiment)) {
+    const hasEx = symbol.includes(':');
+    const bare = hasEx ? symbol.split(':')[1] : symbol;
+    if (!bare || bare.length < 2 || bare.length > 12) continue;
     // The exchange itself ("NSE") shows up as an all-caps word in headlines but
     // is not a pickable stock.
-    if (ticker.toUpperCase() === 'NSE') continue;
-    const explicitMarket = africaMarketByTicker[ticker.toUpperCase()];
-    const isNse = nseTickers.has(ticker.toUpperCase());
+    if (bare === 'NSE') continue;
+    const explicitMarket = data.market || africaMarketByTicker[bare];
+    const isNse = nseTickers.has(bare);
     // Global tags can come from a coincidental symbol word-match, so require
     // >= 2 independent articles. African tags (NSE/NGX/JSE) are minted from
     // distinctive company names/JSE-NGX SENS records which never collide, so a
@@ -325,15 +334,15 @@ async function pickHotStocks(forceFresh = false) {
     const mentions = data.total;
     const recency = mentions ? data.recencySum / mentions : 0;
     const freshVolume = mentions * (0.4 + recency * 0.6); // stale mentions count ~40%
-    const signalBoost = signalBoostMap[ticker.toUpperCase()] || 0;
+    const signalBoost = signalBoostMap[bare] || 0;
     const score = freshVolume * 2 + polarity * 3 + data.hot * 3 + data.urgent * 4 + signalBoost + (Math.random() * 0.001);
     const sentiment = data.positive > data.negative ? 'positive'
       : data.negative > data.positive ? 'negative' : 'neutral';
     const market = explicitMarket || (isNse ? 'NSE' : 'Global');
     scored.push({
-      ticker, score, sentiment, articles: data.articles, total: mentions, market,
-      sector: sectorMap[ticker.toUpperCase()] || 'Other',
-      repeatCount: recentFeatured[ticker.toUpperCase()] || 0,
+      ticker: bare, symbol, score, sentiment, articles: data.articles, total: mentions, market,
+      sector: sectorMap[bare] || 'Other',
+      repeatCount: recentFeatured[bare] || 0,
       signalBoost,
     });
   }
