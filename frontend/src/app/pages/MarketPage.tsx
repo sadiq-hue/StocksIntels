@@ -18,6 +18,16 @@ import { fetchAllNews, type NewsArticle } from '../services/newsService';
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from '../services/marketDataService';
 import { useAuth } from '../auth/AuthContext';
 
+interface MarketStatusInfo {
+  open: boolean;
+  label: string;
+  closeTime: string;
+  openTime?: string;
+  eventLabel: string;
+  timeToClose: number | null;
+  timeToOpen: number | null;
+}
+
 function formatCompactNumber(value: number) {
   if (!Number.isFinite(value) || value === 0) return "0";
   return new Intl.NumberFormat("en-KE", {
@@ -155,7 +165,7 @@ const MarketPage: React.FC = () => {
 
 
   const [aiSummary, setAiSummary] = useState<{ summary: string; sentiment: string; confidence: string } | null>(null);
-  const [marketStatus, setMarketStatus] = useState<{ nse: { open: boolean; label: string; closeTime: string; eventLabel: string; timeToClose: number | null; timeToOpen: number | null }; global: { open: boolean; label: string; closeTime: string; eventLabel: string; timeToClose: number | null; timeToOpen: number | null } } | null>(null);
+  const [marketStatus, setMarketStatus] = useState<{ nse: MarketStatusInfo; ngx: MarketStatusInfo; jse: MarketStatusInfo; global: MarketStatusInfo } | null>(null);
 
   const [marketNews, setMarketNews] = useState<NewsArticle[]>([]);
   const newsFetched = useRef(false);
@@ -512,6 +522,8 @@ const MarketPage: React.FC = () => {
   }
 
   const nseStatus = marketStatus?.nse;
+  const ngxStatus = marketStatus?.ngx;
+  const jseStatus = marketStatus?.jse;
   const globalStatus = marketStatus?.global;
 
   return (
@@ -551,9 +563,19 @@ const MarketPage: React.FC = () => {
             <div>
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">NSE</div>
               <div className={`text-lg font-bold ${nseStatus?.open ? 'text-emerald-600' : 'text-red-500'}`}>{nseStatus?.label || '--'}</div>
-              <div className="text-[10px] text-muted-foreground">{nseStatus?.eventLabel || `Closes ${nseStatus?.closeTime || '3:30 PM'}`}</div>
+              <div className="text-[10px] text-muted-foreground">{nseStatus?.eventLabel || `Closes ${nseStatus?.closeTime || '3:00 PM'}`}</div>
             </div>
             <div className="border-l border-border pl-3">
+              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">NGX</div>
+              <div className={`text-lg font-bold ${ngxStatus?.open ? 'text-emerald-600' : 'text-red-500'}`}>{ngxStatus?.label || '--'}</div>
+              <div className="text-[10px] text-muted-foreground">{ngxStatus?.eventLabel || `Closes ${ngxStatus?.closeTime || '4:00 PM'}`}</div>
+            </div>
+            <div className="border-t border-border pt-3">
+              <div className="text-[10px] font-medium text-muted-foreground mb-0.5">JSE</div>
+              <div className={`text-lg font-bold ${jseStatus?.open ? 'text-emerald-600' : 'text-red-500'}`}>{jseStatus?.label || '--'}</div>
+              <div className="text-[10px] text-muted-foreground">{jseStatus?.eventLabel || `Closes ${jseStatus?.closeTime || '4:50 PM'}`}</div>
+            </div>
+            <div className="border-l border-t border-border pl-3 pt-3">
               <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Global</div>
               <div className={`text-lg font-bold ${globalStatus?.open ? 'text-emerald-600' : 'text-red-500'}`}>{globalStatus?.label || '--'}</div>
               <div className="text-[10px] text-muted-foreground">

@@ -2433,6 +2433,16 @@ function isMarketOpen(market) {
     currentMinutes = marketHours.eatMinutes(now);
     openStart = marketHours.NSE_OPEN_EAT_MIN;
     openEnd = marketHours.NSE_CLOSE_EAT_MIN;
+  } else if (market === 'NGX') {
+    // NGX: Mon-Fri 09:30 - 16:00 WAT (UTC+1)
+    currentMinutes = marketHours.watMinutes(now);
+    openStart = marketHours.NGX_OPEN_WAT_MIN;
+    openEnd = marketHours.NGX_CLOSE_WAT_MIN;
+  } else if (market === 'JSE') {
+    // JSE: Mon-Fri 09:00 - 16:50 SAST (UTC+2)
+    currentMinutes = marketHours.sastMinutes(now);
+    openStart = marketHours.JSE_OPEN_SAST_MIN;
+    openEnd = marketHours.JSE_CLOSE_SAST_MIN;
   } else {
     // US Markets (Global): Mon-Fri 09:30 - 16:00 ET
     currentMinutes = marketHours.etMinutes(now);
@@ -2466,14 +2476,17 @@ function isMarketOpen(market) {
     ? `Closes ${formatMinutes(nextClose)}`
     : `Opens ${formatMinutes(nextOpen)}`;
 
+  const openTime = market === 'JSE' ? '9:00 AM' : '9:30 AM';
+  const closeTime = market === 'NSE' ? '3:00 PM' : market === 'JSE' ? '4:50 PM' : '4:00 PM';
+
   return {
     open: isOpen,
     label: openLabel,
     eventLabel,
     timeToClose: isOpen ? nextClose : null,
     timeToOpen: isOpen ? null : nextOpen,
-    openTime: '9:30 AM',
-    closeTime: market === 'NSE' ? '3:00 PM' : '4:00 PM',
+    openTime,
+    closeTime,
   };
 }
 
@@ -6245,6 +6258,8 @@ app.get('/api/countries', (req, res) => {
 app.get('/api/market/status', async (req, res) => {
   res.json({
     nse: isMarketOpen('NSE'),
+    ngx: isMarketOpen('NGX'),
+    jse: isMarketOpen('JSE'),
     global: isMarketOpen('Global'),
   });
 });
