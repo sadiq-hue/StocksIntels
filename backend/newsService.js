@@ -553,9 +553,21 @@ const AFRICA_SYMBOL_NAMES = (() => {
   return out;
 })();
 
+// Proper display names where title-casing mangles acronyms ("Mtn Group").
+const AFRICA_NAME_OVERRIDES = {
+  'NGX:MTNN': 'MTN Nigeria', 'JSE:MTN': 'MTN Group', 'NGX:GTCO': 'Guaranty Trust Holding',
+  'NGX:UBA': 'United Bank for Africa', 'NGX:FBNH': 'FBN Holdings', 'NGX:ACCESSCORP': 'Access Holdings',
+  'NGX:ZENITHBANK': 'Zenith Bank', 'NGX:STANBIC': 'Stanbic IBTC', 'NGX:ETI': 'Ecobank Transnational',
+  'NGX:NB': 'Nigerian Breweries', 'NGX:AIRTELAFRI': 'Airtel Africa', 'NGX:NGXGROUP': 'NGX Group',
+  'JSE:BHP': 'BHP Group', 'JSE:ABG': 'Absa Group', 'JSE:SBK': 'Standard Bank', 'JSE:FSR': 'FirstRand',
+  'JSE:AGL': 'Anglo American', 'JSE:AMS': 'Anglo American Platinum', 'JSE:SSW': 'Sibanye-Stillwater',
+  'JSE:ANH': 'AB InBev', 'JSE:N91': 'Ninety One', 'JSE:MTM': 'Momentum Metropolitan',
+  'JSE:OMU': 'Old Mutual', 'JSE:KIO': 'Kumba Iron Ore', 'JSE:S32': 'South32',
+};
+
 function getAfricaCompanyName(symbol) {
   const s = String(symbol || '').toUpperCase();
-  return AFRICA_SYMBOL_NAMES[s] || null;
+  return AFRICA_NAME_OVERRIDES[s] || AFRICA_SYMBOL_NAMES[s] || null;
 }
 
 // ─── Pan-African source stock relevance ──────────────────────────────────────
