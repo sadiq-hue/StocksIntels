@@ -4529,11 +4529,12 @@ app.get('/api/signals/backtest', async (req, res) => {
 
 app.get('/api/signals/forward-test', async (req, res) => {
   try {
-    const { symbol, resolved, limit, offset } = req.query;
-    if (symbol || resolved !== undefined || req.query.limit) {
+    const { symbol, resolved, limit, offset, action } = req.query;
+    if (symbol || resolved !== undefined || req.query.limit || action) {
       const result = getForwardTestPredictions({
         symbol: symbol || undefined,
         resolved: resolved !== undefined ? resolved === 'true' : undefined,
+        action: action || undefined,
         limit: parseInt(limit) || 50,
         offset: parseInt(offset) || 0,
       });

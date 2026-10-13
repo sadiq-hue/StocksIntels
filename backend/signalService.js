@@ -3183,12 +3183,17 @@ function getLiveTestSnapshot() {
   };
 }
 
-function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0 } = {}) {
+function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0, action } = {}) {
   const all = [];
   for (const [sym, store] of _forwardTestStore) {
     for (const p of store.predictions) {
       if (symbol && sym !== symbol) continue;
       if (resolved !== undefined && p.resolved !== resolved) continue;
+      // The forward test tracks BUY calls only — SELL predictions feed the
+      // (separate, currently unused) sell audit and only cluttered this list.
+      // An explicit `action` query still lets a caller request a side.
+      const side = p.action || 'buy';
+      if (action ? side !== action : side !== 'buy') continue;
       all.push({ symbol: sym, ...p, currency: NSE_SYMBOLS.includes(sym) ? 'KES' : 'USD', generatedAt: new Date(p.generatedAt).toISOString(), resolvedAt: p.resolvedAt ? new Date(p.resolvedAt).toISOString() : null, supersededAt: p.supersededAt ? new Date(p.supersededAt).toISOString() : null });
     }
   }
