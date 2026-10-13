@@ -2681,6 +2681,7 @@ async function getForwardTestStats() {
           LIMIT 1
         ) h ON true
        WHERE o.result IS NOT NULL AND o.source = 'live'
+         AND o.signal NOT ILIKE '%sell%'
          AND COALESCE(o.signal_generated_at, o.recorded_at) > NOW() - $1::interval
        ORDER BY COALESCE(o.resolved_at, o.recorded_at) DESC`,
       [`${SIGNAL_WINDOW_DAYS} days`]
@@ -2788,6 +2789,7 @@ async function getForwardTestStats() {
       `SELECT symbol, signal, confidence, price, actual_return, correct, generated_at, resolved_at
        FROM forward_predictions
        WHERE resolved = TRUE AND correct IS NOT NULL
+         AND signal NOT ILIKE '%sell%'
          AND COALESCE(resolved_at, generated_at) > NOW() - $1::interval`,
       [`${SIGNAL_WINDOW_DAYS} days`]
     );
