@@ -538,6 +538,26 @@ function extractRelatedStocks(text) {
   return [...found];
 }
 
+// Reverse lookup: qualified African symbol -> a human company name, derived from
+// the longest (most descriptive) alias that maps to it. Lets the newsletter show
+// "Dangote Cement" instead of the raw "DANGCEM", and "MTN Nigeria" not "MTNN".
+const AFRICA_SYMBOL_NAMES = (() => {
+  const best = {};
+  for (const [alias, tick] of Object.entries(NAME_ALIASES)) {
+    if (!String(tick).includes(':')) continue;
+    const nice = alias.replace(/\b\w/g, c => c.toUpperCase());
+    if (!best[tick] || alias.length > best[tick].len) best[tick] = { name: nice, len: alias.length };
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(best)) out[k] = v.name;
+  return out;
+})();
+
+function getAfricaCompanyName(symbol) {
+  const s = String(symbol || '').toUpperCase();
+  return AFRICA_SYMBOL_NAMES[s] || null;
+}
+
 // ─── Pan-African source stock relevance ──────────────────────────────────────
 // The pan-African business feeds (Nairametrics, BusinessDay NG, Premium Times,
 // MyJoyOnline, Enterprise, IOL) publish a lot of general business/macro copy
@@ -1876,6 +1896,6 @@ async function getPositiveStockNews(limit = 5) {
 }
 
 module.exports = { getAllNews, getPositiveStockNews, getNewsSummary, getAggregatedSentiment, getCatalysts, getInsiderNewsSignals, classifyHotNews,
-    classifyCatalyst, classifyInsider, extractRelatedStocks, backfillSentimentHistory, initNewsHistory, KENYAN_STOCKS,
+    classifyCatalyst, classifyInsider, extractRelatedStocks, getAfricaCompanyName, backfillSentimentHistory, initNewsHistory, KENYAN_STOCKS,
     STOCK_SYMBOLS };
 

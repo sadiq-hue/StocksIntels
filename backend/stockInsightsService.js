@@ -5,7 +5,7 @@
 
 const axios = require('axios');
 const { pool } = require('./db');
-const { getAllNews, getNewsSummary } = require('./newsService');
+const { getAllNews, getNewsSummary, getAfricaCompanyName } = require('./newsService');
 const { getCompanyName } = require('./marketService');
 const { getFundamentals } = require('./signalService');
 const llm = require('./llmService');
@@ -120,6 +120,18 @@ const isAfricanMarket = (m) => AFRICAN_MARKETS.has(String(m || '').toUpperCase()
 function getExchangeDisplay(market) {
   const m = String(market || '').toUpperCase();
   return AFRICAN_MARKETS.has(m) ? m : 'Global';
+}
+
+// Human company name for a scored stock: NSE/US canonical names first, then the
+// reverse African symbol map (Dangote Cement, MTN Nigeria…), then the raw ticker.
+function companyNameFor(stock) {
+  const ticker = stock?.ticker || stock?.symbol || '';
+  const generic = getCompanyName(ticker);
+  if (generic && generic !== ticker) return generic;
+  const qualified = stock?.symbol && String(stock.symbol).includes(':')
+    ? stock.symbol
+    : (stock?.market && isAfricanMarket(stock.market) ? `${stock.market}:${ticker}` : '');
+  return (qualified && getAfricaCompanyName(qualified)) || generic || ticker;
 }
 
 function getGlobalExchange(ticker) {
@@ -470,8 +482,8 @@ async function buildMarketOverview() {
   const dow = indicesArr.find(i => i.symbol?.includes('DJI'));
 
   const toMover = (t, defMarket) => ({
-    ticker: t.symbol || t.ticker,
-    name: t.name || t.symbol || t.ticker,
+    ticker: String(t.ticker || t.symbol || '').replace(/^(NSE|NGX|JSE):/i, ''),
+    name: t.name || t.ticker || t.symbol || '',
     change: t.changePercent ?? t.change ?? t.pct_change ?? '0',
     price: t.price || t.regularMarketPrice || null,
     market: t.market || defMarket || 'Global',
@@ -623,7 +635,7 @@ function formatMarketContext(marketOverview, stock) {
 }
 
 async function generateNarrativeThesis(ticker, sentiment, articles, priceData, market, extraContext = '') {
-  const name = getCompanyName(ticker) || ticker;
+  const name = companyNameFor({ ticker, market });
   const isGlobal = market === 'Global';
 
   const articleList = articles.slice(0, 4).map((a, i) =>
@@ -720,8 +732,8 @@ RULES:
     }
     if (!thesis) thesis = pickFallbackThesis(name, sentiment);
     if (!analysis) analysis = text;
-    if (!catalyst) catalyst = fallbackCatalystLine(ticker, isGlobal);
-    if (!risk) risk = fallbackRiskLine(ticker, isGlobal);
+    if (!catalyst) catalyst = fallbackCatalystLine(ticker, market);
+    if (!risk) risk = fallbackRiskLine(ticker, market);
 
     return { thesis, analysis, catalyst, risk };
   } catch (e) {
@@ -747,8 +759,9 @@ const lowerFirst = (s) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 
 // Sector-aware risk lines so every name in a newsletter doesn't repeat the same
 // generic sentence.
-function fallbackRiskLine(ticker, isGlobal) {
+function fallbackRiskLine(ticker, market) {
   const t = String(ticker || '').toUpperCase();
+  const m = String(market || '').toUpperCase();
   const NSE_RISKS = {
     SCOM: 'M-Pesa regulation, mobile-data pricing and competitive pressure',
     EABL: 'excise-duty changes, input-cost inflation and consumer demand',
@@ -772,28 +785,30 @@ function fallbackRiskLine(ticker, isGlobal) {
     JUB: 'claims inflation and investment returns',
     BRIT: 'claims inflation and investment returns',
   };
-  if (!isGlobal && NSE_RISKS[t]) return NSE_RISKS[t];
-  return isGlobal
-    ? 'rate expectations, sector rotation and earnings revisions'
-    : 'Kenyan macro conditions, CBK policy and NSE liquidity';
+  if (m === 'NSE' && NSE_RISKS[t]) return NSE_RISKS[t];
+  if (m === 'NGX') return 'naira volatility, CBN policy and NGX liquidity';
+  if (m === 'JSE') return 'rand volatility, SARB policy and JSE liquidity';
+  if (m === 'NSE') return 'Kenyan macro conditions, CBK policy and NSE liquidity';
+  return 'rate expectations, sector rotation and earnings revisions';
 }
 
 // Near-term catalyst, varied by market/sector rather than one repeated line.
-function fallbackCatalystLine(ticker, isGlobal) {
+function fallbackCatalystLine(ticker, market) {
   const t = String(ticker || '').toUpperCase();
-  if (!isGlobal) {
-    if (['EQTY', 'KCB', 'COOP', 'ABSA', 'NCBA', 'SBIC', 'SCBK', 'DTK', 'HFCK', 'BKG', 'IMH'].includes(t)) return 'the next CBK rate decision and Q3 earnings';
-    if (t === 'SCOM') return 'M-Pesa monetisation updates and the next results';
-    if (t === 'EABL') return 'volume trends in the next trading update';
-    if (['BAMB', 'PORT'].includes(t)) return 'construction-demand data and the next results';
-    if (['NMG', 'SGL'].includes(t)) return 'digital-subscription growth in the next update';
-    return 'the next corporate announcement or NSE trading update';
-  }
-  return 'the next earnings report and US macro data';
+  const m = String(market || '').toUpperCase();
+  if (m === 'NGX') return 'the next NGX earnings release and CBN policy';
+  if (m === 'JSE') return 'the next JSE results and the SARB rate decision';
+  if (m === 'Global') return 'the next earnings report and US macro data';
+  if (['EQTY', 'KCB', 'COOP', 'ABSA', 'NCBA', 'SBIC', 'SCBK', 'DTK', 'HFCK', 'BKG', 'IMH'].includes(t)) return 'the next CBK rate decision and Q3 earnings';
+  if (t === 'SCOM') return 'M-Pesa monetisation updates and the next results';
+  if (t === 'EABL') return 'volume trends in the next trading update';
+  if (['BAMB', 'PORT'].includes(t)) return 'construction-demand data and the next results';
+  if (['NMG', 'SGL'].includes(t)) return 'digital-subscription growth in the next update';
+  return 'the next corporate announcement or NSE trading update';
 }
 
 function generateFallbackNarrative(ticker, sentiment, articles, market, priceData) {
-  const name = getCompanyName(ticker) || ticker;
+  const name = companyNameFor({ ticker, market });
   const isGlobal = market === 'Global';
   const heads = articles.filter(a => a.headline).map(a => a.headline);
   const primary = heads[0] || '';
@@ -805,55 +820,60 @@ function generateFallbackNarrative(ticker, sentiment, articles, market, priceDat
 
   const thesis = pickFallbackThesis(name, sentiment);
 
-  const px = priceData && priceData.price != null ? priceData.price : null;
-  const pct = priceData && priceData.changePercent != null ? String(priceData.changePercent) : null;
+  const px = priceData && priceData.price != null ? Number(priceData.price) : null;
+  const rawPct = priceData ? (priceData.changePercent ?? priceData.change) : null;
+  const pctNum = rawPct != null ? Number(String(rawPct).replace('%', '')) : NaN;
+  const pct = Number.isFinite(pctNum) && pctNum !== 0
+    ? `${pctNum >= 0 ? '+' : ''}${pctNum.toFixed(2)}%`
+    : null;
   const vol = priceData && priceData.volume ? Number(priceData.volume).toLocaleString() : null;
+  const pxStr = px != null ? (Number.isInteger(px) ? px.toLocaleString() : px.toLocaleString(undefined, { maximumFractionDigits: 2 })) : null;
 
   // 1) What happened — plain, factual.
   const opening = primary
-    ? `${name} (${ticker}) is in focus after "${cleanSnippet(primary, 120)}".`
+    ? `${name} (${ticker}) is in focus after the headline "${cleanSnippet(primary, 110)}".`
     : `${name} (${ticker}) is in focus today.`;
 
   // 2) The concrete detail behind the headline.
-  const detailSentence = detail ? `The substance: ${detail}.` : '';
+  const detailSentence = detail ? `In short: ${detail}.` : '';
 
   // 3) A second thread, if there is one.
-  const secondarySentence = secondary ? `A second thread worth noting: "${cleanSnippet(secondary, 110)}".` : '';
+  const secondarySentence = secondary ? `Also worth noting: "${cleanSnippet(secondary, 100)}".` : '';
 
   // 4) The market's read, using the live move and volume.
   let marketRead;
-  if (px != null) {
+  if (pxStr != null) {
     const reaction = sentiment === 'positive'
-      ? 'the market has not fully priced the news in yet'
+      ? 'so the news may not be fully priced in yet'
       : sentiment === 'negative'
-      ? 'the market is still absorbing it'
-      : 'the market is waiting for confirmation';
-    marketRead = `The shares are at ${px}${pct ? ` (${pct} on the day)` : ''}${vol ? `, on volume of ${vol}` : ''}, so ${reaction}.`;
+      ? 'so the market is still absorbing it'
+      : 'so the market is waiting for confirmation';
+    marketRead = `The shares trade at ${pxStr}${pct ? `, ${pct} on the day` : ''}${vol ? ` on volume of ${vol}` : ''}, ${reaction}.`;
   } else {
     marketRead = sentiment === 'positive'
       ? 'The news is constructive, but it only becomes convincing on follow-through volume.'
       : sentiment === 'negative'
-      ? 'The news weighs on sentiment; the next session will show whether sellers follow through.'
+      ? 'The news weighs on sentiment; the next session shows whether sellers follow through.'
       : 'The market is waiting for a clearer signal before committing either way.';
   }
 
   // 5) What to watch.
   const outlook = sentiment === 'positive'
-    ? 'Watch for a close above recent highs on rising volume — that would confirm the bullish read.'
+    ? 'A close above recent highs on rising volume would confirm the bullish read.'
     : sentiment === 'negative'
-    ? 'Watch whether the recent support holds; a decisive break below would open the next leg lower.'
+    ? 'Watch whether recent support holds; a decisive break below opens the next leg lower.'
     : 'Watch the next company update or macro print — it should break the current range.';
 
-  // 6) A specific, sector-aware risk.
-  const riskText = `Key risk: ${fallbackRiskLine(ticker, isGlobal)}.`;
+  // 6) A specific, market-aware risk.
+  const riskText = `Main risk: ${fallbackRiskLine(ticker, market)}.`;
 
   const analysis = [opening, detailSentence, secondarySentence, marketRead, outlook, riskText].filter(Boolean).join(' ');
 
   return {
     thesis,
     analysis,
-    catalyst: fallbackCatalystLine(ticker, isGlobal),
-    risk: fallbackRiskLine(ticker, isGlobal),
+    catalyst: fallbackCatalystLine(ticker, market),
+    risk: fallbackRiskLine(ticker, market),
   };
 }
 
@@ -862,7 +882,7 @@ function generateFallbackNarrative(ticker, sentiment, articles, market, priceDat
 // limited LLM quota is spent on the per-stock narratives and the big story,
 // where it adds the most value, instead of on these short preambles.
 function buildThematicIntro(stocks, marketOverview) {
-  const tickerList = stocks.map(s => `${getCompanyName(s.ticker) || s.ticker} (${s.ticker})`).join(', ');
+  const tickerList = stocks.map(s => `${companyNameFor(s)} (${s.ticker})`).join(', ');
   const sentiment = marketOverview.sentiment || 'Neutral';
   if (sentiment === 'Bullish') {
     return `Risk appetite is improving today, so we're looking past the headline indices to the names actually moving: ${tickerList}. Below is what's driving each one.`;
@@ -885,7 +905,7 @@ function buildEditorsNote(stocks, marketOverview) {
 // Optional LLM versions (kept for explicit callers); they fall back to the
 // templated builders above on any error.
 async function generateThematicIntro(stocks, marketOverview) {
-  const tickerList = stocks.map(s => `${getCompanyName(s.ticker) || s.ticker} (${s.ticker})`).join(', ');
+  const tickerList = stocks.map(s => `${companyNameFor(s)} (${s.ticker})`).join(', ');
   const sentiment = marketOverview.sentiment || 'Neutral';
   const nseCount = stocks.filter(s => s.market === 'NSE').length;
   const globalCount = stocks.filter(s => s.market === 'Global').length;
@@ -914,7 +934,7 @@ async function generateEditorsNote(stocks, marketOverview) {
 // ── Generate the featured "Big Story" editorial deep-dive ─────────
 async function generateBigStory(stocks, marketOverview) {
   if (!stocks.length) return null;
-  const names = stocks.map(s => `${getCompanyName(s.ticker) || s.ticker} (${s.ticker})`).join(', ');
+  const names = stocks.map(s => `${companyNameFor(s)} (${s.ticker})`).join(', ');
   const bulls = stocks.filter(s => s.sentiment === 'positive').map(s => s.ticker);
   const bears = stocks.filter(s => s.sentiment === 'negative').map(s => s.ticker);
   const nseCount = stocks.filter(s => s.market === 'NSE').length;
@@ -959,7 +979,7 @@ BODY: <2-3 paragraphs>`;
 async function generateBottomLine(stocks) {
   if (!stocks.length) return [];
   const lines = stocks.map((s, i) => {
-    const name = getCompanyName(s.ticker) || s.ticker;
+    const name = companyNameFor(s);
     return `${i + 1}. ${name} (${s.ticker})`;
   });
   const prompt = `Below is the day's focus list for a stock newsletter. Write exactly 3 crisp "bottom line" takeaways (max 18 words each, plain text, one per line, no numbers, no markdown). Each must be a specific, actionable insight that combines the names with today's market backdrop — NOT a generic platitude and NOT a per-stock recap.
@@ -1025,14 +1045,14 @@ function generateEditorialSummary(stocks, marketOverview) {
 
   // Connect to the specific stocks — not just list tickers
   if (nseStocks.length > 0 && globalStocks.length > 0) {
-    const nseT = nseStocks.map(s => getCompanyName(s.ticker) || s.ticker).join(' & ');
-    const globT = globalStocks.map(s => getCompanyName(s.ticker) || s.ticker).join(' & ');
+    const nseT = nseStocks.map(s => companyNameFor(s)).join(' & ');
+    const globT = globalStocks.map(s => companyNameFor(s)).join(' & ');
     summary += `${nseT} ${nseStocks.length > 1 ? 'lead' : 'leads'} the NSE conversation today, while ${globT} ${globalStocks.length > 1 ? 'carry' : 'carries'} the global narrative. `;
   } else if (nseStocks.length > 0) {
-    const names = nseStocks.map(s => getCompanyName(s.ticker) || s.ticker).join(' & ');
+    const names = nseStocks.map(s => companyNameFor(s)).join(' & ');
     summary += `On the NSE, ${names} ${nseStocks.length > 1 ? 'are' : 'is'} the names that matter today. `;
   } else {
-    const names = globalStocks.map(s => getCompanyName(s.ticker) || s.ticker).join(' & ');
+    const names = globalStocks.map(s => companyNameFor(s)).join(' & ');
     summary += `Globally, ${names} ${globalStocks.length > 1 ? 'are' : 'is'} driving the conversation. `;
   }
 
@@ -1128,7 +1148,7 @@ async function generateDailyInsights(force = false) {
     const { thesis, analysis, catalyst, risk } = await generateNarrativeThesis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market, marketCtx)
     .catch(e => { console.warn(`[INSIGHTS] narrative fallback for ${stock.ticker}: ${e.message}`); return generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market, priceData); });
 
-    const companyName = getCompanyName(stock.ticker) || stock.ticker;
+    const companyName = companyNameFor(stock);
     const signal = stock.sentiment === 'positive' ? 'BULLISH'
       : stock.sentiment === 'negative' ? 'BEARISH' : 'NEUTRAL';
 

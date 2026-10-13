@@ -980,8 +980,9 @@ function fmtMoverRow(m) {
   const color = chg >= 0 ? GREEN : RED;
   const mk = String(m.market || '').toUpperCase();
   const tag = ['NSE', 'NGX', 'JSE'].includes(mk) ? ` <span style="font-size:8px;font-weight:600;color:${TEXT_LIGHT}">${mk}</span>` : '';
+  const bareTicker = String(m.ticker || m.symbol || '').replace(/^(NSE|NGX|JSE):/i, '');
   return `<tr>
-    <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${esc(m.ticker || m.symbol || '')}${tag}</td>
+    <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${esc(bareTicker)}${tag}</td>
     <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${esc(m.name || '')}</td>
     <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:700;color:${color};text-align:right">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</td>
   </tr>`;
