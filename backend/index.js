@@ -2389,7 +2389,7 @@ async function getMarketSnapshot() {
 
 async function getLivePrice(market, ticker) {
   const { getStockQuote } = require('./marketService');
-  const sym = market === 'NSE' ? 'NSE:' + ticker : ticker;
+  const sym = ['NSE', 'NGX', 'JSE'].includes(market) ? `${market}:${ticker}` : ticker;
   try {
     const quote = await Promise.race([
       getStockQuote(sym),
@@ -2402,7 +2402,7 @@ async function getLivePrice(market, ticker) {
 
 async function getLiveQuote(market, ticker) {
   const { getStockQuote } = require('./marketService');
-  const sym = market === 'NSE' ? 'NSE:' + ticker : ticker;
+  const sym = ['NSE', 'NGX', 'JSE'].includes(market) ? `${market}:${ticker}` : ticker;
   try {
     const quote = await Promise.race([
       getStockQuote(sym),
