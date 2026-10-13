@@ -146,6 +146,9 @@ const GLOBAL_RSS_FEEDS = [
   { url: 'https://www.myjoyonline.com/business/feed/', source: 'MyJoyOnline', category: 'africa', max: 15 },
   { url: 'https://enterprise.news/feed', source: 'Enterprise', category: 'africa', max: 12 },
   { url: 'https://www.iol.co.za/rss', source: 'IOL', category: 'africa', max: 12 },
+  // South Africa / JSE — Moneyweb is the JSE-focused business desk (companies,
+  // deals, markets). Nairametrics/BusinessDay/Premium Times above cover NGX.
+  { url: 'https://www.moneyweb.co.za/feed/', source: 'Moneyweb', category: 'africa', max: 15 },
 ];
 
 // Dedicated RSS client: follows redirects, sets a browser UA, and is NOT behind
