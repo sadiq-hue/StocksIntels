@@ -2474,7 +2474,12 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
     );
     if (!result.rows.length) return;
     dbId = result.rows[0].id;
-  } catch (e) { /* persistence best-effort */ }
+  } catch (e) {
+    // Never track a prediction we could not persist: a memory-only row has no DB
+    // id, can never be resolved/persisted, and surfaces as a phantom duplicate.
+    console.warn(`[ForwardTest] Skipping unpersisted prediction ${symbol}: ${e.message}`);
+    return;
+  }
   store.predictions.push({
     id: dbId, signal: signalAction, confidence, price,
     stopLoss, target1, target2: target2 != null ? target2 : null,
@@ -3187,19 +3192,30 @@ function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0 } 
       all.push({ symbol: sym, ...p, currency: NSE_SYMBOLS.includes(sym) ? 'KES' : 'USD', generatedAt: new Date(p.generatedAt).toISOString(), resolvedAt: p.resolvedAt ? new Date(p.resolvedAt).toISOString() : null, supersededAt: p.supersededAt ? new Date(p.supersededAt).toISOString() : null });
     }
   }
-  // Deduplicate: the in-memory store can accumulate duplicate entries for the
-  // same (symbol, price, action) after restarts (loaded from DB + re-recorded
-  // by the next signal cycle). Keep the latest per group.
-  const deduped = [];
-  const seen = new Map();
+  // Collapse to ONE row per thesis using the SAME predicate the write path uses
+  // (isSameThesis). The in-memory store can hold a re-priced twin of the same
+  // call — loaded from DB and re-recorded, or a fresh cycle that re-derived the
+  // entry within tolerance — and an exact-price key let those show as duplicate
+  // rows (e.g. two PS @ ~59.75, two ALAB @ ~382.25). Keep the newest per thesis.
+  const byKey = new Map();
   for (const p of all) {
-    const key = `${p.symbol}:${p.price}:${p.action}`;
-    const existing = seen.get(key);
-    if (!existing || new Date(p.generatedAt) > new Date(existing.generatedAt)) {
-      if (existing) { const idx = deduped.indexOf(existing); if (idx >= 0) deduped.splice(idx, 1); }
-      deduped.push(p);
-      seen.set(key, p);
+    const k = `${p.symbol}|${p.action || String(p.signal || '').toLowerCase()}`;
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(p);
+  }
+  const deduped = [];
+  for (const chain of byKey.values()) {
+    chain.sort((a, b) => (new Date(a.generatedAt) - new Date(b.generatedAt)) || ((a.id || 0) - (b.id || 0)));
+    const theses = [];
+    for (const r of chain) {
+      const prev = theses[theses.length - 1];
+      if (prev && isSameThesis({ price: prev.price, target1: prev.target1 }, r.price, r.target1, r.action || 'buy')) {
+        theses[theses.length - 1] = r; // newest supersedes
+      } else {
+        theses.push(r);
+      }
     }
+    deduped.push(...theses);
   }
   deduped.sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt));
   return { predictions: deduped.slice(offset, offset + limit), total: deduped.length };
