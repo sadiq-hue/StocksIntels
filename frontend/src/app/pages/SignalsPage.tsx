@@ -7,10 +7,10 @@ import {
 } from "../components/ui/select";
 import { Button } from "../components/ui/button";
 import {
-  TrendingUp, TrendingDown, Search, Zap,
+  TrendingUp, TrendingDown, Search,
   Activity, Star, RefreshCw, Info, ChevronLeft, ChevronRight,
   ArrowUpRight, ArrowDownRight, BarChart3, Clock, Gauge, FilterX, ArrowUpDown, X, Target,
-  Brain, Signal, Flame,
+  Brain,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../auth/AuthContext";
@@ -22,16 +22,13 @@ import { authFetch } from "../auth/tokenStore";
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 // Apple-style stat tile: soft shadow, no border, tight typography.
-function StatCard({ icon: Icon, label, value, tone }: {
-  icon: typeof TrendingUp; label: string; value: string | number; tone: string;
+function StatCard({ label, value, tone }: {
+  label: string; value: string | number; tone: string;
 }) {
   return (
     <div className="rounded-2xl bg-white dark:bg-white/[0.06] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.06)] transition-transform duration-200 hover:-translate-y-0.5">
-      <div className="flex items-center gap-1.5 mb-2.5 text-muted-foreground">
-        <Icon className="w-3.5 h-3.5" />
-        <span className="text-[11px] font-medium uppercase tracking-wide">{label}</span>
-      </div>
-      <p className={`text-[28px] leading-none font-semibold tracking-tight tabular-nums ${tone}`}>{value}</p>
+      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+      <p className={`mt-2.5 text-[28px] leading-none font-semibold tracking-tight tabular-nums ${tone}`}>{value}</p>
     </div>
   );
 }
@@ -405,19 +402,18 @@ export function SignalsPage() {
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" data-tour="signals-stats">
-        <StatCard icon={Signal} label="Total Signals" value={signals.length} tone="text-foreground" />
-        <StatCard icon={TrendingUp} label="Strong Buy / Buy" value={strongBuy} tone="text-emerald-600" />
-        <StatCard icon={TrendingDown} label="Sell / Strong Sell" value={strongSell} tone="text-red-600" />
-        <StatCard icon={Flame} label="Peak Confidence" value={`${peakConf}%`} tone="text-[#0D7490]" />
-        <StatCard icon={Gauge} label="Avg Confidence" value={`${avgConf}%`} tone="text-foreground" />
-        <StatCard icon={Star} label="Favorites" value={favorites.length} tone="text-amber-500" />
+        <StatCard label="Total Signals" value={signals.length} tone="text-foreground" />
+        <StatCard label="Strong Buy / Buy" value={strongBuy} tone="text-emerald-600" />
+        <StatCard label="Sell / Strong Sell" value={strongSell} tone="text-red-600" />
+        <StatCard label="Peak Confidence" value={`${peakConf}%`} tone="text-[#0D7490]" />
+        <StatCard label="Avg Confidence" value={`${avgConf}%`} tone="text-foreground" />
+        <StatCard label="Favorites" value={favorites.length} tone="text-amber-500" />
       </div>
 
       {/* Top signals by confidence */}
       {topConf.length > 0 && (
         <div className="rounded-2xl bg-white dark:bg-white/[0.06] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.06)] flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2.5">
-            <Zap className="w-4 h-4 text-emerald-600" />
             <div>
               <p className="text-sm font-semibold tracking-tight text-foreground">Top signals by confidence</p>
               <p className="text-xs text-muted-foreground">Highest-conviction setups in the feed right now</p>
