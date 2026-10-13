@@ -280,11 +280,6 @@ export function DailyIntelligencePanel() {
             <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{data.analystTake}</p>
           </div>
         )}
-
-        <p className="border-t border-border pt-2 text-[10px] leading-relaxed text-muted-foreground">
-          A summary of the market data we track, regenerated every 15 minutes. It
-          describes what is happening — it is not investment advice.
-        </p>
       </div>
     </Card>
   );

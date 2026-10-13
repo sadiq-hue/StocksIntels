@@ -558,7 +558,7 @@ async function generateDailyBriefContent() {
   }
   const effectiveSummary = { ...summary, sentiment: effectiveSentiment, signals: { total: totalSignals, strongBuys, buys, sells } };
   aiSignalContext = aiSignalContext || buildAiSignalContext(effectiveSummary, signalOfDay, sp500);
-  globalToNseConnection = globalToNseConnection || buildDailyGlobalConnection(sp500, ndx, nse20, effectiveSummary);
+  globalToNseConnection = globalToNseConnection || buildDailyGlobalConnection(sp500, ndx, nse20, effectiveSummary, { africaMarkets, dji });
   analystTake = analystTake || buildAnalystTake(signalOfDay, sectors, effectiveSummary);
 
   const spChgRaw = sp500?.changeRaw || 0;
@@ -600,12 +600,38 @@ function buildAiSignalContext(summary, topSignals, sp500) {
   return parts.join(' ');
 }
 
-function buildDailyGlobalConnection(sp500, ndx, nse20, summary) {
+function buildDailyGlobalConnection(sp500, ndx, nse20, summary, extra = {}) {
+  const { africaMarkets = [], dji = null } = extra;
   const spChange = sp500?.changeRaw || 0;
-  if (Math.abs(spChange) > 0.5) {
-    return `Global markets closed ${spChange > 0 ? 'higher' : 'lower'} with the S&P 500 ${sp500?.change || '--'}. This sets a ${spChange > 0 ? 'supportive' : 'challenging'} backdrop for African markets at the open. Key NSE level: NSE 20 at ${nse20?.value || '--'}. Banking and telecom names on the NSE, and index heavyweights on the NGX and JSE, typically lead any gap reaction.`;
+  const parts = [];
+
+  // Overnight global tone, with the actual index moves.
+  const gParts = [];
+  if (sp500?.change && sp500.change !== '--') gParts.push(`S&P 500 ${sp500.change}`);
+  if (ndx?.change && ndx.change !== '--') gParts.push(`Nasdaq ${ndx.change}`);
+  if (dji?.change && dji.change !== '--') gParts.push(`Dow ${dji.change}`);
+  if (gParts.length) {
+    const tone = spChange > 0.5 ? 'supportive' : spChange < -0.5 ? 'challenging' : 'mixed';
+    parts.push(`Overnight, US markets closed ${tone} (${gParts.join(', ')}), which sets the tone for African markets.`);
+  } else {
+    parts.push('Global market movements overnight can set the tone for the African markets.');
   }
-  return 'Global market movements overnight can set the tone for the African markets. Watch for gap-ups or gap-downs in the first 30 minutes on the NSE, NGX and JSE, especially in large-cap banking and telecom names.';
+
+  // Current African-market breadth, per exchange.
+  for (const mkt of africaMarkets) {
+    if (!mkt || !(mkt.total > 0)) continue;
+    const label = mkt.exchange;
+    const bias = mkt.advancers > mkt.decliners * 1.2 ? 'a positive'
+      : mkt.decliners > mkt.advancers * 1.2 ? 'a soft' : 'a mixed';
+    parts.push(`${label} is showing ${bias} breadth (${mkt.advancers} up / ${mkt.decliners} down of ${mkt.total} listed).`);
+  }
+
+  if (nse20?.value && nse20.value !== '--') {
+    parts.push(`The NSE 20 sits at ${nse20.value} (${nse20.change || '--'}).`);
+  }
+
+  parts.push(`Watch the first 30 minutes on the NSE, NGX and JSE for gap-${spChange >= 0 ? 'ups' : 'downs'}, especially in large-cap banking and telecom names.`);
+  return parts.join(' ');
 }
 
 function buildDailyCalendar() {
