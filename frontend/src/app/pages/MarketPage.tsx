@@ -724,11 +724,19 @@ const MarketPage: React.FC = () => {
           <span className="text-xs font-medium text-muted-foreground">Nairobi Securities Exchange (KES)</span>
         </div>
         <div className="flex items-center gap-2">
+          <div className="size-2 rounded-full bg-emerald-500" />
+          <span className="text-xs font-medium text-muted-foreground">Nigerian Exchange (NGN)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="size-2 rounded-full bg-amber-500" />
+          <span className="text-xs font-medium text-muted-foreground">Johannesburg Stock Exchange (ZAR)</span>
+        </div>
+        <div className="flex items-center gap-2">
           <div className="size-2 rounded-full bg-indigo-500" />
           <span className="text-xs font-medium text-muted-foreground">US/Global Markets (USD)</span>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground sm:ml-auto">
-          <span>Both markets update in real-time</span>
+          <span>All markets update in real-time</span>
         </div>
       </div>
 
