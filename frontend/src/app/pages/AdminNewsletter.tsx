@@ -27,6 +27,13 @@ const statusColors: Record<string, string> = {
   rejected: "bg-red-100 text-red-800",
 };
 
+// Number of tickers featured in the issue, parsed from the subject
+// ("Stock Insights: A, B, C — <date>").
+function stocksCount(subject: string): number {
+  const m = String(subject || "").match(/Stock Insights:\s*(.+?)\s*[—\-–]\s/);
+  return m ? m[1].split(",").filter((s) => s.trim()).length : 0;
+}
+
 export function AdminNewsletter() {
   const { user, apiFetch } = useAuth();
   const [drafts, setDrafts] = useState<NewsletterDraft[]>([]);
@@ -159,6 +166,7 @@ export function AdminNewsletter() {
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Subject</TableHead>
+              <TableHead className="text-center">Stocks</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Sent</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -167,13 +175,13 @@ export function AdminNewsletter() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={6} className="text-center py-8">
                   <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : drafts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   No drafts yet. Click "Generate Draft" to create one.
                 </TableCell>
               </TableRow>
@@ -187,6 +195,9 @@ export function AdminNewsletter() {
                   </TableCell>
                   <TableCell className="font-medium text-sm max-w-xs truncate">
                     {draft.subject}
+                  </TableCell>
+                  <TableCell className="text-center text-sm text-muted-foreground">
+                    {stocksCount(draft.subject)}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={statusColors[draft.status] || ""}>

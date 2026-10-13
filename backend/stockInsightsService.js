@@ -24,7 +24,8 @@ const SIGNAL_BOOST = 3;                 // points added when a candidate also ha
 const SIGNAL_CONFIDENCE_MIN = 75;       // confidence threshold for the live-engine boost
 const SIGNAL_LOOKBACK_DAYS = 3;         // how far back live high-conviction signals count for the boost
 const MAX_DEDUPE_ATTEMPTS = 12;         // safety bound on the walk-down that guarantees a different set
-const SECTOR_VARIETY_COUNT = 2;         // avoid two same-sector names leading the NSE line-up
+const PICKS_PER_MARKET = 3;             // 3 African + 3 global keeps the issue broad, not a 4-name sampler
+const PICKS_PER_ISSUE = PICKS_PER_MARKET * 2; // 6 deep-dives per issue
 const MIN_TAGGED_ARTICLES = 2;          // a name must be independently covered by this many articles to be a candidate
 
 const PORT = process.env.PORT || 3001;
@@ -268,9 +269,9 @@ async function pickHotStocks(forceFresh = false) {
     : scored.filter(s => s.repeatCount <= 0 || s.score >= HARD_REPEAT_OVERRIDE_SCORE);
   // Force-fresh generally avoids repeaters, but NSE repeats may fill a couple
   // of seats so a quiet week still yields a local, market-balanced issue.
-  const forSelection = forceFresh ? eligible : (eligible.length >= 4 ? eligible : scored);
+  const forSelection = forceFresh ? eligible : (eligible.length >= PICKS_PER_ISSUE ? eligible : scored);
 
-  // Sequential selection: market-balanced (2 NSE + 2 global), sector-aware,
+  // Sequential selection: market-balanced (3 African + 3 global), sector-aware,
   // and capped so at most MAX_REPEATS_PER_DRAFT featured names make the issue.
   let picked = [];
   const marketCount = { NSE: 0, Global: 0 };
@@ -278,8 +279,8 @@ async function pickHotStocks(forceFresh = false) {
   let repeatsUsed = 0;
 
   const tryAdd = s => {
-    if (picked.length >= 4) return false;
-    if (marketCount[s.market] >= SECTOR_VARIETY_COUNT) return false;
+    if (picked.length >= PICKS_PER_ISSUE) return false;
+    if (marketCount[s.market] >= PICKS_PER_MARKET) return false;
     if (s.repeatCount > 0 && repeatsUsed >= MAX_REPEATS_PER_DRAFT) return false;
     if (s.sector !== 'Other' && marketSectors[s.market].has(s.sector)) return false;
     picked.push(s);
@@ -290,7 +291,7 @@ async function pickHotStocks(forceFresh = false) {
   };
 
   for (const s of forSelection) {
-    if (picked.length >= 4) break;
+    if (picked.length >= PICKS_PER_ISSUE) break;
     tryAdd(s);
   }
 
@@ -298,7 +299,7 @@ async function pickHotStocks(forceFresh = false) {
   // from the under-filled market (keeps the draft balanced NSE/global).
   const otherMarket = m => (m === 'NSE' ? 'Global' : 'NSE');
   for (const m of ['NSE', 'Global']) {
-    while (marketCount[m] < SECTOR_VARIETY_COUNT && marketCount[otherMarket(m)] > SECTOR_VARIETY_COUNT && picked.length >= 4) {
+    while (marketCount[m] < PICKS_PER_MARKET && marketCount[otherMarket(m)] > PICKS_PER_MARKET) {
       let idx = -1;
       for (let i = picked.length - 1; i >= 0; i--) { if (picked[i].market === otherMarket(m)) { idx = i; break; } }
       const sub = forSelection.find(s => s.market === m && !picked.find(p => p.ticker === s.ticker));
@@ -314,9 +315,9 @@ async function pickHotStocks(forceFresh = false) {
   }
 
   // Fill any remaining slots if one market was genuinely short of candidates.
-  if (picked.length < 4) {
+  if (picked.length < PICKS_PER_ISSUE) {
     for (const s of forSelection) {
-      if (picked.length >= 4) break;
+      if (picked.length >= PICKS_PER_ISSUE) break;
       if (picked.find(p => p.ticker === s.ticker)) continue;
       picked.push(s);
       marketCount[s.market]++;
@@ -328,11 +329,11 @@ async function pickHotStocks(forceFresh = false) {
     const extra = forSelection.filter(s => !picked.find(p => p.ticker === s.ticker)).slice(0, 3 - picked.length);
     picked.push(...extra);
   }
-  picked = picked.slice(0, 4);
+  picked = picked.slice(0, PICKS_PER_ISSUE);
 
   // No-boring-repeat guard: if the picked set is identical to the latest
   // draft, walk further down the ranked list for a ticker not in that draft.
-  if (!latestDraftSet.size || picked.length < 4) {
+  if (!latestDraftSet.size || picked.length < PICKS_PER_ISSUE) {
     // nothing to compare against or too few candidates
   } else {
     let attempt = 0;
@@ -354,14 +355,15 @@ async function pickHotStocks(forceFresh = false) {
     `picked=${picked.map(s => `${s.ticker}(${s.market})`).join(', ')}`,
   ]);
 
-  return picked.slice(0, 4);
+  return picked.slice(0, PICKS_PER_ISSUE);
 }
 
 // ── Build market overview ────────────────────────────────────────
 async function buildMarketOverview() {
-  const [movers, indices, activeCount] = await Promise.all([
-    fetchJson(`${BASE}/api/market/movers`, { nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] } }),
+  const [movers, indices, turnover, activeCount] = await Promise.all([
+    fetchJson(`${BASE}/api/market/movers`, { nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] }, combined: { gainers: [], losers: [] } }),
     fetchJson(`${BASE}/api/indices/all`, {}),
+    fetchJson(`${BASE}/api/market/turnover`, {}),
     pool.query(`SELECT COUNT(*) FROM (SELECT DISTINCT ON (ticker) ticker FROM signal_history ORDER BY ticker, generated_at DESC) t`).then(r => parseInt(r.rows[0].count) || 0).catch(() => 0),
   ]);
 
@@ -374,33 +376,31 @@ async function buildMarketOverview() {
   const nasdaq = indicesArr.find(i => i.symbol?.includes('IXIC'));
   const dow = indicesArr.find(i => i.symbol?.includes('DJI'));
 
-  const nseGainers = (movers?.nse?.gainers || []).slice(0, 3).map(g => ({
-    ticker: g.symbol || g.ticker,
-    name: g.name || g.symbol || g.ticker,
-    change: g.changePercent || g.change || g.pct_change || '0',
-    price: g.price || g.regularMarketPrice || null,
-  }));
+  const toMover = (t, defMarket) => ({
+    ticker: t.symbol || t.ticker,
+    name: t.name || t.symbol || t.ticker,
+    change: t.changePercent ?? t.change ?? t.pct_change ?? '0',
+    price: t.price || t.regularMarketPrice || null,
+    market: t.market || defMarket || 'Global',
+  });
 
-  const nseLosers = (movers?.nse?.losers || []).slice(0, 3).map(l => ({
-    ticker: l.symbol || l.ticker,
-    name: l.name || l.symbol || l.ticker,
-    change: l.changePercent || l.change || l.pct_change || '0',
-    price: l.price || l.regularMarketPrice || null,
-  }));
+  const nseGainers = (movers?.nse?.gainers || []).slice(0, 3).map(g => toMover(g, 'NSE'));
+  const nseLosers = (movers?.nse?.losers || []).slice(0, 3).map(l => toMover(l, 'NSE'));
+  const globalGainers = (movers?.global?.gainers || []).slice(0, 3).map(g => toMover(g, 'Global'));
+  const globalLosers = (movers?.global?.losers || []).slice(0, 3).map(l => toMover(l, 'Global'));
 
-  const globalGainers = (movers?.global?.gainers || []).slice(0, 3).map(g => ({
-    ticker: g.symbol || g.ticker,
-    name: g.name || g.symbol || g.ticker,
-    change: g.changePercent || g.change || g.pct_change || '0',
-    price: g.price || g.regularMarketPrice || null,
-  }));
+  // Pan-African movers — every non-Global name from the combined feed
+  // (NSE + NGX + JSE), so the newsletter's context isn't Kenya-only.
+  const africaGainers = (movers?.combined?.gainers || [])
+    .filter(m => String(m.market || '').toUpperCase() !== 'GLOBAL')
+    .slice(0, 4).map(m => toMover(m));
+  const africaLosers = (movers?.combined?.losers || [])
+    .filter(m => String(m.market || '').toUpperCase() !== 'GLOBAL')
+    .slice(0, 4).map(m => toMover(m));
 
-  const globalLosers = (movers?.global?.losers || []).slice(0, 3).map(l => ({
-    ticker: l.symbol || l.ticker,
-    name: l.name || l.symbol || l.ticker,
-    change: l.changePercent || l.change || l.pct_change || '0',
-    price: l.price || l.regularMarketPrice || null,
-  }));
+  const africaTurnover = turnover && (turnover.nse || turnover.ngx || turnover.jse)
+    ? { nse: turnover.nse || null, ngx: turnover.ngx || null, jse: turnover.jse || null }
+    : null;
 
   return {
     nse: {
@@ -410,6 +410,13 @@ async function buildMarketOverview() {
       topLoser: nseLosers[0] || null,
       gainers: nseGainers,
       losers: nseLosers,
+    },
+    africa: {
+      nse20: nse20 ? { value: nse20.value, change: nse20.change, changeRaw: nse20.changeRaw } : null,
+      nasi: nasi ? { value: nasi.value, change: nasi.change, changeRaw: nasi.changeRaw } : null,
+      gainers: africaGainers,
+      losers: africaLosers,
+      turnover: africaTurnover,
     },
     us: {
       sp500: sp500 ? { value: sp500.value, change: sp500.change, changeRaw: sp500.changeRaw } : null,
@@ -497,7 +504,32 @@ function pickFallbackThesis(name, sentiment) {
   _thesisIdx++;
   return fn(name);
 }
-async function generateNarrativeThesis(ticker, sentiment, articles, priceData, market) {
+// Compact, real market context string fed into the per-stock analysis prompt so
+// the editorial is grounded in the day's actual index levels and movers across
+// African + global markets instead of the model's priors (fewer inaccuracies).
+function formatMarketContext(marketOverview, stock) {
+  const af = marketOverview?.africa || {};
+  const nse = marketOverview?.nse || {};
+  const us = marketOverview?.us || {};
+  const idx = [];
+  if (nse.nse20?.value) idx.push(`NSE 20 ${nse.nse20.value} (${nse.nse20.change || '--'})`);
+  if (nse.nasi?.value) idx.push(`NASI ${nse.nasi.value} (${nse.nasi.change || '--'})`);
+  if (us.sp500?.value) idx.push(`S&P 500 ${us.sp500.value} (${us.sp500.change || '--'})`);
+  if (us.nasdaq?.value) idx.push(`Nasdaq ${us.nasdaq.value} (${us.nasdaq.change || '--'})`);
+  if (us.dow?.value) idx.push(`Dow ${us.dow.value} (${us.dow.change || '--'})`);
+  const parts = [];
+  if (stock?.sector && stock.sector !== 'Other') parts.push(`Sector: ${stock.sector}.`);
+  if (idx.length) parts.push(`Indices: ${idx.join(', ')}.`);
+  const afUp = (af.gainers || []).slice(0, 3).map(m => `${m.ticker}[${m.market}] ${m.change}`);
+  if (afUp.length) parts.push(`African movers up: ${afUp.join(', ')}.`);
+  const afDown = (af.losers || []).slice(0, 3).map(m => `${m.ticker}[${m.market}] ${m.change}`);
+  if (afDown.length) parts.push(`African movers down: ${afDown.join(', ')}.`);
+  const gUp = (us.gainers || []).slice(0, 3).map(m => `${m.ticker} ${m.change}`);
+  if (gUp.length) parts.push(`Global movers up: ${gUp.join(', ')}.`);
+  return parts.join(' ');
+}
+
+async function generateNarrativeThesis(ticker, sentiment, articles, priceData, market, extraContext = '') {
   const name = getCompanyName(ticker) || ticker;
   const isGlobal = market === 'Global';
 
@@ -523,7 +555,10 @@ ${priceContext}
 
 CONTEXT:
 ${marketContext}
-
+${extraContext ? `
+MARKET CONTEXT — REAL FIGURES (use these and ONLY these; never invent numbers):
+${extraContext}
+` : ''}
 WRITE FOUR LABELED SECTIONS — copy the exact labels below:
 
 THESIS: <one compelling one-line hook, max 20 words. A contrarian or insight-driven statement. Examples:
@@ -549,6 +584,7 @@ RULES:
 - Do NOT use generic phrases like "drawing investor attention" or "is among the stories"
 - Do NOT start sentences with "The stock" — vary sentence structure
 - Each sentence should convey new information
+- Use ONLY the figures and facts provided above; never invent prices, ratios, dates or events. If a figure was not given, do not state one
 - Write with conviction — take a stance`;
 
   try {
@@ -785,7 +821,7 @@ async function generateEditorsNote(stocks, marketOverview) {
 // ── Generate the featured "Big Story" editorial deep-dive ─────────
 async function generateBigStory(stocks, marketOverview) {
   if (!stocks.length) return null;
-  const names = stocks.slice(0, 4).map(s => `${getCompanyName(s.ticker) || s.ticker} (${s.ticker})`).join(', ');
+  const names = stocks.map(s => `${getCompanyName(s.ticker) || s.ticker} (${s.ticker})`).join(', ');
   const bulls = stocks.filter(s => s.sentiment === 'positive').map(s => s.ticker);
   const bears = stocks.filter(s => s.sentiment === 'negative').map(s => s.ticker);
   const nseCount = stocks.filter(s => s.market === 'NSE').length;
@@ -829,7 +865,7 @@ BODY: <2-3 paragraphs>`;
 // ── Generate "The Bottom Line" takeaways ──────────────────────────
 async function generateBottomLine(stocks) {
   if (!stocks.length) return [];
-  const lines = stocks.slice(0, 4).map((s, i) => {
+  const lines = stocks.map((s, i) => {
     const name = getCompanyName(s.ticker) || s.ticker;
     return `${i + 1}. ${name} (${s.ticker})`;
   });
@@ -995,7 +1031,8 @@ async function generateDailyInsights(force = false) {
   for (const stock of hotStocks) {
     const priceKey = stock.market === 'NSE' ? `NSE:${stock.ticker}` : stock.ticker;
     const priceData = priceDataMap[priceKey] || priceDataMap[stock.ticker] || null;
-    const { thesis, analysis, catalyst, risk } = await generateNarrativeThesis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market)
+    const marketCtx = formatMarketContext(marketOverview, stock);
+    const { thesis, analysis, catalyst, risk } = await generateNarrativeThesis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market, marketCtx)
     .catch(e => { console.warn(`[INSIGHTS] narrative fallback for ${stock.ticker}: ${e.message}`); return generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market, priceData); });
 
     const companyName = getCompanyName(stock.ticker) || stock.ticker;

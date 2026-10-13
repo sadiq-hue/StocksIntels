@@ -978,8 +978,10 @@ function fmtIndexCell(idx, label) {
 function fmtMoverRow(m) {
   const chg = parseFloat(String(m.change || '0').replace(/[^0-9.\-]/g, ''));
   const color = chg >= 0 ? GREEN : RED;
+  const mk = String(m.market || '').toUpperCase();
+  const tag = ['NSE', 'NGX', 'JSE'].includes(mk) ? ` <span style="font-size:8px;font-weight:600;color:${TEXT_LIGHT}">${mk}</span>` : '';
   return `<tr>
-    <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${esc(m.ticker || m.symbol || '')}</td>
+    <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:600;color:${TEXT_DARK}">${esc(m.ticker || m.symbol || '')}${tag}</td>
     <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">${esc(m.name || '')}</td>
     <td style="padding:5px 8px;border-bottom:1px solid ${BORDER};font-size:12px;font-weight:700;color:${color};text-align:right">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</td>
   </tr>`;
@@ -1063,7 +1065,40 @@ function buildMarketSnapshotHtml(marketOverview, mode = 'full') {
       </div>
     </div>` : '';
 
-  return `${overview}${nseMovers}${globalMovers}`;
+  // ── Pan-African context (NSE + NGX + JSE) ──
+  const af = marketOverview.africa || {};
+  const afGainers = (af.gainers || []).slice(0, 4);
+  const afLosers = (af.losers || []).slice(0, 4);
+  const afTo = af.turnover || {};
+  const fmtTurnover = (t, cur) => (t && t.turnover ? `${cur} ${fmtMarketCap(t.turnover)}` : null);
+  const turnoverParts = [
+    fmtTurnover(afTo.nse, 'KES'),
+    fmtTurnover(afTo.ngx, 'NGN'),
+    fmtTurnover(afTo.jse, 'ZAR'),
+  ].filter(Boolean);
+  const africaMovers = (afGainers.length > 0 || afLosers.length > 0) ? `
+    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
+      <div style="background:linear-gradient(135deg,#b45309 0%,#f59e0b 100%);color:#ffffff;padding:8px 16px;font-size:12px;font-weight:600">
+        Pan-African Markets &middot; NSE &middot; NGX &middot; JSE
+      </div>
+      ${turnoverParts.length ? `<div style="padding:8px 16px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">Total turnover: ${turnoverParts.join(' &middot; ')}</div>` : ''}
+      <div style="display:flex">
+        <div style="flex:1;border-right:1px solid ${BORDER}">
+          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${GREEN};text-transform:uppercase;border-bottom:1px solid ${BORDER}">African Gainers</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+            ${afGainers.map(g => fmtMoverRow(g)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
+          </table>
+        </div>
+        <div style="flex:1">
+          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${RED};text-transform:uppercase;border-bottom:1px solid ${BORDER}">African Losers</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
+            ${afLosers.map(l => fmtMoverRow(l)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
+          </table>
+        </div>
+      </div>
+    </div>` : '';
+
+  return `${overview}${africaMovers}${nseMovers}${globalMovers}`;
 }
 
 // Market overview snapshot shared by transactional emails. Fetched from the
@@ -1990,7 +2025,7 @@ async function sendStockInsightsEmail(email, data, options = {}) {
   const signalColorMap = { BULLISH: GREEN, BEARISH: RED, NEUTRAL: AMBER };
 
   // ── Stock deep-dive cards ──
-  const deepDiveCards = stockDeepDives.slice(0, 4).map((d, i) => {
+  const deepDiveCards = stockDeepDives.slice(0, 6).map((d, i) => {
     const sentColor = sentColorMap[d.sentiment] || AMBER;
     const sigColor = signalColorMap[d.signal] || AMBER;
     const priceChg = d.priceData?.changePercent
@@ -1999,11 +2034,13 @@ async function sendStockInsightsEmail(email, data, options = {}) {
     const chgColor = priceChg !== null ? (priceChg >= 0 ? GREEN : RED) : TEXT_LIGHT;
     const chgStr = priceChg !== null ? `${priceChg >= 0 ? '+' : ''}${priceChg.toFixed(2)}%` : '';
     const priceStr = d.priceData?.price ? Number(d.priceData.price).toLocaleString() : '';
-    const isGlobal = d.market === 'Global' || d.exchange !== 'NSE';
-    const currency = isGlobal ? '$' : 'KES ';
+    const exch = String(d.market || d.exchange || '').toUpperCase();
+    const isGlobal = !['NSE', 'NGX', 'JSE'].includes(exch);
+    const currency = exch === 'NGX' ? 'NGN ' : exch === 'JSE' ? 'ZAR ' : exch === 'NSE' ? 'KES ' : '$';
+    const marketLabel = exch === 'NGX' ? 'NGX' : exch === 'JSE' ? 'JSE' : exch === 'NSE' ? 'NSE' : 'GLOBAL';
     const marketBadge = isGlobal
-      ? `<span style="background:#1e40af;color:#fff;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:0.5px">GLOBAL</span>`
-      : `<span style="background:${BRAND_COLOR};color:#fff;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:0.5px">NSE</span>`;
+      ? `<span style="background:#1e40af;color:#fff;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:0.5px">${marketLabel}</span>`
+      : `<span style="background:${BRAND_COLOR};color:#fff;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:0.5px">${marketLabel}</span>`;
 
     const newsItems = (d.relatedNews || []).slice(0, 3).map(n =>
       `<div style="margin-bottom:6px;padding-left:10px;border-left:2px solid ${BORDER};font-size:12px;color:${TEXT_MED};line-height:1.4">
@@ -2012,7 +2049,7 @@ async function sendStockInsightsEmail(email, data, options = {}) {
     ).join('');
 
     const fund = d.fundamentals || {};
-    const currencyPrefix = isGlobal ? '$' : 'KES ';
+    const currencyPrefix = currency;
     const metricBlocks = [
       fund.peRatio ? { label: 'P/E', value: fmtNum(fund.peRatio) } : null,
       fund.dividendYield ? { label: 'Div Yield', value: `${fmtNum(fund.dividendYield)}%` } : null,
