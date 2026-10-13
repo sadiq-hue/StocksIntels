@@ -396,13 +396,53 @@ function deriveMovers(signals) {
   };
 }
 
+// Per-exchange breadth + top movers for the African markets (NGX/JSE), pulled
+// from the same MyStocks partner feed the Markets page uses. One paginated
+// fetch per exchange; returns breadth counts and the session's biggest
+// gainer/loser so the brief can carry African markets, not just NSE/US.
+async function computeAfricaMarketSummary(exchange) {
+  const { listStocks } = require('./mystocksAfricaApi');
+  let advancers = 0, decliners = 0, unchanged = 0, total = 0, cursor = '';
+  let topGainer = null, topLoser = null;
+  try {
+    for (let page = 0; page < 4; page++) {
+      const { data, hasMore, nextCursor } = await listStocks(exchange, { limit: 200, cursor });
+      for (const s of data) {
+        if (!s || !(s.price > 0)) continue;
+        total++;
+        const c = Number(s.changePct) || 0;
+        if (c > 0) advancers++; else if (c < 0) decliners++; else unchanged++;
+        if (c !== 0) {
+          if (!topGainer || c > topGainer.changePct) topGainer = { ticker: s.ticker, name: s.name, changePct: c, price: s.price };
+          if (!topLoser || c < topLoser.changePct) topLoser = { ticker: s.ticker, name: s.name, changePct: c, price: s.price };
+        }
+      }
+      if (!hasMore || !nextCursor) break;
+      cursor = nextCursor;
+    }
+  } catch (e) {
+    console.warn(`[daily-brief] ${exchange} market summary failed:`, e.message);
+  }
+  const fmt = (m) => m ? { symbol: m.ticker, company: m.name, change: `${m.changePct > 0 ? '+' : ''}${m.changePct.toFixed(2)}%` } : null;
+  return {
+    exchange,
+    currency: exchange === 'NGX' ? 'NGN' : 'ZAR',
+    total, advancers, decliners, unchanged,
+    topGainer: fmt(topGainer),
+    topLoser: fmt(topLoser),
+  };
+}
+
 async function generateDailyBriefContent() {
-  const [summary, allIndices, sectors, signals] = await Promise.all([
+  const [summary, allIndices, sectors, signals, ngxMarket, jseMarket] = await Promise.all([
     fetchJson(`${BASE}/api/ai/market-summary`, { sentiment: 'Neutral', signals: { total: 0, strongBuys: 0, buys: 0, sells: 0 } }),
     fetchJson(`${BASE}/api/indices/all`, {}),
     getSectorPerformance().catch(() => []),
     generateSignals(null, true).catch(() => []),
+    computeAfricaMarketSummary('NGX').catch(() => null),
+    computeAfricaMarketSummary('JSE').catch(() => null),
   ]);
+  const africaMarkets = [ngxMarket, jseMarket].filter(Boolean);
 
   const byTicker = new Map();
   (Array.isArray(signals) ? signals : []).forEach(s => byTicker.set(s.ticker, s));
@@ -473,13 +513,21 @@ async function generateDailyBriefContent() {
   const topGainers = withChange.filter(s => s.change > 0).sort((a, b) => b.change - a.change).slice(0, 3);
   const topLosers = withChange.filter(s => s.change < 0).sort((a, b) => a.change - b.change).slice(0, 3);
   const combinedMovers = [...topGainers, ...topLosers];
-  const yesterdayTopMovers = combinedMovers.map(m => ({
+  const coreMovers = combinedMovers.map(m => ({
     symbol: m.ticker || '--',
     company: m.name || '',
     change: (m.change > 0 ? '+' : '') + (Math.round((m.change || 0) * 100) / 100) + '%',
     volume: m.volume && m.volume !== '0' && m.volume !== '--' ? m.volume : '--',
     market: (NSE_SYMBOLS.includes(m.ticker) || m.market === 'NSE') ? 'NSE' : 'Global',
   }));
+  // Add the day's biggest mover from each African exchange so the list spans
+  // every market we cover, not just NSE/US.
+  const africanMovers = [];
+  for (const mkt of africaMarkets) {
+    if (mkt.topGainer) africanMovers.push({ ...mkt.topGainer, volume: '--', market: mkt.exchange });
+    if (mkt.topLoser) africanMovers.push({ ...mkt.topLoser, volume: '--', market: mkt.exchange });
+  }
+  const yesterdayTopMovers = [...coreMovers, ...africanMovers];
 
   const signalOfDay = enrichedSignals
     .filter(s => s.signal === 'Strong Buy' || s.signal === 'Buy')
@@ -497,7 +545,7 @@ async function generateDailyBriefContent() {
       ? (buys > sells * 2 ? 'Bullish' : buys > sells ? 'Slightly Bullish' : sells > buys * 2 ? 'Bearish' : sells > buys ? 'Slightly Bearish' : 'Neutral')
       : 'Neutral');
 
-  const aiSignal = `StocksIntels AI indicates ${effectiveSentiment} market conditions — ${totalSignals} tracked stocks across NSE and NYSE.`;
+  const aiSignal = `StocksIntels AI indicates ${effectiveSentiment} market conditions — ${totalSignals} tracked stocks across NSE, NGX, JSE and US markets.`;
 
   let aiSignalContext, globalToNseConnection, analystTake;
   if (USE_LLM) {
@@ -527,7 +575,7 @@ async function generateDailyBriefContent() {
     { label: 'Dow Jones', value: dji?.value || '--', change: dji?.change || '--', keyDriver: djiDriver },
   ];
 
-  return { indices, yesterdayTopMovers, aiSignal, aiSignalContext, globalIndices, globalToNseConnection, calendar: [], analystTake };
+  return { indices, yesterdayTopMovers, aiSignal, aiSignalContext, globalIndices, globalToNseConnection, calendar: [], analystTake, africaMarkets };
 }
 
 function buildAiSignalContext(summary, topSignals, sp500) {
@@ -554,11 +602,10 @@ function buildAiSignalContext(summary, topSignals, sp500) {
 
 function buildDailyGlobalConnection(sp500, ndx, nse20, summary) {
   const spChange = sp500?.changeRaw || 0;
-  const sent = summary?.sentiment || 'neutral';
   if (Math.abs(spChange) > 0.5) {
-    return `Global markets closed ${spChange > 0 ? 'higher' : 'lower'} with the S&P 500 ${sp500?.change || '--'}. This sets a ${spChange > 0 ? 'supportive' : 'challenging'} backdrop for the NSE open. Key NSE levels: NSE 20 at ${nse20?.value || '--'}. Banking and telecom stocks typically lead any gap reaction.`;
+    return `Global markets closed ${spChange > 0 ? 'higher' : 'lower'} with the S&P 500 ${sp500?.change || '--'}. This sets a ${spChange > 0 ? 'supportive' : 'challenging'} backdrop for African markets at the open. Key NSE level: NSE 20 at ${nse20?.value || '--'}. Banking and telecom names on the NSE, and index heavyweights on the NGX and JSE, typically lead any gap reaction.`;
   }
-  return 'Global market movements overnight can set the tone for NSE open. Watch for any significant gap-ups or gap-downs in the first 30 minutes of trading, especially in large-cap banking and telecom names.';
+  return 'Global market movements overnight can set the tone for the African markets. Watch for gap-ups or gap-downs in the first 30 minutes on the NSE, NGX and JSE, especially in large-cap banking and telecom names.';
 }
 
 function buildDailyCalendar() {

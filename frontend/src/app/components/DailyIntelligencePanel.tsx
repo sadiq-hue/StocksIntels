@@ -3,17 +3,29 @@ import { Link } from "react-router";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Newspaper, RefreshCw, Loader2, Globe2, ArrowUpRight, Clock3 } from "lucide-react";
+import { Newspaper, RefreshCw, Loader2, Globe2, Landmark, Clock3 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 // Mirrors the email digest payload from generateDailyBriefContent().
 interface BriefIndex { label: string; value: string; change: string; keyDriver?: string | null }
 interface BriefMover { symbol: string; company: string; change: string; volume: string; market?: string }
+interface BriefAfricaMover { symbol: string; company: string; change: string }
+interface BriefAfricaMarket {
+  exchange: string;
+  currency: string;
+  total: number;
+  advancers: number;
+  decliners: number;
+  unchanged: number;
+  topGainer: BriefAfricaMover | null;
+  topLoser: BriefAfricaMover | null;
+}
 export interface DailyBrief {
   indices?: BriefIndex[];
   globalIndices?: BriefIndex[];
   yesterdayTopMovers?: BriefMover[];
+  africaMarkets?: BriefAfricaMarket[];
   aiSignal?: string;
   aiSignalContext?: string;
   globalToNseConnection?: string;
@@ -21,6 +33,18 @@ export interface DailyBrief {
   cached?: boolean;
   stale?: boolean;
   generatedAt?: number;
+}
+
+const EXCHANGE_LABEL: Record<string, string> = { NSE: "Nairobi (NSE)", NGX: "Nigeria (NGX)", JSE: "South Africa (JSE)" };
+
+// Resolve a mover row's market + the `?market=` param its link needs.
+function moverMarket(m: BriefMover): { code: string; param: string } {
+  const raw = String(m.market || "").toUpperCase();
+  const sym = String(m.symbol || "").toUpperCase();
+  if (raw === "NGX" || sym.startsWith("NGX:")) return { code: "NGX", param: "ngx" };
+  if (raw === "JSE" || sym.startsWith("JSE:")) return { code: "JSE", param: "jse" };
+  if (raw === "NSE" || sym.startsWith("NSE:") || (!raw && /KES/i.test(m.volume || ""))) return { code: "NSE", param: "nse" };
+  return { code: "Global", param: "us" };
 }
 
 /** "+1.24%" -> up. Returns null for "--" so we can render a dash instead of 0. */
@@ -171,16 +195,19 @@ export function DailyIntelligencePanel() {
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
               {movers.map((m) => {
                 const t = changeTone(m.change);
-                const isNse = m.market === "NSE" || /^(NSE:|KES)/i.test(m.symbol) || m.volume?.includes("KES");
-                const sym = m.symbol.replace(/^NSE:/i, "");
+                const { code, param } = moverMarket(m);
+                const sym = m.symbol.replace(/^(NSE|NGX|JSE):/i, "");
                 return (
                   <Link
                     key={m.symbol}
-                    to={`/app/stock/${sym}?market=${isNse ? "nse" : "us"}`}
+                    to={`/app/stock/${sym}?market=${param}`}
                     className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/25 px-2.5 py-2 hover:bg-muted/50"
                   >
                     <span className="min-w-0">
-                      <span className="block text-xs font-semibold text-foreground">{sym}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="block text-xs font-semibold text-foreground">{sym}</span>
+                        <span className={`rounded px-1 py-px text-[8px] font-bold uppercase ${code === "NSE" ? "bg-[#0D7490]/15 text-[#0D7490]" : code === "NGX" ? "bg-emerald-100 text-emerald-700" : code === "JSE" ? "bg-amber-100 text-amber-700" : "bg-indigo-100 text-indigo-700"}`}>{code}</span>
+                      </span>
                       <span className="block truncate text-[10px] text-muted-foreground">{m.company}</span>
                     </span>
                     <span className={`shrink-0 text-xs font-semibold ${t?.cls || "text-muted-foreground"}`}>
@@ -193,10 +220,56 @@ export function DailyIntelligencePanel() {
           </div>
         )}
 
+        {/* African markets breadth + top mover per exchange */}
+        {(data.africaMarkets || []).some((m) => m && m.total > 0) && (
+          <div>
+            <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <Landmark className="size-3" /> African markets
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {(data.africaMarkets || []).filter((m) => m && m.total > 0).map((mkt) => (
+                <div key={mkt.exchange} className="rounded-xl border border-border bg-muted/25 p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-foreground">{EXCHANGE_LABEL[mkt.exchange] || mkt.exchange}</span>
+                    <span className="text-[10px] font-medium text-muted-foreground">{mkt.currency}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2.5 text-[10px]">
+                    <span className="font-semibold text-emerald-600">{mkt.advancers} up</span>
+                    <span className="font-semibold text-red-500">{mkt.decliners} down</span>
+                    <span className="text-muted-foreground">{mkt.unchanged} flat</span>
+                    <span className="ml-auto text-muted-foreground">{mkt.total} listed</span>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {[mkt.topGainer, mkt.topLoser].filter(Boolean).map((mv) => {
+                      const t = changeTone(mv!.change);
+                      const sym = mv!.symbol.replace(/^(NSE|NGX|JSE):/i, "");
+                      return (
+                        <Link
+                          key={mv!.symbol}
+                          to={`/app/stock/${sym}?market=${mkt.exchange.toLowerCase()}`}
+                          className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 hover:bg-muted/50"
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-[11px] font-semibold text-foreground">{sym}</span>
+                            <span className="block truncate text-[9.5px] text-muted-foreground">{mv!.company}</span>
+                          </span>
+                          <span className={`shrink-0 text-[11px] font-semibold ${t?.cls || "text-muted-foreground"}`}>
+                            {t?.arrow ? `${t.arrow} ` : ""}{mv!.change}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* What a global move means locally */}
         {data.globalToNseConnection && (
           <div className="rounded-xl border border-border bg-muted/25 p-3">
-            <p className="text-[11px] font-semibold text-foreground">What this means for Kenya</p>
+            <p className="text-[11px] font-semibold text-foreground">What this means for African markets</p>
             <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{data.globalToNseConnection}</p>
           </div>
         )}
