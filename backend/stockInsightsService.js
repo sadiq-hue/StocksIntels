@@ -65,6 +65,16 @@ async function fetchJson(url, fallback = null) {
   } catch { return fallback; }
 }
 
+// Pan-African editorial feed (MyStocks market-intel) that powers the public
+// site's "#insights" section. JSE/NGX SENS & company reports live here with an
+// explicit `exchange` and (often) `symbols`, which the Kenya/US-tagged general
+// news feed never carries.
+async function getAfricaNewsArticles() {
+  const res = await fetchJson(`${BASE}/api/market-intel?limit=60`, []);
+  const arr = Array.isArray(res) ? res : (res?.articles || res?.data || []);
+  return Array.isArray(arr) ? arr : [];
+}
+
 // ── Classify ticker as NSE or Global ──────────────────────────────
 // If ticker exists in the stocks table → NSE. Otherwise → Global.
 async function isNseTicker(ticker) {
@@ -76,8 +86,14 @@ async function getMarketLabel(ticker) {
   return (await isNseTicker(ticker)) ? 'NSE' : 'Global';
 }
 
+// Exchange groups. "African" spans every African exchange we cover so the
+// newsletter balances African vs Global picks (not Kenya vs everywhere else).
+const AFRICAN_MARKETS = new Set(['NSE', 'NGX', 'JSE', 'GSE', 'BRVM']);
+const isAfricanMarket = (m) => AFRICAN_MARKETS.has(String(m || '').toUpperCase());
+
 function getExchangeDisplay(market) {
-  return market === 'Global' ? 'Global' : 'NSE';
+  const m = String(market || '').toUpperCase();
+  return AFRICAN_MARKETS.has(m) ? m : 'Global';
 }
 
 function getGlobalExchange(ticker) {
@@ -218,6 +234,42 @@ async function pickHotStocks(forceFresh = false) {
     }
   }
 
+  // Fold in Pan-African editorial (JSE/NGX/NSE SENS & company reports) so the
+  // picker can surface NGX/JSE names the general feed never reaches. Their
+  // exchange is authoritative, so record it per ticker.
+  const africaMarketByTicker = {};
+  try {
+    const africaIntel = await getAfricaNewsArticles();
+    for (const a of africaIntel) {
+      const ex = String(a.exchange || '').toUpperCase();
+      if (!AFRICAN_MARKETS.has(ex)) continue;
+      const syms = Array.isArray(a.symbols) ? a.symbols : [];
+      for (const rawSym of syms) {
+        const ticker = String(rawSym || '').toUpperCase().trim().replace(/\.(NG|JO|KE)$/, '');
+        if (ticker.length < 2 || ticker.length > 12) continue;
+        if (!tickerSentiment[ticker]) {
+          tickerSentiment[ticker] = { positive: 0, negative: 0, neutral: 0, articles: [], total: 0, recencySum: 0, hot: 0, urgent: 0 };
+        }
+        const d = tickerSentiment[ticker];
+        d.neutral++;
+        d.total++;
+        d.recencySum += Math.max(0, 1 - assignAgeHours(a) / 72) * 0.9;
+        if (d.articles.length < 6) {
+          d.articles.push({
+            headline: a.title || '',
+            source: a.source || 'MyStocks',
+            sentiment: 'neutral',
+            excerpt: a.summary || '',
+            url: a.sourceUrl || a.url || '',
+          });
+        }
+        africaMarketByTicker[ticker] = ex;
+      }
+    }
+  } catch (e) {
+    console.warn('[INSIGHTS/pick] Africa intel fold failed:', e.message);
+  }
+
   // Diversity context for ranking: recently-featured map, sector map, and
   // high-conviction live-engine signals (actionable-name boost).
   const [recentFeatured, latestDraftSet, sectorMap, signalBoostMap] = await Promise.all([
@@ -232,15 +284,17 @@ async function pickHotStocks(forceFresh = false) {
   // don't always resolve in cache/alphabetical order.
   const scored = [];
   for (const [ticker, data] of Object.entries(tickerSentiment)) {
-    if (!ticker || ticker.length < 2 || ticker.length > 6) continue;
+    if (!ticker || ticker.length < 2 || ticker.length > 12) continue;
     // The exchange itself ("NSE") shows up as an all-caps word in headlines but
     // is not a pickable stock.
     if (ticker.toUpperCase() === 'NSE') continue;
+    const explicitMarket = africaMarketByTicker[ticker.toUpperCase()];
+    const isNse = nseTickers.has(ticker.toUpperCase());
     // Global tags can come from a coincidental symbol word-match, so require
-    // >= 2 independent articles. NSE tags are minted from distinctive company
-    // names ("Safaricom", "KCB Group") which never collide, so one solid
-    // Kenyan story is enough — otherwise quiet days leave the NSE side empty.
-    if (!nseTickers.has(ticker.toUpperCase()) && data.total < MIN_TAGGED_ARTICLES) continue;
+    // >= 2 independent articles. African tags (NSE/NGX/JSE) are minted from
+    // distinctive company names/JSE-NGX SENS records which never collide, so a
+    // single solid story is enough — otherwise quiet days leave them empty.
+    if (!explicitMarket && !isNse && data.total < MIN_TAGGED_ARTICLES) continue;
     const polarity = Math.abs(data.positive - data.negative);
     const mentions = data.total;
     const recency = mentions ? data.recencySum / mentions : 0;
@@ -249,7 +303,7 @@ async function pickHotStocks(forceFresh = false) {
     const score = freshVolume * 2 + polarity * 3 + data.hot * 3 + data.urgent * 4 + signalBoost + (Math.random() * 0.001);
     const sentiment = data.positive > data.negative ? 'positive'
       : data.negative > data.positive ? 'negative' : 'neutral';
-    const market = await getMarketLabel(ticker);
+    const market = explicitMarket || (isNse ? 'NSE' : 'Global');
     scored.push({
       ticker, score, sentiment, articles: data.articles, total: mentions, market,
       sector: sectorMap[ticker.toUpperCase()] || 'Other',
@@ -261,31 +315,33 @@ async function pickHotStocks(forceFresh = false) {
   scored.sort((a, b) => b.score - a.score);
 
   // Rotation: shortlist only non-repeats. In force-fresh mode global repeaters
-  // are hard-blocked, but if the only Kenyan names with real news are recent
+  // are hard-blocked, but if the only African names with real news are recent
   // features, allow ONE repeat so the draft never degenerates into an
   // all-foreign issue (MAX_REPEATS_PER_DRAFT still caps total repeats at 1).
   const eligible = forceFresh
-    ? scored.filter(s => (s.market === 'NSE' && s.repeatCount <= 1) || (s.market !== 'NSE' && s.repeatCount <= 0))
+    ? scored.filter(s => (isAfricanMarket(s.market) && s.repeatCount <= 1) || (!isAfricanMarket(s.market) && s.repeatCount <= 0))
     : scored.filter(s => s.repeatCount <= 0 || s.score >= HARD_REPEAT_OVERRIDE_SCORE);
-  // Force-fresh generally avoids repeaters, but NSE repeats may fill a couple
-  // of seats so a quiet week still yields a local, market-balanced issue.
+  // Force-fresh generally avoids repeaters, but African repeats may fill a
+  // couple of seats so a quiet week still yields a market-balanced issue.
   const forSelection = forceFresh ? eligible : (eligible.length >= PICKS_PER_ISSUE ? eligible : scored);
 
-  // Sequential selection: market-balanced (3 African + 3 global), sector-aware,
+  // Sequential selection: group-balanced (3 African + 3 global), sector-aware,
   // and capped so at most MAX_REPEATS_PER_DRAFT featured names make the issue.
+  const groupOf = (m) => (isAfricanMarket(m) ? 'African' : 'Global');
   let picked = [];
-  const marketCount = { NSE: 0, Global: 0 };
-  const marketSectors = { NSE: new Set(), Global: new Set() };
+  const marketCount = { African: 0, Global: 0 };
+  const marketSectors = { African: new Set(), Global: new Set() };
   let repeatsUsed = 0;
 
   const tryAdd = s => {
+    const g = groupOf(s.market);
     if (picked.length >= PICKS_PER_ISSUE) return false;
-    if (marketCount[s.market] >= PICKS_PER_MARKET) return false;
+    if (marketCount[g] >= PICKS_PER_MARKET) return false;
     if (s.repeatCount > 0 && repeatsUsed >= MAX_REPEATS_PER_DRAFT) return false;
-    if (s.sector !== 'Other' && marketSectors[s.market].has(s.sector)) return false;
+    if (s.sector !== 'Other' && marketSectors[g].has(s.sector)) return false;
     picked.push(s);
-    marketCount[s.market]++;
-    marketSectors[s.market].add(s.sector);
+    marketCount[g]++;
+    marketSectors[g].add(s.sector);
     if (s.repeatCount > 0) repeatsUsed++;
     return true;
   };
@@ -295,32 +351,32 @@ async function pickHotStocks(forceFresh = false) {
     tryAdd(s);
   }
 
-  // If a market is still under quota while the other is over, swap in a name
-  // from the under-filled market (keeps the draft balanced NSE/global).
-  const otherMarket = m => (m === 'NSE' ? 'Global' : 'NSE');
-  for (const m of ['NSE', 'Global']) {
-    while (marketCount[m] < PICKS_PER_MARKET && marketCount[otherMarket(m)] > PICKS_PER_MARKET) {
+  // If a group is still under quota while the other is over, swap in a name
+  // from the under-filled group (keeps the draft balanced African/global).
+  const otherGroup = g => (g === 'African' ? 'Global' : 'African');
+  for (const g of ['African', 'Global']) {
+    while (marketCount[g] < PICKS_PER_MARKET && marketCount[otherGroup(g)] > PICKS_PER_MARKET) {
       let idx = -1;
-      for (let i = picked.length - 1; i >= 0; i--) { if (picked[i].market === otherMarket(m)) { idx = i; break; } }
-      const sub = forSelection.find(s => s.market === m && !picked.find(p => p.ticker === s.ticker));
+      for (let i = picked.length - 1; i >= 0; i--) { if (groupOf(picked[i].market) === otherGroup(g)) { idx = i; break; } }
+      const sub = forSelection.find(s => groupOf(s.market) === g && !picked.find(p => p.ticker === s.ticker));
       if (idx < 0 || !sub) break;
       const removed = picked[idx];
       picked[idx] = sub;
-      marketCount[otherMarket(m)]--;
-      marketCount[m]++;
-      marketSectors[m].add(sub.sector);
+      marketCount[otherGroup(g)]--;
+      marketCount[g]++;
+      marketSectors[g].add(sub.sector);
       if (removed.repeatCount > 0) repeatsUsed--;
       if (sub.repeatCount > 0) repeatsUsed++;
     }
   }
 
-  // Fill any remaining slots if one market was genuinely short of candidates.
+  // Fill any remaining slots if one group was genuinely short of candidates.
   if (picked.length < PICKS_PER_ISSUE) {
     for (const s of forSelection) {
       if (picked.length >= PICKS_PER_ISSUE) break;
       if (picked.find(p => p.ticker === s.ticker)) continue;
       picked.push(s);
-      marketCount[s.market]++;
+      marketCount[groupOf(s.market)]++;
       if (s.repeatCount > 0) repeatsUsed++;
     }
   }
@@ -991,27 +1047,27 @@ async function generateDailyInsights(force = false) {
   // 2. Build market overview
   const marketOverview = await buildMarketOverview().catch(() => ({
     nse: { nse20: null, nasi: null, topGainer: null, topLoser: null, gainers: [], losers: [] },
+    africa: { gainers: [], losers: [], turnover: null },
     us: { sp500: null, nasdaq: null, dow: null, gainers: [], losers: [] },
     sentiment: 'Neutral',
     totalSignals: 0,
   }));
 
-  // 3. Fetch price data for hot stocks
+  // 3. Fetch price data for hot stocks (African exchanges are exchange-prefixed)
   let priceDataMap = {};
   try {
-    // Fetch NSE stocks
-    const nseStocks = hotStocks.filter(s => s.market === 'NSE');
-    if (nseStocks.length > 0) {
-      const nseSymbols = nseStocks.map(s => `NSE:${s.ticker}`).join(',');
-      const nseQuotes = await fetchJson(`${BASE}/api/quotes?symbols=${nseSymbols}`, []);
-      if (Array.isArray(nseQuotes)) {
-        for (const q of nseQuotes) {
+    const africaStocks = hotStocks.filter(s => isAfricanMarket(s.market));
+    if (africaStocks.length > 0) {
+      const africaSymbols = africaStocks.map(s => `${s.market}:${s.ticker}`).join(',');
+      const africaQuotes = await fetchJson(`${BASE}/api/quotes?symbols=${africaSymbols}`, []);
+      if (Array.isArray(africaQuotes)) {
+        for (const q of africaQuotes) {
           if (q && q.symbol) priceDataMap[q.symbol] = q;
         }
       }
     }
     // Fetch global stocks
-    const globalStocks = hotStocks.filter(s => s.market === 'Global');
+    const globalStocks = hotStocks.filter(s => !isAfricanMarket(s.market));
     if (globalStocks.length > 0) {
       const globalSymbols = globalStocks.map(s => s.ticker).join(',');
       const globalQuotes = await fetchJson(`${BASE}/api/quotes?symbols=${globalSymbols}`, []);
@@ -1029,7 +1085,7 @@ async function generateDailyInsights(force = false) {
 
   const deepDives = [];
   for (const stock of hotStocks) {
-    const priceKey = stock.market === 'NSE' ? `NSE:${stock.ticker}` : stock.ticker;
+    const priceKey = isAfricanMarket(stock.market) ? `${stock.market}:${stock.ticker}` : stock.ticker;
     const priceData = priceDataMap[priceKey] || priceDataMap[stock.ticker] || null;
     const marketCtx = formatMarketContext(marketOverview, stock);
     const { thesis, analysis, catalyst, risk } = await generateNarrativeThesis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market, marketCtx)
