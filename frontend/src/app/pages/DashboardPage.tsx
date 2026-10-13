@@ -156,7 +156,16 @@ export function DashboardPage() {
   const [pulse, setPulse] = useState<MarketPulseData | null>(null);
   const [liveIndices, setLiveIndices] = useState<any[]>([]);
   const [liveSectors, setLiveSectors] = useState<any[]>([]);
-  const [movers, setMovers] = useState<{ gainers: any[]; losers: any[] }>({ gainers: [], losers: [] });
+  const [movers, setMovers] = useState<{ gainers: any[]; losers: any[] }>(() => {
+    try {
+      const s = localStorage.getItem("dashboard_movers");
+      if (s) {
+        const p = JSON.parse(s);
+        if (Array.isArray(p?.gainers) && Array.isArray(p?.losers)) return { gainers: p.gainers, losers: p.losers };
+      }
+    } catch {}
+    return { gainers: [], losers: [] };
+  });
   const [activeStocks, setActiveStocks] = useState<any[]>([]);
   const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
   const [watchlistQuotes, setWatchlistQuotes] = useState<Record<string, any>>({});
@@ -241,10 +250,14 @@ export function DashboardPage() {
         const data = await res.json();
         if (cancelled) return;
         const combined = data.combined || { gainers: [], losers: [] };
-        setMovers({
-          gainers: (combined.gainers || []).slice(0, 5).map((s: any) => normalizeMover(s)),
-          losers: (combined.losers || []).slice(0, 5).map((s: any) => normalizeMover(s)),
-        });
+        const g = (combined.gainers || []).slice(0, 5).map((s: any) => normalizeMover(s));
+        const l = (combined.losers || []).slice(0, 5).map((s: any) => normalizeMover(s));
+        // Keep the last good snapshot when the API transiently returns nothing
+        // so the mover cards never blank out between refreshes.
+        if (g.length || l.length) {
+          setMovers({ gainers: g, losers: l });
+          try { localStorage.setItem("dashboard_movers", JSON.stringify({ gainers: g, losers: l })); } catch {}
+        }
         setActiveStocks((data.active || []).slice(0, 6));
       } catch {}
     };

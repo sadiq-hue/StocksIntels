@@ -8394,13 +8394,23 @@ app.get('/api/top-stocks', async (req, res) => {
   }
 });
 
+// Movers snapshot cache. The upstream build (stockanalysis + MyStocks) is slow
+// (10-25s) and can transiently return nothing, which left the dashboard's
+// mover cards blank. Cache a good snapshot and serve it stale-while-revalidate
+// so the cards always have the last known data while a refresh runs.
+const MOVERS_CACHE_TTL_MS = 2 * 60 * 1000;
+let moversCache = { data: null, at: 0, inFlight: null };
+
+async function buildDailyMovers() {
+  const snapshot = await getMarketSnapshot();
+  return { nse: snapshot.nse.movers, global: snapshot.global.movers, combined: snapshot.movers, active: snapshot.active, period: '1d' };
+}
+
 app.get('/api/market/movers', async (req, res) => {
-  // Always reflect the live feed — never let a browser/CDN cache the movers.
-  res.set('Cache-Control', 'no-store, max-age=0');
-  try {
-    const period = req.query.period || '1d';
-    // For non-daily periods, compute period returns from historical bars.
-    if (period !== '1d') {
+  const period = req.query.period || '1d';
+  // For non-daily periods, compute period returns from historical bars.
+  if (period !== '1d') {
+    try {
       const { getPeriodMovers } = require('./periodReturnsService');
       const { gainers, losers } = await getPeriodMovers(period);
       const nse = {
@@ -8412,10 +8422,46 @@ app.get('/api/market/movers', async (req, res) => {
         losers: losers.filter(l => l.market === 'Global').slice(0, 10),
       };
       return res.json({ nse, global, combined: { gainers, losers }, active: [], period });
+    } catch (error) {
+      console.error('Error fetching period movers:', error);
+      return res.status(500).json({ error: 'Failed to fetch top movers' });
     }
-    const snapshot = await getMarketSnapshot();
-    res.json({ nse: snapshot.nse.movers, global: snapshot.global.movers, combined: snapshot.movers, active: snapshot.active, period });
+  }
+
+  const now = Date.now();
+  // Fresh cache — serve immediately.
+  if (moversCache.data && now - moversCache.at < MOVERS_CACHE_TTL_MS) {
+    res.set('Cache-Control', 'public, max-age=30');
+    return res.json({ ...moversCache.data, cached: true });
+  }
+  // Stale cache — serve it and refresh in the background.
+  if (moversCache.data && !moversCache.inFlight) {
+    moversCache.inFlight = buildDailyMovers()
+      .then(d => { if (d.combined.gainers.length || d.combined.losers.length) { moversCache.data = d; moversCache.at = Date.now(); } })
+      .catch(() => {})
+      .finally(() => { moversCache.inFlight = null; });
+    res.set('Cache-Control', 'public, max-age=30');
+    return res.json({ ...moversCache.data, cached: true });
+  }
+  // Cold cache — build (collapsing concurrent callers onto one build).
+  try {
+    if (!moversCache.inFlight) {
+      moversCache.inFlight = buildDailyMovers();
+    }
+    const data = await moversCache.inFlight;
+    moversCache.inFlight = null;
+    if (data.combined.gainers.length || data.combined.losers.length) {
+      moversCache.data = data;
+      moversCache.at = Date.now();
+    }
+    res.set('Cache-Control', 'public, max-age=30');
+    res.json(data);
   } catch (error) {
+    moversCache.inFlight = null;
+    if (moversCache.data) {
+      res.set('Cache-Control', 'public, max-age=30');
+      return res.json({ ...moversCache.data, cached: true });
+    }
     console.error('Error fetching movers:', error);
     res.status(500).json({ error: 'Failed to fetch top movers' });
   }
