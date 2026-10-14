@@ -49,7 +49,7 @@ jobs:
           # exact current tree. Includes the pnpm workspace lockfile/manifest that
           # backend/Dockerfile COPYs. Excludes node_modules/.git for speed.
           tar --exclude='node_modules' --exclude='.git' -czf /tmp/stack.tgz \
-            backend frontend deploy pnpm-workspace.yaml pnpm-lock.yaml
+            backend frontend renderer deploy pnpm-workspace.yaml pnpm-lock.yaml
           scp /tmp/stack.tgz "$USER@$HOST":/tmp/stack.tgz
           ssh "$USER@$HOST" "tar -xzf /tmp/stack.tgz -C app && rm -f /tmp/stack.tgz"
 

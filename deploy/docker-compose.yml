@@ -32,6 +32,25 @@ services:
       timeout: 5s
       retries: 5
 
+  # Isolated headless browser for JS-rendered provider fund pages. Runs in its
+  # own container so Chromium can't OOM the backend.
+  renderer:
+    build:
+      context: ..
+      dockerfile: renderer/Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+    expose:
+      - "3000"
+    shm_size: "1gb"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
   backend:
     # Build from the repo root so the Dockerfile can COPY ../frontend and the
     # pnpm workspace files. context = repo root, dockerfile = backend/Dockerfile.
@@ -44,6 +63,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      renderer:
+        condition: service_started
     environment:
       NODE_ENV: production
       PORT: 3001
@@ -87,6 +108,8 @@ services:
       FUND_SCRAPE_PROXY: ${FUND_SCRAPE_PROXY:-}
       FUND_RATES_REFRESH_MS: ${FUND_RATES_REFRESH_MS:-1800000}
       CMA_REPORT_REFRESH_MS: ${CMA_REPORT_REFRESH_MS:-604800000}
+      # Isolated headless-browser renderer for JS-only provider pages.
+      RENDERER_URL: ${RENDERER_URL:-http://renderer:3000}
       # LLM (newsletter / stock-insights narratives). The old app stack got these
       # from env_file: .env; the deploy stack lists env explicitly, so without them
       # every narrative silently fell back to generic filler ("No LLM backend

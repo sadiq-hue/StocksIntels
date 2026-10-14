@@ -15,6 +15,7 @@ const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
 const specialFunds = require('./specialFundsService');
 const fundRates = require('./fundRatesScraper');
 const fundProfiles = require('./fundProfiles');
+const rendererClient = require('./rendererClient');
 const cmaFundReports = require('./cmaFundReports');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, NSE_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, refreshPerformanceStats, computeBacktestStats, getForwardTestStats,
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes } = require('./signalService');
@@ -6225,6 +6226,17 @@ app.post('/api/admin/special-funds/refresh-profiles', authenticateToken, require
     const result = await fundProfiles.refreshProfiles();
     res.json({ success: true, ...result });
   } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
+});
+
+// Debug: render a JS-only provider page via the isolated browser sidecar and
+// return its visible text (admin only), so parsers can be built/validated.
+app.post('/api/admin/special-funds/render', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const url = String(req.body?.url || '').slice(0, 500);
+    if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'valid url required' });
+    const result = await rendererClient.render(url, { timeout: Math.min(Number(req.body?.timeout) || 30000, 60000), waitFor: Math.min(Number(req.body?.waitFor) || 0, 15000), selector: req.body?.selector });
+    res.json({ success: true, status: result.status, title: result.title, ms: result.ms, text: String(result.text || '').slice(0, 20000) });
+  } catch (error) { res.status(500).json({ error: error.message || 'render failed' }); }
 });
 
 // Periodic fund-rate refresh so figures stay current (default every 30 min).
