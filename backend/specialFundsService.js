@@ -178,6 +178,319 @@ function slugify(name) {
   return 'sf-' + String(name).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
 }
 
+// ── Full CMA register (all non-Special sub-funds) ─────────────────────────────
+// Every other sub-fund on the CMA register of Approved Collective Investment
+// Schemes (https://licensees.cma.or.ke/licenses/15/). Tuple:
+// [name, manager, category, currency?, sharia?]
+const REGISTER_FUNDS = [
+  // African Alliance
+  ['African Alliance Kenya Money Market Fund', 'African Alliance', 'Money Market'],
+  ['African Alliance Kenya Fixed Income Fund', 'African Alliance', 'Fixed Income / Bond'],
+  ['African Alliance Kenya Balanced Fund', 'African Alliance', 'Balanced'],
+  ['African Alliance Kenya Equity Fund', 'African Alliance', 'Equity'],
+  // Britam
+  ['Britam Income Fund', 'Britam Asset Managers', 'Fixed Income / Bond'],
+  ['Britam Money Market Fund (USD)', 'Britam Asset Managers', 'Money Market', 'USD'],
+  ['Britam Bond Plus Fund', 'Britam Asset Managers', 'Fixed Income / Bond'],
+  ['Britam USD Fixed Income Fund', 'Britam Asset Managers', 'Fixed Income / Bond', 'USD'],
+  // NCBA
+  ['NCBA Fixed Income Fund', 'NCBA Investment Bank', 'Fixed Income / Bond'],
+  ['NCBA Equity Fund', 'NCBA Investment Bank', 'Equity'],
+  ['NCBA Dollar Fixed Income Fund', 'NCBA Investment Bank', 'Fixed Income / Bond', 'USD'],
+  ['NCBA Fixed Income Basket Note (KES Fund)', 'NCBA Investment Bank', 'Fixed Income / Bond'],
+  ['NCBA Fixed Income Basket Note (USD Fund)', 'NCBA Investment Bank', 'Fixed Income / Bond', 'USD'],
+  ['NCBA Money Market Fund (KES)', 'NCBA Investment Bank', 'Money Market'],
+  ['NCBA Money Market Fund (USD)', 'NCBA Investment Bank', 'Money Market', 'USD'],
+  // Zimele
+  ['Zimele USD Money Market Fund', 'Zimele Asset Management', 'Money Market', 'USD'],
+  ['Zimele USD Fixed Income Fund', 'Zimele Asset Management', 'Fixed Income / Bond', 'USD'],
+  ['Zimele Fixed Income Fund', 'Zimele Asset Management', 'Fixed Income / Bond'],
+  ['Zimele Education Plan', 'Zimele Asset Management', 'Balanced'],
+  ['Zimele Saving Plan', 'Zimele Asset Management', 'Balanced'],
+  // ICEA
+  ['ICEA Money Market Fund', 'ICEA', 'Money Market'],
+  ['ICEA Equity Fund', 'ICEA', 'Equity'],
+  ['ICEA Balanced Fund', 'ICEA', 'Balanced'],
+  ['ICEA Bond Fund', 'ICEA', 'Fixed Income / Bond'],
+  ['ICEA Fixed Income Fund (USD)', 'ICEA', 'Fixed Income / Bond', 'USD'],
+  // CIC
+  ['CIC Money Market Fund', 'CIC Asset Management', 'Money Market'],
+  ['CIC Balanced Fund', 'CIC Asset Management', 'Balanced'],
+  ['CIC Fixed Income Fund', 'CIC Asset Management', 'Fixed Income / Bond'],
+  ['CIC Equity Fund', 'CIC Asset Management', 'Equity'],
+  ['CIC Wealth Fund', 'CIC Asset Management', 'Balanced'],
+  ['CIC Dollar Fund', 'CIC Asset Management', 'Money Market', 'USD'],
+  // Madison
+  ['Madison Money Market Fund', 'Madison Investment Managers', 'Money Market'],
+  ['Madison Fixed Income Fund', 'Madison Investment Managers', 'Fixed Income / Bond'],
+  ['Madison Wealth Fund', 'Madison Investment Managers', 'Balanced'],
+  // Dyer & Blair
+  ['Dyer & Blair Fixed Income Fund (USD)', 'Dyer & Blair', 'Fixed Income / Bond', 'USD'],
+  // Amana
+  ['Amana Money Market Fund', 'Amana Capital', 'Money Market'],
+  ['Amana Balanced Fund', 'Amana Capital', 'Balanced'],
+  ['Amana Equity Fund', 'Amana Capital', 'Equity'],
+  // Diaspora
+  ['Diaspora Money Market Fund', 'Diaspora Investment Club', 'Money Market'],
+  ['Diaspora Bond Fund', 'Diaspora Investment Club', 'Fixed Income / Bond'],
+  ['Diaspora Equity Fund', 'Diaspora Investment Club', 'Equity'],
+  // First Ethical
+  ['First Ethical Opportunities Fund', 'First Ethical', 'Shariah', 'KES', true],
+  // Genghis
+  ['GenCap Hazina Fund (Bond Fund)', 'Genghis Capital', 'Fixed Income / Bond'],
+  ['GenCap Eneza Fund (Diversified Fund)', 'Genghis Capital', 'Balanced'],
+  ['GenCap Hela Fund (Money Market Fund)', 'Genghis Capital', 'Money Market'],
+  ['GenCap Iman Fund (Shariah Compliant Fund)', 'Genghis Capital', 'Shariah', 'KES', true],
+  ['GenCap Hisa Fund (Equity Fund)', 'Genghis Capital', 'Equity'],
+  ['GenCap Hela Imara Fund (Money Market Fund)', 'Genghis Capital', 'Money Market'],
+  ['Gencap Eneza Imara Fund', 'Genghis Capital', 'Balanced'],
+  ['Gencap Hisa Imara Fund', 'Genghis Capital', 'Equity'],
+  ['Gencap Iman Imara Fund', 'Genghis Capital', 'Shariah', 'KES', true],
+  ['Gencap Fixed Income Fund', 'Genghis Capital', 'Fixed Income / Bond'],
+  // Mali
+  ['Mali Money Market Fund', 'Safaricom (M-PESA)', 'Money Market'],
+  // Sanlam
+  ['Sanlam Money Market Fund', 'Sanlam Investments East Africa', 'Money Market'],
+  ['Sanlam Balanced Fund', 'Sanlam Investments East Africa', 'Balanced'],
+  ['Sanlam Fixed Income Fund', 'Sanlam Investments East Africa', 'Fixed Income / Bond'],
+  ['Sanlam USD Fixed Income Fund', 'Sanlam Investments East Africa', 'Fixed Income / Bond', 'USD'],
+  // Nabo
+  ['Nabo Africa Money Market Fund', 'Nabo Capital', 'Money Market'],
+  ['Nabo Africa Balanced Fund', 'Nabo Capital', 'Balanced'],
+  ['Nabo Africa Fixed Income Fund', 'Nabo Capital', 'Fixed Income / Bond'],
+  ['Nabo Africa Equity Fund', 'Nabo Capital', 'Equity'],
+  ['Nabo Capital Money Market Fund (USD)', 'Nabo Capital', 'Money Market', 'USD'],
+  // Old Mutual
+  ['Old Mutual Equity Fund', 'Old Mutual Investment Group', 'Equity'],
+  ['Old Mutual Money Market Fund', 'Old Mutual Investment Group', 'Money Market'],
+  ['Old Mutual Balanced Fund', 'Old Mutual Investment Group', 'Balanced'],
+  ['Old Mutual East Africa Fund', 'Old Mutual Investment Group', 'Equity'],
+  ['Old Mutual Bond Fund', 'Old Mutual Investment Group', 'Fixed Income / Bond'],
+  ['Old Mutual Faulu Money Market Fund', 'Old Mutual Investment Group', 'Money Market'],
+  ['Old Mutual Dollar Money Market Fund', 'Old Mutual Investment Group', 'Money Market', 'USD'],
+  // Equity
+  ['Equity Investment Bank Money Market Fund', 'Equity Investment Bank', 'Money Market'],
+  ['Equity Investment Bank Balanced Fund', 'Equity Investment Bank', 'Balanced'],
+  // Dry Associates (non-special)
+  ['Dry Associates Money Market Fund (KES)', 'Dry Associates', 'Money Market'],
+  ['Dry Associates Money Market Fund (USD)', 'Dry Associates', 'Money Market', 'USD'],
+  ['Dry Associate Small and Medium Enterprise Impact Debt Fund', 'Dry Associates', 'Special Funds'],
+  // Co-op
+  ['Co-op Balanced Fund', 'Co-op Trust Investment Services', 'Balanced'],
+  ['Co-op Equity Fund', 'Co-op Trust Investment Services', 'Equity'],
+  ['Co-op Bond Fund', 'Co-op Trust Investment Services', 'Fixed Income / Bond'],
+  ['Co-op Money Market Fund', 'Co-op Trust Investment Services', 'Money Market'],
+  ['Co-op Fixed Income Gratuity Fund', 'Co-op Trust Investment Services', 'Fixed Income / Bond'],
+  // Apollo
+  ['Apollo Money Market Fund', 'Apollo Asset Management', 'Money Market'],
+  ['Apollo Balanced Fund', 'Apollo Asset Management', 'Balanced'],
+  ['Apollo Aggressive Growth Fund', 'Apollo Asset Management', 'Equity'],
+  ['Apollo Equity Fund', 'Apollo Asset Management', 'Equity'],
+  ['Apollo East Africa Fund', 'Apollo Asset Management', 'Equity'],
+  ['Apollo Bond Fund', 'Apollo Asset Management', 'Fixed Income / Bond'],
+  // Cytonn
+  ['Cytonn Money Market Fund', 'Cytonn Asset Managers', 'Money Market'],
+  ['Cytonn Balanced Fund', 'Cytonn Asset Managers', 'Balanced'],
+  ['Cytonn Equity Fund', 'Cytonn Asset Managers', 'Equity'],
+  ['Cytonn Africa Financial Services Fund', 'Cytonn Asset Managers', 'Equity'],
+  ['Cytonn Money Market Fund (USD)', 'Cytonn Asset Managers', 'Money Market', 'USD'],
+  // Orient
+  ['Orient Hifadhi Fixed Income Fund', 'Orient Asset Management', 'Fixed Income / Bond'],
+  ['Orient Kasha Money Market Fund', 'Orient Asset Management', 'Money Market'],
+  ['Orient Dollar Money Market Fund', 'Orient Asset Management', 'Money Market', 'USD'],
+  // Wanafunzi
+  ['Wanafunzi Investment Unit Trust Fund', 'Wanafunzi', 'Balanced'],
+  // Absa
+  ['Absa Balanced Fund', 'Absa Asset Management', 'Balanced'],
+  ['Absa Fixed Income Fund', 'Absa Asset Management', 'Fixed Income / Bond'],
+  ['Absa Bond Fund', 'Absa Asset Management', 'Fixed Income / Bond'],
+  ['Absa Dollar Money Market Fund', 'Absa Asset Management', 'Money Market', 'USD'],
+  ['Absa USD Money Market Fund', 'Absa Asset Management', 'Money Market', 'USD'],
+  ['Absa Equity Fund', 'Absa Asset Management', 'Equity'],
+  ['Absa Shilling Money Market Fund', 'Absa Asset Management', 'Money Market'],
+  // Jaza / Masaru / ADAM
+  ['Jaza Premier Money Market Fund', 'Adam Capital', 'Money Market'],
+  ['Masaru Wealth Management Fund', 'Synesis', 'Balanced'],
+  ['Masaru Money Market Fund', 'Synesis', 'Money Market'],
+  ['ADAM Balanced Fund', 'Adam Capital', 'Balanced'],
+  ['ADAM Equities Fund', 'Adam Capital', 'Equity'],
+  ['ADAM Fixed Income Fund', 'Adam Capital', 'Fixed Income / Bond'],
+  ['ADAM Money Market Fund', 'Adam Capital', 'Money Market'],
+  // KCB
+  ['KCB Money Market Fund (KES)', 'KCB Asset Management', 'Money Market'],
+  ['KCB Fixed Income Fund', 'KCB Asset Management', 'Fixed Income / Bond'],
+  ['KCB Balanced Fund', 'KCB Asset Management', 'Balanced'],
+  ['KCB Equity Fund', 'KCB Asset Management', 'Equity'],
+  ['KCB Money Market Fund (USD)', 'KCB Asset Management', 'Money Market', 'USD'],
+  // GenAfrica
+  ['GenAfrica Money Market Fund', 'GenAfrica Asset Managers', 'Money Market'],
+  ['GenAfrica Equity Fund', 'GenAfrica Asset Managers', 'Equity'],
+  ['GenAfrica Fixed Income Fund', 'GenAfrica Asset Managers', 'Fixed Income / Bond'],
+  // Amaka
+  ['Amaka HOSP Fixed Income Fund', 'Amaka', 'Fixed Income / Bond'],
+  ['Amaka Qualified Investor Tenant Purchase Scheme Fund', 'Amaka', 'Special Funds'],
+  // Jubilee
+  ['Jubilee Balanced Fund', 'Jubilee Insurance', 'Balanced'],
+  ['Jubilee Equity Fund', 'Jubilee Insurance', 'Equity'],
+  ['Jubilee Fixed Income (KES) Fund', 'Jubilee Insurance', 'Fixed Income / Bond'],
+  ['Jubilee Fixed Income (USD) Fund', 'Jubilee Insurance', 'Fixed Income / Bond', 'USD'],
+  ['Jubilee Money Market Fund (KES)', 'Jubilee Insurance', 'Money Market'],
+  ['Jubilee Money Market Fund (USD)', 'Jubilee Insurance', 'Money Market', 'USD'],
+  // Enwealth
+  ['Enwealth Balanced Fund', 'Enwealth Capital', 'Balanced'],
+  ['Enwealth Equity Fund', 'Enwealth Capital', 'Equity'],
+  ['Enwealth Money Market Fund', 'Enwealth Capital', 'Money Market'],
+  ['Enwealth Dollar Money Market Fund', 'Enwealth Capital', 'Money Market', 'USD'],
+  ['Enwealth Fixed Income Fund', 'Enwealth Capital', 'Fixed Income / Bond'],
+  // Kuza
+  ['Kuza Fixed Income Fund', 'Kuza Asset Management', 'Fixed Income / Bond'],
+  ['Kuza Money Market Fund (KES)', 'Kuza Asset Management', 'Money Market'],
+  ['Kuza Money Market Fund (USD)', 'Kuza Asset Management', 'Money Market', 'USD'],
+  ['Kuza Momentum Fund', 'Kuza Asset Management', 'Equity'],
+  ['Kuza Shariah Momentum Fund', 'Kuza Asset Management', 'Shariah', 'KES', true],
+  // Etica
+  ['Etica Money Market Fund', 'Etica Capital', 'Money Market'],
+  ['Etica Money Market Fund (USD)', 'Etica Capital', 'Money Market', 'USD'],
+  ['Etica Fixed Income Fund', 'Etica Capital', 'Fixed Income / Bond'],
+  ['Etica Fixed Income Fund (USD)', 'Etica Capital', 'Fixed Income / Bond', 'USD'],
+  ['Etica Shariah Fund', 'Etica Capital', 'Shariah', 'KES', true],
+  ['Etica Shariah Fund (USD)', 'Etica Capital', 'Shariah', 'USD', true],
+  ['Etica Wealth Fund', 'Etica Capital', 'Balanced'],
+  ['Etica Wealth Fund (USD)', 'Etica Capital', 'Balanced', 'USD'],
+  // Lofty-Corban
+  ['Lofty Corban Equity Fund', 'Lofty-Corban Investment Management', 'Equity'],
+  ['Lofty Corban Money Market Fund (KES)', 'Lofty-Corban Investment Management', 'Money Market'],
+  ['Lofty Corban Money Market Fund (USD)', 'Lofty-Corban Investment Management', 'Money Market', 'USD'],
+  ['Lofty Corban Bond Fund (USD)', 'Lofty-Corban Investment Management', 'Fixed Income / Bond', 'USD'],
+  ['Lofty Corban Bond Fund (KES)', 'Lofty-Corban Investment Management', 'Fixed Income / Bond'],
+  // Standard Investment
+  ['Standard Investment Equity Growth Fund', 'Standard Investment Bank', 'Equity'],
+  ['Standard Investment Fixed Income Fund', 'Standard Investment Bank', 'Fixed Income / Bond'],
+  ['Standard Investment Balanced Fund', 'Standard Investment Bank', 'Balanced'],
+  // Faida
+  ['Hazina Bond Fund', 'Faida Investment Bank', 'Fixed Income / Bond'],
+  ['Angaza Money Market Fund', 'Faida Investment Bank', 'Money Market'],
+  // Taifa
+  ['Taifa Money Market Fund (KES)', 'Taifa', 'Money Market'],
+  ['Taifa Money Market Fund (USD)', 'Taifa', 'Money Market', 'USD'],
+  // Stanbic
+  ['Stanbic Money Market Fund', 'Stanbic', 'Money Market'],
+  ['Stanbic Fixed Income Fund', 'Stanbic', 'Fixed Income / Bond'],
+  ['Stanbic Fixed Income Fund (USD)', 'Stanbic', 'Fixed Income / Bond', 'USD'],
+  ['Stanbic Balanced Fund', 'Stanbic', 'Balanced'],
+  ['Stanbic Equity Fund', 'Stanbic', 'Equity'],
+  // Rencap
+  ['Rencap Money Market Fund (KES)', 'Renaissance Capital', 'Money Market'],
+  ['Rencap Money Market Fund (USD)', 'Renaissance Capital', 'Money Market', 'USD'],
+  ['Rencap Balanced Fund (KES)', 'Renaissance Capital', 'Balanced'],
+  ['Rencap Fixed Income Fund (KES)', 'Renaissance Capital', 'Fixed Income / Bond'],
+  ['Rencap Fixed Income Fund (USD)', 'Renaissance Capital', 'Fixed Income / Bond', 'USD'],
+  // Mayfair
+  ['Mayfair Money Market Fund', 'Mayfair', 'Money Market'],
+  ['Mayfair Fixed Income Fund', 'Mayfair', 'Fixed Income / Bond'],
+  ['Mayfair Balanced Fund', 'Mayfair', 'Balanced'],
+  ['Mayfair Equity Fund', 'Mayfair', 'Equity'],
+  // Investcent
+  ['Investcent Money Market Fund (KES)', 'Investcent Partners', 'Money Market'],
+  ['Investcent Money Market Fund (USD)', 'Investcent Partners', 'Money Market', 'USD'],
+  // ICEA LION
+  ['ICEA LION Money Market Fund', 'ICEA Lion Asset Management', 'Money Market'],
+  ['ICEA LION Equity Fund', 'ICEA Lion Asset Management', 'Equity'],
+  ['ICEA LION Balanced Fund', 'ICEA Lion Asset Management', 'Balanced'],
+  ['ICEA LION Bond Fund', 'ICEA Lion Asset Management', 'Fixed Income / Bond'],
+  ['ICEA LION USD Fixed Income Fund', 'ICEA Lion Asset Management', 'Fixed Income / Bond', 'USD'],
+  ['ICEA Fixed Income Fund KES', 'ICEA Lion Asset Management', 'Fixed Income / Bond'],
+  // GCIB
+  ['GCIB Money Market Fund', 'GCIB', 'Money Market'],
+  ['GCIB Fixed Income Fund', 'GCIB', 'Fixed Income / Bond'],
+  ['GCIB Shariah Fixed Income Fund', 'GCIB', 'Shariah', 'KES', true],
+  ['GulfCap Fixed Income Fund', 'GCIB', 'Fixed Income / Bond'],
+  ['GulfCap Money Market Fund', 'GCIB', 'Money Market'],
+  // CPF
+  ['CPF Money Market Fund', 'CPF', 'Money Market'],
+  ['CPF Bond Fund', 'CPF', 'Fixed Income / Bond'],
+  ['CPF USD Money Market Fund', 'CPF', 'Money Market', 'USD'],
+  ['CPOF Balanced Fund', 'CPF', 'Balanced'],
+  // Arvocap
+  ['Arvocap Money Market Fund', 'Arvocap', 'Money Market'],
+  ['Arvocap Ngao Fixed Income Distribution Fund', 'Arvocap', 'Fixed Income / Bond'],
+  ['Arvocap Almasi Fixed Income Accumulation Fund', 'Arvocap', 'Fixed Income / Bond'],
+  ['Arvocap Thamani Equity Fund', 'Arvocap', 'Equity'],
+  // XENO
+  ['Xeno Kenya Money Market Fund', 'Xeno', 'Money Market'],
+  ['Xeno Kenya Bond Fund', 'Xeno', 'Fixed Income / Bond'],
+  ['Xeno Kenya Regional East Africa Equity Fund', 'Xeno', 'Equity'],
+  ['XENO Kenya East Africa Equity Fund (KES)', 'Xeno', 'Equity'],
+  ['XENO Kenya Money Market Fund (USD)', 'Xeno', 'Money Market', 'USD'],
+  ['XENO Kenya Fixed Income Fund (USD)', 'Xeno', 'Fixed Income / Bond', 'USD'],
+  // Octagon
+  ['Octagon Money Market Fund', 'Octagon', 'Money Market'],
+  ['Octagon Balanced Fund', 'Octagon', 'Balanced'],
+  ['Octagon Equity Fund', 'Octagon', 'Equity'],
+  ['Octagon Fixed Income Fund', 'Octagon', 'Fixed Income / Bond'],
+  ['Octagon USD Dollar Money Market Fund', 'Octagon', 'Money Market', 'USD'],
+  // Ziidi
+  ['Ziidi Money Market Fund', 'Safaricom (M-PESA)', 'Money Market'],
+  ['Ziidi Biashara Money Market Fund', 'Safaricom (M-PESA)', 'Money Market'],
+  // Capital A
+  ['Capital A Rejesha Money Market Fund (KES)', 'Capital A', 'Money Market'],
+  ['Capital A Rejesha Money Market Fund (USD)', 'Capital A', 'Money Market', 'USD'],
+  ['Capital A Rejesha Fixed Income Fund (KES)', 'Capital A', 'Fixed Income / Bond'],
+  ['Capital A Rejesha Fixed Income Fund (USD)', 'Capital A', 'Fixed Income / Bond', 'USD'],
+  ['Capital A Rejesha Balanced Fund (KES)', 'Capital A', 'Balanced'],
+  ['Capital A Rejesha Balanced Fund (USD)', 'Capital A', 'Balanced', 'USD'],
+  ['Capital A Rejesha Equity Fund (KES)', 'Capital A', 'Equity'],
+  ['Capital A Rejesha Equity Fund (USD)', 'Capital A', 'Equity', 'USD'],
+  // Swala
+  ['Swala Money Market Fund', 'Swala Capital', 'Money Market'],
+  ['Swala Balanced Fund', 'Swala Capital', 'Balanced'],
+  ['Swala Equity Fund', 'Swala Capital', 'Equity'],
+  // Globetec
+  ['Globetec Money Market Fund', 'Globetec Asset Managers', 'Money Market'],
+  ['Globetec Equity Fund', 'Globetec Asset Managers', 'Equity'],
+  ['Globetec Fixed Income Fund', 'Globetec Asset Managers', 'Fixed Income / Bond'],
+  ['Globetec Dollar Fixed Income Fund', 'Globetec Asset Managers', 'Fixed Income / Bond', 'USD'],
+  // Tradiam
+  ['Wekeza Money Market Fund (KES)', 'Tradiam', 'Money Market'],
+  ['Tradiam Fixed Income Fund (KES)', 'Tradiam', 'Fixed Income / Bond'],
+  ['Tradiam Fixed Income Fund (USD)', 'Tradiam', 'Fixed Income / Bond', 'USD'],
+  ['Mfalme Money Market Fund (KES)', 'Tradiam', 'Money Market'],
+  ['Wekeza Fixed Income Fund (KES)', 'Tradiam', 'Fixed Income / Bond'],
+  ['Tau Fixed Income Fund (USD)', 'Tradiam', 'Fixed Income / Bond', 'USD'],
+  // Zamara
+  ['Zamara Money Market Fund (KES)', 'Zamara', 'Money Market'],
+  ['Zamara Money Market Fund (USD)', 'Zamara', 'Money Market', 'USD'],
+  ['Zamara Fixed Income Fund (KES)', 'Zamara', 'Fixed Income / Bond'],
+  // Pergamon
+  ['Pergamon Money Market Fund (KES)', 'Pergamon (PIB Africa)', 'Money Market'],
+  ['Pergamon Money Market Fund (USD)', 'Pergamon (PIB Africa)', 'Money Market', 'USD'],
+  ['Pergamon Equity Fund', 'Pergamon (PIB Africa)', 'Equity'],
+  ['Pergamon Fixed Income Fund', 'Pergamon (PIB Africa)', 'Fixed Income / Bond'],
+  ['Pergamon Balanced Fund', 'Pergamon (PIB Africa)', 'Balanced'],
+  // EDC Kenya
+  ['EDC Kenya Balanced Fund', 'EDC Kenya', 'Balanced'],
+  ['EDC Kenya KES Fixed Income Fund', 'EDC Kenya', 'Fixed Income / Bond'],
+  ['EDC Kenya Dollar Fixed Income Fund', 'EDC Kenya', 'Fixed Income / Bond', 'USD'],
+  ['EDC Kenya Equity Fund', 'EDC Kenya', 'Equity'],
+  ['EDC Kenya Money Market Fund', 'EDC Kenya', 'Money Market'],
+  // Cinemark
+  ['Cinemark KES Money Market Fund', 'Cinemark', 'Money Market'],
+  ['Cinemark KES Fixed Income Fund', 'Cinemark', 'Fixed Income / Bond'],
+  ['Cinemark USD Fixed Income Fund', 'Cinemark', 'Fixed Income / Bond', 'USD'],
+  // Karsis (Zubari)
+  ['Zubari KES Money Market Fund', 'Karsis', 'Money Market'],
+  ['Zubari USD Money Market Fund', 'Karsis', 'Money Market', 'USD'],
+  ['Zubari KES Fixed Income Fund', 'Karsis', 'Fixed Income / Bond'],
+  ['Zubari USD Fixed Income Fund', 'Karsis', 'Fixed Income / Bond', 'USD'],
+];
+
+// Special Funds come from SPECIAL_FUNDS above; non-special from REGISTER_FUNDS.
+// Extra listed NSE schemes not on the CIS register:
+const EXTRA_FUNDS = [
+  { id: 'ilam-fahari-reit', name: 'ILAM Fahari I-REIT', manager: 'ICEA Lion Asset Management (ILAM)', category: 'REIT', structure: 'REIT', listing: 'NSE:ILAM', riskLevel: 'Medium-High', liquidity: 'Exchange-traded' },
+  { id: 'newgold-etf', name: 'NewGold ETF', manager: 'Absa Asset Management', category: 'ETF', structure: 'ETF', listing: 'NSE:GLD', riskLevel: 'Medium-High', liquidity: 'Exchange-traded', assetClass: 'Commodities / Gold' },
+];
+
 // Descriptive, non-numeric defaults derived from the category (safe to state).
 const CATEGORY_DEFAULTS = {
   'Money Market': { structure: 'Unit Trust', riskLevel: 'Low', liquidity: 'Daily', assetClass: 'Cash & short-term deposits', objective: 'Preserve capital and deliver a competitive, stable shilling yield from short-term money-market instruments.' },
@@ -264,10 +577,16 @@ async function ensureTable() {
 
 async function seedFunds() {
   try {
-    const ALL = [...SEED, ...SPECIAL_FUNDS];
+    const ALL = [
+      ...SEED,
+      ...SPECIAL_FUNDS,
+      ...REGISTER_FUNDS.map(([name, manager, category, currency, sharia]) => ({ name, manager, category, currency, sharia })),
+      ...EXTRA_FUNDS,
+    ];
     const ids = [];
     for (const f of ALL) {
       const r = seedRow(f);
+      r.id = slugify(r.name); // key everything by name so overlaps dedupe
       ids.push(r.id);
       await pool.query(
         `INSERT INTO special_funds
