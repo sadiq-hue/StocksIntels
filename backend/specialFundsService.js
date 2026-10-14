@@ -65,10 +65,10 @@ const SEED = [
   // Listed collective schemes (NSE)
   { id: 'ilam-fahari-reit', name: 'ILAM Fahari I-REIT', manager: 'ICEA Lion Asset Management (ILAM)', category: 'REIT', structure: 'REIT', listing: 'NSE:ILAM', riskLevel: 'Medium-High', liquidity: 'Exchange-traded' },
   { id: 'newgold-etf', name: 'NewGold ETF', manager: 'Absa Asset Management', category: 'ETF', structure: 'ETF', listing: 'NSE:GLD', riskLevel: 'Medium-High', liquidity: 'Exchange-traded', assetClass: 'Commodities / Gold' },
-  // Alternative / special (high-yield, structured and dollar-denominated funds)
-  { id: 'mansa-x', name: 'Mansa-X Fund', manager: 'Standard Investment Bank', category: 'Alternative / Special', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Alternative fixed income / structured' },
-  { id: 'mansa-x-usd', name: 'Mansa-X USD Fund', manager: 'Standard Investment Bank', category: 'Alternative / Special', currency: 'USD', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Alternative fixed income / structured (USD)' },
-  { id: 'mansa-x-shariah', name: 'Mansa-X Shariah Fund', manager: 'Standard Investment Bank', category: 'Shariah', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Shariah-compliant structured' },
+  // Special Funds (alternative, structured, high-yield and dollar-denominated schemes)
+  { id: 'mansa-x', name: 'Mansa-X Fund', manager: 'Standard Investment Bank', category: 'Special Funds', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Alternative fixed income / structured' },
+  { id: 'mansa-x-usd', name: 'Mansa-X USD Fund', manager: 'Standard Investment Bank', category: 'Special Funds', currency: 'USD', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Alternative fixed income / structured (USD)' },
+  { id: 'mansa-x-shariah', name: 'Mansa-X Shariah Fund', manager: 'Standard Investment Bank', category: 'Special Funds', sharia: true, riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Shariah-compliant structured' },
   // Additional income / balanced / equity / shariah managers
   { id: 'ndovu-money-market', name: 'Ndovu Money Market Fund', manager: 'Ndovu', category: 'Money Market' },
   { id: 'alpha-africa-money-market', name: 'Alpha Africa Money Market Fund', manager: 'Alpha Africa Asset Managers', category: 'Money Market' },
@@ -95,7 +95,7 @@ const CATEGORY_DEFAULTS = {
   'Shariah': { structure: 'Unit Trust', riskLevel: 'Low-Medium', liquidity: 'T+2', assetClass: 'Shariah-compliant instruments', objective: 'Provide Shariah-compliant returns by investing only in screened, interest-free instruments.' },
   'REIT': { structure: 'REIT', riskLevel: 'Medium-High', liquidity: 'Exchange-traded', assetClass: 'Income-producing real estate', objective: 'Provide income and capital appreciation from a portfolio of income-producing real estate.' },
   'ETF': { structure: 'ETF', riskLevel: 'Medium-High', liquidity: 'Exchange-traded', assetClass: 'Commodities / Gold', objective: 'Track the price of gold, giving exchange-traded exposure to the metal.' },
-  'Alternative / Special': { structure: 'Collective Investment Scheme', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Alternative fixed income / structured', objective: 'Pursue enhanced, less-correlated returns through alternative income and structured strategies under the scheme’s disclosed terms.' },
+  'Special Funds': { structure: 'Collective Investment Scheme', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Alternative fixed income / structured', objective: 'Pursue enhanced, less-correlated returns through alternative income and structured strategies under the scheme’s disclosed terms.' },
 };
 
 const DATA_SOURCE = 'CMA licensee list / provider factsheets (metadata)';
@@ -115,8 +115,9 @@ function seedRow(f) {
     liquidity: f.liquidity || d.liquidity || null,
     asset_class: f.assetClass || d.assetClass || null,
     objective: f.objective || d.objective || null,
+    sharia_compliant: !!f.sharia,
     data_source: DATA_SOURCE,
-    data_status: 'metadata', // metadata only; figures pending ingestion
+    data_status: 'metadata',
   };
 }
 
@@ -175,10 +176,24 @@ async function seedFunds() {
       const r = seedRow(f);
       await pool.query(
         `INSERT INTO special_funds
-           (id, name, manager, category, structure, currency, country, listing, risk_level, liquidity, asset_class, objective, data_source, data_status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-         ON CONFLICT (id) DO NOTHING`,
-        [r.id, r.name, r.manager, r.category, r.structure, r.currency, r.country, r.listing, r.risk_level, r.liquidity, r.asset_class, r.objective, r.data_source, r.data_status]
+           (id, name, manager, category, structure, currency, country, listing, risk_level, liquidity, asset_class, objective, sharia_compliant, data_source, data_status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           manager = EXCLUDED.manager,
+           category = EXCLUDED.category,
+           structure = EXCLUDED.structure,
+           currency = EXCLUDED.currency,
+           country = EXCLUDED.country,
+           listing = EXCLUDED.listing,
+           risk_level = EXCLUDED.risk_level,
+           liquidity = EXCLUDED.liquidity,
+           asset_class = EXCLUDED.asset_class,
+           objective = EXCLUDED.objective,
+           sharia_compliant = EXCLUDED.sharia_compliant,
+           data_source = EXCLUDED.data_source,
+           updated_at = NOW()`,
+        [r.id, r.name, r.manager, r.category, r.structure, r.currency, r.country, r.listing, r.risk_level, r.liquidity, r.asset_class, r.objective, r.sharia_compliant, r.data_source, r.data_status]
       );
     }
     const { rows } = await pool.query('SELECT COUNT(*)::int n FROM special_funds');

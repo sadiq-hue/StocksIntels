@@ -178,7 +178,7 @@ const router = createBrowserRouter([
       { path: "bonds", element: <BondsPage /> },
       { path: "ipos", element: <IpoPage /> },
           { path: "derivatives", element: <DerivativesPage /> },
-          { path: "special-funds", element: <SpecialFundsPage /> },
+          { path: "managed-funds", element: <SpecialFundsPage /> },
       { path: "etfs", element: <ETFsPage /> },
       { path: "profile", element: <ProfilePage /> },
       { path: "affiliates", element: <AffiliatesPage /> },

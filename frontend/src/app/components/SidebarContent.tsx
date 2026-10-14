@@ -71,7 +71,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
         { path: "/app/bonds", icon: Landmark, label: "Bonds" },
         { path: "/app/etfs", icon: Layers, label: "ETFs" },
         { path: "/app/derivatives", icon: GraduationCap, label: "Derivatives" },
-        { path: "/app/special-funds", icon: Coins, label: "Special Funds" },
+        { path: "/app/managed-funds", icon: Coins, label: "Managed Funds" },
         { path: "/app/ipos", icon: TrendingUp, label: "IPOs" },
       ],
     },

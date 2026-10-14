@@ -187,11 +187,11 @@ export function SpecialFundsPage() {
             <div className="size-9 rounded-lg bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] flex items-center justify-center">
               <Landmark className="size-4 text-white" />
             </div>
-            <h1 className="text-xl md:text-2xl font-bold text-foreground">Special Funds</h1>
+            <h1 className="text-xl md:text-2xl font-bold text-foreground">Managed Funds</h1>
             <Badge variant="outline" className="text-[10px] border-[#0D7490] text-[#0D7490]">Advanced</Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Research collective investment schemes — unit trusts, CIS, REITs and ETFs. Kenya first.
+            Research collective investment schemes — unit trusts, CIS, REITs, ETFs and Special Funds. Kenya first.
           </p>
         </div>
       </div>
