@@ -720,7 +720,8 @@ function cleanRecord(rec) {
   }
   for (const f of NUMERIC_FIELDS) {
     if (out[f] !== undefined) {
-      const n = Number(String(out[f]).replace(/[%,$€£\s]/g, ''));
+      const stripped = String(out[f]).replace(/[^0-9.\-]/g, '');
+      const n = stripped === '' || stripped === '-' ? NaN : Number(stripped);
       out[f] = Number.isFinite(n) ? n : null;
     }
   }
