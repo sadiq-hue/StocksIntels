@@ -14,6 +14,7 @@ const KIBABA_KES_SHEET = 'https://ndovu.co/funds/kibaba/kibaba-kes-fact-sheet-q2
 const KIBABA_USD_SHEET = 'https://ndovu.co/funds/kibaba/kibaba-usd-fact-sheet-q2.pdf';
 
 const MANSAX_OBJECTIVE = 'Multi-asset strategy fund using a long/short trading model across local and global markets (200+ asset classes), designed to optimise returns in all market conditions while protecting capital. Operated under the Standard Investment Trust Funds (SITF) umbrella and regulated by the Capital Markets Authority.';
+const MANSAX_SHARIAH_OBJECTIVE = 'Multi-asset strategy fund investing in Shariah-compliant assets across global markets, with all transactions overseen by a Shariah Advisory Board. Operated under the Standard Investment Trust Funds (SITF) umbrella and regulated by the Capital Markets Authority.';
 const KIBABA_OBJECTIVE = 'Multi-asset special fund giving investors diversified global and local exposure across equities, fixed income, commodities and cash, with active allocation and FX-aware risk management.';
 
 const PROFILES = [
@@ -43,6 +44,18 @@ const PROFILES = [
     data_source: 'Mansa-X Special Fund fact sheet Q3 2026 (Standard Investment Bank)',
     source_url: MANSAX_FACTSHEET,
     observation_date: '2026-09-30',
+  },
+  {
+    name: 'Mansa X Shariah Special Fund (KES)',
+    objective: MANSAX_SHARIAH_OBJECTIVE,
+    data_source: 'SIB Najah — Mansa-X Shariah (Standard Investment Bank)',
+    source_url: 'https://sib.co.ke/najah/be-a-mansa/',
+  },
+  {
+    name: 'Mansa X Shariah Special Fund (USD)',
+    objective: MANSAX_SHARIAH_OBJECTIVE,
+    data_source: 'SIB Najah — Mansa-X Shariah (Standard Investment Bank)',
+    source_url: 'https://sib.co.ke/najah/be-a-mansa/',
   },
   {
     name: 'Kibaba Multi-Asset Special Fund (KES)',
