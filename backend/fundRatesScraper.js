@@ -27,14 +27,12 @@ const PROVIDERS = [
     name: 'NCBA Investment Bank',
     url: 'https://ncbagroup.com/investment-banking/',
     source: 'NCBA Investment Bank — Unit Rates',
-    // lower-cased published label -> our fund name
     map: {
       'fixed income': 'NCBA Fixed Income Fund',
       'equity fund': 'NCBA Equity Fund',
       'dollar fixed fund': 'NCBA Dollar Fixed Income Fund',
       'money market fund': 'NCBA Money Market Fund (KES)',
     },
-    // DOM parser for NCBA's .fund-card / .fund-row markup.
     parse: ($) => {
       const asOfTxt = $('.fund-rates-date').first().text().trim();
       const asOf = asOfTxt ? new Date(asOfTxt.replace(',', '')).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
@@ -52,7 +50,51 @@ const PROVIDERS = [
       return { asOf, entries };
     },
   },
+  {
+    key: 'britam',
+    name: 'Britam Asset Managers',
+    source: 'Britam unit trust fund pages — Effective Annual Yield',
+    // Each Britam fund has its own server-rendered page carrying an
+    // "Effective Annual Yield" figure.
+    pages: [
+      { url: 'https://ke.britam.com/save-and-invest/personal/invest/unit-trust-funds/money-market-fund', fund: 'Britam Money Market Fund' },
+      { url: 'https://ke.britam.com/save-and-invest/personal/invest/unit-trust-funds/bond-plus-fund', fund: 'Britam Bond Plus Fund' },
+    ],
+  },
 ];
+
+const MONTHS = { january: '01', february: '02', march: '03', april: '04', may: '05', june: '06', july: '07', august: '08', september: '09', october: '10', november: '11', december: '12', jan: '01', feb: '02', mar: '03', apr: '04', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+
+// Last "Effective Annual Yield ... : X%" figure on the page, else the last
+// percentage in the 200 chars after the phrase.
+function extractYield(text) {
+  const re = /effective annual yield[^:]{0,60}:\s*([0-9]+(?:\.[0-9]+)?)\s?%/gi;
+  let m, last = null;
+  while ((m = re.exec(text)) !== null) last = m[1];
+  if (last == null) {
+    const i = text.toLowerCase().lastIndexOf('effective annual yield');
+    if (i >= 0) {
+      const seg = text.slice(i, i + 220);
+      const p = [...seg.matchAll(/([0-9]+(?:\.[0-9]+)?)\s?%/g)];
+      if (p.length) last = p[p.length - 1][1];
+    }
+  }
+  const n = Number(last);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Infer the "as of" date from a trailing "<Month> <Year>" on the page.
+function extractAsOf(text) {
+  const re = /([A-Za-z]{3,9})[,\s]+(20\d{2})/g;
+  let m, best = null;
+  while ((m = re.exec(text)) !== null) {
+    const mon = MONTHS[m[1].toLowerCase()];
+    if (mon) best = { y: m[2], m: mon };
+  }
+  if (!best) return null;
+  const lastDay = new Date(Number(best.y), Number(best.m), 0).getDate();
+  return `${best.y}-${best.m}-${String(lastDay).padStart(2, '0')}`;
+}
 
 function textOf(html) {
   const $ = cheerio.load(html);
@@ -146,8 +188,38 @@ async function fetchHtml(url, attempts = 3) {
   throw lastErr;
 }
 
+// Providers that publish one fund's yield per page (e.g. Britam).
+async function scrapeYieldPages(provider) {
+  const result = { provider: provider.key, name: provider.name, ok: false, asOf: null, entries: 0, rows: 0, ingested: null, error: null };
+  const rows = [];
+  let asOf = null;
+  for (const pg of provider.pages) {
+    try {
+      const html = await fetchHtml(pg.url);
+      const text = textOf(html);
+      const y = extractYield(text);
+      if (y == null) continue;
+      rows.push({ name: pg.fund, yield_pct: y });
+      if (!asOf) asOf = extractAsOf(text);
+    } catch (e) { /* skip a failing page */ }
+  }
+  result.entries = rows.length;
+  result.rows = rows.length;
+  result.asOf = asOf || new Date().toISOString().slice(0, 10);
+  if (rows.length) {
+    try {
+      const summary = await specialFunds.bulkIngest(rows, { data_source: provider.source, source_url: provider.pages[0]?.url, observation_date: result.asOf });
+      result.ingested = { updated: summary.updated, created: summary.created, skipped: summary.skipped };
+    } catch (e) { result.error = e.message; }
+  }
+  result.ok = rows.length > 0;
+  console.log(`[FundRates] ${provider.name}: ${rows.length} fund rows, asOf ${result.asOf}`);
+  return result;
+}
+
 // Scrape one provider and ingest what it published. Returns a per-provider result.
 async function scrapeProvider(provider) {
+  if (Array.isArray(provider.pages)) return scrapeYieldPages(provider);
   const result = { provider: provider.key, name: provider.name, ok: false, asOf: null, entries: 0, rows: 0, ingested: null, error: null };
   try {
     const html = await fetchHtml(provider.url);
