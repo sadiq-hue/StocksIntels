@@ -769,12 +769,12 @@ async function bulkIngest(records = [], defaults = {}) {
     try {
       const rec = cleanRecord({ ...defaults, ...(records[i] || {}) });
       if (!rec.id && !rec.name) { summary.skipped++; summary.errors.push({ row: i + 1, reason: 'missing id/name' }); continue; }
-      const existsBefore = !!(rec.id && (await pool.query('SELECT 1 FROM special_funds WHERE id = $1', [rec.id])).rows.length);
       const targetId = await resolveFundId({ id: rec.id, name: rec.name });
       if (!targetId) { summary.skipped++; summary.errors.push({ row: i + 1, reason: 'unresolved' }); continue; }
+      const existed = (await pool.query('SELECT 1 FROM special_funds WHERE id = $1', [targetId])).rows.length > 0;
       const { id: _omitId, ...fields } = rec;
       await ingestFund(targetId, fields);
-      if (existsBefore) summary.updated++; else summary.created++;
+      if (existed) summary.updated++; else summary.created++;
     } catch (e) {
       summary.skipped++;
       summary.errors.push({ row: i + 1, reason: e.message });
