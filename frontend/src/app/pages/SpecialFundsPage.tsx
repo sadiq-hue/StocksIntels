@@ -377,6 +377,7 @@ export function SpecialFundsPage() {
                     <th className="text-left py-2 px-2 w-8"></th>
                     <th className="text-left py-2 px-3 font-medium text-muted-foreground">Fund</th>
                     <th className="text-left py-2 px-3 font-medium text-muted-foreground">Manager</th>
+                    <th className="text-right py-2 px-3 font-medium text-muted-foreground" title="AUM of the CMA umbrella scheme this fund sits under">Scheme AUM</th>
                     <th className="text-left py-2 px-3 font-medium text-muted-foreground">Category</th>
                     <th className="text-left py-2 px-3 font-medium text-muted-foreground">Risk</th>
                     <th className="text-right py-2 px-3 font-medium text-muted-foreground">Yield</th>
@@ -387,11 +388,11 @@ export function SpecialFundsPage() {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={9} className="text-center py-10"><Loader2 className="size-5 animate-spin mx-auto text-muted-foreground" /></td></tr>
+                    <tr><td colSpan={10} className="text-center py-10"><Loader2 className="size-5 animate-spin mx-auto text-muted-foreground" /></td></tr>
                   ) : error ? (
-                    <tr><td colSpan={9} className="text-center py-10 text-red-600">{error}</td></tr>
+                    <tr><td colSpan={10} className="text-center py-10 text-red-600">{error}</td></tr>
                   ) : funds.length === 0 ? (
-                    <tr><td colSpan={9} className="text-center py-10 text-muted-foreground">No funds match your filters.</td></tr>
+                    <tr><td colSpan={10} className="text-center py-10 text-muted-foreground">No funds match your filters.</td></tr>
                   ) : funds.map(f => (
                     <tr key={f.id} className="border-b border-border hover:bg-accent/60 cursor-pointer" onClick={() => setProfile(f)}>
                       <td className="py-2 px-2" onClick={e => e.stopPropagation()}>
@@ -402,6 +403,9 @@ export function SpecialFundsPage() {
                         {f.listing && <span className="ml-1.5 text-[9px] text-muted-foreground">{f.listing}</span>}
                       </td>
                       <td className="py-2 px-3 text-muted-foreground">{f.manager}</td>
+                      <td className="py-2 px-3 text-right tabular-nums text-muted-foreground" title={f.schemeContext ? `${f.schemeContext.scheme} · ${f.schemeContext.marketShare.toFixed(2)}% of CIS AUM · ${f.schemeContext.period}` : ""}>
+                        {f.schemeContext ? money(f.schemeContext.aum) : "—"}
+                      </td>
                       <td className="py-2 px-3 text-muted-foreground">{f.category}</td>
                       <td className="py-2 px-3"><span className={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-medium ${riskTone(f.riskLevel)}`}>{f.riskLevel || "—"}</span></td>
                       <td className="py-2 px-3 text-right tabular-nums text-foreground">{pct(f.yieldPct)}</td>
