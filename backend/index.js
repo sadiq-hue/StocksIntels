@@ -14,6 +14,7 @@ const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bo
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
 const specialFunds = require('./specialFundsService');
 const fundRates = require('./fundRatesScraper');
+const cmaFundReports = require('./cmaFundReports');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, NSE_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, refreshPerformanceStats, computeBacktestStats, getForwardTestStats,
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
@@ -6065,6 +6066,13 @@ app.get('/api/special-funds/facets', authenticateToken, requireActiveSubscriptio
   } catch (error) { res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
+// Scheme-level AUM + asset-class context from the CMA quarterly bulletin.
+app.get('/api/special-funds/context', authenticateToken, requireActiveSubscription, async (req, res) => {
+  try {
+    res.json(await cmaFundReports.getContext());
+  } catch (error) { res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
 app.get('/api/special-funds/compare', authenticateToken, requireActiveSubscription, requireFundTier('premium'), async (req, res) => {
   try {
     const ids = String(req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -6202,6 +6210,14 @@ app.post('/api/admin/special-funds/refresh-rates', authenticateToken, requireAdm
   } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
 });
 
+// Import the latest CMA quarterly bulletin (scheme AUM + asset-class split).
+app.post('/api/admin/special-funds/refresh-cma', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await cmaFundReports.importLatest();
+    res.json({ success: result.ok, ...result });
+  } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
+});
+
 // Periodic fund-rate refresh so figures stay current (default every 30 min).
 // Disable with FUND_RATES_REFRESH_MS=0.
 const FUND_RATES_REFRESH_MS = parseInt(process.env.FUND_RATES_REFRESH_MS || '1800000', 10);
@@ -6209,6 +6225,14 @@ if (FUND_RATES_REFRESH_MS > 0) {
   setTimeout(() => { fundRates.refreshAll().catch(() => {}); }, 120000);
   const fundRatesTimer = setInterval(() => { fundRates.refreshAll().catch(() => {}); }, FUND_RATES_REFRESH_MS);
   if (fundRatesTimer.unref) fundRatesTimer.unref();
+}
+
+// CMA quarterly bulletin refresh (default weekly; it only changes quarterly).
+const CMA_REPORT_REFRESH_MS = parseInt(process.env.CMA_REPORT_REFRESH_MS || String(7 * 24 * 3600 * 1000), 10);
+if (CMA_REPORT_REFRESH_MS > 0) {
+  setTimeout(() => { cmaFundReports.importLatest().catch(() => {}); }, 180000);
+  const cmaTimer = setInterval(() => { cmaFundReports.importLatest().catch(() => {}); }, CMA_REPORT_REFRESH_MS);
+  if (cmaTimer.unref) cmaTimer.unref();
 }
 
 // --- FX Routes ---
@@ -12511,6 +12535,12 @@ async function initDatabase() {
       await specialFunds.seedFunds();
     } catch (sfErr) {
       console.warn('[SpecialFunds] table/seed init failed:', sfErr.message);
+    }
+
+    try {
+      await cmaFundReports.ensureTable();
+    } catch (cmaErr) {
+      console.warn('[CMAFunds] table init failed:', cmaErr.message);
     }
 
     await pool.query(`CREATE TABLE IF NOT EXISTS portfolio_holdings (

@@ -39,6 +39,15 @@ interface Facets {
   managers: { value: string; count: number }[];
   currencies: string[];
 }
+interface CmaContext {
+  period: string | null;
+  totalAum: number;
+  source?: string;
+  sourceUrl?: string | null;
+  observationDate?: string | null;
+  schemes: { scheme: string; aum: number; prevAum: number; pctChange: number; marketShare: number }[];
+  assetClasses: { assetClass: string; amount: number; proportion: number; changePct: number }[];
+}
 interface CompareRow { key: keyof Fund | "manager"; label: string; fmt?: "money" | "pct" }
 interface CompareResult { funds: Fund[]; rows: CompareRow[]; notices: string[] }
 
@@ -77,6 +86,7 @@ export function SpecialFundsPage() {
   const { user, apiFetch } = useAuth();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [facets, setFacets] = useState<Facets | null>(null);
+  const [context, setContext] = useState<CmaContext | null>(null);
   const [funds, setFunds] = useState<Fund[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,10 +132,11 @@ export function SpecialFundsPage() {
     let cancel = false;
     (async () => {
       try {
-        const [sRes, fRes] = await Promise.all([apiFetch("/special-funds/summary"), apiFetch("/special-funds/facets")]);
+        const [sRes, fRes, cRes] = await Promise.all([apiFetch("/special-funds/summary"), apiFetch("/special-funds/facets"), apiFetch("/special-funds/context")]);
         if (!cancel) {
           if (sRes.ok) setSummary(await sRes.json());
           if (fRes.ok) setFacets(await fRes.json());
+          if (cRes.ok) setContext(await cRes.json());
         }
       } catch { /* ignore */ }
     })();
@@ -239,6 +250,52 @@ export function SpecialFundsPage() {
         <Card className="p-3"><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Market</div><div className="text-lg font-bold text-foreground">{summary?.country || "Kenya"}</div><div className="text-[10px] text-muted-foreground">{summary?.primaryCurrency || "KES"}</div></Card>
         <Card className="p-3"><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Latest data</div><div className="text-sm font-bold text-foreground">{summary?.latestDataDate ? dateStr(summary.latestDataDate) : "—"}</div><div className="text-[10px] text-muted-foreground">{summary?.verifiedFunds ?? 0} verified</div></Card>
       </div>
+
+      {context && context.period && context.schemes.length > 0 && (
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <Landmark className="size-4 text-[#0D7490]" />
+              <span className="text-sm font-semibold text-foreground">Industry context — CIS assets under management</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {context.period}
+              {context.sourceUrl ? <> · <a className="underline" href={context.sourceUrl} target="_blank" rel="noopener noreferrer">{context.source}</a></> : context.source ? <> · {context.source}</> : null}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total AUM</div>
+              <div className="text-2xl font-bold text-foreground tabular-nums">{money(context.totalAum, "KES")}</div>
+              <div className="text-[11px] text-muted-foreground mt-1">across {context.schemes.length} schemes</div>
+            </div>
+            <div className="lg:col-span-2">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Top schemes by market share</div>
+              <div className="space-y-1.5">
+                {context.schemes.slice(0, 6).map(s => (
+                  <div key={s.scheme} className="flex items-center gap-2">
+                    <span className="text-[11px] text-foreground w-48 truncate">{s.scheme}</span>
+                    <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full bg-[#0D7490]" style={{ width: `${Math.min(100, s.marketShare)}%` }} />
+                    </div>
+                    <span className="text-[11px] tabular-nums text-muted-foreground w-14 text-right">{s.marketShare?.toFixed(2)}%</span>
+                    <span className={`text-[11px] tabular-nums w-16 text-right ${s.pctChange >= 0 ? "text-emerald-600" : "text-red-500"}`}>{s.pctChange >= 0 ? "+" : ""}{s.pctChange}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          {context.assetClasses.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {context.assetClasses.slice(0, 6).map(a => (
+                <span key={a.assetClass} className="text-[10px] rounded-full border border-border bg-muted/40 px-2 py-0.5 text-muted-foreground">
+                  {a.assetClass}: <span className="text-foreground font-medium">{a.proportion}%</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
         <Info className="size-4 shrink-0 mt-0.5" />

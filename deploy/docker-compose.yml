@@ -86,6 +86,7 @@ services:
       # block the datacenter IP) and refresh cadence in ms (0 disables).
       FUND_SCRAPE_PROXY: ${FUND_SCRAPE_PROXY:-}
       FUND_RATES_REFRESH_MS: ${FUND_RATES_REFRESH_MS:-1800000}
+      CMA_REPORT_REFRESH_MS: ${CMA_REPORT_REFRESH_MS:-604800000}
       # LLM (newsletter / stock-insights narratives). The old app stack got these
       # from env_file: .env; the deploy stack lists env explicitly, so without them
       # every narrative silently fell back to generic filler ("No LLM backend
