@@ -16,6 +16,7 @@ const specialFunds = require('./specialFundsService');
 const fundRates = require('./fundRatesScraper');
 const fundProfiles = require('./fundProfiles');
 const rendererClient = require('./rendererClient');
+const fundRatesBrowser = require('./fundRatesBrowser');
 const cmaFundReports = require('./cmaFundReports');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, NSE_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, refreshPerformanceStats, computeBacktestStats, getForwardTestStats,
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes } = require('./signalService');
@@ -6212,6 +6213,14 @@ app.post('/api/admin/special-funds/refresh-rates', authenticateToken, requireAdm
   } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
 });
 
+// Refresh rates for JS-only provider pages via the browser sidecar (admin trigger).
+app.post('/api/admin/special-funds/refresh-rates-browser', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await fundRatesBrowser.refreshAll();
+    res.json({ success: true, ...result });
+  } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
+});
+
 // Import the latest CMA quarterly bulletin (scheme AUM + asset-class split).
 app.post('/api/admin/special-funds/refresh-cma', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -6246,6 +6255,14 @@ if (FUND_RATES_REFRESH_MS > 0) {
   setTimeout(() => { fundRates.refreshAll().catch(() => {}); }, 120000);
   const fundRatesTimer = setInterval(() => { fundRates.refreshAll().catch(() => {}); }, FUND_RATES_REFRESH_MS);
   if (fundRatesTimer.unref) fundRatesTimer.unref();
+}
+
+// Browser-rendered rate refresh for JS-only provider pages (default every 6 h).
+const FUND_RATES_RENDER_MS = parseInt(process.env.FUND_RATES_RENDER_MS || String(6 * 3600 * 1000), 10);
+if (FUND_RATES_RENDER_MS > 0) {
+  setTimeout(() => { fundRatesBrowser.refreshAll().catch(() => {}); }, 200000);
+  const fundRatesRenderTimer = setInterval(() => { fundRatesBrowser.refreshAll().catch(() => {}); }, FUND_RATES_RENDER_MS);
+  if (fundRatesRenderTimer.unref) fundRatesRenderTimer.unref();
 }
 
 // CMA quarterly bulletin refresh (default weekly; it only changes quarterly).

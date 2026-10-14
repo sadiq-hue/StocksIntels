@@ -110,6 +110,7 @@ services:
       CMA_REPORT_REFRESH_MS: ${CMA_REPORT_REFRESH_MS:-604800000}
       # Isolated headless-browser renderer for JS-only provider pages.
       RENDERER_URL: ${RENDERER_URL:-http://renderer:3000}
+      FUND_RATES_RENDER_MS: ${FUND_RATES_RENDER_MS:-21600000}
       # LLM (newsletter / stock-insights narratives). The old app stack got these
       # from env_file: .env; the deploy stack lists env explicitly, so without them
       # every narrative silently fell back to generic filler ("No LLM backend
