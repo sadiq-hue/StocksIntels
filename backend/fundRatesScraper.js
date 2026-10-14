@@ -25,7 +25,7 @@ const PROVIDERS = [
   {
     key: 'ncba',
     name: 'NCBA Investment Bank',
-    url: 'https://investment-bank.ncbagroup.com/wealth-management/collective-investment-schemes/ncba-money-market-fund/',
+    url: 'https://ncbagroup.com/investment-banking/',
     source: 'NCBA Investment Bank — Unit Rates',
     // lower-cased published label -> our fund name
     map: {
@@ -33,6 +33,23 @@ const PROVIDERS = [
       'equity fund': 'NCBA Equity Fund',
       'dollar fixed fund': 'NCBA Dollar Fixed Income Fund',
       'money market fund': 'NCBA Money Market Fund (KES)',
+    },
+    // DOM parser for NCBA's .fund-card / .fund-row markup.
+    parse: ($) => {
+      const asOfTxt = $('.fund-rates-date').first().text().trim();
+      const asOf = asOfTxt ? new Date(asOfTxt.replace(',', '')).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+      const entries = [];
+      $('.fund-card').each((_, el) => {
+        const label = $(el).find('h3').first().text().trim();
+        $(el).find('.fund-row').each((__, row) => {
+          const metric = $(row).find('.label').first().text().replace(/\s+/g, ' ').trim();
+          if (!metric) return;
+          const allText = $(row).text().replace(/\s+/g, ' ').trim();
+          const value = allText.startsWith(metric) ? allText.slice(metric.length).trim() : allText;
+          entries.push({ context: label, metric, value });
+        });
+      });
+      return { asOf, entries };
     },
   },
 ];
@@ -101,9 +118,9 @@ function buildRows(provider, parsed) {
   return Object.values(byFund);
 }
 
-async function fetchText(url, attempts = 3) {
+async function fetchHtml(url, attempts = 3) {
   // Optional egress proxy (set FUND_SCRAPE_PROXY=http://user:pass@host:port) so
-  // providers that block the datacenter IP (e.g. NCBA) can still be reached.
+  // providers that block the datacenter IP can still be reached.
   const proxy = process.env.FUND_SCRAPE_PROXY
     ? (() => { try { const p = new URL(process.env.FUND_SCRAPE_PROXY); return { host: p.hostname, port: Number(p.port) || 8080, protocol: p.protocol.replace(':', ''), ...(p.username ? { auth: { username: decodeURIComponent(p.username), password: decodeURIComponent(p.password) } } : {}) }; } catch { return undefined; } })()
     : undefined;
@@ -117,7 +134,7 @@ async function fetchText(url, attempts = 3) {
         proxy,
         httpsAgent,
       });
-      return textOf(res.data);
+      return String(res.data);
     } catch (e) {
       lastErr = e;
       if (i < attempts) await new Promise(r => setTimeout(r, 1500 * i));
@@ -130,8 +147,8 @@ async function fetchText(url, attempts = 3) {
 async function scrapeProvider(provider) {
   const result = { provider: provider.key, name: provider.name, ok: false, asOf: null, entries: 0, rows: 0, ingested: null, error: null };
   try {
-    const text = await fetchText(provider.url);
-    const parsed = parseUnitRates(text);
+    const html = await fetchHtml(provider.url);
+    const parsed = provider.parse ? provider.parse(cheerio.load(html)) : parseUnitRates(textOf(html));
     const rows = buildRows(provider, parsed);
     result.asOf = parsed.asOf;
     result.entries = parsed.entries.length;
