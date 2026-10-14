@@ -117,9 +117,9 @@ async function findLatestBulletin() {
 
 // Parse "Table 36: Market Share of AUM" → [{ scheme, aum, prevAum, pctChange, marketShare }]
 function parseSchemeTable(text) {
-  const start = text.search(/Market Share of Assets under Management|Market Share of AUM/i);
+  const start = text.lastIndexOf('Market Share of Assets under Management');
   if (start < 0) return [];
-  const section = text.slice(start, start + 6000);
+  const section = text.slice(start, start + 8000);
   const rows = [];
   const lineRe = /^\s*\d+\s+(.+?)\s+([\d,]{6,})\s+([\d,]{6,})\s+(-?[\d.]+)%\s+([\d.]+)%\s*$/gm;
   let m;
@@ -137,7 +137,7 @@ function parseSchemeTable(text) {
 
 // Parse "Table 37" asset-class distribution.
 function parseAssetClassTable(text) {
-  const start = text.search(/Distribution of funds by Asset Class/i);
+  const start = text.lastIndexOf('Distribution of funds by Asset Class');
   if (start < 0) return [];
   const section = text.slice(start, start + 2500);
   const rows = [];
