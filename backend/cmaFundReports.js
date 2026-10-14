@@ -18,6 +18,46 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const SITEMAP = 'https://www.cma.or.ke/wp-sitemap-posts-wpfd_file-1.xml';
 const BULLETIN_SLUG_RE = /(quarterly-statistical-bulletin|quarterly-bulletin|cis-report)/i;
 
+// Map a fund's manager to its CMA umbrella scheme (Table 36), so each sub-fund
+// in the directory can show the AUM / market-share of the scheme it sits under.
+// Schemes are umbrella-level — never presented as the sub-fund's own AUM.
+const SCHEME_BY_MANAGER = {
+  'Britam Asset Managers': 'Britam Unit Trust Scheme',
+  'CIC Asset Management': 'CIC Unit Trust Scheme',
+  'ICEA Lion Asset Management': 'ICEA Unit Trust Scheme',
+  'NCBA Investment Bank': 'NCBA Unit Trust Scheme',
+  'Co-op Trust Investment Services': 'Coop Unit Trust Scheme',
+  'Madison Investment Managers': 'Madison Unit Trust Funds',
+  'GenAfrica Asset Managers': 'GenAfrica Unit Trust Scheme',
+  'Apollo Asset Management': 'Apollo Unit Trust Scheme',
+  'Cytonn Asset Managers': 'Cytonn UnitTrust Fund',
+  'Etica Capital': 'Etica Unit Trust Fund',
+  'Absa Asset Management': 'Absa Unit Trust Funds',
+  'KCB Asset Management': 'KCB Unit Trust Scheme',
+  'Equity Investment Bank': 'Equity Investment Bank',
+  'Kuza Asset Management': 'Kuza Unit Trust Scheme',
+  'Lofty-Corban Investment Management': 'Lofty Corban Unit Trust Scheme',
+  'Dry Associates': 'Dry Associates Unit Trust',
+  'Sanlam Investments East Africa': 'Sanlam Unit Trust Scheme',
+  'Old Mutual Investment Group': 'Old Mutual Unit Trust Scheme',
+  'Standard Investment Bank': 'Standard Investment Trust Fund',
+  'Nabo Capital': 'Nabo Africa Funds',
+  'Amana Capital': 'Amana Unit Trust Funds',
+  'Faida Investment Bank': 'Faida Unit Trust Funds',
+  'Genghis Capital': 'Genghis Unit Trust Funds',
+  'Enwealth Capital': 'Enwealth Unit Trust',
+  'African Alliance': 'African Alliance Kenya Unit Trust',
+  'Arvocap': 'Arvocap Unit trust funds',
+  'CPF': 'CPF Unit Trust Scheme',
+  'Xeno': 'XENO Unit Trust Funds',
+  'Jubilee Insurance': 'Jubilee Unit Trust Scheme',
+};
+// Fund-specific overrides where a manager runs more than one scheme.
+const SCHEME_BY_FUND = {
+  'Ziidi Shari’ah Fund': 'Ziidi Shariah Money Market Fund',
+  'Ziidi Shariah Fund': 'Ziidi Shariah Money Market Fund',
+};
+
 async function ensureTable() {
   try {
     await pool.query(`
@@ -238,4 +278,63 @@ async function getContext() {
   }
 }
 
-module.exports = { ensureTable, importLatest, getContext, findLatestBulletin, parseSchemeTable, parseAssetClassTable, parsePeriod, extractPdfText };
+// Scheme lookup for a fund: explicit fund override wins, else its manager's scheme.
+function schemeNameFor(fund = {}) {
+  return SCHEME_BY_FUND[fund.name] || SCHEME_BY_MANAGER[fund.manager] || null;
+}
+
+function schemeRowOut(r) {
+  if (!r) return null;
+  return {
+    scheme: r.scheme,
+    period: r.period,
+    aum: Number(r.aum),
+    prevAum: Number(r.prev_aum),
+    pctChange: Number(r.pct_change),
+    marketShare: Number(r.market_share),
+    source: r.source,
+    sourceUrl: r.source_url,
+    observationDate: r.observation_date,
+  };
+}
+
+// Latest-period scheme rows keyed by scheme name (all schemes import together).
+async function getLatestSchemeIndex() {
+  await ensureTable();
+  const { rows: p } = await pool.query('SELECT MAX(period) AS period FROM special_fund_schemes');
+  const period = p[0] && p[0].period;
+  if (!period) return new Map();
+  const { rows } = await pool.query('SELECT period, scheme, aum, prev_aum, pct_change, market_share, source, source_url, observation_date FROM special_fund_schemes WHERE period = $1', [period]);
+  return new Map(rows.map(r => [r.scheme, r]));
+}
+
+// Scheme context for one fund (used on the profile endpoint).
+async function getSchemeContextForFund(fund) {
+  const scheme = schemeNameFor(fund);
+  if (!scheme) return null;
+  try {
+    await ensureTable();
+    const { rows } = await pool.query('SELECT period, scheme, aum, prev_aum, pct_change, market_share, source, source_url, observation_date FROM special_fund_schemes WHERE scheme = $1 ORDER BY period DESC LIMIT 1', [scheme]);
+    return rows.length ? schemeRowOut(rows[0]) : null;
+  } catch (e) {
+    console.warn('[CMAFunds] getSchemeContextForFund failed:', e.message);
+    return null;
+  }
+}
+
+// Attach scheme context to an array of funds keyed by manager (list endpoint).
+async function attachSchemeContext(funds = []) {
+  try {
+    const index = await getLatestSchemeIndex();
+    if (!index.size) return funds;
+    return funds.map(f => {
+      const scheme = schemeNameFor(f);
+      const row = scheme ? index.get(scheme) : null;
+      return row ? { ...f, schemeContext: schemeRowOut(row) } : f;
+    });
+  } catch (e) {
+    return funds;
+  }
+}
+
+module.exports = { ensureTable, importLatest, getContext, findLatestBulletin, parseSchemeTable, parseAssetClassTable, parsePeriod, extractPdfText, getSchemeContextForFund, attachSchemeContext, SCHEME_BY_MANAGER, SCHEME_BY_FUND };

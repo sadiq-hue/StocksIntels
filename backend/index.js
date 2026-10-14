@@ -6095,7 +6095,7 @@ app.get('/api/special-funds', authenticateToken, requireActiveSubscription, asyn
       sort: req.query.sort,
       limit: req.query.limit,
     });
-    res.json({ success: true, count: funds.length, funds });
+    res.json({ success: true, count: funds.length, funds: await cmaFundReports.attachSchemeContext(funds) });
   } catch (error) { res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
@@ -6103,7 +6103,7 @@ app.get('/api/special-funds/:id', authenticateToken, requireActiveSubscription, 
   try {
     const fund = await specialFunds.getFund(req.params.id);
     if (!fund) return res.status(404).json({ error: 'Fund not found' });
-    res.json({ success: true, fund });
+    res.json({ success: true, fund: { ...fund, schemeContext: await cmaFundReports.getSchemeContextForFund(fund) } });
   } catch (error) { res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 

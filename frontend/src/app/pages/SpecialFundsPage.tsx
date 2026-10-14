@@ -28,6 +28,11 @@ interface Fund {
   dataSource: string | null; sourceUrl: string | null;
   publishedAt: string | null; observationDate: string | null; dataStatus: string | null;
   updatedAt: string | null;
+  schemeContext?: {
+    scheme: string; period: string; aum: number; prevAum: number;
+    pctChange: number; marketShare: number; source?: string | null;
+    sourceUrl?: string | null; observationDate?: string | null;
+  } | null;
 }
 interface Summary {
   totalFunds: number; categories: number; managers: number; currencies: number;
@@ -615,6 +620,20 @@ function ProfileDrawer({ fund, onClose }: { fund: Fund; onClose: () => void }) {
                 <Row label="Data source" value={fund.dataSource || "—"} />
                 <Row label="Data as of" value={dateStr(fund.observationDate)} />
               </div>
+              {fund.schemeContext && (
+                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <Landmark className="size-3.5 text-[#0D7490]" />
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Umbrella scheme (CMA)</span>
+                  </div>
+                  <Row label="Scheme" value={fund.schemeContext.scheme} />
+                  <Row label="Scheme AUM" value={money(fund.schemeContext.aum)} />
+                  <Row label="Market share" value={`${fund.schemeContext.marketShare.toFixed(2)}%`} />
+                  <Row label="QoQ change" value={`${fund.schemeContext.pctChange > 0 ? "+" : ""}${fund.schemeContext.pctChange.toFixed(2)}%`} />
+                  <Row label="Period" value={fund.schemeContext.period} />
+                  <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">Scheme-level figure from the CMA quarterly statistical bulletin — the umbrella this fund sits under, not the sub-fund's own AUM.</p>
+                </div>
+              )}
             </>
           )}
 
