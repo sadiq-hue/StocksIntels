@@ -85,7 +85,7 @@ const PROVIDERS = [
       const vals = [...text.matchAll(/current effective annual rate\s*[–:—-]\s*([0-9]+(?:\.[0-9]+)?)\s?%/gi)].map(m => Number(m[1]));
       const rows = [];
       vals.forEach((v, i) => { if (CIC_RATE_ORDER[i] && v > 0) rows.push({ name: CIC_RATE_ORDER[i], yield_pct: v }); });
-      const fm = text.match(/([A-Za-z]+)\s+(20\d{2})\s+Fact\s+Sheet/i);
+      const fm = text.match(/(january|february|march|april|may|june|july|august|september|october|november|december)\s+(20\d{2})\s+Fact\s+Sheet/i);
       const asOf = fm ? monthYearToEom(`${fm[1]} ${fm[2]}`) : null;
       return { asOf, rows, sourceUrl: CIC_URL };
     },
