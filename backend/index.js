@@ -12,6 +12,7 @@ const { getAllNews, getNewsSummary, getAggregatedSentiment, KENYAN_STOCKS, STOCK
 const { generateWeeklyDigestContent, generateDailyBriefContent, generateEarningsContent, generateTopMoversContent } = require('./contentGenerator');
 const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
+const specialFunds = require('./specialFundsService');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, NSE_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, refreshPerformanceStats, computeBacktestStats, getForwardTestStats,
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
@@ -6024,6 +6025,147 @@ app.get('/api/etfs/:ticker', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
   }
+});
+
+// --- Special Funds (collective investment schemes) ---
+// Kenya-first research layer for unit trusts / CIS / REITs / ETFs.
+// Read access = any active subscription (or 7-day trial). Advanced comparison
+// and AI research = Premium tier. Ingestion = admin only.
+const SF_TIER_RANK = { free: 0, core: 1, pro: 2, premium: 3, institutional: 4 };
+function sfTierRank(u) { return SF_TIER_RANK[String(u?.subscription_tier || 'free').toLowerCase()] ?? 0; }
+function sfWithinTrial(u) {
+  if (!u?.trial_start_date) return false;
+  const t = new Date(u.trial_start_date).getTime();
+  return Number.isFinite(t) && (Date.now() - t) < 7 * 24 * 3600 * 1000;
+}
+function requireFundTier(min) {
+  const minRank = SF_TIER_RANK[min] ?? 3;
+  return (req, res, next) => {
+    const u = req.user || {};
+    if (u.role === 'admin' || u.role === 'super_admin') return next();
+    if (sfTierRank(u) >= minRank || sfWithinTrial(u)) return next();
+    return res.status(403).json({
+      error: `This feature requires the ${min === 'premium' ? 'Premium' : 'Pro'} plan.`,
+      code: 'TIER_REQUIRED',
+      required: min,
+    });
+  };
+}
+
+app.get('/api/special-funds/summary', authenticateToken, requireActiveSubscription, async (req, res) => {
+  try {
+    res.json(await specialFunds.getSummary());
+  } catch (error) { res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+app.get('/api/special-funds/facets', authenticateToken, requireActiveSubscription, async (req, res) => {
+  try {
+    res.json(await specialFunds.getFacets());
+  } catch (error) { res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+app.get('/api/special-funds/compare', authenticateToken, requireActiveSubscription, requireFundTier('premium'), async (req, res) => {
+  try {
+    const ids = String(req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (ids.length < 2) return res.status(400).json({ error: 'Select at least two funds to compare' });
+    res.json(await specialFunds.compareFunds(ids));
+  } catch (error) { res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+app.get('/api/special-funds', authenticateToken, requireActiveSubscription, async (req, res) => {
+  try {
+    const funds = await specialFunds.listFunds({
+      search: req.query.search,
+      category: req.query.category,
+      manager: req.query.manager,
+      currency: req.query.currency,
+      riskLevel: req.query.riskLevel || req.query.risk,
+      sharia: req.query.sharia,
+      minInvestmentMax: req.query.minInvestmentMax,
+      sort: req.query.sort,
+      limit: req.query.limit,
+    });
+    res.json({ success: true, count: funds.length, funds });
+  } catch (error) { res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+app.get('/api/special-funds/:id', authenticateToken, requireActiveSubscription, async (req, res) => {
+  try {
+    const fund = await specialFunds.getFund(req.params.id);
+    if (!fund) return res.status(404).json({ error: 'Fund not found' });
+    res.json({ success: true, fund });
+  } catch (error) { res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+// Grounded AI research — answers strictly from the fund record (cited), never
+// invents figures and never guarantees returns.
+app.post('/api/special-funds/:id/ai', authenticateToken, requireActiveSubscription, requireFundTier('premium'), async (req, res) => {
+  try {
+    const fund = await specialFunds.getFund(req.params.id);
+    if (!fund) return res.status(404).json({ error: 'Fund not found' });
+    const question = String(req.body?.question || '').slice(0, 500).trim();
+    if (!question) return res.status(400).json({ error: 'A question is required' });
+
+    const record = {
+      name: fund.name, manager: fund.manager, category: fund.category, structure: fund.structure,
+      currency: fund.currency, riskLevel: fund.riskLevel, liquidity: fund.liquidity,
+      objective: fund.objective, minInvestment: fund.minInvestment, managementFeePct: fund.managementFeePct,
+      expenseRatioPct: fund.expenseRatioPct, yieldPct: fund.yieldPct, oneYearReturnPct: fund.oneYearReturnPct,
+      threeYearReturnPct: fund.threeYearReturnPct, nav: fund.nav, aum: fund.aum,
+      observationDate: fund.observationDate, dataSource: fund.dataSource, dataStatus: fund.dataStatus,
+    };
+    const missing = Object.entries(record).filter(([, v]) => v === null || v === undefined).map(([k]) => k);
+    let answer = null;
+    try {
+      const { generate } = require('./llmService');
+      const prompt = `You are a fund research assistant for StocksIntels (African markets). Answer the user's question using ONLY the fund record below and general, non-numeric explanation. Rules:
+- Cite which fields you used (e.g. "per the published 1-year return field").
+- If the record lacks a figure, say it is not available — do NOT estimate, infer or invent any number.
+- Never present past performance as a guarantee of future results.
+- Keep it to 3-5 sentences, plain English, no markdown.
+
+FUND RECORD (JSON):
+${JSON.stringify(record, null, 1)}
+
+USER QUESTION: ${question}`;
+      answer = await generate(prompt, { maxTokens: 400, temperature: 0.3 });
+    } catch (e) { /* fall through to a deterministic, record-grounded fallback */ }
+
+    if (!answer) {
+      const bits = [];
+      bits.push(`${fund.name} is a ${fund.category} fund managed by ${fund.manager} (${fund.currency}).`);
+      if (fund.riskLevel) bits.push(`Risk classification: ${fund.riskLevel}.`);
+      if (fund.objective) bits.push(fund.objective);
+      if (fund.yieldPct != null || fund.oneYearReturnPct != null) {
+        bits.push(`Published figures: ${fund.yieldPct != null ? `yield ${fund.yieldPct}%` : ''}${fund.oneYearReturnPct != null ? `${fund.yieldPct != null ? ', ' : ''}1-yr return ${fund.oneYearReturnPct}%` : ''}.`);
+      } else {
+        bits.push('No performance figures have been published for this fund yet, so none can be quoted.');
+      }
+      if (missing.length) bits.push(`Missing fields: ${missing.join(', ')}.`);
+      answer = bits.join(' ');
+    }
+
+    res.json({
+      success: true,
+      answer,
+      sources: [
+        { field: 'record', label: fund.dataSource || 'Fund record' },
+        { field: 'asOf', label: fund.observationDate || fund.updatedAt || null },
+      ],
+      missing,
+      disclaimer: 'Historical performance is not a guarantee of future results.',
+    });
+  } catch (error) { res.status(500).json({ error: 'An unexpected error occurred' }); }
+});
+
+// Admin ingestion: upsert a fund from an official source (with dates).
+app.post('/api/admin/special-funds/ingest', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id, ...data } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'id is required' });
+    const fund = await specialFunds.ingestFund(id, data);
+    res.json({ success: true, fund });
+  } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
 });
 
 // --- FX Routes ---
@@ -12319,6 +12461,13 @@ async function initDatabase() {
       await ensurePushTable();
     } catch (pushErr) {
       console.warn('[Push] push_subscriptions table init failed:', pushErr.message);
+    }
+
+    try {
+      await specialFunds.ensureTable();
+      await specialFunds.seedFunds();
+    } catch (sfErr) {
+      console.warn('[SpecialFunds] table/seed init failed:', sfErr.message);
     }
 
     await pool.query(`CREATE TABLE IF NOT EXISTS portfolio_holdings (

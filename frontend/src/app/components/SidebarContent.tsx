@@ -6,7 +6,7 @@ import {
   LineChart, Newspaper, FileText, MessageSquare, Users, GitCompare,
   Briefcase, Layers, User, LifeBuoy, Landmark,
   DollarSign, TrendingUp, GraduationCap, Lightbulb,
-  ChevronsLeft, ChevronsRight, Mail,
+  ChevronsLeft, ChevronsRight, Mail, Coins,
 } from "lucide-react";
 import { useBeginnerMode } from "../contexts/BeginnerModeContext";
 import { useCompare } from "../contexts/CompareContext";
@@ -71,6 +71,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
         { path: "/app/bonds", icon: Landmark, label: "Bonds" },
         { path: "/app/etfs", icon: Layers, label: "ETFs" },
         { path: "/app/derivatives", icon: GraduationCap, label: "Derivatives" },
+        { path: "/app/special-funds", icon: Coins, label: "Special Funds" },
         { path: "/app/ipos", icon: TrendingUp, label: "IPOs" },
       ],
     },
