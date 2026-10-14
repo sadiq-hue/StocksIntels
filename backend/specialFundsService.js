@@ -881,7 +881,7 @@ async function getSummary() {
       COUNT(DISTINCT manager)::int managers,
       COUNT(DISTINCT currency)::int currencies,
       COUNT(*) FILTER (WHERE data_status = 'verified')::int verified,
-      COUNT(*) FILTER (WHERE yield_pct IS NOT NULL)::int withYield,
+      COUNT(*) FILTER (WHERE yield_pct IS NOT NULL)::int AS with_yield,
       MAX(COALESCE(observation_date, ingested_at)) AS latest_date
     FROM special_funds`);
   const r = rows[0] || {};
@@ -891,7 +891,7 @@ async function getSummary() {
     managers: r.managers || 0,
     currencies: r.currencies || 0,
     verifiedFunds: r.verified || 0,
-    fundsWithYield: r.withYield || 0,
+    fundsWithYield: r.with_yield || 0,
     latestDataDate: r.latest_date || null,
     country: COUNTRY,
     primaryCurrency: CURRENCY,
