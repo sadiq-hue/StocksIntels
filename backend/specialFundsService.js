@@ -65,10 +65,6 @@ const SEED = [
   // Listed collective schemes (NSE)
   { id: 'ilam-fahari-reit', name: 'ILAM Fahari I-REIT', manager: 'ICEA Lion Asset Management (ILAM)', category: 'REIT', structure: 'REIT', listing: 'NSE:ILAM', riskLevel: 'Medium-High', liquidity: 'Exchange-traded' },
   { id: 'newgold-etf', name: 'NewGold ETF', manager: 'Absa Asset Management', category: 'ETF', structure: 'ETF', listing: 'NSE:GLD', riskLevel: 'Medium-High', liquidity: 'Exchange-traded', assetClass: 'Commodities / Gold' },
-  // Special Funds (alternative, structured, high-yield and dollar-denominated schemes)
-  { id: 'mansa-x', name: 'Mansa-X Fund', manager: 'Standard Investment Bank', category: 'Special Funds', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Alternative fixed income / structured' },
-  { id: 'mansa-x-usd', name: 'Mansa-X USD Fund', manager: 'Standard Investment Bank', category: 'Special Funds', currency: 'USD', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Alternative fixed income / structured (USD)' },
-  { id: 'mansa-x-shariah', name: 'Mansa-X Shariah Fund', manager: 'Standard Investment Bank', category: 'Special Funds', sharia: true, riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Shariah-compliant structured' },
   // Additional income / balanced / equity / shariah managers
   { id: 'ndovu-money-market', name: 'Ndovu Money Market Fund', manager: 'Ndovu', category: 'Money Market' },
   { id: 'alpha-africa-money-market', name: 'Alpha Africa Money Market Fund', manager: 'Alpha Africa Asset Managers', category: 'Money Market' },
@@ -85,6 +81,102 @@ const SEED = [
   { id: 'amana-sharia-money-market', name: 'Amana Sharia Money Market Fund', manager: 'Amana Capital', category: 'Shariah' },
   { id: 'ziidi-shariah', name: 'Ziidi Shari’ah Fund', manager: 'Safaricom (M-PESA)', category: 'Shariah' },
 ];
+
+// ── Special Funds ────────────────────────────────────────────────────────────
+// Every "Special Fund" (and Alternative Investment Fund) sub-fund on the CMA
+// register of Approved Collective Investment Schemes. Source:
+// https://licensees.cma.or.ke/licenses/15/  (Capital Markets Authority, Kenya).
+// Metadata only; figures pending ingestion.
+const SPECIAL_FUNDS = [
+  { name: 'African Alliance Kenya Enhanced Yield Fund', manager: 'African Alliance' },
+  { name: 'Britam Special Fixed Income Fund', manager: 'Britam Asset Managers' },
+  { name: 'Britam Multi-Asset Special Fund', manager: 'Britam Asset Managers' },
+  { name: 'Britam Enhanced Global Equities Special Fund', manager: 'Britam Asset Managers' },
+  { name: 'NCBA Global Special Equity Fund', manager: 'NCBA Investment Bank' },
+  { name: 'NCBA Global Special Fixed Income Fund', manager: 'NCBA Investment Bank' },
+  { name: 'CIC Global Special Fund', manager: 'CIC Asset Management' },
+  { name: 'Dyer & Blair Special Global Strategies Fund (KES)', manager: 'Dyer & Blair' },
+  { name: 'Dyer & Blair Special Global Strategies Fund (USD)', manager: 'Dyer & Blair', currency: 'USD' },
+  { name: 'Gencap NSE25 Index Tracker', manager: 'Genghis Capital' },
+  { name: 'Gencap Financial Services Fund', manager: 'Genghis Capital' },
+  { name: 'Sanlam Special GBP Fixed Income Fund', manager: 'Sanlam Investments East Africa', currency: 'GBP' },
+  { name: 'Sanlam Special Fund (KES)', manager: 'Sanlam Investments East Africa' },
+  { name: 'Nabo Ubuntu Multi Asset Strategy Special Fund', manager: 'Nabo Capital' },
+  { name: 'Old Mutual Special Fixed Income Fund', manager: 'Old Mutual Investment Group' },
+  { name: 'Dry Associates Special High Yield Fund (KES)', manager: 'Dry Associates' },
+  { name: 'Dry Associates Euro Special Fixed Income Fund', manager: 'Dry Associates', currency: 'EUR' },
+  { name: 'Dry Associates Sterling Special Fixed Income Fund', manager: 'Dry Associates', currency: 'GBP' },
+  { name: 'Cytonn High Yield Fund', manager: 'Cytonn Asset Managers' },
+  { name: 'Absa Global Multi-Asset Special Fund (KES)', manager: 'Absa Asset Management' },
+  { name: 'Absa Global Multi-Asset Special Fund (USD)', manager: 'Absa Asset Management', currency: 'USD' },
+  { name: 'Jubilee Enhanced Fixed Income Special Fund', manager: 'Jubilee Insurance' },
+  { name: 'Etica Special Multi Asset Special Fund', manager: 'Etica Capital' },
+  { name: 'Lofty-Corban Private Debt Special Fund', manager: 'Lofty-Corban Investment Management' },
+  { name: 'Lofty-Corban Global Asset Special Fund', manager: 'Lofty-Corban Investment Management' },
+  { name: 'Lofty-Corban Special Money Market Fund', manager: 'Lofty-Corban Investment Management' },
+  { name: 'Mansa X Special Fund (KES)', manager: 'Standard Investment Bank' },
+  { name: 'Mansa X Special Fund (USD)', manager: 'Standard Investment Bank', currency: 'USD' },
+  { name: 'Mansa X Shariah Special Fund (KES)', manager: 'Standard Investment Bank', sharia: true },
+  { name: 'Mansa X Shariah Special Fund (USD)', manager: 'Standard Investment Bank', currency: 'USD', sharia: true },
+  { name: 'Oak Multi Asset Special Fund (KES)', manager: 'Faida Investment Bank' },
+  { name: 'Oak Multi Assets Special USD Fund', manager: 'Faida Investment Bank', currency: 'USD' },
+  { name: 'Spearhead Africa Infrastructure (Special) Fund', manager: 'Spearhead Capital' },
+  { name: 'Investcent Multi Asset Special Fund (KES)', manager: 'Investcent Partners' },
+  { name: 'Investcent Multi Asset Special Fund (USD)', manager: 'Investcent Partners', currency: 'USD' },
+  { name: 'Investcent Shariah Multi Asset Special Fund (KES)', manager: 'Investcent Partners', sharia: true },
+  { name: 'Investcent Shariah Multi Asset Special Fund (USD)', manager: 'Investcent Partners', currency: 'USD', sharia: true },
+  { name: 'Investcent Green Special Fund (KES)', manager: 'Investcent Partners' },
+  { name: 'Investcent Green Special Fund (USD)', manager: 'Investcent Partners', currency: 'USD' },
+  { name: 'GCIB Multi-Asset Special Fund', manager: 'GCIB' },
+  { name: 'GCIB Shariah Multi-Asset Special Fund', manager: 'GCIB', sharia: true },
+  { name: 'CPF Multi-Asset Special Fund (KES)', manager: 'CPF' },
+  { name: 'Arvocap Eurofix Fixed Income Special Fund', manager: 'Arvocap', currency: 'EUR' },
+  { name: 'Arvocap Africa Equity Special Fund', manager: 'Arvocap' },
+  { name: 'Arvocap Global Equity Special Fund', manager: 'Arvocap' },
+  { name: 'Arvocap Multi Asset Strategy Special Fund (USD)', manager: 'Arvocap', currency: 'USD' },
+  { name: 'Arvocap Global Sharia Equity Special Fund (USD)', manager: 'Arvocap', currency: 'USD', sharia: true },
+  { name: 'Arvocap Mabruk Sharia Special Fund (KES)', manager: 'Arvocap', sharia: true },
+  { name: 'XENO Kenya International Equity Special Fund (USD)', manager: 'Xeno' , currency: 'USD' },
+  { name: 'VCG Offshore Equities Megatrends Special Fund (USD)', manager: 'VCG', currency: 'USD' },
+  { name: 'VCG Offshore Diversified Special Fund of Funds (USD)', manager: 'VCG', currency: 'USD' },
+  { name: 'VCG Offshore Fixed Income Special Fund (USD)', manager: 'VCG', currency: 'USD' },
+  { name: 'VCG Offshore Technology Revolution Special Fund (USD)', manager: 'VCG', currency: 'USD' },
+  { name: 'VCG Diversified Commodities Special Fund (USD)', manager: 'VCG', currency: 'USD' },
+  { name: 'VCG Offshore Multi-Asset Special Fund (USD)', manager: 'VCG', currency: 'USD' },
+  { name: 'VCG Managed Oil Special Fund (USD)', manager: 'VCG', currency: 'USD' },
+  { name: 'VCG Managed Agriculture Special Fund (USD)', manager: 'VCG', currency: 'USD' },
+  { name: 'Capital A Multi Asset Strategy Special Fund (KES)', manager: 'Capital A' },
+  { name: 'Capital A Multi Asset Strategy Special Fund (USD)', manager: 'Capital A', currency: 'USD' },
+  { name: 'Globetec Multi-Asset Special Fund', manager: 'Globetec Asset Managers' },
+  { name: 'Globetec Dollar Multi-Asset Special Fund', manager: 'Globetec Asset Managers', currency: 'USD' },
+  { name: 'Zamara Global Balanced Special Fund (USD)', manager: 'Zamara', currency: 'USD' },
+  { name: 'Kibaba Multi-Asset Special Fund (KES)', manager: 'Kibaba' },
+  { name: 'Kibaba Multi-Asset Special Fund (USD)', manager: 'Kibaba', currency: 'USD' },
+  { name: 'Pergamon Special Diversified Income Fund (KES)', manager: 'Pergamon (PIB Africa)' },
+  { name: 'Selective Alpha Multi Asset Special Fund', manager: 'Meridian Asset Management' },
+  { name: 'Cinemark KES Special Fixed Income Fund', manager: 'Cinemark' },
+  { name: 'Cinemark USD Special Fixed Income Fund', manager: 'Cinemark', currency: 'USD' },
+  { name: 'Cinemark KES Multi-asset Special Fund', manager: 'Cinemark' },
+  { name: 'Cinemark USD Multi-asset Special Fund', manager: 'Cinemark', currency: 'USD' },
+  { name: 'Zubari KES Multi-Asset Special Fund', manager: 'Karsis' },
+  { name: 'Zubari USD Multi-Asset Special Fund', manager: 'Karsis', currency: 'USD' },
+  { name: 'Zubari EUR Multi-Asset Special Fund', manager: 'Karsis', currency: 'EUR' },
+  { name: 'Zubari GBP Multi-Asset Special Fund', manager: 'Karsis', currency: 'GBP' },
+  { name: 'Zubari KES Private-Debt Special Fund', manager: 'Karsis' },
+  { name: 'Zubari USD Private-Debt Special Fund', manager: 'Karsis', currency: 'USD' },
+  { name: 'Zubari EUR Private-Debt Special Fund', manager: 'Karsis', currency: 'EUR' },
+  { name: 'Zubari GBP Private-Debt Special Fund', manager: 'Karsis', currency: 'GBP' },
+  // Alternative Investment Funds (the alternative/"special" class on the register)
+  { name: 'Enwealth Impact Debt Fund (AIF)', manager: 'Enwealth Capital' },
+  { name: 'Investcent Hedge Fund (KES)', manager: 'Investcent Partners' },
+  { name: 'Investcent Hedge Fund (USD)', manager: 'Investcent Partners', currency: 'USD' },
+  { name: 'ICEA LION Multi Strategy Bond Fund (AIF)', manager: 'ICEA Lion Asset Management' },
+  { name: 'Green Investment Fund (AIF)', manager: 'Green Investment Fund' },
+].map(f => ({ ...f, id: slugify(f.name), category: 'Special Funds' }));
+
+function slugify(name) {
+  return 'sf-' + String(name).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+}
 
 // Descriptive, non-numeric defaults derived from the category (safe to state).
 const CATEGORY_DEFAULTS = {
@@ -172,8 +264,11 @@ async function ensureTable() {
 
 async function seedFunds() {
   try {
-    for (const f of SEED) {
+    const ALL = [...SEED, ...SPECIAL_FUNDS];
+    const ids = [];
+    for (const f of ALL) {
       const r = seedRow(f);
+      ids.push(r.id);
       await pool.query(
         `INSERT INTO special_funds
            (id, name, manager, category, structure, currency, country, listing, risk_level, liquidity, asset_class, objective, sharia_compliant, data_source, data_status)
@@ -196,6 +291,15 @@ async function seedFunds() {
         [r.id, r.name, r.manager, r.category, r.structure, r.currency, r.country, r.listing, r.risk_level, r.liquidity, r.asset_class, r.objective, r.sharia_compliant, r.data_source, r.data_status]
       );
     }
+    // Prune stale seeded rows that are no longer in the source list (e.g. a fund
+    // renamed/re-categorised). Only touches pure-metadata rows — never an
+    // ingested/verified record.
+    try {
+      await pool.query(
+        `DELETE FROM special_funds WHERE data_status = 'metadata' AND NOT (id = ANY($1::text[]))`,
+        [ids]
+      );
+    } catch (e) { console.warn('[SpecialFunds] prune skipped:', e.message); }
     const { rows } = await pool.query('SELECT COUNT(*)::int n FROM special_funds');
     console.log(`[SpecialFunds] ${rows[0].n} funds in directory`);
   } catch (e) {
