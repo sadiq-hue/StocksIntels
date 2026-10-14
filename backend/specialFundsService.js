@@ -65,6 +65,25 @@ const SEED = [
   // Listed collective schemes (NSE)
   { id: 'ilam-fahari-reit', name: 'ILAM Fahari I-REIT', manager: 'ICEA Lion Asset Management (ILAM)', category: 'REIT', structure: 'REIT', listing: 'NSE:ILAM', riskLevel: 'Medium-High', liquidity: 'Exchange-traded' },
   { id: 'newgold-etf', name: 'NewGold ETF', manager: 'Absa Asset Management', category: 'ETF', structure: 'ETF', listing: 'NSE:GLD', riskLevel: 'Medium-High', liquidity: 'Exchange-traded', assetClass: 'Commodities / Gold' },
+  // Alternative / special (high-yield, structured and dollar-denominated funds)
+  { id: 'mansa-x', name: 'Mansa-X Fund', manager: 'Standard Investment Bank', category: 'Alternative / Special', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Alternative fixed income / structured' },
+  { id: 'mansa-x-usd', name: 'Mansa-X USD Fund', manager: 'Standard Investment Bank', category: 'Alternative / Special', currency: 'USD', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Alternative fixed income / structured (USD)' },
+  { id: 'mansa-x-shariah', name: 'Mansa-X Shariah Fund', manager: 'Standard Investment Bank', category: 'Shariah', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Shariah-compliant structured' },
+  // Additional income / balanced / equity / shariah managers
+  { id: 'ndovu-money-market', name: 'Ndovu Money Market Fund', manager: 'Ndovu', category: 'Money Market' },
+  { id: 'alpha-africa-money-market', name: 'Alpha Africa Money Market Fund', manager: 'Alpha Africa Asset Managers', category: 'Money Market' },
+  { id: 'nabo-money-market', name: 'Nabo Money Market Fund', manager: 'Nabo Capital', category: 'Money Market' },
+  { id: 'zamara-money-market', name: 'Zamara Money Market Fund', manager: 'Zamara', category: 'Money Market' },
+  { id: 'sentinel-money-market', name: 'Sentinel Money Market Fund', manager: 'Sentinel Asset Management', category: 'Money Market' },
+  { id: 'uap-money-market', name: 'UAP Money Market Fund', manager: 'UAP Old Mutual', category: 'Money Market' },
+  { id: 'sentinel-bond', name: 'Sentinel Bond Fund', manager: 'Sentinel Asset Management', category: 'Fixed Income / Bond' },
+  { id: 'uap-bond', name: 'UAP Bond Fund', manager: 'UAP Old Mutual', category: 'Fixed Income / Bond' },
+  { id: 'sentinel-balanced', name: 'Sentinel Balanced Fund', manager: 'Sentinel Asset Management', category: 'Balanced' },
+  { id: 'uap-balanced', name: 'UAP Balanced Fund', manager: 'UAP Old Mutual', category: 'Balanced' },
+  { id: 'sentinel-equity', name: 'Sentinel Equity Fund', manager: 'Sentinel Asset Management', category: 'Equity' },
+  { id: 'uap-equity', name: 'UAP Equity Fund', manager: 'UAP Old Mutual', category: 'Equity' },
+  { id: 'amana-sharia-money-market', name: 'Amana Sharia Money Market Fund', manager: 'Amana Capital', category: 'Shariah' },
+  { id: 'ziidi-shariah', name: 'Ziidi Shari’ah Fund', manager: 'Safaricom (M-PESA)', category: 'Shariah' },
 ];
 
 // Descriptive, non-numeric defaults derived from the category (safe to state).
@@ -76,6 +95,7 @@ const CATEGORY_DEFAULTS = {
   'Shariah': { structure: 'Unit Trust', riskLevel: 'Low-Medium', liquidity: 'T+2', assetClass: 'Shariah-compliant instruments', objective: 'Provide Shariah-compliant returns by investing only in screened, interest-free instruments.' },
   'REIT': { structure: 'REIT', riskLevel: 'Medium-High', liquidity: 'Exchange-traded', assetClass: 'Income-producing real estate', objective: 'Provide income and capital appreciation from a portfolio of income-producing real estate.' },
   'ETF': { structure: 'ETF', riskLevel: 'Medium-High', liquidity: 'Exchange-traded', assetClass: 'Commodities / Gold', objective: 'Track the price of gold, giving exchange-traded exposure to the metal.' },
+  'Alternative / Special': { structure: 'Collective Investment Scheme', riskLevel: 'Medium-High', liquidity: 'Fund terms (T+2)', assetClass: 'Alternative fixed income / structured', objective: 'Pursue enhanced, less-correlated returns through alternative income and structured strategies under the scheme’s disclosed terms.' },
 };
 
 const DATA_SOURCE = 'CMA licensee list / provider factsheets (metadata)';
