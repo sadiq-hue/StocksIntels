@@ -34,6 +34,7 @@ const COOP_FUND_MAP = {
 };
 const MADISON_URL = 'https://madison.co.ke/';
 const NDOVU_URL = 'https://ndovu.co/ke/products/money-market-funds';
+const CYTONN_SHEETS = 'https://cytonn.com/downloads/categories/fact-sheets';
 
 // ── Provider definitions ─────────────────────────────────────────────────────
 const PROVIDERS = [
@@ -156,6 +157,39 @@ const PROVIDERS = [
       return { asOf: new Date().toISOString().slice(0, 10), rows, sourceUrl: NDOVU_URL };
     },
   },
+  {
+    key: 'cytonn',
+    name: 'Cytonn Asset Managers',
+    source: 'Cytonn monthly fund fact sheets (PDF)',
+    url: CYTONN_SHEETS,
+    // Each fund publishes a monthly PDF whose performance table lists
+    // [2025 average] [current month annualized] [since inception]; we take the
+    // current-month annualized return.
+    scrape: async () => {
+      const listHtml = await fetchHtml(CYTONN_SHEETS);
+      const links = [...listHtml.matchAll(/href="([^"]*\/downloads\/[^"]+fact-sheet[^"]*)"/gi)].map(m => m[1]);
+      const jobs = [
+        { link: latestSheetLink(links, /chyf-fact-sheet/i), name: 'Cytonn High Yield Fund', re: /Cytonn High Yield Fund[^\n]*?([0-9.]+)%\s+([0-9.]+)%\s+([0-9.]+)%/ },
+        { link: latestSheetLink(links, /cmmf-kes-fact-sheet/i), name: 'Cytonn Money Market Fund', re: /Cytonn Money Market Fund[^\n]*?([0-9.]+)%\s+([0-9.]+)%\s+([0-9.]+)%/ },
+      ];
+      const rows = [];
+      let asOf = null;
+      for (const j of jobs) {
+        if (!j.link) continue;
+        const pageUrl = j.link.startsWith('http') ? j.link : new URL(j.link, 'https://cytonn.com').href;
+        const pageHtml = await fetchHtml(pageUrl);
+        const pdf = (pageHtml.match(/https?:\/\/[^"'\s]+\.pdf/i) || [])[0];
+        if (!pdf) continue;
+        const text = await fetchPdfText(pdf);
+        const m = text.match(j.re);
+        if (!m) continue;
+        rows.push({ name: j.name, yield_pct: Number(m[2]) });
+        const mm = text.match(/(january|february|march|april|may|june|july|august|september|october|november|december)\s+(20\d{2})/i);
+        if (!asOf && mm) asOf = monthYearToEom(`${mm[1]} ${mm[2]}`);
+      }
+      return { asOf, rows, sourceUrl: CYTONN_SHEETS };
+    },
+  },
 ];
 
 const MONTHS = { january: '01', february: '02', march: '03', april: '04', may: '05', june: '06', july: '07', august: '08', september: '09', october: '10', november: '11', december: '12', jan: '01', feb: '02', mar: '03', apr: '04', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
@@ -169,6 +203,19 @@ function monthYearToEom(label) {
   if (!mon) return null;
   const lastDay = new Date(Number(m[2]), Number(mon), 0).getDate();
   return `${m[2]}-${mon}-${String(lastDay).padStart(2, '0')}`;
+}
+
+// Pick the newest "<fund>-fact-sheet-<month>-<year>" download link.
+function latestSheetLink(links, re) {
+  const candidates = (links || []).filter(l => re.test(l));
+  let best = null;
+  for (const l of candidates) {
+    const m = l.match(/(january|february|march|april|may|june|july|august|september|october|november|december)[-_]?(20\d{2})/i);
+    if (!m) continue;
+    const key = `${m[2]}-${MONTHS[m[1].toLowerCase()]}`;
+    if (!best || key > best.key) best = { key, url: l };
+  }
+  return best ? best.url : (candidates[0] || null);
 }
 
 // Most-recent "Effective Annual Yield" figure: the first yield block lists
