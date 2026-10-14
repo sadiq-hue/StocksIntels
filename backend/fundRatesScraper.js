@@ -32,6 +32,7 @@ const COOP_FUND_MAP = {
   'bond-fund': 'Co-op Bond Fund',
   'gratuity-fund': 'Co-op Fixed Income Gratuity Fund',
 };
+const MADISON_URL = 'https://madison.co.ke/';
 
 // ── Provider definitions ─────────────────────────────────────────────────────
 const PROVIDERS = [
@@ -124,6 +125,20 @@ const PROVIDERS = [
         } catch (e) { /* skip a failing fund */ }
       }
       return { asOf, rows, sourceUrl: COOP_LIST_URL };
+    },
+  },
+  {
+    key: 'madison',
+    name: 'Madison Investment Managers',
+    source: 'Madison Group — Daily & Effective Annual Yield',
+    url: MADISON_URL,
+    scrape: async () => {
+      const text = textOf(await fetchHtml(MADISON_URL));
+      const rows = [];
+      const re = /Madison ([A-Za-z ]+?) Fund\s+Daily Yield:\s*([0-9]+(?:\.[0-9]+)?)\s?%\s+Effective Annual Yield:\s*([0-9]+(?:\.[0-9]+)?)\s?%/gi;
+      let m;
+      while ((m = re.exec(text)) !== null) rows.push({ name: `Madison ${m[1]} Fund`, yield_pct: Number(m[3]) });
+      return { asOf: new Date().toISOString().slice(0, 10), rows, sourceUrl: MADISON_URL };
     },
   },
 ];
