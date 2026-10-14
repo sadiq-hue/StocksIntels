@@ -82,6 +82,10 @@ services:
       ENSEND_SENDER_NAME: ${ENSEND_SENDER_NAME:-}
       MYSTOCKS_AFRICA_API_KEY: ${MYSTOCKS_AFRICA_API_KEY:-}
       MYSTOCKS_AFRICA_BASE_URL: ${MYSTOCKS_AFRICA_BASE_URL:-}
+      # Managed-funds rate scraping: optional egress proxy (for providers that
+      # block the datacenter IP) and refresh cadence in ms (0 disables).
+      FUND_SCRAPE_PROXY: ${FUND_SCRAPE_PROXY:-}
+      FUND_RATES_REFRESH_MS: ${FUND_RATES_REFRESH_MS:-1800000}
       # LLM (newsletter / stock-insights narratives). The old app stack got these
       # from env_file: .env; the deploy stack lists env explicitly, so without them
       # every narrative silently fell back to generic filler ("No LLM backend

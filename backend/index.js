@@ -13,6 +13,7 @@ const { generateWeeklyDigestContent, generateDailyBriefContent, generateEarnings
 const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bondsService');
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
 const specialFunds = require('./specialFundsService');
+const fundRates = require('./fundRatesScraper');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, NSE_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, refreshPerformanceStats, computeBacktestStats, getForwardTestStats,
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
@@ -6192,6 +6193,23 @@ app.post('/api/admin/special-funds/import-csv', authenticateToken, requireAdmin,
     res.json({ success: true, parsedRows: rows.length, ...summary });
   } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
 });
+
+// Refresh published fund rates from provider pages (admin trigger).
+app.post('/api/admin/special-funds/refresh-rates', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await fundRates.refreshAll();
+    res.json({ success: true, ...result });
+  } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
+});
+
+// Periodic fund-rate refresh so figures stay current (default every 30 min).
+// Disable with FUND_RATES_REFRESH_MS=0.
+const FUND_RATES_REFRESH_MS = parseInt(process.env.FUND_RATES_REFRESH_MS || '1800000', 10);
+if (FUND_RATES_REFRESH_MS > 0) {
+  setTimeout(() => { fundRates.refreshAll().catch(() => {}); }, 120000);
+  const fundRatesTimer = setInterval(() => { fundRates.refreshAll().catch(() => {}); }, FUND_RATES_REFRESH_MS);
+  if (fundRatesTimer.unref) fundRatesTimer.unref();
+}
 
 // --- FX Routes ---
 app.get('/api/fx/rate', async (req, res) => {
