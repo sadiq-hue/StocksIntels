@@ -118,7 +118,24 @@ function buildRows(provider, parsed) {
   return Object.values(byFund);
 }
 
-async function fetchHtml(url, attempts = 3) {
+// Render a JS-heavy / bot-blocked page with the headless browser that already
+// ships in the image (playwright). Used for providers where axios gets blocked
+// or the rates are injected client-side.
+async function fetchRendered(url) {
+  const { chromium } = require('playwright');
+  const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+  try {
+    const page = await browser.newPage({ userAgent: UA });
+    await page.goto(url, { timeout: 45000, waitUntil: 'networkidle' }).catch(() => {});
+    await page.waitForTimeout(3000);
+    return await page.content();
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+async function fetchHtml(url, attempts = 3, render = false) {
+  if (render) return fetchRendered(url);
   // Optional egress proxy (set FUND_SCRAPE_PROXY=http://user:pass@host:port) so
   // providers that block the datacenter IP can still be reached.
   const proxy = process.env.FUND_SCRAPE_PROXY
@@ -140,14 +157,15 @@ async function fetchHtml(url, attempts = 3) {
       if (i < attempts) await new Promise(r => setTimeout(r, 1500 * i));
     }
   }
-  throw lastErr;
+  // Last resort: render with the browser.
+  try { return await fetchRendered(url); } catch { throw lastErr; }
 }
 
 // Scrape one provider and ingest what it published. Returns a per-provider result.
 async function scrapeProvider(provider) {
   const result = { provider: provider.key, name: provider.name, ok: false, asOf: null, entries: 0, rows: 0, ingested: null, error: null };
   try {
-    const html = await fetchHtml(provider.url);
+    const html = await fetchHtml(provider.url, 3, !!provider.render);
     const parsed = provider.parse ? provider.parse(cheerio.load(html)) : parseUnitRates(textOf(html));
     const rows = buildRows(provider, parsed);
     result.asOf = parsed.asOf;
