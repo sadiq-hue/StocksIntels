@@ -65,12 +65,15 @@ const PROVIDERS = [
 
 const MONTHS = { january: '01', february: '02', march: '03', april: '04', may: '05', june: '06', july: '07', august: '08', september: '09', october: '10', november: '11', december: '12', jan: '01', feb: '02', mar: '03', apr: '04', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
 
-// Most-recent "Effective Annual Yield" figure: the last percentage in the
-// segment following the phrase (providers list periods oldest→newest).
+// Most-recent "Effective Annual Yield" figure: the first yield block lists
+// periods oldest→newest, so take the last percentage in that block.
 function extractYield(text) {
-  const i = text.toLowerCase().lastIndexOf('effective annual yield');
+  const low = text.toLowerCase();
+  const i = low.indexOf('effective annual yield');
   if (i < 0) return null;
-  const seg = text.slice(i, i + 300).split(/the effective/i)[0];
+  let seg = text.slice(i + 20, i + 400);
+  const nxt = seg.toLowerCase().indexOf('effective annual yield');
+  if (nxt >= 0) seg = seg.slice(0, nxt);
   const p = [...seg.matchAll(/([0-9]+(?:\.[0-9]+)?)\s?%/g)];
   if (!p.length) return null;
   const n = Number(p[p.length - 1][1]);
