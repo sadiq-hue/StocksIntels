@@ -136,7 +136,9 @@ const PROVIDERS = [
     scrape: async () => {
       const text = textOf(await fetchHtml(MADISON_URL));
       const rows = [];
-      const re = /Madison ([A-Za-z ]+?) Fund\s+Daily Yield:\s*([0-9]+(?:\.[0-9]+)?)\s?%\s+Effective Annual Yield:\s*([0-9]+(?:\.[0-9]+)?)\s?%/gi;
+      // Explicit fund names: the page also has nav text ("Madison Investment…")
+      // that a greedy name capture would wrongly absorb.
+      const re = /Madison (Money Market|Fixed Income|Bond|Balanced|Equity) Fund\s+Daily Yield:\s*([0-9]+(?:\.[0-9]+)?)\s?%\s+Effective Annual Yield:\s*([0-9]+(?:\.[0-9]+)?)\s?%/gi;
       let m;
       while ((m = re.exec(text)) !== null) rows.push({ name: `Madison ${m[1]} Fund`, yield_pct: Number(m[3]) });
       return { asOf: new Date().toISOString().slice(0, 10), rows, sourceUrl: MADISON_URL };
