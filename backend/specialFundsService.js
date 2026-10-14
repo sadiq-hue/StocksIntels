@@ -712,6 +712,18 @@ function parseCsv(text) {
     });
 }
 
+function parseAmount(v) {
+  const s = String(v).toUpperCase();
+  const m = s.match(/(-?\d[\d,]*\.?\d*)\s*([KMBT])?/);
+  if (!m) return null;
+  const n = Number(m[1].replace(/,/g, ''));
+  if (!Number.isFinite(n)) return null;
+  const mult = { K: 1e3, M: 1e6, B: 1e9, T: 1e12 }[m[2]] || 1;
+  return n * mult;
+}
+
+const AMOUNT_FIELDS = new Set(['aum', 'min_investment']);
+
 function cleanRecord(rec) {
   const out = {};
   for (const [k, v] of Object.entries(rec)) {
@@ -719,7 +731,10 @@ function cleanRecord(rec) {
     out[k] = v;
   }
   for (const f of NUMERIC_FIELDS) {
-    if (out[f] !== undefined) {
+    if (out[f] === undefined) continue;
+    if (AMOUNT_FIELDS.has(f)) {
+      out[f] = parseAmount(out[f]);
+    } else {
       const stripped = String(out[f]).replace(/[^0-9.\-]/g, '');
       const n = stripped === '' || stripped === '-' ? NaN : Number(stripped);
       out[f] = Number.isFinite(n) ? n : null;
