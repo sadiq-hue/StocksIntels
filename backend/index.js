@@ -6168,6 +6168,31 @@ app.post('/api/admin/special-funds/ingest', authenticateToken, requireAdmin, asy
   } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
 });
 
+// Bulk ingest an array of fund records: body { funds: [...], defaults: {...} }.
+app.post('/api/admin/special-funds/ingest-bulk', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const funds = Array.isArray(req.body?.funds) ? req.body.funds : (Array.isArray(req.body) ? req.body : null);
+    if (!funds) return res.status(400).json({ error: 'funds[] is required' });
+    const summary = await specialFunds.bulkIngest(funds, req.body?.defaults || {});
+    res.json({ success: true, ...summary });
+  } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
+});
+
+// Import a CSV: body { csv: "<text>", defaults?: {...} } (or raw text/plain body).
+app.post('/api/admin/special-funds/import-csv', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const csv = typeof req.body === 'string' ? req.body : (req.body?.csv || '');
+    if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'csv text is required' });
+    const rows = specialFunds.parseCsv(csv);
+    if (!rows.length) return res.status(400).json({ error: 'No data rows found' });
+    const defaults = (typeof req.body === 'object' ? req.body?.defaults : null) || {};
+    if (!defaults.data_source) defaults.data_source = 'Manual CSV import';
+    if (!defaults.observation_date) defaults.observation_date = new Date().toISOString().slice(0, 10);
+    const summary = await specialFunds.bulkIngest(rows, defaults);
+    res.json({ success: true, parsedRows: rows.length, ...summary });
+  } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
+});
+
 // --- FX Routes ---
 app.get('/api/fx/rate', async (req, res) => {
   try {

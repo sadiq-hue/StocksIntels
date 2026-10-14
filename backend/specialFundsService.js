@@ -656,6 +656,117 @@ async function ingestFund(id, data = {}) {
   return normalize(rows[0]);
 }
 
+// ── Bulk / CSV ingestion ─────────────────────────────────────────────────────
+// Header aliases so a provider spreadsheet maps onto our columns regardless of
+// exact wording. Keys are lower-cased header cells.
+const CSV_ALIASES = {
+  id: 'id', fund_id: 'id', slug: 'id',
+  name: 'name', fund: 'name', 'fund name': 'name',
+  manager: 'manager', 'fund manager': 'manager',
+  category: 'category', type: 'category', structure: 'structure', currency: 'currency',
+  listing: 'listing', ticker: 'listing',
+  yield: 'yield_pct', 'yield %': 'yield_pct', 'yield_pct': 'yield_pct',
+  ytd: 'ytd_return_pct', 'ytd return': 'ytd_return_pct', ytd_return_pct: 'ytd_return_pct',
+  '1y return': 'one_year_return_pct', '1-year return': 'one_year_return_pct', one_year_return_pct: 'one_year_return_pct', '1yr': 'one_year_return_pct',
+  '3y return': 'three_year_return_pct', '3-year return': 'three_year_return_pct', three_year_return_pct: 'three_year_return_pct',
+  nav: 'nav', 'nav per unit': 'nav', aum: 'aum', 'assets under management': 'aum',
+  'min investment': 'min_investment', min_investment: 'min_investment', minimum: 'min_investment',
+  'management fee': 'management_fee_pct', management_fee_pct: 'management_fee_pct', 'mgmt fee': 'management_fee_pct',
+  'expense ratio': 'expense_ratio_pct', expense_ratio_pct: 'expense_ratio_pct', ter: 'expense_ratio_pct',
+  'other fees': 'other_fees', other_fees: 'other_fees',
+  risk: 'risk_level', risk_level: 'risk_level', 'risk classification': 'risk_level',
+  risk_notes: 'risk_notes', 'risk notes': 'risk_notes', liquidity: 'liquidity',
+  asset_class: 'asset_class', 'asset class': 'asset_class',
+  benchmarks: 'benchmarks', benchmark: 'benchmarks', objective: 'objective',
+  source: 'data_source', data_source: 'data_source', source_url: 'source_url', url: 'source_url',
+  published_at: 'published_at', 'published date': 'published_at',
+  observation_date: 'observation_date', 'as of': 'observation_date', as_of: 'observation_date', date: 'observation_date',
+  sharia: 'sharia_compliant', 'sharia compliant': 'sharia_compliant', sharia_compliant: 'sharia_compliant',
+  inception_year: 'inception_year', 'inception year': 'inception_year',
+};
+
+// RFC-4180-ish CSV parser (handles quotes, embedded commas/newlines).
+function parseCsv(text) {
+  const s = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const rows = [];
+  let field = '', row = [], inQuotes = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') { if (s[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else field += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  if (!rows.length) return [];
+  const header = rows[0].map(h => String(h).trim().toLowerCase());
+  return rows.slice(1)
+    .filter(r => r.some(c => String(c).trim() !== ''))
+    .map(r => {
+      const obj = {};
+      header.forEach((h, i) => { obj[CSV_ALIASES[h] || h] = r[i] !== undefined ? String(r[i]).trim() : ''; });
+      return obj;
+    });
+}
+
+function cleanRecord(rec) {
+  const out = {};
+  for (const [k, v] of Object.entries(rec)) {
+    if (v === '' || v === undefined || v === null) continue;
+    out[k] = v;
+  }
+  for (const f of NUMERIC_FIELDS) {
+    if (out[f] !== undefined) {
+      const n = Number(String(out[f]).replace(/[%,$€£\s]/g, ''));
+      out[f] = Number.isFinite(n) ? n : null;
+    }
+  }
+  if (out.inception_year !== undefined && out.inception_year !== null) out.inception_year = Math.round(out.inception_year);
+  if (out.sharia_compliant !== undefined) out.sharia_compliant = /^(true|yes|1|y)$/i.test(String(out.sharia_compliant));
+  return out;
+}
+
+// Resolve a CSV/API row to a target fund id: exact id, then case-insensitive
+// name, else create (id if supplied, otherwise a slug of the name).
+async function resolveFundId({ id, name }) {
+  if (id) {
+    const { rows } = await pool.query('SELECT id FROM special_funds WHERE id = $1', [id]);
+    if (rows.length) return rows[0].id;
+  }
+  if (name) {
+    const { rows } = await pool.query('SELECT id FROM special_funds WHERE lower(name) = lower($1) ORDER BY id LIMIT 1', [name]);
+    if (rows.length) return rows[0].id;
+  }
+  if (id) return String(id).slice(0, 120);
+  if (name) return slugify(name);
+  return null;
+}
+
+// Ingest many funds in one call. `defaults` (e.g. { data_source, observation_date,
+// source_url }) are merged under every row so an import carries one provenance.
+async function bulkIngest(records = [], defaults = {}) {
+  const summary = { total: Array.isArray(records) ? records.length : 0, updated: 0, created: 0, skipped: 0, errors: [] };
+  for (let i = 0; i < (records || []).length; i++) {
+    try {
+      const rec = cleanRecord({ ...defaults, ...(records[i] || {}) });
+      if (!rec.id && !rec.name) { summary.skipped++; summary.errors.push({ row: i + 1, reason: 'missing id/name' }); continue; }
+      const existsBefore = !!(rec.id && (await pool.query('SELECT 1 FROM special_funds WHERE id = $1', [rec.id])).rows.length);
+      const targetId = await resolveFundId({ id: rec.id, name: rec.name });
+      if (!targetId) { summary.skipped++; summary.errors.push({ row: i + 1, reason: 'unresolved' }); continue; }
+      const { id: _omitId, ...fields } = rec;
+      await ingestFund(targetId, fields);
+      if (existsBefore) summary.updated++; else summary.created++;
+    } catch (e) {
+      summary.skipped++;
+      summary.errors.push({ row: i + 1, reason: e.message });
+    }
+  }
+  return summary;
+}
+
 function normalize(row) {
   if (!row) return null;
   const num = (v) => (v === null || v === undefined ? null : Number(v));
@@ -816,5 +927,7 @@ module.exports = {
   getSummary,
   compareFunds,
   ingestFund,
+  bulkIngest,
+  parseCsv,
   COMPARE_ROWS,
 };
