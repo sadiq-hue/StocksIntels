@@ -33,6 +33,7 @@ const COOP_FUND_MAP = {
   'gratuity-fund': 'Co-op Fixed Income Gratuity Fund',
 };
 const MADISON_URL = 'https://madison.co.ke/';
+const NDOVU_URL = 'https://ndovu.co/ke/products/money-market-funds';
 
 // ── Provider definitions ─────────────────────────────────────────────────────
 const PROVIDERS = [
@@ -139,6 +140,18 @@ const PROVIDERS = [
       let m;
       while ((m = re.exec(text)) !== null) rows.push({ name: `Madison ${m[1]} Fund`, yield_pct: Number(m[3]) });
       return { asOf: new Date().toISOString().slice(0, 10), rows, sourceUrl: MADISON_URL };
+    },
+  },
+  {
+    key: 'ndovu',
+    name: 'Ndovu',
+    source: 'Ndovu — annualized return',
+    url: NDOVU_URL,
+    scrape: async () => {
+      const text = textOf(await fetchHtml(NDOVU_URL));
+      const m = text.match(/annualized return\s*([0-9]+(?:\.[0-9]+)?)\s?%/i);
+      const rows = m ? [{ name: 'Ndovu Money Market Fund', yield_pct: Number(m[1]) }] : [];
+      return { asOf: new Date().toISOString().slice(0, 10), rows, sourceUrl: NDOVU_URL };
     },
   },
 ];
