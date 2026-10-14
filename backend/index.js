@@ -14,6 +14,7 @@ const { getBonds, getBondById, getBondSummary, getMarketAccess } = require('./bo
 const { getETFs, getETFByTicker, getETFSummary } = require('./etfsService');
 const specialFunds = require('./specialFundsService');
 const fundRates = require('./fundRatesScraper');
+const fundProfiles = require('./fundProfiles');
 const cmaFundReports = require('./cmaFundReports');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, NSE_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, refreshPerformanceStats, computeBacktestStats, getForwardTestStats,
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes } = require('./signalService');
@@ -6218,6 +6219,14 @@ app.post('/api/admin/special-funds/refresh-cma', authenticateToken, requireAdmin
   } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
 });
 
+// Refresh published profile data (terms/fees/returns) for Special Funds.
+app.post('/api/admin/special-funds/refresh-profiles', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await fundProfiles.refreshProfiles();
+    res.json({ success: true, ...result });
+  } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
+});
+
 // Periodic fund-rate refresh so figures stay current (default every 30 min).
 // Disable with FUND_RATES_REFRESH_MS=0.
 const FUND_RATES_REFRESH_MS = parseInt(process.env.FUND_RATES_REFRESH_MS || '1800000', 10);
@@ -6233,6 +6242,14 @@ if (CMA_REPORT_REFRESH_MS > 0) {
   setTimeout(() => { cmaFundReports.importLatest().catch(() => {}); }, 180000);
   const cmaTimer = setInterval(() => { cmaFundReports.importLatest().catch(() => {}); }, CMA_REPORT_REFRESH_MS);
   if (cmaTimer.unref) cmaTimer.unref();
+}
+
+// Published Special-Fund profiles (manager fact sheets; refresh weekly).
+const PROFILES_REFRESH_MS = parseInt(process.env.PROFILES_REFRESH_MS || String(7 * 24 * 3600 * 1000), 10);
+if (PROFILES_REFRESH_MS > 0) {
+  setTimeout(() => { fundProfiles.refreshProfiles().catch(() => {}); }, 150000);
+  const profilesTimer = setInterval(() => { fundProfiles.refreshProfiles().catch(() => {}); }, PROFILES_REFRESH_MS);
+  if (profilesTimer.unref) profilesTimer.unref();
 }
 
 // --- FX Routes ---
