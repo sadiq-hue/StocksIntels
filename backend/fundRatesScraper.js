@@ -14,11 +14,24 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const https = require('https');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { execFileSync } = require('child_process');
 const specialFunds = require('./specialFundsService');
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 // Some provider CDNs return oversized response headers; lift the Node default.
 const httpsAgent = new https.Agent({ maxHeaderSize: 100000000, keepAlive: true });
+
+const CIC_URL = 'https://ke.cicinsurancegroup.com/individual-solutions/investment-solutions/?tab=money-market';
+const CIC_RATE_ORDER = ['CIC Money Market Fund', 'CIC Fixed Income Fund', 'CIC Dollar Fund'];
+const COOP_LIST_URL = 'https://co-optrustinvestment.co-opbank.co.ke/products/co-op-unit-trust/';
+const COOP_FUND_MAP = {
+  'money-market-fund': 'Co-op Money Market Fund',
+  'bond-fund': 'Co-op Bond Fund',
+  'gratuity-fund': 'Co-op Fixed Income Gratuity Fund',
+};
 
 // ── Provider definitions ─────────────────────────────────────────────────────
 const PROVIDERS = [
@@ -61,9 +74,71 @@ const PROVIDERS = [
       { url: 'https://ke.britam.com/save-and-invest/personal/invest/unit-trust-funds/bond-plus-fund', fund: 'Britam Bond Plus Fund' },
     ],
   },
+  {
+    key: 'cic',
+    name: 'CIC Insurance Group',
+    source: 'CIC Investment Solutions — Current Effective Annual Rate',
+    // One page renders every fund tab; the rate blocks appear in tab order.
+    url: CIC_URL,
+    scrape: async () => {
+      const text = textOf(await fetchHtml(CIC_URL));
+      const vals = [...text.matchAll(/current effective annual rate\s*[–:—-]\s*([0-9]+(?:\.[0-9]+)?)\s?%/gi)].map(m => Number(m[1]));
+      const rows = [];
+      vals.forEach((v, i) => { if (CIC_RATE_ORDER[i] && v > 0) rows.push({ name: CIC_RATE_ORDER[i], yield_pct: v }); });
+      const asOf = monthYearToEom((text.match(/([A-Z][a-z]+)\s+(20\d{2})\s+Fact Sheet/) || [])[1]);
+      return { asOf, rows, sourceUrl: CIC_URL };
+    },
+  },
+  {
+    key: 'coop',
+    name: 'Co-op Trust Investment Services',
+    source: 'Co-op Trust monthly fund fact sheets (PDF)',
+    // Month-by-month fact sheets at a predictable URL; newest slug per fund.
+    listUrl: COOP_LIST_URL,
+    scrape: async () => {
+      const html = await fetchHtml(COOP_LIST_URL);
+      const $ = cheerio.load(html);
+      const best = {};
+      $('a[href]').each((_, a) => {
+        const h = $(a).attr('href') || '';
+        const m = h.match(/Co-op-([A-Za-z-]+)-([A-Za-z]+)-(\d{4})\.pdf$/);
+        if (!m) return;
+        const mi = MONTHS[m[2].toLowerCase()];
+        if (!mi || !COOP_FUND_MAP[m[1].toLowerCase()]) return;
+        const key = `${m[3]}-${mi}`;
+        if (!best[m[1].toLowerCase()] || key > best[m[1].toLowerCase()].key) best[m[1].toLowerCase()] = { key, url: h, mon: mi, year: m[3] };
+      });
+      const rows = [];
+      let asOf = null;
+      for (const [slug, info] of Object.entries(best)) {
+        const name = COOP_FUND_MAP[slug];
+        try {
+          const text = await fetchPdfText(info.url);
+          const p = text.match(/([0-9]+(?:\.[0-9]+)?)\s?%/);
+          if (!p || !(Number(p[1]) > 0)) continue;
+          rows.push({ name, yield_pct: Number(p[1]) });
+          const lastDay = new Date(Number(info.year), Number(info.mon), 0).getDate();
+          const d = `${info.year}-${String(info.mon).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+          if (!asOf || d > asOf) asOf = d;
+        } catch (e) { /* skip a failing fund */ }
+      }
+      return { asOf, rows, sourceUrl: COOP_LIST_URL };
+    },
+  },
 ];
 
 const MONTHS = { january: '01', february: '02', march: '03', april: '04', may: '05', june: '06', july: '07', august: '08', september: '09', october: '10', november: '11', december: '12', jan: '01', feb: '02', mar: '03', apr: '04', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' };
+
+// End-of-month ISO date for a "<MonthName> <Year>" label.
+function monthYearToEom(label) {
+  if (!label) return null;
+  const m = String(label).trim().match(/^([A-Za-z]+)\s+(20\d{2})$/);
+  if (!m) return null;
+  const mon = MONTHS[m[1].toLowerCase()];
+  if (!mon) return null;
+  const lastDay = new Date(Number(m[2]), Number(mon), 0).getDate();
+  return `${m[2]}-${mon}-${String(lastDay).padStart(2, '0')}`;
+}
 
 // Most-recent "Effective Annual Yield" figure: the first yield block lists
 // periods oldest→newest, so take the last percentage in that block.
@@ -214,9 +289,44 @@ async function scrapeYieldPages(provider) {
   return result;
 }
 
+// Fetch a provider PDF and return its text via poppler (pdftotext -layout).
+async function fetchPdfText(url) {
+  const res = await axios.get(url, { timeout: 90000, headers: { 'User-Agent': UA }, responseType: 'arraybuffer', maxRedirects: 5, httpsAgent });
+  const tmp = path.join(os.tmpdir(), `fund-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`);
+  fs.writeFileSync(tmp, Buffer.from(res.data));
+  try {
+    return execFileSync('pdftotext', ['-layout', tmp, '-'], { maxBuffer: 30 * 1024 * 1024 }).toString();
+  } finally {
+    try { fs.unlinkSync(tmp); } catch { /* ignore */ }
+  }
+}
+
+// Provider with a bespoke async scraper returning { asOf, rows, sourceUrl }.
+async function scrapeCustom(provider) {
+  const result = { provider: provider.key, name: provider.name, ok: false, asOf: null, entries: 0, rows: 0, ingested: null, error: null };
+  try {
+    const out = await provider.scrape();
+    const rows = (out.rows || []).filter(r => r && r.name && Number.isFinite(r.yield_pct));
+    result.asOf = out.asOf || new Date().toISOString().slice(0, 10);
+    result.entries = rows.length;
+    result.rows = rows.length;
+    if (rows.length) {
+      const summary = await specialFunds.bulkIngest(rows, { data_source: provider.source, source_url: out.sourceUrl || provider.url, observation_date: result.asOf });
+      result.ingested = { updated: summary.updated, created: summary.created, skipped: summary.skipped };
+    }
+    result.ok = rows.length > 0;
+    console.log(`[FundRates] ${provider.name}: ${rows.length} fund rows, asOf ${result.asOf}`);
+  } catch (e) {
+    result.error = e.message;
+    console.warn(`[FundRates] ${provider.name} failed: ${e.message}`);
+  }
+  return result;
+}
+
 // Scrape one provider and ingest what it published. Returns a per-provider result.
 async function scrapeProvider(provider) {
   if (Array.isArray(provider.pages)) return scrapeYieldPages(provider);
+  if (typeof provider.scrape === 'function') return scrapeCustom(provider);
   const result = { provider: provider.key, name: provider.name, ok: false, asOf: null, entries: 0, rows: 0, ingested: null, error: null };
   try {
     const html = await fetchHtml(provider.url);
