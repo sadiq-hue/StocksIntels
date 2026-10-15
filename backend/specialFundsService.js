@@ -861,11 +861,14 @@ async function getFund(id) {
   return normalize(rows[0] || null);
 }
 
-async function getFacets() {
+async function getFacets({ country } = {}) {
+  const params = [];
+  let cond = '';
+  if (country && country !== 'all') { params.push(country); cond = `COALESCE(country, 'Kenya') = $1 AND `; }
   const [cats, mgrs, currencies] = await Promise.all([
-    pool.query('SELECT category, COUNT(*)::int n FROM special_funds WHERE category IS NOT NULL GROUP BY category ORDER BY category'),
-    pool.query('SELECT manager, COUNT(*)::int n FROM special_funds WHERE manager IS NOT NULL GROUP BY manager ORDER BY manager'),
-    pool.query('SELECT DISTINCT currency FROM special_funds WHERE currency IS NOT NULL ORDER BY currency'),
+    pool.query(`SELECT category, COUNT(*)::int n FROM special_funds WHERE ${cond}category IS NOT NULL GROUP BY category ORDER BY category`, params),
+    pool.query(`SELECT manager, COUNT(*)::int n FROM special_funds WHERE ${cond}manager IS NOT NULL GROUP BY manager ORDER BY manager`, params),
+    pool.query(`SELECT DISTINCT currency FROM special_funds WHERE ${cond}currency IS NOT NULL ORDER BY currency`, params),
   ]);
   return {
     categories: cats.rows.map(r => ({ value: r.category, count: r.n })),

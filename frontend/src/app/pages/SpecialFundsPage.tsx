@@ -146,7 +146,7 @@ export function SpecialFundsPage() {
       try {
         const [sRes, fRes, cRes] = await Promise.all([
           apiFetch(`/special-funds/summary?country=${encodeURIComponent(market)}`),
-          apiFetch("/special-funds/facets"),
+          apiFetch(`/special-funds/facets?country=${encodeURIComponent(market)}`),
           apiFetch("/special-funds/context"),
         ]);
         if (!cancel) {
@@ -265,7 +265,7 @@ export function SpecialFundsPage() {
           {MARKETS.map(m => (
             <button
               key={m.country}
-              onClick={() => { setMarket(m.country); setSelected([]); setProfile(null); }}
+              onClick={() => { setMarket(m.country); setSelected([]); setProfile(null); setCategory("all"); setManager("all"); }}
               className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${market === m.country ? "bg-[#0D7490] text-white" : "text-muted-foreground hover:text-foreground"}`}
             >
               <span className="mr-1">{m.flag}</span>{m.label}

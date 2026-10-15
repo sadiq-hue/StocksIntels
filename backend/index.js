@@ -6068,7 +6068,7 @@ app.get('/api/special-funds/summary', authenticateToken, requireActiveSubscripti
 
 app.get('/api/special-funds/facets', authenticateToken, requireActiveSubscription, async (req, res) => {
   try {
-    res.json(await specialFunds.getFacets());
+    res.json(await specialFunds.getFacets({ country: req.query.country }));
   } catch (error) { res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
