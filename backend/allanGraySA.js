@@ -29,7 +29,9 @@ function inferCategory(name) {
 // Parse "<Allan Gray … Fund> Price at <d Mon> <price> current price …"
 function parseAllanGray(text) {
   const rows = [];
-  const re = /(Allan Gray[A-Za-z0-9 &'().+-]*? Fund) Price at (\d{1,2}) ([A-Z][a-z]{2}) ([\d ]+\.\d{2})/g;
+  // Name chars restricted to letters/space/punctuation (no digits) so the match
+  // can't run across section headers and price figures.
+  const re = /(Allan Gray[A-Za-z ()&'\/-]*? Fund) Price at (\d{1,2}) ([A-Z][a-z]{2}) ([\d ]+\.\d{2})/g;
   let m;
   while ((m = re.exec(text)) !== null) {
     const name = m[1].replace(/\s+/g, ' ').trim();
