@@ -15,7 +15,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { SectorsPage } from "./pages/SectorsPage";
 import { NotificationsPage } from "./pages/NotificationsPage";
 import { IpoPage } from "./pages/IpoPage";
-import { DerivativesPage } from "./pages/DerivativesPage";
+// import { DerivativesPage } from "./pages/DerivativesPage"; // Derivatives page disabled
 import { AdminStocks } from "./pages/AdminStocks";
 import { SignalEnginePage } from "./pages/SignalEnginePage";
 export const router = createBrowserRouter([
@@ -44,7 +44,7 @@ export const router = createBrowserRouter([
       { path: "notifications", Component: NotificationsPage },
       { path: "settings", Component: SettingsPage }, 
       { path: "ipos", Component: IpoPage },
-      { path: "derivatives", Component: DerivativesPage },
+      // { path: "derivatives", Component: DerivativesPage },
       { path: "dashboard", loader: () => redirect("/app") },
       { path: "admin/stocks", Component: AdminStocks },
       { path: "signals/engine", Component: SignalEnginePage },

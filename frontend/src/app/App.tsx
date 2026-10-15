@@ -50,7 +50,7 @@ const SecurityPage = React.lazy(() => import("./pages/SecurityPage").then(m => (
 const DisclaimerPage = React.lazy(() => import("./pages/DisclaimerPage").then(m => ({ default: m.DisclaimerPage })));
 const AffiliatesPage = React.lazy(() => import("./pages/AffiliatesPage").then(m => ({ default: m.AffiliatesPage })));
 const IpoPage = React.lazy(() => import("./pages/IpoPage").then(m => ({ default: m.IpoPage })));
-const DerivativesPage = React.lazy(() => import("./pages/DerivativesPage").then(m => ({ default: m.DerivativesPage })));
+// const DerivativesPage = React.lazy(() => import("./pages/DerivativesPage").then(m => ({ default: m.DerivativesPage }))); // Derivatives page disabled
 const SpecialFundsPage = React.lazy(() => import("./pages/SpecialFundsPage").then(m => ({ default: m.SpecialFundsPage })));
 const AdminNewsletter = React.lazy(() => import("./pages/AdminNewsletter").then(m => ({ default: m.AdminNewsletter })));
 
@@ -177,7 +177,7 @@ const router = createBrowserRouter([
       { path: "sectors", element: <SectorsPage /> },
       { path: "bonds", element: <BondsPage /> },
       { path: "ipos", element: <IpoPage /> },
-          { path: "derivatives", element: <DerivativesPage /> },
+          // { path: "derivatives", element: <DerivativesPage /> },
           { path: "managed-funds", element: <SpecialFundsPage /> },
       { path: "etfs", element: <ETFsPage /> },
       { path: "profile", element: <ProfilePage /> },

@@ -70,7 +70,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
         { path: "/app/news", icon: Newspaper, label: "News" },
         { path: "/app/bonds", icon: Landmark, label: "Bonds" },
         { path: "/app/etfs", icon: Layers, label: "ETFs" },
-        { path: "/app/derivatives", icon: GraduationCap, label: "Derivatives" },
+        // { path: "/app/derivatives", icon: GraduationCap, label: "Derivatives" },
         { path: "/app/managed-funds", icon: Coins, label: "Managed Funds" },
         { path: "/app/ipos", icon: TrendingUp, label: "IPOs" },
       ],
