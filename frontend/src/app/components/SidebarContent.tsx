@@ -29,7 +29,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
   const { user } = useAuth();
   const { beginnerMode, toggleBeginnerMode } = useBeginnerMode();
   const { list: compareList } = useCompare();
-  const [marketStatus, setMarketStatus] = useState<{ nse: { open: boolean; label: string; eventLabel: string }; global: { open: boolean; label: string; eventLabel: string } } | null>(null);
+  const [marketStatus, setMarketStatus] = useState<{ nse: { open: boolean; label: string; eventLabel: string }; ngx?: { open: boolean; label: string; eventLabel: string }; jse?: { open: boolean; label: string; eventLabel: string }; global: { open: boolean; label: string; eventLabel: string } } | null>(null);
 
   useEffect(() => {
     const fetchStatus = () => {
@@ -42,6 +42,14 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
     const interval = setInterval(fetchStatus, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // African markets = NSE (Kenya) + NGX (Nigeria) + JSE (South Africa).
+  const africanStat = marketStatus
+    ? (() => {
+        const open = [marketStatus.nse, marketStatus.ngx, marketStatus.jse].some((s) => s && s.open);
+        return { open, label: open ? "Open" : "Closed" };
+      })()
+    : null;
 
   const isActive = (path: string) => {
     if (path === "/app") return location.pathname === "/app";
@@ -150,19 +158,19 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
 
       {!collapsed && marketStatus && (
         <div className="grid grid-cols-2 gap-2 px-4 pt-4">
-          {["nse", "global"].map((m) => {
-            const s = marketStatus[m as "nse" | "global"];
-            return (
-              <div key={m} className={`flex flex-col items-center px-2 py-2 rounded-xl border ${s.open ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50" : "bg-sidebar-accent border-sidebar-border"}`}>
-                <span className={`text-[10px] font-semibold uppercase tracking-wide ${s.open ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                  {m}
-                </span>
-                <span className={`text-[11px] font-medium ${s.open ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                  {s.label}
-                </span>
-              </div>
-            );
-          })}
+          {[
+            { key: "african", name: "African", s: africanStat },
+            { key: "global", name: "Global", s: marketStatus.global },
+          ].map(({ key, name, s }) => s && (
+            <div key={key} className={`flex flex-col items-center px-2 py-2 rounded-xl border ${s.open ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50" : "bg-sidebar-accent border-sidebar-border"}`}>
+              <span className={`text-[10px] font-semibold uppercase tracking-wide ${s.open ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                {name}
+              </span>
+              <span className={`text-[11px] font-medium ${s.open ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                {s.label}
+              </span>
+            </div>
+          ))}
         </div>
       )}
 
@@ -207,18 +215,18 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
             <p className="text-muted-foreground text-[11px] mb-2 font-medium">Market Status</p>
             {marketStatus ? (
               <div className="space-y-2">
-                {(["nse", "global"] as const).map((m) => {
-                  const s = marketStatus[m];
-                  return (
-                    <div key={m} className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${s.open ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
-                      <span className="text-sidebar-foreground text-sm font-medium capitalize">{m}</span>
-                      <span className={`text-xs ml-auto ${s.open ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
-                        {s.label}
-                      </span>
-                    </div>
-                  );
-                })}
+                {[
+                  { key: "african", name: "African Markets", s: africanStat },
+                  { key: "global", name: "Global", s: marketStatus.global },
+                ].map(({ key, name, s }) => s && (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${s.open ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground'}`} />
+                    <span className="text-sidebar-foreground text-sm font-medium">{name}</span>
+                    <span className={`text-xs ml-auto ${s.open ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                      {s.label}
+                    </span>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="flex items-center gap-2">
