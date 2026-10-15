@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import {
   Landmark, Search, X, Loader2, Sparkles, Scale, TrendingUp, Lock,
-  FileText, Info, Wallet, ShieldCheck, ChevronRight, Upload,
+  FileText, Wallet, ShieldCheck, ChevronRight,
 } from "lucide-react";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
@@ -124,19 +124,6 @@ export function SpecialFundsPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiErr, setAiErr] = useState<string | null>(null);
 
-  const isAdmin = !!user && (user.role === "admin" || user.role === "super_admin");
-  const [showImport, setShowImport] = useState(false);
-  const [csvText, setCsvText] = useState("");
-  const [impSource, setImpSource] = useState("");
-  const [impDate, setImpDate] = useState(new Date().toISOString().slice(0, 10));
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ updated: number; created: number; skipped: number; parsedRows?: number; errors: { row: number; reason: string }[] } | null>(null);
-  const [importErr, setImportErr] = useState<string | null>(null);
-
-  const CSV_TEMPLATE =
-    "id,name,currency,yield_pct,one_year_return_pct,management_fee_pct,min_investment,nav,aum,observation_date\n" +
-    "sf-britam-money-market-fund,Britam Money Market Fund,KES,11.85,12.40,1.5,1000,,,\n";
-
   const isPremium = !!user && (user.role === "admin" || user.role === "super_admin" || tierRank(user.subscription_tier) >= 3 ||
     (!!user.trial_start_date && (Date.now() - new Date(user.trial_start_date).getTime()) < 7 * 24 * 3600 * 1000));
 
@@ -181,23 +168,6 @@ export function SpecialFundsPage() {
     const t = setTimeout(loadFunds, 250);
     return () => clearTimeout(t);
   }, [loadFunds]);
-
-  const runImport = useCallback(async () => {
-    if (!csvText.trim()) return;
-    setImporting(true); setImportErr(null); setImportResult(null);
-    try {
-      const res = await apiFetch("/special-funds/import-csv", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv: csvText, defaults: { data_source: impSource || undefined, observation_date: impDate || undefined } }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Import failed");
-      setImportResult({ updated: data.updated || 0, created: data.created || 0, skipped: data.skipped || 0, parsedRows: data.parsedRows, errors: data.errors || [] });
-      await loadFunds();
-    } catch (e: any) {
-      setImportErr(e?.message || "Import failed");
-    } finally { setImporting(false); }
-  }, [apiFetch, csvText, impSource, impDate, loadFunds]);
 
   const toggleSelect = (id: string) => {
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : (prev.length >= 5 ? prev : [...prev, id]));
@@ -251,11 +221,6 @@ export function SpecialFundsPage() {
             Research collective investment schemes — unit trusts, CIS, REITs, ETFs and Special Funds. Kenya first.
           </p>
         </div>
-        {isAdmin && (
-          <Button variant="outline" size="sm" className="border-border h-9" onClick={() => setShowImport(true)}>
-            <Upload className="size-4 mr-1.5" /> Import data
-          </Button>
-        )}
       </div>
 
       {/* Market selector */}
@@ -328,15 +293,6 @@ export function SpecialFundsPage() {
           )}
         </Card>
       )}
-
-      <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-        <Info className="size-4 shrink-0 mt-0.5" />
-        <span>
-          Fund directory shows verified scheme metadata (names, managers, categories, risk class). Live figures
-          (NAV, yield, returns, fees) appear once ingested from official provider/CMA disclosures — missing values
-          show as “—” rather than zero, and every record carries its source and data date.
-        </span>
-      </div>
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-border">
@@ -541,53 +497,6 @@ export function SpecialFundsPage() {
               )}
             </>
           )}
-        </div>
-      )}
-
-      {showImport && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowImport(false)}>
-          <div className="bg-card w-full max-w-2xl rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-border">
-              <div>
-                <h3 className="text-sm font-bold text-foreground">Import fund data (CSV)</h3>
-                <p className="text-[11px] text-muted-foreground">Paste rows from a provider factsheet or CMA disclosure. Funds are matched by id or name; new names are created.</p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => setShowImport(false)}><X className="size-4" /></Button>
-            </div>
-            <div className="p-4 space-y-3">
-              <div className="flex flex-wrap gap-2">
-                <Input value={impSource} onChange={e => setImpSource(e.target.value)} placeholder="Source (e.g. Britam factsheet Q3 2026)" className="h-9 flex-1 min-w-[220px]" />
-                <Input type="date" value={impDate} onChange={e => setImpDate(e.target.value)} className="h-9 w-[160px]" />
-              </div>
-              <textarea value={csvText} onChange={e => setCsvText(e.target.value)} rows={10}
-                placeholder="id,name,currency,yield_pct,one_year_return_pct,..."
-                className="w-full rounded-lg border bg-background p-3 text-xs font-mono outline-none focus:ring-2 focus:ring-[#0D7490]/20" />
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { setCsvText(CSV_TEMPLATE); setImpSource(impSource || 'Manual import'); }}>Load template</Button>
-                <span className="text-[11px] text-muted-foreground">Any of id/name + figures. Numbers accept %, currency symbols and commas.</span>
-              </div>
-              {importErr && <p className="text-xs text-red-600">{importErr}</p>}
-              {importResult && (
-                <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
-                  <div className="text-foreground font-medium">
-                    {importResult.parsedRows != null ? `${importResult.parsedRows} rows parsed · ` : ''}
-                    {importResult.updated} updated · {importResult.created} created · {importResult.skipped} skipped
-                  </div>
-                  {importResult.errors.length > 0 && (
-                    <ul className="mt-1 text-muted-foreground list-disc pl-4">
-                      {importResult.errors.slice(0, 8).map((er, i) => <li key={i}>Row {er.row}: {er.reason}</li>)}
-                    </ul>
-                  )}
-                </div>
-              )}
-              <div className="flex justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setShowImport(false)}>Close</Button>
-                <Button size="sm" className="bg-[#0D7490] hover:bg-[#0A5F7A]" disabled={importing || !csvText.trim()} onClick={runImport}>
-                  {importing ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <Upload className="size-3.5 mr-1" />} Import
-                </Button>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
