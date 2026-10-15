@@ -5,8 +5,12 @@ const path = require('path');
 
 let transporter = null;
 let useEnsend = false;
+let useResend = false;
 
-if (process.env.ENSEND_PROJECT_SECRET) {
+if (process.env.RESEND_API_KEY) {
+  useResend = true;
+  console.log('[MAILER] Using Resend API');
+} else if (process.env.ENSEND_PROJECT_SECRET) {
   useEnsend = true;
   console.log('[MAILER] Using Ensend API');
 }
@@ -191,7 +195,30 @@ function codeCardHtml(title, description, code, expiryMinutes) {
   `);
 }
 
+async function sendViaResend({ to, subject, html, text }) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) throw new Error('RESEND_API_KEY is required for Resend');
+  const from = process.env.RESEND_FROM || 'StocksIntels <noreply@stocksintels.com>';
+  const recipients = Array.isArray(to) ? to : [to];
+  try {
+    const { data } = await axios.post(
+      'https://api.resend.com/emails',
+      { from, to: recipients, subject, html, text },
+      { headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' } }
+    );
+    console.log('[MAILER] Sent via Resend, id:', data && data.id);
+    return data;
+  } catch (err) {
+    const detail = err.response && err.response.data ? JSON.stringify(err.response.data) : err.message;
+    console.error('[MAILER] Resend send failed:', err.response && err.response.status, detail);
+    throw new Error(`Resend failed: ${detail}`);
+  }
+}
+
 async function sendViaTransport({ to, subject, text, html, label }) {
+  if (useResend) {
+    return sendViaResend({ to, subject, html, text });
+  }
   if (useEnsend) {
     return sendViaEnsend({ to, subject, html, text });
   }
