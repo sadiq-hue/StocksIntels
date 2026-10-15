@@ -18,6 +18,16 @@ const HUB = 'https://stanlib.literaturehub.co.za/secure/?s=';
 const SOURCE = 'STANLIB — fund performance (monthly PDF)';
 const MONTHS = { january: '01', february: '02', march: '03', april: '04', may: '05', june: '06', july: '07', august: '08', september: '09', october: '10', november: '11', december: '12' };
 
+// Fallback fund list — used if /our-funds is WAF-blocked (it 403s under load).
+const DEFAULT_SLUGS = [
+  'stanlib-flexible-income-fund', 'stanlib-income-fund', 'stanlib-bond-fund', 'stanlib-money-market-fund',
+  'stanlib-global-property-feeder-fund', 'stanlib-multi-asset-cautious-fund', 'stanlib-absolute-plus-fund',
+  'stanlib-enhanced-multi-style-equity-fund', 'stanlib-multi-asset-growth-fund', 'stanlib-equity-fund',
+  'stanlib-property-income-fund', 'stanlib-enhanced-yield-fund', 'stanlib-extra-income-fund',
+  'stanlib-global-balanced-cautious-fund', 'stanlib-global-balanced-feeder-fund', 'stanlib-global-balanced-fund',
+  'stanlib-global-equity-feeder-fund', 'stanlib-global-equity-fund', 'stanlib-global-property-fund',
+];
+
 const zaId = (slug) => 'sf-za-stanlib-' + slug.replace(/^stanlib-/, '').slice(0, 90);
 const perfCode = (slug) => 'STANLIB_' + slug.replace(/^stanlib-/, '').split('-').map(w => w ? w[0].toUpperCase() + w.slice(1) : w).join('_') + '_Perf';
 
@@ -41,10 +51,15 @@ function pdfText(buf) {
 }
 
 async function listFundSlugs() {
-  const { data } = await axios.get(LIST_URL, { timeout: 30000, headers: { 'User-Agent': UA }, responseType: 'text' });
-  const slugs = new Set();
-  for (const m of String(data).matchAll(/\/our-funds\/([a-z0-9-]+)/gi)) slugs.add(m[1].toLowerCase());
-  return [...slugs];
+  try {
+    const { data } = await axios.get(LIST_URL, { timeout: 30000, headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml', 'Accept-Language': 'en-US,en;q=0.9' }, responseType: 'text' });
+    const slugs = new Set();
+    for (const m of String(data).matchAll(/\/our-funds\/([a-z0-9-]+)/gi)) slugs.add(m[1].toLowerCase());
+    if (slugs.size) return [...slugs];
+  } catch (e) {
+    console.warn('[STANLIB-SA] live list unavailable, using fallback:', e.message);
+  }
+  return DEFAULT_SLUGS;
 }
 
 function parsePerf(text) {
