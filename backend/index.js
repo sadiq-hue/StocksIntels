@@ -19,6 +19,7 @@ const rendererClient = require('./rendererClient');
 const fundRatesBrowser = require('./fundRatesBrowser');
 const secNigeriaFunds = require('./secNigeriaFunds');
 const allanGraySA = require('./allanGraySA');
+const stanlibSA = require('./stanlibSA');
 const cmaFundReports = require('./cmaFundReports');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, NSE_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, refreshPerformanceStats, computeBacktestStats, getForwardTestStats,
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes } = require('./signalService');
@@ -6248,6 +6249,14 @@ app.post('/api/admin/special-funds/refresh-south-africa', authenticateToken, req
   } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
 });
 
+// Import STANLIB fund performance (SA).
+app.post('/api/admin/special-funds/refresh-stanlib', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await stanlibSA.refresh();
+    res.json({ success: result.ok, ...result });
+  } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
+});
+
 // Refresh published profile data (terms/fees/returns) for Special Funds.
 app.post('/api/admin/special-funds/refresh-profiles', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -6311,8 +6320,8 @@ if (NIGERIA_FUNDS_REFRESH_MS > 0) {
 // South Africa fund prices refresh (Allan Gray; default daily).
 const SA_FUNDS_REFRESH_MS = parseInt(process.env.SA_FUNDS_REFRESH_MS || String(24 * 3600 * 1000), 10);
 if (SA_FUNDS_REFRESH_MS > 0) {
-  setTimeout(() => { allanGraySA.refresh().catch(() => {}); }, 260000);
-  const saTimer = setInterval(() => { allanGraySA.refresh().catch(() => {}); }, SA_FUNDS_REFRESH_MS);
+  setTimeout(() => { allanGraySA.refresh().catch(() => {}); stanlibSA.refresh().catch(() => {}); }, 260000);
+  const saTimer = setInterval(() => { allanGraySA.refresh().catch(() => {}); stanlibSA.refresh().catch(() => {}); }, SA_FUNDS_REFRESH_MS);
   if (saTimer.unref) saTimer.unref();
 }
 
