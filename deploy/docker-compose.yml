@@ -58,6 +58,10 @@ services:
       context: ..
       dockerfile: backend/Dockerfile
     restart: unless-stopped
+    # Secrets that must survive deploys (the workflow rewrites .env each push).
+    # This file lives only on the server and is not part of the deploy archive.
+    env_file:
+      - ../resend.env
     depends_on:
       db:
         condition: service_healthy
@@ -101,9 +105,6 @@ services:
       ENSEND_PROJECT_SECRET: ${ENSEND_PROJECT_SECRET:-}
       ENSEND_SENDER_ADDRESS: ${ENSEND_SENDER_ADDRESS:-}
       ENSEND_SENDER_NAME: ${ENSEND_SENDER_NAME:-}
-      # Resend (preferred transport when set)
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
-      RESEND_FROM: ${RESEND_FROM:-}
       MYSTOCKS_AFRICA_API_KEY: ${MYSTOCKS_AFRICA_API_KEY:-}
       MYSTOCKS_AFRICA_BASE_URL: ${MYSTOCKS_AFRICA_BASE_URL:-}
       # Managed-funds rate scraping: optional egress proxy (for providers that

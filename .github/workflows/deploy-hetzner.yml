@@ -61,7 +61,7 @@ jobs:
 
           # Rebuild and restart. Image builds remotely on the box (Dockerfile).
           # Pass --env-file so compose reads app/.env (it is NOT auto-read).
-          ssh "$USER@$HOST" "cd app && docker compose --env-file .env -f deploy/docker-compose.yml up -d --build"
+          ssh "$USER@$HOST" "cd app && touch resend.env && docker compose --env-file .env -f deploy/docker-compose.yml up -d --build"
 
       - name: Smoke test
         run: |
