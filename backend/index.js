@@ -6122,42 +6122,67 @@ app.post('/api/special-funds/:id/ai', authenticateToken, requireActiveSubscripti
     const question = String(req.body?.question || '').slice(0, 500).trim();
     if (!question) return res.status(400).json({ error: 'A question is required' });
 
+    const FIELD_LABELS = {
+      minInvestment: 'minimum investment', managementFeePct: 'management fee', expenseRatioPct: 'expense ratio',
+      otherFees: 'other charges', yieldPct: 'yield', oneYearReturnPct: '1-year return',
+      threeYearReturnPct: '3-year return', nav: 'NAV / unit price', aum: 'assets under management',
+      observationDate: 'as-of date', inceptionYear: 'inception year', riskLevel: 'risk classification',
+      liquidity: 'liquidity', objective: 'objective',
+    };
     const record = {
       name: fund.name, manager: fund.manager, category: fund.category, structure: fund.structure,
-      currency: fund.currency, riskLevel: fund.riskLevel, liquidity: fund.liquidity,
-      objective: fund.objective, minInvestment: fund.minInvestment, managementFeePct: fund.managementFeePct,
-      expenseRatioPct: fund.expenseRatioPct, yieldPct: fund.yieldPct, oneYearReturnPct: fund.oneYearReturnPct,
-      threeYearReturnPct: fund.threeYearReturnPct, nav: fund.nav, aum: fund.aum,
-      observationDate: fund.observationDate, dataSource: fund.dataSource, dataStatus: fund.dataStatus,
+      currency: fund.currency, riskLevel: fund.riskLevel, liquidity: fund.liquidity, shariaCompliant: fund.shariaCompliant,
+      objective: fund.objective, inceptionYear: fund.inceptionYear, minInvestment: fund.minInvestment,
+      managementFeePct: fund.managementFeePct, expenseRatioPct: fund.expenseRatioPct, otherFees: fund.otherFees,
+      yieldPct: fund.yieldPct, oneYearReturnPct: fund.oneYearReturnPct, threeYearReturnPct: fund.threeYearReturnPct,
+      nav: fund.nav, aum: fund.aum, benchmarks: fund.benchmarks,
+      observationDate: fund.observationDate, dataSource: fund.dataSource,
     };
-    const missing = Object.entries(record).filter(([, v]) => v === null || v === undefined).map(([k]) => k);
+    const missingKeys = Object.entries(record).filter(([k, v]) => (v === null || v === undefined) && FIELD_LABELS[k]).map(([k]) => k);
+    const missing = missingKeys.map(k => FIELD_LABELS[k]);
+
+    // Human-readable digest of the figures we DO hold (so the answer cites real data).
+    const digest = [];
+    if (fund.minInvestment != null) digest.push(`minimum investment ${fund.minInvestment} ${fund.currency || ''}`.trim());
+    if (fund.managementFeePct != null) digest.push(`management fee ${fund.managementFeePct}% p.a.`);
+    if (fund.expenseRatioPct != null) digest.push(`expense ratio ${fund.expenseRatioPct}%`);
+    if (fund.otherFees) digest.push(`other charges: ${fund.otherFees}`);
+    if (fund.yieldPct != null) digest.push(`yield ${fund.yieldPct}%`);
+    if (fund.oneYearReturnPct != null) digest.push(`1-year return ${fund.oneYearReturnPct}%`);
+    if (fund.threeYearReturnPct != null) digest.push(`3-year return ${fund.threeYearReturnPct}%`);
+    if (fund.nav != null) digest.push(`NAV / unit price ${fund.nav}`);
+    if (fund.aum != null) digest.push(`assets under management ${fund.aum}`);
+    if (fund.inceptionYear != null) digest.push(`inception year ${fund.inceptionYear}`);
+
     let answer = null;
     try {
       const { generate } = require('./llmService');
-      const prompt = `You are a fund research assistant for StocksIntels (African markets). Answer the user's question using ONLY the fund record below and general, non-numeric explanation. Rules:
-- Cite which fields you used (e.g. "per the published 1-year return field").
-- If the record lacks a figure, say it is not available — do NOT estimate, infer or invent any number.
-- Never present past performance as a guarantee of future results.
-- Keep it to 3-5 sentences, plain English, no markdown.
+      const prompt = `You are the fund research assistant for StocksIntels (African markets). You are answering about exactly ONE fund and must ONLY ever discuss that fund:
+FUND NAME: ${fund.name}
+FUND MANAGER: ${fund.manager || 'not recorded'}
+FUND CATEGORY: ${fund.category || 'not recorded'}
+
+Answer the user's question directly and first, in plain English (3-5 sentences, no markdown). Hard rules:
+- Only discuss ${fund.name}. Never name or describe any other fund or company as the subject.
+- Use ONLY the fund record JSON below. Cite the figures you use in plain language (e.g. "the published 1-year return").
+- If the record does not contain the figure the user asks about, say plainly that it has not been published yet for this fund (for example: "The minimum investment for ${fund.name} has not been published in our records yet."). Never estimate, infer, round or invent any number.
+- Never use the word "metadata" and never list internal field names.
+- Never present past or current performance as a guarantee of future results.
 
 FUND RECORD (JSON):
 ${JSON.stringify(record, null, 1)}
 
 USER QUESTION: ${question}`;
-      answer = await generate(prompt, { maxTokens: 400, temperature: 0.3 });
+      answer = await generate(prompt, { maxTokens: 420, temperature: 0.2 });
     } catch (e) { /* fall through to a deterministic, record-grounded fallback */ }
 
-    if (!answer) {
+    if (!answer || !String(answer).trim()) {
       const bits = [];
-      bits.push(`${fund.name} is a ${fund.category} fund managed by ${fund.manager} (${fund.currency}).`);
-      if (fund.riskLevel) bits.push(`Risk classification: ${fund.riskLevel}.`);
+      bits.push(`${fund.name} is a ${fund.category || 'collective investment'} fund managed by ${fund.manager || 'its manager'}${fund.currency ? ` (${fund.currency})` : ''}.`);
+      if (fund.riskLevel) bits.push(`Its risk classification is ${fund.riskLevel}.`);
       if (fund.objective) bits.push(fund.objective);
-      if (fund.yieldPct != null || fund.oneYearReturnPct != null) {
-        bits.push(`Published figures: ${fund.yieldPct != null ? `yield ${fund.yieldPct}%` : ''}${fund.oneYearReturnPct != null ? `${fund.yieldPct != null ? ', ' : ''}1-yr return ${fund.oneYearReturnPct}%` : ''}.`);
-      } else {
-        bits.push('No performance figures have been published for this fund yet, so none can be quoted.');
-      }
-      if (missing.length) bits.push(`Missing fields: ${missing.join(', ')}.`);
+      if (digest.length) bits.push(`Published figures: ${digest.join('; ')}.`);
+      else bits.push('No fee or performance figures have been published for this fund yet.');
       answer = bits.join(' ');
     }
 

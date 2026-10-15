@@ -490,7 +490,7 @@ export function SpecialFundsPage() {
                 <Card className="p-4 space-y-3">
                   <p className="text-sm leading-relaxed text-foreground whitespace-pre-line">{aiAns.answer}</p>
                   {aiAns.missing.length > 0 && (
-                    <div className="text-[11px] text-muted-foreground border-t border-border pt-2">Missing fields: {aiAns.missing.join(", ")}</div>
+                    <div className="text-[11px] text-muted-foreground border-t border-border pt-2">Not yet published for this fund: {aiAns.missing.join(", ")}.</div>
                   )}
                   <div className="text-[11px] text-amber-700 border-t border-border pt-2">{aiAns.disclaimer}</div>
                 </Card>
