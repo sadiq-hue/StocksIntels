@@ -12,6 +12,12 @@ import {
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 const TIER_RANK: Record<string, number> = { free: 0, core: 1, pro: 2, premium: 3, institutional: 4 };
+
+const MARKETS: { country: string; label: string; flag: string }[] = [
+  { country: "Kenya", label: "Kenya", flag: "🇰🇪" },
+  { country: "South Africa", label: "South Africa", flag: "🇿🇦" },
+  { country: "Nigeria", label: "Nigeria", flag: "🇳🇬" },
+];
 const tierRank = (t?: string) => TIER_RANK[String(t || "free").toLowerCase()] ?? 0;
 
 interface Fund {
@@ -98,6 +104,7 @@ export function SpecialFundsPage() {
   const [tab, setTab] = useState<"directory" | "compare" | "ai">("directory");
 
   const [search, setSearch] = useState("");
+  const [market, setMarket] = useState("Kenya");
   const [category, setCategory] = useState("all");
   const [manager, setManager] = useState("all");
   const [risk, setRisk] = useState("all");
@@ -137,7 +144,11 @@ export function SpecialFundsPage() {
     let cancel = false;
     (async () => {
       try {
-        const [sRes, fRes, cRes] = await Promise.all([apiFetch("/special-funds/summary"), apiFetch("/special-funds/facets"), apiFetch("/special-funds/context")]);
+        const [sRes, fRes, cRes] = await Promise.all([
+          apiFetch(`/special-funds/summary?country=${encodeURIComponent(market)}`),
+          apiFetch("/special-funds/facets"),
+          apiFetch("/special-funds/context"),
+        ]);
         if (!cancel) {
           if (sRes.ok) setSummary(await sRes.json());
           if (fRes.ok) setFacets(await fRes.json());
@@ -146,12 +157,12 @@ export function SpecialFundsPage() {
       } catch { /* ignore */ }
     })();
     return () => { cancel = true; };
-  }, [apiFetch]);
+  }, [apiFetch, market]);
 
   const loadFunds = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const params = new URLSearchParams({ sort });
+      const params = new URLSearchParams({ sort, country: market });
       if (search) params.set("search", search);
       if (category !== "all") params.set("category", category);
       if (manager !== "all") params.set("manager", manager);
@@ -164,7 +175,7 @@ export function SpecialFundsPage() {
     } catch (e: any) {
       setError(e?.message || "Failed to load funds");
     } finally { setLoading(false); }
-  }, [apiFetch, search, category, manager, risk, sort, sharia]);
+  }, [apiFetch, search, category, manager, risk, sort, sharia, market]);
 
   useEffect(() => {
     const t = setTimeout(loadFunds, 250);
@@ -247,6 +258,22 @@ export function SpecialFundsPage() {
         )}
       </div>
 
+      {/* Market selector */}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Market</span>
+        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+          {MARKETS.map(m => (
+            <button
+              key={m.country}
+              onClick={() => { setMarket(m.country); setSelected([]); setProfile(null); }}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${market === m.country ? "bg-[#0D7490] text-white" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <span className="mr-1">{m.flag}</span>{m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card className="p-3"><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Funds tracked</div><div className="text-xl font-bold text-foreground">{summary?.totalFunds ?? "—"}</div></Card>
@@ -256,7 +283,7 @@ export function SpecialFundsPage() {
         <Card className="p-3"><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Latest data</div><div className="text-sm font-bold text-foreground">{summary?.latestDataDate ? dateStr(summary.latestDataDate) : "—"}</div><div className="text-[10px] text-muted-foreground">{summary?.verifiedFunds ?? 0} verified</div></Card>
       </div>
 
-      {context && context.period && context.schemes.length > 0 && (
+      {market === "Kenya" && context && context.period && context.schemes.length > 0 && (
         <Card className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2">
@@ -392,7 +419,7 @@ export function SpecialFundsPage() {
                   ) : error ? (
                     <tr><td colSpan={10} className="text-center py-10 text-red-600">{error}</td></tr>
                   ) : funds.length === 0 ? (
-                    <tr><td colSpan={10} className="text-center py-10 text-muted-foreground">No funds match your filters.</td></tr>
+                    <tr><td colSpan={10} className="text-center py-10 text-muted-foreground">{market === "Kenya" ? "No funds match your filters." : `No ${market} funds ingested yet — the directory currently covers Kenya.`}</td></tr>
                   ) : funds.map(f => (
                     <tr key={f.id} className="border-b border-border hover:bg-accent/60 cursor-pointer" onClick={() => setProfile(f)}>
                       <td className="py-2 px-2" onClick={e => e.stopPropagation()}>

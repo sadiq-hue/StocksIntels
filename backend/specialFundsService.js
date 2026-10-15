@@ -825,10 +825,11 @@ function normalize(row) {
   };
 }
 
-async function listFunds({ search, category, manager, currency, riskLevel, sharia, minInvestmentMax, sort = 'name', limit = 200 } = {}) {
+async function listFunds({ search, category, manager, currency, riskLevel, sharia, country, minInvestmentMax, sort = 'name', limit = 200 } = {}) {
   const where = [];
   const params = [];
   const p = (v) => { params.push(v); return `$${params.length}`; };
+  if (country && country !== 'all') where.push(`COALESCE(country, 'Kenya') = ${p(country)}`);
   if (search) {
     const like = p(`%${search}%`);
     where.push(`(name ILIKE ${like} OR manager ILIKE ${like} OR category ILIKE ${like})`);
@@ -873,7 +874,12 @@ async function getFacets() {
   };
 }
 
-async function getSummary() {
+const MARKET_CURRENCY = { Kenya: 'KES', 'South Africa': 'ZAR', Nigeria: 'NGN' };
+
+async function getSummary({ country } = {}) {
+  const params = [];
+  let where = '';
+  if (country && country !== 'all') { params.push(country); where = `WHERE COALESCE(country, 'Kenya') = $1`; }
   const { rows } = await pool.query(`
     SELECT
       COUNT(*)::int total,
@@ -883,8 +889,9 @@ async function getSummary() {
       COUNT(*) FILTER (WHERE data_status = 'verified')::int verified,
       COUNT(*) FILTER (WHERE yield_pct IS NOT NULL)::int AS with_yield,
       MAX(COALESCE(observation_date, ingested_at)) AS latest_date
-    FROM special_funds`);
+    FROM special_funds ${where}`, params);
   const r = rows[0] || {};
+  const market = (country && country !== 'all') ? country : COUNTRY;
   return {
     totalFunds: r.total || 0,
     categories: r.categories || 0,
@@ -893,8 +900,8 @@ async function getSummary() {
     verifiedFunds: r.verified || 0,
     fundsWithYield: r.with_yield || 0,
     latestDataDate: r.latest_date || null,
-    country: COUNTRY,
-    primaryCurrency: CURRENCY,
+    country: market,
+    primaryCurrency: MARKET_CURRENCY[market] || CURRENCY,
   };
 }
 

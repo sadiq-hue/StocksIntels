@@ -6059,7 +6059,7 @@ function requireFundTier(min) {
 
 app.get('/api/special-funds/summary', authenticateToken, requireActiveSubscription, async (req, res) => {
   try {
-    res.json(await specialFunds.getSummary());
+    res.json(await specialFunds.getSummary({ country: req.query.country }));
   } catch (error) { res.status(500).json({ error: 'An unexpected error occurred' }); }
 });
 
@@ -6093,6 +6093,7 @@ app.get('/api/special-funds', authenticateToken, requireActiveSubscription, asyn
       currency: req.query.currency,
       riskLevel: req.query.riskLevel || req.query.risk,
       sharia: req.query.sharia,
+      country: req.query.country,
       minInvestmentMax: req.query.minInvestmentMax,
       sort: req.query.sort,
       limit: req.query.limit,
