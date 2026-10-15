@@ -69,7 +69,7 @@ function TrialBanner() {
 }
 
 export function Header() {
-  const [marketStatus, setMarketStatus] = useState<{ nse: { open: boolean; label: string; closeTime: string; eventLabel: string }; global: { open: boolean; label: string; closeTime: string; eventLabel: string } } | null>(null);
+  const [marketStatus, setMarketStatus] = useState<{ nse: { open: boolean; label: string; closeTime: string; eventLabel: string }; ngx?: { open: boolean; label: string; closeTime: string; eventLabel: string }; jse?: { open: boolean; label: string; closeTime: string; eventLabel: string }; global: { open: boolean; label: string; closeTime: string; eventLabel: string } } | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
@@ -108,7 +108,7 @@ export function Header() {
   );
 }
 
-function ProfileDropdown({ marketStatus }: { marketStatus: { nse: { open: boolean; label: string; closeTime: string; eventLabel: string }; global: { open: boolean; label: string; closeTime: string; eventLabel: string } } | null }) {
+function ProfileDropdown({ marketStatus }: { marketStatus: { nse: { open: boolean; label: string; closeTime: string; eventLabel: string }; ngx?: { open: boolean; label: string; closeTime: string; eventLabel: string }; jse?: { open: boolean; label: string; closeTime: string; eventLabel: string }; global: { open: boolean; label: string; closeTime: string; eventLabel: string } } | null }) {
   const { user, logout } = useAuth();
   const { notifications, unread, markRead, markAllRead } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
@@ -144,7 +144,7 @@ function ProfileDropdown({ marketStatus }: { marketStatus: { nse: { open: boolea
 
       <div className="flex items-center gap-2">
         <ThemeToggle />
-        {(marketStatus?.nse.open || marketStatus?.global?.open) ? (
+        {[marketStatus?.nse, marketStatus?.ngx, marketStatus?.jse, marketStatus?.global].some((s) => s?.open) ? (
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg border border-green-200">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
