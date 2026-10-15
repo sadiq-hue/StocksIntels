@@ -17,6 +17,7 @@ const fundRates = require('./fundRatesScraper');
 const fundProfiles = require('./fundProfiles');
 const rendererClient = require('./rendererClient');
 const fundRatesBrowser = require('./fundRatesBrowser');
+const secNigeriaFunds = require('./secNigeriaFunds');
 const cmaFundReports = require('./cmaFundReports');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, NSE_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, refreshPerformanceStats, computeBacktestStats, getForwardTestStats,
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes } = require('./signalService');
@@ -6230,6 +6231,14 @@ app.post('/api/admin/special-funds/refresh-cma', authenticateToken, requireAdmin
   } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
 });
 
+// Import the latest SEC Nigeria weekly CIS valuation (funds, NAV, unit price, yield).
+app.post('/api/admin/special-funds/refresh-nigeria', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await secNigeriaFunds.importLatest();
+    res.json({ success: result.ok, ...result });
+  } catch (error) { res.status(500).json({ error: error.message || 'An unexpected error occurred' }); }
+});
+
 // Refresh published profile data (terms/fees/returns) for Special Funds.
 app.post('/api/admin/special-funds/refresh-profiles', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -6280,6 +6289,14 @@ if (PROFILES_REFRESH_MS > 0) {
   setTimeout(() => { fundProfiles.refreshProfiles().catch(() => {}); }, 150000);
   const profilesTimer = setInterval(() => { fundProfiles.refreshProfiles().catch(() => {}); }, PROFILES_REFRESH_MS);
   if (profilesTimer.unref) profilesTimer.unref();
+}
+
+// Nigeria SEC weekly CIS valuation refresh (default weekly).
+const NIGERIA_FUNDS_REFRESH_MS = parseInt(process.env.NIGERIA_FUNDS_REFRESH_MS || String(7 * 24 * 3600 * 1000), 10);
+if (NIGERIA_FUNDS_REFRESH_MS > 0) {
+  setTimeout(() => { secNigeriaFunds.importLatest().catch(() => {}); }, 240000);
+  const nigeriaTimer = setInterval(() => { secNigeriaFunds.importLatest().catch(() => {}); }, NIGERIA_FUNDS_REFRESH_MS);
+  if (nigeriaTimer.unref) nigeriaTimer.unref();
 }
 
 // --- FX Routes ---
