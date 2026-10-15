@@ -111,6 +111,8 @@ services:
       # Isolated headless-browser renderer for JS-only provider pages.
       RENDERER_URL: ${RENDERER_URL:-http://renderer:3000}
       FUND_RATES_RENDER_MS: ${FUND_RATES_RENDER_MS:-21600000}
+      NIGERIA_FUNDS_REFRESH_MS: ${NIGERIA_FUNDS_REFRESH_MS:-604800000}
+      SA_FUNDS_REFRESH_MS: ${SA_FUNDS_REFRESH_MS:-86400000}
       # LLM (newsletter / stock-insights narratives). The old app stack got these
       # from env_file: .env; the deploy stack lists env explicitly, so without them
       # every narrative silently fell back to generic filler ("No LLM backend
