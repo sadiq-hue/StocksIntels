@@ -2850,6 +2850,11 @@ app.post('/api/auth/login-request-otp', verifyTurnstile, async (req, res) => {
       await logAdminAction(user.id, email, 'login_failed', ip, ua, { reason: 'wrong_password', remaining: limit.remaining - 1 }, false);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+    const recentOtp = await pool.query(
+      "SELECT 1 FROM otp_codes WHERE email = $1 AND type = 'login_password' AND expires_at > NOW() AND created_at > NOW() - INTERVAL '60 seconds' LIMIT 1",
+      [email]
+    );
+    if (recentOtp.rows.length) return res.json({ message: 'A login code was just sent. Please check your inbox and wait a minute before requesting another.', expiresIn: 600, cooldown: true });
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'login_password']);
@@ -3000,6 +3005,12 @@ app.post('/api/auth/forgot-password', verifyTurnstile, async (req, res) => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Valid email required' });
     const exists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
     if (exists.rows.length === 0) return res.status(404).json({ error: 'No account with this email' });
+    // Cooldown: don't fire another reset code within 60s (prevents bursts that get the sender blocked).
+    const recentReset = await pool.query(
+      "SELECT 1 FROM otp_codes WHERE email = $1 AND type = 'password_reset' AND expires_at > NOW() AND created_at > NOW() - INTERVAL '60 seconds' LIMIT 1",
+      [email]
+    );
+    if (recentReset.rows.length) return res.json({ message: 'A reset code was just sent. Please check your inbox and wait a minute before requesting another.', expiresIn: 900, cooldown: true });
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
     await pool.query('DELETE FROM otp_codes WHERE email = $1 AND type = $2', [email, 'password_reset']);
