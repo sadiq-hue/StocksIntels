@@ -15,7 +15,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../components/ui/dialog";
 import { PieChart as RePieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { useAuth } from "../auth/AuthContext";
-import { usePortfolioData } from "../contexts/PortfolioDataContext";
+import { usePortfolioData, AFRICAN_MARKETS } from "../contexts/PortfolioDataContext";
 import { usePaperTrading, type PaperPosition, type PaperTrade } from "../contexts/PaperTradingContext";
 import { CURRENCIES, toDisplayCurrency, formatCurrencyValue, formatCompactCurrency, PORTFOLIO_CURRENCY_KEY, currencyPrefix } from "../utils/currency";
 
@@ -126,7 +126,7 @@ const SECTORS = ["Technology", "Financial", "Telecom", "Banking", "Manufacturing
 export function PortfolioPage() {
   const { user, apiFetch } = useAuth();
   const navigate = useNavigate();
-  const [marketFilter, setMarketFilter] = useState<"All" | "NSE" | "Global">("All");
+  const [marketFilter, setMarketFilter] = useState<"All" | "African" | "Global">("All");
   const [showConnect, setShowConnect] = useState(false);
   const [showAddHolding, setShowAddHolding] = useState(false);
   const [showEditHolding, setShowEditHolding] = useState<Holding | null>(null);
@@ -827,7 +827,11 @@ export function PortfolioPage() {
     });
   }, [holdings, brokerNameMap]);
 
-  const filteredHoldings = (marketFilter === "All" ? mergedHoldings : mergedHoldings.filter(h => h.market === marketFilter)) as (Holding & { _brokerName?: string })[];
+  const filteredHoldings = (marketFilter === "All"
+    ? mergedHoldings
+    : marketFilter === "African"
+      ? mergedHoldings.filter(h => AFRICAN_MARKETS.has(h.market))
+      : mergedHoldings.filter(h => !AFRICAN_MARKETS.has(h.market))) as (Holding & { _brokerName?: string })[];
 
   // brokerTotals and enhancedTotals come from context (shared with dashboard)
 
@@ -845,7 +849,7 @@ export function PortfolioPage() {
       <div className="flex flex-col gap-4">
         <div>
           <h2 className="text-foreground text-xl md:text-2xl font-semibold">Portfolio Intelligence</h2>
-          <p className="text-muted-foreground text-sm md:text-base">{paperMode ? "Simulate trades with virtual cash" : "Track NSE & global investments, AI insights, and broker integrations"}</p>
+          <p className="text-muted-foreground text-sm md:text-base">{paperMode ? "Simulate trades with virtual cash" : "Track African & global investments, AI insights, and broker integrations"}</p>
         </div>
         <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:items-center sm:w-auto">
           <div className="flex items-center rounded-lg border border-border p-0.5 bg-muted col-span-2 sm:col-span-1 sm:flex-none">
@@ -908,7 +912,7 @@ export function PortfolioPage() {
               {["NSE", "Global"].map(m => (
                 <button key={m} onClick={() => setPaperOrder({ ...paperOrder, market: m as "NSE" | "Global" })}
                   className={`px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all ${paperOrder.market === m ? "bg-[#0D7490] text-white shadow-sm" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
-                  {m === "NSE" ? "NSE Stocks" : "Global Stocks"}
+                  {m === "NSE" ? "African Stocks" : "Global Stocks"}
                 </button>
               ))}
             </div>
@@ -959,7 +963,7 @@ export function PortfolioPage() {
               {/* Dashboard Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card className="bg-card border-border p-4">
-                  <div className="text-muted-foreground text-xs mb-1">NSE Balance</div>
+                  <div className="text-muted-foreground text-xs mb-1">African Balance</div>
                   <div className="text-foreground text-xl font-bold">{dcFmt(paperAccount.cashBalance)}</div>
                   {dc !== "KES" && <div className="text-muted-foreground text-[10px] mt-0.5">KES {paperAccount.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
                   <div className="text-muted-foreground text-xs mt-1 flex items-center gap-1">Initial: {dcFmt(paperAccount.initialCapital)} <button onClick={() => setShowPaperReset(true)} className="text-[#0D7490] hover:underline font-medium ml-1">Change</button></div>
@@ -973,7 +977,7 @@ export function PortfolioPage() {
                 <Card className="bg-card border-border p-4">
                   <div className="text-muted-foreground text-xs mb-1">Portfolio Value</div>
                   <div className="text-foreground text-xl font-bold">{dcFmt(paperAccount.portfolioValue)}</div>
-                  <div className="text-muted-foreground text-xs mt-1">NSE + Global in {dc}</div>
+                  <div className="text-muted-foreground text-xs mt-1">African + Global in {dc}</div>
                 </Card>
                 <Card className="bg-card border-border p-4">
                   <div className="text-muted-foreground text-xs mb-1">Total Return</div>
@@ -1649,10 +1653,10 @@ export function PortfolioPage() {
       {/* Market Filter + Add */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {["All", "NSE", "Global"].map(m => (
+          {["All", "African", "Global"].map(m => (
             <button key={m} onClick={() => setMarketFilter(m as any)}
               className={`px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium transition-all ${marketFilter === m ? "bg-[#0D7490] text-white shadow-sm" : "bg-muted text-muted-foreground hover:bg-accent"}`}>
-              {m === "All" ? "All Markets" : m === "NSE" ? "NSE Stocks" : "Global Stocks"}
+              {m === "All" ? "All Markets" : m === "African" ? "African Stocks" : "Global Stocks"}
             </button>
           ))}
         </div>
