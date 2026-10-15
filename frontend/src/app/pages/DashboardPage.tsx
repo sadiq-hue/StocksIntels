@@ -1311,7 +1311,8 @@ export function DashboardPage() {
         */}
       </div>
 
-      {/* Holdings & Allocation */}
+      {/* Holdings & Allocation — hidden until the user actually has holdings */}
+      {topHoldings.length > 0 && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="border shadow-sm p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
@@ -1407,6 +1408,7 @@ export function DashboardPage() {
           </div>
         </Card>
       </div>
+      )}
 
       {/* News & Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
