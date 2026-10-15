@@ -29,7 +29,18 @@ const DEFAULT_SLUGS = [
 ];
 
 const zaId = (slug) => 'sf-za-stanlib-' + slug.replace(/^stanlib-/, '').slice(0, 90);
-const perfCode = (slug) => 'STANLIB_' + slug.replace(/^stanlib-/, '').split('-').map(w => w ? w[0].toUpperCase() + w.slice(1) : w).join('_') + '_Perf';
+const derivedCode = (slug) => 'STANLIB_' + slug.replace(/^stanlib-/, '').split('-').map(w => w ? w[0].toUpperCase() + w.slice(1) : w).join('_') + '_Perf';
+
+// The exact Performance code is on each fund page (it varies, e.g. "Multi-Asset"
+// keeps its hyphen). Fall back to the derived code.
+async function perfCode(slug) {
+  try {
+    const { data } = await axios.get(`https://www.stanlib.com/our-funds/${slug}`, { timeout: 20000, headers: { 'User-Agent': UA, Accept: 'text/html' }, responseType: 'text' });
+    const m = String(data).match(/secure\/\?s=([^"'&]+_Perf)\b/i);
+    if (m) return decodeURIComponent(m[1]);
+  } catch { /* fall through */ }
+  return derivedCode(slug);
+}
 
 function inferCategory(name) {
   const n = name.toLowerCase();
@@ -85,7 +96,8 @@ async function refresh() {
     const slugs = await listFundSlugs();
     const rows = [];
     for (const slug of slugs) {
-      const url = HUB + perfCode(slug);
+      const code = await perfCode(slug);
+      const url = HUB + code;
       try {
         const { data, headers } = await axios.get(url, { timeout: 60000, headers: { 'User-Agent': UA }, responseType: 'arraybuffer', maxRedirects: 5, validateStatus: () => true });
         if (!/pdf/i.test(headers['content-type'] || '')) { result.skipped.push(slug); continue; }
@@ -121,4 +133,4 @@ async function refresh() {
   return result;
 }
 
-module.exports = { refresh, perfCode, parsePerf, inferCategory, listFundSlugs };
+module.exports = { refresh, perfCode, derivedCode, parsePerf, inferCategory, listFundSlugs };
