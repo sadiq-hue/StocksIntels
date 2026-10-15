@@ -51,7 +51,7 @@ function serialize(fn) {
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.post('/render', async (req, res) => {
-  const { url, waitUntil = 'networkidle', waitFor = 0, timeout = 30000, selector, raw = false, html = false } = req.body || {};
+  const { url, waitUntil = 'networkidle', waitFor = 0, timeout = 30000, selector, raw = false, html = false, capture = false } = req.body || {};
   if (!/^https?:\/\//i.test(String(url || ''))) return res.status(400).json({ ok: false, error: 'valid http(s) url required' });
   const started = Date.now();
   try {
@@ -60,6 +60,22 @@ app.post('/render', async (req, res) => {
       const context = await browser.newContext({ userAgent: UA, viewport: { width: 1366, height: 900 } });
       try {
         const page = await context.newPage();
+        // Optionally capture XHR/fetch network calls (to discover data APIs).
+        const network = [];
+        if (capture) {
+          page.on('response', async (resp) => {
+            try {
+              const rt = resp.request().resourceType();
+              const ct = resp.headers()['content-type'] || '';
+              if (rt !== 'xhr' && rt !== 'fetch' && !/json/i.test(ct)) return;
+              const entry = { url: resp.url(), status: resp.status(), ct, type: rt };
+              if (/json/i.test(ct) && network.length < 80) {
+                try { entry.body = String(await resp.text()).slice(0, 6000); } catch { /* ignore */ }
+              }
+              network.push(entry);
+            } catch { /* ignore */ }
+          });
+        }
         // Skip heavy resources — we only need text.
         await page.route('**/*', route => {
           const t = route.request().resourceType();
@@ -87,6 +103,7 @@ app.post('/render', async (req, res) => {
           const h = await page.evaluate(() => document.documentElement.outerHTML).catch(() => '');
           out.html = String(h || '').slice(0, 400000);
         }
+        if (capture) out.network = network;
         return out;
       } finally {
         await context.close().catch(() => {});

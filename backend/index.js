@@ -6262,8 +6262,8 @@ app.post('/api/admin/special-funds/render', authenticateToken, requireAdmin, asy
   try {
     const url = String(req.body?.url || '').slice(0, 500);
     if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'valid url required' });
-    const result = await rendererClient.render(url, { timeout: Math.min(Number(req.body?.timeout) || 30000, 60000), waitFor: Math.min(Number(req.body?.waitFor) || 0, 15000), selector: req.body?.selector, raw: !!req.body?.raw, html: !!req.body?.html });
-    res.json({ success: true, status: result.status, title: result.title, ms: result.ms, text: String(result.text || '').slice(0, 20000), rawText: req.body?.raw ? String(result.rawText || '').slice(0, 20000) : undefined, html: req.body?.html ? String(result.html || '').slice(0, 60000) : undefined });
+    const result = await rendererClient.render(url, { timeout: Math.min(Number(req.body?.timeout) || 30000, 60000), waitFor: Math.min(Number(req.body?.waitFor) || 0, 15000), selector: req.body?.selector, raw: !!req.body?.raw, html: !!req.body?.html, capture: !!req.body?.capture });
+    res.json({ success: true, status: result.status, title: result.title, ms: result.ms, text: String(result.text || '').slice(0, 20000), rawText: req.body?.raw ? String(result.rawText || '').slice(0, 20000) : undefined, html: req.body?.html ? String(result.html || '').slice(0, 60000) : undefined, network: req.body?.capture ? result.network : undefined });
   } catch (error) { res.status(500).json({ error: error.message || 'render failed' }); }
 });
 
