@@ -51,7 +51,7 @@ function serialize(fn) {
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.post('/render', async (req, res) => {
-  const { url, waitUntil = 'networkidle', waitFor = 0, timeout = 30000, selector, raw = false } = req.body || {};
+  const { url, waitUntil = 'networkidle', waitFor = 0, timeout = 30000, selector, raw = false, html = false } = req.body || {};
   if (!/^https?:\/\//i.test(String(url || ''))) return res.status(400).json({ ok: false, error: 'valid http(s) url required' });
   const started = Date.now();
   try {
@@ -82,6 +82,10 @@ app.post('/render', async (req, res) => {
         if (raw) {
           const rt = await page.evaluate(() => (document.body ? document.body.textContent : '')).catch(() => '');
           out.rawText = String(rt || '').replace(/[ \t]+/g, ' ').replace(/\n{2,}/g, '\n').trim();
+        }
+        if (html) {
+          const h = await page.evaluate(() => document.documentElement.outerHTML).catch(() => '');
+          out.html = String(h || '').slice(0, 400000);
         }
         return out;
       } finally {
