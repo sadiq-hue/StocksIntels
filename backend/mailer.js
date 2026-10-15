@@ -213,7 +213,7 @@ async function sendResetCode(email, code, expiryMinutes = 15) {
   return sendViaTransport({ to: email, subject, html, label: 'Reset code' });
 }
 
-async function sendOtpEmail(email, code, expiryMinutes) {
+async function sendOtpEmail(email, code, expiryMinutes = 10) {
   const subject = 'Your StocksIntels Login Code';
   const html = codeCardHtml('Login Verification', 'Use the code below to complete your login. This code is valid for a limited time.', code, expiryMinutes);
   return sendViaTransport({ to: email, subject, html, label: 'OTP' });
