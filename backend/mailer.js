@@ -207,7 +207,7 @@ async function sendViaTransport({ to, subject, text, html, label }) {
   return result;
 }
 
-async function sendResetCode(email, code, expiryMinutes) {
+async function sendResetCode(email, code, expiryMinutes = 15) {
   const subject = 'Your StocksIntels Password Reset Code';
   const html = codeCardHtml('Password Reset', 'Use the code below to reset your password. This code is valid for a limited time.', code, expiryMinutes);
   return sendViaTransport({ to: email, subject, html, label: 'Reset code' });
