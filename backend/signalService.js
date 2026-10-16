@@ -122,12 +122,15 @@ const schemaReadyPromise = (async () => {
       `DELETE FROM forward_predictions a
        USING forward_predictions b
        WHERE NOT a.resolved AND NOT b.resolved
-         AND a.symbol = b.symbol AND a.action = b.action AND a.price = b.price
+         AND a.symbol = b.symbol AND COALESCE(a.action, 'buy') = COALESCE(b.action, 'buy')
          AND (a.generated_at < b.generated_at OR (a.generated_at = b.generated_at AND a.id < b.id))`
     ).catch(() => {});
+    // One OPEN call per symbol+side (rule): no new call until the open one hits
+    // its target/stop. Enforced by a unique index on (symbol, action).
+    await pool.query(`DROP INDEX IF EXISTS uq_forward_predictions_open_thesis`).catch(() => {});
     await pool.query(
-      `CREATE UNIQUE INDEX IF NOT EXISTS uq_forward_predictions_open_thesis
-       ON forward_predictions (symbol, action, price) WHERE NOT resolved`
+      `CREATE UNIQUE INDEX IF NOT EXISTS uq_forward_predictions_open_symbol
+       ON forward_predictions (symbol, action) WHERE NOT resolved`
     ).catch(() => {});
     // Collapse resolved same-call rows sharing a symbol+action+entry on the same
     // day (a re-emission after a resolve otherwise stacks as a duplicate log row).
@@ -2430,9 +2433,9 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
   // was still pending, so it never reached the forward test at all.
   const existing = _forwardTestStore.get(symbol);
   if (existing) {
-    const open = existing.predictions.find(p =>
-      !p.resolved && p.action === signalObjAction && isSameThesis(p, price, target1, signalObjAction)
-    );
+    // One OPEN call per symbol+side: while a call is unresolved, do not record a
+    // new one — it must run to its own stop/target first.
+    const open = existing.predictions.find(p => !p.resolved && p.action === signalObjAction);
     if (open) return;
     // Also block re-creation of a prediction that was recently resolved — without
     // this, a restart between two hourly cycles re-records the same prediction
@@ -2458,18 +2461,9 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
   try {
     const dup = await pool.query(
       `SELECT id FROM forward_predictions
-       WHERE symbol = $1 AND action = $2
-         AND generated_at > NOW() - $3::interval
-         AND price > 0 AND $4 > 0
-         AND ABS(price - $4) / $4 < 0.005
-         AND (
-           $5 = 'sell'
-           OR target1 IS NULL
-           OR $6 IS NULL
-           OR ABS(target1 - $6) / $6 < 0.05
-         )
+       WHERE symbol = $1 AND action = $2 AND NOT resolved
        LIMIT 1`,
-      [symbol, signalObjAction, `${SIGNAL_WINDOW_DAYS} days`, price, signalObjAction, target1]
+      [symbol, signalObjAction]
     );
     if (dup.rows.length) return;
   } catch (e) { /* persistence best-effort */ }
@@ -2491,7 +2485,7 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
     // is already open in the DB, so skip the in-memory push too.
     const result = await pool.query(
       `INSERT INTO forward_predictions (symbol, signal, confidence, price, stop_loss, target1, target2, target3, action, trade_type, sector, bench_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       ON CONFLICT (symbol, action, price) WHERE NOT resolved DO NOTHING
+       ON CONFLICT (symbol, action) WHERE NOT resolved DO NOTHING
        RETURNING id`,
       [symbol, signalAction, confidence, price, stopLoss, target1, target2, target3, signalObjAction, tradeType, sector, benchPrice]
     );
@@ -4482,10 +4476,12 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     // price was the source of the coin-flip "~0% target hit" churn. Without this gate,
     // the hourly cycle re-emitted the same still-open signal over and over, ballooning
     // the signal count for no reason.
-    if (prevOutcome && !prevOutcome.result && prevOutcome.timestamp) {
+    if (prevOutcome && !prevOutcome.result && prevOutcome.timestamp && prevOutcome.action !== 'hold') {
       const prevAction = prevOutcome.action;
-      const monitoring = prevAction !== 'hold' && prevOutcome.stopLoss != null && prevOutcome.target1 != null;
-      if (monitoring) {
+      // Rule: while ANY call for this symbol is open (buy or sell), never emit a
+      // new one — it must resolve at its stop/target (or a valid score-based
+      // close) first, with or without stored levels.
+      {
         // Long-term holds (Long Term / Long Term Value) are closed ONLY by their
         // stop or target. A score-based close (flip or conviction fade) resolves
         // them at whatever the market price happens to be — usually a coin-flip
