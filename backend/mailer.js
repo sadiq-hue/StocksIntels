@@ -1045,30 +1045,6 @@ function buildMarketSnapshotHtml(marketOverview, mode = 'full') {
 
   if (mode === 'compact') return overview;
 
-  // ── Top Movers: NSE ──
-  const nseGainers = (nse.gainers || []).slice(0, 3);
-  const nseLosers = (nse.losers || []).slice(0, 3);
-  const nseMovers = (nseGainers.length > 0 || nseLosers.length > 0) ? `
-    <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
-      <div style="background:linear-gradient(135deg,${GREEN} 0%,#059669 100%);color:#ffffff;padding:8px 16px;font-size:12px;font-weight:600">
-        NSE Top Movers
-      </div>
-      <div style="display:flex">
-        <div style="flex:1;border-right:1px solid ${BORDER}">
-          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${GREEN};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Gainers</div>
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
-            ${nseGainers.map(g => fmtMoverRow(g)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
-          </table>
-        </div>
-        <div style="flex:1">
-          <div style="padding:6px 10px;font-size:10px;font-weight:600;color:${RED};text-transform:uppercase;border-bottom:1px solid ${BORDER}">Losers</div>
-          <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse">
-            ${nseLosers.map(l => fmtMoverRow(l)).join('') || `<tr><td colspan="3" style="padding:8px;text-align:center;color:${TEXT_LIGHT};font-size:11px">No data</td></tr>`}
-          </table>
-        </div>
-      </div>
-    </div>` : '';
-
   // ── Top Movers: Global ──
   const globalGainers = (us.gainers || []).slice(0, 3);
   const globalLosers = (us.losers || []).slice(0, 3);
@@ -1095,8 +1071,8 @@ function buildMarketSnapshotHtml(marketOverview, mode = 'full') {
 
   // ── Pan-African context (NSE + NGX + JSE) ──
   const af = marketOverview.africa || {};
-  const afGainers = (af.gainers || []).slice(0, 4);
-  const afLosers = (af.losers || []).slice(0, 4);
+  const afGainers = (af.gainers || []).slice(0, 5);
+  const afLosers = (af.losers || []).slice(0, 5);
   const afTo = af.turnover || {};
   const fmtTurnover = (t, cur) => (t && t.turnover ? `${cur} ${fmtMarketCap(t.turnover)}` : null);
   const turnoverParts = [
@@ -1107,7 +1083,7 @@ function buildMarketSnapshotHtml(marketOverview, mode = 'full') {
   const africaMovers = (afGainers.length > 0 || afLosers.length > 0) ? `
     <div style="background:${CARD_WHITE};border:1px solid ${BORDER};border-radius:10px;overflow:hidden;margin-bottom:20px">
       <div style="background:linear-gradient(135deg,#b45309 0%,#f59e0b 100%);color:#ffffff;padding:8px 16px;font-size:12px;font-weight:600">
-        Pan-African Markets &middot; NSE &middot; NGX &middot; JSE
+        African Top Movers &middot; NSE &middot; NGX &middot; JSE
       </div>
       ${turnoverParts.length ? `<div style="padding:8px 16px;border-bottom:1px solid ${BORDER};font-size:11px;color:${TEXT_MED}">Total turnover: ${turnoverParts.join(' &middot; ')}</div>` : ''}
       <div style="display:flex">
@@ -1126,7 +1102,7 @@ function buildMarketSnapshotHtml(marketOverview, mode = 'full') {
       </div>
     </div>` : '';
 
-  return `${overview}${africaMovers}${nseMovers}${globalMovers}`;
+  return `${overview}${africaMovers}${globalMovers}`;
 }
 
 // Market overview snapshot shared by transactional emails. Fetched from the

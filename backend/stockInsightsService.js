@@ -494,14 +494,16 @@ async function buildMarketOverview() {
   const globalGainers = (movers?.global?.gainers || []).slice(0, 3).map(g => toMover(g, 'Global'));
   const globalLosers = (movers?.global?.losers || []).slice(0, 3).map(l => toMover(l, 'Global'));
 
-  // Pan-African movers — every non-Global name from the combined feed
-  // (NSE + NGX + JSE), so the newsletter's context isn't Kenya-only.
-  const africaGainers = (movers?.combined?.gainers || [])
-    .filter(m => String(m.market || '').toUpperCase() !== 'GLOBAL')
-    .slice(0, 4).map(m => toMover(m));
-  const africaLosers = (movers?.combined?.losers || [])
-    .filter(m => String(m.market || '').toUpperCase() !== 'GLOBAL')
-    .slice(0, 4).map(m => toMover(m));
+  // Pan-African movers — merge the dedicated NSE / NGX / JSE buckets and rank,
+  // so the section is never Kenya-only and isn't diluted by the combined feed.
+  const numPct = (v) => { const n = parseFloat(String(v ?? '0').replace(/[^0-9.\-]/g, '')); return Number.isFinite(n) ? n : 0; };
+  const africaFrom = (side) => {
+    const buckets = [...(movers?.nse?.[side] || []), ...(movers?.ngx?.[side] || []), ...(movers?.jse?.[side] || [])];
+    const list = buckets.length ? buckets : (movers?.combined?.[side] || []).filter(m => String(m.market || '').toUpperCase() !== 'GLOBAL');
+    return list.map(m => toMover(m));
+  };
+  const africaGainers = africaFrom('gainers').sort((a, b) => numPct(b.change) - numPct(a.change)).slice(0, 5);
+  const africaLosers = africaFrom('losers').sort((a, b) => numPct(a.change) - numPct(b.change)).slice(0, 5);
 
   const africaTurnover = turnover && (turnover.nse || turnover.ngx || turnover.jse)
     ? { nse: turnover.nse || null, ngx: turnover.ngx || null, jse: turnover.jse || null }
@@ -757,6 +759,19 @@ function cleanSnippet(text, maxLen = 180) {
 
 const lowerFirst = (s) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 
+// RSS descriptions often end with the publisher name appended to the sentence
+// ("… earnings fall The Kenyan Wall Street."). Strip it so the prose reads clean.
+function stripTrailingSource(text, source) {
+  let s = String(text || '').trim();
+  const src = String(source || '').trim();
+  if (src && s.toLowerCase().endsWith(src.toLowerCase())) {
+    s = s.slice(0, s.length - src.length).replace(/[\s\-–—|•·:,]+$/, '').trim();
+  }
+  // Also drop a trailing domain (e.g. "… says report. businessdailyafrica.com").
+  s = s.replace(/\s+[a-z0-9-]+\.(?:co\.[a-z]{2}|com|net|org|africa|ke|ng|za)\b\.?$/i, '').trim();
+  return s.replace(/[\s\-–—|•·:,]+$/, '').trim();
+}
+
 // Sector-aware risk lines so every name in a newsletter doesn't repeat the same
 // generic sentence.
 function fallbackRiskLine(ticker, market) {
@@ -816,7 +831,7 @@ function generateFallbackNarrative(ticker, sentiment, articles, market, priceDat
   // Ignore placeholder "excerpts" (RSS items whose body is just a link-out).
   const rawExcerpt = String(articles[0]?.excerpt || '');
   const isPlaceholder = /read the full story|read more|click here|continue reading|subscribe/i.test(rawExcerpt) && rawExcerpt.length < 90;
-  const detail = isPlaceholder ? '' : cleanSnippet(rawExcerpt, 170);
+  const detail = isPlaceholder ? '' : stripTrailingSource(cleanSnippet(rawExcerpt, 170), articles[0]?.source);
 
   const thesis = pickFallbackThesis(name, sentiment);
 
