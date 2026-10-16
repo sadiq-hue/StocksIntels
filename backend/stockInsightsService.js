@@ -666,21 +666,30 @@ function formatMarketContext(marketOverview, stock) {
   const af = marketOverview?.africa || {};
   const nse = marketOverview?.nse || {};
   const us = marketOverview?.us || {};
+  const mk = String(stock?.market || '').toUpperCase();
   const idx = [];
-  if (nse.nse20?.value) idx.push(`NSE 20 ${nse.nse20.value} (${nse.nse20.change || '--'})`);
-  if (nse.nasi?.value) idx.push(`NASI ${nse.nasi.value} (${nse.nasi.change || '--'})`);
-  if (us.sp500?.value) idx.push(`S&P 500 ${us.sp500.value} (${us.sp500.change || '--'})`);
-  if (us.nasdaq?.value) idx.push(`Nasdaq ${us.nasdaq.value} (${us.nasdaq.change || '--'})`);
-  if (us.dow?.value) idx.push(`Dow ${us.dow.value} (${us.dow.change || '--'})`);
+  if (mk === 'NSE') {
+    if (nse.nse20?.value) idx.push(`NSE 20 ${nse.nse20.value} (${nse.nse20.change || '--'})`);
+    if (nse.nasi?.value) idx.push(`NASI ${nse.nasi.value} (${nse.nasi.change || '--'})`);
+  } else if (mk === 'GLOBAL') {
+    if (us.sp500?.value) idx.push(`S&P 500 ${us.sp500.value} (${us.sp500.change || '--'})`);
+    if (us.nasdaq?.value) idx.push(`Nasdaq ${us.nasdaq.value} (${us.nasdaq.change || '--'})`);
+    if (us.dow?.value) idx.push(`Dow ${us.dow.value} (${us.dow.change || '--'})`);
+  }
+  const homeLabel = mk === 'NGX' ? 'NGX (Nigeria)' : mk === 'JSE' ? 'JSE (South Africa)' : mk === 'NSE' ? 'NSE (Kenya)' : 'US/global markets';
   const parts = [];
   if (stock?.sector && stock.sector !== 'Other') parts.push(`Sector: ${stock.sector}.`);
-  if (idx.length) parts.push(`Indices: ${idx.join(', ')}.`);
-  const afUp = (af.gainers || []).slice(0, 3).map(m => `${m.ticker}[${m.market}] ${m.change}`);
-  if (afUp.length) parts.push(`African movers up: ${afUp.join(', ')}.`);
-  const afDown = (af.losers || []).slice(0, 3).map(m => `${m.ticker}[${m.market}] ${m.change}`);
-  if (afDown.length) parts.push(`African movers down: ${afDown.join(', ')}.`);
-  const gUp = (us.gainers || []).slice(0, 3).map(m => `${m.ticker} ${m.change}`);
-  if (gUp.length) parts.push(`Global movers up: ${gUp.join(', ')}.`);
+  parts.push(`This stock trades on ${homeLabel}.`);
+  if (idx.length) parts.push(`Home indices: ${idx.join(', ')}.`);
+  if (mk !== 'GLOBAL') {
+    const afUp = (af.gainers || []).slice(0, 3).map(m => `${m.ticker}[${m.market}] ${m.change}`);
+    if (afUp.length) parts.push(`African movers up: ${afUp.join(', ')}.`);
+    const afDown = (af.losers || []).slice(0, 3).map(m => `${m.ticker}[${m.market}] ${m.change}`);
+    if (afDown.length) parts.push(`African movers down: ${afDown.join(', ')}.`);
+  } else {
+    const gUp = (us.gainers || []).slice(0, 3).map(m => `${m.ticker} ${m.change}`);
+    if (gUp.length) parts.push(`Global movers up: ${gUp.join(', ')}.`);
+  }
   return parts.join(' ');
 }
 
@@ -692,15 +701,23 @@ async function generateNarrativeThesis(ticker, sentiment, articles, priceData, m
     `${i + 1}. "${a.headline}" (${a.source || 'Unknown'}, sentiment: ${a.sentiment})${a.excerpt ? '\n   Excerpt: ' + a.excerpt.slice(0, 200) : ''}`
   ).join('\n');
 
+  // Anchor the editorial to the stock's real exchange + currency so the model
+  // never relocates an NGX/JSE name onto the NSE (or mislabels the currency).
+  const EX = {
+    NSE: { name: 'Nairobi Securities Exchange (NSE), Kenya', ccy: 'KES', macro: 'Kenyan macro, CBK policy and NSE liquidity' },
+    NGX: { name: 'Nigerian Exchange (NGX), Nigeria', ccy: 'NGN', macro: 'Nigerian macro, CBN policy and NGX liquidity' },
+    JSE: { name: 'Johannesburg Stock Exchange (JSE), South Africa', ccy: 'ZAR', macro: 'South African macro, SARB policy and JSE liquidity' },
+    GLOBAL: { name: 'US/global markets', ccy: 'USD', macro: 'US macro, Fed policy and global sector rotation' },
+  };
+  const ex = EX[String(market || '').toUpperCase()] || EX.GLOBAL;
+
   const priceContext = priceData
-    ? `Current price: ${priceData.price || 'N/A'}, daily change: ${priceData.change || 'N/A'} (${priceData.changePercent || 'N/A'}), volume: ${priceData.volume ? Number(priceData.volume).toLocaleString() : 'N/A'}`
+    ? `Current price: ${priceData.price != null ? priceData.price : 'N/A'} ${ex.ccy}, daily change: ${priceData.change ?? 'N/A'} (${priceData.changePercent ?? 'N/A'}), volume: ${priceData.volume ? Number(priceData.volume).toLocaleString() : 'N/A'}`
     : 'Live price data not available at time of generation.';
 
-  const marketContext = isGlobal
-    ? `This is a US/global stock. Consider broader market context, sector rotation, Fed policy, and global macro trends.`
-    : `This is a Nairobi Securities Exchange (NSE) stock. Consider local market dynamics, Kenyan macro context, NSE index performance, and sector-specific factors.`;
+  const marketContext = `This is a ${ex.name} stock. Quote any price in ${ex.ccy}. Consider ${ex.macro}. Do NOT reference other exchanges or currencies — never mention Nairobi, the NSE or KES unless this is an NSE stock, and never mention Lagos/NGX/CBN/NGN or Johannesburg/JSE/SARB/ZAR unless this is that exchange's stock.`;
 
-  const prompt = `You are a senior equity research analyst writing a daily market briefing for investors. Write a rich, data-driven editorial analysis for ${name} (${ticker}) — ${isGlobal ? 'Global/US market' : 'Nairobi Securities Exchange (NSE), Kenya'}.
+  const prompt = `You are a senior equity research analyst writing a daily market briefing for investors. Write a rich, data-driven editorial analysis for ${name} (${ticker}) — listed on the ${ex.name}, quoted in ${ex.ccy}.
 
 RECENT NEWS COVERAGE:
 ${articleList || 'No recent articles.'}
@@ -740,6 +757,7 @@ RULES:
 - Do NOT start sentences with "The stock" — vary sentence structure
 - Each sentence should convey new information
 - Use ONLY the figures and facts provided above; never invent prices, ratios, dates or events. If a figure was not given, do not state one
+- Quote prices in ${ex.ccy}; never place this stock on a different exchange or market
 - Write with conviction — take a stance`;
 
   try {
@@ -861,7 +879,7 @@ function fallbackCatalystLine(ticker, market) {
   const m = String(market || '').toUpperCase();
   if (m === 'NGX') return 'the next NGX earnings release and CBN policy';
   if (m === 'JSE') return 'the next JSE results and the SARB rate decision';
-  if (m === 'Global') return 'the next earnings report and US macro data';
+  if (m === 'GLOBAL') return 'the next earnings report and US macro data';
   if (['EQTY', 'KCB', 'COOP', 'ABSA', 'NCBA', 'SBIC', 'SCBK', 'DTK', 'HFCK', 'BKG', 'IMH'].includes(t)) return 'the next CBK rate decision and Q3 earnings';
   if (t === 'SCOM') return 'M-Pesa monetisation updates and the next results';
   if (t === 'EABL') return 'volume trends in the next trading update';
