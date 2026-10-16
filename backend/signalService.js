@@ -60,6 +60,15 @@ const schemaReadyPromise = (async () => {
     await pool.query(`DELETE FROM signal_outcomes a USING signal_outcomes b
       WHERE a.ctid < b.ctid AND a.ticker = b.ticker
         AND a.signal_generated_at IS NOT DISTINCT FROM b.signal_generated_at`).catch(() => {});
+    // Collapse same-call re-emissions that share a ticker + entry price on the
+    // SAME day: the engine re-emits one idea per cycle with a fresh timestamp and
+    // confidence, so these are one trade, not several. Keep the newest row.
+    await pool.query(`DELETE FROM signal_outcomes a USING signal_outcomes b
+      WHERE a.source = 'live' AND b.source = 'live' AND a.ticker = b.ticker
+        AND a.entry_price IS NOT NULL AND b.entry_price IS NOT NULL
+        AND round(a.entry_price::numeric, 2) = round(b.entry_price::numeric, 2)
+        AND date_trunc('day', COALESCE(a.signal_generated_at, a.recorded_at)) = date_trunc('day', COALESCE(b.signal_generated_at, b.recorded_at))
+        AND a.ctid < b.ctid`).catch(() => {});
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_signal_outcomes_signal
       ON signal_outcomes (ticker, signal_generated_at)`).catch(() => {});
     // The old entry-price unique index conflated distinct signals with the same
@@ -119,6 +128,17 @@ const schemaReadyPromise = (async () => {
     await pool.query(
       `CREATE UNIQUE INDEX IF NOT EXISTS uq_forward_predictions_open_thesis
        ON forward_predictions (symbol, action, price) WHERE NOT resolved`
+    ).catch(() => {});
+    // Collapse resolved same-call rows sharing a symbol+action+entry on the same
+    // day (a re-emission after a resolve otherwise stacks as a duplicate log row).
+    // Keep the newest per call.
+    await pool.query(
+      `DELETE FROM forward_predictions a USING forward_predictions b
+       WHERE a.symbol = b.symbol AND COALESCE(a.action, 'buy') = COALESCE(b.action, 'buy')
+         AND a.price IS NOT NULL AND b.price IS NOT NULL
+         AND round(a.price::numeric, 2) = round(b.price::numeric, 2)
+         AND date_trunc('day', a.generated_at) = date_trunc('day', b.generated_at)
+         AND a.ctid < b.ctid`
     ).catch(() => {});
     // One-time cleanup: superseding was removed (a generated signal must run to
     // its own stop/target). Re-open predictions that were superseded under the
@@ -2317,7 +2337,10 @@ function collapseToThesesDetailed(rows) {
     const theses = [];
     for (const r of chain) {
       const prev = theses[theses.length - 1];
-      if (prev && isSameThesis({ price: prev.entryPrice, target1: prev.target1 }, r.entryPrice, r.target1, 'buy')) {
+      // Same CALL = same ticker/signal with a near-identical entry (<=1%). The
+      // engine re-derives target/confidence every cycle, so isSameThesis()'s
+      // target-drift rule split one position into several rows here.
+      if (prev && prev.entryPrice > 0 && r.entryPrice > 0 && Math.abs(prev.entryPrice - r.entryPrice) / r.entryPrice < 0.01) {
         // Same thesis re-emitted: the newer resolution supersedes the older one.
         superseded.push(prev);
         theses[theses.length - 1] = r;
@@ -3213,16 +3236,14 @@ function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0, a
   const deduped = [];
   for (const chain of byKey.values()) {
     chain.sort((a, b) => (new Date(a.generatedAt) - new Date(b.generatedAt)) || ((a.id || 0) - (b.id || 0)));
-    const theses = [];
+    const calls = [];
     for (const r of chain) {
-      const prev = theses[theses.length - 1];
-      if (prev && isSameThesis({ price: prev.price, target1: prev.target1 }, r.price, r.target1, r.action || 'buy')) {
-        theses[theses.length - 1] = r; // newest supersedes
-      } else {
-        theses.push(r);
-      }
+      const prev = calls[calls.length - 1];
+      const sameEntry = prev && prev.price > 0 && r.price > 0 && Math.abs(prev.price - r.price) / r.price < 0.01;
+      if (sameEntry) calls[calls.length - 1] = r; // newest supersedes
+      else calls.push(r);
     }
-    deduped.push(...theses);
+    deduped.push(...calls);
   }
   deduped.sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt));
   return { predictions: deduped.slice(offset, offset + limit), total: deduped.length };
@@ -3617,10 +3638,11 @@ async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPri
            LIMIT 25`,
           [symbol, signalAction]
         );
-        const match = prior.rows.find(r => isSameThesis(
-          { price: parseFloat(r.entry_price), target1: r.target1 != null ? parseFloat(r.target1) : null },
-          entryPrice, target1, 'buy'
-        ));
+        const match = prior.rows.find(r => {
+          const pe = parseFloat(r.entry_price);
+          const sameEntry = pe > 0 && entryPrice > 0 && Math.abs(pe - entryPrice) / entryPrice < 0.01;
+          return sameEntry || isSameThesis({ price: pe, target1: r.target1 != null ? parseFloat(r.target1) : null }, entryPrice, target1, 'buy');
+        });
         if (match) {
           const upd = await pool.query(
             `UPDATE signal_outcomes
