@@ -24,8 +24,9 @@ const SIGNAL_BOOST = 3;                 // points added when a candidate also ha
 const SIGNAL_CONFIDENCE_MIN = 75;       // confidence threshold for the live-engine boost
 const SIGNAL_LOOKBACK_DAYS = 3;         // how far back live high-conviction signals count for the boost
 const MAX_DEDUPE_ATTEMPTS = 12;         // safety bound on the walk-down that guarantees a different set
-const PICKS_PER_MARKET = 3;             // 3 African + 3 global keeps the issue broad, not a 4-name sampler
-const PICKS_PER_ISSUE = PICKS_PER_MARKET * 2; // 6 deep-dives per issue
+const PICKS_PER_MARKET = 4;             // 4 African + 4 global — broad coverage, not a 3-name sampler
+const PICKS_PER_ISSUE = PICKS_PER_MARKET * 2; // 8 deep-dives per issue
+const MAX_PER_AFRICAN_EXCHANGE = 2;     // no single African exchange (NSE/NGX/JSE) dominates the African seats
 const MIN_TAGGED_ARTICLES = 2;          // a name must be independently covered by this many articles to be a candidate
 
 const PORT = process.env.PORT || 3001;
@@ -378,16 +379,20 @@ async function pickHotStocks(forceFresh = false) {
   let picked = [];
   const marketCount = { African: 0, Global: 0 };
   const marketSectors = { African: new Set(), Global: new Set() };
+  const africaExCount = {}; // per African exchange so NSE can't take every African seat
+  const africaEx = (m) => String(m || '').toUpperCase();
   let repeatsUsed = 0;
 
   const tryAdd = s => {
     const g = groupOf(s.market);
     if (picked.length >= PICKS_PER_ISSUE) return false;
     if (marketCount[g] >= PICKS_PER_MARKET) return false;
+    if (g === 'African' && (africaExCount[africaEx(s.market)] || 0) >= MAX_PER_AFRICAN_EXCHANGE) return false;
     if (s.repeatCount > 0 && repeatsUsed >= MAX_REPEATS_PER_DRAFT) return false;
     if (s.sector !== 'Other' && marketSectors[g].has(s.sector)) return false;
     picked.push(s);
     marketCount[g]++;
+    if (g === 'African') africaExCount[africaEx(s.market)] = (africaExCount[africaEx(s.market)] || 0) + 1;
     marketSectors[g].add(s.sector);
     if (s.repeatCount > 0) repeatsUsed++;
     return true;
@@ -434,6 +439,40 @@ async function pickHotStocks(forceFresh = false) {
     const extra = forSelection.filter(s => !picked.find(p => p.ticker === s.ticker)).slice(0, 3 - picked.length);
     picked.push(...extra);
   }
+
+  // Backfill so the issue always spans markets even on thin-news days: pull in
+  // top movers (African NSE/NGX/JSE + global) as lightweight picks for any group
+  // still under quota, so coverage isn't limited to the few names that happened
+  // to carry two tagged articles.
+  if (picked.length < PICKS_PER_ISSUE) {
+    try {
+      const mv = await fetchJson(`${BASE}/api/market/movers`, {});
+      const pool = [
+        ...(mv?.nse?.gainers || []), ...(mv?.nse?.losers || []),
+        ...(mv?.ngx?.gainers || []), ...(mv?.ngx?.losers || []),
+        ...(mv?.jse?.gainers || []), ...(mv?.jse?.losers || []),
+        ...(mv?.global?.gainers || []), ...(mv?.global?.losers || []),
+      ];
+      for (const m of pool) {
+        if (picked.length >= PICKS_PER_ISSUE) break;
+        const ticker = String(m.ticker || m.symbol || '').replace(/^(NSE|NGX|JSE):/i, '').toUpperCase();
+        if (!ticker || ticker.length < 2) continue;
+        const mk = String(m.market || '').toUpperCase();
+        const market = isAfricanMarket(mk) ? mk : 'Global';
+        const g = groupOf(market);
+        if (marketCount[g] >= PICKS_PER_MARKET) continue;
+        if (picked.find(p => p.ticker === ticker)) continue;
+        const chg = parseFloat(String(m.changePercent ?? m.change ?? 0).replace('%', '')) || 0;
+        picked.push({
+          ticker, symbol: m.symbol || ticker, score: 0,
+          sentiment: chg >= 0 ? 'positive' : 'negative',
+          articles: [], total: 0, market, sector: 'Other', repeatCount: 0, signalBoost: 0,
+        });
+        marketCount[g]++;
+      }
+    } catch (e) { /* backfill is best-effort */ }
+  }
+
   picked = picked.slice(0, PICKS_PER_ISSUE);
 
   // No-boring-repeat guard: if the picked set is identical to the latest
