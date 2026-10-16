@@ -1142,7 +1142,7 @@ export function DashboardPage() {
 
       {/* Watchlist & Today's Market Intelligence — side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="border shadow-sm p-5">
+        <Card className="border shadow-sm p-5 h-full flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="size-8 rounded-lg bg-[#0D7490]/10 flex items-center justify-center">
@@ -1154,9 +1154,9 @@ export function DashboardPage() {
               Manage watchlist <ChevronRight className="size-3.5" />
             </Link>
           </div>
-          <div className="space-y-1">
+          <div className="flex-1 flex flex-col gap-1 min-h-0">
             {watchlist.length === 0 && (
-              <div className="p-6 text-center text-xs text-muted-foreground">No live watchlist data available</div>
+              <div className="flex-1 flex items-center justify-center p-6 text-center text-xs text-muted-foreground">No live watchlist data available</div>
             )}
             {watchlist.map((stock) => {
               const fullStock = allStocks.find(s => s.ticker === stock.ticker);
@@ -1171,7 +1171,7 @@ export function DashboardPage() {
                     market: stock.market,
                     currency: stock.currency || 'KES',
                     signal: sig,
-                  })} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-all border border-transparent hover:border-border cursor-pointer gap-3">
+                  })} className="flex-1 flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-all border border-transparent hover:border-border cursor-pointer gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="size-9 rounded-lg bg-gradient-to-br from-[#0D7490]/10 to-[#0EA5E9]/10 flex items-center justify-center relative shrink-0">
                         <span className="text-[#0D7490] font-bold text-xs">{stock.ticker}</span>
