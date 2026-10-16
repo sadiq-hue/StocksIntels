@@ -99,11 +99,11 @@ const MarketPage: React.FC = () => {
   });
   const [sentimentPrefLoaded, setSentimentPrefLoaded] = useState(false);
   const [marketData, setMarketData] = useState<{
-    movers: { nse: any, global: any },
+    movers: { nse: any, ngx?: any, jse?: any, global: any },
     indices: any[],
     sectors: any[]
   }>({
-    movers: { nse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] } },
+    movers: { nse: { gainers: [], losers: [] }, ngx: { gainers: [], losers: [] }, jse: { gainers: [], losers: [] }, global: { gainers: [], losers: [] } },
     indices: [],
     sectors: [],
   });
@@ -288,10 +288,13 @@ const MarketPage: React.FC = () => {
         isPositive: s.isPositive,
         currency: s.currency,
       }));
-      const nseMovers = movers.nse ? { gainers: normalize(movers.nse.gainers), losers: normalize(movers.nse.losers) } : { gainers: [], losers: [] };
-      const globalMovers = movers.global ? { gainers: normalize(movers.global.gainers), losers: normalize(movers.global.losers) } : { gainers: [], losers: [] };
+      const norm = (b: any) => (b ? { gainers: normalize(b.gainers), losers: normalize(b.losers) } : { gainers: [], losers: [] });
+      const nseMovers = norm(movers.nse);
+      const ngxMovers = norm(movers.ngx);
+      const jseMovers = norm(movers.jse);
+      const globalMovers = norm(movers.global);
       setMarketData({
-        movers: { nse: nseMovers, global: globalMovers },
+        movers: { nse: nseMovers, ngx: ngxMovers, jse: jseMovers, global: globalMovers },
         indices,
         sectors,
       });
@@ -897,6 +900,8 @@ const MarketPage: React.FC = () => {
           <MoverWindow 
             title="Top Gainers" 
             nse={marketData.movers?.nse?.gainers?.length ? marketData.movers.nse.gainers : localNseGainers}
+            ngx={marketData.movers?.ngx?.gainers}
+            jse={marketData.movers?.jse?.gainers}
             global={marketData.movers?.global?.gainers?.length ? marketData.movers.global.gainers : localGlobalGainers}
             pos={true} 
             period={moverPeriod}
@@ -904,6 +909,8 @@ const MarketPage: React.FC = () => {
           />
           <MoverWindow title="Top Losers"
             nse={marketData.movers?.nse?.losers?.length ? marketData.movers.nse.losers : localNseLosers}
+            ngx={marketData.movers?.ngx?.losers}
+            jse={marketData.movers?.jse?.losers}
             global={marketData.movers?.global?.losers?.length ? marketData.movers.global.losers : localGlobalLosers}
             pos={false} 
             period={moverPeriod}
@@ -1149,9 +1156,12 @@ const MarketWindow = ({
 );
 };
 
-const MoverWindow = ({ title, nse, global, pos, period, onPeriodChange }: any) => {
-  const [tab, setTab] = useState<'nse' | 'global'>('nse');
-  const data = tab === 'nse' ? nse : global;
+const MoverWindow = ({ title, nse, ngx, jse, global, pos, period, onPeriodChange }: any) => {
+  const [tab, setTab] = useState<'african' | 'global'>('african');
+  // African markets = NSE (Kenya) + NGX (Nigeria) + JSE (South Africa), merged & ranked.
+  const africa = [...(nse || []), ...(ngx || []), ...(jse || [])]
+    .sort((a: any, b: any) => pos ? (b.changePercent ?? 0) - (a.changePercent ?? 0) : (a.changePercent ?? 0) - (b.changePercent ?? 0));
+  const data = tab === 'african' ? africa : global;
 
   const periods = [
     { id: '1d', label: 'Daily' },
@@ -1167,11 +1177,11 @@ const MoverWindow = ({ title, nse, global, pos, period, onPeriodChange }: any) =
     <SidebarWidget title={title} link={`/app/stocks/top-stocks?category=${category}&period=${period || '1d'}`}>
       <div className="flex gap-1.5 mb-2">
         <button 
-          onClick={() => setTab('nse')}
+          onClick={() => setTab('african')}
           className={`flex-1 py-1.5 text-[10px] font-semibold rounded-md transition-all ${
-            tab === 'nse' ? 'bg-[#0D7490] text-white shadow-sm' : 'bg-muted text-muted-foreground hover:bg-accent'
+            tab === 'african' ? 'bg-[#0D7490] text-white shadow-sm' : 'bg-muted text-muted-foreground hover:bg-accent'
           }`}
-        >NSE</button>
+        >AFRICAN</button>
         <button 
           onClick={() => setTab('global')}
           className={`flex-1 py-1.5 text-[10px] font-semibold rounded-md transition-all ${
@@ -1198,7 +1208,7 @@ const MoverWindow = ({ title, nse, global, pos, period, onPeriodChange }: any) =
       )}
       <div className="space-y-1">
         {data?.slice(0, 5).map((s: any) => (
-          <TinyCard key={s.symbol} s={s.symbol?.replace(/^(NSE|NYSE|NASDAQ|AMEX):/, '')} p={s.price} c={s.changePercent} v={s.volume} pos={pos} />
+          <TinyCard key={s.symbol} s={s.symbol?.replace(/^(NSE|NGX|JSE|NYSE|NASDAQ|AMEX):/, '')} p={s.price} c={s.changePercent} v={s.volume} pos={pos} m={s.market} />
         ))}
         {(!data || data.length === 0) && (
           <div className="py-6 text-center text-[11px] text-muted-foreground font-medium uppercase tracking-wider">No data</div>
@@ -1208,13 +1218,17 @@ const MoverWindow = ({ title, nse, global, pos, period, onPeriodChange }: any) =
   );
 };
 
-const TinyCard = ({ s, p, c, v, pos }: any) => {
+const TinyCard = ({ s, p, c, v, pos, m }: any) => {
   const isPending = p === null || p === undefined || p === '--';
+  const marketTag = m && /^(NSE|NGX|JSE)$/i.test(m) ? String(m).toUpperCase() : null;
   return (
     <div className="flex justify-between items-center gap-2 py-2.5 border-b border-border/50 last:border-0 min-w-0">
       <div className="flex flex-col min-w-0">
         <span className="text-sm font-semibold text-foreground truncate">{s}</span>
-        <span className="text-[10px] text-muted-foreground font-medium truncate">Vol: {isPending ? '--' : formatCompactNumber(typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0)}</span>
+        <span className="text-[10px] text-muted-foreground font-medium truncate">
+          {marketTag && <span className="mr-1 text-[#0D7490] font-bold">{marketTag}</span>}
+          Vol: {isPending ? '--' : formatCompactNumber(typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0)}
+        </span>
       </div>
       <div className="text-right flex flex-col shrink-0 tabular-nums">
         <span className="text-sm font-semibold text-foreground">{isPending ? '--' : p}</span>
