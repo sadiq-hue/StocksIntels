@@ -2831,6 +2831,23 @@ async function getForwardTestStats() {
     console.warn('[SignalService] forward-test log query failed:', e.message);
   }
 
+  // Cross-source dedupe: the SAME trade can appear twice — once as a live
+  // signal_outcome (no confidence) and once as a resolved forward prediction
+  // (with confidence). Collapse to one row per symbol+entry, keeping the more
+  // informative / latest-resolution row.
+  const byCall = new Map();
+  const collapsed = [];
+  for (const r of log) {
+    const k = `${r.symbol}|${r.entryPrice != null ? Number(r.entryPrice).toFixed(2) : 'x'}`;
+    if (!byCall.has(k)) { byCall.set(k, r); collapsed.push(r); continue; }
+    const prev = byCall.get(k);
+    const prefer = (r.confidence != null && prev.confidence == null)
+      || (new Date(r.resolvedAt || 0).getTime() > new Date(prev.resolvedAt || 0).getTime());
+    if (prefer) { collapsed[collapsed.indexOf(prev)] = r; byCall.set(k, r); }
+  }
+  log.length = 0;
+  log.push(...collapsed);
+
   log.sort((a, b) => new Date(b.resolvedAt || b.generatedAt || 0) - new Date(a.resolvedAt || a.generatedAt || 0));
 
   const winRate = total > 0 ? Math.round((wins / total) * 1000) / 10 : 0;
