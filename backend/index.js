@@ -2389,6 +2389,8 @@ async function getMarketSnapshot() {
   return {
     indices,
     nse: { active: getActive(nseStocks), movers: hasReal ? realMovers.nse : getMovers(nseStocks) },
+    ngx: { movers: hasReal ? realMovers.ngx : { gainers: [], losers: [] } },
+    jse: { movers: hasReal ? realMovers.jse : { gainers: [], losers: [] } },
     global: { active: getActive(globalStocks), movers: hasReal ? realMovers.global : getMovers(globalStocks) },
     active: getActive(stocks),
     movers: hasReal ? realMovers.combined : getMovers(stocks),
@@ -8739,7 +8741,7 @@ let moversCache = { data: null, at: 0, inFlight: null };
 
 async function buildDailyMovers() {
   const snapshot = await getMarketSnapshot();
-  return { nse: snapshot.nse.movers, global: snapshot.global.movers, combined: snapshot.movers, active: snapshot.active, period: '1d' };
+  return { nse: snapshot.nse.movers, ngx: snapshot.ngx?.movers, jse: snapshot.jse?.movers, global: snapshot.global.movers, combined: snapshot.movers, active: snapshot.active, period: '1d' };
 }
 
 app.get('/api/market/movers', async (req, res) => {
@@ -8749,15 +8751,11 @@ app.get('/api/market/movers', async (req, res) => {
     try {
       const { getPeriodMovers } = require('./periodReturnsService');
       const { gainers, losers } = await getPeriodMovers(period);
-      const nse = {
-        gainers: gainers.filter(g => g.market === 'NSE').slice(0, 10),
-        losers: losers.filter(l => l.market === 'NSE').slice(0, 10),
-      };
-      const global = {
-        gainers: gainers.filter(g => g.market === 'Global').slice(0, 10),
-        losers: losers.filter(l => l.market === 'Global').slice(0, 10),
-      };
-      return res.json({ nse, global, combined: { gainers, losers }, active: [], period });
+      const bucket = (m) => ({
+        gainers: gainers.filter(g => g.market === m).slice(0, 10),
+        losers: losers.filter(l => l.market === m).slice(0, 10),
+      });
+      return res.json({ nse: bucket('NSE'), ngx: bucket('NGX'), jse: bucket('JSE'), global: bucket('Global'), combined: { gainers, losers }, active: [], period });
     } catch (error) {
       console.error('Error fetching period movers:', error);
       return res.status(500).json({ error: 'Failed to fetch top movers' });
