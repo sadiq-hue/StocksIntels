@@ -500,7 +500,16 @@ async function buildMarketOverview() {
   const africaFrom = (side) => {
     const buckets = [...(movers?.nse?.[side] || []), ...(movers?.ngx?.[side] || []), ...(movers?.jse?.[side] || [])];
     const list = buckets.length ? buckets : (movers?.combined?.[side] || []).filter(m => String(m.market || '').toUpperCase() !== 'GLOBAL');
-    return list.map(m => toMover(m));
+    const seen = new Set();
+    const out = [];
+    for (const m of list) {
+      const mv = toMover(m);
+      const key = `${String(mv.market || '').toUpperCase()}:${String(mv.ticker).toUpperCase()}`;
+      if (!mv.ticker || seen.has(key)) continue;
+      seen.add(key);
+      out.push(mv);
+    }
+    return out;
   };
   const africaGainers = africaFrom('gainers').sort((a, b) => numPct(b.change) - numPct(a.change)).slice(0, 5);
   const africaLosers = africaFrom('losers').sort((a, b) => numPct(a.change) - numPct(b.change)).slice(0, 5);
