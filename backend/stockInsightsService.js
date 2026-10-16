@@ -958,6 +958,34 @@ function generateFallbackNarrative(ticker, sentiment, articles, market, priceDat
   };
 }
 
+// ── Post-generation narrative guard ──────────────────────────────
+// Rejects LLM output that relocates a stock onto the wrong exchange/currency
+// (e.g. an NGX name written as an NSE story) or that never names the stock.
+const WRONG_MARKET_PATTERNS = {
+  NSE: [/\bNGX\b/i, /\bCBN\b/i, /\bLagos\b/i, /\bNGN\b/i, /\bnaira\b/i, /\bJSE\b/i, /\bSARB\b/i, /\bJohannesburg\b/i, /\bZAR\b/i, /\brand\b/i],
+  NGX: [/\bNSE\b/i, /\bNairobi\b/i, /\bKES\b/i, /\bCBK\b/i, /\bJSE\b/i, /\bSARB\b/i, /\bJohannesburg\b/i, /\bZAR\b/i, /\brand\b/i],
+  JSE: [/\bNSE\b/i, /\bNairobi\b/i, /\bKES\b/i, /\bCBK\b/i, /\bNGX\b/i, /\bCBN\b/i, /\bLagos\b/i, /\bNGN\b/i, /\bnaira\b/i],
+  GLOBAL: [/\bNSE\b/i, /\bNairobi\b/i, /\bKES\b/i, /\bCBK\b/i, /\bNGX\b/i, /\bCBN\b/i, /\bLagos\b/i, /\bNGN\b/i, /\bnaira\b/i, /\bJSE\b/i, /\bSARB\b/i, /\bJohannesburg\b/i, /\bZAR\b/i],
+};
+
+function guardNarrative(stock, narrative, companyName) {
+  const mk = String(stock.market || '').toUpperCase();
+  const pats = WRONG_MARKET_PATTERNS[mk] || WRONG_MARKET_PATTERNS.GLOBAL;
+  const text = [narrative.thesis, narrative.headline, narrative.analysis, narrative.catalyst, narrative.risk].filter(Boolean).join(' ');
+  const wrongExchange = pats.some(p => p.test(text));
+  const ticker = String(stock.ticker || '').toUpperCase();
+  const nameWords = String(companyName || '').split(/\s+/).map(w => w.replace(/[^A-Za-z0-9]/g, '')).filter(w => w.length >= 4);
+  const hasTicker = ticker && text.toUpperCase().includes(ticker);
+  const hasName = String(companyName || '').length >= 4 && text.toLowerCase().includes(String(companyName).toLowerCase());
+  const hasNameWord = nameWords.some(w => new RegExp(`\\b${w}`, 'i').test(text));
+  const namesStock = Boolean(hasTicker || hasName || hasNameWord);
+  if (wrongExchange || !namesStock) {
+    console.warn(`[INSIGHTS] narrative rejected for ${stock.ticker} (${mk}): ${wrongExchange ? 'wrong-exchange/currency reference' : 'stock not named'} — using grounded fallback`);
+    return generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market, stock.priceData);
+  }
+  return narrative;
+}
+
 // ── Generate thematic intro for the newsletter ───────────────────
 // Templated (no-LLM) intro + editor's note. The daily flow uses these so the
 // limited LLM quota is spent on the per-stock narratives and the big story,
@@ -1226,10 +1254,20 @@ async function generateDailyInsights(force = false) {
     const priceKey = isAfricanMarket(stock.market) ? `${stock.market}:${stock.ticker}` : stock.ticker;
     const priceData = priceDataMap[priceKey] || priceDataMap[stock.ticker] || null;
     const marketCtx = formatMarketContext(marketOverview, stock);
-    const { thesis, analysis, catalyst, risk } = await generateNarrativeThesis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market, marketCtx)
-    .catch(e => { console.warn(`[INSIGHTS] narrative fallback for ${stock.ticker}: ${e.message}`); return generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market, priceData); });
-
     const companyName = companyNameFor(stock);
+    // Only run the LLM when there is real news to ground it; backfilled (no-news)
+    // picks use the deterministic, exchange-safe fallback so nothing is invented.
+    let narrative;
+    if (stock.articles && stock.articles.length > 0) {
+      narrative = await generateNarrativeThesis(stock.ticker, stock.sentiment, stock.articles, priceData, stock.market, marketCtx)
+        .catch(e => { console.warn(`[INSIGHTS] narrative fallback for ${stock.ticker}: ${e.message}`); return generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market, priceData); });
+    } else {
+      narrative = generateFallbackNarrative(stock.ticker, stock.sentiment, stock.articles, stock.market, priceData);
+    }
+    // Post-generation guard: reject a narrative that misplaces the stock on the
+    // wrong exchange/currency or that never names the stock.
+    const { thesis, analysis, catalyst, risk } = guardNarrative(stock, narrative, companyName);
+
     const signal = stock.sentiment === 'positive' ? 'BULLISH'
       : stock.sentiment === 'negative' ? 'BEARISH' : 'NEUTRAL';
 
