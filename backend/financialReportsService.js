@@ -911,6 +911,29 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
       const sa = require('./stockAnalysisScraper');
       const saReport = await sa.getFinancialReport(symbol, period, limit).catch(() => null);
       if (saReport && saReport.success && (saReport.data?.incomeStatementHistory || []).length > 0) {
+        // stockanalysis only knows the ticker; pull the Yahoo `.JO` profile for
+        // the company name, CEO, employees and website.
+        try {
+          const yh = await yahooFinanceScraper.getCompanyProfile(`${ticker}.JO`);
+          const p = saReport.data.profile;
+          if (yh && p) {
+            saReport.data.profile = {
+              ...p,
+              companyName: (p.companyName && p.companyName.toUpperCase() !== ticker) ? p.companyName : (yh.companyName || ticker),
+              ceo: yh.ceo || p.ceo || '',
+              ceoRole: yh.ceoRole || p.ceoRole || '',
+              employees: yh.employees || p.employees || 0,
+              website: yh.website || p.website || '',
+              description: yh.description || p.description || '',
+              industry: yh.industry || p.industry || '',
+              sector: yh.sector || p.sector || '',
+              country: yh.country || p.country || 'South Africa',
+              image: yh.image || p.image || '',
+              currency: 'ZAR',
+              exchange: 'JSE',
+            };
+          }
+        } catch { /* profile enrichment is optional */ }
         return saReport;
       }
       const yahoo = await yahooFinanceScraper.getFinancialReport(`${ticker}.JO`, period, limit).catch(() => null);

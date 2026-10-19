@@ -98,6 +98,7 @@ function findPriorYearPeriod(items: any[], idx: number) {
 
 const PROVIDER_LABELS: Record<string, { label: string; color: string }> = {
   "sec-edgar": { label: "SEC EDGAR", color: "bg-blue-100 text-blue-800" },
+  "stockanalysis": { label: "StockAnalysis", color: "bg-emerald-100 text-emerald-800" },
   simfin: { label: "SimFin", color: "bg-orange-100 text-orange-800" },
   fmp: { label: "FMP", color: "bg-purple-100 text-purple-800" },
   "yahoo-finance": { label: "Yahoo Finance", color: "bg-red-100 text-red-800" },
@@ -322,26 +323,80 @@ export function FinancialsPage() {
   const [yahooSuggestions, setYahooSuggestions] = useState<{ ticker: string; name: string }[]>([]);
   const [yahooSuggesting, setYahooSuggesting] = useState(false);
   const [yahooPremarket, setYahooPremarket] = useState<Record<string, any> | null>(null);
+  const [africaListings, setAfricaListings] = useState<StockListItem[]>([]);
+  const [africaQuote, setAfricaQuote] = useState<any>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const yahooSuggestRef = useRef<ReturnType<typeof setTimeout>>();
   const lastFetchedSymbol = useRef<string>(selectedSymbol);
   const { getQuote } = useRealtimeQuotes();
-  const contextSymbol = selectedMarket === "nse" ? `NSE:${selectedSymbol}` : selectedSymbol;
-  const liveQuote = getQuote(contextSymbol);
+  const contextSymbol = selectedMarket === "nse" ? `NSE:${selectedSymbol}`
+    : selectedMarket === "ngx" ? `NGX:${selectedSymbol}`
+    : selectedMarket === "jse" ? `JSE:${selectedSymbol}`
+    : selectedSymbol;
+  const liveQuote = getQuote(contextSymbol) || (africaQuote ? {
+    symbol: selectedSymbol,
+    price: africaQuote.price,
+    change: africaQuote.change,
+    changePercent: africaQuote.changesPercentage,
+    volume: africaQuote.volume,
+    dayHigh: africaQuote.dayHigh,
+    dayLow: africaQuote.dayLow,
+    previousClose: africaQuote.previousClose,
+    timestamp: Math.floor(Date.now() / 1000),
+  } : undefined);
+
+  // NGX / JSE listings for search + quick access (the static universes only
+  // cover NSE and global names).
+  useEffect(() => {
+    let active = true;
+    Promise.all(["NGX", "JSE"].map((ex) =>
+      fetch(`${import.meta.env.VITE_API_URL || "/api"}/africa/stocks?exchange=${ex}&limit=200&all=1`)
+        .then((r) => (r.ok ? r.json() : { data: [] }))
+        .then((d) => (Array.isArray(d?.data) ? d.data : []).map((s: any) => ({
+          ticker: String(s.ticker || s.symbol || "").toUpperCase(),
+          name: s.name || s.ticker || "",
+          price: Number(s.price) || 0,
+          change: Number(s.changePct) || 0,
+          volume: "",
+          marketCap: "",
+          sector: s.sector || "Other",
+          pe: 0,
+          dividend: 0,
+          market: ex === "NGX" ? "ngx" : "jse",
+          currency: s.currency || (ex === "NGX" ? "NGN" : "ZAR"),
+        } as StockListItem)))
+        .catch(() => [])
+    )).then(([ngx, jse]) => { if (active) setAfricaListings([...ngx, ...jse]); });
+    return () => { active = false; };
+  }, []);
+
+  // NGX / JSE live quote (these exchanges aren't part of the global realtime
+  // quote subscription).
+  useEffect(() => {
+    if (selectedMarket !== "ngx" && selectedMarket !== "jse") { setAfricaQuote(null); return; }
+    let active = true;
+    fetch(`${import.meta.env.VITE_API_URL || "/api"}/africa/quotes?exchange=${selectedMarket.toUpperCase()}&symbols=${encodeURIComponent(selectedSymbol)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (active) setAfricaQuote(d?.quotes?.[selectedSymbol] || null); })
+      .catch(() => { if (active) setAfricaQuote(null); });
+    return () => { active = false; };
+  }, [selectedSymbol, selectedMarket]);
+
+  const allStocks = useMemo(() => [...kenyanStocks, ...africaListings, ...globalStocks], [africaListings]);
 
   // Static universe lookup — used as a fallback when the live report has no
   // profile (e.g. newly listed NSE stocks like KPC that aren't yet seeded).
-  // Guarantees correct name, exchange (NSE), currency (KES) and price.
+  // Guarantees correct name, exchange, currency and price.
   const staticStock = useMemo(
-    () => [...kenyanStocks, ...globalStocks].find(
+    () => allStocks.find(
       (s) => s.ticker.toUpperCase() === selectedSymbol.toUpperCase()
     ),
-    [selectedSymbol]
+    [allStocks, selectedSymbol]
   );
 
   const searchIndex = useMemo(() =>
-    [...kenyanStocks, ...globalStocks].map(s => ({ ticker: s.ticker, name: s.name, market: s.market })),
-  []);
+    allStocks.map(s => ({ ticker: s.ticker, name: s.name, market: s.market })),
+  [allStocks]);
 
   useEffect(() => {
     const q = symbolInput.trim().toUpperCase();
@@ -390,7 +445,7 @@ export function FinancialsPage() {
 
   // Yahoo Finance pre-market data — real pre/after-hours prints (same source as the quote header)
   useEffect(() => {
-    if (selectedMarket === "nse") return;
+    if (selectedMarket !== "global") return;
     let active = true;
     const fetchPremarket = async () => {
       try {
@@ -418,7 +473,7 @@ export function FinancialsPage() {
     setIsLoading(true);
     setError(null);
     const limit = period === "annual" ? 25 : 8;
-    fetchFinancialReport(selectedSymbol, period, limit, provider)
+    fetchFinancialReport(contextSymbol, period, limit, provider)
       .then((payload) => {
         if (!active) return;
         if (!payload.success) throw new Error(payload.error || "Unable to load financial report");
@@ -432,25 +487,45 @@ export function FinancialsPage() {
       })
       .finally(() => { if (!active) return; setIsLoading(false); setIsRefreshing(false); });
 
-    setFilingsLoading(true);
-    fetchEdgarFilings(selectedSymbol, 20)
-      .then((data) => { if (active) setFilings(data.filings || []); })
-      .catch(() => { if (active) setFilings([]); })
-      .finally(() => { if (active) setFilingsLoading(false); });
+    if (selectedMarket !== "global") {
+      setFilings([]);
+      setFilingsLoading(false);
+    } else {
+      setFilingsLoading(true);
+      fetchEdgarFilings(selectedSymbol, 20)
+        .then((data) => { if (active) setFilings(data.filings || []); })
+        .catch(() => { if (active) setFilings([]); })
+        .finally(() => { if (active) setFilingsLoading(false); });
+    }
 
     return () => { active = false; };
-  }, [selectedSymbol, period, refreshKey, provider]);
+  }, [selectedSymbol, selectedMarket, contextSymbol, period, refreshKey, provider]);
 
-  const profile = (report?.data.profile as CompanyProfile | undefined) || (staticStock ? {
+  const staticProfile = staticStock ? ({
     symbol: staticStock.ticker,
     companyName: staticStock.name,
-    exchange: staticStock.market === "nse" ? "NSE" : "NASDAQ/NYSE",
-    currency: staticStock.currency || (staticStock.market === "nse" ? "KES" : "USD"),
+    exchange: staticStock.market === "nse" ? "NSE"
+      : staticStock.market === "ngx" ? "NGX"
+      : staticStock.market === "jse" ? "JSE" : "NASDAQ/NYSE",
+    currency: staticStock.currency || (staticStock.market === "nse" ? "KES"
+      : staticStock.market === "ngx" ? "NGN"
+      : staticStock.market === "jse" ? "ZAR" : "USD"),
     sector: staticStock.sector || "Other",
     industry: staticStock.sector || "Other",
-    country: staticStock.market === "nse" ? "Kenya" : "USA",
+    country: staticStock.market === "nse" ? "Kenya"
+      : staticStock.market === "ngx" ? "Nigeria"
+      : staticStock.market === "jse" ? "South Africa" : "USA",
     website: "", description: "", ceo: "N/A", employees: 0, marketCap: 0, image: "", isEtf: false, lastUpdated: "",
-  } as CompanyProfile : undefined);
+  } as CompanyProfile) : undefined;
+  const rawProfile = report?.data.profile as CompanyProfile | undefined;
+  const profile = rawProfile ? {
+    ...rawProfile,
+    // stockanalysis profiles use the bare ticker as the company name; prefer
+    // the listing name we already know.
+    companyName: rawProfile.companyName && rawProfile.companyName.toUpperCase() !== String(rawProfile.symbol || "").toUpperCase()
+      ? rawProfile.companyName
+      : (staticProfile?.companyName || rawProfile.companyName),
+  } : staticProfile;
   const reportQuote = report?.data.quote as CompanyQuote | undefined;
   const baseQuote: CompanyQuote = reportQuote || { symbol: selectedSymbol, price: 0, change: 0, changesPercentage: 0, dayLow: 0, dayHigh: 0, yearLow: 0, yearHigh: 0, marketCap: 0, volume: 0, avgVolume: 0, open: 0, previousClose: 0, eps: 0, pe: 0, sharesOutstanding: 0, lastUpdated: "" };
   const quote = liveQuote
@@ -552,7 +627,9 @@ export function FinancialsPage() {
   // Auto-sync provider only after data loads (e.g. switching to a stock that doesn't support sec-edgar)
   useEffect(() => {
     if (report && availableProviders.length > 0 && !availableProviders.includes(provider)) {
-      setProvider(availableProviders[0]);
+      const next = availableProviders[0];
+      // stockanalysis is only a data source, not a selectable provider.
+      setProvider((next as string) === "stockanalysis" ? "yahoo-finance" : next);
     }
   }, [report, availableProviders, provider]);
 
@@ -560,11 +637,18 @@ export function FinancialsPage() {
     const next = symbolInput.trim().toUpperCase();
     if (!next) return;
     setSelectedSymbol(next);
-    setSelectedMarket(quickFinancialSymbols.find((item) => item.symbol === next)?.market || "global");
+    setSelectedMarket(allStocks.find((item) => item.ticker.toUpperCase() === next)?.market || "global");
     setYahooSuggestions([]);
   };
 
+  useEffect(() => {
+    if ((selectedMarket === "ngx" || selectedMarket === "jse") && period === "quarter") setPeriod("annual");
+  }, [selectedMarket, period]);
+
   const handleRefresh = () => { setIsRefreshing(true); setRefreshKey((c) => c + 1); };
+
+  const primaryQuickSymbols = (["nse", "ngx", "jse", "global"] as const)
+    .flatMap((m) => quickFinancialSymbols.filter((i) => i.market === m).slice(0, m === "nse" || m === "global" ? 6 : 4));
 
   const latestInc = incHistory[0];
   const latestMet = metHistory[0];
@@ -652,7 +736,7 @@ export function FinancialsPage() {
                   <button key={`${s.market}-${s.ticker}`} onMouseDown={() => { setSymbolInput(s.ticker); setSelectedSymbol(s.ticker); setSelectedMarket(s.market); setShowSuggestions(false); }}
                     className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center justify-between border-b border-border last:border-0">
                     <span className="font-medium text-foreground">{s.name}</span>
-                    <span className="text-[10px] font-bold text-muted-foreground ml-2">{s.ticker} · {s.market === 'nse' ? 'NSE' : 'Global'}</span>
+                    <span className="text-[10px] font-bold text-muted-foreground ml-2">{s.ticker} · {s.market === 'nse' ? 'NSE' : s.market === 'ngx' ? 'NGX' : s.market === 'jse' ? 'JSE' : 'Global'}</span>
                   </button>
                 ))}
               </div>
@@ -685,7 +769,8 @@ export function FinancialsPage() {
 
           <div className="flex bg-muted p-0.5 rounded-lg" data-tour="fin-controls">
             <button onClick={() => setPeriod("annual")} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${period === 'annual' ? 'bg-card text-[#0D7490] shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Annual</button>
-            <button onClick={() => setPeriod("quarter")} className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${period === 'quarter' ? 'bg-card text-[#0D7490] shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>Quarterly</button>
+            <button onClick={() => setPeriod("quarter")} disabled={selectedMarket === "ngx" || selectedMarket === "jse"}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${period === 'quarter' ? 'bg-card text-[#0D7490] shadow-sm' : 'text-muted-foreground hover:text-foreground'} ${selectedMarket === 'ngx' || selectedMarket === 'jse' ? 'opacity-40 cursor-not-allowed' : ''}`}>Quarterly</button>
           </div>
 
           <div className="h-6 w-px bg-border mx-1 hidden md:block" />
@@ -717,7 +802,7 @@ export function FinancialsPage() {
         <div className="mt-3 flex items-center gap-2">
           <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider shrink-0">Quick:</span>
           <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-            {(["nse", "global"] as const).flatMap(m => quickFinancialSymbols.filter(i => i.market === m)).slice(0, 15).map((item) => (
+            {primaryQuickSymbols.map((item) => (
               <button key={`${item.market}-${item.symbol}`} onClick={() => { setSymbolInput(item.symbol); setSelectedSymbol(item.symbol); setSelectedMarket(item.market); }}
                 className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all whitespace-nowrap ${
                   selectedSymbol === item.symbol ? 'border-[#0D7490] bg-[#0D7490]/10 text-[#0D7490]' : 'border-border text-muted-foreground hover:border-border hover:text-foreground'
@@ -725,17 +810,17 @@ export function FinancialsPage() {
                 {item.symbol}
               </button>
             ))}
-            {quickFinancialSymbols.length > 15 && (
+            {quickFinancialSymbols.length > primaryQuickSymbols.length && (
               <button onClick={() => setShowQuickSymbols(!showQuickSymbols)}
                 className="text-[10px] font-bold px-2.5 py-1 rounded-full border border-dashed border-border text-muted-foreground hover:border-border whitespace-nowrap">
-                +{quickFinancialSymbols.length - 15} more
+                +{quickFinancialSymbols.length - primaryQuickSymbols.length} more
               </button>
             )}
           </div>
         </div>
         {showQuickSymbols && (
           <div className="mt-2 flex flex-wrap gap-1.5 pt-2 border-t border-border">
-            {quickFinancialSymbols.slice(15).map((item) => (
+            {quickFinancialSymbols.filter((i) => !primaryQuickSymbols.includes(i)).map((item) => (
               <button key={`${item.market}-${item.symbol}`} onClick={() => { setSymbolInput(item.symbol); setSelectedSymbol(item.symbol); setSelectedMarket(item.market); setShowQuickSymbols(false); }}
                 className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition-all ${
                   selectedSymbol === item.symbol ? 'border-[#0D7490] bg-[#0D7490]/10 text-[#0D7490]' : 'border-border text-muted-foreground hover:border-border'
@@ -1200,10 +1285,13 @@ export function FinancialsPage() {
               <div className="bg-card rounded-xl border border-border p-16 text-center">
                 <FileText className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground font-bold">
-                  {selectedMarket === "nse" ? "SEC EDGAR filings only available for US stocks" : "No SEC EDGAR filings found"}
+                  {selectedMarket !== "global" ? "SEC EDGAR filings are only available for US stocks" : "No SEC EDGAR filings found"}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {selectedMarket === "nse" ? "NSE stocks file with the Nairobi Securities Exchange" : "Verify the ticker symbol"}
+                  {selectedMarket === "nse" ? "NSE stocks file with the Nairobi Securities Exchange"
+              : selectedMarket === "ngx" ? "NGX stocks file with the Nigerian Exchange"
+              : selectedMarket === "jse" ? "JSE stocks file with the Johannesburg Stock Exchange"
+              : "Verify the ticker symbol"}
                 </p>
               </div>
             ) : (

@@ -61,6 +61,14 @@ export const quickFinancialSymbols: QuickStockSymbol[] = [
   { symbol: "GLD", market: "nse" }, { symbol: "HBE", market: "nse" }, { symbol: "KPC", market: "nse" },
   { symbol: "KURV", market: "nse" }, { symbol: "LAPR", market: "nse" }, { symbol: "SKL", market: "nse" },
   { symbol: "SMWF", market: "nse" }, { symbol: "TCL", market: "nse" },
+  // Top NGX (Nigeria) stocks
+  { symbol: "DANGCEM", market: "ngx" }, { symbol: "MTNN", market: "ngx" }, { symbol: "GTCO", market: "ngx" },
+  { symbol: "ZENITHBANK", market: "ngx" }, { symbol: "ACCESSCORP", market: "ngx" }, { symbol: "UBA", market: "ngx" },
+  { symbol: "SEPLAT", market: "ngx" }, { symbol: "BUACEMENT", market: "ngx" },
+  // Top JSE (South Africa) stocks
+  { symbol: "NPN", market: "jse" }, { symbol: "MTN", market: "jse" }, { symbol: "FSR", market: "jse" },
+  { symbol: "ABG", market: "jse" }, { symbol: "SBK", market: "jse" }, { symbol: "SOL", market: "jse" },
+  { symbol: "VOD", market: "jse" }, { symbol: "BHP", market: "jse" },
   // Top global stocks
   { symbol: "AAPL", market: "global" }, { symbol: "MSFT", market: "global" }, { symbol: "NVDA", market: "global" },
   { symbol: "GOOGL", market: "global" }, { symbol: "AMZN", market: "global" }, { symbol: "META", market: "global" },
