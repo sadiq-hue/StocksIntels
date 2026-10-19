@@ -625,8 +625,8 @@ export function FinancialsPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" data-tour="fin-kpi">
         {(() => {
           const price = quote?.price || 0;
-          const shares = quote?.sharesOutstanding || 0;
-          const marketCap = quote?.marketCap || (price > 0 && shares > 0 ? price * shares : 0);
+          const shares = quote?.sharesOutstanding || metrics?.sharesOutstanding || 0;
+          const marketCap = quote?.marketCap || metrics?.marketCap || (price > 0 && shares > 0 ? price * shares : 0);
           return <KpiCard label="Market Cap" value={formatCompactNumber(marketCap)} sub={profile?.currency || "USD"} icon={<Globe className="w-4 h-4" />} />;
         })()}
 

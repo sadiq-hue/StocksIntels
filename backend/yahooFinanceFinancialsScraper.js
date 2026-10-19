@@ -418,10 +418,10 @@ async function fetchAnnualIncomeHistory(symbol) {
 async function getCompanyProfile(symbol) {
   const cacheKey = `yh_profile_v2_${symbol}`;
   const cached = cacheGet(cacheKey);
-  if (cached) return cached;
+  if (cached && cached.ceo && cached.ceo !== 'N/A' && (cached.employees || 0) > 0) return cached;
 
   const [qsResult, apResult] = await Promise.allSettled([
-    fetchQuoteSummary(symbol, ['summaryProfile', 'financialData', 'defaultKeyStatistics']),
+    fetchQuoteSummary(symbol, ['summaryProfile', 'financialData', 'defaultKeyStatistics', 'price']),
     fetchQuoteSummary(symbol, ['assetProfile']),
   ]);
 
@@ -432,6 +432,7 @@ async function getCompanyProfile(symbol) {
   const sp = qs?.summaryProfile || ap || {};
   const fd = qs?.financialData || {};
   const dk = qs?.defaultKeyStatistics || {};
+  const pr = qs?.price || {};
 
   const officers = ap?.companyOfficers || [];
   const ceoOfficer = officers.find(o => o.title && /\bCEO\b|Chief Executive/i.test(o.title));
@@ -460,7 +461,9 @@ async function getCompanyProfile(symbol) {
     ceo: ceo !== 'N/A' ? ceo : (edgarProfile?.ceo || 'N/A'),
     ceoRole,
     employees: sp.fullTimeEmployees || ap?.fullTimeEmployees || edgarProfile?.employees || 0,
-    marketCap: fd.marketCap || dk.marketCap || 0,
+    marketCap: fd.marketCap || dk.marketCap || pr.marketCap ||
+      ((pr.regularMarketPrice || 0) > 0 && (dk.sharesOutstanding || 0) > 0 ? pr.regularMarketPrice * dk.sharesOutstanding : 0),
+    price: pr.regularMarketPrice || fd.currentPrice || 0,
     exchange: sp.exchange || sp.exchangeDisplay || ap?.exchange || edgarProfile?.exchange || '',
     // Force USD for known US stocks (CIK lookup succeeded)
     currency: edgarProfile ? 'USD' : (fd.financialCurrency || 'USD'),
@@ -801,14 +804,16 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
   }
 
   // Get current market data from quoteSummary
-  let qs = await fetchQuoteSummary(symbol, ['financialData', 'defaultKeyStatistics']);
+  let qs = await fetchQuoteSummary(symbol, ['financialData', 'defaultKeyStatistics', 'price']);
   let fd = qs?.financialData || {};
   let dk = qs?.defaultKeyStatistics || {};
-  let currentMarketCap = fd.marketCap || dk.marketCap || 0;
+  let pr = qs?.price || {};
+  const sharesOutstanding = typeof dk.sharesOutstanding === 'number' ? dk.sharesOutstanding : 0;
+  let currentMarketCap = fd.marketCap || dk.marketCap || pr.marketCap ||
+    ((pr.regularMarketPrice || 0) > 0 && sharesOutstanding > 0 ? pr.regularMarketPrice * sharesOutstanding : 0);
   let forwardPE = fd.forwardPE || dk.forwardPE || 0;
   let trailingPE = fd.trailingPE || dk.trailingPE || 0;
   const floatShares = typeof dk.floatShares === 'number' ? dk.floatShares : 0;
-  const sharesOutstanding = typeof dk.sharesOutstanding === 'number' ? dk.sharesOutstanding : 0;
   const sharesShortPriorMonth = (typeof dk.sharesShortPriorMonth === 'number' && dk.sharesShortPriorMonth > 0) ? dk.sharesShortPriorMonth : (typeof dk.sharesShort === 'number' && dk.sharesShort > 0 ? dk.sharesShort : 0);
 
   // Fallback: scan fundamentals data for marketCap/price fields
@@ -1020,6 +1025,23 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
     }
 
     const km = await getKeyMetrics(symbol, period, limit, cfHistory);
+    const km0 = km?.[0] || null;
+    const profileWithCap = profileVal
+      ? { ...profileVal, marketCap: profileVal.marketCap || km0?.marketCap || 0 }
+      : null;
+    const quote = km0 ? {
+      symbol: symbol.toUpperCase(),
+      price: profileVal?.price || 0,
+      change: 0,
+      changesPercentage: 0,
+      marketCap: km0.marketCap || 0,
+      sharesOutstanding: km0.sharesOutstanding || 0,
+      eps: km0.netIncomePerShare || 0,
+      pe: km0.peRatio || 0,
+      volume: 0,
+      previousClose: 0,
+      lastUpdated: new Date().toISOString(),
+    } : null;
 
     return {
       success: true,
@@ -1028,8 +1050,8 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
       availableProviders: ['yahoo-finance', 'synthetic'],
       lastUpdated: new Date().toISOString(),
       data: {
-        profile: profileVal,
-        quote: null,
+        profile: profileWithCap,
+        quote,
         incomeStatement: incomeHistory?.[0] || null,
         incomeStatementHistory: incomeHistory || [],
         balanceSheet: balanceHistory?.[0] || null,
