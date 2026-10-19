@@ -1008,7 +1008,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           if (eps <= 0 && isCurrent && ttm.forwardPE > 0 && price > 0) {
             eps = price / ttm.forwardPE;
           }
-          const sharesOut = quote?.sharesOutstanding || ((netIncome && eps && (netIncome > 0 === eps > 0)) ? Math.abs(netIncome / eps) : 0);
+          const sharesOut = quote?.sharesOutstanding || km.sharesOutstanding || ((netIncome && eps && (netIncome > 0 === eps > 0)) ? Math.abs(netIncome / eps) : 0);
           const mc = quote?.marketCap || km.marketCap || computeMarketCap(price, netIncome, eps, sharesOut) || 0;
           const revenue = quote?.revenueTTM || (isCurrent ? ttm.revenue : inc.revenue) || inc.revenue || 0;
           const equity = bal.totalStockholdersEquity || bal.totalEquity || 0;
@@ -1028,18 +1028,22 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           };
         });
 
-        // Override incomeStatement[0] with TTM values so the frontend KPI row shows TTM data
-        const ttmIncome = incHist[0] ? {
-          ...incHist[0],
-          date: incHist[0].date,
+        // Prepend a TTM column built from the last four quarters when EDGAR has
+        // them (keeps the latest annual period in place).
+        const ttmBase = incHist[0];
+        const ttmInc = ttm.income || {};
+        const ttmIncome = (ttmBase && ttm.income) ? {
+          ...ttmBase,
           period: 'ttm',
-          revenue: ttm.revenue || incHist[0].revenue,
-          netIncome: ttm.netIncome || incHist[0].netIncome,
-          eps: ttm.eps || incHist[0].eps,
-          epsdiluted: ttm.eps || incHist[0].epsdiluted || incHist[0].eps,
-          netIncomeRatio: ttm.revenue > 0 ? (ttm.netIncome || 0) / ttm.revenue : incHist[0].netIncomeRatio,
+          periodType: 'TTM',
+          date: ttm.asOf || ttmBase.date,
+          revenue: ttmInc.revenue != null ? ttmInc.revenue : (ttm.revenue || ttmBase.revenue),
+          netIncome: ttmInc.netIncome != null ? ttmInc.netIncome : (ttm.netIncome || ttmBase.netIncome),
+          eps: ttmInc.eps != null ? ttmInc.eps : (ttm.eps || ttmBase.eps),
+          epsdiluted: ttmInc.epsdiluted != null ? ttmInc.epsdiluted : (ttm.eps || ttmBase.epsdiluted || ttmBase.eps),
+          netIncomeRatio: ttmInc.netIncomeRatio != null ? ttmInc.netIncomeRatio : (ttm.revenue > 0 ? (ttm.netIncome || 0) / ttm.revenue : ttmBase.netIncomeRatio),
         } : null;
-        const ttmIncHist = ttmIncome ? [ttmIncome, ...incHist.slice(1)] : incHist;
+        const ttmIncHist = ttmIncome ? [ttmIncome, ...incHist] : incHist;
 
         const yahooResult = {
           ...yahooReport,
@@ -1058,7 +1062,11 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
                 const pc = q.previousClose || (q.price - (q.change || 0));
                 q.changesPercentage = pc > 0 ? ((q.price - pc) / pc) * 100 : 0;
               }
-              return { ...q, marketCap: enrichedKm[0]?.marketCap || q.marketCap || 0 };
+              const cap = enrichedKm[0]?.marketCap || q.marketCap || 0;
+              const kmShares = enrichedKm[0]?.sharesOutstanding || 0;
+              const sharesOutstanding = q.sharesOutstanding || kmShares ||
+                (cap > 0 && q.price > 0 ? Math.round(cap / q.price) : 0);
+              return { ...q, marketCap: cap, sharesOutstanding };
             })(),
             dividendHistory: yahooReport.data.dividendHistory?.length
               ? yahooReport.data.dividendHistory

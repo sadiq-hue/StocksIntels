@@ -808,9 +808,11 @@ async function getKeyMetrics(symbol, period = 'annual', limit = 4, cashFlowHisto
   let fd = qs?.financialData || {};
   let dk = qs?.defaultKeyStatistics || {};
   let pr = qs?.price || {};
-  const sharesOutstanding = typeof dk.sharesOutstanding === 'number' ? dk.sharesOutstanding : 0;
-  let currentMarketCap = fd.marketCap || dk.marketCap || pr.marketCap ||
-    ((pr.regularMarketPrice || 0) > 0 && sharesOutstanding > 0 ? pr.regularMarketPrice * sharesOutstanding : 0);
+  const priceNow = pr.regularMarketPrice || fd.currentPrice || 0;
+  const rawCap = fd.marketCap || dk.marketCap || pr.marketCap || 0;
+  let sharesOutstanding = typeof dk.sharesOutstanding === 'number' ? dk.sharesOutstanding : 0;
+  if (!sharesOutstanding && priceNow > 0 && rawCap > 0) sharesOutstanding = Math.round(rawCap / priceNow);
+  let currentMarketCap = rawCap || (priceNow > 0 && sharesOutstanding > 0 ? priceNow * sharesOutstanding : 0);
   let forwardPE = fd.forwardPE || dk.forwardPE || 0;
   let trailingPE = fd.trailingPE || dk.trailingPE || 0;
   const floatShares = typeof dk.floatShares === 'number' ? dk.floatShares : 0;
@@ -1026,6 +1028,8 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
 
     const km = await getKeyMetrics(symbol, period, limit, cfHistory);
     const km0 = km?.[0] || null;
+    const quoteShares = km0?.sharesOutstanding ||
+      ((km0?.marketCap || 0) > 0 && (profileVal?.price || 0) > 0 ? Math.round(km0.marketCap / profileVal.price) : 0);
     const profileWithCap = profileVal
       ? { ...profileVal, marketCap: profileVal.marketCap || km0?.marketCap || 0 }
       : null;
@@ -1035,7 +1039,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
       change: 0,
       changesPercentage: 0,
       marketCap: km0.marketCap || 0,
-      sharesOutstanding: km0.sharesOutstanding || 0,
+      sharesOutstanding: quoteShares,
       eps: km0.netIncomePerShare || 0,
       pe: km0.peRatio || 0,
       volume: 0,
