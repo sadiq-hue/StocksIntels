@@ -128,30 +128,26 @@ function factLookup(facts, tag) {
 }
 
 function getFiscalYear(facts, tagKeys) {
+  // Merge every tag variant instead of returning the first one with data: XBRL
+  // revenue (and other line items) moved between tags over the years, so
+  // stopping at the first tag truncates history to the last ~7 fiscal years.
+  const byFy = new Map();
   for (const tag of tagKeys) {
     const entries = factLookup(facts, tag);
     if (!entries) continue;
     const units = entries.units;
     const usd = units?.USD || units?.USD_per_share || units?.['USD/shares'] || units?.shares || units?.pure;
     if (!usd || usd.length === 0) continue;
-    const annual = usd.filter(e => e.frame && e.frame.endsWith('I') && e.fy);
-    if (annual.length > 0) {
-      const sorted = annual.sort((a, b) => b.fy - a.fy);
-      return sorted;
-    }
-    const byFy = {};
     for (const e of usd) {
-      if (e.fy) {
-        const key = e.fy;
-        if (!byFy[key] || e.fp === 'FY') byFy[key] = e;
-      }
+      if (!e || !e.fy || e.val == null) continue;
+      const isAnnual = e.fp === 'FY' || (e.frame && /I$/.test(e.frame));
+      const existing = byFy.get(e.fy);
+      // Keep the first (most specific) tag, but upgrade a non-annual duplicate to
+      // an annual one when available.
+      if (!existing || (isAnnual && !existing._annual)) byFy.set(e.fy, { ...e, _annual: isAnnual });
     }
-    const years = Object.values(byFy).sort((a, b) => b.fy - a.fy);
-    if (years.length > 0) return years;
-    const allSorted = usd.filter(e => e.fy).sort((a, b) => b.fy - a.fy);
-    if (allSorted.length > 0) return allSorted;
   }
-  return [];
+  return [...byFy.values()].sort((a, b) => b.fy - a.fy);
 }
 
 function getLatestValue(facts, tagKeys) {
