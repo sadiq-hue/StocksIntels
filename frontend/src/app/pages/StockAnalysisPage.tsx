@@ -527,14 +527,14 @@ export function StockAnalysisPage() {
     const fetchData = async () => {
       setLoadingData(true);
       if (isAfrica) {
-        const fin = await fetchFinancialReport(finSymbol, "annual", 2).catch(() => null);
+        const fin = await fetchFinancialReport(finSymbol, "annual", 10).catch(() => null);
         if (!cancelled) { if (fin) setFinancialReport(fin); setLoadingData(false); }
         return;
       }
       const userIdParam = user?.id ? `?userId=${user.id}` : '';
       const [signalsRes, finRes] = await Promise.allSettled([
         authFetch(`${API_URL}/signals${userIdParam}`).then(r => r.ok ? r.json() : null),
-        fetchFinancialReport(finSymbol, "annual", 2),
+        fetchFinancialReport(finSymbol, "annual", 10),
       ]);
       let sig: any = null;
       if (signalsRes.status === 'fulfilled' && signalsRes.value?.signals) {
@@ -677,7 +677,12 @@ export function StockAnalysisPage() {
     { label: "Sector", value: activeSelection.sector, icon: Layers },
     { label: "Volume", value: liveQuote?.volume ? `${(liveQuote.volume / 1000000).toFixed(1)}M` : "—", icon: BarChart3 },
     { label: "Market Cap", value: (() => { const cur = liveQuote?.currency || activeSelection.currency; const cap = financialReport?.data?.quote?.marketCap || financialReport?.data?.keyMetrics?.marketCap || liveQuote?.marketCap || 0; return cap > 0 ? formatMarketCap(cap, cur) : "—"; })(), icon: PieChart },
-    { label: "P/E Ratio", value: financialReport?.data?.quote?.pe?.toFixed(1) || financialReport?.data?.keyMetrics?.peRatio?.toFixed(1) || (activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A"), icon: Percent },
+    { label: "P/E Ratio", value: (() => {
+      const pe = financialReport?.data?.quote?.pe || financialReport?.data?.keyMetrics?.peRatio || 0;
+      if (pe > 0) return pe.toFixed(1);
+      if (financialReport) return "N/A";
+      return activeSelection.pe > 0 ? activeSelection.pe.toFixed(1) : "N/A";
+    })(), icon: Percent },
   ];
 
   return (

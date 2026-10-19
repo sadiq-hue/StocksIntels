@@ -492,8 +492,8 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
     const netIncome = (isCurrent ? (ttm.netIncome || 0) : incItem.netIncome) || incItem.netIncome || 0;
     const revenue = (isCurrent ? (ttm.revenue || 0) : incItem.revenue) || incItem.revenue || 0;
     const pe = quoteValue?.pe > 0 ? quoteValue.pe : ((price > 0 && eps > 0) ? price / eps : 0);
-    const sharesOut = quoteValue?.sharesOutstanding || km.sharesOutstanding || 0;
-    const computedMarketCap = marketCapFromQuote || (price > 0 && sharesOut > 0 ? price * sharesOut : 0);
+    const sharesOut = km.sharesOutstanding || quoteValue?.sharesOutstanding || 0;
+    const computedMarketCap = (price > 0 && sharesOut > 0) ? price * sharesOut : (marketCapFromQuote || 0);
     const divYield = quoteValue?.dividendYield || tds?.dividendYield || km.dividendYield || divYieldFromHistory || 0;
     return {
       ...km, marketCap: computedMarketCap,
@@ -552,8 +552,9 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
     lastUpdated: new Date().toISOString(),
   } : { symbol, price: price || 0, change: 0, changesPercentage: 0, marketCap: computedCap });
   const quoteResponse = { ...baseQuote };
-  if (!quoteResponse.marketCap) quoteResponse.marketCap = computedCap;
-  if (!quoteResponse.sharesOutstanding) quoteResponse.sharesOutstanding = enrichedKm[0]?.sharesOutstanding || 0;
+  if (computedCap > 0) quoteResponse.marketCap = computedCap;
+  if (enrichedKm[0]?.sharesOutstanding > 0) quoteResponse.sharesOutstanding = enrichedKm[0].sharesOutstanding;
+  else if (!quoteResponse.sharesOutstanding) quoteResponse.sharesOutstanding = computedCap > 0 && quoteResponse.price > 0 ? Math.round(computedCap / quoteResponse.price) : 0;
 
   let profileData = edgarReport.data.profile || { symbol, companyName: symbol, exchange: 'NASDAQ', currency: 'USD' };
   try {
@@ -614,7 +615,8 @@ function enrichReportData(result, ownership, quarterlyShares, validationWarnings
   if (ownership) {
     if (ownership.shortInterest > 0) patch.sharesShortPriorMonth = ownership.shortInterest;
     if (ownership.floatShares > 0) patch.floatShares = ownership.floatShares;
-    if (ownership.yahooSharesOutstanding > 0) patch.sharesOutstanding = ownership.yahooSharesOutstanding;
+    const existingShares = data.keyMetrics?.sharesOutstanding || data.keyMetricsHistory?.[0]?.sharesOutstanding || 0;
+  if (ownership.yahooSharesOutstanding > 0 && !existingShares) patch.sharesOutstanding = ownership.yahooSharesOutstanding;
   }
 
   if (Object.keys(patch).length > 0) {
@@ -944,7 +946,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
       return saReport || yahoo || { success: false, symbol: ticker, error: `No financial data for ${ticker}` };
     }
 
-    const isUs = edgarService.isUsStock(symbol);
+    const isUs = edgarService.isUsStock(symbol) || Boolean(await edgarService.resolveCik(symbol));
 
     // NSE-listed stocks: serve local NSE data only. Yahoo Finance / SEC EDGAR have
     // no NSE coverage, so falling through to them just produces a failed Yahoo fetch

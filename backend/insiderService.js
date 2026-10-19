@@ -1,6 +1,6 @@
 const axios = require('axios');
 const path = require('path');
-const { cikLookup, fetchSubmissions } = require('./edgarService');
+const { resolveCik, fetchSubmissions } = require('./edgarService');
 
 const USER_AGENT = 'StocksIntels/1.0 (contact@stockintel.app)';
 const SEC_ARCHIVES = 'https://www.sec.gov/Archives';
@@ -278,7 +278,7 @@ function summarize(rows) {
 }
 
 async function getCompanyInsiderFilings(symbol, limit = 20) {
-  const cik = cikLookup(symbol);
+  const cik = await resolveCik(symbol);
   if (!cik) return { success: false, symbol, error: 'No SEC CIK for this symbol', filings: [], rows: [] };
 
   const cacheKey = `company-insider:${String(cik)}:${limit}`;

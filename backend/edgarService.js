@@ -97,7 +97,7 @@ const US_GAAP_TAGS = {
   incomeTax: ['us-gaap:IncomeTaxExpenseBenefit'],
   interestExpense: ['us-gaap:InterestExpense', 'us-gaap:InterestExpenseNonoperating'],
   ebitda: ['us-gaap:EarningsBeforeInterestTaxesDepreciationAndAmortization'],
-  cash: ['us-gaap:CashAndCashEquivalentsAtCarryingValue'],
+  cash: ['us-gaap:CashAndCashEquivalentsAtCarryingValue', 'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'],
   inventory: ['us-gaap:InventoryNet'],
   currentAssets: ['us-gaap:AssetsCurrent'],
   nonCurrentAssets: ['us-gaap:AssetsNoncurrent'],
@@ -351,13 +351,63 @@ async function fetchSubmissions(cik) {
   return null;
 }
 
-function cikLookup(ticker) {
-  const upper = ticker.toUpperCase().replace('NSE:', '');
-  return CIK_MAP[upper] || null;
+function normalizeCikTicker(ticker) {
+  return String(ticker || '').toUpperCase().replace('NSE:', '').trim().replace(/\./g, '-');
 }
 
+function cikLookup(ticker) {
+  const upper = String(ticker || '').toUpperCase().replace('NSE:', '').trim();
+  return CIK_MAP[upper] || CIK_MAP[normalizeCikTicker(upper)] || null;
+}
+
+// Authoritative ticker -> CIK map from the SEC. The static CIK_MAP only covers
+// the largest names; loading the full file means every US registrant (AAL,
+// IONQ, ...) uses the EDGAR pipeline instead of silently falling back to Yahoo.
+let companyTickersPromise = null;
+let companyTickersLoadedAt = 0;
+
+async function ensureCompanyTickers() {
+  if (Date.now() - companyTickersLoadedAt < 24 * 60 * 60 * 1000) return CIK_MAP;
+  if (companyTickersPromise) return companyTickersPromise;
+  companyTickersPromise = (async () => {
+    const res = await edgarClient.get('https://www.sec.gov/files/company_tickers.json', {
+      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+    });
+    const rows = Object.values(res.data || {});
+    for (const row of rows) {
+      const cik = Number(row.cik_str);
+      const ticker = String(row.ticker || '').toUpperCase();
+      if (!cik || !ticker) continue;
+      CIK_MAP[ticker] = cik;
+      const normalized = ticker.replace(/\./g, '-');
+      if (normalized !== ticker) CIK_MAP[normalized] = cik;
+      if (ticker.includes('-')) CIK_MAP[ticker.replace(/-/g, '.')] = cik;
+    }
+    companyTickersLoadedAt = Date.now();
+    console.log(`[EDGAR] Loaded ${rows.length} SEC company tickers`);
+    return CIK_MAP;
+  })().catch((err) => {
+    console.warn(`[EDGAR] Could not load company tickers: ${err.message}`);
+    companyTickersLoadedAt = 0;
+    return CIK_MAP;
+  }).finally(() => {
+    companyTickersPromise = null;
+  });
+  return companyTickersPromise;
+}
+
+async function resolveCik(symbol) {
+  const existing = cikLookup(symbol);
+  if (existing && companyTickersLoadedAt) return existing;
+  await ensureCompanyTickers();
+  return cikLookup(symbol);
+}
+
+// Warm the full ticker map in the background so most lookups are synchronous.
+ensureCompanyTickers().catch(() => {});
+
 async function getIncomeStatementFromEdgar(symbol, period = 'annual', limit = 4) {
-  const cik = cikLookup(symbol);
+  const cik = await resolveCik(symbol);
   if (!cik) return null;
 
   const data = await fetchCompanyFacts(cik);
@@ -427,7 +477,7 @@ function getLatestValueByFy(facts, tagKeys, fy) {
 }
 
 async function getBalanceSheetFromEdgar(symbol, period = 'annual', limit = 4) {
-  const cik = cikLookup(symbol);
+  const cik = await resolveCik(symbol);
   if (!cik) return null;
 
   const data = await fetchCompanyFacts(cik);
@@ -450,9 +500,11 @@ async function getBalanceSheetFromEdgar(symbol, period = 'annual', limit = 4) {
     const inventory = getSnapshotByEnd(facts, US_GAAP_TAGS.inventory, end) || 0;
     const currentAssets = getSnapshotByEnd(facts, US_GAAP_TAGS.currentAssets, end) || 0;
     const nonCurrentAssets = getSnapshotByEnd(facts, US_GAAP_TAGS.nonCurrentAssets, end) || (totalAssets - currentAssets);
-    const totalLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.totalLiabilities, end) || 0;
     const currentLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.currentLiabilities, end) || 0;
-    const nonCurrentLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.nonCurrentLiabilities, end) || (totalLiabilities - currentLiabilities);
+    let nonCurrentLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.nonCurrentLiabilities, end) || 0;
+    let totalLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.totalLiabilities, end) || 0;
+    if (!totalLiabilities) totalLiabilities = currentLiabilities + nonCurrentLiabilities;
+    if (!nonCurrentLiabilities) nonCurrentLiabilities = Math.max(0, totalLiabilities - currentLiabilities);
     const equity = getSnapshotByEnd(facts, US_GAAP_TAGS.stockholdersEquity, end) || getSnapshotByEnd(facts, US_GAAP_TAGS.totalEquity, end) || (totalAssets - totalLiabilities);
     const retainedEarnings = getSnapshotByEnd(facts, US_GAAP_TAGS.retainedEarnings, end) || 0;
     const longTermDebt = getSnapshotByEnd(facts, US_GAAP_TAGS.longTermDebt, end) || 0;
@@ -485,7 +537,7 @@ async function getBalanceSheetFromEdgar(symbol, period = 'annual', limit = 4) {
 }
 
 async function getCashFlowFromEdgar(symbol, period = 'annual', limit = 4) {
-  const cik = cikLookup(symbol);
+  const cik = await resolveCik(symbol);
   if (!cik) return null;
 
   const data = await fetchCompanyFacts(cik);
@@ -538,7 +590,7 @@ async function getCashFlowFromEdgar(symbol, period = 'annual', limit = 4) {
 }
 
 async function getCompanyProfileFromEdgar(symbol) {
-  const cik = cikLookup(symbol);
+  const cik = await resolveCik(symbol);
   if (!cik) return null;
 
   const cacheKey = `edgar_profile_${symbol}`;
@@ -593,7 +645,7 @@ async function getCompanyProfileFromEdgar(symbol) {
 }
 
 async function getFilings(symbol, formTypes = ['10-K', '10-Q'], limit = 20) {
-  const cik = cikLookup(symbol);
+  const cik = await resolveCik(symbol);
   if (!cik) return [];
 
   const cacheKey = `edgar_filings_${symbol}_${limit}`;
@@ -653,7 +705,7 @@ async function getFilings(symbol, formTypes = ['10-K', '10-Q'], limit = 20) {
 }
 
 async function getKeyMetricsFromEdgar(symbol, period = 'annual', limit = 4) {
-  const cik = cikLookup(symbol);
+  const cik = await resolveCik(symbol);
   if (!cik) return null;
 
   const data = await fetchCompanyFacts(cik);
@@ -676,9 +728,11 @@ async function getKeyMetricsFromEdgar(symbol, period = 'annual', limit = 4) {
     const netIncome = getValueByEnd(facts, US_GAAP_TAGS.netIncome, end, period) || 0;
     const equity = getSnapshotByEnd(facts, US_GAAP_TAGS.stockholdersEquity, end) || 0;
     const totalAssets = getSnapshotByEnd(facts, US_GAAP_TAGS.totalAssets, end) || 0;
-    const totalLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.totalLiabilities, end) || 0;
     const currentAssets = getSnapshotByEnd(facts, US_GAAP_TAGS.currentAssets, end) || 0;
     const currentLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.currentLiabilities, end) || 0;
+    const nonCurrentLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.nonCurrentLiabilities, end) || 0;
+    let totalLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.totalLiabilities, end) || 0;
+    if (!totalLiabilities) totalLiabilities = currentLiabilities + nonCurrentLiabilities;
     const ocf = getValueByEnd(facts, US_GAAP_TAGS.operatingCashFlow, end, period) || 0;
     const capex = Math.abs(getValueByEnd(facts, US_GAAP_TAGS.capex, end, period) || 0);
     const fcf = ocf - capex;
@@ -686,12 +740,12 @@ async function getKeyMetricsFromEdgar(symbol, period = 'annual', limit = 4) {
     const cash = getSnapshotByEnd(facts, US_GAAP_TAGS.cash, end) || 0;
     const netDebt = Math.max(0, longTermDebt - cash);
     const dividends = Math.abs(getValueByEnd(facts, US_GAAP_TAGS.dividendsPaid, end, period) || 0);
-    const shares = getSnapshotByEnd(facts, US_GAAP_TAGS.sharesOutstanding, end) || (entry === selected[0] ? latestShares : 0) || 0;
+    const shares = (entry === selected[0] ? latestShares : 0) || getSnapshotByEnd(facts, US_GAAP_TAGS.sharesOutstanding, end) || 0;
 
     const peRatio = 0;
     const priceToSales = 0;
     const pbRatio = 0;
-    const debtToEquity = equity !== 0 ? (totalLiabilities / equity) : 0;
+    const debtToEquity = equity > 0 ? (totalLiabilities / equity) : 0;
     const currentRatio = currentLiabilities !== 0 ? (currentAssets / currentLiabilities) : 0;
     const dividendYieldPct = 0;
     const payoutRatio = netIncome !== 0 ? (dividends / netIncome) : 0;
@@ -772,7 +826,7 @@ async function getFinancialReportFromEdgar(symbol, period = 'annual', limit = 4)
 }
 
 async function getTTMFromEdgarLegacy(symbol) {
-  const cik = cikLookup(symbol);
+  const cik = await resolveCik(symbol);
   if (!cik) return null;
 
   const data = await fetchCompanyFacts(cik);
@@ -966,7 +1020,7 @@ async function getTTMFromEdgarLegacy(symbol) {
 }
 
 async function getTTMFromEdgar(symbol) {
-  const cik = cikLookup(symbol);
+  const cik = await resolveCik(symbol);
   if (!cik) return null;
 
   const data = await fetchCompanyFacts(cik);
@@ -1074,7 +1128,7 @@ async function getTTMFromEdgar(symbol) {
 }
 
 async function getQuarterlyShareCountHistory(symbol) {
-  const cik = cikLookup(symbol);
+  const cik = await resolveCik(symbol);
   if (!cik) return null;
 
   const cacheKey = `edgar_qshares_${symbol}`;
@@ -1121,6 +1175,8 @@ cache.loadFromDb().then(count => {
 module.exports = {
   isUsStock,
   cikLookup,
+  resolveCik,
+  ensureCompanyTickers,
   fetchSubmissions,
   getCompanyProfileFromEdgar,
   getIncomeStatementFromEdgar,
