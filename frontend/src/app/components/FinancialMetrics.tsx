@@ -193,7 +193,7 @@ export function FinancialMetrics({ symbol, sector, instrumentName }: FinancialMe
             <div className="grid grid-cols-2 gap-2">
               <MetricBox label="Revenue Growth" value={pct(revenueGrowth, 1)} color={badgeColor(revenueGrowth, v => v > 0.05)} sub="Latest FY vs prior FY" />
               <MetricBox label="EPS Growth" value={pct(epsGrowth, 1)} color={badgeColor(epsGrowth, v => v > 0.05)} sub="Latest FY vs prior FY" />
-              <MetricBox label="Free Cash Flow" value={fcf != null ? formatLargeNum(fcf) : "—"} color={badgeColor(fcf, v => v > 0)} sub="Operating CF − CapEx" />
+              <MetricBox label="Free Cash Flow" value={fcf != null ? formatLargeNum(fcf) : "—"} color={badgeColor(fcf, v => v > 0)} sub={cf?.date ? `FY ${cf.date.slice(0, 4)} · OCF − CapEx` : "Operating CF − CapEx"} />
               <MetricBox label="Earnings Yield" value={pct(earningsYield, 1)} color={badgeColor(earningsYield, v => v > 0.05)} sub="Net Income ÷ Market Cap" />
             </div>
           </div>

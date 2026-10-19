@@ -745,7 +745,7 @@ async function getKeyMetricsFromEdgar(symbol, period = 'annual', limit = 4) {
     const peRatio = 0;
     const priceToSales = 0;
     const pbRatio = 0;
-    const debtToEquity = equity > 0 ? (totalLiabilities / equity) : 0;
+    const debtToEquity = equity > 0 ? (longTermDebt / equity) : 0;
     const currentRatio = currentLiabilities !== 0 ? (currentAssets / currentLiabilities) : 0;
     const dividendYieldPct = 0;
     const payoutRatio = netIncome !== 0 ? (dividends / netIncome) : 0;
