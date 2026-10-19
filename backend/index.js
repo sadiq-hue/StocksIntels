@@ -5913,7 +5913,9 @@ app.get('/api/financials/:symbol', async (req, res) => {
   try {
     const symbol = req.params.symbol.toUpperCase();
     const period = req.query.period || 'annual';
-    const limit = parseInt(req.query.limit, 10) || 4;
+    // Deep history: allow up to 25 annual periods (EDGAR XBRL covers ~2009+;
+    // older 2001-2008 years only exist in legacy text filings).
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 4, 1), 25);
     const provider = req.query.provider || null;
     const key = `${symbol}|${period}|${limit}|${provider || ''}`;
     const hit = _financialReportCache.get(key);

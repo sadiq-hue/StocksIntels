@@ -911,6 +911,24 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
     const availableProviders = ['yahoo-finance'];
     if (isUs) availableProviders.push('sec-edgar');
 
+    // Deep annual history: Yahoo only exposes ~4 years. When the caller asks for
+    // more, pull the full XBRL history from SEC EDGAR (covers ~2009 onward) and
+    // fall back to Yahoo if EDGAR has nothing.
+    if (isUs && period === 'annual' && limit > 6 && activeProvider !== 'sec-edgar') {
+      try {
+        const deep = await buildEdgarReport(symbol, period, limit, availableProviders);
+        if (deep.success) {
+          const [own, qs] = await Promise.allSettled([
+            getOwnershipData(symbol),
+            getQuarterlyShareCountHistory(symbol),
+          ]);
+          return enrichReportData(deep, own.status === 'fulfilled' ? own.value : null, qs.status === 'fulfilled' ? qs.value : null, validateFinancialData(deep));
+        }
+      } catch (e) {
+        console.warn('[Financials] deep EDGAR history failed, falling back to Yahoo:', e.message);
+      }
+    }
+
     // Yahoo Finance — primary for all stocks (uses Twelve Data + SEC EDGAR internally on Railway)
     if (activeProvider === 'yahoo-finance') {
       const yahooReport = await yahooFinanceScraper.getFinancialReport(symbol, period, limit);

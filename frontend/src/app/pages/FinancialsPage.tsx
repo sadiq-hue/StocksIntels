@@ -417,7 +417,7 @@ export function FinancialsPage() {
     }
     setIsLoading(true);
     setError(null);
-    const limit = period === "annual" ? 4 : 6;
+    const limit = period === "annual" ? 25 : 8;
     fetchFinancialReport(selectedSymbol, period, limit, provider)
       .then((payload) => {
         if (!active) return;
