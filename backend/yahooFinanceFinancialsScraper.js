@@ -416,7 +416,7 @@ async function fetchAnnualIncomeHistory(symbol) {
 }
 
 async function getCompanyProfile(symbol) {
-  const cacheKey = `yh_profile_v2_${symbol}`;
+  const cacheKey = `yh_profile_v3_${symbol}`;
   const cached = cacheGet(cacheKey);
   if (cached && cached.ceo && cached.ceo !== 'N/A' && (cached.employees || 0) > 0) return cached;
 
@@ -452,7 +452,7 @@ async function getCompanyProfile(symbol) {
 
   const profile = {
     symbol,
-    companyName: sp.longName || sp.shortName || edgarProfile?.companyName || symbol,
+    companyName: pr.longName || pr.shortName || sp.longName || sp.shortName || edgarProfile?.companyName || symbol,
     industry: sp.industry || ap?.industry || edgarProfile?.industry || '',
     sector: sp.sector || ap?.sector || edgarProfile?.sector || '',
     country: sp.country || ap?.country || edgarProfile?.country || '',
