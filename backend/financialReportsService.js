@@ -53,6 +53,8 @@ async function ensureTTMValues(symbol, incHist) {
   let ttmNetIncome = 0;
   let ttmEps = 0;
   let ttmPeriods = '';
+  let ttmAsOf = null;
+  let ttmIncome = null;
   let sharesOut = 0;
   let forwardPE = 0;
 
@@ -69,11 +71,13 @@ async function ensureTTMValues(symbol, incHist) {
   // Primary source: SEC EDGAR quarterly data (free, authoritative, works on Railway)
   try {
     const edgarTtm = await edgarService.getTTMFromEdgar(symbol);
-    if (edgarTtm && edgarTtm.revenue > 0 && edgarTtm.netIncome > 0) {
+    if (edgarTtm && edgarTtm.revenue > 0) {
       ttmRevenue = edgarTtm.revenue;
-      ttmNetIncome = edgarTtm.netIncome;
-      ttmEps = edgarTtm.eps > 0 ? edgarTtm.eps : 0;
+      ttmNetIncome = edgarTtm.netIncome || 0;
+      ttmEps = Number.isFinite(edgarTtm.eps) ? edgarTtm.eps : 0;
       ttmPeriods = edgarTtm.periods || '';
+      ttmAsOf = edgarTtm.asOf || null;
+      ttmIncome = edgarTtm.income || null;
     } else if (edgarTtm?.periods) {
       ttmPeriods = edgarTtm.periods;
     }
@@ -101,7 +105,7 @@ async function ensureTTMValues(symbol, incHist) {
     }
   }
 
-  return { revenue: ttmRevenue, netIncome: ttmNetIncome, eps: ttmEps, forwardPE, periods: ttmPeriods };
+  return { revenue: ttmRevenue, netIncome: ttmNetIncome, eps: ttmEps, forwardPE, periods: ttmPeriods, asOf: ttmAsOf, income: ttmIncome };
 }
 
 function validateDateString(dateStr) {
@@ -508,17 +512,31 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
     if (equity > 0 && mc > 0) enrichedKm[0].pbRatio = mc / equity;
   }
 
-  // Override incomeStatement[0] with TTM values
-  const ttmIncome = edgarIncHistory[0] ? {
-    ...edgarIncHistory[0],
+  // Prepend a TTM column built from the last four quarters (2026 data when
+  // the latest 10-K isn't filed yet).
+  const ttmBase = edgarIncHistory[0];
+  const ttmInc = ttm.income || {};
+  const ttmIncome = (ttmBase && ttm.income) ? {
+    ...ttmBase,
     period: 'ttm',
-    revenue: ttm.revenue || edgarIncHistory[0].revenue,
-    netIncome: ttm.netIncome || edgarIncHistory[0].netIncome,
-    eps: ttm.eps || edgarIncHistory[0].eps,
-    epsdiluted: ttm.eps || edgarIncHistory[0].epsdiluted || edgarIncHistory[0].eps,
-    netIncomeRatio: ttm.revenue > 0 ? (ttm.netIncome || 0) / ttm.revenue : edgarIncHistory[0].netIncomeRatio,
+    periodType: 'TTM',
+    date: ttm.asOf || ttmBase.date,
+    revenue: ttmInc.revenue != null ? ttmInc.revenue : (ttm.revenue || ttmBase.revenue),
+    costOfRevenue: ttmInc.costOfRevenue != null ? ttmInc.costOfRevenue : ttmBase.costOfRevenue,
+    grossProfit: ttmInc.grossProfit != null ? ttmInc.grossProfit : ttmBase.grossProfit,
+    grossProfitRatio: ttmInc.grossProfitRatio != null ? ttmInc.grossProfitRatio : ttmBase.grossProfitRatio,
+    operatingExpenses: ttmInc.operatingExpenses != null ? ttmInc.operatingExpenses : ttmBase.operatingExpenses,
+    operatingIncome: ttmInc.operatingIncome != null ? ttmInc.operatingIncome : ttmBase.operatingIncome,
+    operatingIncomeRatio: ttmInc.operatingIncomeRatio != null ? ttmInc.operatingIncomeRatio : ttmBase.operatingIncomeRatio,
+    netIncome: ttmInc.netIncome != null ? ttmInc.netIncome : (ttm.netIncome || ttmBase.netIncome),
+    netIncomeRatio: ttmInc.netIncomeRatio != null ? ttmInc.netIncomeRatio : ttmBase.netIncomeRatio,
+    incomeTaxExpense: ttmInc.incomeTaxExpense != null ? ttmInc.incomeTaxExpense : ttmBase.incomeTaxExpense,
+    interestExpense: ttmInc.interestExpense != null ? ttmInc.interestExpense : ttmBase.interestExpense,
+    ebitda: ttmInc.ebitda != null ? ttmInc.ebitda : ttmBase.ebitda,
+    eps: ttmInc.eps != null ? ttmInc.eps : (ttm.eps || ttmBase.eps),
+    epsdiluted: ttmInc.epsdiluted != null ? ttmInc.epsdiluted : (ttm.eps || ttmBase.epsdiluted || ttmBase.eps),
   } : null;
-  const ttmIncHist = ttmIncome ? [ttmIncome, ...edgarIncHistory.slice(1)] : edgarIncHistory;
+  const ttmIncHist = ttmIncome ? [ttmIncome, ...edgarIncHistory] : edgarIncHistory;
 
   const computedCap = enrichedKm[0]?.marketCap || 0;
   const quoteResponse = quoteValue || (tds ? {

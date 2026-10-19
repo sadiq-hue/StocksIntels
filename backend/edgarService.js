@@ -86,7 +86,7 @@ const CIK_MAP = {
 };
 
 const US_GAAP_TAGS = {
-  revenue: ['us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax', 'us-gaap:Revenues', 'us-gaap:SalesRevenueNet', 'us-gaap:SalesRevenueGoodsNet', 'us-gaap:SalesRevenueServicesNet'],
+  revenue: ['us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax', 'us-gaap:Revenues', 'us-gaap:RevenuesNetOfInterestExpense', 'us-gaap:SalesRevenueNet', 'us-gaap:SalesRevenueGoodsNet', 'us-gaap:SalesRevenueServicesNet'],
   costOfRevenue: ['us-gaap:CostOfRevenue', 'us-gaap:CostOfGoodsSold'],
   grossProfit: ['us-gaap:GrossProfit'],
   operatingExpenses: ['us-gaap:OperatingExpenses'],
@@ -148,6 +148,100 @@ function getFiscalYear(facts, tagKeys) {
     }
   }
   return [...byFy.values()].sort((a, b) => b.fy - a.fy);
+}
+
+function isQuarterPeriod(period) {
+  return /^q(uarter|uarterly)?$/i.test(String(period || '')) || String(period || '').toLowerCase().startsWith('quarter');
+}
+
+function entryDurationDays(e) {
+  if (!e || !e.start || !e.end) return null;
+  const days = Math.round((Date.parse(e.end) - Date.parse(e.start)) / 86400000);
+  return Number.isFinite(days) ? days : null;
+}
+
+// All period entries across tag variants. Keeps separate durations (a Q3 filing
+// reports both 3-month and 9-month figures at the same period end) and the
+// latest filing wins for identical start/end.
+function getAllEntries(facts, tagKeys) {
+  const byKey = new Map();
+  for (const tag of tagKeys) {
+    const entries = factLookup(facts, tag);
+    if (!entries) continue;
+    const units = entries.units;
+    const usd = units?.USD || units?.USD_per_share || units?.['USD/shares'] || units?.shares || units?.pure;
+    if (!usd) continue;
+    for (const e of usd) {
+      if (!e || e.val == null || !e.end) continue;
+      const k = `${e.end}|${e.fp || ''}|${e.start || ''}`;
+      const prev = byKey.get(k);
+      if (!prev || String(e.filed || '') > String(prev.filed || '')) byKey.set(k, e);
+    }
+  }
+  return [...byKey.values()];
+}
+
+function durationScore(days, wantsQuarter) {
+  if (days == null) return 500;
+  return wantsQuarter ? Math.abs(days - 90) : Math.abs(days - 365);
+}
+
+// Pick the newest N annual or quarterly periods from a tag set.
+function pickPeriodEntries(facts, tagKeys, period, limit) {
+  const all = getAllEntries(facts, tagKeys);
+  const wantsQuarter = isQuarterPeriod(period);
+  let pool = all.filter(e => {
+    const days = entryDurationDays(e);
+    if (wantsQuarter) {
+      return /^Q[1-4]$/i.test(String(e.fp || '')) && (days == null || (days >= 60 && days <= 120));
+    }
+    return String(e.fp || '').toUpperCase() === 'FY' && (days == null || days >= 300);
+  });
+  if (!pool.length) {
+    pool = all.filter(e => e.frame && (wantsQuarter ? /Q[1-4]$/i.test(e.frame) : /I$/.test(e.frame)));
+  }
+  if (!pool.length) pool = all;
+  const sorted = pool.slice().sort((a, b) => {
+    const byEnd = String(b.end).localeCompare(String(a.end));
+    if (byEnd !== 0) return byEnd;
+    return durationScore(entryDurationDays(a), wantsQuarter) - durationScore(entryDurationDays(b), wantsQuarter);
+  });
+  const seen = new Set();
+  const out = [];
+  for (const e of sorted) {
+    if (seen.has(e.end)) continue;
+    seen.add(e.end);
+    out.push(e);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+// A line item measured at the same period end (works for annual and quarterly).
+// Prefers the matching duration so 3-month figures aren't confused with YTD.
+function getValueByEnd(facts, tagKeys, end, period) {
+  const wantsQuarter = isQuarterPeriod(period);
+  for (const tag of tagKeys) {
+    const entries = factLookup(facts, tag);
+    if (!entries) continue;
+    const units = entries.units;
+    const usd = units?.USD || units?.USD_per_share || units?.['USD/shares'] || units?.shares || units?.pure;
+    if (!usd) continue;
+    const matches = usd.filter(e => e.end === end);
+    if (!matches.length) continue;
+    matches.sort((a, b) => {
+      const score = durationScore(entryDurationDays(a), wantsQuarter) - durationScore(entryDurationDays(b), wantsQuarter);
+      if (score !== 0) return score;
+      return String(b.filed || '').localeCompare(String(a.filed || ''));
+    });
+    return matches[0].val;
+  }
+  return null;
+}
+
+// Instantaneous (balance-sheet) value at a period end; duration is irrelevant.
+function getSnapshotByEnd(facts, tagKeys, end) {
+  return getValueByEnd(facts, tagKeys, end, 'annual');
 }
 
 function getLatestValue(facts, tagKeys) {
@@ -250,30 +344,32 @@ async function getIncomeStatementFromEdgar(symbol, period = 'annual', limit = 4)
   if (!data) return null;
 
   const facts = data.facts?.['us-gaap'] || {};
-  const revenueEntries = getFiscalYear(facts, US_GAAP_TAGS.revenue);
+  const revenueEntries = getAllEntries(facts, US_GAAP_TAGS.revenue);
   if (revenueEntries.length === 0) return null;
 
-  const selected = pickAnnualEntries(revenueEntries).slice(0, limit);
+  const selected = pickPeriodEntries(facts, US_GAAP_TAGS.revenue, period, limit);
   const statements = [];
 
   for (const entry of selected) {
     const fy = entry.fy;
-    const date = entry.filed || `${fy}-12-31`;
+    const date = entry.end || entry.filed || `${fy}-12-31`;
+    const end = entry.end;
 
     const revenue = entry.val;
-    const costOfRevenue = getLatestValueByFy(facts, US_GAAP_TAGS.costOfRevenue, fy) || 0;
-    const grossProfit = getLatestValueByFy(facts, US_GAAP_TAGS.grossProfit, fy) || (revenue - costOfRevenue);
-    const opEx = getLatestValueByFy(facts, US_GAAP_TAGS.operatingExpenses, fy) || 0;
-    const opIncome = getLatestValueByFy(facts, US_GAAP_TAGS.operatingIncome, fy) || (grossProfit - opEx);
-    const netIncome = getLatestValueByFy(facts, US_GAAP_TAGS.netIncome, fy) || 0;
-    const eps = getLatestValueByFy(facts, US_GAAP_TAGS.epsBasic, fy) || 0;
-    const epsDil = getLatestValueByFy(facts, US_GAAP_TAGS.epsDiluted, fy) || eps;
-    const tax = getLatestValueByFy(facts, US_GAAP_TAGS.incomeTax, fy) || 0;
-    const interest = getLatestValueByFy(facts, US_GAAP_TAGS.interestExpense, fy) || 0;
+    const costOfRevenue = getValueByEnd(facts, US_GAAP_TAGS.costOfRevenue, end, period) || 0;
+    const grossProfit = getValueByEnd(facts, US_GAAP_TAGS.grossProfit, end, period) || (revenue - costOfRevenue);
+    const opEx = getValueByEnd(facts, US_GAAP_TAGS.operatingExpenses, end, period) || 0;
+    const opIncome = getValueByEnd(facts, US_GAAP_TAGS.operatingIncome, end, period) || (grossProfit - opEx);
+    const netIncome = getValueByEnd(facts, US_GAAP_TAGS.netIncome, end, period) || 0;
+    const eps = getValueByEnd(facts, US_GAAP_TAGS.epsBasic, end, period) || 0;
+    const epsDil = getValueByEnd(facts, US_GAAP_TAGS.epsDiluted, end, period) || eps;
+    const tax = getValueByEnd(facts, US_GAAP_TAGS.incomeTax, end, period) || 0;
+    const interest = getValueByEnd(facts, US_GAAP_TAGS.interestExpense, end, period) || 0;
 
     statements.push({
       date,
       period,
+      periodType: isQuarterPeriod(period) ? 'quarterly' : 'annual',
       revenue,
       costOfRevenue,
       grossProfit,
@@ -283,7 +379,7 @@ async function getIncomeStatementFromEdgar(symbol, period = 'annual', limit = 4)
       operatingIncomeRatio: revenue > 0 ? opIncome / revenue : 0,
       netIncome,
       netIncomeRatio: revenue > 0 ? netIncome / revenue : 0,
-      ebitda: getLatestValueByFy(facts, US_GAAP_TAGS.ebitda, fy) || Math.round(opIncome * 1.18),
+      ebitda: getValueByEnd(facts, US_GAAP_TAGS.ebitda, end, period) || Math.round(opIncome * 1.18),
       incomeTaxExpense: tax,
       interestExpense: interest,
       eps: eps,
@@ -318,33 +414,35 @@ async function getBalanceSheetFromEdgar(symbol, period = 'annual', limit = 4) {
   if (!data) return null;
 
   const facts = data.facts?.['us-gaap'] || {};
-  const assetsEntries = getFiscalYear(facts, US_GAAP_TAGS.totalAssets);
+  const assetsEntries = getAllEntries(facts, US_GAAP_TAGS.totalAssets);
   if (assetsEntries.length === 0) return null;
 
-  const selected = pickAnnualEntries(assetsEntries).slice(0, limit);
+  const selected = pickPeriodEntries(facts, US_GAAP_TAGS.totalAssets, period, limit);
   const statements = [];
 
   for (const entry of selected) {
     const fy = entry.fy;
-    const date = entry.filed || `${fy}-12-31`;
+    const date = entry.end || entry.filed || `${fy}-12-31`;
+    const end = entry.end;
 
     const totalAssets = entry.val;
-    const cash = getLatestValueByFy(facts, US_GAAP_TAGS.cash, fy) || 0;
-    const inventory = getLatestValueByFy(facts, US_GAAP_TAGS.inventory, fy) || 0;
-    const currentAssets = getLatestValueByFy(facts, US_GAAP_TAGS.currentAssets, fy) || 0;
-    const nonCurrentAssets = getLatestValueByFy(facts, US_GAAP_TAGS.nonCurrentAssets, fy) || (totalAssets - currentAssets);
-    const totalLiabilities = getLatestValueByFy(facts, US_GAAP_TAGS.totalLiabilities, fy) || 0;
-    const currentLiabilities = getLatestValueByFy(facts, US_GAAP_TAGS.currentLiabilities, fy) || 0;
-    const nonCurrentLiabilities = getLatestValueByFy(facts, US_GAAP_TAGS.nonCurrentLiabilities, fy) || (totalLiabilities - currentLiabilities);
-    const equity = getLatestValueByFy(facts, US_GAAP_TAGS.stockholdersEquity, fy) || getLatestValueByFy(facts, US_GAAP_TAGS.totalEquity, fy) || (totalAssets - totalLiabilities);
-    const retainedEarnings = getLatestValueByFy(facts, US_GAAP_TAGS.retainedEarnings, fy) || 0;
-    const longTermDebt = getLatestValueByFy(facts, US_GAAP_TAGS.longTermDebt, fy) || 0;
-    const treasuryStock = getLatestValueByFy(facts, US_GAAP_TAGS.treasuryStock, fy) || 0;
-    const additionalPaidInCapital = getLatestValueByFy(facts, US_GAAP_TAGS.additionalPaidInCapital, fy) || 0;
+    const cash = getSnapshotByEnd(facts, US_GAAP_TAGS.cash, end) || 0;
+    const inventory = getSnapshotByEnd(facts, US_GAAP_TAGS.inventory, end) || 0;
+    const currentAssets = getSnapshotByEnd(facts, US_GAAP_TAGS.currentAssets, end) || 0;
+    const nonCurrentAssets = getSnapshotByEnd(facts, US_GAAP_TAGS.nonCurrentAssets, end) || (totalAssets - currentAssets);
+    const totalLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.totalLiabilities, end) || 0;
+    const currentLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.currentLiabilities, end) || 0;
+    const nonCurrentLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.nonCurrentLiabilities, end) || (totalLiabilities - currentLiabilities);
+    const equity = getSnapshotByEnd(facts, US_GAAP_TAGS.stockholdersEquity, end) || getSnapshotByEnd(facts, US_GAAP_TAGS.totalEquity, end) || (totalAssets - totalLiabilities);
+    const retainedEarnings = getSnapshotByEnd(facts, US_GAAP_TAGS.retainedEarnings, end) || 0;
+    const longTermDebt = getSnapshotByEnd(facts, US_GAAP_TAGS.longTermDebt, end) || 0;
+    const treasuryStock = getSnapshotByEnd(facts, US_GAAP_TAGS.treasuryStock, end) || 0;
+    const additionalPaidInCapital = getSnapshotByEnd(facts, US_GAAP_TAGS.additionalPaidInCapital, end) || 0;
 
     statements.push({
       date,
       period,
+      periodType: isQuarterPeriod(period) ? 'quarterly' : 'annual',
       cashAndCashEquivalents: cash,
       inventory,
       totalCurrentAssets: currentAssets,
@@ -374,28 +472,30 @@ async function getCashFlowFromEdgar(symbol, period = 'annual', limit = 4) {
   if (!data) return null;
 
   const facts = data.facts?.['us-gaap'] || {};
-  const ocfEntries = getFiscalYear(facts, US_GAAP_TAGS.operatingCashFlow);
+  const ocfEntries = getAllEntries(facts, US_GAAP_TAGS.operatingCashFlow);
   if (ocfEntries.length === 0) return null;
 
-  const selected = pickAnnualEntries(ocfEntries).slice(0, limit);
+  const selected = pickPeriodEntries(facts, US_GAAP_TAGS.operatingCashFlow, period, limit);
   const statements = [];
 
   for (const entry of selected) {
     const fy = entry.fy;
-    const date = entry.filed || `${fy}-12-31`;
+    const date = entry.end || entry.filed || `${fy}-12-31`;
+    const end = entry.end;
 
     const operatingCashFlow = entry.val;
-    const netIncome = getLatestValueByFy(facts, US_GAAP_TAGS.netIncome, fy) || 0;
-    const capex = getLatestValueByFy(facts, US_GAAP_TAGS.capex, fy) || 0;
-    const dividends = getLatestValueByFy(facts, US_GAAP_TAGS.dividendsPaid, fy) || 0;
-    const shareRepurchases = getLatestValueByFy(facts, US_GAAP_TAGS.shareRepurchases, fy) || 0;
-    const shareIssued = getLatestValueByFy(facts, US_GAAP_TAGS.shareIssued, fy) || 0;
-    const netCommonStockIssuance = getLatestValueByFy(facts, US_GAAP_TAGS.netCommonStockIssuance, fy) || 0;
-    const stockBasedCompensation = getLatestValueByFy(facts, US_GAAP_TAGS.stockBasedCompensation, fy) || 0;
+    const netIncome = getValueByEnd(facts, US_GAAP_TAGS.netIncome, end, period) || 0;
+    const capex = getValueByEnd(facts, US_GAAP_TAGS.capex, end, period) || 0;
+    const dividends = getValueByEnd(facts, US_GAAP_TAGS.dividendsPaid, end, period) || 0;
+    const shareRepurchases = getValueByEnd(facts, US_GAAP_TAGS.shareRepurchases, end, period) || 0;
+    const shareIssued = getValueByEnd(facts, US_GAAP_TAGS.shareIssued, end, period) || 0;
+    const netCommonStockIssuance = getValueByEnd(facts, US_GAAP_TAGS.netCommonStockIssuance, end, period) || 0;
+    const stockBasedCompensation = getValueByEnd(facts, US_GAAP_TAGS.stockBasedCompensation, end, period) || 0;
 
     statements.push({
       date,
       period,
+      periodType: isQuarterPeriod(period) ? 'quarterly' : 'annual',
       netIncome,
       operatingCashFlow,
       capitalExpenditure: Math.abs(capex) * -1,
@@ -539,31 +639,32 @@ async function getKeyMetricsFromEdgar(symbol, period = 'annual', limit = 4) {
   if (!data) return null;
 
   const facts = data.facts?.['us-gaap'] || {};
-  const revenueEntries = getFiscalYear(facts, US_GAAP_TAGS.revenue);
+  const revenueEntries = getAllEntries(facts, US_GAAP_TAGS.revenue);
   if (revenueEntries.length === 0) return null;
 
-  const selected = pickAnnualEntries(revenueEntries).slice(0, limit);
+  const selected = pickPeriodEntries(facts, US_GAAP_TAGS.revenue, period, limit);
   const metrics = [];
 
   for (const entry of selected) {
     const fy = entry.fy;
-    const date = entry.filed || `${fy}-12-31`;
+    const date = entry.end || entry.filed || `${fy}-12-31`;
+    const end = entry.end;
 
     const revenue = entry.val;
-    const netIncome = getLatestValueByFy(facts, US_GAAP_TAGS.netIncome, fy) || 0;
-    const equity = getLatestValueByFy(facts, US_GAAP_TAGS.stockholdersEquity, fy) || 0;
-    const totalAssets = getLatestValueByFy(facts, US_GAAP_TAGS.totalAssets, fy) || 0;
-    const totalLiabilities = getLatestValueByFy(facts, US_GAAP_TAGS.totalLiabilities, fy) || 0;
-    const currentAssets = getLatestValueByFy(facts, US_GAAP_TAGS.currentAssets, fy) || 0;
-    const currentLiabilities = getLatestValueByFy(facts, US_GAAP_TAGS.currentLiabilities, fy) || 0;
-    const ocf = getLatestValueByFy(facts, US_GAAP_TAGS.operatingCashFlow, fy) || 0;
-    const capex = Math.abs(getLatestValueByFy(facts, US_GAAP_TAGS.capex, fy) || 0);
+    const netIncome = getValueByEnd(facts, US_GAAP_TAGS.netIncome, end, period) || 0;
+    const equity = getSnapshotByEnd(facts, US_GAAP_TAGS.stockholdersEquity, end) || 0;
+    const totalAssets = getSnapshotByEnd(facts, US_GAAP_TAGS.totalAssets, end) || 0;
+    const totalLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.totalLiabilities, end) || 0;
+    const currentAssets = getSnapshotByEnd(facts, US_GAAP_TAGS.currentAssets, end) || 0;
+    const currentLiabilities = getSnapshotByEnd(facts, US_GAAP_TAGS.currentLiabilities, end) || 0;
+    const ocf = getValueByEnd(facts, US_GAAP_TAGS.operatingCashFlow, end, period) || 0;
+    const capex = Math.abs(getValueByEnd(facts, US_GAAP_TAGS.capex, end, period) || 0);
     const fcf = ocf - capex;
-    const longTermDebt = getLatestValueByFy(facts, US_GAAP_TAGS.longTermDebt, fy) || 0;
-    const cash = getLatestValueByFy(facts, US_GAAP_TAGS.cash, fy) || 0;
+    const longTermDebt = getSnapshotByEnd(facts, US_GAAP_TAGS.longTermDebt, end) || 0;
+    const cash = getSnapshotByEnd(facts, US_GAAP_TAGS.cash, end) || 0;
     const netDebt = Math.max(0, longTermDebt - cash);
-    const dividends = Math.abs(getLatestValueByFy(facts, US_GAAP_TAGS.dividendsPaid, fy) || 0);
-    const shares = getLatestValueByFy(facts, US_GAAP_TAGS.sharesOutstanding, fy) || 0;
+    const dividends = Math.abs(getValueByEnd(facts, US_GAAP_TAGS.dividendsPaid, end, period) || 0);
+    const shares = getSnapshotByEnd(facts, US_GAAP_TAGS.sharesOutstanding, end) || 0;
 
     const peRatio = 0;
     const priceToSales = 0;
@@ -572,11 +673,12 @@ async function getKeyMetricsFromEdgar(symbol, period = 'annual', limit = 4) {
     const currentRatio = currentLiabilities !== 0 ? (currentAssets / currentLiabilities) : 0;
     const dividendYieldPct = 0;
     const payoutRatio = netIncome !== 0 ? (dividends / netIncome) : 0;
-    const ebitda = getLatestValueByFy(facts, US_GAAP_TAGS.ebitda, fy) || 0;
+    const ebitda = getValueByEnd(facts, US_GAAP_TAGS.ebitda, end, period) || 0;
 
     metrics.push({
       date,
       period,
+      periodType: isQuarterPeriod(period) ? 'quarterly' : 'annual',
       marketCap: 0,
       sharesOutstanding: shares,
       floatShares: 0,
@@ -647,7 +749,7 @@ async function getFinancialReportFromEdgar(symbol, period = 'annual', limit = 4)
   }
 }
 
-async function getTTMFromEdgar(symbol) {
+async function getTTMFromEdgarLegacy(symbol) {
   const cik = cikLookup(symbol);
   if (!cik) return null;
 
@@ -839,6 +941,114 @@ async function getTTMFromEdgar(symbol) {
     eps: epsTtm ? epsTtm.reduce((s, i) => s + i.val, 0) : 0,
     periods: revTtm.map(i => `FY${i.fy}_${i.fp}_${(i.val/1e9).toFixed(1)}B`).join(', '),
   };
+}
+
+async function getTTMFromEdgar(symbol) {
+  const cik = cikLookup(symbol);
+  if (!cik) return null;
+
+  const data = await fetchCompanyFacts(cik);
+  if (!data) return null;
+
+  const facts = data.facts?.['us-gaap'] || {};
+
+  // Standalone (≈90 day) periods, one per period end.
+  function allStandaloneQuarters(tagKeys) {
+    const all = getAllEntries(facts, tagKeys);
+    const quarters = all.filter(e => {
+      const days = entryDurationDays(e);
+      return days != null && days >= 60 && days <= 120;
+    });
+    const byEnd = new Map();
+    for (const e of quarters) {
+      const prev = byEnd.get(e.end);
+      if (!prev || String(e.filed || '') > String(prev.filed || '')) byEnd.set(e.end, e);
+    }
+    return [...byEnd.values()].sort((a, b) => String(b.end).localeCompare(String(a.end)));
+  }
+
+  // Q4 is only reported inside the 10-K, so derive it as FY minus Q1–Q3.
+  function ttmQuarters(tagKeys) {
+    const quarters = allStandaloneQuarters(tagKeys);
+    const annual = pickPeriodEntries(facts, tagKeys, 'annual', 10);
+    const byEnd = new Map(quarters.map(e => [e.end, e]));
+    for (const a of annual) {
+      if (byEnd.has(a.end)) continue;
+      const fyQuarters = quarters.filter(e => e.end < a.end && (!a.start || e.end > a.start));
+      if (fyQuarters.length === 3) {
+        const q123 = fyQuarters.reduce((s, e) => s + (e.val || 0), 0);
+        byEnd.set(a.end, { ...a, val: a.val - q123, derived: true });
+      }
+    }
+    return [...byEnd.values()].sort((a, b) => String(b.end).localeCompare(String(a.end)));
+  }
+
+  const sum4 = (tagKeys) => {
+    const q = ttmQuarters(tagKeys).slice(0, 4);
+    return q.length === 4 ? q.reduce((s, e) => s + (e.val || 0), 0) : null;
+  };
+
+  const revQ = ttmQuarters(US_GAAP_TAGS.revenue).slice(0, 4);
+  const niQ = ttmQuarters(US_GAAP_TAGS.netIncome).slice(0, 4);
+  const epsQ = ttmQuarters(US_GAAP_TAGS.epsBasic).slice(0, 4);
+
+  let revenue = revQ.length === 4 ? revQ.reduce((s, e) => s + (e.val || 0), 0) : 0;
+  let netIncome = niQ.length === 4 ? niQ.reduce((s, e) => s + (e.val || 0), 0) : 0;
+  let eps = epsQ.length === 4 ? epsQ.reduce((s, e) => s + (e.val || 0), 0) : 0;
+  let asOf = revQ[0]?.end || null;
+  let periods = revQ.map(e => `${e.end}:${(e.val / 1e9).toFixed(1)}B`).join(', ');
+
+  // Full TTM income statement (all four quarters, same period ends).
+  let income = null;
+  if (revenue) {
+    const costOfRevenue = sum4(US_GAAP_TAGS.costOfRevenue);
+    const grossProfit = sum4(US_GAAP_TAGS.grossProfit);
+    const operatingExpenses = sum4(US_GAAP_TAGS.operatingExpenses);
+    const operatingIncome = sum4(US_GAAP_TAGS.operatingIncome);
+    const incomeTax = sum4(US_GAAP_TAGS.incomeTax);
+    const interestExpense = sum4(US_GAAP_TAGS.interestExpense);
+    const ebitda = sum4(US_GAAP_TAGS.ebitda);
+    const epsDiluted = sum4(US_GAAP_TAGS.epsDiluted);
+    const gp = grossProfit != null ? grossProfit : (costOfRevenue != null ? revenue - costOfRevenue : null);
+    const cogs = costOfRevenue != null ? costOfRevenue : (gp != null ? revenue - gp : null);
+    const oi = operatingIncome != null ? operatingIncome : (gp != null && operatingExpenses != null ? gp - operatingExpenses : null);
+    income = {
+      revenue,
+      costOfRevenue: cogs,
+      grossProfit: gp,
+      grossProfitRatio: gp != null && revenue > 0 ? gp / revenue : null,
+      operatingExpenses,
+      operatingIncome: oi,
+      operatingIncomeRatio: oi != null && revenue > 0 ? oi / revenue : null,
+      netIncome,
+      netIncomeRatio: revenue > 0 ? netIncome / revenue : null,
+      incomeTaxExpense: incomeTax,
+      interestExpense,
+      ebitda,
+      eps,
+      epsdiluted: epsDiluted != null ? epsDiluted : eps,
+    };
+  }
+
+  // Fallback to the newest fiscal year when four quarters aren't available.
+  if (!revenue) {
+    const annual = pickPeriodEntries(facts, US_GAAP_TAGS.revenue, 'annual', 1);
+    if (annual.length) {
+      const niA = pickPeriodEntries(facts, US_GAAP_TAGS.netIncome, 'annual', 1);
+      const epsA = pickPeriodEntries(facts, US_GAAP_TAGS.epsBasic, 'annual', 1);
+      revenue = annual[0].val;
+      netIncome = niA.length ? niA[0].val : 0;
+      eps = epsA.length ? epsA[0].val : 0;
+      asOf = annual[0].end || null;
+      periods = `ANNUAL_FALLBACK_${annual[0].end}`;
+    }
+  }
+
+  if (!revenue) {
+    return { revenue: 0, netIncome: 0, eps: 0, asOf: null, income: null, periods: `FAIL: revQ=${revQ.length} niQ=${niQ.length} epsQ=${epsQ.length}` };
+  }
+
+  return { revenue, netIncome, eps, asOf, income, periods };
 }
 
 async function getQuarterlyShareCountHistory(symbol) {
