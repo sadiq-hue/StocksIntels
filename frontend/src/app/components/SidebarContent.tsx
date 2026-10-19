@@ -75,6 +75,7 @@ export function SidebarContent({ onNavigate, onToggle, collapsed = false }: { on
         { path: "/app/stocks", icon: LineChart, label: "Stocks" },
         { path: "/app/compare", icon: GitCompare, label: "Compare", badge: compareList.length },
         { path: "/app/financials", icon: FileText, label: "Financials" },
+        { path: "/app/insider", icon: Users, label: "Insider Trading" },
         { path: "/app/news", icon: Newspaper, label: "News" },
         { path: "/app/bonds", icon: Landmark, label: "Bonds" },
         { path: "/app/etfs", icon: Layers, label: "ETFs" },

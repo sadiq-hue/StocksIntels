@@ -6696,6 +6696,35 @@ app.get('/api/africa/history/:exchange/:symbol', async (req, res) => {
   }
 });
 
+// ─── SEC insider filings (Forms 3, 4 and 5) ─────────────────────────────────
+// Company-specific feed (from EDGAR submissions) and a market-wide recent feed
+// (current-events Atom + the daily form index). Form 4 is due within two
+// business days, so this is as close to real-time as the SEC publishes.
+app.get('/api/insider/recent', async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 25, 1), 50);
+    const { getRecentInsiderFilings } = require('./insiderService');
+    const data = await getRecentInsiderFilings(limit);
+    res.json(data);
+  } catch (e) {
+    console.error('[insider] recent error:', e.message);
+    res.status(500).json({ success: false, error: 'Failed to load recent insider filings', rows: [] });
+  }
+});
+
+app.get('/api/insider/:symbol', async (req, res) => {
+  try {
+    const symbol = req.params.symbol.toUpperCase().replace('NSE:', '');
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 50);
+    const { getCompanyInsiderFilings } = require('./insiderService');
+    const data = await getCompanyInsiderFilings(symbol, limit);
+    res.json(data);
+  } catch (e) {
+    console.error('[insider] company error:', e.message);
+    res.status(500).json({ success: false, error: 'Failed to load insider filings', rows: [] });
+  }
+});
+
 // Market intelligence feed from MyStocks Africa — curated editorial articles
 // across African exchanges (macro, sector reports, earnings, announcements).
 app.get('/api/market-intel', async (req, res) => {

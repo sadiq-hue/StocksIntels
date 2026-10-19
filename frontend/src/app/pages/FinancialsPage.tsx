@@ -20,7 +20,9 @@ import {
   type OwnershipData, type InstitutionalHolder, type InsiderTransaction,
   type ValidationWarning, type ShareCountEntry,
 } from "../services/financialsService";
+import { Link } from "react-router";
 import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
+import { fetchCompanyInsiderFilings, type InsiderResponse } from "../services/insiderService";
 
 function formatCurrency(value: number, currency = "USD") {
   if (!Number.isFinite(value) || value === 0) return `${currency} 0`;
@@ -325,6 +327,8 @@ export function FinancialsPage() {
   const [yahooPremarket, setYahooPremarket] = useState<Record<string, any> | null>(null);
   const [africaListings, setAfricaListings] = useState<StockListItem[]>([]);
   const [africaQuote, setAfricaQuote] = useState<any>(null);
+  const [secInsider, setSecInsider] = useState<InsiderResponse | null>(null);
+  const [secInsiderLoading, setSecInsiderLoading] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const yahooSuggestRef = useRef<ReturnType<typeof setTimeout>>();
   const lastFetchedSymbol = useRef<string>(selectedSymbol);
@@ -379,6 +383,18 @@ export function FinancialsPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (active) setAfricaQuote(d?.quotes?.[selectedSymbol] || null); })
       .catch(() => { if (active) setAfricaQuote(null); });
+    return () => { active = false; };
+  }, [selectedSymbol, selectedMarket]);
+
+  // SEC Forms 3/4/5 for the selected US company.
+  useEffect(() => {
+    if (selectedMarket !== "global") { setSecInsider(null); return; }
+    let active = true;
+    setSecInsiderLoading(true);
+    fetchCompanyInsiderFilings(selectedSymbol, 12)
+      .then((data) => { if (active) setSecInsider(data?.success ? data : null); })
+      .catch(() => { if (active) setSecInsider(null); })
+      .finally(() => { if (active) setSecInsiderLoading(false); });
     return () => { active = false; };
   }, [selectedSymbol, selectedMarket]);
 
@@ -1182,6 +1198,69 @@ export function FinancialsPage() {
                     </Card>
                   )}
 
+                  {secInsider?.rows?.length ? (
+                    <Card className="border-border bg-card p-5 shadow-sm rounded-xl">
+                      <div className="flex items-center justify-between gap-2 mb-4">
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-[#0D7490]" />
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Insider Transactions (SEC Forms 3/4/5)</h3>
+                        </div>
+                        <Link to={`/app/insider?symbol=${encodeURIComponent(selectedSymbol)}`} className="text-[10px] font-bold text-[#0D7490] hover:underline">
+                          All filings →
+                        </Link>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-border">
+                              <th className="text-left p-2 font-bold text-muted-foreground">Filed</th>
+                              <th className="text-left p-2 font-bold text-muted-foreground">Insider</th>
+                              <th className="text-left p-2 font-bold text-muted-foreground">Role</th>
+                              <th className="text-left p-2 font-bold text-muted-foreground">Form</th>
+                              <th className="text-left p-2 font-bold text-muted-foreground">Transaction</th>
+                              <th className="text-right p-2 font-bold text-muted-foreground">Shares</th>
+                              <th className="text-right p-2 font-bold text-muted-foreground">Value</th>
+                              <th className="text-center p-2 font-bold text-muted-foreground">SEC</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {secInsider.rows.slice(0, 10).map((row, i) => {
+                              const roles = [
+                                row.owner?.isDirector ? "Director" : "",
+                                row.owner?.isOfficer ? (row.owner.officerTitle || "Officer") : "",
+                                row.owner?.isTenPercentOwner ? "10% Owner" : "",
+                              ].filter(Boolean);
+                              return (
+                                <tr key={`${row.accessionNumber}-${i}`} className="border-b border-border/50 hover:bg-muted/50">
+                                  <td className="p-2 text-muted-foreground whitespace-nowrap">{formatDate(row.filedDate)}</td>
+                                  <td className="p-2 font-medium text-foreground truncate max-w-[150px]">{row.owner?.name || "—"}</td>
+                                  <td className="p-2 text-muted-foreground truncate max-w-[150px]">{roles.join(", ") || "—"}</td>
+                                  <td className="p-2 font-bold text-foreground">{row.formType}</td>
+                                  <td className="p-2">
+                                    <span className={`font-bold ${row.direction === "buy" ? "text-emerald-600" : row.direction === "sell" ? "text-rose-600" : "text-muted-foreground"}`}>
+                                      {row.code}
+                                    </span>
+                                    <span className="text-muted-foreground"> · {row.codeLabel}</span>
+                                  </td>
+                                  <td className="p-2 text-right text-foreground">{row.shares > 0 ? formatCompactNumber(row.shares) : "—"}</td>
+                                  <td className="p-2 text-right text-foreground">{row.value > 0 ? formatCurrency(row.value, "USD") : "—"}</td>
+                                  <td className="p-2 text-center">
+                                    {row.filingUrl ? (
+                                      <a href={row.filingUrl} target="_blank" rel="noreferrer" className="inline-flex text-[#0D7490] hover:text-[#0A5F7A]">
+                                        <ExternalLink className="w-3.5 h-3.5" />
+                                      </a>
+                                    ) : "—"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {secInsiderLoading && <p className="text-[10px] text-muted-foreground mt-2">Refreshing SEC filings…</p>}
+                    </Card>
+                  ) : null}
+
                   {ownership && (ownership.institutionalHolders.length > 0 || ownership.insiderTransactions.length > 0) && (
             <div className="grid gap-5 lg:grid-cols-2">
                       {ownership.institutionalHolders.length > 0 && (
@@ -1215,7 +1294,7 @@ export function FinancialsPage() {
                         </Card>
                       )}
 
-                      {ownership.insiderTransactions.length > 0 && (
+                      {!secInsider?.rows?.length && ownership.insiderTransactions.length > 0 && (
                         <Card className="border-border bg-card p-5 shadow-sm rounded-xl">
                           <div className="flex items-center gap-2 mb-4">
                             <Users className="w-4 h-4 text-[#0D7490]" />

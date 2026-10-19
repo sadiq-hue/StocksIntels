@@ -1121,6 +1121,7 @@ cache.loadFromDb().then(count => {
 module.exports = {
   isUsStock,
   cikLookup,
+  fetchSubmissions,
   getCompanyProfileFromEdgar,
   getIncomeStatementFromEdgar,
   getBalanceSheetFromEdgar,
