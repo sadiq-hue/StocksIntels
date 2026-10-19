@@ -539,7 +539,7 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
   const ttmIncHist = ttmIncome ? [ttmIncome, ...edgarIncHistory] : edgarIncHistory;
 
   const computedCap = enrichedKm[0]?.marketCap || 0;
-  const quoteResponse = quoteValue || (tds ? {
+  const baseQuote = quoteValue || (tds ? {
     symbol: symbol.toUpperCase(),
     price: tds.price || 0,
     change: 0,
@@ -551,12 +551,33 @@ async function buildEdgarReport(symbol, period, limit, availableProviders) {
     previousClose: 0,
     lastUpdated: new Date().toISOString(),
   } : { symbol, price: price || 0, change: 0, changesPercentage: 0, marketCap: computedCap });
+  const quoteResponse = { ...baseQuote };
+  if (!quoteResponse.marketCap) quoteResponse.marketCap = computedCap;
+  if (!quoteResponse.sharesOutstanding) quoteResponse.sharesOutstanding = enrichedKm[0]?.sharesOutstanding || 0;
+
+  let profileData = edgarReport.data.profile || { symbol, companyName: symbol, exchange: 'NASDAQ', currency: 'USD' };
+  try {
+    const yhProfile = await yahooFinanceScraper.getCompanyProfile(symbol);
+    if (yhProfile) {
+      profileData = {
+        ...profileData,
+        companyName: profileData.companyName || yhProfile.companyName,
+        website: yhProfile.website || profileData.website || '',
+        description: yhProfile.description || profileData.description || '',
+        ceo: yhProfile.ceo && yhProfile.ceo !== 'N/A' ? yhProfile.ceo : (profileData.ceo || ''),
+        ceoRole: yhProfile.ceoRole || profileData.ceoRole || '',
+        employees: yhProfile.employees || profileData.employees || 0,
+        image: profileData.image || yhProfile.image || '',
+      };
+    }
+  } catch {}
+  profileData.marketCap = computedCap;
 
   return {
     success: true, symbol, source: 'sec-edgar', availableProviders,
     lastUpdated: new Date().toISOString(),
     data: {
-      profile: edgarReport.data.profile || { symbol, companyName: symbol, exchange: 'NASDAQ', currency: 'USD' },
+      profile: profileData,
       quote: quoteResponse,
       incomeStatement: ttmIncome || edgarIncHistory[0] || null,
       incomeStatementHistory: ttmIncHist,

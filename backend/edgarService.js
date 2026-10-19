@@ -117,7 +117,7 @@ const US_GAAP_TAGS = {
   shareRepurchases: ['us-gaap:PaymentsForRepurchaseOfCommonStock', 'us-gaap:RepurchaseOfCommonStock', 'us-gaap:StockRepurchased'],
   shareIssued: ['us-gaap:IssuanceOfCommonStock', 'us-gaap:ProceedsFromIssuanceOfCommonStock'],
   netCommonStockIssuance: ['us-gaap:ProceedsFromStockOptionsExercised', 'us-gaap:ProceedsFromIssuanceOfCommonStock'],
-  sharesOutstanding: ['us-gaap:EntityCommonStockSharesOutstanding'],
+  sharesOutstanding: ['us-gaap:EntityCommonStockSharesOutstanding', 'us-gaap:CommonStockSharesOutstanding', 'us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding', 'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic'],
   stockBasedCompensation: ['us-gaap:StockBasedCompensation', 'us-gaap:ShareBasedCompensation', 'us-gaap:AllocatedShareBasedCompensationExpense'],
   marketCap: [],  // calculated
 };
@@ -242,6 +242,26 @@ function getValueByEnd(facts, tagKeys, end, period) {
 // Instantaneous (balance-sheet) value at a period end; duration is irrelevant.
 function getSnapshotByEnd(facts, tagKeys, end) {
   return getValueByEnd(facts, tagKeys, end, 'annual');
+}
+
+// Newest share count across tag variants. Cover-page share counts use their own
+// date (usually a few weeks after the balance-sheet date), so exact-end matching
+// misses them.
+function getLatestSharesOutstanding(facts) {
+  let best = null;
+  for (const tag of US_GAAP_TAGS.sharesOutstanding) {
+    const entries = factLookup(facts, tag);
+    if (!entries) continue;
+    const arr = entries.units?.shares || entries.units?.['USD/shares'] || [];
+    for (const e of arr) {
+      if (!e || e.val == null || !e.end) continue;
+      if (!best || String(e.end) > String(best.end) ||
+        (String(e.end) === String(best.end) && String(e.filed || '') > String(best.filed || ''))) {
+        best = e;
+      }
+    }
+  }
+  return best ? best.val : null;
 }
 
 function getLatestValue(facts, tagKeys) {
@@ -552,9 +572,10 @@ async function getCompanyProfileFromEdgar(symbol) {
       industry,
       sector,
       country: submissions.address?.state ? 'USA' : 'USA',
-      website: submissions.website || submissions.address?.state || '',
+      website: submissions.website || '',
       description: submissions.description || sicDesc || '',
       ceo: submissions.officers?.[0]?.name || '',
+      ceoRole: '',
       employees: submissions.employees || 0,
       marketCap: 0,
       exchange: exchange.includes('NASDAQ') ? 'NASDAQ' : exchange.includes('NYSE') ? 'NYSE' : exchange || 'NASDAQ/NYSE',
@@ -644,6 +665,7 @@ async function getKeyMetricsFromEdgar(symbol, period = 'annual', limit = 4) {
 
   const selected = pickPeriodEntries(facts, US_GAAP_TAGS.revenue, period, limit);
   const metrics = [];
+  const latestShares = getLatestSharesOutstanding(facts);
 
   for (const entry of selected) {
     const fy = entry.fy;
@@ -664,7 +686,7 @@ async function getKeyMetricsFromEdgar(symbol, period = 'annual', limit = 4) {
     const cash = getSnapshotByEnd(facts, US_GAAP_TAGS.cash, end) || 0;
     const netDebt = Math.max(0, longTermDebt - cash);
     const dividends = Math.abs(getValueByEnd(facts, US_GAAP_TAGS.dividendsPaid, end, period) || 0);
-    const shares = getSnapshotByEnd(facts, US_GAAP_TAGS.sharesOutstanding, end) || 0;
+    const shares = getSnapshotByEnd(facts, US_GAAP_TAGS.sharesOutstanding, end) || (entry === selected[0] ? latestShares : 0) || 0;
 
     const peRatio = 0;
     const priceToSales = 0;
