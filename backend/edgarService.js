@@ -275,46 +275,97 @@ function pickAnnualEntries(entries) {
   return entries.sort((a, b) => b.fy - a.fy);
 }
 
+// Company-facts payloads are large (up to ~1.5 MB each). Keep only a tiny
+// bounded in-memory set and never persist them: the old persistent cache grew
+// to 1,500+ entries / ~194 MB and, once loaded into the heap, pushed the
+// backend into an OOM restart loop. Parsed reports are cached separately.
+const FACTS_CACHE_MAX = 6;
+const FACTS_CACHE_TTL = 15 * 60 * 1000;
+const factsCache = new Map();
+
+function factsCacheGet(cik) {
+  const hit = factsCache.get(cik);
+  if (!hit) return null;
+  if (Date.now() - hit.ts > FACTS_CACHE_TTL) { factsCache.delete(cik); return null; }
+  // Refresh LRU position.
+  factsCache.delete(cik);
+  factsCache.set(cik, hit);
+  return hit.data;
+}
+
+function factsCacheSet(cik, data) {
+  factsCache.delete(cik);
+  factsCache.set(cik, { data, ts: Date.now() });
+  while (factsCache.size > FACTS_CACHE_MAX) {
+    factsCache.delete(factsCache.keys().next().value);
+  }
+  return data;
+}
+
+// Only two company-facts downloads may be in flight at once. Bulk signal
+// prefetching used to fire 30 at once and exhausted the heap.
+const FACTS_CONCURRENCY = 2;
+let factsActive = 0;
+const factsQueue = [];
+
+function acquireFactsSlot() {
+  if (factsActive < FACTS_CONCURRENCY) {
+    factsActive++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => factsQueue.push(resolve));
+}
+
+function releaseFactsSlot() {
+  const next = factsQueue.shift();
+  if (next) next();
+  else factsActive = Math.max(0, factsActive - 1);
+}
+
 const inflightFacts = new Map();
 async function fetchCompanyFacts(cik) {
-  const cacheKey = `edgar_facts_${cik}`;
-  const cached = cacheGet(cacheKey);
+  const cached = factsCacheGet(cik);
   if (cached) return cached;
 
   if (inflightFacts.has(cik)) return inflightFacts.get(cik);
 
   const promise = (async () => {
-    const url = `${SEC_BASE_URL}/api/xbrl/companyfacts/CIK${padCik(cik)}.json`;
-    console.log(`[EDGAR] Fetching company facts for CIK ${cik}...`);
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const res = await edgarClient.get(url, {
-          headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' },
-        });
-        const usGaap = res.data?.facts?.['us-gaap'] || {};
-        const dei = res.data?.facts?.['dei'] || {};
-        // Merge dei facts into us-gaap so EntityCommonStockSharesOutstanding etc. are accessible
-        for (const key of Object.keys(dei)) {
-          if (!usGaap[key]) usGaap[key] = dei[key];
-        }
-        const tagCount = Object.keys(usGaap).length;
-        const revenueTag = 'RevenueFromContractWithCustomerExcludingAssessedTax';
-        console.log(`[EDGAR] Company facts for CIK ${cik}: ${tagCount} tags (incl ${Object.keys(dei).length} dei), revenue=${!!usGaap[revenueTag]}`);
-        if (tagCount > 0) console.log(`[EDGAR] Sample tags: ${Object.keys(usGaap).slice(0, 3).join(', ')}...`);
-        return cacheSet(cacheKey, res.data);
-      } catch (err) {
-        const status = err?.response?.status;
-        const statusText = status ? `HTTP ${status}` : err.code;
-        console.warn(`[EDGAR] Attempt ${attempt + 1}/3 for CIK ${cik}: ${statusText}`);
-        if (attempt < 2) {
-          const delay = 2000 * Math.pow(2, attempt) + Math.random() * 1000;
-          await new Promise(r => setTimeout(r, delay));
-        } else {
-          console.error(`[EDGAR] Failed to fetch company facts for CIK ${cik} after 3 attempts`);
+    await acquireFactsSlot();
+    try {
+      const url = `${SEC_BASE_URL}/api/xbrl/companyfacts/CIK${padCik(cik)}.json`;
+      console.log(`[EDGAR] Fetching company facts for CIK ${cik}...`);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await edgarClient.get(url, {
+            headers: { 'User-Agent': USER_AGENT, 'Accept': 'application/json' },
+          });
+          const usGaap = res.data?.facts?.['us-gaap'] || {};
+          const dei = res.data?.facts?.['dei'] || {};
+          // Merge dei facts into us-gaap so EntityCommonStockSharesOutstanding etc. are accessible
+          for (const key of Object.keys(dei)) {
+            if (!usGaap[key]) usGaap[key] = dei[key];
+          }
+          const tagCount = Object.keys(usGaap).length;
+          const revenueTag = 'RevenueFromContractWithCustomerExcludingAssessedTax';
+          console.log(`[EDGAR] Company facts for CIK ${cik}: ${tagCount} tags (incl ${Object.keys(dei).length} dei), revenue=${!!usGaap[revenueTag]}`);
+          if (tagCount > 0) console.log(`[EDGAR] Sample tags: ${Object.keys(usGaap).slice(0, 3).join(', ')}...`);
+          return factsCacheSet(cik, res.data);
+        } catch (err) {
+          const status = err?.response?.status;
+          const statusText = status ? `HTTP ${status}` : err.code;
+          console.warn(`[EDGAR] Attempt ${attempt + 1}/3 for CIK ${cik}: ${statusText}`);
+          if (attempt < 2) {
+            const delay = 2000 * Math.pow(2, attempt) + Math.random() * 1000;
+            await new Promise(r => setTimeout(r, delay));
+          } else {
+            console.error(`[EDGAR] Failed to fetch company facts for CIK ${cik} after 3 attempts`);
+          }
         }
       }
+      return null;
+    } finally {
+      releaseFactsSlot();
     }
-    return null;
   })();
 
   inflightFacts.set(cik, promise);
@@ -1165,6 +1216,7 @@ async function getQuarterlyShareCountHistory(symbol) {
 
 function clearCache() {
   cache.clear();
+  factsCache.clear();
 }
 
 // Load persisted cache from DB on startup

@@ -1046,11 +1046,11 @@ async function fetchRealFinancialMetrics(symbol) {
 }
 
 async function prefetchFinancialReports(symbols) {
-  const batchSize = 30;
+  const batchSize = 4;
   for (let i = 0; i < symbols.length; i += batchSize) {
     const batch = symbols.slice(i, i + batchSize);
     await Promise.allSettled(batch.map(s => fetchRealFinancialMetrics(s)));
-    if (i + batchSize < symbols.length) await new Promise(r => setTimeout(r, 50));
+    if (i + batchSize < symbols.length) await new Promise(r => setTimeout(r, 200));
   }
 }
 
