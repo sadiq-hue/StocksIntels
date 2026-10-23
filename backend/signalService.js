@@ -359,7 +359,7 @@ const PRICE_HISTORY_CACHE_TTL = 60 * 60 * 1000; // 1 hour
 const PRICE_HISTORY_FAIL_TTL = 60 * 1000;       // retry a failed fetch after 60s (not 1h)
 
 // Financial report cache for fundamental analysis (daily refresh, persisted to DB on restart)
-const _financialReportCache = new PersistentCache('sigfin', 24 * 60 * 60 * 1000);
+const _financialReportCache = new PersistentCache('sigfin', 30 * 24 * 60 * 60 * 1000);
 
 // Signal performance tracker (in-memory, rolling 100 signals per symbol)
 const _signalOutcomes = new Map();
@@ -920,7 +920,7 @@ async function fetchRealFinancialMetrics(symbol) {
     // Full financial report (24h cache) — income, balance, cash flow, ratios
     // For NSE, getFinancialReport routes to buildLocalNseReport (local DB + marketService).
     // For US stocks, it goes Yahoo Finance → Alpha Vantage → SEC EDGAR.
-    const report = await financialReportsService.getFinancialReport(symbol, 'annual', 2);
+    const report = await financialReportsService.getFinancialReport(symbol, 'annual', 2, null, { lite: true });
     if (!report?.success || !report?.data) {
       _financialReportCache.set(symbol, null);
       return null;
@@ -1047,10 +1047,26 @@ async function fetchRealFinancialMetrics(symbol) {
 
 async function prefetchFinancialReports(symbols) {
   const batchSize = 4;
+  // Hard budget: a cold cache (e.g. after a restart/outage) can otherwise spend
+  // an hour fetching hundreds of reports and block the whole signal cycle, so
+  // monitored positions never get resolved. Proceed with whatever is cached.
+  const deadline = Date.now() + 180000;
+  let deferred = 0;
   for (let i = 0; i < symbols.length; i += batchSize) {
+    if (Date.now() > deadline) {
+      deferred = symbols.length - i;
+      console.warn(`[SignalService] financial prefetch budget reached - deferring ${deferred} symbols to next cycle`);
+      break;
+    }
     const batch = symbols.slice(i, i + batchSize);
-    await Promise.allSettled(batch.map(s => fetchRealFinancialMetrics(s)));
+    await Promise.race([
+      Promise.allSettled(batch.map(s => fetchRealFinancialMetrics(s))),
+      new Promise(resolve => setTimeout(resolve, 45000)),
+    ]);
     if (i + batchSize < symbols.length) await new Promise(r => setTimeout(r, 200));
+  }
+  if (deferred === 0 && symbols.length > 0) {
+    console.log(`[SignalService] financial prefetch complete for ${symbols.length} symbols`);
   }
 }
 
@@ -4321,10 +4337,14 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       ]);
       newsBySymbol = await buildNewsBySymbol(allNews);
     } catch { /* silent */ }
-    await Promise.all([
-      prefetchPriceHistories(symbols).catch(() => {}),
-      prefetchFinancialReports(symbols).catch(() => {}),
-      prefetchWeeklyData(symbols).catch(() => {}),
+    await Promise.race([
+      Promise.all([
+        prefetchPriceHistories(symbols).catch(() => {}),
+        prefetchFinancialReports(symbols).catch(() => {}),
+        prefetchWeeklyData(symbols).catch(() => {}),
+      ]),
+      // Never let a slow external prefetch starve the resolution/scoring loop.
+      new Promise(resolve => setTimeout(resolve, 300000)),
     ]);
     // Quotes last: spark makes this fast, and keeping it out of the big
     // concurrent prefetch burst means the quote cache is still fresh when the

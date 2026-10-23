@@ -896,7 +896,7 @@ async function isNseStock(symbol) {
   return NSE_SYMBOLS.includes(ticker.toUpperCase());
 }
 
-async function getFinancialReport(symbol, period = 'annual', limit = 4, providerOverride = null) {
+async function getFinancialReport(symbol, period = 'annual', limit = 4, providerOverride = null, options = {}) {
   try {
     // Exchanges not covered by Yahoo Finance / SEC EDGAR (currently NGX Nigeria):
     // use the stockanalysis.com scraper. Symbol arrives qualified ("NGX:DANGCEM").
@@ -1099,12 +1099,16 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
           }
         };
 
-        const [ownership, quarterlyShares] = await Promise.allSettled([
-          getOwnershipData(symbol),
-          getQuarterlyShareCountHistory(symbol),
-        ]);
-        const ownershipVal = ownership.status === 'fulfilled' ? ownership.value : null;
-        const quarterlyVal = quarterlyShares.status === 'fulfilled' ? quarterlyShares.value : null;
+        let ownershipVal = null;
+        let quarterlyVal = null;
+        if (!options.lite) {
+          const [ownership, quarterlyShares] = await Promise.allSettled([
+            getOwnershipData(symbol),
+            getQuarterlyShareCountHistory(symbol),
+          ]);
+          ownershipVal = ownership.status === 'fulfilled' ? ownership.value : null;
+          quarterlyVal = quarterlyShares.status === 'fulfilled' ? quarterlyShares.value : null;
+        }
         return enrichReportData(yahooResult, ownershipVal, quarterlyVal, validateFinancialData(yahooResult));
       }
       // Alpha Vantage fallback when Yahoo Finance has no data (1 quick OVERVIEW call)
