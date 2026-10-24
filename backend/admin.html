@@ -6098,6 +6098,51 @@ async function fetchBacktest() {
 }
 
 let _fwStats = null;
+function renderPhase1Benchmark(p) {
+  const rows = [
+    ['Live 1R (gated)', p.live1R],
+    ['Live 2R shadow', p.shadow2R],
+    ['Raw 1R (research)', p.raw1R],
+    ['Raw 2R (research)', p.raw2R],
+  ];
+  const num = (v, d = 2) => v == null ? '—' : Number(v).toFixed(d);
+  return `
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+        <p style="font-size:13px;font-weight:600">Phase 1 Benchmark — Short 1R vs 2R</p>
+        <span style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em">${esc(p.specs?.live || '')} vs ${esc(p.specs?.shadow || '')}</span>
+      </div>
+      <p style="font-size:11px;color:#6b7280;margin-bottom:10px">Same entries, stops and 20-day time stop; only target1 differs. Raw rows include pre-gate intent and are research-only.</p>
+      <div style="overflow-x:auto">
+        <table style="width:100%;font-size:12px">
+          <thead><tr style="border-bottom:1px solid #e5e7eb">
+            <th style="text-align:left;padding:6px 8px;color:#6b7280">Cohort</th>
+            <th style="text-align:right;padding:6px 8px;color:#6b7280">Resolved</th>
+            <th style="text-align:right;padding:6px 8px;color:#6b7280">Win rate</th>
+            <th style="text-align:right;padding:6px 8px;color:#6b7280">Avg win</th>
+            <th style="text-align:right;padding:6px 8px;color:#6b7280">Avg loss</th>
+            <th style="text-align:right;padding:6px 8px;color:#6b7280">Expectancy</th>
+            <th style="text-align:right;padding:6px 8px;color:#6b7280">Profit factor</th>
+            <th style="text-align:right;padding:6px 8px;color:#6b7280">Res. rate</th>
+            <th style="text-align:right;padding:6px 8px;color:#6b7280">Avg days</th>
+          </tr></thead>
+          <tbody>${rows.map(([label, d]) => `
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:6px 8px;font-weight:600">${label}</td>
+              <td style="padding:6px 8px;text-align:right;color:#6b7280">${d?.resolved ?? 0} / ${d?.total ?? 0}</td>
+              <td style="padding:6px 8px;text-align:right;font-weight:600">${d ? num(d.winRate, 1) + '%' : '—'}</td>
+              <td style="padding:6px 8px;text-align:right;color:#059669">${d ? num(d.avgWinR) + 'R' : '—'}</td>
+              <td style="padding:6px 8px;text-align:right;color:#dc2626">${d ? num(d.avgLossR) + 'R' : '—'}</td>
+              <td style="padding:6px 8px;text-align:right;font-weight:600;color:${(d?.expectancyR ?? 0) >= 0 ? '#059669' : '#dc2626'}">${d ? (d.expectancyR >= 0 ? '+' : '') + num(d.expectancyR) + 'R' : '—'}</td>
+              <td style="padding:6px 8px;text-align:right">${d?.profitFactor != null ? num(d.profitFactor) : '—'}</td>
+              <td style="padding:6px 8px;text-align:right;color:#6b7280">${d ? num(d.resolutionRate, 0) + '%' : '—'}</td>
+              <td style="padding:6px 8px;text-align:right;color:#6b7280">${d?.avgDays != null ? num(d.avgDays, 1) : '—'}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+      </div>
+      <p style="font-size:11px;color:#6b7280;margin-top:8px">Judge on expectancy and profit factor, with at least 30 resolved per cohort. Use a 30-day checkpoint and extend to 60 days if the sample is short.</p>
+    </div>`;
+}
 async function fetchForwardTest() {
   const el = document.getElementById('engineForwardContent');
   el.innerHTML = '<div style="text-align:center;padding:40px;color:#6b7280;font-size:14px">Loading...</div>';
@@ -6193,7 +6238,14 @@ async function fetchForwardTest() {
     const allCfgNote = allCfg && allCfg.total > 0
       ? `<div style="font-size:11px;color:#6b7280;margin:-8px 0 16px">For comparison, across <b>all</b> ${allCfg.total} resolved outcomes regardless of stop configuration: <b>${fmtPct(allCfg.winRate)}</b> win rate (${allCfg.wins}/${allCfg.total}). That figure pools signals with very different risk profiles, which is why it is not the headline.</div>`
       : '';
+    let phase1Html = '';
+    try {
+      const pRes = await fetch('/api/signals/phase1-benchmark');
+      const pData = await pRes.json();
+      if (pData && pData.success) phase1Html = renderPhase1Benchmark(pData);
+    } catch { /* benchmark best-effort */ }
     el.innerHTML = `
+      ${phase1Html}
       ${specNote}
       ${thinWarn}
       ${allCfgNote}
