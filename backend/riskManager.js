@@ -100,7 +100,7 @@ function estimateHoldingDays(entry, target1, atrFraction) {
   return Math.min(250, Math.max(1, Math.ceil(days)));
 }
 
-function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = MIN_STOP_PCT, tradeType = 'Swing Trade') {
+function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = MIN_STOP_PCT, tradeType = 'Swing Trade', targetMults = null) {
   const volatility = calculateATR(priceHistory);
   const mult = TRADE_TYPE_STOP_MULT[tradeType] || 1.5;
   const baseDistancePct = Math.max(volatility * mult, MIN_STOP_PCT);
@@ -136,11 +136,14 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
   // exact even when the cap widens the stop on a pathological name.
   let target1, target2, target3;
   if (signal.action !== 'sell') {
-    const risk = Math.abs(entry - stopLoss);
-    target1 = entry + risk * TARGET1_MULT;
-    target2 = entry + risk * TARGET2_MULT;
-    target3 = entry + risk * TARGET3_MULT;
-  }
+  const risk = Math.abs(entry - stopLoss);
+  const t1Mult = targetMults && targetMults.target1 != null ? Number(targetMults.target1) : TARGET1_MULT;
+  const t2Mult = targetMults && targetMults.target2 != null ? Number(targetMults.target2) : TARGET2_MULT;
+  const t3Mult = targetMults && targetMults.target3 != null ? Number(targetMults.target3) : TARGET3_MULT;
+  target1 = entry + risk * t1Mult;
+  target2 = entry + risk * t2Mult;
+  target3 = entry + risk * t3Mult;
+}
 
   // Resistance-aware T2/T3 (buy/hold only — sells have no levels). T1 stays at
   // its 2x-risk anchor; each informational target is pushed onto the next real
@@ -349,6 +352,9 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
 // sooner; this only guarantees the position book is finite and that every exit
 // is recorded rather than silently forgotten. 0 disables the horizon.
 const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DAYS || '365', 10) || 365) * 24 * 60 * 60 * 1000;
+  // Phase 1 short cohort: close at market after 20 trading days (~28 calendar
+  // days) if neither the 1R target nor the stop has been hit.
+  const SHORT_HORIZON_MS = 28 * 24 * 60 * 60 * 1000;
 
   // Legacy sub-floor stops (pre-MIN_STOP_PCT) must not resolve on ordinary noise.
   // Normalize BEFORE any resolution check so the effective exit level is the floor
@@ -422,9 +428,35 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
     // so a corrupt 24.88 quote against a 35.20 SCOM entry (~30% "move") can't trip
     // the stop/target resolution in a single cycle.
     const moved = pctMove > 0.0005 && (pctMove < maxSingleMovePct || (isPrevBuy && stageIdx > 0));
-    if (marketOpen && saneLevels && moved) {
+    const isShort = previous.horizon === 'short' || String(previous.specVersion || '').startsWith('short-');
+    const shortTimeStop = isShort && isPrevBuy && signalAge >= SHORT_HORIZON_MS;
+    const effectiveMoved = moved || shortTimeStop;
+    if (marketOpen && saneLevels && effectiveMoved) {
       if (isPrevBuy) {
-        if (currentPrice <= previous.stopLoss) {
+        if (isShort) {
+          if (shortTimeStop) {
+            previous.result = currentPrice >= entry ? 'win' : 'loss';
+            previous.closeReason = 'time stop';
+            if (previous.result === 'win') { performanceStats.wins++; portfolioState.consecutiveLosses = 0; }
+            else { performanceStats.losses++; portfolioState.consecutiveLosses++; }
+            performanceStats.total++;
+            console.log(`[RiskManager] ${symbol} short 1R TIME STOP after ${Math.round(signalAge / 86400000)}d - closing at ${currentPrice} (${(((currentPrice - entry) / entry) * 100).toFixed(1)}%)`);
+          } else if (currentPrice <= previous.stopLoss) {
+            const lockedProfit = previous.stopLoss >= entry;
+            previous.result = lockedProfit ? 'win' : 'loss';
+            previous.closeReason = 'stop loss';
+            if (lockedProfit) { performanceStats.wins++; portfolioState.consecutiveLosses = 0; }
+            else { performanceStats.losses++; portfolioState.consecutiveLosses++; }
+            performanceStats.total++;
+          } else if (currentPrice >= previous.target1) {
+            previous.result = 'win';
+            previous.closeReason = 'target1 (1R) reached';
+            performanceStats.wins++;
+            performanceStats.total++;
+            portfolioState.consecutiveLosses = 0;
+            console.log(`[RiskManager] ${symbol} short 1R TARGET hit at ${previous.target1} (price=${currentPrice})`);
+          }
+        } else if (currentPrice <= previous.stopLoss) {
           // A stop at/above entry is a locked-profit level (re-leveled or a target
           // milestone lock): hitting it books a win, not a loss. A stop below
           // entry is a real stop-out.
@@ -521,11 +553,13 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
       // Record the level that actually resolved the trade (stop for a loss,
       // target for a win) so the persisted outcome shows the true exit, not
       // the market price at the check moment.
-      previous.exitPrice = previous.result === 'win'
-        ? (previous.closeReason === 'stop loss' ? previous.stopLoss
-           : previous.closeReason === 'ultimate target reached' && previous.ultimateTarget != null ? previous.ultimateTarget
-           : previous.target1)
-        : previous.stopLoss;
+      previous.exitPrice = previous.closeReason === 'time stop'
+        ? currentPrice
+        : previous.result === 'win'
+          ? (previous.closeReason === 'stop loss' ? previous.stopLoss
+            : previous.closeReason === 'ultimate target reached' && previous.ultimateTarget != null ? previous.ultimateTarget
+            : previous.target1)
+          : previous.stopLoss;
       // A milestone-booked position banked its win (and total trade) at target1;
       // the final resolution only upgrades the exit, never re-counts it.
       if (!previous.milestoneWinBooked) {
@@ -567,6 +601,8 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
           reason: newSignal.reason || '', analysis: newSignal.analysis || null,
           confidence: newSignal.confidence != null ? newSignal.confidence : null,
           timeframe: newSignal.timeframe || null,
+          horizon: newSignal.horizon || 'legacy',
+          specVersion: newSignal.specVersion || 'legacy',
         });
       } else if (monitorable) {
         console.log(`[RiskManager] ${symbol} ${newSignal.signal} is the same thesis that just resolved (entry=${previous.entryPrice}->${currentPrice}, t1=${previous.target1}) - not re-opening; waiting for a genuinely new call`);
@@ -598,6 +634,8 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
         reason: newSignal.reason || '', analysis: newSignal.analysis || null,
         confidence: newSignal.confidence != null ? newSignal.confidence : null,
         timeframe: newSignal.timeframe || null,
+        horizon: newSignal.horizon || 'legacy',
+        specVersion: newSignal.specVersion || 'legacy',
       });
     }
   }

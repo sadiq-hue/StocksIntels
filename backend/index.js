@@ -22,7 +22,7 @@ const allanGraySA = require('./allanGraySA');
 const stanlibSA = require('./stanlibSA');
 const cmaFundReports = require('./cmaFundReports');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, NSE_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, refreshPerformanceStats, computeBacktestStats, getForwardTestStats,
-            getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes } = require('./signalService');
+            getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes, getPhase1Benchmark } = require('./signalService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
 const marketHours = require('./marketHours');
 const { refitParameters } = require('./paramRefit');
@@ -4546,6 +4546,16 @@ app.get('/api/signals/backtest', async (req, res) => {
     res.json({ success: true, stats });
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+app.get('/api/signals/phase1-benchmark', async (req, res) => {
+  try {
+    const data = await getPhase1Benchmark();
+    res.json(data);
+  } catch (error) {
+    console.error('[Phase1] benchmark error:', error.message);
+    res.status(500).json({ success: false, error: 'Failed to load Phase 1 benchmark' });
   }
 });
 

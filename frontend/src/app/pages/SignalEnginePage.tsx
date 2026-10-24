@@ -240,6 +240,7 @@ function BacktestPanel() {
 function ForwardTestPanel() {
   const [stats, setStats] = useState<ForwardTestStats | null>(null);
   const [live, setLive] = useState<LiveWinRate | null>(null);
+  const [phase1, setPhase1] = useState<any>(null);
   const [predictions, setPredictions] = useState<ForwardPrediction[]>([]);
   const [predTotal, setPredTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -255,15 +256,20 @@ function ForwardTestPanel() {
   const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
-      const [ftRes, healthRes] = await Promise.all([
+      const [ftRes, healthRes, phase1Res] = await Promise.all([
         authFetch(`${API_URL}/signals/forward-test${userIdParam}`),
         authFetch(`${API_URL}/signals/engine/health`),
+        authFetch(`${API_URL}/signals/phase1-benchmark`).catch(() => null),
       ]);
       const ftData = await ftRes.json();
       if (ftData.success) setStats(ftData.stats);
       const healthData = await healthRes.json();
       if (healthData.success && healthData.health?.performance?.live) {
         setLive(healthData.health.performance.live);
+      }
+      if (phase1Res) {
+        const phase1Data = await phase1Res.json();
+        if (phase1Data.success) setPhase1(phase1Data);
       }
     } catch (e) { console.error(e); } finally { setLoading(false); }
   }, [userIdParam]);
@@ -404,6 +410,65 @@ function ForwardTestPanel() {
           </div>
         )}
       </div>
+
+      {/* Phase 1 benchmark: short 1R vs shadow 2R */}
+      {phase1 && (
+        <Card className="bg-card border-border p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Phase 1 Benchmark — Short 1R vs 2R</p>
+              <p className="text-[10px] text-muted-foreground">
+                Same entries, stops and 20-day time stop; only target1 differs. Live/shadow rows are gated signals; raw rows include pre-gate intent and are research-only.
+              </p>
+            </div>
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+              {phase1.specs?.live} vs {phase1.specs?.shadow}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-right">
+              <thead>
+                <tr className="border-b border-border text-muted-foreground">
+                  <th className="text-left py-2 px-2 font-medium">Cohort</th>
+                  <th className="py-2 px-2 font-medium">Resolved</th>
+                  <th className="py-2 px-2 font-medium">Win rate</th>
+                  <th className="py-2 px-2 font-medium">Avg win</th>
+                  <th className="py-2 px-2 font-medium">Avg loss</th>
+                  <th className="py-2 px-2 font-medium">Expectancy</th>
+                  <th className="py-2 px-2 font-medium">Profit factor</th>
+                  <th className="py-2 px-2 font-medium">Res. rate</th>
+                  <th className="py-2 px-2 font-medium">Avg days</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: "Live 1R (gated)", d: phase1.live1R },
+                  { label: "Live 2R shadow", d: phase1.shadow2R },
+                  { label: "Raw 1R (research)", d: phase1.raw1R },
+                  { label: "Raw 2R (research)", d: phase1.raw2R },
+                ].map(({ label, d }) => (
+                  <tr key={label} className="border-b border-border/60">
+                    <td className="text-left py-2 px-2 font-semibold text-foreground">{label}</td>
+                    <td className="py-2 px-2 text-muted-foreground">{d?.resolved ?? 0} / {d?.total ?? 0}</td>
+                    <td className="py-2 px-2 font-semibold text-foreground">{d ? `${d.winRate.toFixed(1)}%` : "—"}</td>
+                    <td className="py-2 px-2 text-emerald-600">{d ? `${d.avgWinR.toFixed(2)}R` : "—"}</td>
+                    <td className="py-2 px-2 text-rose-600">{d ? `${d.avgLossR.toFixed(2)}R` : "—"}</td>
+                    <td className={`py-2 px-2 font-bold ${(d?.expectancyR ?? 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {d ? `${d.expectancyR >= 0 ? "+" : ""}${d.expectancyR.toFixed(2)}R` : "—"}
+                    </td>
+                    <td className="py-2 px-2 font-semibold text-foreground">{d?.profitFactor != null ? d.profitFactor.toFixed(2) : "—"}</td>
+                    <td className="py-2 px-2 text-muted-foreground">{d ? `${d.resolutionRate.toFixed(0)}%` : "—"}</td>
+                    <td className="py-2 px-2 text-muted-foreground">{d?.avgDays != null ? d.avgDays.toFixed(1) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-2">
+            Judge on expectancy and profit factor, with at least 30 resolved per cohort. Use a 30-day checkpoint and extend to 60 days if the sample is short.
+          </p>
+        </Card>
+      )}
 
       {/* Main content */}
       {stats && (stats.totalPredictions > 0 || stats.pendingPredictions > 0) ? (

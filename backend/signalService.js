@@ -109,6 +109,41 @@ const schemaReadyPromise = (async () => {
     // inserted its own outcome row.
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS target1 NUMERIC(15,2)`);
     await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS stop_loss NUMERIC(15,2)`);
+    // Phase 1 horizon/spec tagging. Every new signal/outcome records which
+    // risk profile generated it, so short-1R, the 2R shadow and legacy
+    // medium/long rows can never be pooled in the audit.
+    await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS horizon VARCHAR(10)`);
+    await pool.query(`ALTER TABLE signal_history ADD COLUMN IF NOT EXISTS spec_version VARCHAR(30)`);
+    await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS horizon VARCHAR(10)`);
+    await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS spec_version VARCHAR(30)`);
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS horizon VARCHAR(10)`);
+    await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS spec_version VARCHAR(30)`);
+    // Shadow 2R benchmark cohort. Kept in its own table so it cannot affect the
+    // live monitor-first gate, notifications or per-symbol unique index.
+    await pool.query(`CREATE TABLE IF NOT EXISTS forward_benchmarks (
+      id SERIAL PRIMARY KEY,
+      source_prediction_id INTEGER,
+      symbol VARCHAR(20) NOT NULL,
+      signal VARCHAR(20),
+      confidence INTEGER,
+      price NUMERIC(15,2) NOT NULL,
+      stop_loss NUMERIC(15,2),
+      target1 NUMERIC(15,2),
+      target2 NUMERIC(15,2),
+      target3 NUMERIC(15,2),
+      action VARCHAR(10),
+      trade_type VARCHAR(30),
+      horizon VARCHAR(10) DEFAULT 'short',
+      spec_version VARCHAR(30) DEFAULT 'short-2R-v1',
+      generated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      resolved BOOLEAN DEFAULT FALSE,
+      actual_return NUMERIC(10,2),
+      correct BOOLEAN,
+      resolved_at TIMESTAMP WITH TIME ZONE,
+      close_reason VARCHAR(30)
+    )`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_forward_benchmarks_open ON forward_benchmarks (symbol, action, spec_version) WHERE NOT resolved`).catch(() => {});
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_forward_benchmarks_unresolved ON forward_benchmarks (resolved, generated_at)`).catch(() => {});
     // Forward-test dedup in recordForwardPrediction is a SELECT-then-INSERT, which
     // a concurrent signal cycle can race past — two identical theses landed as
     // id 13453/13667 @ NMG 13.65 (Aug 31 + Sep 1), hidden from the UI only by the
@@ -1079,11 +1114,22 @@ async function prefetchQuotes(symbols) {
   });
   if (toFetch.length === 0) return;
   const batchSize = 100;
+  // Never let a slow quote feed block the scoring/pre-gate benchmark loop for
+  // the whole cycle. Missing symbols fall back to the per-symbol quote path.
+  const deadline = Date.now() + 120000;
   for (let i = 0; i < toFetch.length; i += batchSize) {
+    if (Date.now() > deadline) {
+      console.warn(`[SignalService] quote prefetch budget reached - ${toFetch.length - i} symbols deferred`);
+      break;
+    }
     const batch = toFetch.slice(i, i + batchSize);
     try {
       const marketSymbols = batch.map(s => NSE_SYMBOLS.includes(s) ? `NSE:${s}` : s);
-      const quotes = await getQuotesBatch(marketSymbols);
+      const quotes = await Promise.race([
+        getQuotesBatch(marketSymbols),
+        new Promise(resolve => setTimeout(() => resolve(null), 30000)),
+      ]);
+      if (!quotes) continue;
       for (const s of batch) {
         const q = quotes[NSE_SYMBOLS.includes(s) ? `NSE:${s}` : s];
         if (q && q.price) {
@@ -1101,7 +1147,7 @@ async function prefetchQuotes(symbols) {
     const c = _quoteCache.get(s);
     return !c || !Number(c.price) || c.price <= 0;
   });
-  if (stillMissing.length > 0) {
+  if (stillMissing.length > 0 && Date.now() < deadline) {
     try {
       const marketSymbols = stillMissing.map(s => NSE_SYMBOLS.includes(s) ? `NSE:${s}` : s);
       const quotes = await getQuotesBatch(marketSymbols);
@@ -1302,7 +1348,7 @@ async function restoreStateFromDb() {
     // line prevents re-monitoring any position that already resolved. Only the
     // most recent signal per ticker is restored (DISTINCT ON + ORDER BY DESC).
     const openRes = await pool.query(
-      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, stage_idx, trade_type, position_size, generated_at, reason, analysis_data, confidence, timeframe
+      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, stage_idx, trade_type, position_size, generated_at, reason, analysis_data, confidence, timeframe, horizon, spec_version
        FROM signal_history
        WHERE signal IN ('Strong Buy','Buy')
          AND entry_price > 0 AND stop_loss > 0 AND target1 > 0
@@ -1370,6 +1416,8 @@ async function restoreStateFromDb() {
         reason: row.reason || '', analysis: row.analysis_data || null,
         confidence: row.confidence != null ? parseInt(row.confidence) : null,
         timeframe: row.timeframe || null,
+        horizon: row.horizon || 'legacy',
+        specVersion: row.spec_version || 'legacy',
       });
     }
     console.log(`[SignalService] Restored open live positions from signal_history`);
@@ -1910,6 +1958,29 @@ function computeMaxDrawdown(returns) {
 // Tracks signal predictions forward and compares to actual outcomes.
 const _forwardTestStore = new Map(); // symbol -> { predictions: [{id, signal, confidence, price, stopLoss, target1, action, tradeType, sector, generatedAt, resolved, actualReturn, correct, resolvedAt, supersededAt}] }
 
+// Phase 1 short-term profile: 20 trading days (~28 calendar days). A short
+// signal that has not hit its stop or 1R target is closed at market so the
+// benchmark cohort always resolves and short-term ideas cannot ride for months.
+const SHORT_MAX_HOLD_MS = 28 * 24 * 60 * 60 * 1000;
+const SHORT_SPEC_VERSION = 'short-1R-v1';
+const SHORT_SHADOW_SPEC_VERSION = 'short-2R-v1';
+const SHORT_TARGET_MULTS = { target1: 1, target2: 1.5, target3: 2 };
+const HORIZON_SPEC_VERSIONS = { short: SHORT_SPEC_VERSION, medium: 'medium-legacy-v1', long: 'long-legacy-v1' };
+
+function classifyHorizon(tradeType, expectedDays) {
+  const tt = String(tradeType || '').toLowerCase();
+  if (tt.includes('long term')) return 'long';
+  const days = Number(expectedDays);
+  if (tt.includes('aggressive') || tt.includes('momentum')) return 'short';
+  if (tt.includes('swing')) return (Number.isFinite(days) && days > 30) ? 'medium' : 'short';
+  if (Number.isFinite(days) && days > 0) {
+    if (days <= 20) return 'short';
+    if (days <= 75) return 'medium';
+    return 'long';
+  }
+  return 'short';
+}
+
 const FORWARD_TEST_MIN_AGE = 28800000; // 8 hours — predictions younger than this are skipped
 
 // A resolution quote that deviates more than 50% from the prediction entry cannot
@@ -2234,7 +2305,7 @@ async function _loadForwardPredictionsFromDb() {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const result = await pool.query(
-        `SELECT id, symbol, signal, confidence, price, stop_loss, target1, target2, target3, action, trade_type, sector, bench_price, generated_at, resolved, actual_return, correct, resolved_at, superseded_at
+        `SELECT id, symbol, signal, confidence, price, stop_loss, target1, target2, target3, action, trade_type, sector, bench_price, generated_at, resolved, actual_return, correct, resolved_at, superseded_at, horizon, spec_version
          FROM forward_predictions ORDER BY generated_at`
       );
       const resolved = result.rows.filter(r => r.resolved).length;
@@ -2265,6 +2336,8 @@ async function _loadForwardPredictionsFromDb() {
           target3: row.target3 != null ? Number(row.target3) : null,
           action: row.action, tradeType, sector: row.sector,
           benchPrice: row.bench_price != null ? Number(row.bench_price) : null,
+          horizon: row.horizon || 'legacy',
+          specVersion: row.spec_version || 'legacy',
           generatedAt: new Date(row.generated_at).getTime(),
           resolved: !!row.resolved, actualReturn: row.actual_return != null ? Number(row.actual_return) : null, correct: row.correct,
           resolvedAt: row.resolved_at ? new Date(row.resolved_at).getTime() : null,
@@ -2436,7 +2509,42 @@ function collapseToTheses(rows) {
   return collapseToThesesDetailed(rows).kept;
 }
 
-async function recordForwardPrediction(symbol, signalAction, confidence, price, stopLoss, target1, target2, target3, signalObjAction, tradeType, sector) {
+// Raw pre-gate shadow pair for the Phase 1 benchmark. The live monitor gate and
+// confidence bar can leave the short cohort empty for long stretches, so we also
+// record the raw short buy intent with both 1R and 2R targets. This is research
+// only (no live state, no notifications) and both rows share the same entry,
+// stop and time stop, making the 1R-vs-2R comparison path-identical.
+async function recordRawBenchmarkPair(symbol, sig, confidence, levels, tradeType) {
+  const entry = Number(levels.entry);
+  const stop = Number(levels.stopLoss);
+  if (!(entry > 0) || !(stop > 0) || stop >= entry) return;
+  const risk = entry - stop;
+  const specs = [
+    { spec: 'short-1R-raw-v1', t1: entry + risk, t2: entry + risk * 1.5, t3: entry + risk * 2 },
+    { spec: 'short-2R-raw-v1', t1: entry + risk * 2, t2: entry + risk * 4, t3: entry + risk * 6 },
+  ];
+  for (const s of specs) {
+    try {
+      const recent = await pool.query(
+        `SELECT 1 FROM forward_benchmarks
+         WHERE symbol = $1 AND spec_version = $2 AND resolved
+           AND ABS(price - $3) / NULLIF($3, 0) < 0.005
+           AND generated_at > NOW() - INTERVAL '1 day' LIMIT 1`,
+        [symbol, s.spec, entry]
+      );
+      if (recent.rows.length) continue;
+      await pool.query(
+        `INSERT INTO forward_benchmarks
+           (symbol, signal, confidence, price, stop_loss, target1, target2, target3, action, trade_type, horizon, spec_version)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'buy', $9, 'short', $10)
+         ON CONFLICT (symbol, action, spec_version) WHERE NOT resolved DO NOTHING`,
+        [symbol, sig.signal, confidence, entry, stop, s.t1, s.t2, s.t3, tradeType, s.spec]
+      );
+    } catch { /* research shadow best-effort */ }
+  }
+}
+
+async function recordForwardPrediction(symbol, signalAction, confidence, price, stopLoss, target1, target2, target3, signalObjAction, tradeType, sector, horizon = null, specVersion = null) {
   // Dedup: one live prediction per symbol+action+THESIS. A persistent signal that
   // never triggers a decisive move must NOT re-emit a fresh prediction every
   // signal cycle — the audit would count the same call N times (same ref price,
@@ -2500,13 +2608,26 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
     // produced id 13453/13667 (@ NMG 13.65). An empty result means the thesis
     // is already open in the DB, so skip the in-memory push too.
     const result = await pool.query(
-      `INSERT INTO forward_predictions (symbol, signal, confidence, price, stop_loss, target1, target2, target3, action, trade_type, sector, bench_price) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO forward_predictions (symbol, signal, confidence, price, stop_loss, target1, target2, target3, action, trade_type, sector, bench_price, horizon, spec_version) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        ON CONFLICT (symbol, action) WHERE NOT resolved DO NOTHING
        RETURNING id`,
-      [symbol, signalAction, confidence, price, stopLoss, target1, target2, target3, signalObjAction, tradeType, sector, benchPrice]
+      [symbol, signalAction, confidence, price, stopLoss, target1, target2, target3, signalObjAction, tradeType, sector, benchPrice, horizon, specVersion]
     );
     if (!result.rows.length) return;
     dbId = result.rows[0].id;
+    // Shadow 2R benchmark cohort: same entry/stop, target1 = 2R. It lives in a
+    // separate table and never touches the live gate/notifications.
+    if (horizon === 'short' && signalObjAction === 'buy' && stopLoss != null && price > stopLoss) {
+      const risk = price - stopLoss;
+      await pool.query(
+        `INSERT INTO forward_benchmarks
+           (source_prediction_id, symbol, signal, confidence, price, stop_loss, target1, target2, target3, action, trade_type, horizon, spec_version)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'buy', $10, 'short', $11)
+         ON CONFLICT (symbol, action, spec_version) WHERE NOT resolved DO NOTHING`,
+        [dbId, symbol, signalAction, confidence, price, stopLoss,
+          price + risk * 2, price + risk * 4, price + risk * 6, tradeType, SHORT_SHADOW_SPEC_VERSION]
+      ).catch((e) => console.warn(`[Phase1] shadow insert ${symbol}: ${e.message}`));
+    }
   } catch (e) {
     // Never track a prediction we could not persist: a memory-only row has no DB
     // id, can never be resolved/persisted, and surfaces as a phantom duplicate.
@@ -2518,6 +2639,7 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
     stopLoss, target1, target2: target2 != null ? target2 : null,
     target3: target3 != null ? target3 : null,
     action: signalObjAction, tradeType, sector, benchPrice,
+    horizon: horizon || 'legacy', specVersion: specVersion || 'legacy',
     generatedAt: Date.now(), resolved: false,
     actualReturn: null, correct: null, resolvedAt: null, supersededAt: null,
   });
@@ -2577,6 +2699,46 @@ function evaluateForwardPrediction(pred, currentPrice, th = DEFAULT_SELL_THRESHO
   return { status: 'neutral' };
 }
 
+function isShortPrediction(pred) {
+  return pred?.horizon === 'short' || String(pred?.specVersion || '').startsWith('short-');
+}
+
+// Phase 1 short cohort: exit at target1 (1R) or stop, and close at market after
+// the 20-trading-day time stop. This is deliberately different from the
+// ride-to-ultimate rule used by medium/long predictions.
+function evaluateShortPrediction(pred, currentPrice) {
+  if (isGarbageQuote(pred, currentPrice)) return { status: 'defer' };
+  const actualReturn = Math.round(((currentPrice - pred.price) / pred.price) * 1000) / 10;
+  if (pred.stopLoss != null && currentPrice <= pred.stopLoss) {
+    return { status: 'resolved', correct: false, actualReturn, closeReason: 'stop loss' };
+  }
+  if (pred.target1 != null && currentPrice >= pred.target1) {
+    return { status: 'resolved', correct: true, actualReturn, closeReason: 'target1 (1R) reached' };
+  }
+  const age = Date.now() - (pred.generatedAt || 0);
+  if (age >= SHORT_MAX_HOLD_MS) {
+    return { status: 'resolved', correct: currentPrice >= pred.price, actualReturn, closeReason: 'time stop' };
+  }
+  return { status: 'pending' };
+}
+
+function applyShortPredictionResolution(pred, currentPrice) {
+  const outcome = evaluateShortPrediction(pred, currentPrice);
+  if (outcome.status === 'defer' || outcome.status !== 'resolved') return false;
+  pred.correct = outcome.correct;
+  pred.resolved = true;
+  pred.resolvedAt = Date.now();
+  pred.actualReturn = outcome.actualReturn;
+  pred.closeReason = outcome.closeReason;
+  if (pred.id) {
+    pool.query(
+      `UPDATE forward_predictions SET resolved = TRUE, actual_return = $1, correct = $2, resolved_at = NOW() WHERE id = $3`,
+      [outcome.actualReturn, outcome.correct, pred.id]
+    ).catch(() => {});
+  }
+  return true;
+}
+
 // Refinement for sells that the absolute evaluator left pending (stock moved
 // less than ±th.exitMove). Uses absolute direction: stock fell = sell was
 // correct, stock rose = sell was wrong.
@@ -2611,6 +2773,10 @@ async function resolveForwardPredictions(symbol) {
     for (const pred of unresolved) {
       if (Date.now() - pred.generatedAt < FORWARD_TEST_MIN_AGE) continue;
       const age = Date.now() - pred.generatedAt;
+      if (isShortPrediction(pred) && pred.action === 'buy') {
+        applyShortPredictionResolution(pred, currentPrice);
+        continue;
+      }
       const outcome = evaluateForwardPrediction(pred, currentPrice, th);
       if (outcome.status === 'defer') {
         const dev = Math.abs(currentPrice - pred.price) / pred.price * 100;
@@ -3276,6 +3442,128 @@ function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0, a
   return { predictions: deduped.slice(offset, offset + limit), total: deduped.length };
 }
 
+// Resolve the shadow 2R benchmark cohort. Same entry/stop and time stop as the
+// live 1R short cohort; only target1 differs (2R). Never touches live state.
+async function resolveForwardBenchmarks() {
+  let rows = [];
+  try {
+    const res = await pool.query(
+      `SELECT id, symbol, price, stop_loss, target1, generated_at
+       FROM forward_benchmarks WHERE NOT resolved AND price > 0`
+    );
+    rows = res.rows || [];
+  } catch { return; }
+  if (!rows.length) return;
+  const symbols = [...new Set(rows.map(r => r.symbol))];
+  const quotes = await getQuotesBatch(symbols).catch(() => null);
+  if (!quotes) return;
+  const byBare = new Map();
+  for (const [k, v] of Object.entries(quotes)) {
+    if (!v) continue;
+    const bare = String(k).toUpperCase().replace(/^NSE:/, '').replace(/\.KE$/, '');
+    if (!byBare.has(bare)) byBare.set(bare, v);
+  }
+  let resolved = 0;
+  for (const row of rows) {
+    const bare = String(row.symbol).toUpperCase().replace(/^NSE:/, '').replace(/\.KE$/, '');
+    const q = byBare.get(bare);
+    const px = q ? parseFloat(q.price) : NaN;
+    if (!(px > 0)) continue;
+    const entry = parseFloat(row.price);
+    const stop = parseFloat(row.stop_loss);
+    const target = parseFloat(row.target1);
+    if (!(entry > 0) || !(stop > 0) || !(target > entry)) continue;
+    const age = Date.now() - new Date(row.generated_at).getTime();
+    let correct = null;
+    let reason = null;
+    if (px <= stop) { correct = false; reason = 'stop loss'; }
+    else if (px >= target) { correct = true; reason = 'target1 (2R) reached'; }
+    else if (age >= SHORT_MAX_HOLD_MS) { correct = px >= entry; reason = 'time stop'; }
+    else continue;
+    const actualReturn = Math.round(((px - entry) / entry) * 1000) / 10;
+    await pool.query(
+      `UPDATE forward_benchmarks SET resolved = TRUE, actual_return = $1, correct = $2, resolved_at = NOW(), close_reason = $3 WHERE id = $4`,
+      [actualReturn, correct, reason, row.id]
+    ).catch(() => {});
+    resolved++;
+  }
+  if (resolved) console.log(`[Phase1] resolved ${resolved} shadow 2R benchmark(s)`);
+}
+
+function benchmarkCohortStats(rows) {
+  const resolved = rows.filter(r => r.resolved);
+  let wins = 0, losses = 0, grossWinR = 0, grossLossR = 0, days = 0;
+  for (const r of resolved) {
+    const entry = Number(r.price);
+    const stop = Number(r.stop_loss);
+    const ret = Number(r.actual_return);
+    const riskPct = entry > 0 && stop > 0 ? (entry - stop) / entry : 0;
+    if (!(riskPct > 0) || !Number.isFinite(ret)) continue;
+    const rMultiple = ret / (riskPct * 100);
+    if (r.correct === true) { wins++; grossWinR += Math.max(0, rMultiple); }
+    else if (r.correct === false) { losses++; grossLossR += Math.abs(Math.min(0, rMultiple)); }
+    if (r.resolved_at && r.generated_at) days += (new Date(r.resolved_at) - new Date(r.generated_at)) / 86400000;
+  }
+  const total = wins + losses;
+  const winRate = total > 0 ? (wins / total) * 100 : 0;
+  const avgWinR = wins > 0 ? grossWinR / wins : 0;
+  const avgLossR = losses > 0 ? grossLossR / losses : 0;
+  const expectancyR = total > 0 ? (wins / total) * avgWinR - (losses / total) * avgLossR : 0;
+  return {
+    total: rows.length,
+    resolved: resolved.length,
+    open: rows.length - resolved.length,
+    wins, losses,
+    winRate: Math.round(winRate * 10) / 10,
+    avgWinR: Math.round(avgWinR * 100) / 100,
+    avgLossR: Math.round(avgLossR * 100) / 100,
+    expectancyR: Math.round(expectancyR * 100) / 100,
+    profitFactor: grossLossR > 0 ? Math.round((grossWinR / grossLossR) * 100) / 100 : null,
+    resolutionRate: rows.length > 0 ? Math.round((resolved.length / rows.length) * 1000) / 10 : 0,
+    avgDays: resolved.length > 0 ? Math.round((days / resolved.length) * 10) / 10 : null,
+  };
+}
+
+async function getPhase1Benchmark() {
+  const [live, shadow, raw1R, raw2R] = await Promise.all([
+    pool.query(
+      `SELECT price, stop_loss, actual_return, correct, resolved, generated_at, resolved_at
+       FROM forward_predictions WHERE spec_version = $1`,
+      [SHORT_SPEC_VERSION]
+    ).catch(() => ({ rows: [] })),
+    pool.query(
+      `SELECT price, stop_loss, actual_return, correct, resolved, generated_at, resolved_at
+       FROM forward_benchmarks WHERE spec_version = $1`,
+      [SHORT_SHADOW_SPEC_VERSION]
+    ).catch(() => ({ rows: [] })),
+    pool.query(
+      `SELECT price, stop_loss, actual_return, correct, resolved, generated_at, resolved_at
+       FROM forward_benchmarks WHERE spec_version = $1`,
+      ['short-1R-raw-v1']
+    ).catch(() => ({ rows: [] })),
+    pool.query(
+      `SELECT price, stop_loss, actual_return, correct, resolved, generated_at, resolved_at
+       FROM forward_benchmarks WHERE spec_version = $1`,
+      ['short-2R-raw-v1']
+    ).catch(() => ({ rows: [] })),
+  ]);
+  return {
+    success: true,
+    horizon: 'short',
+    specs: {
+      live: SHORT_SPEC_VERSION,
+      shadow: SHORT_SHADOW_SPEC_VERSION,
+      raw1R: 'short-1R-raw-v1',
+      raw2R: 'short-2R-raw-v1',
+    },
+    live1R: benchmarkCohortStats(live.rows),
+    shadow2R: benchmarkCohortStats(shadow.rows),
+    raw1R: benchmarkCohortStats(raw1R.rows),
+    raw2R: benchmarkCohortStats(raw2R.rows),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 async function resolveAllForwardPredictions() {
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS stop_loss NUMERIC(15,2)`).catch(() => {});
@@ -3287,7 +3575,11 @@ async function resolveAllForwardPredictions() {
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS target2 NUMERIC(15,2)`).catch(() => {});
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS target3 NUMERIC(15,2)`).catch(() => {});
   await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
+  await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS horizon VARCHAR(10)`).catch(() => {});
+  await pool.query(`ALTER TABLE forward_predictions ADD COLUMN IF NOT EXISTS spec_version VARCHAR(30)`).catch(() => {});
   await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE`).catch(() => {});
+  await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS horizon VARCHAR(10)`).catch(() => {});
+  await pool.query(`ALTER TABLE signal_outcomes ADD COLUMN IF NOT EXISTS spec_version VARCHAR(30)`).catch(() => {});
   let resolved = 0, failed = 0, skipped = 0;
   for (const [symbol, store] of _forwardTestStore) {
     const unresolved = store.predictions.filter(p => !p.resolved);
@@ -3346,6 +3638,11 @@ async function resolveAllForwardPredictions() {
       for (const pred of unresolved) {
         if (Date.now() - pred.generatedAt < FORWARD_TEST_MIN_AGE) { skipped++; continue; }
         const age = Date.now() - pred.generatedAt;
+        if (isShortPrediction(pred) && pred.action === 'buy') {
+          if (applyShortPredictionResolution(pred, currentPrice)) resolved++;
+          else skipped++;
+          continue;
+        }
         const outcome = evaluateForwardPrediction(pred, currentPrice, th);
         if (outcome.status === 'defer') {
           const dev = Math.abs(currentPrice - pred.price) / pred.price * 100;
@@ -3674,9 +3971,10 @@ async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPri
           const upd = await pool.query(
             `UPDATE signal_outcomes
              SET exit_price = $3, result = $4, resolved_at = $5, close_reason = $6,
-                 recorded_at = $5, target1 = COALESCE(target1, $7), stop_loss = COALESCE(stop_loss, $8)
+                 recorded_at = $5, target1 = COALESCE(target1, $7), stop_loss = COALESCE(stop_loss, $8),
+                 horizon = COALESCE(horizon, $9), spec_version = COALESCE(spec_version, $10)
              WHERE id = $1 AND source = 'live'`,
-            [match.id, symbol, currentPrice, result, resolvedAt || now, closeReason, target1, stopLoss]
+            [match.id, symbol, currentPrice, result, resolvedAt || now, closeReason, target1, stopLoss, prevOutcome?.horizon || null, prevOutcome?.specVersion || null]
           );
           if ((upd.rowCount || 0) > 0) {
             // The in-memory _liveTestStore is a capped display cache whose entries
@@ -3691,10 +3989,10 @@ async function persistSignalOutcome(symbol, entryPrice, signalAction, currentPri
     }
 
     await pool.query(
-      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at, signal_generated_at, close_reason, source, target1, stop_loss)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'live', $11, $12)
+      `INSERT INTO signal_outcomes (ticker, entry_price, signal, exit_price, result, position_size, recorded_at, resolved_at, signal_generated_at, close_reason, source, target1, stop_loss, horizon, spec_version)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'live', $11, $12, $13, $14)
        ON CONFLICT (ticker, signal_generated_at) DO NOTHING`,
-      [symbol, entryPrice, signalAction, currentPrice, result, posSize, now, resolvedAt || now, signalGenAt, closeReason, target1, stopLoss]
+      [symbol, entryPrice, signalAction, currentPrice, result, posSize, now, resolvedAt || now, signalGenAt, closeReason, target1, stopLoss, prevOutcome?.horizon || null, prevOutcome?.specVersion || null]
     );
     // Push to live test store
     const store = _liveTestStore.get(symbol);
@@ -4011,15 +4309,16 @@ async function persistSignals(signals) {
       s.currency || 'USD', s.type || 'Swing Trade', s.timeframe || '2-4 weeks', s.reason || '',
       parseInt(s.positionSize) || 25,
       s.analysis ? JSON.stringify(s.analysis) : null,
+      s.horizon || null, s.specVersion || null,
     ]);
-    const cols = 19;
+    const cols = 21;
     const placeholders = values.map((_, i) => {
       const base = i * cols;
-      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, $${base+17}, $${base+18}, $${base+19}, NOW(), date_trunc('hour', NOW()))`;
+      return `($${base+1}, $${base+2}, $${base+3}, $${base+4}, $${base+5}, $${base+6}, $${base+7}, $${base+8}, $${base+9}, $${base+10}, $${base+11}, $${base+12}, $${base+13}, $${base+14}, $${base+15}, $${base+16}, $${base+17}, $${base+18}, $${base+19}, $${base+20}, $${base+21}, NOW(), date_trunc('hour', NOW()))`;
     }).join(',');
     const flat = values.flat();
     const result = await pool.query(
-      `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, target3, risk_reward, sector, market, currency, trade_type, timeframe, reason, position_size, analysis_data, generated_at, signal_bucket)
+      `INSERT INTO signal_history (ticker, signal, confidence, price, change_pct, entry_price, stop_loss, target1, target2, target3, risk_reward, sector, market, currency, trade_type, timeframe, reason, position_size, analysis_data, horizon, spec_version, generated_at, signal_bucket)
        VALUES ${placeholders}
        ON CONFLICT DO NOTHING`,
       flat
@@ -4138,6 +4437,7 @@ setTimeout(async () => {
 // Auto-resolve forward test predictions every 5 minutes
 setInterval(() => {
   resolveAllForwardPredictions().catch(() => {});
+  resolveForwardBenchmarks().catch(() => {});
 }, 5 * 60 * 1000);
 // Auto-generate signals every 15 min (the exchange-hours guard inside means it
 // only actually runs while a tracked market is live; _signalsInProgress prevents
@@ -4527,6 +4827,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         // Score-based close verdict (flip / profit-fade / stale-thesis / conviction
         // fade) with the minimum-age guard and fade-confirmation rules — extracted
         // as a pure helper so this decision is unit-verifiable (test-fade-relevel.cjs).
+        const shortCohort = prevOutcome.horizon === 'short' || String(prevOutcome.specVersion || '').startsWith('short-');
         const sc = evaluateScoreClose(prevOutcome, sigObj.action, eligibility.ok, currentPrice, Date.now(), SCORE_CLOSE_MIN_AGE_MS, sigObj.analysis?.overall?.score);
         prevOutcome.fadeCount = sc.fadeCount;
         prevOutcome.fadeFirstSeen = sc.fadeFirstSeen;
@@ -4535,9 +4836,9 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         // conviction-fade can't cut the ride short. It closes ONLY by the locked
         // stop (milestone floor already banks the gain) or the ultimate target.
         const ridingUltimate = prevAction === 'buy' && (prevOutcome.stageIdx || 0) > 0;
-        if (!sc.close || ridingUltimate) {
+        if (!sc.close || ridingUltimate || shortCohort) {
           emitSignal = false;
-          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${ridingUltimate ? ` [riding toward ultimate: milestone passed, score-based close disabled]` : ''}${sc.isFade ? ` (conviction fading ${sc.fadeCount}/${sc.required})` : ''}${sc.longTermHold ? ' [long-term hold: score-based close disabled]' : ''}${sc.tooYoung && !sc.longTermHold ? ` [min-age guard: ${Math.max(0, Math.round((SCORE_CLOSE_MIN_AGE_MS - (Date.now() - prevOutcome.timestamp)) / 60000))}m remaining]` : ''}`);
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${ridingUltimate ? ` [riding toward ultimate: milestone passed, score-based close disabled]` : ''}${shortCohort ? ' [short 1R cohort: resolves only at 1R/stop/time stop]' : ''}${sc.isFade ? ` (conviction fading ${sc.fadeCount}/${sc.required})` : ''}${sc.longTermHold ? ' [long-term hold: score-based close disabled]' : ''}${sc.tooYoung && !sc.longTermHold ? ` [min-age guard: ${Math.max(0, Math.round((SCORE_CLOSE_MIN_AGE_MS - (Date.now() - prevOutcome.timestamp)) / 60000))}m remaining]` : ''}`);
         } else if (marketOpen) {
           // Score-based close at market: the full analysis flipped direction against
           // the open position, its conviction faded to neutral on consecutive
@@ -4597,7 +4898,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       console.log(`[SignalService] ${symbol} ${sigObj.signal} confidence ${sigObj.confidence} below emission floor ${cfg.minConfidence || 40} - not persisting`);
     }
     if (emitSignal && !suppressSellPersist && sigObj.signal !== 'Hold') {
-      recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.target2, sigObj.target3, sigObj.action, sigObj.type, sigObj.sector).catch(() => {});
+      recordForwardPrediction(symbol, sigObj.signal, sigObj.confidence, currentPrice, sigObj.stopLoss, sigObj.target1, sigObj.target2, sigObj.target3, sigObj.action, sigObj.type, sigObj.sector, sigObj.horizon, sigObj.specVersion).catch(() => {});
     }
     if (prevOutcome && prevOutcome.timestamp) {
       // Persist THIS cycle's new milestone or final resolution.  The resolved
@@ -5538,6 +5839,20 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // label misleading (e.g. CGEN score 55 → Buy, but confidence only 47%).
   // Demote to the next weaker label so the displayed conviction matches the
   // displayed label.
+  // Phase 1 raw shadow benchmark (pre confidence/eligibility gates): records
+  // both 1R and 2R exits for the same short-term buy intent so the comparison
+  // can populate even while the live gate is saturated or confidence is low.
+  if (sig.action === 'buy') {
+    try {
+      const rawTradeType = determineTradeType(technical.score, fundamental.score);
+      const rawLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, rawTradeType);
+      const rawHorizon = classifyHorizon(rawTradeType, rawLevels.expectedDays);
+      if (rawHorizon === 'short') {
+        recordRawBenchmarkPair(symbol, sig, confidence, rawLevels, rawTradeType).catch(() => {});
+      }
+    } catch { /* research shadow best-effort */ }
+  }
+
   const _origSignalLabel = sig.signal;
   let _confidenceGateNote = null;
   if (sig.action === 'buy') {
@@ -5554,7 +5869,11 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   }
 
   const tradeType = sig.action === 'sell' ? 'Avoid' : determineTradeType(technical.score, fundamental.score);
-  const tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType);
+  let tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType);
+  // Phase 1 horizon classification uses the current (2R) expected holding
+  // period, so the entry set is unchanged; only short signals get the 1R exit.
+  const horizon = sig.action === 'buy' ? classifyHorizon(tradeType, tradeLevels.expectedDays) : null;
+  const specVersion = horizon ? HORIZON_SPEC_VERSIONS[horizon] : null;
 
   // ── Expectancy gate: the score bar is not enough ─────────────────────
   // A Buy must also clear a positive risk-adjusted expectancy, else it is a
@@ -5572,6 +5891,13 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       sig = { ...sig, signal: 'Hold', action: 'hold', strength: 'neutral' };
       console.log(`[SignalService] ${symbol} expectancy-gate: ${_expectancyGateNote}`);
     }
+  }
+
+  // Phase 1: short-term buys exit at target1 = 1R instead of riding to the
+  // ultimate 2R/4R/6R ladder. Stop distance is unchanged, so this isolates the
+  // effect of the exit rule. The 2R shadow cohort is recorded separately.
+  if (sig.action === 'buy' && horizon === 'short') {
+    tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType, SHORT_TARGET_MULTS);
   }
 
   const regimePenalty = regime.regime === 'crash' ? regimePenaltyCrash : 1;
@@ -5682,6 +6008,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     type: tradeType, signal: sig.signal, action: sig.action, entry: tradeLevels.entry,
     stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2, target3: tradeLevels.target3,
     riskReward: tradeLevels.riskReward, confidence, positionSize: positionSize + '%',
+    horizon: horizon || 'legacy', specVersion: specVersion || null,
     timeframe: holdingPeriod || timeframes[tradeType], sector: stock.sector, volume: formattedVolume, rawVolume: volume || 0,
     weeklyTrend: weeklyTrend.trend, regime: regime.regime,
     catalyst: cat.direction ? {
@@ -5954,6 +6281,7 @@ module.exports = {
   getMonitoredSignals,
   refreshMonitoredQuotes,
   getOpenPositionsMarkToMarket,
+  getPhase1Benchmark,
   collapseToTheses,
   collapseToThesesDetailed,
   POSITION_HORIZON_DAYS,
