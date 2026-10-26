@@ -320,7 +320,7 @@ async function _loadSignalCacheFromDb() {
   // Fallback: rebuild from signal_history (last known signal per ticker)
   try {
     const hist = await pool.query(
-      `SELECT DISTINCT ON (ticker) ticker, signal, confidence, price, change_pct, sector, market, currency, trade_type
+      `SELECT DISTINCT ON (ticker) ticker, signal, confidence, price, change_pct, sector, market, currency, trade_type, timeframe, horizon, spec_version
        FROM signal_history ORDER BY ticker, generated_at DESC LIMIT 500`
     );
     if (hist.rows.length > 0) {
@@ -334,6 +334,9 @@ async function _loadSignalCacheFromDb() {
         currency: r.currency || (NSE_SYMBOLS.includes(r.ticker) ? 'KES' : 'USD'),
         signal: r.signal || 'Hold',
         type: r.trade_type || 'Swing Trade',
+        timeframe: r.timeframe || null,
+        horizon: r.horizon || classifyHorizon(r.trade_type, r.timeframe),
+        specVersion: r.spec_version || null,
         confidence: parseInt(r.confidence) || 0,
         volume: 0,
         analysis: { overall: { score: 50, grade: 'C' }, fundamental: { score: 50 }, technical: { score: 50 }, financial: { score: 50 }, macro: { score: 50 } },
@@ -607,6 +610,8 @@ function getMonitoredSignals() {
       name: cached && cached.name ? cached.name : null,
       sector: cached && cached.sector ? cached.sector : null,
       timeframe: monitoredTimeframe(ticker, v, cached),
+      horizon: v.horizon || classifyHorizon(v.type, v.timeframe),
+      specVersion: v.specVersion || null,
       market: isNse ? 'NSE' : 'Global',
       currency: isNse ? 'KES' : 'USD',
       openedAt: new Date(v.timestamp).toISOString(),
@@ -4069,6 +4074,9 @@ function getLiveWinRate(signalOutcomes = _signalOutcomes, lastKnownPrices = _las
     openPositions.push({
       symbol, action: pos.action, entryPrice: pos.entryPrice, lastPrice: price,
       currency: NSE_SYMBOLS.includes(symbol) ? 'KES' : 'USD',
+      horizon: pos.horizon || classifyHorizon(pos.type, pos.timeframe),
+      type: pos.type || null,
+      timeframe: pos.timeframe || null,
       mtm: mtmWin ? 'win' : 'loss',
       unrealizedPct: Math.round(((price - pos.entryPrice) / pos.entryPrice) * 1000) / 10,
     });

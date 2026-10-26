@@ -282,6 +282,18 @@ function overallVerdict(s: StockSignal): string {
   return `After weighing everything, ${lead} with ${tail}`;
 }
 
+function horizonOf(s: StockSignal | any): "short" | "medium" | "long" {
+  const h = String(s?.horizon || "").toLowerCase();
+  if (h === "short" || h === "medium" || h === "long") return h;
+  const type = String(s?.type || "").toLowerCase();
+  if (type.includes("long term")) return "long";
+  if (type.includes("aggressive") || type.includes("momentum")) return "short";
+  const tf = String(s?.timeframe || "").toLowerCase();
+  if (tf.includes("week") || tf.includes("2-4") || tf.includes("1-4")) return "short";
+  if (tf.includes("3-6") || tf.includes("6 month") || tf.includes("1 year")) return "long";
+  return "medium";
+}
+
 export function SignalsPage() {
   const [signals, setSignals] = useState<StockSignal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -291,6 +303,7 @@ export function SignalsPage() {
   const [filterSignal, setFilterSignal] = useState("All");
   const [filterSector, setFilterSector] = useState("All");
   const [filterMarket, setFilterMarket] = useState("all");
+  const [filterHorizon, setFilterHorizon] = useState<"all" | "short" | "long">("all");
   const [sortBy, setSortBy] = useState<"confidence" | "change" | "ticker">("confidence");
   const [page, setPage] = useState(1);
   const [favorites, setFavorites] = useState<string[]>([]);
@@ -325,25 +338,26 @@ export function SignalsPage() {
       (filterType === "all" || s.type === filterType) &&
       (filterSignal === "All" || s.signal === filterSignal) &&
       (filterSector === "All" || s.sector === filterSector) &&
-      (filterMarket === "all" || (filterMarket === "nse" ? s.market === "NSE" : s.market !== "NSE"))
+      (filterMarket === "all" || (filterMarket === "nse" ? s.market === "NSE" : s.market !== "NSE")) &&
+      (filterHorizon === "all" || (filterHorizon === "short" ? horizonOf(s) === "short" : horizonOf(s) !== "short"))
     );
     const sorted = [...list];
     if (sortBy === "confidence") sorted.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
     else if (sortBy === "change") sorted.sort((a, b) => (b.change ?? 0) - (a.change ?? 0));
     else sorted.sort((a, b) => a.ticker.localeCompare(b.ticker));
     return sorted;
-  }, [signals, search, filterType, filterSignal, filterSector, sortBy]);
+  }, [signals, search, filterType, filterSignal, filterSector, filterMarket, filterHorizon, sortBy]);
 
-  const hasActiveFilters = search !== "" || filterType !== "all" || filterSignal !== "All" || filterSector !== "All" || filterMarket !== "all";
+  const hasActiveFilters = search !== "" || filterType !== "all" || filterSignal !== "All" || filterSector !== "All" || filterMarket !== "all" || filterHorizon !== "all";
 
   const clearFilters = () => {
-    setSearch(""); setFilterType("all"); setFilterSignal("All"); setFilterSector("All"); setFilterMarket("all"); setSortBy("confidence");
+    setSearch(""); setFilterType("all"); setFilterSignal("All"); setFilterSector("All"); setFilterMarket("all"); setFilterHorizon("all"); setSortBy("confidence");
   };
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(page, totalPages);
   const paged = filtered.slice((safePage - 1) * perPage, safePage * perPage);
-  useEffect(() => { setPage(1); }, [search, filterType, filterSignal, filterSector, sortBy]);
+  useEffect(() => { setPage(1); }, [search, filterType, filterSignal, filterSector, filterMarket, filterHorizon, sortBy]);
 
   useEffect(() => {
     if (!selected) return;
@@ -358,6 +372,8 @@ export function SignalsPage() {
   const topConf = [...signals].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0)).slice(0, 5);
   const peakConf = topConf.length ? Math.round(topConf[0].confidence ?? 0) : 0;
   const avgConf = signals.length ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / signals.length) : 0;
+  const shortIdeas = signals.filter(s => horizonOf(s) === "short").length;
+  const longIdeas = signals.length - shortIdeas;
 
   const toggleFav = (t: string) => setFavorites(p => p.includes(t) ? p.filter(f => f !== t) : [...p, t]);
 
@@ -410,6 +426,36 @@ export function SignalsPage() {
         <StatCard label="Favorites" value={favorites.length} tone="text-amber-500" />
       </div>
 
+      {/* Horizon split: short-term traders vs medium/long-term investors */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {([
+          { key: "short" as const, label: "Short-term positions", sub: "Days to weeks", count: shortIdeas, tone: "text-[#0D7490]", bg: "bg-[#0D7490]/5 border-[#0D7490]/20" },
+          { key: "long" as const, label: "Long-term positions", sub: "Medium to long term (1–3+ months)", count: longIdeas, tone: "text-violet-700", bg: "bg-violet-50 border-violet-200" },
+        ]).map(({ key, label, sub, count, tone, bg }) => {
+          const top = signals
+            .filter(s => key === "short" ? horizonOf(s) === "short" : horizonOf(s) !== "short")
+            .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
+            .slice(0, 5);
+          return (
+            <button key={key} onClick={() => setFilterHorizon(key)}
+              className={`text-left rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] ${bg} ${filterHorizon === key ? "ring-2 ring-[#0D7490]/40" : ""}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{label}</p>
+                  <p className="text-[11px] text-muted-foreground">{sub}</p>
+                </div>
+                <span className={`text-2xl font-black tabular-nums ${tone}`}>{count}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {top.length === 0 ? <span className="text-[11px] text-muted-foreground">No signals in this horizon yet</span> : top.map(s => (
+                  <span key={s.ticker} className="rounded-full bg-white/80 dark:bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{s.ticker}</span>
+                ))}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Top signals by confidence */}
       {topConf.length > 0 && (
         <div className="rounded-2xl bg-white dark:bg-white/[0.06] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_18px_rgba(0,0,0,0.06)] flex items-center justify-between flex-wrap gap-3">
@@ -448,6 +494,14 @@ export function SignalsPage() {
         <Select value={filterMarket} onValueChange={setFilterMarket}>
           <SelectTrigger className="w-[120px] h-9 text-sm border-border"><SelectValue placeholder="Market" /></SelectTrigger>
           <SelectContent><SelectItem value="all">All Markets</SelectItem><SelectItem value="nse">NSE</SelectItem><SelectItem value="global">Global</SelectItem></SelectContent>
+        </Select>
+        <Select value={filterHorizon} onValueChange={v => setFilterHorizon(v as "all" | "short" | "long")}>
+          <SelectTrigger className="w-[140px] h-9 text-sm border-border"><SelectValue placeholder="Horizon" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Horizons</SelectItem>
+            <SelectItem value="short">Short-term</SelectItem>
+            <SelectItem value="long">Medium / Long-term</SelectItem>
+          </SelectContent>
         </Select>
         <Select value={sortBy} onValueChange={v => setSortBy(v as "confidence" | "change" | "ticker")}>
           <SelectTrigger className="w-[160px] h-9 text-sm border-border"><ArrowUpDown className="w-3.5 h-3.5 mr-2" /><SelectValue placeholder="Sort" /></SelectTrigger>
@@ -489,6 +543,9 @@ export function SignalsPage() {
               {/* Type + sector */}
               <div className="px-4 pb-3 flex items-center gap-2 text-[11px] text-muted-foreground">
                 <Badge className={`${TYPE_STYLES[s.type]} border-0 text-[10px] font-medium`}>{s.type}</Badge>
+                <Badge className={`border-0 text-[10px] font-semibold ${horizonOf(s) === "short" ? "bg-sky-100 text-sky-700" : horizonOf(s) === "medium" ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700"}`}>
+                  {horizonOf(s) === "short" ? "Short-term" : horizonOf(s) === "medium" ? "Medium-term" : "Long-term"}
+                </Badge>
                 <span className="text-muted-foreground">|</span>
                 <span>Sector: {s.sector}</span>
                 <span className="text-muted-foreground">|</span>
