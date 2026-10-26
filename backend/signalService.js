@@ -310,6 +310,9 @@ async function _loadSignalCacheFromDb() {
         await pool.query(`DELETE FROM app_cache WHERE cache_key = 'signals_cache'`).catch(() => {});
       } else {
         _signalsCache = cached;
+        if (Array.isArray(_signalsCache)) {
+          _signalsCache = _signalsCache.map(s => ({ ...s, horizon: resolveHorizon(s.horizon, s.type, s.timeframe) }));
+        }
         _signalsCacheTime = 0;
         console.log(`[SignalService] Loaded ${_signalsCache.length} signals from cache DB (will regenerate in background)`);
         return;
@@ -335,7 +338,7 @@ async function _loadSignalCacheFromDb() {
         signal: r.signal || 'Hold',
         type: r.trade_type || 'Swing Trade',
         timeframe: r.timeframe || null,
-        horizon: r.horizon || classifyHorizon(r.trade_type, r.timeframe),
+        horizon: resolveHorizon(r.horizon, r.trade_type, r.timeframe),
         specVersion: r.spec_version || null,
         confidence: parseInt(r.confidence) || 0,
         volume: 0,
@@ -610,7 +613,7 @@ function getMonitoredSignals() {
       name: cached && cached.name ? cached.name : null,
       sector: cached && cached.sector ? cached.sector : null,
       timeframe: monitoredTimeframe(ticker, v, cached),
-      horizon: v.horizon || classifyHorizon(v.type, v.timeframe),
+      horizon: resolveHorizon(v.horizon, v.type, v.timeframe),
       specVersion: v.specVersion || null,
       market: isNse ? 'NSE' : 'Global',
       currency: isNse ? 'KES' : 'USD',
@@ -1972,18 +1975,27 @@ const SHORT_SHADOW_SPEC_VERSION = 'short-2R-v1';
 const SHORT_TARGET_MULTS = { target1: 1, target2: 1.5, target3: 2 };
 const HORIZON_SPEC_VERSIONS = { short: SHORT_SPEC_VERSION, medium: 'medium-legacy-v1', long: 'long-legacy-v1' };
 
-function classifyHorizon(tradeType, expectedDays) {
+function classifyHorizon(tradeType, expectedDays, timeframe) {
   const tt = String(tradeType || '').toLowerCase();
+  const tf = String(timeframe || '').toLowerCase();
   if (tt.includes('long term')) return 'long';
-  const days = Number(expectedDays);
+  if (tf.includes('3-6') || tf.includes('6 month') || tf.includes('1 year')) return 'long';
   if (tt.includes('aggressive') || tt.includes('momentum')) return 'short';
-  if (tt.includes('swing')) return (Number.isFinite(days) && days > 30) ? 'medium' : 'short';
+  if (tf.includes('week') || tf.includes('2-4') || tf.includes('1-4')) return 'short';
+  if (tf.includes('1-3 month') || tf.includes('1-3months') || tf.includes('~1 month') || tf.includes('1 month')) return 'medium';
+  if (tt.includes('swing')) return (Number.isFinite(Number(expectedDays)) && Number(expectedDays) > 30) ? 'medium' : 'short';
+  const days = Number(expectedDays);
   if (Number.isFinite(days) && days > 0) {
     if (days <= 20) return 'short';
     if (days <= 75) return 'medium';
     return 'long';
   }
   return 'short';
+}
+
+function resolveHorizon(horizon, tradeType, timeframe) {
+  const h = String(horizon || '').toLowerCase();
+  return (h === 'short' || h === 'medium' || h === 'long') ? h : classifyHorizon(tradeType, null, timeframe);
 }
 
 const FORWARD_TEST_MIN_AGE = 28800000; // 8 hours — predictions younger than this are skipped
@@ -4074,7 +4086,7 @@ function getLiveWinRate(signalOutcomes = _signalOutcomes, lastKnownPrices = _las
     openPositions.push({
       symbol, action: pos.action, entryPrice: pos.entryPrice, lastPrice: price,
       currency: NSE_SYMBOLS.includes(symbol) ? 'KES' : 'USD',
-      horizon: pos.horizon || classifyHorizon(pos.type, pos.timeframe),
+      horizon: resolveHorizon(pos.horizon, pos.type, pos.timeframe),
       type: pos.type || null,
       timeframe: pos.timeframe || null,
       mtm: mtmWin ? 'win' : 'loss',

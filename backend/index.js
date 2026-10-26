@@ -4237,8 +4237,10 @@ app.get('/api/signals', async (req, res) => {
       base.entry = m.entryPrice;
       base.stopLoss = m.stopLoss;
       base.target1 = m.target1;
-      base.target2 = m.target2;
-      base.target3 = m.target3;
+  base.target2 = m.target2;
+  base.target3 = m.target3;
+  base.horizon = m.horizon || base.horizon || null;
+  base.specVersion = m.specVersion || base.specVersion || null;
       base.riskReward = stopDist > 0 ? Math.round(((m.target1 - m.entryPrice) / stopDist) * 10) / 10 : null;
       // A monitored card carries the analysis snapshot frozen when the position
       // was opened, so its macro block can be months stale (and predate the live
