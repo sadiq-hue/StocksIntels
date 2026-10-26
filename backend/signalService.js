@@ -313,7 +313,7 @@ async function _loadSignalCacheFromDb() {
         if (Array.isArray(_signalsCache)) {
           _signalsCache = _signalsCache.map(s => {
             const isBuy = s.action === 'buy' || /buy/i.test(String(s.signal || ''));
-            return { ...s, horizon: isBuy ? resolveHorizon(s.horizon, s.type, s.timeframe) : null };
+            return { ...s, sector: normalizeSector(s.sector, s.ticker), horizon: isBuy ? resolveHorizon(s.horizon, s.type, s.timeframe) : null };
           });
         }
         _signalsCacheTime = 0;
@@ -333,7 +333,7 @@ async function _loadSignalCacheFromDb() {
       _signalsCache = _normalizeSignalCurrency(hist.rows.map(r => ({
         ticker: r.ticker,
         name: r.ticker,
-        sector: r.sector || 'General',
+        sector: normalizeSector(r.sector, r.ticker),
         price: parseFloat(r.price) || 0,
         change: parseFloat(r.change_pct) || 0,
         market: r.market || (NSE_SYMBOLS.includes(r.ticker) ? 'NSE' : 'Global'),
@@ -614,7 +614,7 @@ function getMonitoredSignals() {
       change,
       confidence: v.confidence != null ? v.confidence : (cached && cached.confidence != null ? cached.confidence : null),
       name: cached && cached.name ? cached.name : null,
-      sector: cached && cached.sector ? cached.sector : null,
+      sector: normalizeSector(cached?.sector || v.sector, ticker),
       timeframe: monitoredTimeframe(ticker, v, cached),
       horizon: resolveHorizon(v.horizon, v.type, v.timeframe),
       specVersion: v.specVersion || null,
@@ -1360,7 +1360,7 @@ async function restoreStateFromDb() {
     // line prevents re-monitoring any position that already resolved. Only the
     // most recent signal per ticker is restored (DISTINCT ON + ORDER BY DESC).
     const openRes = await pool.query(
-      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, stage_idx, trade_type, position_size, generated_at, reason, analysis_data, confidence, timeframe, horizon, spec_version
+      `SELECT DISTINCT ON (ticker) ticker, signal, entry_price, stop_loss, target1, target2, target3, stage_idx, trade_type, position_size, generated_at, reason, analysis_data, confidence, timeframe, horizon, spec_version, sector
        FROM signal_history
        WHERE signal IN ('Strong Buy','Buy')
          AND entry_price > 0 AND stop_loss > 0 AND target1 > 0
@@ -1430,6 +1430,7 @@ async function restoreStateFromDb() {
         timeframe: row.timeframe || null,
         horizon: row.horizon || 'legacy',
         specVersion: row.spec_version || 'legacy',
+        sector: normalizeSector(row.sector, row.ticker),
       });
     }
     console.log(`[SignalService] Restored open live positions from signal_history`);
@@ -2006,6 +2007,12 @@ function classifyHorizon(tradeType, expectedDays, timeframe) {
 function resolveHorizon(horizon, tradeType, timeframe) {
   const h = String(horizon || '').toLowerCase();
   return (h === 'short' || h === 'medium' || h === 'long') ? h : classifyHorizon(tradeType, null, timeframe);
+}
+
+function normalizeSector(sector, ticker) {
+  const s = String(sector || '').trim();
+  if (s && !/^(general|other|n\/a|unknown)$/i.test(s)) return s;
+  try { return guessSector(ticker) || s || 'General'; } catch { return s || 'General'; }
 }
 
 const FORWARD_TEST_MIN_AGE = 28800000; // 8 hours — predictions younger than this are skipped
@@ -4095,6 +4102,7 @@ function getLiveWinRate(signalOutcomes = _signalOutcomes, lastKnownPrices = _las
       symbol, action: pos.action, entryPrice: pos.entryPrice, lastPrice: price,
       currency: NSE_SYMBOLS.includes(symbol) ? 'KES' : 'USD',
       horizon: resolveHorizon(pos.horizon, pos.type, pos.timeframe),
+      sector: normalizeSector(pos.sector, symbol),
       type: pos.type || null,
       timeframe: pos.timeframe || null,
       mtm: mtmWin ? 'win' : 'loss',
@@ -4124,6 +4132,63 @@ function getLiveWinRate(signalOutcomes = _signalOutcomes, lastKnownPrices = _las
 }
 
 // ─── Health Check ───────────────────────────────────────────────────────────
+function getSignalExposure() {
+  const rows = new Map();
+  for (const s of Array.isArray(_signalsCache) ? _signalsCache : []) {
+    if (!(s && (s.action === 'buy' || /buy/i.test(String(s.signal || ''))))) continue;
+    rows.set(String(s.ticker).toUpperCase(), {
+      ticker: s.ticker,
+      sector: normalizeSector(s.sector, s.ticker),
+      horizon: resolveHorizon(s.horizon, s.type, s.timeframe),
+      currency: s.currency || 'USD',
+      market: s.market || 'Global',
+      weight: Math.max(0, parseInt(s.positionSize) || 0),
+    });
+  }
+  for (const [ticker, pos] of _signalOutcomes) {
+    if (!pos || pos.result || pos.action !== 'buy') continue;
+    rows.set(String(ticker).toUpperCase(), {
+      ticker,
+      sector: normalizeSector(pos.sector || (rows.get(String(ticker).toUpperCase())?.sector), ticker),
+      horizon: resolveHorizon(pos.horizon, pos.type, pos.timeframe),
+      currency: rows.get(String(ticker).toUpperCase())?.currency || 'USD',
+      market: rows.get(String(ticker).toUpperCase())?.market || 'Global',
+      weight: Math.max(0, parseInt(pos.positionSize) || 0),
+    });
+  }
+  const bySector = new Map();
+  const byHorizon = { short: 0, medium: 0, long: 0 };
+  const byCurrency = {};
+  const byMarket = {};
+  let totalWeight = 0;
+  for (const r of rows.values()) {
+    totalWeight += r.weight;
+    bySector.set(r.sector, (bySector.get(r.sector) || 0) + r.weight);
+    byHorizon[r.horizon] = (byHorizon[r.horizon] || 0) + 1;
+    byCurrency[r.currency] = (byCurrency[r.currency] || 0) + 1;
+    byMarket[r.market] = (byMarket[r.market] || 0) + 1;
+  }
+  const sectors = [...bySector.entries()].map(([sector, weight]) => ({
+    sector, weight,
+    count: [...rows.values()].filter(r => r.sector === sector).length,
+    weightPct: totalWeight > 0 ? Math.round((weight / totalWeight) * 1000) / 10 : 0,
+  })).sort((a, b) => b.weight - a.weight);
+  const warnings = [];
+  for (const s of sectors) {
+    if (s.weightPct > 30) warnings.push(`${s.sector} concentration ${s.weightPct}%`);
+  }
+  if (rows.size > 0 && byHorizon.short / rows.size > 0.8) warnings.push('Portfolio is >80% short-term');
+  return {
+    positions: rows.size,
+    totalWeight,
+    bySector: sectors,
+    byHorizon,
+    byCurrency,
+    byMarket,
+    warnings,
+  };
+}
+
 function getEngineHealth() {
   const perf = _performanceStats;
   // Keep the mark-to-market basis fresh: open positions' last-known prices are
@@ -4155,6 +4220,7 @@ function getEngineHealth() {
       maxDrawdown: Math.round(_portfolioState.maxDrawdown * 1000) / 10,
     },
     regime: _marketRegime.regime,
+    exposure: getSignalExposure(),
     signalCount: (() => {
       // Match what GET /api/signals returns to the frontend: the engine cache
       // plus monitored open positions that are surfaced as Buy cards.
@@ -5835,6 +5901,8 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const insiderMaxDelta = sc.insider_activity?.max_delta ?? INSIDER_MAX_DELTA;
   const overlayInsider = insider ? ((insider.score - 50) / 50) * insiderMaxDelta : 0;
   adjScore += overlayInsider;
+  const sectorValuation = computeSectorValuation(stock, fundamental, symbol);
+  adjScore += sectorValuation.overlay;
 
   const scoreBeforeCap = adjScore;
 
@@ -6049,7 +6117,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     },
     mlWinProb: mlWinProb != null ? Math.round(mlWinProb * 1000) / 1000 : null,
     compositeBase: Math.round(compositeBase * 1000) / 1000,
-    overlays: { sparse: overlaySparse, catalyst: overlayCatalyst, insider: overlayInsider },
+    overlays: { sparse: overlaySparse, catalyst: overlayCatalyst, insider: overlayInsider, sector: sectorValuation.overlay },
     scoreBeforeCap: Math.round(scoreBeforeCap * 1000) / 1000,
     speculativeCapApplied: !!speculative,
     overallScore,
@@ -6077,6 +6145,24 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     console.log(`[SignalService][diag] ${symbol} ${sig.signal} score=${overallScore} (base=${diagnostics.compositeBase} news=${newsScore} ov: cat=${overlayCatalyst} ins=${overlayInsider} sparse=${overlaySparse}) regime=${regime.regime} conf=${confRaw}->${confFinal} ml=${diagnostics.mlWinProb} gate=${_confidenceGateNote || 'none'}`);
   }
 
+  const bullTarget = tradeLevels.target3 || tradeLevels.target2 || tradeLevels.target1;
+  const scenarioReturn = (price) => tradeLevels.entry > 0 && price != null
+    ? Math.round(((price - tradeLevels.entry) / tradeLevels.entry) * 1000) / 10 : null;
+  const scenarios = sig.action === 'buy' && tradeLevels.stopLoss != null && tradeLevels.target1 != null
+    ? {
+        bear: { price: tradeLevels.stopLoss, returnPct: scenarioReturn(tradeLevels.stopLoss) },
+        base: { price: tradeLevels.target1, returnPct: scenarioReturn(tradeLevels.target1) },
+        bull: { price: bullTarget, returnPct: scenarioReturn(bullTarget) },
+        expectedReturnPct: (() => {
+          const b = scenarioReturn(tradeLevels.stopLoss);
+          const ba = scenarioReturn(tradeLevels.target1);
+          const bu = scenarioReturn(bullTarget);
+          if (b == null || ba == null || bu == null) return null;
+          return Math.round((0.25 * bu + 0.5 * ba + 0.25 * b) * 10) / 10;
+        })(),
+      }
+    : null;
+
   const obj = {
     id: `signal-${symbol}-${Date.now()}`, ticker: symbol, name: stock.name,
     price: Math.round(currentPrice * 100) / 100, change: Math.round(priceChange * 100) / 100,
@@ -6090,6 +6176,8 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     estCostBps,
     estCostPct: Math.round(estCostBps) / 100,
     benchmarkSymbol: benchmarkSymbolFor(symbol),
+    sectorValuation,
+    scenarios,
     timeframe: holdingPeriod || timeframes[tradeType], sector: stock.sector, volume: formattedVolume, rawVolume: volume || 0,
     weeklyTrend: weeklyTrend.trend, regime: regime.regime,
     catalyst: cat.direction ? {
@@ -6157,6 +6245,43 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
 // Note: the confidence bar is NOT part of this gate; it is enforced separately
 // on the final feed (minConfidence filter) so a momentarily low-confidence stock
 // never blocks an already-open monitored position from being tracked.
+function computeSectorValuation(stock, fundamental, symbol) {
+  const sector = String(stock?.sector || guessSector(symbol) || 'Other');
+  const m = fundamental?.metrics || {};
+  const pe = Number(stock?.peRatio ?? m.peRatio ?? 0);
+  const pb = Number(stock?.pbRatio ?? m.pbRatio ?? 0);
+  const ev = Number(stock?.evEbitda ?? m.evEbitda ?? 0);
+  const sectorPE = getEffectiveSectorPE(_dynamicSectorPE, sector);
+  const sectorEV = INDUSTRY_MEDIAN_EV_EBITDA[sector] || 12;
+  const lower = /bank|financial|insurance|real estate|reit/i.test(sector);
+  let metric, value, benchmark;
+  if (/bank|financial|insurance|real estate|reit/i.test(sector)) {
+    metric = 'P/B';
+    value = pb;
+    benchmark = /insurance/i.test(sector) ? 1.2 : /real estate|reit/i.test(sector) ? 1.6 : 1.5;
+  } else if (/energy|utilit|commodit|material/i.test(sector)) {
+    metric = 'EV/EBITDA';
+    value = ev;
+    benchmark = sectorEV;
+  } else {
+    metric = 'P/E';
+    value = pe;
+    benchmark = sectorPE;
+  }
+  if (!(value > 0) || !(benchmark > 0)) {
+    return { sector, metric, value: value || null, benchmark, relative: null, score: 50, overlay: 0, label: 'n/a' };
+  }
+  const relative = value / benchmark;
+  const raw = lower ? 50 + (1 - relative) * 30 : 50 + (1 - relative) * 30;
+  const score = Math.max(0, Math.min(100, Math.round(raw)));
+  const overlay = Math.max(-4, Math.min(4, Math.round(((score - 50) / 50) * 4 * 10) / 10));
+  return {
+    sector, metric, value: Math.round(value * 100) / 100, benchmark: Math.round(benchmark * 100) / 100,
+    relative: Math.round(relative * 100) / 100, score, overlay,
+    label: score >= 65 ? 'cheap' : score <= 35 ? 'expensive' : 'fair',
+  };
+}
+
 function assessDataQuality({ marketOpen, quoteAgeMs, currentPrice, volume, priceHistory, fundamental, technical }) {
   const bars = Array.isArray(priceHistory) ? priceHistory.length : 0;
   const stale = Boolean(marketOpen) && Number(quoteAgeMs) > 15 * 60 * 1000;

@@ -609,6 +609,18 @@ export function SignalsPage() {
                 {(s as any).estCostBps != null && (
                   <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border" title="Estimated round-trip cost">COST ~{(s as any).estCostBps}bps</span>
                 )}
+                {(s as any).sectorValuation?.metric && (
+                  <span className={`px-1.5 py-0.5 rounded border font-medium ${(s as any).sectorValuation.label === "cheap" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : (s as any).sectorValuation.label === "expensive" ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-muted text-muted-foreground border-border"}`}
+                    title={`${(s as any).sectorValuation.metric} ${(s as any).sectorValuation.value} vs sector ${(s as any).sectorValuation.benchmark} (${(s as any).sectorValuation.relative}x)`}>
+                    VAL {(s as any).sectorValuation.label} · {(s as any).sectorValuation.metric}
+                  </span>
+                )}
+                {(s as any).scenarios && (
+                  <span className="px-1.5 py-0.5 rounded bg-slate-50 text-slate-700 border border-slate-200"
+                    title={`Bear ${(s as any).scenarios.bear?.returnPct}% · Base ${(s as any).scenarios.base?.returnPct}% · Bull ${(s as any).scenarios.bull?.returnPct}%`}>
+                    SCEN {((s as any).scenarios.expectedReturnPct ?? 0) >= 0 ? "+" : ""}{(s as any).scenarios.expectedReturnPct}%
+                  </span>
+                )}
                 {s.var95 && <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-100">VaR: {s.var95}</span>}
                 {s.mlWinProb && <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">ML: {s.mlWinProb}</span>}
                 {s.regime && <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">{s.regime}</span>}

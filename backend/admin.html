@@ -6033,6 +6033,23 @@ async function fetchEngineHealth() {
         <div class="stat-card"><div class="stat-value" style="color:${h.liveTest.winRate >= 60 ? '#059669' : '#d97706'}">${h.liveTest.winRate != null ? fmtPct(h.liveTest.winRate) : '—'}</div><div class="stat-label">Live Win Rate</div></div>
       </div>
       ` : '')}
+      ${h.exposure && h.exposure.positions > 0 ? `
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
+        <p style="font-size:13px;font-weight:600;margin-bottom:10px">Signal Exposure <span style="color:#6b7280;font-weight:400">(${h.exposure.positions} buy positions)</span></p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">By sector</p>
+            ${h.exposure.bySector.slice(0, 6).map(s => `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>${esc(s.sector)}</span><span style="font-weight:600;color:${s.weightPct > 30 ? '#dc2626' : '#6b7280'}">${s.weightPct}%</span></div>`).join('')}
+          </div>
+          <div>
+            <p style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">By horizon</p>
+            <p style="font-size:12px;color:#111827">Short-term <b>${h.exposure.byHorizon.short || 0}</b> · Medium <b>${h.exposure.byHorizon.medium || 0}</b> · Long <b>${h.exposure.byHorizon.long || 0}</b></p>
+            <p style="font-size:12px;color:#6b7280;margin-top:6px">Currency: ${Object.entries(h.exposure.byCurrency || {}).map(([k, v]) => `${esc(k)} ${v}`).join(' · ')}</p>
+            <p style="font-size:12px;color:#6b7280;margin-top:4px">Market: ${Object.entries(h.exposure.byMarket || {}).map(([k, v]) => `${esc(k)} ${v}`).join(' · ')}</p>
+          </div>
+        </div>
+        ${h.exposure.warnings && h.exposure.warnings.length ? `<p style="font-size:11px;color:#b45309;margin-top:8px">⚠ ${h.exposure.warnings.map(esc).join(' · ')}</p>` : ''}
+      </div>` : ''}
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px">
         <p style="font-size:13px;font-weight:600;margin-bottom:12px">Source Health</p>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
