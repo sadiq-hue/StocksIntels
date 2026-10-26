@@ -2618,12 +2618,10 @@ async function recordForwardPrediction(symbol, signalAction, confidence, price, 
     );
     if (dup.rows.length) return;
   } catch (e) { /* persistence best-effort */ }
-  // Benchmark snapshot for sell predictions so the exit thesis can be judged
-  // relative to the market later (best-effort; null → absolute evaluation).
+  // Benchmark snapshot for every prediction so outcomes can be judged relative
+  // to the relevant market later (best-effort; null -> absolute evaluation).
   let benchPrice = null;
-  if (signalObjAction === 'sell') {
-    benchPrice = await _getBenchmarkNow(benchmarkSymbolFor(symbol));
-  }
+  try { benchPrice = await _getBenchmarkNow(benchmarkSymbolFor(symbol)); } catch { /* benchmark optional */ }
   if (!_forwardTestStore.has(symbol)) _forwardTestStore.set(symbol, { predictions: [] });
   const store = _forwardTestStore.get(symbol);
   let dbId = null;
@@ -4648,6 +4646,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   let catalysts = {};
   let insiderNews = {};
   let newsBySymbol = {};
+  let eventRiskMap = new Map();
   let regime = _marketRegime;
   if (!quick) {
     try {
@@ -4694,6 +4693,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     await prefetchQuotes(symbols).catch(() => {});
     flushNseDailyBars();
     regime = await detectMarketRegime();
+    eventRiskMap = await loadEventRiskMap().catch(() => new Map());
   }
   // A regime change is new information: relax the loss streak instead of
   // carrying a bear-market streak into the next regime forever.
@@ -4818,6 +4818,9 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       }
     }
     const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume, engineConfig.getConfig().indicator_params);
+    const quoteAgeMs = (marketData && marketData[symbol]) ? 0 : Math.max(0, Date.now() - (_quoteCache.get(symbol)?.ts || Date.now()));
+    const dataQuality = assessDataQuality({ marketOpen, quoteAgeMs, currentPrice, volume, priceHistory, fundamental, technical });
+    const liquidity = assessLiquidity({ symbol, currentPrice, volume, priceHistory });
     const financial = analyzeFinancials(stock, fundamental);
     const country = getCountryForSymbol(symbol);
     let macro = getMacroScore(country);
@@ -4834,8 +4837,16 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       catalyst: catalysts[symbol] || null,
       insiderNews: insiderNews[symbol] || null,
       news: newsBySymbol[String(symbol).toUpperCase()] || [],
-      priceHistory, degFactor
+      priceHistory, degFactor, dataQuality, liquidity
     });
+    const eventRisk = eventRiskMap.get(symbol) || null;
+    if (eventRisk && sigObj) {
+      sigObj.eventRisk = eventRisk;
+      if (sigObj.action === 'buy' && sigObj.horizon === 'short') {
+        const ps = parseInt(sigObj.positionSize) || 0;
+        sigObj.positionSize = Math.max(1, Math.round(ps * 0.5)) + '%';
+      }
+    }
     const prevOutcome = _signalOutcomes.get(symbol);
     let emitSignal = true;
     // Strict all-conditions gate: a stock only earns a (new) signal when its
@@ -4844,7 +4855,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     // (its stop/target use the previously-valid levels) but never emits a fresh
     // signal built on untrustworthy data.
     const eligibility = meetsSignalConditions(sigObj, {
-      currentPrice, priceHistory, volume, fundamental, technical, financial, macro,
+      currentPrice, priceHistory, volume, fundamental, technical, financial, macro, dataQuality, liquidity,
     });
     if (!eligibility.ok) {
       const hasOpen = prevOutcome && !prevOutcome.result && prevOutcome.timestamp;
@@ -5258,6 +5269,10 @@ async function generateSingleSignal(symbol) {
     if (reportMetrics) stock = sanitizeLiveFundamentals(stock, reportMetrics);
     const fundamental = analyzeFundamentals(stock, currentPrice, newsSent, _dynamicSectorPE);
     const technical = analyzeTechnicals(symbol, currentPrice, priceHistory, volume);
+    const marketOpen = isExchangeOpen(symbol);
+    const quoteAgeMs = Math.max(0, Date.now() - (_quoteCache.get(symbol)?.ts || Date.now()));
+    const dataQuality = assessDataQuality({ marketOpen, quoteAgeMs, currentPrice, volume, priceHistory, fundamental, technical });
+    const liquidity = assessLiquidity({ symbol, currentPrice, volume, priceHistory });
     const financial = analyzeFinancials(stock, fundamental);
     const country = getCountryForSymbol(symbol);
     let macro = getMacroScore(country);
@@ -5272,13 +5287,13 @@ async function generateSingleSignal(symbol) {
     const sigObj = await _buildSignal({
       symbol, stock, currentPrice, priceChange, volume,
       fundamental, technical, financial, macro, regime, weights, weeklyTrend,
-      newsSent, catalyst, insiderNews, news: signalNews, priceHistory, degFactor
+      newsSent, catalyst, insiderNews, news: signalNews, priceHistory, degFactor, dataQuality, liquidity
     });
     if (sigObj) {
       // Same strict all-conditions gate as the batch path: an on-demand lookup
       // only returns a signal when the stock genuinely qualifies.
       const eligibility = meetsSignalConditions(sigObj, {
-        currentPrice, priceHistory, volume, fundamental, technical, financial, macro,
+        currentPrice, priceHistory, volume, fundamental, technical, financial, macro, dataQuality, liquidity,
       });
       if (!eligibility.ok) {
         console.log(`[SignalService] ${symbol} ineligible for a signal: ${eligibility.reasons.join(', ')}`);
@@ -5733,7 +5748,7 @@ function formatHoldingPeriod(days, tradeType) {
   if (days <= 90) return '1-3 months';
   return '3-6 months';
 }
-async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, catalyst, insiderNews, news = [], priceHistory, degFactor }) {
+async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, catalyst, insiderNews, news = [], priceHistory, degFactor, dataQuality, liquidity }) {
   // Read scoring and portfolio config once at the top
   const sc = engineConfig.getConfig().scoring?.signal_confidence || {};
   const confMin = sc.min ?? 10;
@@ -5929,20 +5944,26 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // period, so the entry set is unchanged; only short signals get the 1R exit.
   const horizon = sig.action === 'buy' ? classifyHorizon(tradeType, tradeLevels.expectedDays) : null;
   const specVersion = horizon ? HORIZON_SPEC_VERSIONS[horizon] : null;
+  const estCostBps = estimateCostBps(symbol, horizon);
+  const stopPct = tradeLevels.entry > 0 && tradeLevels.stopLoss != null
+    ? (tradeLevels.entry - tradeLevels.stopLoss) / tradeLevels.entry : 0;
+  const costR = stopPct > 0 ? (estCostBps / 10000) / stopPct : 0;
 
   // ── Expectancy gate: the score bar is not enough ─────────────────────
   // A Buy must also clear a positive risk-adjusted expectancy, else it is a
   // low-conviction call that the score alone would wave through. E = p*R - (1-p)
-  // with p = calibrated confidence and R = the reward:risk of the levels.
+  // with p = calibrated confidence and R = the reward:risk of the levels net of
+  // estimated transaction costs.
   let expectancy = null;
   let _expectancyGateNote = null;
   if (sig.action === 'buy' && qualityCfg.enabled !== false) {
     const R = Number(tradeLevels.riskReward) || 0;
+    const netR = Math.max(0, R - costR);
     const p = confidence / 100;
-    expectancy = Math.round((p * R - (1 - p)) * 1000) / 1000;
+    expectancy = Math.round((p * netR - (1 - p)) * 1000) / 1000;
     const minE = qualityCfg.min_expectancy ?? 0.2;
     if (expectancy < minE) {
-      _expectancyGateNote = `${sig.signal} (expectancy ${expectancy}R < ${minE}R: p=${Math.round(p * 100)}%, R=${R})`;
+      _expectancyGateNote = `${sig.signal} (net expectancy ${expectancy}R < ${minE}R: p=${Math.round(p * 100)}%, R=${netR.toFixed(2)}, cost=${estCostBps}bps)`;
       sig = { ...sig, signal: 'Hold', action: 'hold', strength: 'neutral' };
       console.log(`[SignalService] ${symbol} expectancy-gate: ${_expectancyGateNote}`);
     }
@@ -6064,6 +6085,11 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2, target3: tradeLevels.target3,
     riskReward: tradeLevels.riskReward, confidence, positionSize: positionSize + '%',
     horizon: horizon || 'legacy', specVersion: specVersion || null,
+    dataQuality: dataQuality || null,
+    liquidity: liquidity || null,
+    estCostBps,
+    estCostPct: Math.round(estCostBps) / 100,
+    benchmarkSymbol: benchmarkSymbolFor(symbol),
     timeframe: holdingPeriod || timeframes[tradeType], sector: stock.sector, volume: formattedVolume, rawVolume: volume || 0,
     weeklyTrend: weeklyTrend.trend, regime: regime.regime,
     catalyst: cat.direction ? {
@@ -6131,7 +6157,76 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
 // Note: the confidence bar is NOT part of this gate; it is enforced separately
 // on the final feed (minConfidence filter) so a momentarily low-confidence stock
 // never blocks an already-open monitored position from being tracked.
-function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fundamental, technical, financial, macro } = {}) {
+function assessDataQuality({ marketOpen, quoteAgeMs, currentPrice, volume, priceHistory, fundamental, technical }) {
+  const bars = Array.isArray(priceHistory) ? priceHistory.length : 0;
+  const stale = Boolean(marketOpen) && Number(quoteAgeMs) > 15 * 60 * 1000;
+  const doubleSparse =
+    fundamental?.metrics?.dataQuality === 'Very sparse data' &&
+    technical?.indicators?.dataQuality === 'Insufficient history';
+  const reasons = [];
+  if (!(Number(currentPrice) > 0)) reasons.push('invalid price');
+  if (!(Number(volume) > 0)) reasons.push('missing volume');
+  if (bars < MIN_SIGNAL_HISTORY) reasons.push(`only ${bars}/${MIN_SIGNAL_HISTORY} bars`);
+  if (stale) reasons.push(`quote ${Math.round(quoteAgeMs / 60000)}m old`);
+  if (doubleSparse) reasons.push('sparse fundamental + technical data');
+  return {
+    ok: reasons.length === 0,
+    bars,
+    quoteAgeMin: Math.round((Number(quoteAgeMs) || 0) / 60000),
+    stale,
+    reasons,
+  };
+}
+
+function assessLiquidity({ symbol, currentPrice, volume, priceHistory }) {
+  const isNse = NSE_SYMBOLS.includes(symbol);
+  const vols = Array.isArray(priceHistory?.volumes) ? priceHistory.volumes.filter(v => Number(v) > 0).slice(-20) : [];
+  const avgVolume = vols.length
+    ? vols.reduce((a, b) => a + Number(b), 0) / vols.length
+    : Number(volume) || 0;
+  const dollarVolume = avgVolume * (Number(currentPrice) || 0);
+  const minDollarAdv = isNse ? 500000 : 1000000;
+  return {
+    ok: dollarVolume >= minDollarAdv,
+    avgVolume: Math.round(avgVolume),
+    dollarVolume: Math.round(dollarVolume),
+    minDollarAdv,
+    thin: dollarVolume < minDollarAdv * 2,
+    currency: isNse ? 'KES' : 'USD',
+  };
+}
+
+function estimateCostBps(symbol, horizon) {
+  const isNse = NSE_SYMBOLS.includes(symbol);
+  const base = isNse ? 55 : 12;
+  const shortExtra = horizon === 'short' ? (isNse ? 30 : 10) : 0;
+  return base + shortExtra;
+}
+
+async function loadEventRiskMap() {
+  try {
+    const { fetchFinnhubEarningsCalendar } = require('./earningsService');
+    const now = new Date();
+    const from = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const to = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const events = await Promise.race([
+      fetchFinnhubEarningsCalendar(from, to),
+      new Promise(resolve => setTimeout(() => resolve([]), 8000)),
+    ]);
+    const map = new Map();
+    for (const e of events || []) {
+      const d = new Date(`${e.date}T12:00:00Z`);
+      if (Number.isNaN(d.getTime())) continue;
+      const days = Math.round((d.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+      if (days >= -1 && days <= 3) {
+        map.set(String(e.ticker || '').toUpperCase(), { type: 'earnings', date: e.date, days });
+      }
+    }
+    return map;
+  } catch { return new Map(); }
+}
+
+function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fundamental, technical, financial, macro, dataQuality, liquidity } = {}) {
   const reasons = [];
   const isFin = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -6153,6 +6248,13 @@ function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fun
     fundamental?.metrics?.dataQuality === 'Very sparse data' &&
     technical?.indicators?.dataQuality === 'Insufficient history';
   if (doubleSparse) reasons.push('sparse fundamental + technical data');
+
+  if (dataQuality && dataQuality.ok === false) {
+    reasons.push(`data quality: ${(dataQuality.reasons || []).join(', ') || 'failed'}`);
+  }
+  if (liquidity && liquidity.ok === false) {
+    reasons.push(`illiquid: ADV ${liquidity.currency} ${Number(liquidity.dollarVolume || 0).toLocaleString()} < ${liquidity.minDollarAdv.toLocaleString()}`);
+  }
 
   if (sigObj.action === 'buy') {
     const e = Number(sigObj.entry), s = Number(sigObj.stopLoss), t1 = Number(sigObj.target1);

@@ -594,6 +594,21 @@ export function SignalsPage() {
               {/* Risk / ML badges */}
               <div className="px-4 pb-2 flex items-center gap-2 flex-wrap text-[10px]">
                 {s.positionSize && parseInt(s.positionSize) > 0 && <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100 font-medium">Size: {s.positionSize}</span>}
+                {(s as any).dataQuality && !(s as any).dataQuality.ok && (
+                  <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-semibold" title={((s as any).dataQuality.reasons || []).join(', ')}>DATA ISSUE</span>
+                )}
+                {(s as any).liquidity && (s as any).liquidity.ok === false && (
+                  <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-semibold" title="Below minimum dollar ADV">ILLIQUID</span>
+                )}
+                {(s as any).liquidity?.thin && (s as any).liquidity.ok !== false && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200" title="Thin liquidity: position size should stay small">THIN LIQUIDITY</span>
+                )}
+                {(s as any).eventRisk && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-medium" title={`${(s as any).eventRisk.type} event on ${(s as any).eventRisk.date}`}>EVENT {(s as any).eventRisk.days}d</span>
+                )}
+                {(s as any).estCostBps != null && (
+                  <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border" title="Estimated round-trip cost">COST ~{(s as any).estCostBps}bps</span>
+                )}
                 {s.var95 && <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-100">VaR: {s.var95}</span>}
                 {s.mlWinProb && <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">ML: {s.mlWinProb}</span>}
                 {s.regime && <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">{s.regime}</span>}
