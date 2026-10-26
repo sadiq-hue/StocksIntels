@@ -202,18 +202,25 @@ function updatePortfolioRisk(portfolioState, symbol, currentPrice, priceHistory,
   // position to earn. That self-lock sat at 0 for 4 days in production.
   // 0.25 is the same multiplier the 5-loss tier already uses: conviction is
   // cut hard after a bad run, but generation always recovers.
+  // Phase 1 fix: the streak now only scales POSITION SIZE, never confidence,
+  // and it decays by one loss per week since the last loss so a bad regime
+  // cannot mute the engine forever. A regime change halves it in signalService.
   let circuitBreaker = 1;
-  const streak = portfolioState.consecutiveLosses || 0;
+  const rawStreak = portfolioState.consecutiveLosses || 0;
+  const weeksSinceLoss = portfolioState.lastLossAt
+    ? Math.floor((Date.now() - portfolioState.lastLossAt) / (7 * 24 * 60 * 60 * 1000))
+    : 0;
+  const streak = Math.max(0, rawStreak - weeksSinceLoss);
   if (streak >= 3) circuitBreaker = 0.5;
   if (streak >= 5) circuitBreaker = 0.25;
   if (streak >= 8) {
     if (circuitBreaker !== 0.25) {
-      console.warn(`[RiskManager] Loss streak ${streak} - conviction throttled to 0.25x (floor, not 0)`);
+      console.warn(`[RiskManager] Loss streak ${streak} - position size throttled to 0.25x (floor, not 0)`);
     }
     circuitBreaker = 0.25;
   }
 
-  return { var95: Math.round(var95 * 1000) / 10, var99: Math.round(var99 * 1000) / 10, cvar95: Math.round(cvar95 * 1000) / 10, circuitBreaker, sharpe: null };
+  return { var95: Math.round(var95 * 1000) / 10, var99: Math.round(var99 * 1000) / 10, cvar95: Math.round(cvar95 * 1000) / 10, circuitBreaker, effectiveStreak: streak, sharpe: null };
 }
 
 function applyPortfolioConstraints(signals) {
@@ -567,6 +574,7 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
         performanceStats.winRate = performanceStats.total > 0
           ? Math.round((performanceStats.wins / performanceStats.total) * 1000) / 10 : 0;
       }
+      if (previous.result === 'loss') portfolioState.lastLossAt = previous.resolvedAt || Date.now();
     }
     // Clear the resolved entry; re-seed only if the fresh signal is a GENUINELY NEW
     // call. Hold/Sell-after-close means the symbol is no longer tracked rather than

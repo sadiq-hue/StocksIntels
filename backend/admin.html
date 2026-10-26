@@ -5982,7 +5982,7 @@ async function fetchEngineHealth() {
         <div class="stat-card"><div class="stat-value" style="color:#111827">${fmtNum(h.performance.total)}</div><div class="stat-label">Total Trades</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#059669">${fmtNum(h.performance.wins)}</div><div class="stat-label">Wins</div></div>
         <div class="stat-card"><div class="stat-value" style="color:#dc2626">${fmtNum(h.performance.losses)}</div><div class="stat-label">Losses</div></div>
-        <div class="stat-card"><div class="stat-value" style="color:${h.portfolio.consecutiveLosses >= 3 ? '#dc2626' : '#111827'}">${h.portfolio.consecutiveLosses}</div><div class="stat-label">Consec. Losses</div></div>
+        <div class="stat-card" title="Raw losing streak. It only reduces position size now, never signal confidence. Effective streak decays by 1 per week since the last loss and halves/resets on a regime change."><div class="stat-value" style="color:${h.portfolio.consecutiveLosses >= 3 ? '#dc2626' : '#111827'}">${h.portfolio.consecutiveLosses}</div><div class="stat-label">Consec. Losses${h.portfolio.sizeThrottle != null && h.portfolio.sizeThrottle < 1 ? ` · size ×${h.portfolio.sizeThrottle}` : ''}</div></div>
       </div>
       ${(h.performance && h.performance.live) ? `
       <div class="grid grid-cols-2 md:grid-cols-3 gap-4" style="margin-bottom:16px">

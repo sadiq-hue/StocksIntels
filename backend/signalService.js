@@ -692,7 +692,8 @@ let _sectorPELastUpdate = 0;
 const SECTOR_PE_UPDATE_INTERVAL = 30 * 60 * 1000; // 30 minutes
 
 // Portfolio state tracker
-let _portfolioState = { cash: 1, positions: [], maxDrawdown: 0, peakValue: 1, consecutiveLosses: 0, totalTrades: 0 };
+let _portfolioState = { cash: 1, positions: [], maxDrawdown: 0, peakValue: 1, consecutiveLosses: 0, totalTrades: 0, lastLossAt: null };
+let _lastRegimeForStreak = null;
 
 // Source health tracking for graceful degradation
 const _sourceHealth = { yahooFinance: { ok: true, failCount: 0, lastFail: 0 }, db: { ok: true, failCount: 0, lastFail: 0 }, scraper: { ok: true, failCount: 0, lastFail: 0 } };
@@ -1454,6 +1455,12 @@ async function restoreStateFromDb() {
     );
     if (result.rows.length > 0) {
       _portfolioState.consecutiveLosses = parseInt(result.rows[0].consecutive_losses) || 0;
+    }
+    const lastLoss = await pool.query(
+      `SELECT MAX(resolved_at) AS last FROM signal_outcomes WHERE source = 'live' AND result = 'loss'`
+    ).catch(() => null);
+    if (lastLoss?.rows?.[0]?.last) {
+      _portfolioState.lastLossAt = new Date(lastLoss.rows[0].last).getTime();
     }
   } catch { /* table may not exist — start fresh */ }
 }
@@ -4125,6 +4132,11 @@ function getEngineHealth() {
   // QUOTE_CACHE_TTL dedupe it, so it is at most one quote refresh per symbol per
   // 30s and the next health poll renders updated marks.
   if (getOpenPositionCount() > 0) _warmMonitoredQuotes().catch(() => {});
+  const weeksSinceLoss = _portfolioState.lastLossAt
+    ? Math.floor((Date.now() - _portfolioState.lastLossAt) / (7 * 24 * 60 * 60 * 1000))
+    : 0;
+  const effectiveLossStreak = Math.max(0, _portfolioState.consecutiveLosses - weeksSinceLoss);
+  const sizeThrottle = effectiveLossStreak >= 5 ? 0.25 : effectiveLossStreak >= 3 ? 0.5 : 1;
   return {
     status: Object.values(_sourceHealth).every(h => h.ok) ? 'healthy' : 'degraded',
     uptime: process.uptime(),
@@ -4132,6 +4144,8 @@ function getEngineHealth() {
     performance: { ...perf, live: getLiveWinRate() },
     portfolio: {
       consecutiveLosses: _portfolioState.consecutiveLosses,
+      effectiveLossStreak,
+      sizeThrottle,
       totalTrades: perf.total,
       maxDrawdown: Math.round(_portfolioState.maxDrawdown * 1000) / 10,
     },
@@ -4674,6 +4688,16 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     flushNseDailyBars();
     regime = await detectMarketRegime();
   }
+  // A regime change is new information: relax the loss streak instead of
+  // carrying a bear-market streak into the next regime forever.
+  if (_lastRegimeForStreak && _lastRegimeForStreak !== regime.regime && _portfolioState.consecutiveLosses > 0) {
+    const before = _portfolioState.consecutiveLosses;
+    _portfolioState.consecutiveLosses = regime.regime === 'bull'
+      ? 0
+      : Math.floor(_portfolioState.consecutiveLosses / 2);
+    console.log(`[SignalService] Regime changed ${_lastRegimeForStreak}->${regime.regime}; loss streak ${before}->${_portfolioState.consecutiveLosses}`);
+  }
+  _lastRegimeForStreak = regime.regime;
   const weights = computeDynamicWeights(regime.regime);
   updateSectorAverages();
 
@@ -4872,7 +4896,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           prevOutcome.resolvedAt = Date.now();
           prevOutcome.exitPrice = currentPrice;
           prevOutcome.closeReason = closeReason;
-          if (closedWin) { performanceStats.wins++; } else { performanceStats.losses++; }
+          if (closedWin) { performanceStats.wins++; } else { performanceStats.losses++; _portfolioState.lastLossAt = Date.now(); }
           performanceStats.total++;
           portfolioState.totalTrades++;
           performanceStats.winRate = performanceStats.total > 0
@@ -5840,7 +5864,11 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   let confidence = Math.round(confRaw * degFactor);
   const confAfterDegFactor = confidence;
   const riskMetrics = updatePortfolioRisk(_portfolioState, symbol, currentPrice, priceHistory, sig.action);
-  confidence = Math.round(confidence * riskMetrics.circuitBreaker);
+  // Phase 1: the loss-streak circuit breaker scales POSITION SIZE only, not
+  // confidence. Throttling confidence created a self-lock (no buys -> no win ->
+  // streak never resets -> no buys). A genuine setup now keeps its score/confidence
+  // and enters with a smaller position after a bad run.
+  const circuitBreaker = riskMetrics.circuitBreaker;
   const confAfterCircuitBreaker = confidence;
   // Apply calibration (ML does not enter here — see mlSignalModel.calibrateConfidence).
   confidence = mlModel.calibrateConfidence(confidence);
@@ -5932,10 +5960,10 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     // Exit/avoid rating — no position is opened, so no capital is allocated.
     positionSize = 0;
   } else if (kellyPct != null && kellyPct > 0) {
-    positionSize = Math.round(kellyPct * regimePenalty);
+    positionSize = Math.round(kellyPct * regimePenalty * circuitBreaker);
   } else {
     positionSize = calculatePositionSize(sig, regime.regime, confidence, scoreVariance);
-    positionSize = Math.round(positionSize * regimePenalty);
+    positionSize = Math.round(positionSize * regimePenalty * circuitBreaker);
   }
   const formattedVolume = volume >= 1000000 ? (volume / 1000000).toFixed(1) + 'M' : (volume / 1000).toFixed(1) + 'K';
   const macroReason = generateMacroReason(macro);
