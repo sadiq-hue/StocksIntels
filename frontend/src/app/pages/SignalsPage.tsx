@@ -283,15 +283,22 @@ function overallVerdict(s: StockSignal): string {
 }
 
 function horizonOf(s: StockSignal | any): "short" | "medium" | "long" {
+  const type = String(s?.type || "").toLowerCase();
+  const tf = String(s?.timeframe || "").toLowerCase();
+  // The displayed holding period wins over a stale stored horizon.
+  if (type.includes("long term")) return "long";
+  if (tf.includes("year") || tf.includes("3-6") || tf.includes("6-12") || tf.includes("12 month") || tf.includes("6 month")) return "long";
+  if (tf.includes("1-3 month") || tf.includes("1-3months") || tf.includes("~1 month") || tf.includes("1 month")) return "medium";
+  if (tf.includes("week") || tf.includes("2-4") || tf.includes("1-4") || tf.includes("1-2")) return "short";
   const h = String(s?.horizon || "").toLowerCase();
   if (h === "short" || h === "medium" || h === "long") return h;
-  const type = String(s?.type || "").toLowerCase();
-  if (type.includes("long term")) return "long";
   if (type.includes("aggressive") || type.includes("momentum")) return "short";
-  const tf = String(s?.timeframe || "").toLowerCase();
-  if (tf.includes("week") || tf.includes("2-4") || tf.includes("1-4")) return "short";
-  if (tf.includes("3-6") || tf.includes("6 month") || tf.includes("1 year")) return "long";
   return "medium";
+}
+
+function displayTimeframe(s: StockSignal | any): string {
+  if (horizonOf(s) === "long" && /long term/i.test(String(s?.type || ""))) return "1-3+ years";
+  return s?.timeframe || "—";
 }
 
 function isBuyIdea(s: StockSignal | any): boolean {
@@ -555,7 +562,7 @@ export function SignalsPage() {
                 <span className="text-muted-foreground">|</span>
                 <span>Sector: {s.sector}</span>
                 <span className="text-muted-foreground">|</span>
-                <span>Holding Period: {s.timeframe || "â€”"}</span>
+                <span>Holding Period: {displayTimeframe(s)}</span>
                 {s.country && (
                   <>
                     <span className="text-muted-foreground">|</span>

@@ -313,7 +313,8 @@ async function _loadSignalCacheFromDb() {
         if (Array.isArray(_signalsCache)) {
           _signalsCache = _signalsCache.map(s => {
             const isBuy = s.action === 'buy' || /buy/i.test(String(s.signal || ''));
-            return { ...s, sector: normalizeSector(s.sector, s.ticker), horizon: isBuy ? resolveHorizon(s.horizon, s.type, s.timeframe) : null };
+            const horizon = isBuy ? resolveHorizon(s.horizon, s.type, s.timeframe) : null;
+            return { ...s, sector: normalizeSector(s.sector, s.ticker), horizon, timeframe: normalizeTimeframe(s.type, s.timeframe, horizon) };
           });
         }
         _signalsCacheTime = 0;
@@ -340,7 +341,7 @@ async function _loadSignalCacheFromDb() {
         currency: r.currency || (NSE_SYMBOLS.includes(r.ticker) ? 'KES' : 'USD'),
         signal: r.signal || 'Hold',
         type: r.trade_type || 'Swing Trade',
-        timeframe: r.timeframe || null,
+        timeframe: normalizeTimeframe(r.trade_type, r.timeframe, /buy/i.test(String(r.signal || '')) ? resolveHorizon(r.horizon, r.trade_type, r.timeframe) : null),
         horizon: /buy/i.test(String(r.signal || '')) ? resolveHorizon(r.horizon, r.trade_type, r.timeframe) : null,
         specVersion: r.spec_version || null,
         confidence: parseInt(r.confidence) || 0,
@@ -599,6 +600,8 @@ function getMonitoredSignals() {
     const price = (cached && cached.price) || (qc && qc.price) || null;
     const change = cached && cached.change != null ? cached.change : (qc && qc.changePercent != null ? qc.changePercent : null);
     const isNse = NSE_SYMBOLS.includes(ticker);
+    const monitoredHorizon = resolveHorizon(v.horizon, v.type, v.timeframe);
+    const monitoredTf = monitoredTimeframe(ticker, v, cached);
     out.push({
       ticker,
       signal: v.signal,
@@ -615,8 +618,8 @@ function getMonitoredSignals() {
       confidence: v.confidence != null ? v.confidence : (cached && cached.confidence != null ? cached.confidence : null),
       name: cached && cached.name ? cached.name : null,
       sector: normalizeSector(cached?.sector || v.sector, ticker),
-      timeframe: monitoredTimeframe(ticker, v, cached),
-      horizon: resolveHorizon(v.horizon, v.type, v.timeframe),
+      timeframe: normalizeTimeframe(v.type, monitoredTf, monitoredHorizon),
+      horizon: monitoredHorizon,
       specVersion: v.specVersion || null,
       market: isNse ? 'NSE' : 'Global',
       currency: isNse ? 'KES' : 'USD',
@@ -1990,23 +1993,33 @@ function classifyHorizon(tradeType, expectedDays, timeframe) {
   const tt = String(tradeType || '').toLowerCase();
   const tf = String(timeframe || '').toLowerCase();
   if (tt.includes('long term')) return 'long';
-  if (tf.includes('3-6') || tf.includes('6 month') || tf.includes('1 year')) return 'long';
-  if (tt.includes('aggressive') || tt.includes('momentum')) return 'short';
-  if (tf.includes('week') || tf.includes('2-4') || tf.includes('1-4')) return 'short';
+  // The displayed holding period is the primary signal; trade type is only a
+  // fallback when no timeframe/expected duration is available.
+  if (tf.includes('year') || tf.includes('3-6') || tf.includes('6-12') || tf.includes('12 month') || tf.includes('6 month')) return 'long';
   if (tf.includes('1-3 month') || tf.includes('1-3months') || tf.includes('~1 month') || tf.includes('1 month')) return 'medium';
-  if (tt.includes('swing')) return (Number.isFinite(Number(expectedDays)) && Number(expectedDays) > 30) ? 'medium' : 'short';
+  if (tf.includes('week') || tf.includes('2-4') || tf.includes('1-4') || tf.includes('1-2')) return 'short';
   const days = Number(expectedDays);
   if (Number.isFinite(days) && days > 0) {
     if (days <= 20) return 'short';
-    if (days <= 75) return 'medium';
+    if (days <= 63) return 'medium';
     return 'long';
   }
+  if (tt.includes('aggressive') || tt.includes('momentum')) return 'short';
   return 'medium';
 }
 
 function resolveHorizon(horizon, tradeType, timeframe) {
   const h = String(horizon || '').toLowerCase();
+  // Reclassify from the actual holding period when present. This corrects
+  // legacy rows whose stored horizon was short even though the timeframe shows
+  // 1-3 months or 3-6 months.
+  if (timeframe) return classifyHorizon(tradeType, null, timeframe);
   return (h === 'short' || h === 'medium' || h === 'long') ? h : classifyHorizon(tradeType, null, timeframe);
+}
+
+function normalizeTimeframe(tradeType, timeframe, horizon) {
+  if (horizon === 'long' && /long term/i.test(String(tradeType || ''))) return '1-3+ years';
+  return timeframe || null;
 }
 
 function normalizeSector(sector, ticker) {
@@ -4104,7 +4117,7 @@ function getLiveWinRate(signalOutcomes = _signalOutcomes, lastKnownPrices = _las
       horizon: resolveHorizon(pos.horizon, pos.type, pos.timeframe),
       sector: normalizeSector(pos.sector, symbol),
       type: pos.type || null,
-      timeframe: pos.timeframe || null,
+      timeframe: normalizeTimeframe(pos.type, pos.timeframe, resolveHorizon(pos.horizon, pos.type, pos.timeframe)),
       mtm: mtmWin ? 'win' : 'loss',
       unrealizedPct: Math.round(((price - pos.entryPrice) / pos.entryPrice) * 1000) / 10,
     });
@@ -5804,15 +5817,17 @@ function scoreNewsInsider(info) {
 // at their classified horizon — the engine's score-based trade type says "hold
 // for months", so an ATR estimate of a few weeks never contradicts it.
 function formatHoldingPeriod(days, tradeType) {
-  if (tradeType === 'Long Term' || tradeType === 'Long Term Value') return '3-6 months';
+  if (tradeType === 'Long Term' || tradeType === 'Long Term Value') return '1-3+ years';
   if (days == null || !isFinite(days) || days <= 0) return null;
   if (days <= 5) return '~1 week';
   if (days <= 10) return '1-2 weeks';
   if (days <= 15) return '~2 weeks';
-  if (days <= 25) return '2-4 weeks';
+  if (days <= 20) return '2-4 weeks';
   if (days <= 40) return '~1 month';
-  if (days <= 90) return '1-3 months';
-  return '3-6 months';
+  if (days <= 63) return '1-3 months';
+  if (days <= 130) return '3-6 months';
+  if (days <= 260) return '6-12 months';
+  return '1-3+ years';
 }
 async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, fundamental, technical, financial, macro, regime, weights, weeklyTrend, newsSent, catalyst, insiderNews, news = [], priceHistory, degFactor, dataQuality, liquidity }) {
   // Read scoring and portfolio config once at the top
@@ -6092,7 +6107,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // how many trading sessions price needs to travel from entry to target1 at the
   // stock's average daily range (tradeLevels.expectedDays). Falls back to the
   // per-type label when no target exists (Sell/Avoid ratings have no levels).
-  const timeframes = { 'Aggressive Buy': '1-4 weeks', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks', 'Long Term Value': '3-6 months', 'Long Term': '3-6 months', 'Avoid': 'N/A' };
+  const timeframes = { 'Aggressive Buy': '1-4 weeks', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks', 'Long Term Value': '1-3+ years', 'Long Term': '1-3+ years', 'Avoid': 'N/A' };
   const holdingPeriod = formatHoldingPeriod(tradeLevels.expectedDays, tradeType);
   const isNse = NSE_SYMBOLS.includes(symbol);
   // Recent-news digest: every article that mentions this ticker, newest first.
