@@ -294,6 +294,10 @@ function horizonOf(s: StockSignal | any): "short" | "medium" | "long" {
   return "medium";
 }
 
+function isBuyIdea(s: StockSignal | any): boolean {
+  return s?.action === "buy" || s?.signal === "Buy" || s?.signal === "Strong Buy";
+}
+
 export function SignalsPage() {
   const [signals, setSignals] = useState<StockSignal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -339,7 +343,7 @@ export function SignalsPage() {
       (filterSignal === "All" || s.signal === filterSignal) &&
       (filterSector === "All" || s.sector === filterSector) &&
       (filterMarket === "all" || (filterMarket === "nse" ? s.market === "NSE" : s.market !== "NSE")) &&
-      (filterHorizon === "all" || (filterHorizon === "short" ? horizonOf(s) === "short" : horizonOf(s) !== "short"))
+      (filterHorizon === "all" || (isBuyIdea(s) && (filterHorizon === "short" ? horizonOf(s) === "short" : horizonOf(s) !== "short")))
     );
     const sorted = [...list];
     if (sortBy === "confidence") sorted.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
@@ -372,8 +376,8 @@ export function SignalsPage() {
   const topConf = [...signals].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0)).slice(0, 5);
   const peakConf = topConf.length ? Math.round(topConf[0].confidence ?? 0) : 0;
   const avgConf = signals.length ? Math.round(signals.reduce((a, b) => a + b.confidence, 0) / signals.length) : 0;
-  const shortIdeas = signals.filter(s => horizonOf(s) === "short").length;
-  const longIdeas = signals.length - shortIdeas;
+  const shortIdeas = signals.filter(s => isBuyIdea(s) && horizonOf(s) === "short").length;
+  const longIdeas = signals.filter(s => isBuyIdea(s) && horizonOf(s) !== "short").length;
 
   const toggleFav = (t: string) => setFavorites(p => p.includes(t) ? p.filter(f => f !== t) : [...p, t]);
 
@@ -429,11 +433,11 @@ export function SignalsPage() {
       {/* Horizon split: short-term traders vs medium/long-term investors */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {([
-          { key: "short" as const, label: "Short-term positions", sub: "Days to weeks", count: shortIdeas, tone: "text-[#0D7490]", bg: "bg-[#0D7490]/5 border-[#0D7490]/20" },
-          { key: "long" as const, label: "Long-term positions", sub: "Medium to long term (1–3+ months)", count: longIdeas, tone: "text-violet-700", bg: "bg-violet-50 border-violet-200" },
+          { key: "short" as const, label: "Short-term buy ideas", sub: "Days to weeks", count: shortIdeas, tone: "text-[#0D7490]", bg: "bg-[#0D7490]/5 border-[#0D7490]/20" },
+          { key: "long" as const, label: "Long-term buy ideas", sub: "Medium to long term (1–3+ months)", count: longIdeas, tone: "text-violet-700", bg: "bg-violet-50 border-violet-200" },
         ]).map(({ key, label, sub, count, tone, bg }) => {
           const top = signals
-            .filter(s => key === "short" ? horizonOf(s) === "short" : horizonOf(s) !== "short")
+            .filter(s => isBuyIdea(s) && (key === "short" ? horizonOf(s) === "short" : horizonOf(s) !== "short"))
             .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
             .slice(0, 5);
           return (
@@ -543,9 +547,11 @@ export function SignalsPage() {
               {/* Type + sector */}
               <div className="px-4 pb-3 flex items-center gap-2 text-[11px] text-muted-foreground">
                 <Badge className={`${TYPE_STYLES[s.type]} border-0 text-[10px] font-medium`}>{s.type}</Badge>
-                <Badge className={`border-0 text-[10px] font-semibold ${horizonOf(s) === "short" ? "bg-sky-100 text-sky-700" : horizonOf(s) === "medium" ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700"}`}>
-                  {horizonOf(s) === "short" ? "Short-term" : horizonOf(s) === "medium" ? "Medium-term" : "Long-term"}
-                </Badge>
+                {isBuyIdea(s) && (
+                  <Badge className={`border-0 text-[10px] font-semibold ${horizonOf(s) === "short" ? "bg-sky-100 text-sky-700" : horizonOf(s) === "medium" ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700"}`}>
+                    {horizonOf(s) === "short" ? "Short-term" : horizonOf(s) === "medium" ? "Medium-term" : "Long-term"}
+                  </Badge>
+                )}
                 <span className="text-muted-foreground">|</span>
                 <span>Sector: {s.sector}</span>
                 <span className="text-muted-foreground">|</span>

@@ -311,7 +311,10 @@ async function _loadSignalCacheFromDb() {
       } else {
         _signalsCache = cached;
         if (Array.isArray(_signalsCache)) {
-          _signalsCache = _signalsCache.map(s => ({ ...s, horizon: resolveHorizon(s.horizon, s.type, s.timeframe) }));
+          _signalsCache = _signalsCache.map(s => {
+            const isBuy = s.action === 'buy' || /buy/i.test(String(s.signal || ''));
+            return { ...s, horizon: isBuy ? resolveHorizon(s.horizon, s.type, s.timeframe) : null };
+          });
         }
         _signalsCacheTime = 0;
         console.log(`[SignalService] Loaded ${_signalsCache.length} signals from cache DB (will regenerate in background)`);
@@ -338,7 +341,7 @@ async function _loadSignalCacheFromDb() {
         signal: r.signal || 'Hold',
         type: r.trade_type || 'Swing Trade',
         timeframe: r.timeframe || null,
-        horizon: resolveHorizon(r.horizon, r.trade_type, r.timeframe),
+        horizon: /buy/i.test(String(r.signal || '')) ? resolveHorizon(r.horizon, r.trade_type, r.timeframe) : null,
         specVersion: r.spec_version || null,
         confidence: parseInt(r.confidence) || 0,
         volume: 0,
@@ -1997,7 +2000,7 @@ function classifyHorizon(tradeType, expectedDays, timeframe) {
     if (days <= 75) return 'medium';
     return 'long';
   }
-  return 'short';
+  return 'medium';
 }
 
 function resolveHorizon(horizon, tradeType, timeframe) {
@@ -4137,15 +4140,19 @@ function getEngineHealth() {
     : 0;
   const effectiveLossStreak = Math.max(0, _portfolioState.consecutiveLosses - weeksSinceLoss);
   const sizeThrottle = effectiveLossStreak >= 5 ? 0.25 : effectiveLossStreak >= 3 ? 0.5 : 1;
+  const live = getLiveWinRate();
+  const unclassifiedOpen = live.openPositions.filter(p => !['short', 'medium', 'long'].includes(String(p.horizon || '').toLowerCase())).length;
   return {
     status: Object.values(_sourceHealth).every(h => h.ok) ? 'healthy' : 'degraded',
     uptime: process.uptime(),
     sources: { ..._sourceHealth },
-    performance: { ...perf, live: getLiveWinRate() },
+    performance: { ...perf, live },
     portfolio: {
       consecutiveLosses: _portfolioState.consecutiveLosses,
       effectiveLossStreak,
       sizeThrottle,
+      unclassifiedOpen,
+      classificationOk: unclassifiedOpen === 0,
       totalTrades: perf.total,
       maxDrawdown: Math.round(_portfolioState.maxDrawdown * 1000) / 10,
     },
