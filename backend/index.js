@@ -4205,10 +4205,17 @@ app.get('/api/signals', async (req, res) => {
     await refreshMonitoredQuotes();
     // Per-ticker news for monitored cards: their stored snapshot has no `news`
     // array, so a held position would otherwise show no source of movement.
+    // News aggregation can be cold and fan out to ten providers; never make the
+    // signals page wait for it. Use whatever is ready within a second and let
+    // the background fetch warm the cache for the next poll.
     let liveNewsMap = {};
     try {
       const { getNewsMap } = require('./signalService');
-      liveNewsMap = await getNewsMap();
+      const newsPromise = getNewsMap().catch(() => ({}));
+      liveNewsMap = await Promise.race([
+        newsPromise,
+        new Promise(resolve => setTimeout(() => resolve({}), 1000)),
+      ]);
     } catch { /* leave cards without news */ }
     for (const m of getMonitoredSignals()) {
       const isNse = m.market === 'NSE';
