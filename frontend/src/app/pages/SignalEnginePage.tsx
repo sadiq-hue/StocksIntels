@@ -411,12 +411,12 @@ function ForwardTestPanel() {
         )}
       </div>
 
-      {/* Phase 1 benchmark: short 1R vs shadow 2R */}
+        {/* Phase 1 benchmark: short 1.5R vs shadow 2R */}
       {phase1 && (
         <Card className="bg-card border-border p-4">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">Phase 1 Benchmark — Short 1R vs 2R</p>
+              <p className="text-sm font-semibold text-foreground">Phase 1 Benchmark — Short 1.5R vs 2R</p>
               <p className="text-[10px] text-muted-foreground">
                 Same entries, stops and 20-day time stop; only target1 differs. Live/shadow rows are gated signals; raw rows include pre-gate intent and are research-only.
               </p>
@@ -442,7 +442,7 @@ function ForwardTestPanel() {
               </thead>
               <tbody>
                 {[
-                  { label: "Live 1R (gated)", d: phase1.live1R },
+                  { label: "Live 1.5R (gated)", d: phase1.live1R },
                   { label: "Live 2R shadow", d: phase1.shadow2R },
                   { label: "Raw 1R (research)", d: phase1.raw1R },
                   { label: "Raw 2R (research)", d: phase1.raw2R },

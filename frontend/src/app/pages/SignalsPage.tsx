@@ -555,7 +555,7 @@ export function SignalsPage() {
               <div className="px-4 pb-3 flex items-center gap-2 text-[11px] text-muted-foreground">
                 <Badge className={`${TYPE_STYLES[s.type]} border-0 text-[10px] font-medium`}>{s.type}</Badge>
                 {isBuyIdea(s) && (
-                  <Badge className={`border-0 text-[10px] font-semibold ${horizonOf(s) === "short" ? "bg-sky-100 text-sky-700" : horizonOf(s) === "medium" ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700"}`}>
+                  <Badge title={(s as any).horizonCriteria?.join(" · ")} className={`border-0 text-[10px] font-semibold ${horizonOf(s) === "short" ? "bg-sky-100 text-sky-700" : horizonOf(s) === "medium" ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700"}`}>
                     {horizonOf(s) === "short" ? "Short-term" : horizonOf(s) === "medium" ? "Medium-term" : "Long-term"}
                   </Badge>
                 )}

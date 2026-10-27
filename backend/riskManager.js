@@ -1,6 +1,6 @@
 // Risk management — position sizing, trade levels, portfolio constraints, outcome tracking.
 // Functions are stateless and take all required state as parameters.
-const { calculateATR, findResistanceLevels } = require('./technicalIndicators');
+const { calculateATR, findResistanceLevels, findSupportLevels } = require('./technicalIndicators');
 const { kellyFraction, monteCarloVaR } = require('./portfolioOptimizer');
 const { isSameThesis } = require('./thesisUtils');
 
@@ -30,29 +30,29 @@ function calculatePositionSize(signal, regime, confidence, scoreVariance) {
   return Math.round(Math.min(Math.max(baseSize, 0), 1) * 100);
 }
 
-// Stop distance scales with the trade's holding horizon: a momentum trade needs a
-// tight stop (1.5x ATR) while a 3-6 month "Long Term Value" hold needs room to
-// breathe (3x ATR) or it gets stopped out on ordinary noise.
+// Stop distance scales with the trade's holding horizon: a momentum trade needs
+// room for several ATRs of noise, while a 3-6 month "Long Term Value" hold needs
+// even more room (3x ATR) or it gets stopped out on ordinary noise.
 const TRADE_TYPE_STOP_MULT = {
-  'Momentum Trade': 1.5,
-  'Aggressive Buy': 1.5,
-  'Swing Trade': 2,
+  'Momentum Trade': 2.5,
+  'Aggressive Buy': 2.5,
+  'Swing Trade': 3,
   'Long Term Value': 3,
   'Long Term': 3,
 };
-// Minimum stop distance (fraction of price). A pure ATR-scaled stop on a calm
-// stock can shrink to ~2% (1% daily range x 2x), which is only two days of
-// ordinary noise — one bad day or a small gap stops it out on noise, not thesis
-// failure. The floor keeps the stop (and the 3x targets it sizes) at a realistic
-// distance from entry. 5% proved too tight in production: a normal 2-4% daily
-// range is barely 1-2 ATRs under a 5% stop, so ordinary intraday swings stopped
-// out names before a move could play out (e.g. PINS stopped at -5.6% on noise).
-// Raised from 15% to 18% (2026) to give signals a bit more room on the same
-// underlying rationale. ~18% is ~3-7 ATRs of room for typical US names — enough
-// to breathe through a pullback while still capping a stop-out loss at a bounded
-// 18%. The re-level pre-lock cap respects the same floor so live monitoring never
-// tightens a calm stock's stop back into the noise.
-const MIN_STOP_PCT = 0.18;
+// Long-term minimum stop distance (fraction of price). A pure ATR-scaled stop on
+// a calm stock can shrink to ~2%, which is only two days of ordinary noise — one
+// bad day or a small gap stops it out on noise, not thesis failure. Short/medium
+// trades use MIN_STOP_PCT_SHORT below plus structural support; long-term holds
+// still get the wider floor because they are not traded on short-term noise.
+// Long-term minimum stop distance (fraction of price). A 6-month to 3-year
+// position needs a disaster-stop sized to a full market cycle, not a swing stop.
+const MIN_STOP_PCT = 0.30;
+// Short trades need a wide enough floor to survive several average daily ranges.
+// Short-term stop floor is 15% of price; medium-term is 20%; long-term is 30%.
+// Structural support can widen any floor, never tighten it.
+const MIN_STOP_PCT_SHORT = 0.15;
+const MIN_STOP_PCT_MEDIUM = 0.20;
 // Absolute stop ceiling (fraction of price). calculateATR clamps daily range at
 // 15%, so the widest legitimate ATR-scaled stop is 2x that (30%) for a swing
 // trade — a stop must always leave a high-volatility name at least ~2 daily
@@ -100,11 +100,17 @@ function estimateHoldingDays(entry, target1, atrFraction) {
   return Math.min(250, Math.max(1, Math.ceil(days)));
 }
 
-function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = MIN_STOP_PCT, tradeType = 'Swing Trade', targetMults = null) {
+function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = MIN_STOP_PCT, tradeType = 'Swing Trade', targetMults = null, horizonHint = null) {
   const volatility = calculateATR(priceHistory);
   const mult = TRADE_TYPE_STOP_MULT[tradeType] || 1.5;
-  const baseDistancePct = Math.max(volatility * mult, MIN_STOP_PCT);
+  const isLongTermType = /long term/i.test(String(tradeType || ''));
+  const floorPct = isLongTermType ? MIN_STOP_PCT : (horizonHint === 'short' ? MIN_STOP_PCT_SHORT : MIN_STOP_PCT_MEDIUM);
+  const minStopPct = Math.max(floorPct, volatility * 2.5);
+  const baseDistancePct = Math.max(volatility * mult, minStopPct);
   let entry, stopLoss;
+  let stopMethod = 'atr';
+  let supportLevel = null;
+  let atrBuffer = null;
   if (signal.action === 'buy') {
     entry = currentPrice;
     stopLoss = currentPrice - (currentPrice * baseDistancePct);
@@ -121,15 +127,27 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
     entry = currentPrice;
     stopLoss = currentPrice * (1 - stopLossPct);
   }
-  // Cap stop distance at 2x the base stop, but never more than MAX_STOP_PCT of
-  // price so an extreme name can't produce an absurd 60%+ stop. The 30% ceiling
-  // still covers the full ATR-scaled range (ATR is clamped at 15%, so a swing
-  // stop is at most 2 x 15% = 30%) — it only bites for genuinely pathological
-  // cases. Sizing the cap off the floored base distance keeps the 15% minimum
-  // stop intact for calm names.
-  const maxStopDistance = Math.min(currentPrice * baseDistancePct * 2, currentPrice * MAX_STOP_PCT);
+  // Absolute risk cap: an extreme structural stop can widen the stop up to 30%
+  // of price, but never more. Sizing is then derived from that stop distance.
+  const maxStopDistance = currentPrice * MAX_STOP_PCT;
+  if (signal.action === 'buy' && !isLongTermType && priceHistory) {
+    // Technical invalidation: place the stop below the nearest confirmed swing
+    // low/support with a half-ATR buffer. This can only widen the mechanical
+    // ATR stop, never tighten it, so structure never overrides the minimum
+    // volatility buffer.
+    const supports = findSupportLevels(priceHistory, entry);
+    if (supports.length) {
+      supportLevel = supports[supports.length - 1];
+      atrBuffer = 0.5 * volatility * entry;
+      const structuralStop = supportLevel - atrBuffer;
+      if (structuralStop > 0 && structuralStop < stopLoss) {
+        stopLoss = structuralStop;
+      }
+    }
+  }
   if (signal.action === 'buy') {
     stopLoss = Math.max(stopLoss, currentPrice - maxStopDistance);
+    if (supportLevel != null) stopMethod = stopLoss <= supportLevel ? 'support+atr' : 'atr';
   }
 
   // Targets anchor to the final stop distance, so the 2:1 / 4:1 / 6:1 ladder is
@@ -174,6 +192,11 @@ function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null,
     target3: Math.round(target3 * 100) / 100,
     riskReward: parseFloat(riskReward),
     expectedDays,
+    stopMethod,
+    supportLevel: supportLevel != null ? Math.round(supportLevel * 100) / 100 : null,
+    atrBuffer: atrBuffer != null ? Math.round(atrBuffer * 100) / 100 : null,
+    stopDistancePct: entry > 0 ? Math.round(((entry - stopLoss) / entry) * 10000) / 100 : null,
+    minStopPct: Math.round(minStopPct * 10000) / 100,
   };
 }
 
@@ -257,10 +280,13 @@ function applyPortfolioConstraints(signals) {
 // tighter than the floor relative to the position's entry is widened up to the
 // floor so ordinary noise can't stop out a position that deserves room to breathe.
 // Stops at/above entry (locked-profit re-levels) and non-buy levels are untouched.
-function enforceStopFloor(entryPrice, stopLoss) {
+function enforceStopFloor(entryPrice, stopLoss, horizon = null) {
+  const floorPct = horizon === 'short' ? MIN_STOP_PCT_SHORT
+    : horizon === 'medium' ? MIN_STOP_PCT_MEDIUM
+    : MIN_STOP_PCT;
   if (entryPrice > 0 && stopLoss != null && stopLoss < entryPrice
-      && (entryPrice - stopLoss) / entryPrice < MIN_STOP_PCT) {
-    return Math.round(entryPrice * (1 - MIN_STOP_PCT) * 100) / 100;
+      && (entryPrice - stopLoss) / entryPrice < floorPct) {
+    return Math.round(entryPrice * (1 - floorPct) * 100) / 100;
   }
   return stopLoss;
 }
@@ -340,6 +366,8 @@ function isPlausibleBuyLevels(entryPrice, stopLoss, target1, target2 = null, tar
 function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, symbol, currentPrice, newSignal, marketOpen = true, maxSingleMovePct = 0.5) {
   let previous = signalOutcomes.get(symbol);
   const posSize = parseInt(newSignal.positionSize) || 25;
+  const newLongThesisBroken = (newSignal.horizon === 'long' || /long term/i.test(String(newSignal.type || '')))
+    && newSignal.thesis?.invalidated === true;
   // Only open Buy-direction positions are tracked. Sell/Strong Sell are exit/avoid
   // ratings, not mirrored shorts — they have no stop/target levels and must never
   // enter the monitored map. Storing Holds or ratings inflated "Monitored Signals",
@@ -354,20 +382,26 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
   // gate, every stale-signal-on-restart becomes an instant ±10% / ±20% resolved
   // outcome with zero real market participation.
   const MIN_SIGNAL_AGE_MS = 5 * 60 * 1000; // 5 minutes
-// Max age of a position that may stay open before it is closed at market and
-// booked as 'expired'. A year is a legitimate long-term hold, so nothing closes
-// sooner; this only guarantees the position book is finite and that every exit
-// is recorded rather than silently forgotten. 0 disables the horizon.
-const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DAYS || '365', 10) || 365) * 24 * 60 * 60 * 1000;
+  // Max age of a position before it is closed at market and booked as 'expired'.
+  // Horizon-specific: medium positions run up to 6 months, long-term positions up
+  // to 3 years. Short positions use their dedicated 28-day time stop below.
+  // 0 disables the expiry.
+  const MEDIUM_HORIZON_MS = Math.max(0, parseInt(process.env.MEDIUM_POSITION_HORIZON_DAYS || '180', 10) || 180) * 24 * 60 * 60 * 1000;
+  const LONG_HORIZON_MS = Math.max(0, parseInt(process.env.LONG_POSITION_HORIZON_DAYS || '1095', 10) || 1095) * 24 * 60 * 60 * 1000;
   // Phase 1 short cohort: close at market after 20 trading days (~28 calendar
-  // days) if neither the 1R target nor the stop has been hit.
+  // days) if neither the 1.5R target nor the stop has been hit.
   const SHORT_HORIZON_MS = 28 * 24 * 60 * 60 * 1000;
+  // Long-term thesis review: a material fundamental break must be confirmed on
+  // two separate checks at least 24h apart before the position is exited. Price
+  // alone never triggers this path.
+  const THESIS_CONFIRM_MS = 24 * 60 * 60 * 1000;
+  const THESIS_CONFIRM_CHECKS = 2;
 
   // Legacy sub-floor stops (pre-MIN_STOP_PCT) must not resolve on ordinary noise.
   // Normalize BEFORE any resolution check so the effective exit level is the floor
   // (e.g. ASML: entry 1748.54, legacy stop 1702.96 = -2.61% -> floored to 1486.26).
   if (previous && previous.action === 'buy' && previous.entryPrice > 0 && previous.stopLoss != null) {
-    const flooredStop = enforceStopFloor(previous.entryPrice, previous.stopLoss);
+    const flooredStop = enforceStopFloor(previous.entryPrice, previous.stopLoss, previous.horizon);
     if (flooredStop !== previous.stopLoss) {
       console.log(`[RiskManager] ${symbol} widening legacy sub-floor stop ${previous.stopLoss} -> ${flooredStop} (entry=${previous.entryPrice})`);
       previous.stopLoss = flooredStop;
@@ -400,7 +434,10 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
       // Closed at market and BOOKED as 'expired'. Forgetting the position instead
       // would leave the trade counted as neither a win nor a loss, quietly
       // distorting the forward test - so the exit is recorded either way.
-      if (POSITION_HORIZON_MS > 0 && signalAge >= POSITION_HORIZON_MS) {
+      const isLongPosition = previous.horizon === 'long' || /long term/i.test(String(previous.type || ''));
+      const positionHorizonMs = previous.horizon === 'short' ? 0
+        : isLongPosition ? LONG_HORIZON_MS : MEDIUM_HORIZON_MS;
+      if (positionHorizonMs > 0 && signalAge >= positionHorizonMs) {
         exitPrice = currentPrice;
         const pnl = (currentPrice - entry) / entry * 100;
         resultStr = pnl > 0 ? 'win' : 'loss';
@@ -441,14 +478,9 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
     if (marketOpen && saneLevels && effectiveMoved) {
       if (isPrevBuy) {
         if (isShort) {
-          if (shortTimeStop) {
-            previous.result = currentPrice >= entry ? 'win' : 'loss';
-            previous.closeReason = 'time stop';
-            if (previous.result === 'win') { performanceStats.wins++; portfolioState.consecutiveLosses = 0; }
-            else { performanceStats.losses++; portfolioState.consecutiveLosses++; }
-            performanceStats.total++;
-            console.log(`[RiskManager] ${symbol} short 1R TIME STOP after ${Math.round(signalAge / 86400000)}d - closing at ${currentPrice} (${(((currentPrice - entry) / entry) * 100).toFixed(1)}%)`);
-          } else if (currentPrice <= previous.stopLoss) {
+          // Honour the price exits first. If neither was touched by the 28-day
+          // mark, close at the live quote and record a time stop.
+          if (currentPrice <= previous.stopLoss) {
             const lockedProfit = previous.stopLoss >= entry;
             previous.result = lockedProfit ? 'win' : 'loss';
             previous.closeReason = 'stop loss';
@@ -457,11 +489,18 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
             performanceStats.total++;
           } else if (currentPrice >= previous.target1) {
             previous.result = 'win';
-            previous.closeReason = 'target1 (1R) reached';
+            previous.closeReason = 'target1 (1.5R) reached';
             performanceStats.wins++;
             performanceStats.total++;
             portfolioState.consecutiveLosses = 0;
-            console.log(`[RiskManager] ${symbol} short 1R TARGET hit at ${previous.target1} (price=${currentPrice})`);
+            console.log(`[RiskManager] ${symbol} short 1.5R TARGET hit at ${previous.target1} (price=${currentPrice})`);
+          } else if (shortTimeStop) {
+            previous.result = currentPrice >= entry ? 'win' : 'loss';
+            previous.closeReason = 'time stop';
+            if (previous.result === 'win') { performanceStats.wins++; portfolioState.consecutiveLosses = 0; }
+            else { performanceStats.losses++; portfolioState.consecutiveLosses++; }
+            performanceStats.total++;
+            console.log(`[RiskManager] ${symbol} short 1.5R TIME STOP after ${Math.round(signalAge / 86400000)}d - closing at ${currentPrice} (${(((currentPrice - entry) / entry) * 100).toFixed(1)}%)`);
           }
         } else if (currentPrice <= previous.stopLoss) {
           // A stop at/above entry is a locked-profit level (re-leveled or a target
@@ -555,12 +594,38 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
     } else {
       console.warn(`[RiskManager] Skipping resolution for ${symbol} ${previous.signal} (${previous.action}) entry=${entry} stop=${previous.stopLoss} t1=${previous.target1} price=${currentPrice} saneLevels=${saneLevels} moved=${moved}`);    }
     } // end signal-age guard
+    // Long-term thesis review. A fundamental break is not a price stop: only a
+    // confirmed, persistent deterioration closes the position. Price-only moves
+    // remain governed by the portfolio-risk stop above.
+    if (!previous.result && !previous.milestoneWinBooked && previous.action === 'buy' && marketOpen && newSignal.thesis) {
+      const isLongHorizon = previous.horizon === 'long' || /long term/i.test(String(previous.type || ''));
+      if (isLongHorizon) {
+        if (newSignal.thesis.invalidated) {
+          if (!previous.thesisFirstSeen) previous.thesisFirstSeen = Date.now();
+          previous.thesisBreaches = (previous.thesisBreaches || 0) + 1;
+          previous.thesisLastSeen = Date.now();
+          if (previous.thesisBreaches >= THESIS_CONFIRM_CHECKS
+              && Date.now() - previous.thesisFirstSeen >= THESIS_CONFIRM_MS) {
+            previous.result = currentPrice >= previous.entryPrice ? 'win' : 'loss';
+            previous.closeReason = 'thesis invalidated';
+            previous.thesisExit = true;
+            if (previous.result === 'win') { performanceStats.wins++; portfolioState.consecutiveLosses = 0; }
+            else { performanceStats.losses++; portfolioState.consecutiveLosses++; }
+            performanceStats.total++;
+            console.log(`[RiskManager] ${symbol} long-term THESIS EXIT after ${previous.thesisBreaches} confirmed checks - ${(newSignal.thesis.flags || []).join('; ')} at ${currentPrice}`);
+          }
+        } else {
+          previous.thesisBreaches = 0;
+          previous.thesisFirstSeen = null;
+        }
+      }
+    }
     if (previous.result) {
       previous.resolvedAt = Date.now();
       // Record the level that actually resolved the trade (stop for a loss,
       // target for a win) so the persisted outcome shows the true exit, not
       // the market price at the check moment.
-      previous.exitPrice = previous.closeReason === 'time stop'
+      previous.exitPrice = previous.closeReason === 'time stop' || previous.closeReason === 'thesis invalidated'
         ? currentPrice
         : previous.result === 'win'
           ? (previous.closeReason === 'stop loss' ? previous.stopLoss
@@ -596,10 +661,10 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
         currentPrice, newSignal.target1, newSignal.action
       );
       signalOutcomes.delete(symbol);
-      if (monitorable && !sameThesisAsClosed) {
+      if (monitorable && !sameThesisAsClosed && !newLongThesisBroken) {
         signalOutcomes.set(symbol, {
           entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
-          stopLoss: enforceStopFloor(currentPrice, newSignal.stopLoss),
+          stopLoss: enforceStopFloor(currentPrice, newSignal.stopLoss, newSignal.horizon),
           target1: newSignal.target1,
           target2: newSignal.target2 != null ? newSignal.target2 : null,
           target3: newSignal.target3 != null ? newSignal.target3 : null,
@@ -611,6 +676,9 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
           timeframe: newSignal.timeframe || null,
           horizon: newSignal.horizon || 'legacy',
           specVersion: newSignal.specVersion || 'legacy',
+          thesis: newSignal.thesis || null,
+          thesisBreaches: 0,
+          thesisFirstSeen: null,
         });
       } else if (monitorable) {
         console.log(`[RiskManager] ${symbol} ${newSignal.signal} is the same thesis that just resolved (entry=${previous.entryPrice}->${currentPrice}, t1=${previous.target1}) - not re-opening; waiting for a genuinely new call`);
@@ -629,10 +697,10 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
       );
       signalOutcomes.delete(symbol);
     }
-    if (monitorable && !sameThesisAsClosed) {
+    if (monitorable && !sameThesisAsClosed && !newLongThesisBroken) {
       signalOutcomes.set(symbol, {
         entryPrice: currentPrice, signal: newSignal.signal, action: newSignal.action,
-        stopLoss: enforceStopFloor(currentPrice, newSignal.stopLoss),
+        stopLoss: enforceStopFloor(currentPrice, newSignal.stopLoss, newSignal.horizon),
         target1: newSignal.target1,
         target2: newSignal.target2 != null ? newSignal.target2 : null,
         target3: newSignal.target3 != null ? newSignal.target3 : null,
@@ -644,6 +712,9 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
         timeframe: newSignal.timeframe || null,
         horizon: newSignal.horizon || 'legacy',
         specVersion: newSignal.specVersion || 'legacy',
+        thesis: newSignal.thesis || null,
+        thesisBreaches: 0,
+        thesisFirstSeen: null,
       });
     }
   }
@@ -706,6 +777,8 @@ const POSITION_HORIZON_MS = Math.max(0, parseInt(process.env.POSITION_HORIZON_DA
 
 module.exports = {
   MIN_STOP_PCT,
+  MIN_STOP_PCT_SHORT,
+  MIN_STOP_PCT_MEDIUM,
   MAX_STOP_PCT,
   LOCKED_PROFIT_MAX_RATIO,
   calculatePositionSize,

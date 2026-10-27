@@ -8966,12 +8966,29 @@ app.get('/api/market/turnover', async (req, res) => {
     return res.json(turnoverCache);
   }
   try {
-    const result = await computeTurnover();
-    if (result.nse.volume > 0) {
-      turnoverCache = result;
-      turnoverCacheTime = now;
+    // First cold request: wait only briefly. The full computation (Yahoo chart
+    // calls for 44 global symbols + NSE batch) can take 8s; the page should not
+    // block on it. Let the pending computation finish in the background and
+    // serve it on the next request.
+    const pending = computeTurnover();
+    const result = await Promise.race([
+      pending,
+      new Promise(resolve => setTimeout(() => resolve(null), 1500)),
+    ]);
+    if (result) {
+      if (result.nse.volume > 0) {
+        turnoverCache = result;
+        turnoverCacheTime = now;
+      }
+      return res.json(result);
     }
-    res.json(result);
+    pending.then((fresh) => {
+      if (fresh.nse.volume > 0) {
+        turnoverCache = fresh;
+        turnoverCacheTime = Date.now();
+      }
+    }).catch(() => {});
+    return res.json(turnoverCache);
   } catch (error) {
     console.error('Error computing turnover:', error.message);
     if (turnoverCacheTime) return res.json(turnoverCache);
@@ -15227,6 +15244,9 @@ server.listen(port, '0.0.0.0', async () => {
     // history to work with (no reachable free source exists - see
     // recordNseIndexHistory).
     startNseIndexHistoryRecorder();
+    // Warm the turnover cache in the background so the Market page's first
+    // request does not pay the full Yahoo/NSE fetch cost.
+    computeTurnoverInBackground().catch(() => {});
     await queueService.connect();
     queueService.onSignalUpdate((signal) => {
         if (signal.batch) {

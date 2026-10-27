@@ -275,6 +275,7 @@ initNewsHistory().catch(() => {});
 let _signalsCache = null;
 let _signalsCacheTime = 0;
 let _signalsInProgress = false;
+let _signalsCacheReady = null;
 // Signals are considered stale after 15 min, so during market hours a fresh
 // cycle is kicked off around every 15 min (the _signalsInProgress guard means
 // cycles never overlap, so a slow cycle simply delays the next one).
@@ -675,7 +676,11 @@ async function _warmMonitoredQuotes() {
 // proxy/Yahoo fallbacks each take seconds), the route still responds promptly and
 // the background warm in getMonitoredSignals() keeps refreshing for the next poll.
 async function refreshMonitoredQuotes() {
-  await Promise.race([_warmMonitoredQuotes(), new Promise(resolve => setTimeout(resolve, 25000))]);
+  // Never block a page/API read on quote warming. Monitored cards already fall
+  // back to the last cached quote, and the warm continues in the background for
+  // the next poll. The old 25s await made the first /api/signals request after a
+  // restart take 20+ seconds.
+  _warmMonitoredQuotes().catch(() => {});
 }
 
 // Live test store — ring buffer of resolved signal outcomes with resolvedAt timestamps
@@ -1403,7 +1408,7 @@ async function restoreStateFromDb() {
       // Legacy sub-floor stops (pre-MIN_STOP_PCT builds) would re-arm a noise-band
       // stop-out on the next cycle. Widen to the 15% floor at restore and persist
       // the repair so a restart doesn't re-seed the tight level from signal_history.
-      const flooredStop = enforceStopFloor(entry, stop);
+      const flooredStop = enforceStopFloor(entry, stop, row.horizon);
       if (flooredStop !== stop) {
         console.log(`[SignalService] ${sym} restored legacy sub-floor stop ${stop} -> floored to ${flooredStop} (entry=${entry})`);
         stop = flooredStop;
@@ -1981,12 +1986,12 @@ function computeMaxDrawdown(returns) {
 const _forwardTestStore = new Map(); // symbol -> { predictions: [{id, signal, confidence, price, stopLoss, target1, action, tradeType, sector, generatedAt, resolved, actualReturn, correct, resolvedAt, supersededAt}] }
 
 // Phase 1 short-term profile: 20 trading days (~28 calendar days). A short
-// signal that has not hit its stop or 1R target is closed at market so the
+// signal that has not hit its stop or 1.5R target is closed at market so the
 // benchmark cohort always resolves and short-term ideas cannot ride for months.
 const SHORT_MAX_HOLD_MS = 28 * 24 * 60 * 60 * 1000;
-const SHORT_SPEC_VERSION = 'short-1R-v1';
+const SHORT_SPEC_VERSION = 'short-1.5R-v1';
 const SHORT_SHADOW_SPEC_VERSION = 'short-2R-v1';
-const SHORT_TARGET_MULTS = { target1: 1, target2: 1.5, target3: 2 };
+const SHORT_TARGET_MULTS = { target1: 1.5, target2: 2, target3: 2.5 };
 const HORIZON_SPEC_VERSIONS = { short: SHORT_SPEC_VERSION, medium: 'medium-legacy-v1', long: 'long-legacy-v1' };
 
 function classifyHorizon(tradeType, expectedDays, timeframe) {
@@ -2560,7 +2565,7 @@ function collapseToTheses(rows) {
 // confidence bar can leave the short cohort empty for long stretches, so we also
 // record the raw short buy intent with both 1R and 2R targets. This is research
 // only (no live state, no notifications) and both rows share the same entry,
-// stop and time stop, making the 1R-vs-2R comparison path-identical.
+// stop and time stop, making the 1.5R-vs-2R comparison path-identical.
 async function recordRawBenchmarkPair(symbol, sig, confidence, levels, tradeType) {
   const entry = Number(levels.entry);
   const stop = Number(levels.stopLoss);
@@ -2748,7 +2753,7 @@ function isShortPrediction(pred) {
   return pred?.horizon === 'short' || String(pred?.specVersion || '').startsWith('short-');
 }
 
-// Phase 1 short cohort: exit at target1 (1R) or stop, and close at market after
+// Phase 1 short cohort: exit at target1 (1.5R) or stop, and close at market after
 // the 20-trading-day time stop. This is deliberately different from the
 // ride-to-ultimate rule used by medium/long predictions.
 function evaluateShortPrediction(pred, currentPrice) {
@@ -2758,7 +2763,7 @@ function evaluateShortPrediction(pred, currentPrice) {
     return { status: 'resolved', correct: false, actualReturn, closeReason: 'stop loss' };
   }
   if (pred.target1 != null && currentPrice >= pred.target1) {
-    return { status: 'resolved', correct: true, actualReturn, closeReason: 'target1 (1R) reached' };
+    return { status: 'resolved', correct: true, actualReturn, closeReason: 'target1 (1.5R) reached' };
   }
   const age = Date.now() - (pred.generatedAt || 0);
   if (age >= SHORT_MAX_HOLD_MS) {
@@ -3488,7 +3493,7 @@ function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0, a
 }
 
 // Resolve the shadow 2R benchmark cohort. Same entry/stop and time stop as the
-// live 1R short cohort; only target1 differs (2R). Never touches live state.
+// live 1.5R short cohort; only target1 differs (2R). Never touches live state.
 async function resolveForwardBenchmarks() {
   let rows = [];
   try {
@@ -4518,7 +4523,7 @@ async function getSignalHistory({ ticker, signal, market, sector, limit = 100, o
 // Eagerly detect market regime so it's available before the first cycle
 detectMarketRegime().catch(() => {});
 _loadForwardPredictionsFromDb().catch(() => {});
-_loadSignalCacheFromDb().catch(() => {});
+_signalsCacheReady = _loadSignalCacheFromDb().catch(() => {});
 _financialReportCache.loadFromDb().then(count => {
   if (count > 0) console.log(`[SignalService] Restored ${count} financial report cache entries from DB`);
 }).catch(() => {});
@@ -4685,6 +4690,19 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       generateSignals(null, false, false).catch(() => {});
     }
     return _signalsCache;
+  }
+  if (!marketData && quick && !_signalsCache) {
+    // No cache yet (startup / first request after a restart): never run the
+    // expensive generation inline. Give the durable cache a short chance to
+    // load, then answer; the background cycle fills it for the next poll.
+    generateSignals(null, false, false).catch(() => {});
+    if (_signalsCacheReady) {
+      await Promise.race([
+        _signalsCacheReady,
+        new Promise(resolve => setTimeout(resolve, 800)),
+      ]);
+    }
+    return _signalsCache || [];
   }
   if (!marketData && !quick && _signalsInProgress) {
     return _signalsCache || [];
@@ -4934,7 +4952,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     // (its stop/target use the previously-valid levels) but never emits a fresh
     // signal built on untrustworthy data.
     const eligibility = meetsSignalConditions(sigObj, {
-      currentPrice, priceHistory, volume, fundamental, technical, financial, macro, dataQuality, liquidity,
+      currentPrice, priceHistory, volume, fundamental, technical, financial, macro, dataQuality, liquidity, stock, regimeName: regime.regime,
     });
     if (!eligibility.ok) {
       const hasOpen = prevOutcome && !prevOutcome.result && prevOutcome.timestamp;
@@ -4979,7 +4997,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         const ridingUltimate = prevAction === 'buy' && (prevOutcome.stageIdx || 0) > 0;
         if (!sc.close || ridingUltimate || shortCohort) {
           emitSignal = false;
-          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${ridingUltimate ? ` [riding toward ultimate: milestone passed, score-based close disabled]` : ''}${shortCohort ? ' [short 1R cohort: resolves only at 1R/stop/time stop]' : ''}${sc.isFade ? ` (conviction fading ${sc.fadeCount}/${sc.required})` : ''}${sc.longTermHold ? ' [long-term hold: score-based close disabled]' : ''}${sc.tooYoung && !sc.longTermHold ? ` [min-age guard: ${Math.max(0, Math.round((SCORE_CLOSE_MIN_AGE_MS - (Date.now() - prevOutcome.timestamp)) / 60000))}m remaining]` : ''}`);
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal still open (entry=${prevOutcome.entryPrice}, stop=${prevOutcome.stopLoss}, target=${prevOutcome.target1}) - monitoring, not emitting a new signal${ridingUltimate ? ` [riding toward ultimate: milestone passed, score-based close disabled]` : ''}${shortCohort ? ' [short 1.5R cohort: resolves only at 1.5R/stop/time stop]' : ''}${sc.isFade ? ` (conviction fading ${sc.fadeCount}/${sc.required})` : ''}${sc.longTermHold ? ' [long-term hold: score-based close disabled]' : ''}${sc.tooYoung && !sc.longTermHold ? ` [min-age guard: ${Math.max(0, Math.round((SCORE_CLOSE_MIN_AGE_MS - (Date.now() - prevOutcome.timestamp)) / 60000))}m remaining]` : ''}`);
         } else if (marketOpen) {
           // Score-based close at market: the full analysis flipped direction against
           // the open position, its conviction faded to neutral on consecutive
@@ -5372,7 +5390,7 @@ async function generateSingleSignal(symbol) {
       // Same strict all-conditions gate as the batch path: an on-demand lookup
       // only returns a signal when the stock genuinely qualifies.
       const eligibility = meetsSignalConditions(sigObj, {
-        currentPrice, priceHistory, volume, fundamental, technical, financial, macro, dataQuality, liquidity,
+        currentPrice, priceHistory, volume, fundamental, technical, financial, macro, dataQuality, liquidity, stock, regimeName: regime.regime,
       });
       if (!eligibility.ok) {
         console.log(`[SignalService] ${symbol} ineligible for a signal: ${eligibility.reasons.join(', ')}`);
@@ -5871,7 +5889,27 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // term was never an input — it just inflated every score by ~6.5-10 points,
   // which is why removing it shifts the distribution down. Renormalize over the
   // components that actually contribute.
-  const w = weights;
+  // Horizon-specific evidence weights. Long-term signals lean on fundamentals,
+  // financial quality and valuation; trade signals lean on technicals, ML,
+  // news/catalysts and macro/regime. The weightSum renormalizes below.
+  const candidateTradeType = determineTradeType(technical.score, fundamental.score);
+  const weightProfile = /long term/i.test(candidateTradeType) ? 'long' : 'trade';
+  const w = { ...weights };
+  if (weightProfile === 'long') {
+    w.fundamental = (w.fundamental || 0) * 1.5;
+    w.financial = (w.financial || 0) * 2.5;
+    w.technical = (w.technical || 0) * 0.4;
+    w.macro = (w.macro || 0) * 1.5;
+    w.ml_probability = (w.ml_probability || 0) * 1.0;
+    w.news = (w.news || 0) * 0.5;
+  } else {
+    w.technical = (w.technical || 0) * 1.2;
+    w.ml_probability = (w.ml_probability || 0) * 1.3;
+    w.news = (w.news || 0) * 1.0;
+    w.fundamental = (w.fundamental || 0) * 0.5;
+    w.financial = (w.financial || 0) * 1.25;
+    w.macro = (w.macro || 0) * 2.0;
+  }
   // News & sentiment is a first-class weighted dimension (it was only a flat
   // ±5 overlay before). Insufficient coverage (<3 stories) abstains at 50 so
   // thin coverage never fabricates a directional view.
@@ -6021,11 +6059,62 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     console.log(`[SignalService] ${symbol} confidence-gate: ${_confidenceGateNote}`);
   }
 
-  const tradeType = sig.action === 'sell' ? 'Avoid' : determineTradeType(technical.score, fundamental.score);
-  let tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType);
+  const tradeType = sig.action === 'sell' ? 'Avoid' : candidateTradeType;
+  // Momentum/aggressive names are short-term by construction. Swing names keep
+  // the medium floor until their actual expected holding period is classified
+  // below, so we do not force a 15% floor on a 3-6 month swing.
+  const initialHorizonHint = /momentum|aggressive/i.test(String(tradeType || '')) ? 'short' : null;
+  let tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType, null, initialHorizonHint);
   // Phase 1 horizon classification uses the current (2R) expected holding
-  // period, so the entry set is unchanged; only short signals get the 1R exit.
+  // period, so the entry set is unchanged; only short signals get the 1.5R exit.
   const horizon = sig.action === 'buy' ? classifyHorizon(tradeType, tradeLevels.expectedDays) : null;
+  if (sig.action === 'buy' && horizon === 'short' && tradeLevels.entry > 0 && tradeLevels.stopLoss != null
+      && (tradeLevels.entry - tradeLevels.stopLoss) / tradeLevels.entry < 0.15) {
+    // A short Swing can initially receive the 20% medium floor; once classified
+    // short, re-level with the 15% short-term floor before expectancy/sizing.
+    tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType, null, 'short');
+  }
+  if (sig.action === 'buy' && horizon === 'long') {
+    // Long-term targets must be valuation-feasible, not 2R/4R/6R of a 30% stop
+    // (which would imply 60%/120%/180%). Use the sector-relative fair value
+    // when it is above entry; otherwise cap the risk-multiple target.
+    const fair = computeFairValueTarget(sectorValuation, currentPrice);
+    const entry = tradeLevels.entry;
+    const risk = entry - tradeLevels.stopLoss;
+    let t1, t2, t3, method;
+    if (fair && fair.value > entry) {
+      t1 = Math.min(fair.value, entry * 2.0);
+      t2 = Math.min(t1 * 1.2, entry * 2.25);
+      t3 = Math.min(t1 * 1.4, entry * 2.5);
+      method = 'fair-value';
+    } else {
+      t1 = Math.min(tradeLevels.target1, entry * 1.5);
+      t2 = Math.min(tradeLevels.target2, entry * 1.8);
+      t3 = Math.min(tradeLevels.target3, entry * 2.2);
+      method = fair ? 'fair-value-below-price/capped-risk' : 'capped-risk';
+    }
+    t1 = Math.max(t1, entry * 1.05);
+    t2 = Math.max(t2, t1 * 1.05);
+    t3 = Math.max(t3, t2 * 1.05);
+    const rr = risk > 0 ? Math.round(((t1 - entry) / risk) * 10) / 10 : 1;
+    tradeLevels = {
+      ...tradeLevels,
+      target1: Math.round(t1 * 100) / 100,
+      target2: Math.round(t2 * 100) / 100,
+      target3: Math.round(t3 * 100) / 100,
+      riskReward: rr,
+      targetMethod: method,
+      fairValue: fair ? {
+        ...fair,
+        value: Math.round(fair.value * 100) / 100,
+        usedTarget1: Math.round(t1 * 100) / 100,
+      } : null,
+    };
+  }
+  // Assess the business thesis for every symbol, not only a fresh Buy: an open
+  // long-term position can turn into a Hold/Sell while it is being monitored,
+  // and the thesis review still needs the current fundamental evidence.
+  const thesis = assessThesisRisk(stock, fundamental, financial);
   const specVersion = horizon ? HORIZON_SPEC_VERSIONS[horizon] : null;
   const estCostBps = estimateCostBps(symbol, horizon);
   const stopPct = tradeLevels.entry > 0 && tradeLevels.stopLoss != null
@@ -6052,11 +6141,11 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     }
   }
 
-  // Phase 1: short-term buys exit at target1 = 1R instead of riding to the
+  // Phase 1: short-term buys exit at target1 = 1.5R instead of riding to the
   // ultimate 2R/4R/6R ladder. Stop distance is unchanged, so this isolates the
   // effect of the exit rule. The 2R shadow cohort is recorded separately.
   if (sig.action === 'buy' && horizon === 'short') {
-    tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType, SHORT_TARGET_MULTS);
+    tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType, SHORT_TARGET_MULTS, 'short');
   }
 
   const regimePenalty = regime.regime === 'crash' ? regimePenaltyCrash : 1;
@@ -6067,14 +6156,26 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     kellyPct = calculateKellyPositionSize(mlWinProb, wlr, maxConcentration);
   }
   let positionSize;
-  if (sig.action === 'sell') {
-    // Exit/avoid rating — no position is opened, so no capital is allocated.
+  // Institutional sizing: size is an output of the risk model, not a separate
+  // conviction guess. Risk budget / stop distance gives the % of equity to
+  // allocate; the horizon cap and liquidity/concentration rules then bound it.
+  const maxPositionPct = horizon === 'long' ? 5 : horizon === 'short' ? 3 : 4;
+  const riskPerTradePct = Math.max(0.05, Number(portfolioCfg.riskPerTradePct ?? 0.5));
+  const regimeRiskScale = regime.regime === 'crash' ? 0.3 : regime.regime === 'bear' ? 0.6 : 1;
+  const effectiveRiskBudgetPct = riskPerTradePct * regimeRiskScale * (circuitBreaker || 1);
+  const riskSizedPct = stopPct > 0 ? effectiveRiskBudgetPct / stopPct : 0;
+  if (sig.action !== 'buy') {
+    // Exit/avoid rating or Hold — no capital is allocated.
     positionSize = 0;
-  } else if (kellyPct != null && kellyPct > 0) {
-    positionSize = Math.round(kellyPct * regimePenalty * circuitBreaker);
+  } else if (riskSizedPct > 0) {
+    positionSize = Math.round(riskSizedPct);
+    if (kellyPct != null && kellyPct > 0) positionSize = Math.min(positionSize, kellyPct);
+    positionSize = Math.max(1, Math.min(positionSize, maxPositionPct));
   } else {
+    // Fallback only if the stop distance is unavailable.
     positionSize = calculatePositionSize(sig, regime.regime, confidence, scoreVariance);
     positionSize = Math.round(positionSize * regimePenalty * circuitBreaker);
+    positionSize = Math.max(1, Math.min(positionSize, maxPositionPct));
   }
   const formattedVolume = volume >= 1000000 ? (volume / 1000000).toFixed(1) + 'M' : (volume / 1000).toFixed(1) + 'K';
   const macroReason = generateMacroReason(macro);
@@ -6193,6 +6294,22 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     benchmarkSymbol: benchmarkSymbolFor(symbol),
     sectorValuation,
     scenarios,
+    stopMethod: tradeLevels.stopMethod || 'atr',
+    supportLevel: tradeLevels.supportLevel != null ? tradeLevels.supportLevel : null,
+    atrBuffer: tradeLevels.atrBuffer != null ? tradeLevels.atrBuffer : null,
+    stopDistancePct: tradeLevels.stopDistancePct != null ? tradeLevels.stopDistancePct : Math.round(stopPct * 10000) / 100,
+    riskBudgetPct: Math.round(effectiveRiskBudgetPct * 100) / 100,
+    riskSizedPct: Math.round(riskSizedPct * 100) / 100,
+    positionSizeModel: 'risk-budget',
+    targetMethod: tradeLevels.targetMethod || null,
+    fairValue: tradeLevels.fairValue || null,
+    thesis: thesis || null,
+    horizonProfile: weightProfile,
+    horizonCriteria: horizon === 'long'
+      ? ['fundamental score ≥55', 'financial score ≥45', 'D/E ≤2.5', 'current ratio ≥0.8', 'Altman Z ≥1.8', 'fair-value/capped target', 'thesis-break exit']
+      : horizon === 'short'
+        ? ['technical score ≥55', 'no death cross', 'MACD not bearish', 'risk-on regime', 'R:R ≥1.5', '1.5R target', '20-day time stop', 'liquidity/event/cost']
+        : ['score/confidence gates', 'R:R ≥1.2', '2R targets'],
     timeframe: holdingPeriod || timeframes[tradeType], sector: stock.sector, volume: formattedVolume, rawVolume: volume || 0,
     weeklyTrend: weeklyTrend.trend, regime: regime.regime,
     catalyst: cat.direction ? {
@@ -6260,6 +6377,74 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
 // Note: the confidence bar is NOT part of this gate; it is enforced separately
 // on the final feed (minConfidence filter) so a momentarily low-confidence stock
 // never blocks an already-open monitored position from being tracked.
+// ─── Long-term thesis invalidation ──────────────────────────────────────────
+// Long-term positions are not exited because price wiggled: they are reviewed
+// against the business thesis. These are the metrics that constitute a material
+// break (earnings/balance-sheet stress), with financials exempt from the
+// leverage/liquidity/Z-score tests in the same way as the long-term entry gate.
+// A break is confirmed twice at least 24h apart in monitoring before exit.
+function computeFairValueTarget(sectorValuation, currentPrice) {
+  const v = sectorValuation || {};
+  const value = Number(v.value);
+  const benchmark = Number(v.benchmark);
+  if (!(currentPrice > 0) || !(value > 0) || !(benchmark > 0)) return null;
+  if (!['P/E', 'P/B', 'EV/EBITDA'].includes(v.metric)) return null;
+  const fair = currentPrice * (benchmark / value);
+  if (!(fair > 0)) return null;
+  return {
+    value: fair,
+    metric: v.metric,
+    currentMultiple: value,
+    benchmarkMultiple: benchmark,
+    method: `${v.metric} re-rating to sector ${benchmark}`,
+  };
+}
+
+function assessThesisRisk(stock, fundamental, financial) {
+  const flags = [];
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const dataSource = String(stock?.dataSource || '').toLowerCase();
+  const sparse = fundamental?.metrics?.dataQuality === 'Very sparse data';
+  const reliable = dataSource !== 'fallback' && !sparse;
+  if (!reliable) {
+    return {
+      invalidated: false,
+      severity: 'unknown',
+      flags: [],
+      checks: {},
+      review: 'thesis review skipped until reliable fundamentals are available',
+      dataQuality: dataSource === 'fallback' ? 'fallback' : 'sparse',
+      asOf: new Date().toISOString(),
+    };
+  }
+  const sector = String(stock?.sector || '');
+  const isFinancial = /bank|financial|insurance/i.test(sector);
+  const fs = num(fundamental?.score);
+  const fins = num(financial?.score);
+  const rev = num(stock?.revenueGrowth);
+  const eps = num(stock?.epsGrowth);
+  const de = num(stock?.debtToEquity);
+  const cr = num(stock?.currentRatio);
+  const z = num(stock?.altmanZ);
+  if (fs != null && fs < 45) flags.push(`fundamental score ${fs} <45`);
+  if (fins != null && fins < 35) flags.push(`financial score ${fins} <35`);
+  if (rev != null && rev < -15) flags.push(`revenue growth ${rev}% < -15%`);
+  if (eps != null && eps < -25) flags.push(`EPS growth ${eps}% < -25%`);
+  if (!isFinancial) {
+    if (de != null && de > 3.0) flags.push(`D/E ${de} >3.0`);
+    if (cr != null && cr > 0 && cr < 0.7) flags.push(`current ratio ${cr} <0.7`);
+    if (z != null && z > 0 && z < 1.0) flags.push(`Altman Z ${z} <1.0`);
+  }
+  return {
+    invalidated: flags.length > 0,
+    severity: flags.length >= 2 ? 'high' : flags.length === 1 ? 'watch' : 'none',
+    flags,
+    checks: { fundamentalScore: fs, financialScore: fins, revenueGrowth: rev, epsGrowth: eps, debtToEquity: de, currentRatio: cr, altmanZ: z },
+    review: 'exit after two confirmations at least 24h apart',
+    asOf: new Date().toISOString(),
+  };
+}
+
 function computeSectorValuation(stock, fundamental, symbol) {
   const sector = String(stock?.sector || guessSector(symbol) || 'Other');
   const m = fundamental?.metrics || {};
@@ -6366,7 +6551,7 @@ async function loadEventRiskMap() {
   } catch { return new Map(); }
 }
 
-function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fundamental, technical, financial, macro, dataQuality, liquidity } = {}) {
+function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fundamental, technical, financial, macro, dataQuality, liquidity, stock, regimeName } = {}) {
   const reasons = [];
   const isFin = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -6407,8 +6592,40 @@ function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fun
       reasons.push(`low risk/reward ${sigObj.riskReward}`);
     }
   } else if (sigObj.action === 'sell') {
-    // Sell/Avoid ratings are exit references, not mirrored shorts — no levels
+    // Sell/Avoid ratings are exit references, not mirrored shorts - no levels
     // are produced for them, so geometry checks don't apply.
+  }
+
+  // Horizon-specific selection conditions. Long-term names are judged on
+  // quality/financial strength/valuation; short-term names on trend/momentum
+  // and risk-on regime. They are deliberately not the same gate.
+  if (sigObj.action === 'buy' && sigObj.horizon === 'long') {
+    const isFinancial = /bank|financial|insurance/i.test(String(stock?.sector || ''));
+    if (Number(fundamental?.score) < 55) reasons.push('long-term: fundamental score <55');
+    if (Number(financial?.score) < 45) reasons.push('long-term: financial score <45');
+    if (!isFinancial) {
+      const de = Number(stock?.debtToEquity);
+      if (Number.isFinite(de) && de > 2.5) reasons.push(`long-term: D/E ${de} >2.5`);
+      const cr = Number(stock?.currentRatio);
+      if (Number.isFinite(cr) && cr > 0 && cr < 0.8) reasons.push(`long-term: current ratio ${cr} <0.8`);
+      const z = Number(stock?.altmanZ);
+      if (Number.isFinite(z) && z > 0 && z < 1.8) reasons.push(`long-term: Altman Z ${z} <1.8`);
+    }
+    const rg = Number(stock?.revenueGrowth);
+    if (Number.isFinite(rg) && rg < -10) reasons.push(`long-term: revenue declining ${rg}%`);
+    if (sigObj.thesis?.invalidated) {
+      reasons.push(`long-term: thesis invalidated (${(sigObj.thesis.flags || []).join('; ')})`);
+    }
+  }
+  if (sigObj.action === 'buy' && sigObj.horizon === 'short') {
+    if (Number(technical?.score) < 55) reasons.push('short-term: technical score <55');
+    const ind = technical?.indicators || {};
+    if (/strong downtrend|death cross/i.test(String(ind.trendSignal || ''))) reasons.push('short-term: downtrend/death cross');
+    if (/bearish/i.test(String(ind.macdSignal || ''))) reasons.push('short-term: MACD bearish');
+    if (String(regimeName || '').toLowerCase() === 'bear' || String(regimeName || '').toLowerCase() === 'crash') {
+      reasons.push('short-term: risk-off regime');
+    }
+    if (Number(sigObj.riskReward) < 1.5) reasons.push('short-term: R:R <1.5');
   }
 
   return { ok: reasons.length === 0, reasons };

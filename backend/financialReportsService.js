@@ -39,6 +39,16 @@ function cacheSet(key, data) {
   return financialCache.set(key, data);
 }
 
+// Resolve a slow provider with a fallback instead of letting it hold the whole
+// request open. The underlying promise may still finish later and warm its own
+// cache; this only bounds the user-facing wait.
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise(resolve => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 function getDateStr(d) {
   if (!d) return null;
   if (d instanceof Date) return d.toISOString().split('T')[0];
@@ -58,30 +68,35 @@ async function ensureTTMValues(symbol, incHist) {
   let sharesOut = 0;
   let forwardPE = 0;
 
-  // Get shares outstanding & forwardPE from defaultKeyStatistics
-  try {
+  // Quote-summary statistics and EDGAR TTM are independent. Run them in
+  // parallel with hard timeouts so one slow provider cannot add ~10-20s to the
+  // whole report. Missing values fall back to the scraper data below.
+  const statsPromise = (async () => {
     const yf = await createYf();
-    const qs = await yf.quoteSummary(symbol, { modules: ['defaultKeyStatistics'] });
-    const raw = qs?.defaultKeyStatistics?.sharesOutstanding;
+    return yf.quoteSummary(symbol, { modules: ['defaultKeyStatistics'] });
+  })();
+  const [statsRes, edgarRes] = await Promise.allSettled([
+    withTimeout(statsPromise, 6000, null),
+    withTimeout(edgarService.getTTMFromEdgar(symbol), 8000, null),
+  ]);
+  const qs = statsRes.status === 'fulfilled' ? statsRes.value : null;
+  if (qs?.defaultKeyStatistics) {
+    const raw = qs.defaultKeyStatistics.sharesOutstanding;
     sharesOut = raw?.raw ?? raw ?? 0;
-    const fwdRaw = qs?.defaultKeyStatistics?.forwardPE;
+    const fwdRaw = qs.defaultKeyStatistics.forwardPE;
     forwardPE = fwdRaw?.raw ?? fwdRaw ?? 0;
-  } catch {}
-
-  // Primary source: SEC EDGAR quarterly data (free, authoritative, works on Railway)
-  try {
-    const edgarTtm = await edgarService.getTTMFromEdgar(symbol);
-    if (edgarTtm && edgarTtm.revenue > 0) {
-      ttmRevenue = edgarTtm.revenue;
-      ttmNetIncome = edgarTtm.netIncome || 0;
-      ttmEps = Number.isFinite(edgarTtm.eps) ? edgarTtm.eps : 0;
-      ttmPeriods = edgarTtm.periods || '';
-      ttmAsOf = edgarTtm.asOf || null;
-      ttmIncome = edgarTtm.income || null;
-    } else if (edgarTtm?.periods) {
-      ttmPeriods = edgarTtm.periods;
-    }
-  } catch { ttmPeriods = 'EXCEPTION in getTTMFromEdgar'; }
+  }
+  const edgarTtm = edgarRes.status === 'fulfilled' ? edgarRes.value : null;
+  if (edgarTtm && edgarTtm.revenue > 0) {
+    ttmRevenue = edgarTtm.revenue;
+    ttmNetIncome = edgarTtm.netIncome || 0;
+    ttmEps = Number.isFinite(edgarTtm.eps) ? edgarTtm.eps : 0;
+    ttmPeriods = edgarTtm.periods || '';
+    ttmAsOf = edgarTtm.asOf || null;
+    ttmIncome = edgarTtm.income || null;
+  } else if (edgarTtm?.periods) {
+    ttmPeriods = edgarTtm.periods;
+  }
 
   // If we still have no EPS but have sharesOutstanding and TTM netIncome, compute EPS
   if (!ttmEps && ttmNetIncome > 0 && sharesOut > 0) {
@@ -896,7 +911,7 @@ async function isNseStock(symbol) {
   return NSE_SYMBOLS.includes(ticker.toUpperCase());
 }
 
-async function getFinancialReport(symbol, period = 'annual', limit = 4, providerOverride = null, options = {}) {
+async function buildFinancialReport(symbol, period = 'annual', limit = 4, providerOverride = null, options = {}) {
   try {
     // Exchanges not covered by Yahoo Finance / SEC EDGAR (currently NGX Nigeria):
     // use the stockanalysis.com scraper. Symbol arrives qualified ("NGX:DANGCEM").
@@ -1240,6 +1255,29 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4, provider
   }
 }
 
+// Full assembled reports are expensive (multi-provider, cold ~10-25s). Cache the
+// completed report persistently and coalesce concurrent cold requests so two tabs
+// or a page + prefetch cannot stampede the providers. Component-level caches in
+// buildFinancialReport still keep the report fresh internally.
+const _reportInflight = new Map();
+async function getFinancialReport(symbol, period = 'annual', limit = 4, providerOverride = null, options = {}) {
+  const mode = options?.lite ? 'lite' : 'full';
+  const key = `report_${String(symbol).toUpperCase()}_${period}_${limit}_${providerOverride || 'auto'}_${mode}`;
+  if (options?.force !== true) {
+    const cached = cacheGet(key);
+    if (cached) return cached;
+  }
+  if (_reportInflight.has(key)) return _reportInflight.get(key);
+  const pending = buildFinancialReport(symbol, period, limit, providerOverride, options)
+    .then((report) => {
+      if (report?.success) cacheSet(key, report);
+      return report;
+    })
+    .finally(() => _reportInflight.delete(key));
+  _reportInflight.set(key, pending);
+  return pending;
+}
+
 function validateFinancialData(report) {
   if (!report?.success || !report?.data) return [];
 
@@ -1304,6 +1342,7 @@ async function getQuarterlyShareCountHistory(symbol) {
 
 function clearCache() {
   financialCache.clear();
+  _reportInflight.clear();
 }
 
 // Load persisted cache from DB on startup

@@ -6126,7 +6126,7 @@ async function fetchBacktest() {
 let _fwStats = null;
 function renderPhase1Benchmark(p) {
   const rows = [
-    ['Live 1R (gated)', p.live1R],
+      ['Live 1.5R (gated)', p.live1R],
     ['Live 2R shadow', p.shadow2R],
     ['Raw 1R (research)', p.raw1R],
     ['Raw 2R (research)', p.raw2R],
@@ -6135,7 +6135,7 @@ function renderPhase1Benchmark(p) {
   return `
     <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
       <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
-        <p style="font-size:13px;font-weight:600">Phase 1 Benchmark — Short 1R vs 2R</p>
+        <p style="font-size:13px;font-weight:600">Phase 1 Benchmark — Short 1.5R vs 2R</p>
         <span style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em">Live + raw research cohorts</span>
       </div>
       <p style="font-size:11px;color:#6b7280;margin-bottom:10px">Same entries, stops and 20-day time stop; only target1 differs. Raw rows include pre-gate intent and are research-only.</p>

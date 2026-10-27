@@ -148,6 +148,37 @@ function findResistanceLevels(prices, floorPrice = null, pivotRadius = 3, cluste
     : clustered;
 }
 
+function findSupportLevels(prices, ceilingPrice = null, pivotRadius = 3, clusterPct = 0.02) {
+  if (!Array.isArray(prices) || prices.length < pivotRadius * 2 + 2) return [];
+  const hasRange = Array.isArray(prices.lows) && prices.lows.length === prices.length;
+  const val = (i) => hasRange ? prices.lows[i] : prices[i];
+  const pivots = [];
+  for (let i = pivotRadius; i < prices.length - pivotRadius; i++) {
+    const l = val(i);
+    if (l == null || !Number.isFinite(l) || l <= 0) continue;
+    let isPivot = true;
+    for (let j = i - pivotRadius; j <= i + pivotRadius; j++) {
+      if (j === i) continue;
+      const nj = val(j);
+      if (nj == null || !Number.isFinite(nj) || nj <= l) { isPivot = false; break; }
+    }
+    if (isPivot) pivots.push(l);
+  }
+  pivots.sort((a, b) => a - b);
+  const clustered = [];
+  for (const p of pivots) {
+    const last = clustered[clustered.length - 1];
+    if (last != null && (last - p) / last <= clusterPct) {
+      if (p < last) clustered[clustered.length - 1] = p;
+    } else {
+      clustered.push(p);
+    }
+  }
+  return ceilingPrice != null
+    ? clustered.filter(p => p < ceilingPrice)
+    : clustered;
+}
+
 module.exports = {
   calculateRSI,
   calculateEMASeries,
@@ -157,4 +188,5 @@ module.exports = {
   calculateSMA,
   calculateATR,
   findResistanceLevels,
+  findSupportLevels,
 };
