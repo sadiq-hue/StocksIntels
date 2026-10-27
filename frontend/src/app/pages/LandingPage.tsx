@@ -1,1204 +1,803 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import { Link } from "react-router";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router";
 import {
-  ArrowRight, Menu, X, Star,
-  CheckCircle2, Phone, Mail, MapPin, Twitter, Linkedin, Github, ChevronUp,
-  ChevronRight, TrendingUp,
+  ArrowRight,
+  BarChart3,
+  Check,
+  ChevronRight,
+  Clock3,
+  Database,
+  FileText,
+  Globe2,
+  Landmark,
+  Layers,
+  LineChart,
+  LockKeyhole,
+  Mail,
+  Menu,
+  Scale,
+  Search,
+  ShieldCheck,
+  Users,
+  X,
 } from "lucide-react";
-import { Button } from "../components/ui/button";
-
-import { useRealtimeQuotes } from "../contexts/RealtimeQuotesContext";
-import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from "../services/marketDataService";
 import { useSEO } from "../hooks/useSEO";
-import { PLANS, YEARLY_SAVINGS_LABEL, MONEY_BACK_GUARANTEE } from "../data/plans";
+import { PLANS, YEARLY_SAVINGS_LABEL } from "../data/plans";
+import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from "../services/marketDataService";
 
-const HERO_SYMBOLS = ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "NSE:EABL", "AAPL", "TSLA", "MSFT", "GOOGL", "NVDA"];
+const HERO_SYMBOLS = ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "NSE:EABL", "AAPL", "MSFT", "NVDA"];
 
-// Fetch only the hero symbols so the landing page shows live prices fast,
-// without waiting on the full ~280-symbol global batch.
+type MarketArticle = {
+  id?: string;
+  title: string;
+  summary?: string;
+  source?: string;
+  publishedAt?: string;
+  slug?: string;
+  url?: string;
+};
+
+type DailyBrief = {
+  aiSignal?: string;
+  aiSignalContext?: string;
+  analystTake?: string;
+  globalToNseConnection?: string;
+};
+
+const QUICK_LINKS = [
+  { label: "Nairobi (NSE)", description: "Kenyan equities, banks and Safaricom", to: "/app/markets?exchange=NSE", icon: Landmark },
+  { label: "Nigeria (NGX)", description: "Lagos-listed companies and sector breadth", to: "/app/markets?exchange=NGX", icon: Globe2 },
+  { label: "Johannesburg (JSE)", description: "South African large caps and industrials", to: "/app/markets?exchange=JSE", icon: BarChart3 },
+  { label: "US markets", description: "NYSE and Nasdaq companies with SEC filings", to: "/app/markets?exchange=Global", icon: LineChart },
+  { label: "AI market signals", description: "Risk-aware Buy, Hold and Sell intelligence", to: "/app/signals", icon: Layers },
+  { label: "Financial statements", description: "Annual and quarterly reports with TTM data", to: "/app/financials", icon: FileText },
+  { label: "Insider activity", description: "SEC Forms 3, 4 and 5 ownership changes", to: "/app/insider", icon: Users },
+  { label: "Compare companies", description: "Put fundamentals and valuation side by side", to: "/app/compare", icon: Scale },
+];
+
+const EVENTS = [
+  { market: "NSE", session: "Nairobi", time: "09:00 – 15:00 EAT", detail: "Continuous trading, Monday to Friday" },
+  { market: "NGX", session: "Lagos", time: "10:00 – 14:20 WAT", detail: "Nigerian Exchange trading session" },
+  { market: "JSE", session: "Johannesburg", time: "09:00 – 16:50 SAST", detail: "Johannesburg Stock Exchange session" },
+  { market: "US", session: "New York", time: "09:30 – 16:00 ET", detail: "NYSE and Nasdaq regular session" },
+];
+
+const COVERAGE = [
+  { market: "NSE", name: "Nairobi Securities Exchange", count: "65", note: "Kenyan equities" },
+  { market: "NGX", name: "Nigerian Exchange", count: "155", note: "Nigerian equities" },
+  { market: "JSE", name: "Johannesburg Stock Exchange", count: "396", note: "South African equities" },
+  { market: "US", name: "NYSE / Nasdaq", count: "10,000+", note: "SEC-reporting companies" },
+];
+
+const FAQS = [
+  {
+    q: "What does StocksIntels cover?",
+    a: "StocksIntels covers NSE Kenya, NGX Nigeria, JSE South Africa and US markets, with prices, financial statements, insider filings, market news and risk-aware signals. Coverage depends on your plan.",
+  },
+  {
+    q: "Where does the data come from?",
+    a: "Market prices come from exchange and market-data providers. US financial statements use SEC EDGAR filings. African listings use the MyStocks Africa partner feed and local filing data. Each screen states its source and freshness.",
+  },
+  {
+    q: "How are signals and price targets produced?",
+    a: "Signals combine fundamental, financial, technical, macro, news and ML evidence. Stops and targets follow an explicit risk framework, including structural support, ATR-based distance, liquidity, event risk and position sizing.",
+  },
+  {
+    q: "Is StocksIntels affiliated with the SEC or a government agency?",
+    a: "No. StocksIntels is an independent financial data platform. We reference SEC EDGAR filings as a public data source, but we are not affiliated with, endorsed by, or operated by the SEC or any government agency.",
+  },
+];
+
 function useHeroQuotes() {
   const [quotes, setQuotes] = useState<Record<string, RealtimeStockQuote>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let alive = true;
+    let active = true;
     const load = async () => {
       try {
         const data = await fetchRealtimeQuotesBatch(HERO_SYMBOLS);
-        if (alive) {
-          setQuotes(data);
-          setLoading(false);
-        }
+        if (active) setQuotes(data || {});
       } catch {
-        if (alive) setLoading(false);
+        /* leave the snapshot empty rather than inventing prices */
+      } finally {
+        if (active) setLoading(false);
       }
     };
     load();
     const id = setInterval(load, 15000);
-    return () => { alive = false; clearInterval(id); };
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
   }, []);
 
   return { quotes, loading };
 }
 
-function StockChartBg() {
-  const path = useMemo(() => {
-    const points = [
-      { x: 0, y: 70 }, { x: 5, y: 65 }, { x: 10, y: 68 }, { x: 15, y: 55 }, { x: 20, y: 58 },
-      { x: 25, y: 45 }, { x: 30, y: 50 }, { x: 35, y: 40 }, { x: 40, y: 35 }, { x: 45, y: 38 },
-      { x: 50, y: 30 }, { x: 55, y: 33 }, { x: 60, y: 28 }, { x: 65, y: 32 }, { x: 70, y: 25 },
-      { x: 75, y: 20 }, { x: 80, y: 22 }, { x: 85, y: 18 }, { x: 90, y: 15 }, { x: 95, y: 18 },
-      { x: 100, y: 12 },
-    ];
-    const d = points.map((p, i) => {
-      if (i === 0) return `M ${p.x} ${p.y}`;
-      const prev = points[i - 1];
-      const cx = (prev.x + p.x) / 2;
-      const cy = (prev.y + p.y) / 2;
-      return `Q ${cx} ${cy} ${p.x} ${p.y}`;
-    }).join(" ");
-    return d;
-  }, []);
-
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      <svg
-        className="absolute bottom-0 left-0 w-full h-[80%] opacity-[0.05]"
-        viewBox="0 0 100 80"
-        preserveAspectRatio="none"
-      >
-        <defs>
-          <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#0D7490" stopOpacity="0.12" />
-            <stop offset="100%" stopColor="#0D7490" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={`${path} L 100 80 L 0 80 Z`} fill="url(#chart-gradient)" />
-        <path
-          d={path}
-          fill="none"
-          stroke="#0D7490"
-          strokeWidth="0.4"
-        />
-      </svg>
-      <svg
-        className="absolute bottom-0 right-0 w-[60%] h-[60%] opacity-[0.04]"
-        viewBox="0 0 100 80"
-        preserveAspectRatio="none"
-      >
-        <defs>
-          <linearGradient id="chart-gradient-2" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#0EA5E9" stopOpacity="0" />
-            <stop offset="50%" stopColor="#0EA5E9" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="#0EA5E9" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={`M 0 60 Q 20 50 40 55 T 80 30 T 100 25 L 100 80 L 0 80 Z`} fill="url(#chart-gradient-2)" />
-        <path d="M 0 60 Q 20 50 40 55 T 80 30 T 100 25" fill="none" stroke="#0EA5E9" strokeWidth="0.5" />
-      </svg>
-    </div>
-  );
+function quoteFor(quotes: Record<string, RealtimeStockQuote>, symbol: string) {
+  return quotes[symbol] || quotes[symbol.replace(/^NSE:/, "")] || quotes[`NSE:${symbol}`];
 }
 
-const floatingShapes = [
-  { size: 60, top: "8%", left: "3%", delay: 0, depth: 1 },
-  { size: 40, top: "18%", right: "5%", delay: 1.2, depth: 3 },
-  { size: 90, top: "50%", left: "1%", delay: 0.7, depth: 2 },
-  { size: 35, top: "70%", right: "3%", delay: 1.8, depth: 1 },
-  { size: 50, top: "35%", left: "12%", delay: 0.3, depth: 3 },
-  { size: 30, top: "82%", left: "18%", delay: 2.2, depth: 2 },
-  { size: 45, top: "12%", left: "45%", delay: 0.5, depth: 3 },
-  { size: 35, top: "42%", right: "15%", delay: 1.5, depth: 2 },
-  { size: 55, top: "60%", left: "30%", delay: 0.9, depth: 1 },
-  { size: 25, top: "28%", right: "22%", delay: 2.5, depth: 3 },
-];
-
-const features = [
-  {
-    title: "Market Intelligence for African & Global Stocks",
-    description: "AI-powered buy, sell, and hold recommendations on Safaricom, Equity, KCB, EABL, plus JSE, NGX and NYSE/NASDAQ stocks. Updated throughout the trading day.",
-    stat: "15+ African + global",
-  },
-  {
-    title: "Real-Time Market Data",
-    description: "Live prices, bid-ask spreads, and volume data across NSE, JSE, NGX, NYSE, NASDAQ, and LSE. See the same data institutional traders use.",
-    stat: "< 1s refresh",
-  },
-  {
-    title: "Portfolio Analytics",
-    description: "Track your real and paper portfolios. See your P&L, sector allocation, and risk exposure across all your holdings in one place.",
-    stat: "Real-time P&L",
-  },
-  {
-    title: "Price Alerts",
-    description: "Set alerts for when Safaricom hits your target or when a US stock moves more than you expect. Get notified via email and in-app.",
-    stat: "Instant alerts",
-  },
-  {
-    title: "Paper Trading",
-    description: "Practice trading African and US stocks with $10,000 virtual cash. Test strategies before risking real money. No broker account needed.",
-    stat: "$10K virtual",
-  },
-  {
-    title: "Market Scanner",
-    description: "Screen NSE and US stocks by price, volume, sector, and technical indicators. Find opportunities you would otherwise miss scrolling through individual charts.",
-    stat: "10+ filters",
-  },
-];
-
-const steps = [
-  { step: "01", title: "Create Your Account", description: "Sign up with your email. Start your trial today." },
-  { step: "02", title: "Explore the Markets", description: "Browse NSE and US stocks, check AI insights, set up your watchlist. Start with paper trading if you are new." },
-  { step: "03", title: "Trade with Confidence", description: "Use AI market intelligence alongside your own research. Track your performance and refine your strategy over time." },
-];
-
-const testimonials = [
-  {
-    name: "Caleb Mwangi",
-    role: "Retail trader, Nairobi, Kenya",
-    content: "I was relying on tips from Twitter groups before. Now I get daily AI market intelligence on my watchlist stocks. It does not replace my own research but it saves hours of screen time.",
-    rating: 5,
-    initials: "CM",
-  },
-  {
-    name: "Joseph Okonkwo",
-    role: "Part-time investor, Lagos, Nigeria",
-    content: "The paper trading feature helped me learn without losing real money. After three months of practicing, I felt ready to open a live brokerage account.",
-    rating: 5,
-    initials: "JO",
-  },
-  {
-    name: "Palesa Dlamini",
-    role: "Freelancer, Johannesburg, South Africa",
-    content: "I check the insights on my phone during lunch breaks. The price alerts are what I use most — they ping me when Naspers or MTN hit my targets.",
-    rating: 4,
-    initials: "PD",
-  },
-];
-
-const whyChoose = [
-  { title: "Built for African & Global Traders", description: "We cover Nairobi Securities Exchange, Johannesburg (JSE) and Nigeria (NGX) alongside NYSE, NASDAQ, and LSE. One platform for African and international stocks." },
-  { title: "AI Trained on Both Markets", description: "Our models train on African and US market data. Kenyan, South African and global market patterns differ — our intelligence respects each." },
-  { title: "No Fancy Jargon", description: "We explain recommendations in plain English. Buy, sell, or hold — with a short reason why. You stay in control of your decisions." },
-  { title: "Local Support", description: "With teams across Nairobi, Lagos, and Johannesburg — plus global coverage — if something breaks or you have a question, you get a response from someone who understands your market, wherever you trade." },
-];
-
-const faqs = [
-  { q: "Which NSE stocks does StocksIntels cover?", a: "We cover all actively traded NSE stocks including Safaricom (SCOM), Equity Group (EQTY), KCB Group (KCB), EABL (EABL), Co-op Bank (COOP), Absa Kenya (ABSA), BAT Kenya (BAT), and 50+ more. Global stocks on NYSE and NASDAQ are also available." },
-  { q: "How accurate is the AI market intelligence?", a: "We publish our forward-test accuracy inside the app and update it as new outcomes resolve, so you can judge performance for yourself. No model is always right — accuracy varies with market conditions and we make no guarantee of any specific level. We show you the reasoning behind every rating and let you decide." },
-  { q: "Can I try before I pay?", a: "Yes. Every paid plan comes with a 7-day trial. You'll get full access to your chosen plan for 7 days." },
-  { q: "Do I need a broker account?", a: "Not to start. The paper trading feature gives you $10,000 in virtual cash to practice. When you are ready, you can connect your broker or trade manually based on the recommendations." },
-  { q: "Is there a mobile app?", a: "The web app works on mobile browsers. We do not have an iOS or Android app yet but the site is fully responsive and works on phone screens." },
-];
-
-function LiveTickerItem({ sym, isNse, quotes }: { sym: string; isNse: boolean; quotes: Record<string, RealtimeStockQuote> }) {
-  const q = quotes[sym] || quotes[`NSE:${sym}`];
-  const price = q?.price ? q.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
-  const change = q?.changePercent != null ? `${q.changePercent >= 0 ? '+' : ''}${q.changePercent.toFixed(1)}%` : "—";
-  const up = q?.changePercent != null ? q.changePercent >= 0 : true;
-  const currency = isNse ? "KSh" : "$";
-
-  const prev = useRef<string>(price);
-  const [flash, setFlash] = useState<"up" | "down" | null>(null);
-  useEffect(() => {
-    if (prev.current !== price) {
-      setFlash(up ? "up" : "down");
-      prev.current = price;
-      const t = setTimeout(() => setFlash(null), 700);
-      return () => clearTimeout(t);
-    }
-  }, [price, up]);
-
-  return (
-    <div className={`flex items-center gap-2 px-5 py-1.5 bg-white/60 dark:bg-white/[0.04] backdrop-blur-sm border border-gray-100 dark:border-white/[0.06] rounded-lg mx-1.5 shrink-0 transition-colors duration-500 ${
-      flash === "up" ? "bg-emerald-100 border-emerald-200" : flash === "down" ? "bg-red-100 border-red-200" : ""
-    }`}>
-      <span className="font-bold text-xs text-foreground">{sym}</span>
-      <span className="text-xs text-muted-foreground">{currency}{price}</span>
-      <span className={`text-xs font-semibold ${up ? "text-emerald-600" : "text-red-500"}`}>{change}</span>
-    </div>
-  );
+function formatPrice(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function HeroStockCard({ quotes }: { quotes: Record<string, RealtimeStockQuote> }) {
-  const scom = quotes["SCOM"] || quotes["NSE:SCOM"];
-  const price = scom?.price ?? null;
-  const chg = scom?.changePercent ?? null;
-  const isUp = (chg ?? 0) >= 0;
-
-  const prev = useRef<number | null>(price);
-  const [flash, setFlash] = useState<"up" | "down" | null>(null);
-  useEffect(() => {
-    if (prev.current !== price) {
-      setFlash((price ?? 0) > (prev.current ?? 0) ? "up" : "down");
-      prev.current = price;
-      const t = setTimeout(() => setFlash(null), 700);
-      return () => clearTimeout(t);
-    }
-  }, [price]);
-
-  return (
-    <div className={`bg-card rounded-2xl border border-border shadow-2xl shadow-[#0D7490]/10 p-6 relative transition-colors duration-500 ${flash === "up" ? "ring-2 ring-emerald-300" : flash === "down" ? "ring-2 ring-red-300" : ""}`}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 ${isUp ? 'bg-emerald-100' : 'bg-red-100'} rounded-xl flex items-center justify-center`}>
-            <TrendingUp className={`w-5 h-5 ${isUp ? 'text-emerald-600' : 'text-red-600'}`} />
-          </div>
-          <div>
-            <p className="font-bold text-foreground">SCOM</p>
-            <p className="text-xs text-muted-foreground">Safaricom PLC</p>
-          </div>
-        </div>
-        <div className="text-right">
-          <p className="text-2xl font-bold text-foreground transition-colors duration-300">KES {price != null ? price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"}</p>
-          <p className={`text-sm font-semibold ${isUp ? 'text-emerald-600' : 'text-red-600'}`}>{chg != null ? `${isUp ? '+' : ''}${chg.toFixed(1)}% today` : '—'}</p>
-        </div>
-      </div>
-      <svg className="w-full h-24" viewBox="0 0 400 80">
-        <defs>
-          <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#0D7490" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#0D7490" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d="M0 60 Q20 55 40 58 T80 50 T120 45 T160 48 T200 35 T240 38 T280 30 T320 32 T360 25 T400 20 L400 80 L0 80 Z" fill="url(#heroGrad)" />
-        <path d="M0 60 Q20 55 40 58 T80 50 T120 45 T160 48 T200 35 T240 38 T280 30 T320 32 T360 25 T400 20" fill="none" stroke="#0D7490" strokeWidth="2.5" />
-        <circle cx="400" cy="20" r="4" fill="#0D7490" />
-      </svg>
-        <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-        <span>9:30 AM</span>
-        <span>10:15 AM</span>
-        <span>11:00 AM</span>
-        <span>12:30 PM</span>
-        <span>Now</span>
-      </div>
-    </div>
-  );
+function formatChange(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
-function FloatingMiniCards({ quotes }: { quotes: Record<string, RealtimeStockQuote> }) {
-  const cards = [
-    { sym: "AAPL", fallback: "+3.2", iconBg: "bg-blue-100", iconColor: "text-blue-600", anim: "animate-[float-3d_6s_ease-in-out_infinite]", pos: "-top-6 -right-4" },
-    { sym: "NVDA", fallback: "+4.1", iconBg: "bg-purple-100", iconColor: "text-purple-600", anim: "animate-[float-3d_7s_ease-in-out_infinite] animation-delay-1s", pos: "-bottom-4 -left-6" },
-    { sym: "EQTY", fallback: "+1.1", iconBg: "bg-emerald-100", iconColor: "text-emerald-600", anim: "animate-[float-3d_8s_ease-in-out_infinite] animation-delay-2s", pos: "top-1/2 -right-8" },
-  ];
-  const MiniCard = ({ c }: { c: typeof cards[number] }) => {
-    const q = quotes[c.sym];
-    const chg = q?.changePercent ?? null;
-    const isUp = (chg ?? 0) >= 0;
-    return (
-        <div className="flex items-center gap-2 bg-card rounded-xl border border-border shadow-md p-2.5">
-          <div className={`w-7 h-7 ${c.iconBg} rounded-lg flex items-center justify-center`}>
-            <TrendingUp className={`w-3.5 h-3.5 ${c.iconColor}`} />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-foreground">{c.sym}</p>
-          <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{chg != null ? `${isUp ? '+' : ''}${chg.toFixed(1)}%` : '—'}</p>
-        </div>
-      </div>
-    );
-  };
+function SectionHeading({ eyebrow, title, action }: { eyebrow: string; title: string; action?: React.ReactNode }) {
   return (
-    <>
-      {/* Desktop: floating absolute cards */}
-      <div className="hidden lg:block">
-        {cards.map(c => {
-          const q = quotes[c.sym];
-          const chg = q?.changePercent ?? null;
-          const isUp = (chg ?? 0) >= 0;
-          return (
-            <div key={c.sym} className={`absolute ${c.pos} bg-card rounded-xl border border-border shadow-xl p-3 ${c.anim}`}>
-              <div className="flex items-center gap-2">
-                <div className={`w-8 h-8 ${c.iconBg} rounded-lg flex items-center justify-center`}>
-                  <TrendingUp className={`w-4 h-4 ${c.iconColor}`} />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-foreground">{c.sym}</p>
-                  <p className={`text-[10px] font-semibold ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>{chg != null ? `${isUp ? '+' : ''}${chg.toFixed(1)}%` : '—'}</p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-slate-300 pb-3">
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1a4480]">{eyebrow}</p>
+        <h2 className="mt-1 font-serif text-2xl font-bold text-[#0b2d4d] sm:text-3xl">{title}</h2>
       </div>
-      {/* Mobile/tablet: stacked row under the hero card */}
-      <div className="flex lg:hidden justify-center gap-2 mt-4">
-        {cards.map(c => <MiniCard key={c.sym} c={c} />)}
-      </div>
-    </>
+      {action}
+    </div>
   );
 }
 
 export function LandingPage() {
   useSEO({
-    title: "StocksIntels – AI Stock Market Intelligence for African & Global Markets",
-    description: "AI-powered stock market intelligence for NSE Kenya, JSE, NGX, NYSE, and NASDAQ. Real-time prices, buy/sell signals, portfolio tracking, and market analysis for African and global traders.",
+    title: "StocksIntels | African & Global Market Intelligence",
+    description:
+      "Institutional-grade market intelligence for NSE Kenya, NGX Nigeria, JSE South Africa and US markets. Prices, financial statements, insider filings and risk-aware signals in one platform.",
     canonical: "/",
-    keywords: "Nairobi Securities Exchange, NSE Kenya, Safaricom stock, Equity Group, KCB, African stock market, AI stock signals, stock trading Kenya, JSE stocks, NYSE, portfolio tracker",
+    keywords:
+      "NSE Kenya, NGX Nigeria, JSE South Africa, African stocks, SEC EDGAR, stock signals, market intelligence",
   });
 
-  // JSON-LD structured data for search engines
+  const navigate = useNavigate();
+  const { quotes, loading: quotesLoading } = useHeroQuotes();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
+  const [articles, setArticles] = useState<MarketArticle[]>([]);
+  const [brief, setBrief] = useState<DailyBrief | null>(null);
+  const [contact, setContact] = useState({ name: "", email: "", subject: "General enquiry", message: "" });
+  const [contactStatus, setContactStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
   useEffect(() => {
-    const orgSchema = {
+    const controller = new AbortController();
+    fetch("/api/market-intel?limit=4", { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (Array.isArray(data)) setArticles(data.slice(0, 4));
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    fetch("/api/market/daily-brief", { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && !data.error) setBrief(data);
+      })
+      .catch(() => {})
+      .finally(() => clearTimeout(timer));
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    const id = "ld-org-sec-style";
+    if (document.getElementById(id)) return;
+    const el = document.createElement("script");
+    el.type = "application/ld+json";
+    el.id = id;
+    el.text = JSON.stringify({
       "@context": "https://schema.org",
       "@type": "Organization",
       name: "StocksIntels",
       url: "https://stocksintels.com",
       logo: "https://stocksintels.com/logo1.jpg",
-      description: "AI-powered stock market intelligence for African and global equities.",
-      foundingDate: "2024",
-      contactPoint: { "@type": "ContactPoint", telephone: "+254-792-754-435", contactType: "customer service", email: "support@stocksintels.com", availableLanguage: ["English"] },
-      sameAs: ["https://twitter.com/stocksintels"],
-      address: { "@type": "PostalAddress", addressLocality: "Nairobi", addressCountry: "KE" },
-    };
-    const webSiteSchema = {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      name: "StocksIntels",
-      url: "https://stocksintels.com",
-      potentialAction: { "@type": "SearchAction", target: "https://stocksintels.com/app/stocks?q={search_term_string}", "query-input": "required name=search_term_string" },
-    };
-    const faqSchema = {
-      "@context": "https://schema.org",
-      "@type": "FAQPage",
-      mainEntity: faqs.map(f => ({
-        "@type": "Question",
-        name: f.q,
-        acceptedAnswer: { "@type": "Answer", text: f.a },
-      })),
-    };
-    const el1 = document.createElement("script"); el1.type = "application/ld+json"; el1.id = "ld-org"; el1.text = JSON.stringify(orgSchema);
-    const el2 = document.createElement("script"); el2.type = "application/ld+json"; el2.id = "ld-website"; el2.text = JSON.stringify(webSiteSchema);
-    const el3 = document.createElement("script"); el3.type = "application/ld+json"; el3.id = "ld-faq"; el3.text = JSON.stringify(faqSchema);
-    document.head.appendChild(el1); document.head.appendChild(el2); document.head.appendChild(el3);
-    return () => { el1.remove(); el2.remove(); el3.remove(); };
-  }, []);
-
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [contactForm, setContactForm] = useState({ name: '', email: '', subject: '', message: '' });
-  const [contactSending, setContactSending] = useState(false);
-  const [contactStatus, setContactStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [userTestimonials, setUserTestimonials] = useState<any[]>([]);
-  const heroRef = useRef<HTMLDivElement>(null);
-  const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const [visibleSections, setVisibleSections] = useState<Set<number>>(new Set());
-  const { getQuote } = useRealtimeQuotes();
-  const { quotes: heroQuotes } = useHeroQuotes();
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  useEffect(() => {
-    const handleMouse = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX, y: e.clientY });
-    };
-    window.addEventListener("mousemove", handleMouse);
-    return () => window.removeEventListener("mousemove", handleMouse);
-  }, []);
-
-  useEffect(() => {
-    const observers = sectionRefs.current.map((el, i) => {
-      if (!el) return;
-      const obs = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) {
-            setVisibleSections((prev) => new Set(prev).add(i));
-          }
-        },
-        { threshold: 0.1 }
-      );
-      obs.observe(el);
-      return obs;
+      description:
+        "Independent market intelligence for African and global equities, financial statements, insider activity and risk-aware signals.",
+      sameAs: [],
     });
-    return () => observers.forEach((obs) => obs?.disconnect());
+    document.head.appendChild(el);
+    return () => el.remove();
   }, []);
 
-  useEffect(() => {
-    fetch('/api/testimonials')
-      .then(r => r.json())
-      .then(data => { if (data.testimonials) setUserTestimonials(data.testimonials); })
-      .catch(() => {});
-  }, []);
+  const snapshot = useMemo(
+    () => ["NSE:SCOM", "NSE:EQTY", "NSE:KCB", "AAPL"].map((symbol) => ({
+      symbol,
+      label: symbol.replace("NSE:", ""),
+      isNse: symbol.startsWith("NSE:"),
+      quote: quoteFor(quotes, symbol),
+    })),
+    [quotes],
+  );
 
-  const [marketArticles, setMarketArticles] = useState<Array<{ id: string; title: string; summary?: string; source?: string; publishedAt?: string; slug?: string; url?: string }>>([]);
-
-  useEffect(() => {
-    fetch('/api/market-intel?limit=6')
-      .then(r => r.json())
-      .then(data => { if (Array.isArray(data)) setMarketArticles(data.slice(0, 6)); })
-      .catch(() => {});
-  }, []);
-
-  const allTestimonials = useMemo(() => [...testimonials, ...userTestimonials], [userTestimonials]);
-
-  const setSectionRef = (i: number) => (el: HTMLDivElement | null) => {
-    sectionRefs.current[i] = el;
+  const search = (event: FormEvent) => {
+    event.preventDefault();
+    const q = query.trim();
+    navigate(q ? `/app/markets?search=${encodeURIComponent(q)}` : "/app/markets");
   };
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  const submitContact = async (event: FormEvent) => {
+    event.preventDefault();
+    setContactStatus("sending");
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(contact),
+      });
+      if (!res.ok) throw new Error("Contact request failed");
+      setContactStatus("sent");
+      setContact({ name: "", email: "", subject: "General enquiry", message: "" });
+    } catch {
+      setContactStatus("error");
+    }
   };
-
-  const renderFloatingShapes = () => floatingShapes.map((shape, i) => {
-    const depthFactor = shape.depth * 6;
-    const tx = (mousePos.x - window.innerWidth / 2) / depthFactor;
-    const ty = (mousePos.y - window.innerHeight / 2) / depthFactor;
-    return (
-      <div
-        key={i}
-        className="absolute rounded-full bg-[#0D7490]/[0.03]"
-        style={{
-          top: shape.top,
-          left: shape.left ?? undefined,
-          right: shape.right ?? undefined,
-          width: shape.size,
-          height: shape.size,
-          animation: `float-3d ${8 + shape.delay * 1.5}s ease-in-out infinite`,
-          animationDelay: `${shape.delay}s`,
-          transform: `translate3d(${tx}px, ${ty}px, 0)`,
-          willChange: "transform",
-        }}
-      />
-    );
-  });
 
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-[#0D7490]/20 relative">
-      {/* Full-page floating stock elements */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        {renderFloatingShapes()}
+    <div className="min-h-screen bg-white text-slate-900">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-[#0b2d4d] focus:outline focus:outline-2 focus:outline-[#1a4480]"
+      >
+        Skip to main content
+      </a>
+
+      {/* Trust strip — benchmarked against the SEC.gov utility banner without
+          claiming government affiliation. */}
+      <div className="bg-[#0b2d4d] text-white">
+        <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-x-5 gap-y-1 px-4 py-2 text-[10.5px] sm:text-[11px]">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <span className="inline-flex items-center gap-1.5 font-semibold">
+              <ShieldCheck className="size-3.5" aria-hidden="true" /> Independent financial intelligence
+            </span>
+            <span className="hidden items-center gap-1.5 text-white/75 sm:inline-flex">
+              <LockKeyhole className="size-3" aria-hidden="true" /> Secure platform
+            </span>
+            <span className="hidden text-white/75 md:inline">Data: NSE · NGX · JSE · SEC EDGAR</span>
+          </div>
+          <div className="flex items-center gap-4 text-white/80">
+            <span className="hidden sm:inline">Not affiliated with the SEC</span>
+            <Link to="/login" className="font-semibold text-white hover:underline">
+              Sign in
+            </Link>
+          </div>
+        </div>
       </div>
 
-      {/* HEADER */}
-      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-700 ${
-        scrolled ? "bg-white/70 dark:bg-black/40 backdrop-blur-2xl shadow-lg border-b border-white/20 dark:border-white/[0.04]" : "bg-transparent"
-      }`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap justify-between items-center gap-4 h-16 md:h-20">
-            <Link to="/" className="flex items-center gap-2.5 group">
-              <div className="size-9 md:size-10 overflow-hidden">
-                <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
-              </div>
-              <span className="text-xl md:text-2xl font-bold text-foreground tracking-tight">StocksIntels</span>
+      <header className="border-b border-slate-300 bg-white">
+        <div className="mx-auto max-w-[1180px] px-4">
+          <div className="flex min-h-[86px] items-center justify-between gap-5 py-3">
+            <Link to="/" className="flex min-w-0 items-center gap-3" aria-label="StocksIntels home">
+              <span className="flex size-11 shrink-0 items-center justify-center border-2 border-[#0b2d4d] bg-[#0b2d4d] font-serif text-xl font-bold text-white">
+                SI
+              </span>
+              <span className="min-w-0">
+                <span className="block font-serif text-[19px] font-bold tracking-[0.08em] text-[#0b2d4d] sm:text-[22px]">
+                  STOCKSINTELS
+                </span>
+                <span className="block truncate text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                  African &amp; global market intelligence
+                </span>
+              </span>
             </Link>
 
-            <nav className="hidden lg:flex items-center gap-6">
-              {["Features", "Insights", "Testimonials", "Pricing", "Contact"].map((item) => (
-                <a key={item} href={`#${item.toLowerCase()}`}
-                  className="text-sm font-medium text-muted-foreground hover:text-[#0D7490] transition-colors">
-                  {item}
-                </a>
-              ))}
-              <span className="h-4 w-px bg-border" />
-              {[
-                { label: "About Us", to: "/about" },
-                { label: "Stocks", to: "/app/stocks" },
-                { label: "Bonds", to: "/app/bonds" },
-                { label: "News", to: "/app/news" },
-              ].map((item) => (
-                <Link key={item.label} to={item.to}
-                  className="text-sm font-medium text-muted-foreground hover:text-[#0D7490] transition-colors">
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
+            <form onSubmit={search} className="hidden max-w-md flex-1 items-stretch border border-slate-400 lg:flex" role="search">
+              <label htmlFor="landing-search" className="sr-only">
+                Search stocks and markets
+              </label>
+              <input
+                id="landing-search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search a ticker, company or market"
+                className="min-w-0 flex-1 px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-inset focus:ring-[#1a4480]"
+              />
+              <button type="submit" className="inline-flex items-center gap-1.5 bg-[#1a4480] px-4 text-sm font-semibold text-white hover:bg-[#0b2d4d]">
+                <Search className="size-4" aria-hidden="true" />
+                Search
+              </button>
+            </form>
 
-            <div className="hidden md:flex items-center gap-3">
-              <Link to="/login">
-                <Button variant="ghost" className="text-muted-foreground hover:text-[#0D7490] font-medium">Sign In</Button>
+            <div className="hidden items-center gap-2 sm:flex">
+              <Link to="/login" className="border border-[#1a4480] px-3 py-2 text-sm font-semibold text-[#1a4480] hover:bg-[#f2f6fa]">
+                Sign in
               </Link>
-              <Link to="/login">
-                <Button className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white shadow-lg font-medium px-6">
-                  Get Started
-                </Button>
+              <Link to="/login" className="inline-flex items-center gap-1 bg-[#1a4480] px-3 py-2 text-sm font-semibold text-white hover:bg-[#0b2d4d]">
+                Start free trial <ArrowRight className="size-4" aria-hidden="true" />
               </Link>
             </div>
 
-            <button className="lg:hidden p-2.5 rounded-xl hover:bg-accent text-muted-foreground" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            <button
+              type="button"
+              onClick={() => setMobileOpen((v) => !v)}
+              className="inline-flex size-10 items-center justify-center border border-slate-400 text-[#0b2d4d] sm:hidden"
+              aria-label={mobileOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileOpen}
+            >
+              {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
             </button>
           </div>
+
+          <nav aria-label="Primary" className="hidden border-t border-slate-200 lg:block">
+            <ul className="flex flex-wrap items-center gap-x-7 text-[13px] font-semibold text-slate-700">
+              {[
+                { label: "Markets", to: "/app/markets" },
+                { label: "Intelligence", to: "/app/signals" },
+                { label: "Research", to: "/app/financials" },
+                { label: "Insider activity", to: "/app/insider" },
+                { label: "Compare", to: "/app/compare" },
+                { label: "Pricing", to: "#plans" },
+                { label: "Company", to: "/about" },
+              ].map((item) =>
+                item.to.startsWith("#") ? (
+                  <li key={item.label}>
+                    <a href={item.to} className="block border-b-2 border-transparent py-3 hover:border-[#1a4480] hover:text-[#0b2d4d]">
+                      {item.label}
+                    </a>
+                  </li>
+                ) : (
+                  <li key={item.label}>
+                    <Link to={item.to} className="block border-b-2 border-transparent py-3 hover:border-[#1a4480] hover:text-[#0b2d4d]">
+                      {item.label}
+                    </Link>
+                  </li>
+                ),
+              )}
+            </ul>
+          </nav>
+
+          <form onSubmit={search} className="flex border border-slate-400 pb-3 lg:hidden" role="search">
+            <label htmlFor="landing-search-mobile" className="sr-only">
+              Search stocks and markets
+            </label>
+            <input
+              id="landing-search-mobile"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search a ticker, company or market"
+              className="min-w-0 flex-1 px-3 py-2 text-sm outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-inset focus:ring-[#1a4480]"
+            />
+            <button type="submit" aria-label="Search" className="bg-[#1a4480] px-3 text-white">
+              <Search className="size-4" />
+            </button>
+          </form>
         </div>
 
-        {mobileMenuOpen && (
-          <div className="lg:hidden bg-card border-b border-border shadow-xl">
-            <div className="px-4 py-6 space-y-1">
-              {["Features", "Insights", "Testimonials", "Pricing", "Contact"].map((item) => (
-                <a key={item} href={`#${item.toLowerCase()}`}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block px-4 py-3 rounded-xl text-base font-medium text-muted-foreground hover:text-[#0D7490] hover:bg-muted">
-                  {item}
-                </a>
-              ))}
-              <div className="pt-3 pb-1 px-4">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Platform</span>
-              </div>
-              {[
-                { label: "About Us", to: "/about" },
-                { label: "Stocks", to: "/app/stocks" },
-                { label: "Bonds", to: "/app/bonds" },
-                { label: "News", to: "/app/news" },
-              ].map((item) => (
-                <Link key={item.label} to={item.to}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block px-4 py-3 rounded-xl text-base font-medium text-muted-foreground hover:text-[#0D7490] hover:bg-muted">
+        {mobileOpen && (
+          <div className="border-t border-slate-300 bg-white px-4 py-3 lg:hidden">
+            <div className="grid gap-1">
+              {QUICK_LINKS.slice(0, 5).map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setMobileOpen(false)}
+                  className="border-b border-slate-200 px-1 py-2.5 text-sm font-semibold text-slate-700"
+                >
                   {item.label}
                 </Link>
               ))}
-              <div className="pt-4 border-t border-border space-y-3">
-                <Link to="/login" className="block w-full" onClick={() => setMobileMenuOpen(false)}>
-                  <Button variant="outline" className="w-full">Sign In</Button>
-                </Link>
-                <Link to="/login" className="block w-full" onClick={() => setMobileMenuOpen(false)}>
-                  <Button className="w-full bg-[#0D7490] text-white">Get Started</Button>
-                </Link>
-              </div>
+              <a href="#plans" onClick={() => setMobileOpen(false)} className="border-b border-slate-200 px-1 py-2.5 text-sm font-semibold text-slate-700">
+                Pricing
+              </a>
+              <Link to="/about" onClick={() => setMobileOpen(false)} className="px-1 py-2.5 text-sm font-semibold text-slate-700">
+                Company
+              </Link>
             </div>
           </div>
         )}
       </header>
 
-      {/* HERO */}
-      <section ref={heroRef} className="relative pt-32 pb-20 lg:pt-40 lg:pb-28 overflow-hidden">
-        <div className="absolute inset-0">
-          <StockChartBg />
-        </div>
+      <main id="main-content">
+        <div className="mx-auto max-w-[1180px] px-4">
+          <nav aria-label="Breadcrumb" className="border-b border-slate-200 py-3 text-[11px] text-slate-500">
+            <ol className="flex items-center gap-1.5">
+              <li><Link to="/" className="text-[#1a4480] hover:underline">Home</Link></li>
+              <li aria-hidden="true"><ChevronRight className="size-3" /></li>
+              <li aria-current="page">Market intelligence</li>
+            </ol>
+          </nav>
 
-        {/* Stock Ticker Strip */}
-        <div className="relative z-10 mb-12 overflow-hidden">
-          <div className="flex whitespace-nowrap animate-[ticker_30s_linear_infinite]">
-            {(() => {
-              const tickerSymbols = [
-                { sym: "SCOM", isNse: true },
-                { sym: "EQTY", isNse: true },
-                { sym: "KCB", isNse: true },
-                { sym: "EABL", isNse: true },
-                { sym: "AAPL", isNse: false },
-                { sym: "TSLA", isNse: false },
-                { sym: "MSFT", isNse: false },
-                { sym: "GOOGL", isNse: false },
-                { sym: "NVDA", isNse: false },
-              ];
-              const items = [...tickerSymbols, ...tickerSymbols];
-              return items.map((t, i) => (
-                <LiveTickerItem key={i} sym={t.sym} isNse={t.isNse} quotes={heroQuotes} />
-              ));
-            })()}
-          </div>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            {/* Left: Text */}
+          {/* Mission / hero */}
+          <section className="grid gap-8 border-b border-slate-300 py-10 lg:grid-cols-[1.35fr_0.65fr] lg:gap-12 lg:py-14">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#0D7490]/10 rounded-full mb-6">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-xs font-semibold text-[#0D7490]">Live market data</span>
-              </div>
-
-              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-[1.1] tracking-tight">
-                Your edge in{" "}
-                <span className="bg-gradient-to-r from-[#0D7490] to-[#0EA5E9] bg-clip-text text-transparent">African and global</span>{" "}
-                markets.
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#1a4480]">Independent market intelligence</p>
+              <h1 className="mt-3 max-w-3xl font-serif text-[2.6rem] font-bold leading-[1.05] tracking-[-0.02em] text-[#0b2d4d] sm:text-5xl lg:text-[3.6rem]">
+                We make African markets <em className="text-[#1a4480]">legible.</em>
               </h1>
-
-              <p className="text-lg sm:text-xl text-muted-foreground mb-8 max-w-xl leading-relaxed">
-                We track price, volume, fundamentals, sentiment, and macro conditions across African and global exchanges — turning data into market intelligence you can act on.
+              <p className="mt-5 max-w-2xl text-[15px] leading-7 text-slate-700">
+                StocksIntels turns prices, filings, fundamentals, insider activity and market sentiment into clear,
+                risk-aware intelligence across <strong className="font-semibold text-slate-900">NSE Kenya</strong>,{" "}
+                <strong className="font-semibold text-slate-900">NGX Nigeria</strong>,{" "}
+                <strong className="font-semibold text-slate-900">JSE South Africa</strong> and US markets.
               </p>
-
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Link to="/login" className="w-full sm:w-auto">
-                  <Button size="lg" className="w-full sm:w-auto bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-8 py-6 text-base shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-0.5 font-semibold">
-                    Start Free Trial
-                    <ArrowRight className="ml-2 w-5 h-5" />
-                  </Button>
+              <div className="mt-7 flex flex-wrap items-center gap-3">
+                <Link to="/login" className="inline-flex items-center gap-2 bg-[#1a4480] px-5 py-3 text-sm font-semibold text-white hover:bg-[#0b2d4d]">
+                  Explore the platform <ArrowRight className="size-4" aria-hidden="true" />
                 </Link>
-                <a href="#features" className="w-full sm:w-auto">
-                  <Button variant="outline" size="lg" className="w-full sm:w-auto border-border text-foreground hover:bg-muted px-8 py-6 text-base font-medium">
-                    See How It Works
-                  </Button>
+                <a href="#coverage" className="inline-flex items-center gap-2 border border-[#1a4480] px-5 py-3 text-sm font-semibold text-[#1a4480] hover:bg-[#f2f6fa]">
+                  View coverage
                 </a>
               </div>
-
-              <div className="mt-8 flex flex-wrap items-center gap-6 text-muted-foreground">
-                {["Real-time data", "AI-powered insights", "Portfolio tracking"].map((item) => (
-                  <div key={item} className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-green-500" />
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Right: Stock Cards */}
-            <div className="relative mt-10 lg:mt-0">
-              <HeroStockCard quotes={heroQuotes} />
-              {/* Floating mini cards — absolute on desktop, stacked on mobile */}
-              <FloatingMiniCards quotes={heroQuotes} />
-            </div>
-          </div>
-
-          {/* Quick stats */}
-          <div className="mt-16 grid grid-cols-3 gap-3 sm:gap-6 max-w-2xl mx-auto">
-            <div className="text-center">
-              <p className="text-xl sm:text-3xl font-bold text-foreground">10,000+</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">stocks across 15+ African & global exchanges</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xl sm:text-3xl font-bold text-foreground">7</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">days trial</p>
-            </div>
-            <div className="text-center">
-              <p className="text-xl sm:text-3xl font-bold text-[#0D7490]">USD+</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">multi-currency support</p>
-            </div>
-          </div>
-
-          {/* Markets we cover */}
-          <div className="mt-12 pt-8 border-t border-border">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest mb-5 text-center">Markets we cover</p>
-            <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
-              {[
-                { label: "NSE", sub: "Nairobi Securities Exchange", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
-                { label: "JSE", sub: "Johannesburg Stock Exchange", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" },
-                { label: "NGX", sub: "Nigerian Exchange Group", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200" },
-                { label: "GSE", sub: "Ghana Stock Exchange", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" },
-                { label: "NYSE", sub: "New York Stock Exchange", color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200" },
-                { label: "NASDAQ", sub: "Nasdaq Stock Market", color: "text-indigo-700", bg: "bg-indigo-50", border: "border-indigo-200" },
-                { label: "LSE", sub: "London Stock Exchange", color: "text-purple-700", bg: "bg-purple-50", border: "border-purple-200" },
-              ].map((m) => (
-                <div key={m.label} className={`flex items-center gap-3 px-4 py-2.5 rounded-lg ${m.bg} ${m.border} border`}>
-                  <span className={`font-black text-lg tracking-tight ${m.color}`}>{m.label}</span>
-                  <span className="text-xs text-muted-foreground hidden sm:block">{m.sub}</span>
+              <div className="mt-8 grid max-w-xl grid-cols-3 gap-4 border-t border-slate-200 pt-5">
+                <div>
+                  <p className="font-serif text-2xl font-bold text-[#0b2d4d]">4</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-500">Exchange groups</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* FEATURES */}
-      <section id="features" className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(2)}>
-        <div className="absolute inset-0 opacity-[0.02]" style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
-          backgroundSize: "40px 40px",
-        }} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className={`text-center max-w-3xl mx-auto mb-14 transition-all duration-700 ${visibleSections.has(2) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Tools that help you trade African and global stocks better</h2>
-            <p className="text-lg text-muted-foreground">No fluff. Just practical features built for African markets.</p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature, idx) => (
-              <div key={feature.title} className="group bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 transition-all duration-500 hover:-translate-y-1"
-                style={{ animation: `fade-in-up 0.6s ease-out ${idx * 0.1}s forwards`, opacity: 0 }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <h3 className="text-lg font-bold text-foreground group-hover:text-[#0D7490] transition-colors duration-300">{feature.title}</h3>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-[#0D7490]/10 text-[#0D7490] group-hover:bg-[#0D7490] group-hover:text-white transition-all duration-300">
-                    {feature.stat}
-                  </span>
+                <div>
+                  <p className="font-serif text-2xl font-bold text-[#0b2d4d]">10,000+</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-500">Instruments tracked</p>
                 </div>
-                <p className="text-muted-foreground text-sm leading-relaxed group-hover:text-foreground transition-colors duration-300">{feature.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* HOW IT WORKS */}
-      <section className="py-20 lg:py-28 bg-card" ref={setSectionRef(3)}>
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(3) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Getting started takes five minutes</h2>
-            <p className="text-lg text-muted-foreground">Sign up, explore the markets, and start using AI market intelligence — no broker or credit card needed.</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
-            {steps.map((item, idx) => (
-              <div key={item.step} className="text-center group"
-                style={{ animation: `fade-in-up 0.6s ease-out ${idx * 0.15}s forwards`, opacity: 0 }}>
-                <div className="w-14 h-14 bg-gradient-to-br from-[#0D7490] to-[#0EA5E9] rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:shadow-xl group-hover:shadow-[#0D7490]/20 group-hover:scale-110 transition-all duration-300">
-                  <span className="text-white font-bold text-lg">{item.step}</span>
-                </div>
-                <h3 className="text-xl font-bold text-foreground mb-3 group-hover:text-[#0D7490] transition-colors duration-300">{item.title}</h3>
-                <p className="text-muted-foreground max-w-xs mx-auto leading-relaxed">{item.description}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="text-center mt-14">
-            <Link to="/login">
-              <Button size="lg" className="bg-[#0D7490] hover:bg-[#0A5F7A] text-white px-10 py-6 text-base shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-0.5 font-semibold">
-                Start Free Trial
-                <ArrowRight className="ml-2 w-5 h-5" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* WHY CHOOSE US */}
-      <section className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(4)}>
-        <div className="absolute inset-0 opacity-[0.015]" style={{
-          backgroundImage: `linear-gradient(45deg, #0D7490 1px, transparent 1px)`,
-          backgroundSize: "50px 50px",
-        }} />
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(4) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Built for traders everywhere, starting with Africa</h2>
-            <p className="text-lg text-muted-foreground">Most trading platforms ignore African markets. We built StocksIntels to give traders across the continent — from Nairobi to Lagos to Johannesburg — and around the world better tools, whether you trade Safaricom, MTN, Dangote, or Apple.</p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-            {whyChoose.map((item, idx) => (
-                <div key={item.title} className="group bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-lg hover:shadow-[#0D7490]/5 transition-all duration-500 hover:-translate-y-1"
-                style={{ animation: `fade-in-up 0.5s ease-out ${idx * 0.1}s forwards`, opacity: 0 }}>
-                <h4 className="font-bold text-foreground mb-1.5 group-hover:text-[#0D7490] transition-colors duration-300">{item.title}</h4>
-                <p className="text-muted-foreground text-sm leading-relaxed">{item.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* TESTIMONIALS */}
-      <section id="testimonials" className="py-20 lg:py-28 bg-card" ref={setSectionRef(5)}>
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(5) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">What users say</h2>
-            <p className="text-lg text-muted-foreground">People using StocksIntels to track and trade African and global stocks.</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
-            {allTestimonials.map((t, i) => (
-                <div key={i} className="group bg-card rounded-xl p-6 border border-border shadow-sm hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
-                style={{ animation: `fade-in-up 0.5s ease-out ${i * 0.15}s forwards`, opacity: 0 }}>
-                <div className="flex gap-1 mb-4">
-                  {[...Array(t.rating)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 text-amber-400 fill-amber-400" />
-                  ))}
-                </div>
-                <p className="text-muted-foreground mb-6 leading-relaxed text-sm group-hover:text-foreground transition-colors duration-300">{t.content}</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center text-gray-700 dark:text-gray-300 font-bold text-sm">
-                    {t.initials}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-foreground text-sm">{t.name}</p>
-                    <p className="text-muted-foreground text-xs">{t.role}</p>
-                  </div>
+                <div>
+                  <p className="font-serif text-2xl font-bold text-[#0b2d4d]">1</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-500">Research workspace</p>
                 </div>
               </div>
-              ))}
-          </div>
-        </div>
-      </section>
+            </div>
 
-      {/* MARKET INSIGHTS */}
-      <section id="insights" className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(6)}>
-        <div className="absolute inset-0 opacity-[0.015]" style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
-          backgroundSize: "30px 30px",
-        }} />
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(6) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Latest market insights</h2>
-            <p className="text-lg text-muted-foreground">Curated editorial coverage from MyStocks across African exchanges — macro analysis, sector reports, and earnings commentary.</p>
-          </div>
-
-          {marketArticles.length > 0 && (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {marketArticles.map((article, i) => {
-                const href = article.url || (article.slug ? `https://mystocks.africa/market-intel/${article.slug}` : '#');
-                const dateLabel = article.publishedAt
-                  ? new Date(article.publishedAt).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })
-                  : '';
-                return (
-                  <a key={article.id || i} href={href} target="_blank" rel="noopener noreferrer"
-                    className="group bg-card rounded-xl p-6 border border-border shadow-sm hover:shadow-xl hover:shadow-[#0D7490]/10 hover:-translate-y-1 transition-all duration-500 block"
-                    style={{ animation: `fade-in-up 0.5s ease-out ${i * 0.1}s forwards`, opacity: 0 }}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <TrendingUp className="w-4 h-4 text-[#0D7490]" />
-                      <span className="text-xs font-medium text-[#0D7490] uppercase tracking-wide">{article.source || 'Market Intel'}</span>
+            <aside className="border border-slate-300 bg-[#f7f9fb]" aria-label="Market snapshot">
+              <div className="flex items-center justify-between border-b border-slate-300 px-4 py-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#1a4480]">Market snapshot</p>
+                  <p className="text-[11px] text-slate-500">Delayed quotes · {quotesLoading ? "loading" : "live"}</p>
+                </div>
+                <LineChart className="size-5 text-[#1a4480]" aria-hidden="true" />
+              </div>
+              <dl className="divide-y divide-slate-200">
+                {snapshot.map((row) => {
+                  const q = row.quote;
+                  const change = q?.changePercent;
+                  return (
+                    <div key={row.symbol} className="flex items-center justify-between gap-3 px-4 py-3">
+                      <div>
+                        <dt className="font-mono text-sm font-bold text-slate-900">{row.label}</dt>
+                        <dd className="text-[10px] uppercase tracking-wide text-slate-500">{row.isNse ? "NSE Kenya · KES" : "US · USD"}</dd>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono text-sm font-semibold text-slate-900">
+                          {row.isNse ? "KSh " : "$"}{formatPrice(q?.price)}
+                        </p>
+                        <p className={`text-[11px] font-semibold ${change == null ? "text-slate-400" : change >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                          {formatChange(change)}
+                        </p>
+                      </div>
                     </div>
-                    <h3 className="font-bold text-foreground mb-2 group-hover:text-[#0D7490] transition-colors duration-300 leading-snug">{article.title}</h3>
-                    {article.summary && (
-                      <p className="text-muted-foreground text-sm leading-relaxed line-clamp-3">{article.summary}</p>
-                    )}
-                    {dateLabel && (
-                      <p className="text-muted-foreground text-xs mt-3">{dateLabel}</p>
-                    )}
-                  </a>
+                  );
+                })}
+              </dl>
+              <div className="border-t border-slate-300 px-4 py-3">
+                <Link to="/app/markets" className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1a4480] hover:underline">
+                  Open full market data <ArrowRight className="size-3.5" />
+                </Link>
+              </div>
+            </aside>
+          </section>
+
+          {/* Quick links */}
+          <section className="border-b border-slate-300 py-10" aria-labelledby="quick-links-heading">
+            <SectionHeading eyebrow="Start here" title="Quick links" />
+            <div className="grid gap-px border border-slate-300 bg-slate-300 sm:grid-cols-2 lg:grid-cols-4">
+              {QUICK_LINKS.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className="group bg-white p-4 transition-colors hover:bg-[#f2f6fa]"
+                  >
+                    <Icon className="size-5 text-[#1a4480]" aria-hidden="true" />
+                    <h3 className="mt-3 text-sm font-bold text-[#0b2d4d] group-hover:underline">{item.label}</h3>
+                    <p className="mt-1 text-[11px] leading-5 text-slate-600">{item.description}</p>
+                  </Link>
                 );
               })}
             </div>
-          )}
+          </section>
 
-          {marketArticles.length > 0 && (
-            <div className="text-center mt-10">
-              <Link to="/blog"
-                className="inline-flex items-center gap-2 text-[#0D7490] font-medium hover:underline">
-                View all articles <ChevronRight className="w-4 h-4" />
-              </Link>
-            </div>
-          )}
-
-          {marketArticles.length === 0 && (
-            <p className="text-center text-muted-foreground">Market insights are refreshed throughout the trading day.</p>
-          )}
-        </div>
-      </section>
-
-      {/* PRICING */}
-      <section id="pricing" className="relative py-20 lg:py-28 bg-muted overflow-hidden" ref={setSectionRef(7)}>
-        <div className="absolute inset-0 opacity-[0.015]" style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, #0D7490 1px, transparent 0)`,
-          backgroundSize: "30px 30px",
-        }} />
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(7) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Simple pricing. Start your trial today.</h2>
-            <p className="text-lg text-muted-foreground">Less than a coffee a day. Try any plan free for 7 days — every plan includes a {MONEY_BACK_GUARANTEE}.</p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
-            {PLANS.map((plan, i) => {
-              const popular = plan.popular;
-              return (
-                <div
-                  key={plan.id}
-                  className={
-                    popular
-                      ? "bg-[#111827] dark:bg-[#1e293b] text-white rounded-xl p-6 border border-gray-800 dark:border-gray-700 shadow-xl lg:scale-[1.02] z-10 hover:shadow-2xl transition-all duration-500"
-                      : "bg-card rounded-xl p-6 border border-border hover:border-[#0D7490]/30 hover:shadow-xl hover:shadow-[#0D7490]/5 hover:-translate-y-1 transition-all duration-500"
-                  }
-                  style={{ animation: `fade-in-up 0.5s ease-out ${i * 0.1}s forwards`, opacity: 0 }}
-                >
-                  {popular && (
-                    <div className="mb-2">
-                      <span className="bg-[#0D7490] text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                        Most Popular
-                      </span>
-                    </div>
-                  )}
-                  <h3 className={`text-xl font-bold mb-1 ${popular ? "" : "text-foreground"}`}>{plan.name}</h3>
-                  <p className={`text-sm mb-4 ${popular ? "text-white/50" : "text-muted-foreground"}`}>{plan.tagline}</p>
-                  <div className="mb-4">
-                    <div className="flex items-baseline gap-2">
-                      <span className={`text-3xl font-bold ${popular ? "" : "text-foreground"}`}>${plan.monthlyPrice}</span>
-                      <span className={`text-sm ${popular ? "text-white/50" : "text-muted-foreground"}`}>/mo</span>
-                    </div>
-                    <p className={`text-xs mt-1 ${popular ? "text-white/50" : "text-muted-foreground/50"}`}>
-                      ≈ ${(plan.monthlyPrice / 30).toFixed(2)}/day &middot; {YEARLY_SAVINGS_LABEL} on yearly
-                    </p>
-                  </div>
-                  <Link to="/pricing">
-                    <Button
-                      variant={popular ? "default" : "outline"}
-                      className={
-                        popular
-                          ? "w-full mb-4 bg-[#0D7490] text-white hover:bg-[#0A5F7A] shadow-xl font-semibold cursor-pointer"
-                          : "w-full mb-4 border-border text-foreground hover:bg-muted cursor-pointer"
-                      }
-                    >
-                      Start Trial
-                      {popular && <ArrowRight className="ml-2 w-4 h-4" />}
-                    </Button>
+          {/* Latest news + upcoming sessions */}
+          <div className="grid gap-10 border-b border-slate-300 py-10 lg:grid-cols-[1.25fr_0.75fr]">
+            <section aria-labelledby="latest-news-heading">
+              <SectionHeading
+                eyebrow="Newsroom"
+                title="Latest market intelligence"
+                action={
+                  <Link to="/app/news" className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-[#1a4480] hover:underline">
+                    View all <ArrowRight className="size-3.5" />
                   </Link>
-                  <div className="space-y-2">
-                    {plan.highlights.map((f) => (
-                      <div key={f} className="flex items-center gap-2">
-                        <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${popular ? "text-emerald-400" : "text-green-500"}`} />
-                        <span className={`text-xs ${popular ? "text-white/70" : "text-muted-foreground"}`}>{f}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="text-center mt-10">
-            <Link to="/pricing" className="inline-flex items-center gap-1 text-[#0D7490] font-semibold hover:text-[#0A5F7A] transition-colors text-sm">
-              View full comparison <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section id="faq" className="py-20 lg:py-28 bg-card" ref={setSectionRef(8)}>
-        <div className={`max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(8) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Common questions</h2>
-            <p className="text-lg text-muted-foreground">Honest answers about what StocksIntels does and does not do.</p>
-          </div>
-
-          <div className="space-y-3">
-            {faqs.map((faq, i) => (
-                <div key={i} className="bg-card rounded-xl border border-border overflow-hidden hover:border-[#0D7490]/30 transition-all duration-300"
-                style={{ animation: `fade-in-up 0.4s ease-out ${i * 0.08}s forwards`, opacity: 0 }}>
-                <button
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full flex items-center justify-between gap-4 p-5 text-left cursor-pointer"
-                >
-                  <span className="font-semibold text-foreground text-sm">{faq.q}</span>
-                  <div className={`w-6 h-6 rounded-full bg-accent dark:bg-muted flex items-center justify-center flex-shrink-0 transition-all duration-300 ${openFaq === i ? "bg-[#0D7490] rotate-90" : ""}`}>
-                    <ChevronRight className={`w-3.5 h-3.5 transition-colors duration-300 ${openFaq === i ? "text-white" : "text-muted-foreground"}`} />
-                  </div>
-                </button>
-                <div className={`overflow-hidden transition-all duration-300 ${openFaq === i ? "max-h-48" : "max-h-0"}`}>
-                  <p className="px-5 pb-5 text-muted-foreground text-sm leading-relaxed">{faq.a}</p>
-                </div>
+                }
+              />
+              <div className="divide-y divide-slate-200 border-y border-slate-200">
+                {(articles.length > 0 ? articles : [
+                  { title: "How StocksIntels scores a stock", summary: "The evidence, gates and risk controls behind every rating.", source: "StocksIntels research" },
+                  { title: "Coverage across NSE, NGX, JSE and US markets", summary: "One research workspace for African and global equities.", source: "StocksIntels research" },
+                  { title: "Risk-aware targets and stops", summary: "How structure, ATR, liquidity and event risk shape a trade plan.", source: "StocksIntels research" },
+                ]).map((article, index) => {
+                  const href = (article as MarketArticle).url
+                    || ((article as MarketArticle).slug ? `https://mystocks.africa/market-intel/${(article as MarketArticle).slug}` : "/app/news");
+                  const date = (article as MarketArticle).publishedAt;
+                  return (
+                    <a key={(article as MarketArticle).id || index} href={href} className="group flex gap-4 py-4 first:pt-0 last:pb-0">
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[10px] font-bold uppercase tracking-wide text-[#1a4480]">
+                          {(article as MarketArticle).source || "Market intelligence"}
+                        </span>
+                        <span className="mt-1 block font-serif text-lg font-bold leading-snug text-[#0b2d4d] group-hover:underline">
+                          {article.title}
+                        </span>
+                        {(article as MarketArticle).summary && (
+                          <span className="mt-1 block text-[12px] leading-5 text-slate-600">{(article as MarketArticle).summary}</span>
+                        )}
+                      </span>
+                      {date && (
+                        <span className="hidden shrink-0 pt-5 text-[11px] text-slate-500 sm:block">
+                          {new Date(date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                        </span>
+                      )}
+                    </a>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
+            </section>
 
-      {/* CONTACT */}
-      <section id="contact" className="py-20 lg:py-28 bg-muted" ref={setSectionRef(9)}>
-        <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-700 ${visibleSections.has(9) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
-            <div>
-              <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4 tracking-tight">Get in touch</h2>
-              <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-                Questions about the platform? Found a bug? Want to suggest a feature? Reach out — we reply within 24 hours.
-              </p>
-
-              <div className="space-y-4">
-                <div className="flex items-center gap-4 p-4 bg-card rounded-xl border border-border hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
-                  <div className="w-10 h-10 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
-                    <Phone className="w-5 h-5 text-[#0D7490]" />
+            <section aria-labelledby="events-heading">
+              <SectionHeading
+                eyebrow="Market calendar"
+                title="Trading sessions"
+                action={<Link to="/app/markets" className="text-[11px] font-bold uppercase tracking-wide text-[#1a4480] hover:underline">Markets</Link>}
+              />
+              <div className="divide-y divide-slate-200 border-y border-slate-200">
+                {EVENTS.map((event) => (
+                  <div key={event.market} className="flex gap-3 py-3 first:pt-0 last:pb-0">
+                    <span className="flex size-10 shrink-0 items-center justify-center border border-slate-300 bg-[#f7f9fb] font-mono text-[10px] font-bold text-[#1a4480]">
+                      {event.market}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[#0b2d4d]">{event.session}</p>
+                      <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-slate-600">
+                        <Clock3 className="size-3" aria-hidden="true" /> {event.time}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-slate-500">{event.detail}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Phone</p>
-                    <a href="tel:+254792754435" className="text-foreground font-semibold hover:text-[#0D7490]">+254 792 754 435</a>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 p-4 bg-card rounded-xl border border-border hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
-                  <div className="w-10 h-10 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
-                    <Mail className="w-5 h-5 text-[#0D7490]" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Email</p>
-                    <a href="mailto:support@stocksintels.com" className="text-foreground font-semibold hover:text-[#0D7490]">support@stocksintels.com</a>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 p-4 bg-card rounded-xl border border-border hover:border-[#0D7490]/30 hover:shadow-md transition-all duration-300">
-                  <div className="w-10 h-10 bg-[#0D7490]/10 rounded-lg flex items-center justify-center">
-                    <MapPin className="w-5 h-5 text-[#0D7490]" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Location</p>
-                    <p className="text-foreground font-semibold">Nairobi, Kenya</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-card rounded-xl p-6 lg:p-8 shadow-lg border border-border hover:shadow-xl transition-shadow duration-300">
-              <h3 className="text-xl font-bold text-foreground mb-2">Send us a message</h3>
-              <p className="text-muted-foreground text-sm mb-6">We will get back to you within 24 hours.</p>
-              {contactStatus && (
-                <div className={`mb-4 p-3 rounded-xl text-sm font-medium ${contactStatus.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                  {contactStatus.message}
-                </div>
-              )}
-              <form className="space-y-4" onSubmit={async (e) => {
-                e.preventDefault();
-                if (!contactForm.name || !contactForm.email || !contactForm.subject || !contactForm.message) {
-                  setContactStatus({ type: 'error', message: 'Please fill in all fields.' });
-                  return;
-                }
-                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactForm.email)) {
-                  setContactStatus({ type: 'error', message: 'Please provide a valid email address.' });
-                  return;
-                }
-                setContactSending(true);
-                setContactStatus(null);
-                try {
-                  const res = await fetch('/api/contact', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(contactForm),
-                  });
-                  const data = await res.json();
-                  if (res.ok) {
-                    setContactStatus({ type: 'success', message: 'Message sent! We will get back to you soon.' });
-                    setContactForm({ name: '', email: '', subject: '', message: '' });
-                  } else {
-                    setContactStatus({ type: 'error', message: data.error || 'Something went wrong.' });
-                  }
-                } catch {
-                  setContactStatus({ type: 'error', message: 'Network error. Please try again.' });
-                }
-                setContactSending(false);
-              }}>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <input type="text" placeholder="Your name" value={contactForm.name} onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-white/20 dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.04] focus:bg-white/80 dark:focus:bg-white/[0.08] focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20 outline-none transition-all text-sm placeholder:text-muted-foreground/40" />
-                  <input type="email" placeholder="Your email" value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border border-white/20 dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.04] focus:bg-white/80 dark:focus:bg-white/[0.08] focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20 outline-none transition-all text-sm placeholder:text-muted-foreground/40" />
-                </div>
-                <input type="text" placeholder="Subject" value={contactForm.subject} onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-white/20 dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.04] focus:bg-white/80 dark:focus:bg-white/[0.08] focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20 outline-none transition-all text-sm placeholder:text-muted-foreground/40" />
-                <textarea rows={4} placeholder="Tell us more..." value={contactForm.message} onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-white/20 dark:border-white/[0.06] bg-white/50 dark:bg-white/[0.04] focus:bg-white/80 dark:focus:bg-white/[0.08] focus:border-[#0D7490] focus:ring-1 focus:ring-[#0D7490]/20 outline-none transition-all text-sm placeholder:text-muted-foreground/40 resize-none" />
-                <Button type="submit" disabled={contactSending}
-                  className="w-full py-3 bg-[#0D7490] hover:bg-[#0A5F7A] text-white font-semibold shadow-lg transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
-                  {contactSending ? 'Sending...' : 'Send Message'}
-                  <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </form>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA BANNER */}
-      <section className="py-16 lg:py-20 bg-gradient-to-r from-[#0D7490] to-[#0A5F7A] relative overflow-hidden">
-        <div className="absolute inset-0 opacity-5" style={{
-          backgroundImage: `radial-gradient(circle at 20px 20px, white 1px, transparent 1px)`,
-          backgroundSize: "40px 40px",
-        }} />
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4 tracking-tight">Start your trial today</h2>
-          <p className="text-lg text-white/80 mb-8 max-w-2xl mx-auto leading-relaxed">
-            Try any plan free for 7 days. Cancel anytime. Join other African traders using AI-powered market intelligence for African and global stocks.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/login" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full sm:w-auto bg-white text-[#0D7490] hover:bg-gray-100 dark:hover:bg-white/10 px-10 py-6 text-base font-bold shadow-2xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-3xl cursor-pointer">
-                Start Trial
-                <ArrowRight className="ml-2 w-5 h-5" />
-              </Button>
-            </Link>
-            <a href="#contact" className="w-full sm:w-auto">
-              <Button variant="outline" size="lg" className="w-full sm:w-auto border-white/50 text-white bg-transparent hover:bg-white/10 px-10 py-6 text-base font-medium cursor-pointer">
-                Contact Us
-              </Button>
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* FOOTER */}
-      <footer className="bg-gray-950 dark:bg-[#0a0a0b] text-white pt-14 pb-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 lg:gap-12 mb-10">
-            <div className="col-span-2 md:col-span-1">
-              <Link to="/" className="flex items-center gap-2 mb-3 group">
-                <div className="size-8 overflow-hidden">
-                  <img src="/logo1.jpg" alt="StocksIntels" className="size-full object-cover" />
-                </div>
-                <span className="text-base font-bold">StocksIntels</span>
-              </Link>
-              <p className="text-gray-500 text-xs leading-relaxed mb-4">AI-powered market intelligence for African and global equities.</p>
-              <div className="flex items-center gap-2">
-                {[{ icon: Twitter, href: "#" }, { icon: Linkedin, href: "#" }, { icon: Github, href: "#" }].map(({ icon: Icon }) => (
-                  <a key={Icon.name} href="#" className="w-8 h-8 bg-gray-800 hover:bg-[#0D7490] rounded-lg flex items-center justify-center transition-all duration-300 hover:scale-110">
-                    <Icon className="w-4 h-4 text-gray-400" />
-                  </a>
                 ))}
               </div>
-            </div>
+            </section>
+          </div>
 
+          {/* Featured intelligence */}
+          <section className="border-b border-slate-300 py-10" aria-labelledby="featured-heading">
+            <SectionHeading eyebrow="Featured research" title="The read" />
+            <div className="grid gap-0 border border-slate-300 bg-[#f7f9fb] lg:grid-cols-[1fr_280px]">
+              <div className="p-5 sm:p-7">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#1a4480]">Daily market intelligence</p>
+                <p className="mt-3 font-serif text-xl font-bold leading-snug text-[#0b2d4d] sm:text-2xl">
+                  {brief?.aiSignal || "Bullish or bearish, the evidence comes first. Read the market brief for the drivers, breadth and risk context behind today’s tape."}
+                </p>
+                {(brief?.aiSignalContext || brief?.globalToNseConnection) && (
+                  <p className="mt-3 text-[13px] leading-6 text-slate-700">
+                    {brief.aiSignalContext || brief.globalToNseConnection}
+                  </p>
+                )}
+                <Link to="/app/signals" className="mt-5 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-[#1a4480] hover:underline">
+                  Read market intelligence <ArrowRight className="size-3.5" />
+                </Link>
+              </div>
+              <div className="border-t border-slate-300 p-5 lg:border-l lg:border-t-0">
+                <Database className="size-6 text-[#1a4480]" aria-hidden="true" />
+                <p className="mt-3 text-xs font-bold text-[#0b2d4d]">Evidence over narrative</p>
+                <p className="mt-1 text-[11px] leading-5 text-slate-600">
+                  Prices, filings, fundamentals, ownership and macro data are scored together; missing data is shown as missing, never invented.
+                </p>
+                <Link to="/app/signals/engine" className="mt-4 inline-flex items-center gap-1 text-[11px] font-semibold text-[#1a4480] hover:underline">
+                  Signal methodology <ChevronRight className="size-3.5" />
+                </Link>
+              </div>
+            </div>
+          </section>
+
+          {/* How it works */}
+          <section className="border-b border-slate-300 py-10" aria-labelledby="method-heading">
+            <SectionHeading eyebrow="Methodology" title="How we build a market view" />
+            <div className="grid gap-0 border border-slate-300 sm:grid-cols-3">
+              {[
+                { n: "01", title: "Collect", body: "Exchange prices, SEC and local filings, fundamentals, insider transactions, news and macro data." },
+                { n: "02", title: "Evaluate", body: "Fundamental, financial, technical, macro, news and ML evidence is scored with explicit quality and data gates." },
+                { n: "03", title: "Plan", body: "Stops, targets and position sizes follow the risk framework: structure, ATR, liquidity, event risk and exposure." },
+              ].map((item, index) => (
+                <div key={item.n} className={`p-5 ${index > 0 ? "border-t border-slate-300 sm:border-l sm:border-t-0" : ""}`}>
+                  <p className="font-mono text-xs font-bold text-[#1a4480]">{item.n}</p>
+                  <h3 className="mt-2 font-serif text-lg font-bold text-[#0b2d4d]">{item.title}</h3>
+                  <p className="mt-2 text-[12px] leading-6 text-slate-600">{item.body}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Coverage */}
+          <section id="coverage" className="border-b border-slate-300 py-10" aria-labelledby="coverage-heading">
+            <SectionHeading eyebrow="Coverage" title="Markets we cover" />
+            <div className="overflow-hidden border border-slate-300">
+              <table className="w-full border-collapse text-left text-sm">
+                <thead className="bg-[#0b2d4d] text-white">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 text-[11px] font-bold uppercase tracking-wide">Exchange</th>
+                    <th scope="col" className="px-4 py-3 text-[11px] font-bold uppercase tracking-wide">Market</th>
+                    <th scope="col" className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-wide">Tracked</th>
+                    <th scope="col" className="hidden px-4 py-3 text-[11px] font-bold uppercase tracking-wide sm:table-cell">Coverage</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {COVERAGE.map((row) => (
+                    <tr key={row.market} className="hover:bg-[#f7f9fb]">
+                      <td className="px-4 py-3 font-mono text-xs font-bold text-[#1a4480]">{row.market}</td>
+                      <td className="px-4 py-3 text-[13px] font-semibold text-slate-800">{row.name}</td>
+                      <td className="px-4 py-3 text-right font-mono text-[13px] font-bold text-slate-900">{row.count}</td>
+                      <td className="hidden px-4 py-3 text-[11px] text-slate-500 sm:table-cell">{row.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-[10px] text-slate-500">
+              Counts reflect the current tracked universe and vary by plan and data availability. US coverage includes SEC-reporting companies.
+            </p>
+          </section>
+
+          {/* Pricing */}
+          <section id="plans" className="border-b border-slate-300 py-10" aria-labelledby="plans-heading">
+            <SectionHeading
+              eyebrow="Plans"
+              title="Research access"
+              action={
+                <div className="inline-flex border border-slate-400 text-[11px] font-semibold">
+                  <button type="button" onClick={() => setBilling("monthly")} className={`px-3 py-1.5 ${billing === "monthly" ? "bg-[#1a4480] text-white" : "bg-white text-slate-700"}`}>
+                    Monthly
+                  </button>
+                  <button type="button" onClick={() => setBilling("yearly")} className={`border-l border-slate-400 px-3 py-1.5 ${billing === "yearly" ? "bg-[#1a4480] text-white" : "bg-white text-slate-700"}`}>
+                    Yearly
+                  </button>
+                </div>
+              }
+            />
+            {billing === "yearly" && <p className="mb-3 text-[11px] font-semibold text-[#1a4480]">{YEARLY_SAVINGS_LABEL}</p>}
+            <div className="grid gap-4 lg:grid-cols-3">
+              {PLANS.map((plan) => (
+                <div key={plan.id} className={`flex flex-col border bg-white p-5 ${plan.popular ? "border-[#1a4480] ring-1 ring-[#1a4480]" : "border-slate-300"}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-serif text-xl font-bold text-[#0b2d4d]">{plan.name}</h3>
+                    {plan.popular && <span className="bg-[#1a4480] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Most popular</span>}
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-500">{plan.tagline}</p>
+                  <p className="mt-4 font-serif text-3xl font-bold text-[#0b2d4d]">
+                    ${billing === "yearly" ? plan.yearlyPrice : plan.monthlyPrice}
+                    <span className="ml-1 font-sans text-[11px] font-normal text-slate-500">/{billing === "yearly" ? "year" : "month"}</span>
+                  </p>
+                  <ul className="mt-4 flex-1 space-y-2 border-t border-slate-200 pt-4">
+                    {plan.highlights.map((item) => (
+                      <li key={item} className="flex gap-2 text-[11px] leading-5 text-slate-700">
+                        <Check className="mt-0.5 size-3.5 shrink-0 text-[#1a4480]" aria-hidden="true" /> {item}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link to="/login" className={`mt-5 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold ${plan.popular ? "bg-[#1a4480] text-white hover:bg-[#0b2d4d]" : "border border-[#1a4480] text-[#1a4480] hover:bg-[#f2f6fa]"}`}>
+                    Start free trial <ArrowRight className="size-3.5" />
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* FAQ */}
+          <section className="border-b border-slate-300 py-10" aria-labelledby="faq-heading">
+            <SectionHeading eyebrow="Questions" title="Frequently asked" />
+            <div className="divide-y divide-slate-200 border-y border-slate-200">
+              {FAQS.map((item) => (
+                <details key={item.q} className="group py-4">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[13px] font-semibold text-[#0b2d4d]">
+                    {item.q}
+                    <ChevronRight className="size-4 shrink-0 transition-transform group-open:rotate-90" aria-hidden="true" />
+                  </summary>
+                  <p className="mt-2 max-w-3xl text-[12px] leading-6 text-slate-600">{item.a}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+
+          {/* Contact */}
+          <section className="grid gap-8 border-b border-slate-300 py-10 lg:grid-cols-[0.9fr_1.1fr]" aria-labelledby="contact-heading">
             <div>
-              <h4 className="font-semibold text-xs uppercase tracking-wider text-gray-400 mb-4">Product</h4>
-              <ul className="space-y-3">
-                <li><Link to="/pricing" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Pricing</Link></li>
-                <li><a href="#features" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Features</a></li>
-                <li><Link to="/blog" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Blog</Link></li>
-                <li><a href="#testimonials" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Testimonials</a></li>
-                <li><a href="#faq" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">FAQ</a></li>
+              <SectionHeading eyebrow="Contact" title="Talk to the team" />
+              <p className="max-w-md text-[13px] leading-6 text-slate-700">
+                Questions about coverage, plans or the signal engine? Send a message and we will respond directly.
+              </p>
+              <div className="mt-5 space-y-3 text-[12px] text-slate-700">
+                <p className="inline-flex items-center gap-2"><Mail className="size-4 text-[#1a4480]" aria-hidden="true" /> support@stocksintels.com</p>
+                <p className="inline-flex items-center gap-2"><Globe2 className="size-4 text-[#1a4480]" aria-hidden="true" /> Nairobi · Lagos · Johannesburg · Global</p>
+              </div>
+            </div>
+            <form onSubmit={submitContact} className="border border-slate-300 bg-[#f7f9fb] p-4 sm:p-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-[11px] font-semibold text-slate-700">
+                  Name
+                  <input required value={contact.name} onChange={(e) => setContact((v) => ({ ...v, name: e.target.value }))} className="mt-1 block w-full border border-slate-400 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1a4480]" />
+                </label>
+                <label className="block text-[11px] font-semibold text-slate-700">
+                  Email
+                  <input required type="email" value={contact.email} onChange={(e) => setContact((v) => ({ ...v, email: e.target.value }))} className="mt-1 block w-full border border-slate-400 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1a4480]" />
+                </label>
+              </div>
+              <label className="mt-3 block text-[11px] font-semibold text-slate-700">
+                Subject
+                <input value={contact.subject} onChange={(e) => setContact((v) => ({ ...v, subject: e.target.value }))} className="mt-1 block w-full border border-slate-400 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1a4480]" />
+              </label>
+              <label className="mt-3 block text-[11px] font-semibold text-slate-700">
+                Message
+                <textarea required rows={4} value={contact.message} onChange={(e) => setContact((v) => ({ ...v, message: e.target.value }))} className="mt-1 block w-full resize-y border border-slate-400 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1a4480]" />
+              </label>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button type="submit" disabled={contactStatus === "sending"} className="inline-flex items-center gap-1.5 bg-[#1a4480] px-4 py-2 text-xs font-bold text-white hover:bg-[#0b2d4d] disabled:opacity-60">
+                  {contactStatus === "sending" ? "Sending…" : "Send message"} <ArrowRight className="size-3.5" />
+                </button>
+                {contactStatus === "sent" && <p className="text-[11px] font-semibold text-emerald-700">Message sent. We will respond shortly.</p>}
+                {contactStatus === "error" && <p className="text-[11px] font-semibold text-rose-700">Could not send. Please email support@stocksintels.com.</p>}
+              </div>
+            </form>
+          </section>
+        </div>
+      </main>
+
+      <footer className="bg-[#0b2d4d] text-white">
+        <div className="mx-auto max-w-[1180px] px-4 py-10">
+          <div className="grid gap-8 border-b border-white/20 pb-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <p className="font-serif text-lg font-bold tracking-[0.08em]">STOCKSINTELS</p>
+              <p className="mt-2 max-w-xs text-[11px] leading-5 text-white/70">
+                Independent market intelligence for African and global equities.
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Platform</p>
+              <ul className="mt-3 space-y-2 text-[11px] text-white/85">
+                <li><Link to="/app/markets" className="hover:underline">Markets</Link></li>
+                <li><Link to="/app/signals" className="hover:underline">Market intelligence</Link></li>
+                <li><Link to="/app/financials" className="hover:underline">Financial statements</Link></li>
+                <li><Link to="/app/insider" className="hover:underline">Insider activity</Link></li>
               </ul>
             </div>
-
             <div>
-              <h4 className="font-semibold text-xs uppercase tracking-wider text-gray-400 mb-4">Markets</h4>
-              <ul className="space-y-3">
-                <li><Link to="/app/markets" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">African Markets</Link></li>
-                <li><Link to="/app/stocks" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Stock Exchanges</Link></li>
-                <li><Link to="/app/bonds" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">African Bonds</Link></li>
-                <li><Link to="/app/ipos" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Upcoming IPOs</Link></li>
-                <li><Link to="/app/markets" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Market Pulse</Link></li>
-                <li><Link to="/app/markets?exchange=NSE" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Nairobi (NSE)</Link></li>
-                <li><Link to="/app/markets?exchange=JSE" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Johannesburg (JSE)</Link></li>
-                <li><Link to="/app/markets?exchange=NGX" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Nigeria (NGX)</Link></li>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Coverage</p>
+              <ul className="mt-3 space-y-2 text-[11px] text-white/85">
+                <li><Link to="/app/markets?exchange=NSE" className="hover:underline">Nairobi (NSE)</Link></li>
+                <li><Link to="/app/markets?exchange=NGX" className="hover:underline">Nigeria (NGX)</Link></li>
+                <li><Link to="/app/markets?exchange=JSE" className="hover:underline">Johannesburg (JSE)</Link></li>
+                <li><Link to="/app/markets?exchange=Global" className="hover:underline">US markets</Link></li>
               </ul>
             </div>
-
             <div>
-              <h4 className="font-semibold text-xs uppercase tracking-wider text-gray-400 mb-4">Company</h4>
-              <ul className="space-y-3">
-                <li><Link to="/about" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">About</Link></li>
-                <li><Link to="/blog" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Blog</Link></li>
-                <li><a href="#contact" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Contact</a></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-xs uppercase tracking-wider text-gray-400 mb-4">Legal</h4>
-              <ul className="space-y-3">
-                <li><Link to="/privacy" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Privacy Policy</Link></li>
-                <li><Link to="/terms" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Terms of Service</Link></li>
-                <li><Link to="/disclaimer" className="text-sm text-gray-500 hover:text-white transition-colors duration-300">Disclaimer</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-xs uppercase tracking-wider text-gray-400 mb-4">Contact</h4>
-              <ul className="space-y-3">
-                <li>
-                  <a href="tel:+254792754435" className="text-sm text-gray-500 hover:text-white transition-colors duration-300 flex items-center gap-2">
-                    <Phone className="w-3 h-3" /> +254 792 754 435
-                  </a>
-                </li>
-                <li>
-                  <a href="mailto:support@stocksintels.com" className="text-sm text-gray-500 hover:text-white transition-colors duration-300 flex items-center gap-2">
-                    <Mail className="w-3 h-3" /> support@stocksintels.com
-                  </a>
-                </li>
-                <li>
-                  <span className="text-sm text-gray-500 flex items-center gap-2">
-                    <MapPin className="w-3 h-3" /> Nairobi, Kenya
-                  </span>
-                </li>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Company</p>
+              <ul className="mt-3 space-y-2 text-[11px] text-white/85">
+                <li><Link to="/about" className="hover:underline">About</Link></li>
+                <li><a href="#plans" className="hover:underline">Plans</a></li>
+                <li><a href="mailto:support@stocksintels.com" className="hover:underline">Contact</a></li>
+                <li><Link to="/login" className="hover:underline">Sign in</Link></li>
               </ul>
             </div>
           </div>
-
-          <div className="border-t border-gray-800 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p className="text-gray-600 text-xs">2026 StocksIntels. Built for African & global traders.</p>
-            <button onClick={scrollToTop} className="w-7 h-7 bg-gray-800 hover:bg-[#0D7490] rounded-lg flex items-center justify-center transition-all duration-300 cursor-pointer">
-              <ChevronUp className="w-3 h-3 text-gray-400" />
-            </button>
+          <div className="flex flex-wrap items-start justify-between gap-4 pt-6 text-[10px] leading-5 text-white/60">
+            <p className="max-w-2xl">
+              StocksIntels is an independent financial data and research platform. We are not affiliated with, endorsed by, or operated by the U.S. Securities and Exchange Commission or any government agency. Nothing on this page is investment advice.
+            </p>
+            <p>© {new Date().getFullYear()} StocksIntels</p>
           </div>
         </div>
       </footer>
-
-      {/* DISCLAIMER */}
-      <div className="bg-gray-950 dark:bg-[#0a0a0b] border-t border-gray-800/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
-          <p className="text-[11px] text-gray-600 leading-relaxed">
-            <strong className="text-gray-500">Risk Disclaimer:</strong> Trading stocks and other financial instruments involves substantial risk of loss. AI recommendations are for informational and educational purposes only and do not constitute financial advice. Past performance does not guarantee future results. StocksIntels is not a licensed broker or financial advisor. By using this platform, you acknowledge and accept these risks.{' '}
-            <Link to="/disclaimer" className="text-gray-500 hover:text-gray-400 underline">Read full disclaimer</Link>
-          </p>
-        </div>
-      </div>
     </div>
   );
 }

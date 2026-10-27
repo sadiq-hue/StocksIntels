@@ -195,6 +195,12 @@ const MarketPage: React.FC = () => {
     const ex = (searchParams.get('exchange') || '').toUpperCase();
     if (ex === 'NGX') setAfricaTab('ngx');
     else if (ex === 'JSE') setAfricaTab('jse');
+    const q = searchParams.get('search');
+    if (q) {
+      setNseSearch(q);
+      setGlobalSearch(q);
+      setAfricaSearch(q);
+    }
   }, [searchParams]);
 
   // Load sentiment preference from backend on mount (if logged in)
