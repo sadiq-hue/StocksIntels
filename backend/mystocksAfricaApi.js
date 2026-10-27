@@ -10,6 +10,10 @@ const API_BASE = (process.env.MYSTOCKS_AFRICA_BASE_URL || 'https://mystocks.afri
 const API_KEY = process.env.MYSTOCKS_AFRICA_API_KEY;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT = 8000;
+// Listing pages (especially JSE) are materially slower than quotes/history and
+// have been observed taking ~33s for a 200-row page. Keep the quote timeout tight
+// but allow the listing endpoint enough time to return real breadth.
+const LIST_FETCH_TIMEOUT = 40000;
 
 // exchange code -> symbol suffix + settlement currency + our internal market tag.
 const EXCHANGES = {
@@ -19,6 +23,13 @@ const EXCHANGES = {
 };
 
 const cache = new Map(); // `${exchange}:${ticker}` -> { value, time }
+// Exchange listings are heavy and the partner endpoint is flaky on large pages
+// (JSE 200 has been observed timing out intermittently). Cache successful pages,
+// coalesce concurrent callers, and retry once so the daily brief and Markets page
+// do not silently drop an exchange when one upstream request fails.
+const listCache = new Map(); // `${exchange}|${limit}|${search}|${cursor}` -> { value, time }
+const listInflight = new Map();
+const LIST_CACHE_TTL_MS = 5 * 60 * 1000;
 
 // Detect the exchange from a symbol ("NGX:MTN", "MTN.ZA", "SCOM.KE") or an
 // explicit exchange argument, defaulting to NSE to preserve legacy callers.
@@ -204,35 +215,66 @@ async function getExchanges() {
 }
 
 // List stocks on an exchange. Returns { data, hasMore, nextCursor }.
+async function fetchListPage(exchange, limit, search, cursor) {
+  let lastError = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const resp = await axios.get(`${API_BASE}/stocks`, {
+        timeout: LIST_FETCH_TIMEOUT,
+        headers: { Authorization: `Bearer ${API_KEY}`, Accept: 'application/json' },
+        params: { exchange, limit, ...(search ? { search } : {}), ...(cursor ? { cursor } : {}) },
+      });
+      const d = resp.data || {};
+      const rows = Array.isArray(d.stocks) ? d.stocks : (Array.isArray(d.data) ? d.data : (Array.isArray(d) ? d : []));
+      return {
+        data: rows.map(r => ({
+          symbol: r.symbol || null,
+          ticker: bareTicker(r.symbol),
+          name: r.name || r.symbol || '',
+          exchange: r.exchange || exchange,
+          currency: r.currency || (EXCHANGES[exchange] || EXCHANGES.NSE).currency,
+          sector: r.sector || null,
+          price: Number(r.price) || 0,
+          changePct: (Number(r.changePct) || 0) * 100,
+          volume: Number(r.volume) || 0,
+        })),
+        hasMore: !!d.hasMore,
+        nextCursor: d.nextCursor || null,
+      };
+    } catch (e) {
+      lastError = e;
+      if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 350 * (attempt + 1)));
+    }
+  }
+  throw lastError || new Error('listStocks failed');
+}
+
 async function listStocks(exchange, { limit = 200, search = '', cursor = '' } = {}) {
   if (!API_KEY) return { data: [], hasMore: false, nextCursor: null };
-  try {
-    const resp = await axios.get(`${API_BASE}/stocks`, {
-      timeout: FETCH_TIMEOUT * 2,
-      headers: { Authorization: `Bearer ${API_KEY}`, Accept: 'application/json' },
-      params: { exchange, limit, ...(search ? { search } : {}), ...(cursor ? { cursor } : {}) },
-    });
-    const d = resp.data || {};
-    const rows = Array.isArray(d.stocks) ? d.stocks : (Array.isArray(d.data) ? d.data : (Array.isArray(d) ? d : []));
-    return {
-      data: rows.map(r => ({
-        symbol: r.symbol || null,
-        ticker: bareTicker(r.symbol),
-        name: r.name || r.symbol || '',
-        exchange: r.exchange || exchange,
-        currency: r.currency || (EXCHANGES[exchange] || EXCHANGES.NSE).currency,
-        sector: r.sector || null,
-        price: Number(r.price) || 0,
-        changePct: (Number(r.changePct) || 0) * 100,
-        volume: Number(r.volume) || 0,
-      })),
-      hasMore: !!d.hasMore,
-      nextCursor: d.nextCursor || null,
-    };
-  } catch (e) {
-    console.warn(`[myStocksAfrica] listStocks ${exchange} failed: ${e.message}`);
-    return { data: [], hasMore: false, nextCursor: null };
+  const key = `${exchange}|${limit}|${search}|${cursor}`;
+  const cached = listCache.get(key);
+  if (cached && Date.now() - cached.time < LIST_CACHE_TTL_MS) return cached.value;
+  // Serve stale immediately and refresh in the background; this keeps the
+  // Markets page and daily brief responsive while the partner recovers.
+  if (cached) {
+    fetchListPage(exchange, limit, search, cursor)
+      .then(value => { if (value.data.length > 0) listCache.set(key, { value, time: Date.now() }); })
+      .catch(() => {});
+    return cached.value;
   }
+  if (listInflight.has(key)) return listInflight.get(key);
+  const pending = fetchListPage(exchange, limit, search, cursor)
+    .then(value => {
+      if (value.data.length > 0) listCache.set(key, { value, time: Date.now() });
+      return value;
+    })
+    .catch(e => {
+      console.warn(`[myStocksAfrica] listStocks ${exchange} failed: ${e.message}`);
+      return { data: [], hasMore: false, nextCursor: null };
+    })
+    .finally(() => listInflight.delete(key));
+  listInflight.set(key, pending);
+  return pending;
 }
 
 // Top movers for an exchange. `direction` is 'gainers' (default) or 'losers'
@@ -304,6 +346,18 @@ async function fetchMarketIntel(exchange, limit = 10) {
     console.warn(`[myStocksAfrica] market-intel failed: ${e.message}`);
     return null;
   }
+}
+
+// Warm the three listings in the background. JSE is slow enough (~30s) that
+// waiting until the first Markets/brief request would show an empty JSE card;
+// listStocks' cache/in-flight map means the later request shares this fetch.
+if (API_KEY) {
+  const warm = setTimeout(() => {
+    for (const ex of ['NSE', 'NGX', 'JSE']) {
+      listStocks(ex, { limit: 200 }).catch(() => {});
+    }
+  }, 3000);
+  if (warm && typeof warm.unref === 'function') warm.unref();
 }
 
 module.exports = {

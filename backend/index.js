@@ -15254,6 +15254,17 @@ server.listen(port, '0.0.0.0', async () => {
     // Warm the turnover cache in the background so the Market page's first
     // request does not pay the full Yahoo/NSE fetch cost.
     computeTurnoverInBackground().catch(() => {});
+    // Warm the daily brief too. JSE's listing page can take ~30s; doing this at
+    // startup means the dashboard opens onto the cached brief instead of waiting
+    // for the first on-demand generation.
+    setTimeout(() => {
+      if (!dailyBriefCache.data && !dailyBriefCache.inFlight) {
+        dailyBriefCache.inFlight = generateDailyBriefContent()
+          .then((out) => { dailyBriefCache.data = out; dailyBriefCache.at = Date.now(); return out; })
+          .catch(() => null)
+          .finally(() => { dailyBriefCache.inFlight = null; });
+      }
+    }, 10000).unref?.();
     await queueService.connect();
     queueService.onSignalUpdate((signal) => {
         if (signal.batch) {

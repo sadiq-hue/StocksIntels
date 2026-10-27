@@ -405,7 +405,11 @@ async function computeAfricaMarketSummary(exchange) {
   let advancers = 0, decliners = 0, unchanged = 0, total = 0, cursor = '';
   let topGainer = null, topLoser = null;
   try {
-    for (let page = 0; page < 4; page++) {
+    // JSE's 200-row page is already ~200 names and takes tens of seconds; do not
+    // serialize four of them inside a daily brief. NSE/NGX are fast enough for
+    // the full cursor walk.
+    const maxPages = exchange === 'JSE' ? 1 : 4;
+    for (let page = 0; page < maxPages; page++) {
       const { data, hasMore, nextCursor } = await listStocks(exchange, { limit: 200, cursor });
       for (const s of data) {
         if (!s || !(s.price > 0)) continue;
