@@ -30,6 +30,11 @@ const cache = new Map(); // `${exchange}:${ticker}` -> { value, time }
 const listCache = new Map(); // `${exchange}|${limit}|${search}|${cursor}` -> { value, time }
 const listInflight = new Map();
 const LIST_CACHE_TTL_MS = 5 * 60 * 1000;
+// Complete-universe cache: walk the cursor to the end once, then serve the full
+// exchange. JSE has more than one 200-row page, so a single page is not a
+// complete universe.
+const fullListCache = new Map(); // `${exchange}|${limit}|${search}` -> { value, time }
+const fullListInflight = new Map();
 
 // Detect the exchange from a symbol ("NGX:MTN", "MTN.ZA", "SCOM.KE") or an
 // explicit exchange argument, defaulting to NSE to preserve legacy callers.
@@ -277,6 +282,46 @@ async function listStocks(exchange, { limit = 200, search = '', cursor = '' } = 
   return pending;
 }
 
+// Complete exchange universe: follow the cursor to the end. Cached separately
+// from individual pages so the daily brief, Markets page and Financials page all
+// see the same complete listing. Stale-while-revalidate prevents a slow upstream
+// refresh from blocking a page.
+async function listAllStocks(exchange, { limit = 200, search = '', maxPages = 25 } = {}) {
+  if (!API_KEY) return { data: [], hasMore: false, nextCursor: null, count: 0, complete: false };
+  const key = `${exchange}|${limit}|${search}`;
+  const cached = fullListCache.get(key);
+  if (cached && Date.now() - cached.time < LIST_CACHE_TTL_MS) return cached.value;
+  if (cached) {
+    fetchAllListPages(exchange, limit, search, maxPages)
+      .then(value => { if (value.data.length > 0) fullListCache.set(key, { value, time: Date.now() }); })
+      .catch(() => {});
+    return cached.value;
+  }
+  if (fullListInflight.has(key)) return fullListInflight.get(key);
+  const pending = fetchAllListPages(exchange, limit, search, maxPages)
+    .then(value => {
+      if (value.data.length > 0) fullListCache.set(key, { value, time: Date.now() });
+      return value;
+    })
+    .finally(() => fullListInflight.delete(key));
+  fullListInflight.set(key, pending);
+  return pending;
+}
+
+async function fetchAllListPages(exchange, limit, search, maxPages) {
+  const all = [];
+  let cursor = '';
+  let complete = false;
+  for (let page = 0; page < maxPages; page++) {
+    const chunk = await listStocks(exchange, { limit, search, cursor });
+    if (!Array.isArray(chunk.data) || chunk.data.length === 0) break;
+    all.push(...chunk.data);
+    if (!chunk.hasMore || !chunk.nextCursor) { complete = true; break; }
+    cursor = chunk.nextCursor;
+  }
+  return { data: all, hasMore: !complete, nextCursor: complete ? null : cursor, count: all.length, complete };
+}
+
 // Top movers for an exchange. `direction` is 'gainers' (default) or 'losers'
 // — the partner endpoint returns one side per call, padded with 0% rows.
 // The endpoint is rate-limited, so results are cached in-process per side.
@@ -348,13 +393,14 @@ async function fetchMarketIntel(exchange, limit = 10) {
   }
 }
 
-// Warm the three listings in the background. JSE is slow enough (~30s) that
-// waiting until the first Markets/brief request would show an empty JSE card;
-// listStocks' cache/in-flight map means the later request shares this fetch.
+// Warm the complete exchange universes in the background. JSE is slow enough
+// (~30s per page) that waiting until the first Markets/brief request would show
+// an incomplete or empty JSE card; the cache/in-flight maps mean later requests
+// share this fetch.
 if (API_KEY) {
   const warm = setTimeout(() => {
     for (const ex of ['NSE', 'NGX', 'JSE']) {
-      listStocks(ex, { limit: 200 }).catch(() => {});
+      listAllStocks(ex, { limit: 200 }).catch(() => {});
     }
   }, 3000);
   if (warm && typeof warm.unref === 'function') warm.unref();
@@ -362,6 +408,6 @@ if (API_KEY) {
 
 module.exports = {
   getQuoteForSymbol, getBatchQuotes, toApiSymbol, fetchHistorical, fetchMarketIntel,
-  getExchanges, listStocks, listMovers,
+  getExchanges, listStocks, listAllStocks, listMovers,
   exchangeOf, bareTicker, EXCHANGES,
 };

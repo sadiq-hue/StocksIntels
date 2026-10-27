@@ -6647,7 +6647,7 @@ app.get('/api/africa/stocks', async (req, res) => {
   try {
     const exchange = String(req.query.exchange || 'NGX').toUpperCase();
     if (!AFRICA_EXCHANGES.includes(exchange)) return res.status(400).json({ error: 'Unsupported exchange' });
-    const { listStocks } = require('./mystocksAfricaApi');
+    const { listStocks, listAllStocks } = require('./mystocksAfricaApi');
     const limit = Math.min(parseInt(req.query.limit) || 200, 500);
     const search = req.query.search || '';
     const wantAll = req.query.all === '1' || req.query.all === 'true';
@@ -6655,17 +6655,9 @@ app.get('/api/africa/stocks', async (req, res) => {
       const data = await listStocks(exchange, { limit, search });
       return res.json({ success: true, exchange, ...data });
     }
-    // Follow the partner's cursor to the end (bounded) so callers can load the
-    // whole exchange universe, not just the first page.
-    const all = [];
-    let cursor = '';
-    for (let page = 0; page < 25; page++) {
-      const chunk = await listStocks(exchange, { limit: Math.min(limit, 200), search, cursor });
-      all.push(...chunk.data);
-      if (!chunk.hasMore || !chunk.nextCursor || chunk.data.length === 0) break;
-      cursor = chunk.nextCursor;
-    }
-    res.json({ success: true, exchange, data: all, hasMore: false, nextCursor: null, count: all.length });
+    // Cached complete universe, shared with the daily brief and Financials page.
+    const data = await listAllStocks(exchange, { limit: Math.min(limit, 200), search });
+    res.json({ success: true, exchange, ...data });
   } catch (e) {
     console.error('[africa] stocks error:', e.message);
     res.json({ success: false, data: [], hasMore: false, nextCursor: null });

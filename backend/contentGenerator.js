@@ -401,28 +401,20 @@ function deriveMovers(signals) {
 // fetch per exchange; returns breadth counts and the session's biggest
 // gainer/loser so the brief can carry African markets, not just NSE/US.
 async function computeAfricaMarketSummary(exchange) {
-  const { listStocks } = require('./mystocksAfricaApi');
-  let advancers = 0, decliners = 0, unchanged = 0, total = 0, cursor = '';
+  const { listAllStocks } = require('./mystocksAfricaApi');
+  let advancers = 0, decliners = 0, unchanged = 0, total = 0;
   let topGainer = null, topLoser = null;
   try {
-    // JSE's 200-row page is already ~200 names and takes tens of seconds; do not
-    // serialize four of them inside a daily brief. NSE/NGX are fast enough for
-    // the full cursor walk.
-    const maxPages = exchange === 'JSE' ? 1 : 4;
-    for (let page = 0; page < maxPages; page++) {
-      const { data, hasMore, nextCursor } = await listStocks(exchange, { limit: 200, cursor });
-      for (const s of data) {
-        if (!s || !(s.price > 0)) continue;
-        total++;
-        const c = Number(s.changePct) || 0;
-        if (c > 0) advancers++; else if (c < 0) decliners++; else unchanged++;
-        if (c !== 0) {
-          if (!topGainer || c > topGainer.changePct) topGainer = { ticker: s.ticker, name: s.name, changePct: c, price: s.price };
-          if (!topLoser || c < topLoser.changePct) topLoser = { ticker: s.ticker, name: s.name, changePct: c, price: s.price };
-        }
+    const { data } = await listAllStocks(exchange, { limit: 200 });
+    for (const s of data) {
+      if (!s || !(s.price > 0)) continue;
+      total++;
+      const c = Number(s.changePct) || 0;
+      if (c > 0) advancers++; else if (c < 0) decliners++; else unchanged++;
+      if (c !== 0) {
+        if (!topGainer || c > topGainer.changePct) topGainer = { ticker: s.ticker, name: s.name, changePct: c, price: s.price };
+        if (!topLoser || c < topLoser.changePct) topLoser = { ticker: s.ticker, name: s.name, changePct: c, price: s.price };
       }
-      if (!hasMore || !nextCursor) break;
-      cursor = nextCursor;
     }
   } catch (e) {
     console.warn(`[daily-brief] ${exchange} market summary failed:`, e.message);

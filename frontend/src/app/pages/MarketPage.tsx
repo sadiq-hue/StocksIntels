@@ -490,7 +490,7 @@ const MarketPage: React.FC = () => {
     if (africaTab !== 'ngx' && africaTab !== 'jse') return;
     let dead = false;
     setAfricaLoading(true);
-    fetch(`${API_BASE_URL}/africa/stocks?exchange=${africaTab.toUpperCase()}&limit=200`)
+    fetch(`${API_BASE_URL}/africa/stocks?exchange=${africaTab.toUpperCase()}&limit=200&all=1`)
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
         if (dead) return;
