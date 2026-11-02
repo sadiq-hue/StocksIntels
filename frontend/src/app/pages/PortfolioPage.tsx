@@ -374,7 +374,7 @@ export function PortfolioPage() {
   const loadRecommendations = async () => {
     try {
       const userIdParam = user?.id ? `?userId=${user.id}` : '';
-      const res = await apiFetch(`/signals${userIdParam}`);
+      const res = await apiFetch(`/signals${userIdParam}${userIdParam ? '&' : '?'}compact=1`);
       const data = await res.json();
       if (data?.signals && Array.isArray(data.signals)) {
         const mapped = data.signals

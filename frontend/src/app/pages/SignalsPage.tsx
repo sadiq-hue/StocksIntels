@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
@@ -51,7 +51,7 @@ const TYPE_STYLES: Record<string, string> = {
   Avoid: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
-// â”€â”€ Signal condition definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Signal condition definitions ─────────────────────────────────────────────
 interface ConditionDef {
   key: string; name: string; category: string;
 }
@@ -122,17 +122,17 @@ function fmtPrice(
   s: { currency?: string; market?: string; country?: string },
   v: number | null | undefined
 ): string {
-  if (v == null || Number.isNaN(v)) return "â€”";
+  if (v == null || Number.isNaN(v)) return "—";
   return curSym(s) + formatCurrency(v);
 }
 
 function fmtNum(v: number | null | undefined): string {
-  if (v == null || Number.isNaN(v)) return "â€”";
+  if (v == null || Number.isNaN(v)) return "—";
   return formatCurrency(v);
 }
 
 function changeDisplay(s: { price: number | null | undefined; change: number }): string {
-  if (s.price == null || Number.isNaN(s.price)) return "â€”";
+  if (s.price == null || Number.isNaN(s.price)) return "—";
   return `${s.change >= 0 ? "+" : ""}${s.change.toFixed(2)}%`;
 }
 
@@ -141,22 +141,22 @@ function insiderPositive(ins: { netShares: number | null; buyCount: number; sell
   return ins.netShares != null ? ins.netShares >= 0 : ins.buyCount >= ins.sellCount;
 }
 
-// â”€â”€ Plain-language explanations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Plain-language explanations ──────────────────────────────────────────────
 const CONDITION_PLAIN: Record<string, string> = {
-  peSignal: "Price compared to the company's earnings, vs similar companies â€” is the stock cheap or expensive?",
-  evSignal: "What you pay for the whole business vs its earnings â€” a cheaper multiple is usually better.",
-  pbSignal: "Price vs the value of the company's assets â€” how much you pay per dollar of assets.",
+  peSignal: "Price compared to the company's earnings, vs similar companies — is the stock cheap or expensive?",
+  evSignal: "What you pay for the whole business vs its earnings — a cheaper multiple is usually better.",
+  pbSignal: "Price vs the value of the company's assets — how much you pay per dollar of assets.",
   divSignal: "Cash the company pays shareholders each year as a % of the share price.",
   revSignal: "How fast sales are growing compared to the same period last year.",
-  epsSignal: "Whether the latest profit report beat analyst expectations â€” surprises can move the stock.",
+  epsSignal: "Whether the latest profit report beat analyst expectations — surprises can move the stock.",
   mgnSignal: "Whether the company's profit margins are widening or shrinking over time.",
-  fcfSignal: "Cash left after expenses and reinvestment â€” the real money the business actually generates.",
-  deSignal: "How much debt the company carries vs shareholder money â€” lower is safer.",
+  fcfSignal: "Cash left after expenses and reinvestment — the real money the business actually generates.",
+  deSignal: "How much debt the company carries vs shareholder money — lower is safer.",
   crSignal: "Can it pay its short-term bills with short-term assets? Above 1.5 is generally healthy.",
-  roeSignal: "Profit earned per dollar of shareholder money â€” how efficiently it uses investors' capital.",
+  roeSignal: "Profit earned per dollar of shareholder money — how efficiently it uses investors' capital.",
   altSignal: "Bankruptcy-risk score. Above 3 = low risk; below 1.8 = danger zone.",
   insiderSignal: "Are the company's own directors and executives buying or selling its shares?",
-  newsSignal: "The overall tone of recent news coverage â€” positive, negative, or mixed.",
+  newsSignal: "The overall tone of recent news coverage — positive, negative, or mixed.",
 };
 
 
@@ -169,8 +169,8 @@ function macroAsOfLabel(meta?: { live: boolean; sources: string[]; asOf: Record<
       .map((v) => String(v).match(/\d{4}/)?.[0])
       .filter(Boolean)
   )].sort();
-  const span = years.length ? ` Â· ${years[0]}${years.length > 1 ? `â€“${years[years.length - 1]}` : ''}` : '';
-  return `Live Â· ${(meta.sources || []).join(', ') || 'World Bank'}${span}`;
+  const span = years.length ? ` · ${years[0]}${years.length > 1 ? `–${years[years.length - 1]}` : ''}` : '';
+  return `Live · ${(meta.sources || []).join(', ') || 'World Bank'}${span}`;
 }
 
 function isReferenceField(meta: { referenceFields?: string[] } | undefined, key: string): boolean {
@@ -212,19 +212,19 @@ function influentialNews<T extends { headline: string; catalystDirection?: strin
 
 function ratingPlain(signal: string): string {
   switch (signal) {
-    case 'BUY': return "Positive â€” helps this stock";
-    case 'STRONG BUY': return "Strongly positive â€” a clear tailwind";
-    case 'SELL': return "Negative â€” a headwind to watch";
-    case 'WATCH': return "Watch closely â€” could go either way";
-    case 'SUPPRESS': return "A red-flag override â€” this one metric alone blocks a buy";
-    default: return "Neutral â€” no strong impact";
+    case 'BUY': return "Positive — helps this stock";
+    case 'STRONG BUY': return "Strongly positive — a clear tailwind";
+    case 'SELL': return "Negative — a headwind to watch";
+    case 'WATCH': return "Watch closely — could go either way";
+    case 'SUPPRESS': return "A red-flag override — this one metric alone blocks a buy";
+    default: return "Neutral — no strong impact";
   }
 }
 
 function confidencePlain(conf: number): string {
   if (conf >= 80) return "high conviction";
   if (conf >= 60) return "moderate conviction";
-  if (conf >= 40) return "balanced â€” the model sees real pros and cons";
+  if (conf >= 40) return "balanced — the model sees real pros and cons";
   return "low conviction";
 }
 
@@ -237,9 +237,9 @@ function plainSummary(s: StockSignal): string {
     : s.signal;
   const conf = s.confidence;
   let tail: string;
-  if (conf >= 60) tail = "This is a relatively strong signal â€” but always check the levels below.";
-  else if (conf >= 40) tail = "Treat this as a starting point, not a certainty â€” the model is fairly balanced.";
-  else tail = "Be cautious â€” the model is not very confident about this one.";
+  if (conf >= 60) tail = "This is a relatively strong signal — but always check the levels below.";
+  else if (conf >= 40) tail = "Treat this as a starting point, not a certainty — the model is fairly balanced.";
+  else tail = "Be cautious — the model is not very confident about this one.";
   return `The model rates this ${verb} with ${conf}% confidence (${confidencePlain(conf)}). ${tail}`;
 }
 
@@ -261,8 +261,8 @@ function gradePlain(grade: string): string {
 
 function timeframePlain(timeframe: string | null | undefined): string {
   const t = (timeframe || '').toLowerCase();
-  if (t.includes('intraday') || t.includes('day')) return "an intraday trade â€” opened and closed within the same trading day";
-  if (t.includes('week')) return "a short-term trade, entered and exited within a few weeks â€” not a long-term investment";
+  if (t.includes('intraday') || t.includes('day')) return "an intraday trade — opened and closed within the same trading day";
+  if (t.includes('week')) return "a short-term trade, entered and exited within a few weeks — not a long-term investment";
   if (t.includes('month')) return "a medium-term position, meant to be held over months";
   return "a longer-term position, meant to be held for months or more";
 }
@@ -276,9 +276,9 @@ function overallVerdict(s: StockSignal): string {
     ? `the stock scores an overall ${overall.grade} (${score}) and ${rated}`
     : `the model ${rated}`;
   let tail: string;
-  if (conf >= 60) tail = `${conf}% confidence â€” a relatively strong signal.`;
-  else if (conf >= 40) tail = `${conf}% confidence â€” balanced, so treat it as a starting point, not a certainty.`;
-  else tail = `${conf}% confidence â€” a cautious call.`;
+  if (conf >= 60) tail = `${conf}% confidence — a relatively strong signal.`;
+  else if (conf >= 40) tail = `${conf}% confidence — balanced, so treat it as a starting point, not a certainty.`;
+  else tail = `${conf}% confidence — a cautious call.`;
   return `After weighing everything, ${lead} with ${tail}`;
 }
 
@@ -298,7 +298,7 @@ function horizonOf(s: StockSignal | any): "short" | "medium" | "long" {
 
 function displayTimeframe(s: StockSignal | any): string {
   if (horizonOf(s) === "long" && /long term/i.test(String(s?.type || ""))) return "1-3+ years";
-  return s?.timeframe || "—";
+  return s?.timeframe || "�";
 }
 
 function isBuyIdea(s: StockSignal | any): boolean {
@@ -319,6 +319,8 @@ export function SignalsPage() {
   const [page, setPage] = useState(1);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [selected, setSelected] = useState<StockSignal | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const fullSignalCache = useRef<Map<string, StockSignal>>(new Map());
   const perPage = 15;
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
@@ -327,10 +329,37 @@ export function SignalsPage() {
     try {
       setLoading(true);
       const userIdParam = user?.id ? `?userId=${user.id}` : '';
-      const res = await authFetch(`${API_URL}/signals${userIdParam}`);
+      // List mode is compact on purpose: the full technical/news/ML blocks are
+      // fetched only when a card is opened. This cuts the mobile payload sharply.
+      const res = await authFetch(`${API_URL}/signals${userIdParam}${userIdParam ? '&' : '?'}compact=1`);
       const data = await res.json();
       if (data.success) { setSignals(data.signals); setLastUpdated(new Date().toLocaleString()); }
     } catch (e) { console.error("Signals fetch error:", e); } finally { setLoading(false); }
+  };
+
+  const openSignal = async (signal: StockSignal) => {
+    setSelected(signal);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    const cached = fullSignalCache.current.get(signal.ticker);
+    if (cached) {
+      setSelected(cached);
+      return;
+    }
+    setDetailLoading(true);
+    try {
+      const res = await authFetch(`${API_URL}/signal/${encodeURIComponent(signal.ticker)}`);
+      const payload = await res.json();
+      const full = payload?.signal || payload;
+      if (full && (full.ticker || full.analysis)) {
+        const merged = { ...signal, ...full } as StockSignal;
+        fullSignalCache.current.set(signal.ticker, merged);
+        setSelected(merged);
+      }
+    } catch (e) {
+      console.error("Signal detail fetch error:", e);
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   useEffect(() => { fetchSignals(); const i = setInterval(fetchSignals, 300000); return () => clearInterval(i); }, [user?.id]);
@@ -339,7 +368,7 @@ export function SignalsPage() {
     const ticker = searchParams.get("ticker");
     if (ticker && signals.length > 0) {
       const match = signals.find(s => s.ticker === ticker);
-      if (match) { setSelected(match); window.scrollTo({ top: 0, behavior: "smooth" }); }
+      if (match) openSignal(match);
     }
   }, [searchParams, signals]);
 
@@ -441,7 +470,7 @@ export function SignalsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {([
           { key: "short" as const, label: "Short-term buy ideas", sub: "Days to weeks", count: shortIdeas, tone: "text-[#0D7490]", bg: "bg-[#0D7490]/5 border-[#0D7490]/20" },
-          { key: "long" as const, label: "Long-term buy ideas", sub: "Medium to long term (1–3+ months)", count: longIdeas, tone: "text-violet-700", bg: "bg-violet-50 border-violet-200" },
+          { key: "long" as const, label: "Long-term buy ideas", sub: "Medium to long term (1�3+ months)", count: longIdeas, tone: "text-violet-700", bg: "bg-violet-50 border-violet-200" },
         ]).map(({ key, label, sub, count, tone, bg }) => {
           const top = signals
             .filter(s => isBuyIdea(s) && (key === "short" ? horizonOf(s) === "short" : horizonOf(s) !== "short"))
@@ -478,7 +507,7 @@ export function SignalsPage() {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {topConf.map(s => (
-              <button key={s.ticker} onClick={() => { setSelected(s); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="px-3 py-1.5 rounded-full bg-black/[0.05] dark:bg-white/10 text-xs font-medium text-foreground hover:bg-black/[0.08] dark:hover:bg-white/15 transition-colors">{s.ticker} <span className="text-emerald-600 font-semibold">{s.confidence}%</span></button>
+                        <button key={s.ticker} onClick={() => openSignal(s)} className="px-3 py-1.5 rounded-full bg-black/[0.05] dark:bg-white/10 text-xs font-medium text-foreground hover:bg-black/[0.08] dark:hover:bg-white/15 transition-colors">{s.ticker} <span className="text-emerald-600 font-semibold">{s.confidence}%</span></button>
             ))}
           </div>
         </div>
@@ -516,7 +545,7 @@ export function SignalsPage() {
         </Select>
         <Select value={sortBy} onValueChange={v => setSortBy(v as "confidence" | "change" | "ticker")}>
           <SelectTrigger className="w-[160px] h-9 text-sm border-border"><ArrowUpDown className="w-3.5 h-3.5 mr-2" /><SelectValue placeholder="Sort" /></SelectTrigger>
-          <SelectContent><SelectItem value="confidence">Confidence â†“</SelectItem><SelectItem value="change">Change â†“</SelectItem><SelectItem value="ticker">Ticker Aâ€“Z</SelectItem></SelectContent>
+          <SelectContent><SelectItem value="confidence">Confidence ↓</SelectItem><SelectItem value="change">Change ↓</SelectItem><SelectItem value="ticker">Ticker A–Z</SelectItem></SelectContent>
         </Select>
         <Badge className="h-9 px-3.5 flex items-center gap-1.5 rounded-full bg-[#0D7490] text-white border-0 text-xs">{filtered.length} signal{filtered.length !== 1 ? "s" : ""}</Badge>
         {hasActiveFilters && (
@@ -532,7 +561,7 @@ export function SignalsPage() {
           const ss = SIGNAL_STYLES[s.signal];
           const Icon = ss.icon;
           return (
-            <Card key={s.id || s.ticker} className="bg-white dark:bg-white/[0.06] border border-black/[0.05] dark:border-white/[0.06] rounded-2xl overflow-hidden hover:shadow-[0_10px_30px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all cursor-pointer group flex flex-col" onClick={() => setSelected(s)} data-tour={idx === 0 ? "signal-card" : undefined}>
+            <Card key={s.id || s.ticker} className="bg-white dark:bg-white/[0.06] border border-black/[0.05] dark:border-white/[0.06] rounded-2xl overflow-hidden hover:shadow-[0_10px_30px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all cursor-pointer group flex flex-col" onClick={() => openSignal(s)} data-tour={idx === 0 ? "signal-card" : undefined}>
               {/* Signal accent bar */}
               <div className={`h-1 w-full ${ss.accent}`} />
               {/* Top: ticker, signal badge */}
@@ -555,7 +584,7 @@ export function SignalsPage() {
               <div className="px-4 pb-3 flex items-center gap-2 text-[11px] text-muted-foreground">
                 <Badge className={`${TYPE_STYLES[s.type]} border-0 text-[10px] font-medium`}>{s.type}</Badge>
                 {isBuyIdea(s) && (
-                  <Badge title={(s as any).horizonCriteria?.join(" · ")} className={`border-0 text-[10px] font-semibold ${horizonOf(s) === "short" ? "bg-sky-100 text-sky-700" : horizonOf(s) === "medium" ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700"}`}>
+                  <Badge title={(s as any).horizonCriteria?.join(" � ")} className={`border-0 text-[10px] font-semibold ${horizonOf(s) === "short" ? "bg-sky-100 text-sky-700" : horizonOf(s) === "medium" ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700"}`}>
                     {horizonOf(s) === "short" ? "Short-term" : horizonOf(s) === "medium" ? "Medium-term" : "Long-term"}
                   </Badge>
                 )}
@@ -619,12 +648,12 @@ export function SignalsPage() {
                 {(s as any).sectorValuation?.metric && (
                   <span className={`px-1.5 py-0.5 rounded border font-medium ${(s as any).sectorValuation.label === "cheap" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : (s as any).sectorValuation.label === "expensive" ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-muted text-muted-foreground border-border"}`}
                     title={`${(s as any).sectorValuation.metric} ${(s as any).sectorValuation.value} vs sector ${(s as any).sectorValuation.benchmark} (${(s as any).sectorValuation.relative}x)`}>
-                    VAL {(s as any).sectorValuation.label} · {(s as any).sectorValuation.metric}
+                    VAL {(s as any).sectorValuation.label} � {(s as any).sectorValuation.metric}
                   </span>
                 )}
                 {(s as any).scenarios && (
                   <span className="px-1.5 py-0.5 rounded bg-slate-50 text-slate-700 border border-slate-200"
-                    title={`Bear ${(s as any).scenarios.bear?.returnPct}% · Base ${(s as any).scenarios.base?.returnPct}% · Bull ${(s as any).scenarios.bull?.returnPct}%`}>
+                    title={`Bear ${(s as any).scenarios.bear?.returnPct}% � Base ${(s as any).scenarios.base?.returnPct}% � Bull ${(s as any).scenarios.bull?.returnPct}%`}>
                     SCEN {((s as any).scenarios.expectedReturnPct ?? 0) >= 0 ? "+" : ""}{(s as any).scenarios.expectedReturnPct}%
                   </span>
                 )}
@@ -633,17 +662,17 @@ export function SignalsPage() {
                 {s.regime && <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">{s.regime}</span>}
                 {s.weeklyTrend && <span className={`px-1.5 py-0.5 rounded font-medium ${s.weeklyTrend === "Bullish" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>{s.weeklyTrend}</span>}
                 {s.speculative && <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-semibold">SPECULATIVE</span>}
-                {s.catalyst?.direction && <span className={`px-1.5 py-0.5 rounded font-semibold border ${s.catalyst.direction === "positive" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>{s.catalyst.direction === "positive" ? "CATALYST +" : "CATALYST âˆ’"}</span>}
+                {s.catalyst?.direction && <span className={`px-1.5 py-0.5 rounded font-semibold border ${s.catalyst.direction === "positive" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>{s.catalyst.direction === "positive" ? "CATALYST +" : "CATALYST −"}</span>}
                 {s.insider?.hasActivity && s.insider.score !== 50 && (
                   <span className={`px-1.5 py-0.5 rounded font-semibold border ${insiderPositive(s.insider) ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                    INSIDER {insiderPositive(s.insider) ? "+" : "âˆ’"}
+                    INSIDER {insiderPositive(s.insider) ? "+" : "−"}
                   </span>
                 )}
               </div>
 
               {s.speculative && (
                 <div className="mx-4 mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
-                  <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wide">Speculative Rally â€” Not a Buy</p>
+                  <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wide">Speculative Rally — Not a Buy</p>
                   <p className="text-[11px] text-amber-800 leading-snug mt-0.5">+{s.speculative.momentumPct}% run over ~{s.speculative.lookbackSessions} sessions on sentiment/catalyst while fundamentals stay weak (Altman Z {s.speculative.altmanZ != null ? s.speculative.altmanZ : "n/a"}). Composite capped at Hold.</p>
                 </div>
               )}
@@ -651,8 +680,8 @@ export function SignalsPage() {
               {s.catalyst?.headline && (
                 <div className="px-4 pb-3 -mt-1">
                   <p className="text-[11px] leading-snug">
-                    <span className={`font-semibold ${s.catalyst.direction === "positive" ? "text-emerald-700" : "text-red-700"}`}>{s.catalyst.direction === "positive" ? "â–²" : "â–¼"} {s.catalyst.type}</span>
-                    <span className="text-muted-foreground"> â€” {s.catalyst.headline.slice(0, 90)}{s.catalyst.headline.length > 90 ? "â€¦" : ""}</span>
+                    <span className={`font-semibold ${s.catalyst.direction === "positive" ? "text-emerald-700" : "text-red-700"}`}>{s.catalyst.direction === "positive" ? "▲" : "▼"} {s.catalyst.type}</span>
+                    <span className="text-muted-foreground"> — {s.catalyst.headline.slice(0, 90)}{s.catalyst.headline.length > 90 ? "…" : ""}</span>
                   </p>
                 </div>
               )}
@@ -660,10 +689,10 @@ export function SignalsPage() {
               {s.insider?.hasActivity && (
                 <div className="px-4 pb-3 -mt-1">
                   <p className="text-[11px] leading-snug">
-                    <span className={`font-semibold ${insiderPositive(s.insider) ? "text-emerald-700" : "text-red-700"}`}>{insiderPositive(s.insider) ? "â–²" : "â–¼"} {s.insider.summary}</span>
-                    {s.insider.latestDate && <span className="text-muted-foreground"> Â· latest {s.insider.latestDate}</span>}
-                    {s.insider.score != null && <span className="text-muted-foreground"> Â· insider score {s.insider.score}/100</span>}
-                    {s.insider.shortFloatPct != null && <span className="text-muted-foreground"> Â· short float {s.insider.shortFloatPct}%</span>}
+                    <span className={`font-semibold ${insiderPositive(s.insider) ? "text-emerald-700" : "text-red-700"}`}>{insiderPositive(s.insider) ? "▲" : "▼"} {s.insider.summary}</span>
+                    {s.insider.latestDate && <span className="text-muted-foreground"> · latest {s.insider.latestDate}</span>}
+                    {s.insider.score != null && <span className="text-muted-foreground"> · insider score {s.insider.score}/100</span>}
+                    {s.insider.shortFloatPct != null && <span className="text-muted-foreground"> · short float {s.insider.shortFloatPct}%</span>}
                   </p>
                 </div>
               )}
@@ -673,7 +702,7 @@ export function SignalsPage() {
                 <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div className={`h-full rounded-full transition-all ${s.confidence >= 80 ? "bg-emerald-500" : s.confidence >= 70 ? "bg-yellow-500" : "bg-red-500"}`} style={{ width: `${s.confidence}%` }} />
                 </div>
-                <span className="text-xs text-muted-foreground">R:R 1:{s.riskReward != null && !Number.isNaN(s.riskReward) ? s.riskReward.toFixed(1) : "â€”"}</span>
+                <span className="text-xs text-muted-foreground">R:R 1:{s.riskReward != null && !Number.isNaN(s.riskReward) ? s.riskReward.toFixed(1) : "—"}</span>
               </div>
 
               {/* Condition summary + Reason */}
@@ -713,7 +742,7 @@ export function SignalsPage() {
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Gauge className="w-8 h-8 mb-3 opacity-30" />
             <p className="text-sm font-medium text-muted-foreground">No signals available right now</p>
-            <p className="text-xs mt-1 text-muted-foreground">Signals regenerate every few minutes â€” markets may be closed or the engine is still warming up.</p>
+            <p className="text-xs mt-1 text-muted-foreground">Signals regenerate every few minutes — markets may be closed or the engine is still warming up.</p>
             <Button onClick={fetchSignals} disabled={loading} variant="outline" size="sm" className="border-border mt-4">
               <RefreshCw className={`w-3.5 h-3.5 mr-2 ${loading ? "animate-spin" : ""}`} />Refresh
             </Button>
@@ -741,6 +770,12 @@ export function SignalsPage() {
       {selected && (
         <div className="fixed inset-0 bg-black/30 dark:bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelected(null)}>
           <div className="bg-white/70 dark:bg-white/[0.08] backdrop-blur-xl rounded-[24px] max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-white/30 dark:border-white/[0.08]" onClick={e => e.stopPropagation()}>
+            {detailLoading && (
+              <div className="flex items-center gap-2 border-b border-black/[0.06] px-6 py-3 text-xs font-medium text-muted-foreground">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                Loading full analysis…
+              </div>
+            )}
             <div className="p-6">
               <MarketIntelligenceCard signal={selected} />
             </div>

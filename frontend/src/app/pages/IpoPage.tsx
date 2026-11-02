@@ -3,10 +3,12 @@ import { Link } from "react-router";
 import { Card } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import {
   Rocket, CalendarDays, Search, BarChart3, Newspaper, History,
   ChevronDown, Check, RefreshCw, TrendingUp, TrendingDown, Info,
   DollarSign, Users, Timer, Globe2, ExternalLink, Search as SearchIcon,
+  Filter, ChevronUp,
 } from "lucide-react";
 import { currencyPrefix } from "../utils/currency";
 
@@ -67,6 +69,24 @@ const SUB_TABS: { key: SubTab; label: string }[] = [
   { key: "withdrawn", label: "Withdrawn" },
 ];
 
+// Market/Exchange definitions for filtering
+const MARKETS = [
+  { key: "all", label: "All Markets", icon: Globe2 },
+  { key: "NSE", label: "NSE (Kenya)", icon: Globe2 },
+  { key: "EGX", label: "EGX (Egypt)", icon: Globe2 },
+  { key: "NGX", label: "NGX (Nigeria)", icon: Globe2 },
+  { key: "JSE", label: "JSE (South Africa)", icon: Globe2 },
+  { key: "CSE", label: "CSE (Morocco)", icon: Globe2 },
+  { key: "GSE", label: "GSE (Ghana)", icon: Globe2 },
+  { key: "BVMT", label: "BVMT (Tunisia)", icon: Globe2 },
+  { key: "SEM", label: "SEM (Mauritius)", icon: Globe2 },
+  { key: "BSE", label: "BSE (Botswana)", icon: Globe2 },
+  { key: "NSX", label: "NSX (Namibia)", icon: Globe2 },
+  { key: "NYSE", label: "NYSE (US)", icon: Globe2 },
+  { key: "NASDAQ", label: "NASDAQ (US)", icon: Globe2 },
+  { key: "Tadawul", label: "Tadawul (Saudi)", icon: Globe2 },
+];
+
 const statusColors: Record<string, string> = {
   upcoming: "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50",
   filed: "bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/50",
@@ -87,6 +107,7 @@ export function IpoPage() {
   const [view, setView] = useState<ViewKey>("calendar");
   const [subTab, setSubTab] = useState<SubTab>("recent");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [marketFilter, setMarketFilter] = useState<string>("all");
   const [calendar, setCalendar] = useState<Ipo[]>([]);
   const [news, setNews] = useState<IpoNewsItem[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -152,8 +173,34 @@ export function IpoPage() {
   const activeView = VIEWS.find((v) => v.key === view)!;
   const ActiveIcon = activeView.icon;
 
+  // Filter IPOs by market
+  const filteredCalendar = useMemo(() => {
+    if (marketFilter === "all") return calendar;
+    return calendar.filter((ipo) => ipo.exchange === marketFilter || ipo.market === marketFilter);
+  }, [calendar, marketFilter]);
+
+  const grouped = useMemo(() => {
+    const upcoming = filteredCalendar.filter((i) => i.status === "upcoming" || i.status === "filed");
+    const listed = filteredCalendar.filter((i) => i.status === "listed");
+    return { upcoming, listed };
+  }, [filteredCalendar]);
+
   const renderCard = (ipo: Ipo) => {
-    const cur = currencyPrefix(ipo.market === "NSE" ? "KES" : "USD");
+    // Determine currency based on exchange
+    let currency = "USD";
+    if (ipo.market === "NSE") currency = "KES";
+    else if (ipo.exchange === "EGX") currency = "EGP";
+    else if (ipo.exchange === "NGX") currency = "NGN";
+    else if (ipo.exchange === "JSE") currency = "ZAR";
+    else if (ipo.exchange === "CSE") currency = "MAD";
+    else if (ipo.exchange === "GSE") currency = "GHS";
+    else if (ipo.exchange === "BVMT") currency = "TND";
+    else if (ipo.exchange === "SEM") currency = "MUR";
+    else if (ipo.exchange === "BSE") currency = "BWP";
+    else if (ipo.exchange === "NSX") currency = "NAD";
+    else if (ipo.exchange === "Tadawul") currency = "SAR";
+
+    const cur = currencyPrefix(currency);
     return (
       <Card key={ipo.id} className="p-4 border shadow-sm hover:shadow-md transition-shadow">
         <div className="flex items-start justify-between gap-2 mb-2">
@@ -218,12 +265,6 @@ export function IpoPage() {
     );
   };
 
-  const grouped = useMemo(() => {
-    const upcoming = calendar.filter((i) => i.status === "upcoming" || i.status === "filed");
-    const listed = calendar.filter((i) => i.status === "listed");
-    return { upcoming, listed };
-  }, [calendar]);
-
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
       <div className="flex flex-wrap items-center gap-3 mb-5">
@@ -232,41 +273,56 @@ export function IpoPage() {
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="text-lg font-bold text-foreground">IPOs & New Listings</h1>
-          <p className="text-xs text-muted-foreground">NSE and global IPOs — calendar, lookup, stats, news and recent listings</p>
+          <p className="text-xs text-muted-foreground">NSE, African & global IPOs — calendar, lookup, stats, news and recent listings</p>
         </div>
         <Button variant="outline" size="sm" onClick={loadCommon} disabled={loading} className="h-8 text-xs gap-1.5">
           <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} /> Refresh
         </Button>
       </div>
 
-      {/* Section dropdown */}
-      <div className="relative mb-5 w-fit">
-        <button
-          onClick={() => setMenuOpen((o) => !o)}
-          className="flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
-        >
-          <ActiveIcon className="size-4 text-[#0D7490]" />
-          {activeView.label}
-          <ChevronDown className={`size-4 text-muted-foreground transition-transform ${menuOpen ? "rotate-180" : ""}`} />
-        </button>
-        {menuOpen && (
-          <>
-            <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
-            <div className="absolute left-0 z-40 mt-1 w-56 rounded-lg border border-border bg-popover shadow-lg p-1">
-              {VIEWS.map((v) => (
-                <button
-                  key={v.key}
-                  onClick={() => { setView(v.key); setMenuOpen(false); }}
-                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted ${v.key === view ? "font-semibold text-[#0D7490]" : "text-foreground"}`}
-                >
-                  <v.icon className="size-4 shrink-0" />
-                  {v.label}
-                  {v.key === view && <Check className="ml-auto size-4" />}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
+      {/* Market Filter Dropdown */}
+      <div className="flex flex-wrap items-center gap-3 mb-5">
+        <Select value={marketFilter} onValueChange={setMarketFilter}>
+          <SelectTrigger className="w-[200px] h-9 text-sm">
+            <SelectValue placeholder="All Markets" />
+            <Filter className="ml-auto size-3.5 text-muted-foreground" />
+          </SelectTrigger>
+          <SelectContent>
+            {MARKETS.map((m) => (
+              <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Section dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen((o) => !o)}
+            className="flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+          >
+            <ActiveIcon className="size-4 text-[#0D7490]" />
+            {activeView.label}
+            <ChevronDown className={`size-4 text-muted-foreground transition-transform ${menuOpen ? "rotate-180" : ""}`} />
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
+              <div className="absolute left-0 z-40 mt-1 w-56 rounded-lg border border-border bg-popover shadow-lg p-1">
+                {VIEWS.map((v) => (
+                  <button
+                    key={v.key}
+                    onClick={() => { setView(v.key); setMenuOpen(false); }}
+                    className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm hover:bg-muted ${v.key === view ? "font-semibold text-[#0D7490]" : "text-foreground"}`}
+                  >
+                    <v.icon className="size-4 shrink-0" />
+                    {v.label}
+                    {v.key === view && <Check className="ml-auto size-4" />}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -348,6 +404,26 @@ export function IpoPage() {
             {stats.pricedCount != null && stats.pricedCount < 3 && (
               <p className="text-[10px] text-muted-foreground">Only {stats.pricedCount} priced IPO(s) have both an offer and a current price, so return stats are based on a small sample.</p>
             )}
+
+            {/* Market/Exchange Breakdown */}
+            {stats.byMarket && Object.keys(stats.byMarket).length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-foreground">IPOs by Market/Exchange</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                  {Object.entries(stats.byMarket ?? {})
+                    .sort(([,a], [,b]) => (b as number) - (a as number))
+                    .map(([market, count]) => (
+                      <Card key={market} className="p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-foreground">{market}</span>
+                          <span className="text-lg font-bold text-[#0D7490]">{count as number}</span>
+                        </div>
+                      </Card>
+                    ))}
+                </div>
+              </div>
+            )}
+
             {(stats.topPerformers?.length > 0 || stats.bottomPerformers?.length > 0) && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {stats.topPerformers?.length > 0 && (

@@ -491,7 +491,7 @@ export function DashboardPage() {
 
   const fetchSignals = useCallback(() => {
     const userIdParam = user?.id ? `?userId=${user.id}` : '';
-    authFetch(`${import.meta.env.VITE_API_URL || "/api"}/signals${userIdParam}`)
+    authFetch(`${import.meta.env.VITE_API_URL || "/api"}/signals${userIdParam}${userIdParam ? '&' : '?'}compact=1`)
       .then(r => r.json())
       .then(data => {
         if (!data.success || !Array.isArray(data.signals)) return;

@@ -59,7 +59,7 @@ export function WatchlistPage() {
       }
       const [watchlistRes, signalsRes] = await Promise.all([
         authFetch(`${API_BASE_URL}/watchlist?userId=${userId}`),
-        authFetch(`${API_BASE_URL}/signals`)
+        authFetch(`${API_BASE_URL}/signals?compact=1`)
       ]);
 
       if (!watchlistRes.ok) {

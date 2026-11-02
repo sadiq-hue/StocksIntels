@@ -5311,6 +5311,7 @@ async function getSignalForStock(symbol) {
         timeframe: open.timeframe || null,
         positionSize: open.positionSize != null ? open.positionSize + '%' : null,
         reason: open.reason || '',
+        analysis: open.analysis || null,
         status: 'monitoring',
       };
     }

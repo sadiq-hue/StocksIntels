@@ -4187,8 +4187,28 @@ app.get('/api/signals/monitored', async (req, res) => {
   }
 });
 
+// List-mode payload: keep the evidence needed to render/filter a signal card,
+// but omit the full technical/news/ML blocks. The detail endpoint serves those
+// when the user opens a card. This cuts the Market Intelligence payload without
+// changing the information available on demand.
+function compactSignalForList(s) {
+  if (!s) return s;
+  const analysis = s.analysis ? {
+    overall: s.analysis.overall || null,
+    fundamental: s.analysis.fundamental || null,
+  } : null;
+  return {
+    ...s,
+    analysis,
+    news: [],
+    newsSummary: null,
+    diagnostics: null,
+  };
+}
+
 app.get('/api/signals', async (req, res) => {
   try {
+    const compact = req.query.compact === '1' || req.query.compact === 'true';
     const signals = await generateSignals(null, true);
     // generateSignals returns the shared cache reference — copy before merging so
     // we never mutate the engine's cached signal list.
@@ -4267,7 +4287,7 @@ app.get('/api/signals', async (req, res) => {
       }
       if (!existing) merged.push(base);
     }
-    res.json({ success: true, signals: merged });
+    res.json({ success: true, signals: compact ? merged.map(compactSignalForList) : merged });
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
   }
@@ -8363,9 +8383,34 @@ async function _loadIpoHub() {
     secIpos = items || [];
   } catch (e) { console.error('[IPOHub] SEC pipeline failed:', e.message); }
 
-  // Merge NSE + SEC (primary) + Alpha Vantage (supplement).
+  // Global IPOs from database (includes historic global + African market IPOs)
+  let dbGlobalIpos = [];
+  try {
+    const result = await pool.query('SELECT * FROM global_ipos');
+    console.log('[IPOHub] Loaded', result.rows.length, 'global IPOs from DB');
+    dbGlobalIpos = result.rows.map((r) => ({
+      id: 'global-' + (r.ticker || r.company_name),
+      company_name: r.company_name,
+      ticker: r.ticker,
+      exchange: r.exchange,
+      status: r.status,
+      listing_date: r.listing_date ? (r.listing_date instanceof Date ? r.listing_date.toISOString().slice(0, 10) : r.listing_date) : null,
+      offer_price: r.offer_price,
+      current_price: r.current_price,
+      oversubscription_pct: r.oversubscription_pct,
+      description: r.description,
+      sector: r.sector,
+      price_change_pct: null,
+      price_change: null,
+      market: 'GLOBAL',
+      source: 'database',
+    }));
+  } catch { console.error('[IPOHub] Failed to load global_ipos from DB'); }
+
+  // Merge NSE + DB Global + SEC (primary) + Alpha Vantage (supplement).
+  // Put dbGlobalIpos first so it wins on ticker conflicts for African/seed data
   const byTicker = new Map();
-  for (const i of [...nseIpos, ...secIpos, ...avBody.ipos]) {
+  for (const i of [...dbGlobalIpos, ...nseIpos, ...secIpos, ...avBody.ipos]) {
     const key = (i.ticker || i.company_name).toUpperCase();
     if (!byTicker.has(key)) byTicker.set(key, i);
     else {
@@ -8435,10 +8480,14 @@ app.get('/api/ipo/statistics', async (req, res) => {
     const all = await _loadIpoHub();
     const byStatus = { upcoming: 0, listed: 0, filed: 0, current: 0, withdrawn: 0 };
     const byMarket = {};
+    const byExchange = {};
     const perf = [];
     for (const i of all) {
       byStatus[i.status] = (byStatus[i.status] || 0) + 1;
       byMarket[i.market || '?'] = (byMarket[i.market || '?'] || 0) + 1;
+      // Use exchange for more granular breakdown (e.g., EGX, NGX, JSE, NASDAQ, NYSE)
+      const ex = i.exchange || i.market || 'Unknown';
+      byExchange[ex] = (byExchange[ex] || 0) + 1;
       if (typeof i.since_ipo_pct === 'number' && isFinite(i.since_ipo_pct)) {
         perf.push({ ticker: i.ticker, name: i.company_name, pct: i.since_ipo_pct });
       }
@@ -8453,6 +8502,7 @@ app.get('/api/ipo/statistics', async (req, res) => {
       total: all.length,
       byStatus,
       byMarket,
+      byExchange,
       // How many IPOs we can actually compute a return for (have offer + current price)
       pricedCount: pcts.length,
       avgSinceIpoPct: mean,
@@ -13797,8 +13847,51 @@ async function initDatabase() {
         }
       }
       console.log('[Seed] Inserted extra global IPOs');
+
     } catch (seedErr) {
       console.error('[Seed] Extra global IPO migration error:', seedErr.message);
+    }
+
+    // ── Seed African market IPOs (Egypt, Nigeria, South Africa, Morocco, Ghana, Tunisia, Mauritius, Botswana, Namibia) ──
+    try {
+      const seedAfrican = [
+        // Egypt (EGX)
+        { company_name: 'Egyptian Financial Group-Hermes', ticker: 'EFGH', exchange: 'EGX', status: 'listed', listing_date: '2019-05-15', offer_price: 14.50, oversubscription_pct: 1200, description: 'Egypt\'s largest investment bank EFG Hermes listed on the Egyptian Exchange, pricing at EGP 14.50. The IPO was oversubscribed 12x.', sector: 'Financial Services' },
+        { company_name: 'Fawry for Banking Tech', ticker: 'FWRY', exchange: 'EGX', status: 'listed', listing_date: '2019-08-08', offer_price: 6.46, oversubscription_pct: 950, description: 'Egypt\'s leading electronic payments network Fawry went public at EGP 6.46 per share, oversubscribed 9.5x.', sector: 'FinTech' },
+        { company_name: 'Abu Qir Fertilizers', ticker: 'ABUK', exchange: 'EGX', status: 'listed', listing_date: '2022-03-21', offer_price: 10.50, oversubscription_pct: 300, description: 'Abu Qir Fertilizers and Chemical Industries listed on EGX at EGP 10.50, raising capital for expansion.', sector: 'Materials' },
+        // Nigeria (NGX)
+        { company_name: 'MTN Nigeria', ticker: 'MTNN', exchange: 'NGX', status: 'listed', listing_date: '2019-05-16', offer_price: 90.00, oversubscription_pct: 130, description: 'MTN Nigeria, the country\'s largest telecom operator, listed on the Nigerian Exchange at NGN 90 per share, raising NGN 268 billion.', sector: 'Telecommunications' },
+        { company_name: 'Airtel Africa', ticker: 'AIRTELAFRI', exchange: 'NGX', status: 'listed', listing_date: '2019-07-10', offer_price: 363.00, oversubscription_pct: 125, description: 'Airtel Africa dual-listed on NGX and LSE at NGN 363, raising USD 750m for the African telecom giant.', sector: 'Telecommunications' },
+        { company_name: 'BUA Foods', ticker: 'BUAFOODS', exchange: 'NGX', status: 'listed', listing_date: '2021-12-01', offer_price: 40.00, oversubscription_pct: 250, description: 'BUA Foods, part of the BUA Group, listed on NGX at NGN 40, becoming one of Nigeria\'s largest food manufacturers.', sector: 'Consumer Staples' },
+        // South Africa (JSE)
+        { company_name: 'Discovery Ltd', ticker: 'DSY', exchange: 'JSE', status: 'listed', listing_date: '2009-10-29', offer_price: 12.50, oversubscription_pct: 800, description: 'South African financial services group Discovery listed on the JSE at ZAR 12.50.', sector: 'Financial Services' },
+        { company_name: 'Capitec Bank', ticker: 'CPI', exchange: 'JSE', status: 'listed', listing_date: '2002-02-18', offer_price: 10.00, oversubscription_pct: 1500, description: 'Capitec Bank listed on the JSE at ZAR 10, becoming one of SA\'s fastest-growing retail banks.', sector: 'Banking' },
+        { company_name: 'Naspers', ticker: 'NPN', exchange: 'JSE', status: 'listed', listing_date: '1994-05-09', offer_price: 15.00, oversubscription_pct: 2000, description: 'Naspers, Africa\'s largest media and internet group, listed on the JSE and became a continental champion.', sector: 'Technology' },
+        { company_name: 'Thungela Resources', ticker: 'TGA', exchange: 'JSE', status: 'listed', listing_date: '2021-06-07', offer_price: 25.00, oversubscription_pct: 400, description: 'Anglo American spun off Thungela Resources, listing on JSE at ZAR 25.', sector: 'Mining' },
+        // Morocco (CSE - Casablanca Stock Exchange)
+        { company_name: 'Maroc Telecom', ticker: 'IAM', exchange: 'CSE', status: 'listed', listing_date: '2004-12-13', offer_price: 155.00, oversubscription_pct: 3000, description: 'Maroc Telecom, Morocco\'s leading telecom operator, listed on CSE at MAD 155.', sector: 'Telecommunications' },
+        { company_name: 'Attijariwafa Bank', ticker: 'ATW', exchange: 'CSE', status: 'listed', listing_date: '2004-12-20', offer_price: 220.00, oversubscription_pct: 1800, description: 'Attijariwafa Bank, Morocco\'s largest bank, listed on the Casablanca Stock Exchange at MAD 220.', sector: 'Banking' },
+        // Ghana (GSE)
+        { company_name: 'MTN Ghana', ticker: 'MTNGH', exchange: 'GSE', status: 'listed', listing_date: '2018-09-05', offer_price: 0.67, oversubscription_pct: 140, description: 'MTN Ghana listed on the Ghana Stock Exchange at GHS 0.67, the country\'s largest IPO.', sector: 'Telecommunications' },
+        { company_name: 'GCB Bank', ticker: 'GCB', exchange: 'GSE', status: 'listed', listing_date: '2011-03-15', offer_price: 2.50, oversubscription_pct: 200, description: 'GCB Bank (formerly Ghana Commercial Bank) listed on GSE at GHS 2.50.', sector: 'Banking' },
+        // Tunisia (BVMT - Bourse de Tunis)
+        { company_name: 'Societe Tunisienne de Banque', ticker: 'STB', exchange: 'BVMT', status: 'listed', listing_date: '2016-06-20', offer_price: 8.50, oversubscription_pct: 350, description: 'STB, one of Tunisia\'s largest banks, listed on the Bourse de Tunis at TND 8.50.', sector: 'Banking' },
+        // Mauritius (SEM - Stock Exchange of Mauritius)
+        { company_name: 'MCB Group', ticker: 'MCB', exchange: 'SEM', status: 'listed', listing_date: '2014-01-20', offer_price: 185.00, oversubscription_pct: 600, description: 'MCB Group, Mauritius\' largest banking group, listed on SEM at MUR 185.', sector: 'Banking' },
+        // Botswana (BSE - Botswana Stock Exchange)
+        { company_name: 'Letshego Holdings', ticker: 'LGL', exchange: 'BSE', status: 'listed', listing_date: '2002-04-15', offer_price: 1.50, oversubscription_pct: 250, description: 'Letshego Holdings, pan-African financial services, listed on BSE at BWP 1.50.', sector: 'Financial Services' },
+        // Namibia (NSX - Namibian Stock Exchange)
+        { company_name: 'Namibia Breweries', ticker: 'NBS', exchange: 'NSX', status: 'listed', listing_date: '2018-05-10', offer_price: 25.00, oversubscription_pct: 180, description: 'Namibia Breweries, part of Ohlthaver & List Group, listed on NSX at NAD 25.', sector: 'Consumer Staples' },
+      ];
+      for (const ipo of seedAfrican) {
+        await pool.query(
+          'INSERT INTO global_ipos (company_name, ticker, exchange, status, listing_date, offer_price, oversubscription_pct, description, sector) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING',
+          [ipo.company_name, ipo.ticker, ipo.exchange, ipo.status, ipo.listing_date, ipo.offer_price, ipo.oversubscription_pct, ipo.description, ipo.sector]
+        );
+      }
+      console.log('[Seed] Inserted', seedAfrican.length, 'African market IPOs (Egypt, Nigeria, South Africa, Morocco, Ghana, Tunisia, Mauritius, Botswana, Namibia)');
+    } catch (seedErr) {
+      console.error('[Seed] African IPO seeding error:', seedErr.message);
     }
 
     // ── Seed upcoming global IPOs (widely-reported expected listings) ──

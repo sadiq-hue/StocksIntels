@@ -29,7 +29,7 @@ export function Watchlist() {
         const data = await res.json();
         
         // Fetch signals for these items to enrich the UI
-        const signalsRes = await authFetch(`${API_BASE_URL}/signals${userIdParam}`);
+        const signalsRes = await authFetch(`${API_BASE_URL}/signals${userIdParam}${userIdParam ? '&' : '?'}compact=1`);
         const signalsData = await signalsRes.json();
         
         const enrichedItems = data.map((item: any) => {

@@ -200,7 +200,7 @@ export function AIInsightsPage() {
 
   useEffect(() => {
     const userIdParam = user?.id ? `?userId=${user.id}` : '';
-    apiFetch(`/signals${userIdParam}`)
+    apiFetch(`/signals${userIdParam}${userIdParam ? '&' : '?'}compact=1`)
       .then(r => r.json())
       .then(data => {
         if (data.success) setSignals(data.signals || []);
