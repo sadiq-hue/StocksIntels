@@ -6091,9 +6091,9 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // period, so the entry set is unchanged; only short signals get the 1.5R exit.
   const horizon = sig.action === 'buy' ? classifyHorizon(tradeType, tradeLevels.expectedDays) : null;
   if (sig.action === 'buy' && horizon === 'short' && tradeLevels.entry > 0 && tradeLevels.stopLoss != null
-      && (tradeLevels.entry - tradeLevels.stopLoss) / tradeLevels.entry < 0.15) {
+      && (tradeLevels.entry - tradeLevels.stopLoss) / tradeLevels.entry < 0.20) {
     // A short Swing can initially receive the 20% medium floor; once classified
-    // short, re-level with the 15% short-term floor before expectancy/sizing.
+    // short, re-level with the 20% short-term floor before expectancy/sizing.
     tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType, null, 'short');
   }
   if (sig.action === 'buy' && horizon === 'long') {

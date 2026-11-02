@@ -49,9 +49,9 @@ const TRADE_TYPE_STOP_MULT = {
 // position needs a disaster-stop sized to a full market cycle, not a swing stop.
 const MIN_STOP_PCT = 0.30;
 // Short trades need a wide enough floor to survive several average daily ranges.
-// Short-term stop floor is 15% of price; medium-term is 20%; long-term is 30%.
+// Short-term stop floor is 20% of price; medium-term is 20%; long-term is 30%.
 // Structural support can widen any floor, never tighten it.
-const MIN_STOP_PCT_SHORT = 0.15;
+const MIN_STOP_PCT_SHORT = 0.20;
 const MIN_STOP_PCT_MEDIUM = 0.20;
 // Absolute stop ceiling (fraction of price). calculateATR clamps daily range at
 // 15%, so the widest legitimate ATR-scaled stop is 2x that (30%) for a swing
