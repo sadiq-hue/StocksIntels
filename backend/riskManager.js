@@ -102,11 +102,13 @@ function estimateHoldingDays(entry, target1, atrFraction) {
 
 function calculateTradeLevels(symbol, currentPrice, signal, priceHistory = null, stopLossPct = MIN_STOP_PCT, tradeType = 'Swing Trade', targetMults = null, horizonHint = null) {
   const volatility = calculateATR(priceHistory);
-  const mult = TRADE_TYPE_STOP_MULT[tradeType] || 1.5;
   const isLongTermType = /long term/i.test(String(tradeType || ''));
+  // Portfolio-manager rules: 3x ATR for volatile names, 2x for low-volatility
+  // names. Long-term thesis positions keep the wide 3x/long floor.
+  const atrMultiplier = isLongTermType ? (TRADE_TYPE_STOP_MULT[tradeType] || 3) : (volatility >= 0.05 ? 3 : 2);
   const floorPct = isLongTermType ? MIN_STOP_PCT : (horizonHint === 'short' ? MIN_STOP_PCT_SHORT : MIN_STOP_PCT_MEDIUM);
-  const minStopPct = Math.max(floorPct, volatility * 2.5);
-  const baseDistancePct = Math.max(volatility * mult, minStopPct);
+  const minStopPct = Math.max(floorPct, volatility * atrMultiplier);
+  const baseDistancePct = Math.max(volatility * atrMultiplier, minStopPct);
   let entry, stopLoss;
   let stopMethod = 'atr';
   let supportLevel = null;

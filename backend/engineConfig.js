@@ -132,7 +132,7 @@ const DEFAULTS = {
     maxDrawdown: 0.20,
     // Percent of portfolio equity risked on a new Buy. Position size is derived
     // from this budget and the entry-to-stop distance, not chosen independently.
-    riskPerTradePct: 0.5,
+    riskPerTradePct: 1.0,
     // Reference stop used only for Hold signals (no position is opened). Buy
     // stops are structural/ATR-derived (short/medium) or ATR/portfolio-derived
     // (long-term); MIN_STOP_PCT in riskManager.js is the long-term floor.

@@ -18,6 +18,13 @@ const edgarService = require('./edgarService');
 const { getEffectiveSectorPE, getGrade, determineTradeType, getSectorMacroAdjustment, analyzeFundamentals, analyzeTechnicals, analyzeFinancials, generateReason } = require('./analysisEngine');
 const { calculatePositionSize, calculateKellyPositionSize, calculateTradeLevels, estimateHoldingDays, MIN_STOP_PCT, enforceStopFloor, isPlausibleBuyLevels, qualifyingTargets, activeStageIndex, activeStageTarget, ultimateTargetOf, targetLockFloor, updatePortfolioRisk, applyPortfolioConstraints, trackSignalOutcomes } = require('./riskManager');
 const mlModel = require('./mlSignalModel');
+const {
+  buildAdvancedFundamentals,
+  computeValuation,
+  analyzeCrossFactors,
+  computeHybridRisk,
+  buildSegmentViews,
+} = require('./intelligenceEngine');
 const engineConfig = require('./engineConfig');
 const marketHours = require('./marketHours');
 const { ENGINE_VERSION } = require('./engineVersion');
@@ -5958,6 +5965,15 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const sectorValuation = computeSectorValuation(stock, fundamental, symbol);
   adjScore += sectorValuation.overlay;
 
+  // Integrated intelligence layer: normalise the evidence, build a forward
+  // valuation/scenario view and look for cross-factor contradictions before the
+  // confidence gates run.
+  const advancedFundamentals = buildAdvancedFundamentals({ ...stock, price: currentPrice });
+  const valuation = computeValuation({ stock, currentPrice, sectorValuation, advanced: advancedFundamentals });
+  const crossFactor = analyzeCrossFactors({
+    stock, fundamental, technical, financial, newsSent, insider, sectorValuation, valuation, advanced: advancedFundamentals, news,
+  });
+
   const scoreBeforeCap = adjScore;
 
   // Speculative-rally gate: a large run-up on distressed fundamentals is a
@@ -6023,6 +6039,11 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   if (drawdownThrottled) {
     confidence = Math.round(confidence * 0.7);
   }
+  // Cross-factor adjustment: contradictions and data-integrity flags reduce
+  // conviction; aligned evidence adds a small amount. Never let this override
+  // the configured confidence bounds.
+  confidence = Math.min(confMax, Math.max(confMin, confidence + crossFactor.confidenceDelta));
+  const confAfterIntelligence = confidence;
   const confFinal = confidence;
 
   // ── Confidence gate: label must be backed by scaled conviction ───────
@@ -6077,9 +6098,12 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   }
   if (sig.action === 'buy' && horizon === 'long') {
     // Long-term targets must be valuation-feasible, not 2R/4R/6R of a 30% stop
-    // (which would imply 60%/120%/180%). Use the sector-relative fair value
-    // when it is above entry; otherwise cap the risk-multiple target.
-    const fair = computeFairValueTarget(sectorValuation, currentPrice);
+    // (which would imply 60%/120%/180%). Prefer the DCF/comps blend; fall back
+    // to the sector-relative fair value, then to a capped risk multiple.
+    const blendedFair = valuation?.reliable && valuation.fairValue > tradeLevels.entry
+      ? { value: valuation.fairValue, metric: 'DCF + sector-relative', method: 'integrated valuation' }
+      : null;
+    const fair = blendedFair || computeFairValueTarget(sectorValuation, currentPrice);
     const entry = tradeLevels.entry;
     const risk = entry - tradeLevels.stopLoss;
     let t1, t2, t3, method;
@@ -6116,6 +6140,21 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // long-term position can turn into a Hold/Sell while it is being monitored,
   // and the thesis review still needs the current fundamental evidence.
   const thesis = assessThesisRisk(stock, fundamental, financial);
+  const atrPct = calculateATR(priceHistory);
+  const hybrid = computeHybridRisk({
+    entry: tradeLevels.entry,
+    stop: tradeLevels.stopLoss,
+    valuation,
+    horizon,
+    atrPct,
+  });
+  const segmentViews = buildSegmentViews({
+    horizon,
+    valuation,
+    hybrid,
+    advanced: advancedFundamentals,
+    technical,
+  });
   const specVersion = horizon ? HORIZON_SPEC_VERSIONS[horizon] : null;
   const estCostBps = estimateCostBps(symbol, horizon);
   const stopPct = tradeLevels.entry > 0 && tradeLevels.stopLoss != null
@@ -6248,6 +6287,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       afterDegFactor: confAfterDegFactor,
       afterCircuitBreaker: confAfterCircuitBreaker,
       afterCalibration: confAfterCalibration,
+      afterIntelligence: confAfterIntelligence,
       afterDrawdown: confFinal,
       drawdownThrottled,
       gate: _confidenceGateNote,
@@ -6304,6 +6344,11 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     positionSizeModel: 'risk-budget',
     targetMethod: tradeLevels.targetMethod || null,
     fairValue: tradeLevels.fairValue || null,
+    valuation,
+    advancedFundamentals,
+    intelligence: crossFactor,
+    hybrid,
+    segments: segmentViews,
     thesis: thesis || null,
     horizonProfile: weightProfile,
     horizonCriteria: horizon === 'long'
@@ -6351,7 +6396,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     dataSource: stock.dataSource || 'fallback',
     progress: getSignalProgress(symbol, currentPrice),
     analysis: {
-      fundamental: { score: fundamental.score, grade: fundamental.fundamentalGrade, metrics: { ...fundamental.metrics, dataSource: stock.dataSource || 'fallback' } },
+      fundamental: { score: fundamental.score, grade: fundamental.fundamentalGrade, metrics: { ...fundamental.metrics, dataSource: stock.dataSource || 'fallback' }, advanced: advancedFundamentals },
       technical: { score: technical.score, grade: technical.technicalGrade, indicators: technical.indicators },
       financial: { score: financial.score, grade: financial.financialGrade, analysis: financial.analysis },
       macro: { score: macro.score, grade: macro.grade, signal: macro.signal, country: macro.country, summary: macro.summary, meta: macro.meta, conditions: macro.conditions },
@@ -6627,6 +6672,9 @@ function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fun
       reasons.push('short-term: risk-off regime');
     }
     if (Number(sigObj.riskReward) < 1.5) reasons.push('short-term: R:R <1.5');
+    if (sigObj.hybrid && sigObj.hybrid.shortTermEligible === false) {
+      reasons.push(`short-term: hybrid analyst-target R:R ${sigObj.hybrid.riskReward ?? 'n/a'} <3.0`);
+    }
   }
 
   return { ok: reasons.length === 0, reasons };

@@ -593,6 +593,47 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
       )}
 
       {/* ── risk ── */}
+      {(s.valuation || s.intelligence || s.hybrid) && (
+        <Block title="Integrated Valuation & Risk">
+          <div className="space-y-0.5 text-[12px]">
+            {s.valuation?.fairValue != null && (
+              <Fact label="Fair Value" value={money(s.valuation.fairValue)} assess="" />
+            )}
+            {s.valuation?.wacc != null && (
+              <Fact label="WACC / Growth" value={`${s.valuation.wacc}% / ${s.valuation.growth}%`} assess="" />
+            )}
+            {s.advancedFundamentals?.roic != null && (
+              <Fact label="ROIC / Cash Conversion" value={`${s.advancedFundamentals.roic}% / ${s.advancedFundamentals.cashConversion ?? "—"}`} assess="" />
+            )}
+            {s.valuation?.bear != null && s.valuation?.base != null && s.valuation?.bull != null && (
+              <Fact
+                label="Bear / Base / Bull"
+                value={`${money(s.valuation.bear)} / ${money(s.valuation.base)} / ${money(s.valuation.bull)}`}
+                assess=""
+              />
+            )}
+            {s.hybrid?.riskReward != null && (
+              <Fact
+                label="Hybrid R:R"
+                value={`${s.hybrid.riskReward} : 1${s.hybrid.shortTermEligible === false ? " · short-term filter failed" : ""}`}
+                assess=""
+              />
+            )}
+            {s.intelligence?.riskLevel && (
+              <Fact label="Cross-Factor Risk" value={s.intelligence.riskLevel} assess="" />
+            )}
+          </div>
+          {s.intelligence?.summary && (
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{s.intelligence.summary}</p>
+          )}
+          {s.intelligence?.dataIntegrity?.flags?.length > 0 && (
+            <p className="mt-1.5 rounded-md border border-amber-300 bg-amber-50/70 p-2 text-[11px] leading-relaxed text-amber-900">
+              Data verification: {s.intelligence.dataIntegrity.flags.join(" · ")}
+            </p>
+          )}
+        </Block>
+      )}
+
       <Block title="Risk & Position Sizing">
         <div className="space-y-0.5 text-[12px]">
           <Fact label="Risk Level" value={<span className="font-sans">{riskLevel}</span>} assess="" />
