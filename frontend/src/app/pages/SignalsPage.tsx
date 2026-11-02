@@ -707,15 +707,24 @@ export function SignalsPage() {
 
               {/* Condition summary + Reason */}
               <div className="px-4 pb-4 pt-2 border-t border-border mt-auto">
-                {s.analysis?.fundamental?.metrics && (() => {
-                  const condSignals = getConditionSignals(s.analysis?.fundamental?.metrics ?? {});
-                  const counts = countBySignal(condSignals);
-                  const buy = (counts['BUY'] || 0) + (counts['STRONG BUY'] || 0);
-                  const sell = (counts['SELL'] || 0);
-                  const watch = (counts['WATCH'] || 0);
+                {((s as any).conditionSummary || s.analysis?.fundamental?.metrics) && (() => {
+                  const summary = (s as any).conditionSummary;
+                  let buy = 0, sell = 0, watch = 0, suppress = 0;
+                  if (summary) {
+                    buy = Number(summary.buy) || 0;
+                    sell = Number(summary.sell) || 0;
+                    watch = Number(summary.watch) || 0;
+                    suppress = Number(summary.suppress) || 0;
+                  } else {
+                    const counts = countBySignal(getConditionSignals(s.analysis?.fundamental?.metrics ?? {}));
+                    buy = (counts['BUY'] || 0) + (counts['STRONG BUY'] || 0);
+                    sell = counts['SELL'] || 0;
+                    watch = counts['WATCH'] || 0;
+                    suppress = counts['SUPPRESS'] || 0;
+                  }
                   return (
                     <div className="flex items-center gap-2 mb-1.5 text-[10px]">
-                      {counts['SUPPRESS'] ? (
+                      {suppress ? (
                         <span className="px-1.5 py-0.5 rounded bg-red-600 text-white font-semibold">SUPPRESSED</span>
                       ) : (
                         <>

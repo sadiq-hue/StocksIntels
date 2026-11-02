@@ -4193,13 +4193,69 @@ app.get('/api/signals/monitored', async (req, res) => {
 // changing the information available on demand.
 function compactSignalForList(s) {
   if (!s) return s;
-  const analysis = s.analysis ? {
-    overall: s.analysis.overall || null,
-    fundamental: s.analysis.fundamental || null,
+  const metrics = s.analysis?.fundamental?.metrics || null;
+  const conditionPairs = [
+    ['peSignal', 'peRating'], ['evSignal', 'evRating'], ['pbSignal', 'pbRating'], ['divSignal', 'divRating'],
+    ['revSignal', 'revRating'], ['epsSignal', 'epsRating'], ['mgnSignal', 'mgnRating'], ['fcfSignal', 'fcfRating'],
+    ['deSignal', 'debtRating'], ['crSignal', 'crRating'], ['roeSignal', 'roeRating'], ['altSignal', 'altRating'],
+    ['insiderSignal', 'insiderRating'], ['newsSignal', 'newsRating'],
+  ];
+  const conditionSummary = { buy: 0, sell: 0, watch: 0, suppress: 0 };
+  if (metrics) {
+    for (const [signalKey] of conditionPairs) {
+      const value = String(metrics[signalKey] || '').toUpperCase();
+      if (!value) continue;
+      if (value === 'SUPPRESS') conditionSummary.suppress++;
+      else if (value === 'STRONG BUY' || value === 'BUY') conditionSummary.buy++;
+      else if (value === 'SELL') conditionSummary.sell++;
+      else if (value === 'WATCH') conditionSummary.watch++;
+    }
+  }
+  const reason = typeof s.reason === 'string' && s.reason.length > 200
+    ? `${s.reason.slice(0, 197)}...`
+    : s.reason;
+  const catalyst = s.catalyst && typeof s.catalyst.headline === 'string' && s.catalyst.headline.length > 140
+    ? { ...s.catalyst, headline: `${s.catalyst.headline.slice(0, 137)}...` }
+    : s.catalyst;
+  const insider = s.insider ? {
+    hasActivity: s.insider.hasActivity,
+    score: s.insider.score,
+    netShares: s.insider.netShares,
+    buyCount: s.insider.buyCount,
+    sellCount: s.insider.sellCount,
+    summary: typeof s.insider.summary === 'string' && s.insider.summary.length > 180
+      ? `${s.insider.summary.slice(0, 177)}...`
+      : s.insider.summary,
+    latestDate: s.insider.latestDate,
+    shortFloatPct: s.insider.shortFloatPct,
+  } : null;
+  const sectorValuation = s.sectorValuation ? {
+    metric: s.sectorValuation.metric,
+    value: s.sectorValuation.value,
+    benchmark: s.sectorValuation.benchmark,
+    relative: s.sectorValuation.relative,
+    label: s.sectorValuation.label,
+  } : null;
+  const liquidity = s.liquidity ? { ok: s.liquidity.ok, thin: s.liquidity.thin } : null;
+  const dataQuality = s.dataQuality ? { ok: s.dataQuality.ok, reasons: s.dataQuality.reasons || [] } : null;
+  const scenarios = s.scenarios ? {
+    expectedReturnPct: s.scenarios.expectedReturnPct,
+    bear: s.scenarios.bear ? { returnPct: s.scenarios.bear.returnPct } : null,
+    base: s.scenarios.base ? { returnPct: s.scenarios.base.returnPct } : null,
+    bull: s.scenarios.bull ? { returnPct: s.scenarios.bull.returnPct } : null,
   } : null;
   return {
     ...s,
-    analysis,
+    reason,
+    catalyst,
+    insider,
+    sectorValuation,
+    liquidity,
+    dataQuality,
+    scenarios,
+    conditionSummary,
+    analysis: null,
+    thesis: null,
     news: [],
     newsSummary: null,
     diagnostics: null,
