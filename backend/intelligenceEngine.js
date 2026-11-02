@@ -108,6 +108,30 @@ function computeValuation({ stock = {}, currentPrice, sectorValuation = null, ad
   const fallbackFcf = fcf > 0 ? fcf : netIncome > 0 ? netIncome * 0.8 : ebitda > 0 ? ebitda * 0.45 : null;
   const rawGrowth = pct(num(stock.revenueGrowth));
   const growth = clamp(rawGrowth == null ? 0.05 : rawGrowth, -0.05, 0.20);
+  const pe = num(stock.peRatio);
+  const ev = num(stock.evEbitda);
+  const integrityFlags = [];
+  if (pe != null && pe > 0 && pe < 2) integrityFlags.push(`P/E ${pe} is implausibly low`);
+  if (ev != null && ev > 0 && ev < 2) integrityFlags.push(`EV/EBITDA ${ev} is implausibly low`);
+  if (num(stock.fcfYield) != null && num(stock.fcfYield) > 40) integrityFlags.push(`FCF yield ${stock.fcfYield}% is extreme`);
+  if (integrityFlags.length > 0) {
+    return {
+      reliable: false,
+      fairValue: null,
+      dcf: null,
+      relative: null,
+      bear: null,
+      base: null,
+      bull: null,
+      expected: null,
+      wacc: null,
+      growth: round(growth * 100),
+      terminalGrowth: 2.5,
+      probabilities: { bear: 0.25, base: 0.5, bull: 0.25 },
+      flags: integrityFlags,
+      assumptions: { method: 'withheld pending ratio verification' },
+    };
+  }
   const beta = 1.1;
   const riskFree = 0.06;
   const equityRiskPremium = 0.055;

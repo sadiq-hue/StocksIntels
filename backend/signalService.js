@@ -6103,7 +6103,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     const blendedFair = valuation?.reliable && valuation.fairValue > tradeLevels.entry
       ? { value: valuation.fairValue, metric: 'DCF + sector-relative', method: 'integrated valuation' }
       : null;
-    const fair = blendedFair || computeFairValueTarget(sectorValuation, currentPrice);
+    const fair = blendedFair || (valuation?.reliable === false ? null : computeFairValueTarget(sectorValuation, currentPrice));
     const entry = tradeLevels.entry;
     const risk = entry - tradeLevels.stopLoss;
     let t1, t2, t3, method;
