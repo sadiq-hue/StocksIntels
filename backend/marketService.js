@@ -653,23 +653,43 @@ function mergeQuoteSources(primary, secondary) {
  * fills metrics Yahoo does not return. Both calls are bounded independently so
  * one slow provider cannot hold the quote request open.
  */
+function fetchStockAnalysisQuote(symbol, timeoutMs) {
+  return withTimeout(stockAnalysisScraper.getQuote(symbol), timeoutMs, symbol)
+    .then(r => (r?.success ? r.data : null))
+    .catch(() => null);
+}
+
 async function fetchGlobalQuote(symbol, timeoutMs = 8000, { stockAnalysis = true } = {}) {
   const yahoo = withTimeout(yahooService.fetchQuote(symbol), timeoutMs, symbol)
     .catch(() => null);
   const sa = stockAnalysis && stockAnalysisQuoteEligible(symbol)
-    ? withTimeout(stockAnalysisScraper.getQuote(symbol), timeoutMs, symbol)
-      .then(r => (r?.success ? r.data : null))
-      .catch(() => null)
+    ? fetchStockAnalysisQuote(symbol, timeoutMs)
     : Promise.resolve(null);
   const [yahooQuote, saQuote] = await Promise.all([yahoo, sa]);
   return mergeQuoteSources(yahooQuote, saQuote);
 }
 
-async function getStockQuote(symbol) {
+async function getStockQuote(symbol, { refresh = false } = {}) {
   if (!symbol) return null;
 
   const cached = quoteCache.get(symbol);
-  if (cached && Number(cached.price) > 0 && (Date.now() - (cached.timestamp * 1000) < MAX_QUOTE_AGE_MS)) {
+  const cachedAgeMs = cached ? Date.now() - (cached.timestamp * 1000) : Infinity;
+  if (cached && Number(cached.price) > 0 && cachedAgeMs < MAX_QUOTE_AGE_MS) {
+    // A single-quote request may explicitly refresh an already-warm cache. Bulk
+    // prefetch keeps its cheap Yahoo path; the UI quote card gets the parallel
+    // StockAnalysis pass without forcing every batch symbol through it.
+    const canRefresh = refresh && stockAnalysisQuoteEligible(symbol)
+      && (cached.provider !== 'stockanalysis' || cachedAgeMs >= 60 * 1000);
+    if (canRefresh) {
+      const saQuote = await fetchStockAnalysisQuote(symbol, 2500);
+      if (saQuote) {
+        const useSaPrice = cachedAgeMs >= 60 * 1000;
+        const merged = useSaPrice
+          ? mergeQuoteSources(saQuote, cached)
+          : mergeQuoteSources(cached, saQuote);
+        if (merged) return cacheQuote(symbol, merged);
+      }
+    }
     return cached;
   }
 

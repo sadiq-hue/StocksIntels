@@ -3908,7 +3908,7 @@ app.post('/api/support/chatbot', async (req, res) => {
 app.get('/api/quote/:symbol', async (req, res) => {
   try {
     const symbol = req.params.symbol.toUpperCase();
-    const quote = await getStockQuote(symbol);
+    const quote = await getStockQuote(symbol, { refresh: true });
     if (!quote) return res.status(404).json({ error: 'Symbol not found' });
     res.json(quote);
   } catch (error) {
