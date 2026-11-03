@@ -16,6 +16,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 
 const BASE = 'https://stockanalysis.com/quote';
+const BASE_STOCKS = 'https://stockanalysis.com/stocks';
 const EXCHANGE_SLUG = { NGX: 'ngx', JSE: 'jse' };
 const CURRENCY = { ngx: 'NGN', jse: 'ZAR' };
 const HEADERS = {
@@ -44,8 +45,12 @@ function parseDate(label) {
   return y ? `${y[1]}-12-31` : null;
 }
 
-async function fetchTable(slug, ticker, path) {
-  const url = `${BASE}/${slug}/${encodeURIComponent(ticker)}/financials/${path}/`;
+async function fetchTable(slug, ticker, path, market = 'quote') {
+  const isUs = market === 'us';
+  const tablePath = isUs && path === 'income-statement' ? '' : path;
+  const url = isUs
+    ? `${BASE_STOCKS}/${encodeURIComponent(ticker)}/financials/${tablePath ? `${tablePath}/` : ''}`
+    : `${BASE}/${slug}/${encodeURIComponent(ticker)}/financials/${path}/`;
   const resp = await axios.get(url, { timeout: 20000, headers: HEADERS });
   const $ = cheerio.load(resp.data);
   let periods = null;
@@ -72,45 +77,56 @@ async function fetchTable(slug, ticker, path) {
 }
 
 function pick(rows, labels) {
+  const norm = (v) => String(v || '').replace(/[^a-z]/gi, '').toLowerCase();
   for (const l of labels) {
-    if (rows[l]) return rows[l];
-    const key = Object.keys(rows).find(k => k.replace(/[^a-z]/gi, '').toLowerCase() === l.replace(/[^a-z]/gi, '').toLowerCase());
-    if (key) return rows[key];
+    const wanted = norm(l);
+    if (!wanted) continue;
+    const exact = Object.keys(rows).find(k => norm(k) === wanted);
+    if (exact) return rows[exact];
+    const prefixed = Object.keys(rows).find(k => norm(k).startsWith(wanted));
+    if (prefixed) return rows[prefixed];
+    const contained = Object.keys(rows).find(k => norm(k).includes(wanted));
+    if (contained) return rows[contained];
   }
   return [];
 }
 
 async function getFinancialReport(symbol, period = 'annual', limit = 4) {
   const m = String(symbol).toUpperCase().match(/^([A-Z]+):(.+)$/);
-  const exchange = m ? m[1] : 'NGX';
+  const exchange = m ? m[1] : 'US';
   const ticker = m ? m[2] : String(symbol).toUpperCase();
-  const slug = EXCHANGE_SLUG[exchange] || String(exchange).toLowerCase();
-  if (exchange !== 'NGX' && exchange !== 'JSE') {
+  const isUs = exchange === 'US' || exchange === 'STOCKS';
+  const slug = isUs ? 'stocks' : (EXCHANGE_SLUG[exchange] || String(exchange).toLowerCase());
+  if (!isUs && exchange !== 'NGX' && exchange !== 'JSE') {
     return { success: false, symbol: ticker, source: 'stockanalysis', error: `Unsupported exchange ${exchange}` };
   }
+  const market = isUs ? 'us' : 'quote';
 
   try {
-    const inc = await fetchTable(slug, ticker, 'income-statement');
-    const bal = await fetchTable(slug, ticker, 'balance-sheet').catch(() => ({ periods: [], rows: {} }));
-    const cf = await fetchTable(slug, ticker, 'cash-flow-statement').catch(() => ({ periods: [], rows: {} }));
-    const ratios = await fetchTable(slug, ticker, 'ratios').catch(() => ({ periods: [], rows: {} }));
+    const inc = await fetchTable(slug, ticker, 'income-statement', market);
+    const bal = await fetchTable(slug, ticker, 'balance-sheet', market).catch(() => ({ periods: [], rows: {} }));
+    const cf = await fetchTable(slug, ticker, 'cash-flow-statement', market).catch(() => ({ periods: [], rows: {} }));
+    const ratios = await fetchTable(slug, ticker, 'ratios', market).catch(() => ({ periods: [], rows: {} }));
     const M = 1e6;
 
     const periods = inc.periods.slice(0, limit + 1); // TTM + limit fiscal years
     const dates = inc.rows['Period Ending'] || inc.rows['Period ending'] || [];
     const revRow = pick(inc.rows, ['Revenue']);
+    const gpRow = pick(inc.rows, ['Gross Profit']);
     const niRow = pick(inc.rows, ['Net Income', 'Net Income to Common']);
     const epsRow = pick(inc.rows, ['EPS (Basic)', 'EPS (Diluted)', 'Earnings Per Share']);
     const opIncRow = pick(inc.rows, ['Operating Income']);
+    const ebitdaRow = pick(inc.rows, ['EBITDA']);
     const taxRow = pick(inc.rows, ['Income Tax Expense', 'Income Tax']);
-
     const incomeStatementHistory = periods.map((p, i) => ({
       date: parseDate(dates[i] || p),
       period: /TTM/i.test(p) ? 'ttm' : 'annual',
       revenue: (toNumber(revRow[i]) ?? 0) * M,
+      grossProfit: (toNumber(gpRow[i]) ?? 0) * M,
       netIncome: (toNumber(niRow[i]) ?? 0) * M,
       eps: toNumber(epsRow[i]) ?? 0,
       operatingIncome: (toNumber(opIncRow[i]) ?? 0) * M,
+      ebitda: (toNumber(ebitdaRow[i]) ?? 0) * M,
       incomeTaxExpense: (toNumber(taxRow[i]) ?? 0) * M,
     }));
 
@@ -119,7 +135,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
     const tlRow = pick(bal.rows, ['Total Liabilities']);
     const teRow = pick(bal.rows, ['Total Equity', "Total Stockholders' Equity", 'Total Shareholders Equity', 'Shareholders Equity', 'Stockholders Equity', 'Shareholders\u0027 Equity']);
     const debtRow = pick(bal.rows, ['Total Debt']);
-    const cashRow = pick(bal.rows, ['Cash & Cash Equivalents', 'Cash & Equivalents', 'Cash And Cash Equivalents', 'Cash & Investments']);
+    const cashRow = pick(bal.rows, ['Cash & Investments', 'Cash & Cash Equivalents', 'Cash & Equivalents', 'Cash And Cash Equivalents']);
     const balanceSheetHistory = bal.periods.slice(0, limit + 1).map((p, i) => ({
       date: parseDate(balDates[i] || p),
       period: /TTM/i.test(p) ? 'ttm' : 'annual',
@@ -161,15 +177,24 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
     const fcfYieldPct = rnum(['Free Cash Flow Yield', 'FCF Yield']);
     const earnYieldPct = rnum(['Earnings Yield']);
     const mcapRaw = rnum(['Market Capitalization', 'Market Cap']);
+    const revGrowthPct = toNumber(pick(inc.rows, ['Revenue Growth'])[0]) ?? rnum(['Revenue Growth']);
+    const epsGrowthPct = toNumber(pick(inc.rows, ['EPS Growth'])[0]) ?? rnum(['EPS Growth']);
+    const roePct = rnum(['Return on Equity (ROE)', 'Return on Equity', 'ROE']);
+    const roaPct = rnum(['Return on Assets (ROA)', 'Return on Assets', 'ROA']);
+    const evEbitda = rnum(['EV/EBITDA', 'EV / EBITDA']);
+    const ebitda = i0.ebitda || null;
 
     const incomeStatement = {
       date: i0.date,
       revenue,
+      grossProfit: i0.grossProfit || 0,
       netIncome,
       eps: i0.eps || 0,
       operatingIncome,
+      ebitda,
       incomeTaxExpense: i0.incomeTaxExpense || 0,
       operatingIncomeRatio: revenue ? operatingIncome / revenue : null,
+      grossMargin: revenue ? (i0.grossProfit || 0) / revenue : null,
       netIncomeRatio: revenue ? netIncome / revenue : null,
     };
     const balanceSheet = {
@@ -193,6 +218,16 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
       priceToSalesRatio: rnum(['PS Ratio', 'Price/Sales']),
       debtToEquity: rnum(['Debt / Equity Ratio', 'Debt / Equity', 'Debt/Equity', 'Debt To Equity']),
       currentRatio: rnum(['Current Ratio']),
+      roe: roePct != null ? roePct / 100 : null,
+      roa: roaPct != null ? roaPct / 100 : null,
+      evEbitda,
+      grossMargin: revenue ? (i0.grossProfit || 0) / revenue : null,
+      operatingMargin: revenue ? operatingIncome / revenue : null,
+      profitMargin: revenue ? netIncome / revenue : null,
+      ebitda,
+      freeCashFlow: c0.freeCashFlow || 0,
+      revenueGrowth: revGrowthPct != null ? revGrowthPct / 100 : null,
+      epsGrowth: epsGrowthPct != null ? epsGrowthPct / 100 : null,
       dividendYield: divYieldPct != null ? divYieldPct / 100 : null,
       dividendYieldPercentage: divYieldPct,
       freeCashFlowYield: fcfYieldPct != null ? fcfYieldPct / 100 : null,

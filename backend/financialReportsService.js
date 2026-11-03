@@ -1126,6 +1126,53 @@ async function buildFinancialReport(symbol, period = 'annual', limit = 4, provid
         }
         return enrichReportData(yahooResult, ownershipVal, quarterlyVal, validateFinancialData(yahooResult));
       }
+      // StockAnalysis.com is a high-quality fallback for US/global names when
+      // Yahoo returns no usable statement. It is also the primary provider for
+      // NGX/JSE above. Enrich its bare ticker profile with the live quote/profile
+      // already used by the rest of the engine.
+      console.log(`[FinancialReports] Yahoo Finance empty for ${symbol}; trying StockAnalysis fallback`);
+      const saReport = await require('./stockAnalysisScraper')
+        .getFinancialReport(symbol, period, limit)
+        .catch(() => null);
+      if (saReport?.success && (saReport.data?.incomeStatementHistory || []).length > 0) {
+        availableProviders.push('stockanalysis');
+        const [quote, profile] = await Promise.allSettled([
+          getQuote(symbol),
+          getCompanyProfile(symbol),
+        ]);
+        const q = quote.status === 'fulfilled' ? quote.value : null;
+        const p = profile.status === 'fulfilled' ? profile.value : null;
+        const saEnriched = {
+          ...saReport,
+          source: 'stockanalysis',
+          availableProviders,
+          data: {
+            ...saReport.data,
+            profile: {
+              ...(saReport.data.profile || {}),
+              companyName: p?.companyName || q?.company_name || symbol,
+              sector: p?.sector || saReport.data.profile?.sector || null,
+              industry: p?.industry || null,
+              country: p?.country || 'United States',
+              website: p?.website || '',
+              exchange: p?.exchange || saReport.data.profile?.exchange || 'NASDAQ/NYSE',
+              currency: p?.currency || saReport.data.profile?.currency || 'USD',
+            },
+            quote: q || saReport.data.quote || null,
+          },
+        };
+        let ownershipVal = null;
+        let quarterlyVal = null;
+        if (!options.lite) {
+          const [ownership, quarterlyShares] = await Promise.allSettled([
+            getOwnershipData(symbol),
+            getQuarterlyShareCountHistory(symbol),
+          ]);
+          ownershipVal = ownership.status === 'fulfilled' ? ownership.value : null;
+          quarterlyVal = quarterlyShares.status === 'fulfilled' ? quarterlyShares.value : null;
+        }
+        return enrichReportData(saEnriched, ownershipVal, quarterlyVal, validateFinancialData(saEnriched));
+      }
       // Alpha Vantage fallback when Yahoo Finance has no data (1 quick OVERVIEW call)
       console.log(`[FinancialReports] Yahoo Finance empty for ${symbol}; trying Alpha Vantage fallback`);
       const alphaOverview = await alphaVantageService.fetchOverview(symbol).catch(() => null);
