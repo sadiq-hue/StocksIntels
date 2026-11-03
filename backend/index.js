@@ -24,6 +24,7 @@ const cmaFundReports = require('./cmaFundReports');
 const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL_SYMBOLS, NSE_SYMBOLS, searchStocks, mlModel, executeOrder, getPortfolioValue: getOrderPortfolioValue, getAllPositions, updatePositions,            getQualityScore, triggerAlert, getEngineHealth, refreshPerformanceStats, computeBacktestStats, getForwardTestStats,
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes, getPhase1Benchmark } = require('./signalService');
 const stockAnalysisEnrichmentService = require('./stockAnalysisEnrichmentService');
+const universeService = require('./universeService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
 const marketHours = require('./marketHours');
 const { refitParameters } = require('./paramRefit');
@@ -3163,7 +3164,7 @@ app.get('/api/stock-tracking/consecutive-days', authenticateToken, async (req, r
       }),
     });
   } catch (error) {
-    res.json({ ticker: ticker ? ticker.toUpperCase() : null, consecutiveDays: 0, qualifiesForPrompt: false, viewedToday: false });
+    res.json({ ticker: req.query.ticker ? String(req.query.ticker).toUpperCase() : null, consecutiveDays: 0, qualifiesForPrompt: false, viewedToday: false });
   }
 });
 
@@ -3924,6 +3925,14 @@ app.get('/api/quotes', async (req, res) => {
     res.json(quotes.filter(Boolean));
   } catch (error) {
     res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+});
+
+app.get('/api/universe/status', async (req, res) => {
+  try {
+    res.json(universeService.getStats());
+  } catch (error) {
+    res.status(500).json({ error: 'Universe status unavailable' });
   }
 });
 

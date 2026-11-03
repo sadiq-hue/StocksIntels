@@ -27,6 +27,7 @@ const {
 } = require('./intelligenceEngine');
 const { buildScenarioTargets } = require('./scenarioTargets');
 const stockAnalysisEnrichmentService = require('./stockAnalysisEnrichmentService');
+const universeService = require('./universeService');
 const engineConfig = require('./engineConfig');
 const marketHours = require('./marketHours');
 const { ENGINE_VERSION } = require('./engineVersion');
@@ -1063,6 +1064,7 @@ async function fetchRealFinancialMetrics(symbol) {
 
     // Profile
     if (d.profile?.sector) metrics.sector = d.profile.sector;
+    if (d.profile?.companyName && d.profile.companyName !== symbol) metrics.name = d.profile.companyName;
 
     // Key metrics (PB, ROE, yield, etc.)
     const km = d.keyMetricsHistory?.[0] || {};
@@ -4477,6 +4479,9 @@ function getFundamentals(symbol) {
   } else {
     result.dataSource = 'fallback';
   }
+  const dynamicMeta = universeService.getMeta(symbol);
+  if (dynamicMeta?.name && (!result.name || result.name === symbol)) result.name = dynamicMeta.name;
+  if (dynamicMeta?.sector && (!result.sector || result.sector === 'N/A')) result.sector = dynamicMeta.sector;
   if (!result.name || result.name === symbol) {
     result.name = resolveStockName(symbol);
   }
@@ -4848,6 +4853,33 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       ]);
       newsBySymbol = await buildNewsBySymbol(allNews);
     } catch { /* silent */ }
+
+    // Expand the cycle with catalyst/mover/catalog names. Catalysts lead, then
+    // on-demand lookups and current movers; the SEC catalog rotates so the whole
+    // US universe is eventually covered without a 10k-symbol scan per cycle.
+    if (!marketData && !quick) {
+      try {
+        await universeService.observeCatalysts(catalysts).catch(() => {});
+        await Promise.race([
+          universeService.refreshMovers().catch(() => {}),
+          new Promise(resolve => setTimeout(resolve, 8000)),
+        ]);
+        const budget = Math.max(0, maxSymbols - symbols.length);
+        const dynamicSymbols = await universeService.getCycleSymbols(Math.min(60, budget));
+        const seen = new Set(symbols);
+        for (const symbol of dynamicSymbols) {
+          if (!seen.has(symbol)) {
+            symbols.push(symbol);
+            seen.add(symbol);
+          }
+        }
+        if (dynamicSymbols.length) {
+          console.log(`[SignalService] Dynamic universe: +${dynamicSymbols.length} names (total ${symbols.length})`);
+        }
+      } catch (e) {
+        console.warn(`[SignalService] Dynamic universe expansion failed: ${e.message}`);
+      }
+    }
     await Promise.race([
       Promise.all([
         prefetchPriceHistories(symbols).catch(() => {}),
@@ -4890,6 +4922,9 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   const processSymbol = async (symbol) => {
     let stock = getFundamentals(symbol);
     if (!stock) return null;
+    // Dynamic names only enter the scored feed when a live filing/quote-backed
+    // fundamentals record exists; otherwise they stay news-only.
+    if (universeService.getMeta(symbol) && stock.dataSource !== 'live') return null;
     if (requireRealFundNse && NSE_SYMBOLS.includes(symbol) && stock.dataSource !== 'live') {
       blockedNoFundamentals.push(symbol);
       return null;
@@ -5356,9 +5391,11 @@ async function generateSignals(marketData = null, quick = false, force = false) 
 // Get signal for a specific stock (works for ANY stock symbol)
 async function getSignalForStock(symbol) {
   const upper = symbol.toUpperCase();
+  const isCore = ALL_SYMBOLS.includes(upper);
+  const isDynamic = universeService.isDynamic(upper);
   // First check if it's in our main list
-  if (ALL_SYMBOLS.includes(upper)) {
-    const signals = await generateSignals();
+  if (isCore || isDynamic) {
+    const signals = isCore ? await generateSignals() : (_signalsCache || []);
     const found = signals.find(s => s.ticker === upper);
     if (found) return found;
     // The symbol's prior signal is still open and being monitored — surface that
@@ -5410,17 +5447,25 @@ async function getSignalForStock(symbol) {
         status: 'monitoring',
       };
     }
+    if (isDynamic) return generateSingleSignal(upper);
     return null;
   }
   // Generate signal for a single unknown stock
+  await universeService.addOnDemand(upper).catch(() => {});
   return generateSingleSignal(upper);
 }
 
 async function generateSingleSignal(symbol) {
   try {
+    await universeService.addOnDemand(symbol).catch(() => {});
+    await fetchRealFinancialMetrics(symbol).catch(() => null);
     let stock = getFundamentals(symbol);
     if (!stock) {
       console.warn(`[SignalService] Cannot generate signal for ${symbol} — no fundamentals`);
+      return null;
+    }
+    if (universeService.getMeta(symbol) && stock.dataSource !== 'live') {
+      console.warn(`[SignalService] ${symbol}: dynamic symbol has no live fundamentals — signal suppressed`);
       return null;
     }
     if (engineConfig.getConfig().quality?.require_real_fundamentals_nse !== false
