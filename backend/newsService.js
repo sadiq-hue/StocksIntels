@@ -606,7 +606,7 @@ async function getAggregatedSentiment() {
     return sentimentCache;
   }
   const news = await Promise.race([
-    getAllNews(),
+      getAllNews(300),
     new Promise(resolve => setTimeout(() => resolve([]), 20000)),
   ]);
   const realNews = news.filter(a => !a.isMock);
@@ -657,7 +657,7 @@ async function getCatalysts() {
     return catalystCache;
   }
   const news = await Promise.race([
-    getAllNews(),
+      getAllNews(300),
     new Promise(resolve => setTimeout(() => resolve([]), 20000)),
   ]);
   const realNews = news.filter(a => !a.isMock && a.catalyst && a.catalystDirection);
@@ -708,7 +708,7 @@ async function getInsiderNewsSignals() {
     return insiderNewsCache;
   }
   const news = await Promise.race([
-    getAllNews(),
+      getAllNews(300),
     new Promise(resolve => setTimeout(() => resolve([]), 20000)),
   ]);
   // Persist classified articles so they count across days (idempotent).
@@ -797,6 +797,10 @@ function classifyHotNews(title, excerpt) {
 // signal engine treats them as a separate overlay instead of a generic
 // ±sentiment tick. Only one (strongest) catalyst is reported per article.
 const CATALYST_RULES = [
+  { type: 'DealCollapse', direction: 'negative', strength: 2, keywords: [
+    'talks collapse', 'deal collapses', 'walked away', 'shelved', 'rejected bid',
+    'withdrew', 'withdraws', 'abandon', 'stalled', 'no deal', 'called off',
+  ]},
   { type: 'M&A', direction: 'positive', strength: 2, keywords: [
     'acqui', 'takeover', 'buyout', 'merger', 'merged', 'merging', 'merges with',
     'bid for', 'bid to', 'offer for', 'offer to', 'expression of interest', ' eoi ',
@@ -804,6 +808,70 @@ const CATALYST_RULES = [
     'investor talks', 'investor to', 'potential investor', 'new investor', 'foreign investor',
     'to sell', 'sale of', 'stake in', 'sell its stake', 'selling its stake',
     'pursuit', 'considers', 'mulling', 'reportedly interested', 'exploring options',
+  ]},
+  { type: 'FDA', direction: 'positive', strength: 2, keywords: [
+    'fda approval', 'fda approves', 'approved by the fda', 'fda granted approval',
+    'breakthrough therapy designation', 'fast track designation', 'priority review',
+    'orphan drug designation', 'clinical trial met', 'phase 3 met', 'positive topline',
+    'positive top-line', 'primary endpoint met', 'met its primary endpoint',
+    'met the primary endpoint', '510(k) clearance', 'ce mark', 'emergency use authorization',
+  ]},
+  { type: 'FDA', direction: 'negative', strength: 2, keywords: [
+    'complete response letter', 'clinical hold', 'trial failed', 'failed phase 3',
+    'missed the primary endpoint', 'did not meet the primary endpoint', 'fda rejects',
+    'fda declined', 'refuse to file', 'fda warning letter', 'safety signal',
+    'discontinued the trial', 'discontinued its trial',
+  ]},
+  { type: 'Guidance', direction: 'positive', strength: 2, keywords: [
+    'raises guidance', 'raised guidance', 'raises outlook', 'raised outlook', 'boosts outlook',
+    'raises full-year', 'increases guidance', 'upgrades guidance', 'raises forecast',
+    'record revenue', 'record earnings', 'beats estimates', 'beat estimates', 'tops estimates',
+    'earnings beat', 'ahead of expectations', 'above consensus', 'strong guidance',
+  ]},
+  { type: 'Guidance', direction: 'negative', strength: 2, keywords: [
+    'cuts guidance', 'cut guidance', 'lowers guidance', 'lowered guidance', 'cuts outlook',
+    'lowers outlook', 'slashes forecast', 'slashes guidance', 'profit warning',
+    'misses estimates', 'missed estimates', 'misses revenue', 'earnings miss',
+    'below expectations', 'below consensus', 'weak guidance', 'withdraws guidance',
+    'suspends guidance',
+  ]},
+  { type: 'Dilution', direction: 'negative', strength: 2, keywords: [
+    'public offering', 'stock offering', 'common stock offering', 'registered direct offering',
+    'underwritten offering', 'at-the-market', 'at the market offering', 'atm offering',
+    'convertible notes', 'convertible senior notes', 'shelf registration', 'prices offering',
+    'pricing of offering', 'proposed offering',
+  ]},
+  { type: 'Contract', direction: 'positive', strength: 2, keywords: [
+    'awarded contract', 'wins contract', 'won contract', 'contract award', 'new contract',
+    'secures contract', 'receives order', 'purchase order', 'order worth', 'new order',
+    'defense contract', 'government contract', 'strategic agreement', 'license agreement',
+    'supply agreement', 'distribution agreement', 'partnership with', 'collaboration with',
+    'joint development agreement', 'definitive agreement', 'multi-year agreement',
+    'multiyear agreement',
+  ], regex: [
+    /\b(wins?|won|awarded|secures?|secured|receives?|received)\b.{0,60}\bcontract\b/i,
+    /\bcontract\b.{0,50}\b(worth|valued|million|billion)\b/i,
+  ]},
+  { type: 'Buyback', direction: 'positive', strength: 1, keywords: [
+    'share repurchase', 'stock repurchase', 'buyback program', 'repurchase program',
+    'special dividend', 'dividend increase', 'raises dividend', 'raised dividend',
+    'initiates dividend', 'declares dividend',
+  ]},
+  { type: 'Index', direction: 'positive', strength: 1, keywords: [
+    'to join the s&p', 'added to the s&p', 's&p 500 inclusion', 'joins s&p 500',
+    'nasdaq-100 addition', 'added to nasdaq-100', 'russell 2000 addition',
+    'index inclusion', 'to be added to the s&p', 'to be added to the nasdaq',
+    'to be added to the russell',
+  ]},
+  { type: 'Analyst', direction: 'positive', strength: 1, keywords: [
+    'upgrades to buy', 'upgraded to buy', 'upgrades to overweight', 'raises price target',
+    'raised price target', 'price target raised', 'initiates coverage with buy',
+    'initiates with buy', 'outperform rating',
+  ]},
+  { type: 'Analyst', direction: 'negative', strength: 1, keywords: [
+    'downgrades to sell', 'downgraded to sell', 'downgrades to underweight',
+    'cuts price target', 'cut price target', 'price target lowered',
+    'initiates coverage with sell', 'underperform rating',
   ]},
   { type: 'Capital', direction: 'positive', strength: 2, keywords: [
     'capital injection', 'recapitali', 'rights issue', 'private placement',
@@ -815,7 +883,9 @@ const CATALYST_RULES = [
     'approved', 'approval', 'licensed', 'cbk approval', 'cma approval', 'green light',
   ]},
   { type: 'Crisis', direction: 'negative', strength: 2, keywords: [
-    'fraud', 'investigation', 'probe', 'lawsuit', 'litigation', 'scandal',
+    'fraud', 'sec investigation', 'doj investigation', 'criminal investigation',
+    'regulatory investigation', 'under investigation', 'investigated by', 'probe into',
+    'lawsuit against', 'sued by', 'class action', 'litigation filed', 'scandal',
     'bankruptcy', 'insolven', 'default', 'profit warning', 'loss warning',
     'suspended', 'delist', 'irregularit', 'embezzlement', 'money laundering',
   ]},
@@ -848,6 +918,13 @@ function classifyCatalyst(title, excerpt) {
         best = { catalyst: rule.type, direction: rule.direction, strength: rule.strength };
       }
     }
+  }
+  // A positive headline catalyst that is explicitly paired with a negative
+  // share-price reaction ("retreats despite earnings beat") must not lift the
+  // signal. Treat the market reaction as the catalyst direction in that case.
+  const negativeReaction = /\bdespite\b.{0,100}\b(beat|raise|raised|approval|approved|record|strong|better-than|tops)\b|\b(?:shares?|stock)\s+(?:fall|falls|fell|drop|drops|dropped|plunge|plunges|sink|sinks|slide|slides|retreat|retreats|tumble|tumbles)\b|\b(falls?|drops?|plunges?|tumbles?)\s+after\b/i;
+  if (best && best.direction === 'positive' && negativeReaction.test(text)) {
+    return { catalyst: 'PriceReaction', direction: 'negative', strength: 2 };
   }
   if (best) return best;
   return { catalyst: null, direction: null, strength: 0 };
@@ -1751,6 +1828,183 @@ async function fetchFromYahoo() {
   }
 }
 
+// StockTitan aggregates company press releases and SEC filings and puts the
+// ticker in every headline. It is the highest-signal real-time catalyst source
+// for small/mid caps that the general market RSS feeds miss.
+async function fetchFromStockTitan() {
+  try {
+    const res = await fetchRssWithRetry('https://www.stocktitan.net/rss', 2);
+    const data = await rssParser.parseString(res.data);
+    const articles = [];
+    for (const item of (data.items || []).slice(0, 100)) {
+      const rawTitle = String(item.title || '').trim();
+      if (!rawTitle || rawTitle.length < 12) continue;
+      const tickerInTitle = (rawTitle.match(/\|\s*([A-Z][A-Z0-9.-]{0,9})\s+Stock News\s*$/i) || [])[1];
+      const tickerInUrl = (String(item.link || '').match(/\/news\/([A-Z0-9.-]+)\//i) || [])[1];
+      const ticker = String(tickerInTitle || tickerInUrl || '').toUpperCase();
+      if (!ticker) continue;
+      const headline = rawTitle.replace(/\s*\|\s*[A-Z][A-Z0-9.-]{0,9}\s+Stock News\s*$/i, '').trim();
+      if (!headline) continue;
+      const pubDate = item.isoDate ? new Date(item.isoDate) : (item.pubDate ? new Date(item.pubDate) : new Date());
+      const excerpt = stripHtml(item.contentSnippet || item.summary || item.content || '')
+        .replace(/\s+/g, ' ').trim().slice(0, 300);
+      const relatedStocks = [...new Set([ticker, ...extractRelatedStocks(`${headline} ${excerpt}`)])];
+      articles.push({
+        id: `st-${ticker}-${String(item.link || headline).replace(/[^a-z0-9]/gi, '').slice(-32)}`,
+        headline: headline.substring(0, 200),
+        source: 'StockTitan',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: 'global',
+        relatedStocks,
+        sentiment: analyzeSentiment(`${headline} ${excerpt}`),
+        excerpt: excerpt || `Company press release: ${headline}`,
+        url: item.link || '#',
+        imageUrl: extractRssImage(item),
+      });
+    }
+    console.log(`✅ Fetched ${articles.length} articles from StockTitan`);
+    return articles;
+  } catch (e) {
+    console.error('Error fetching from StockTitan:', e.message);
+    return [];
+  }
+}
+
+// Yahoo's per-ticker RSS gives company-specific headlines for every cap size.
+// Rotate a small batch per news cycle so the full US universe is covered without
+// hammering the feed; large caps sit at the front of US_SYMBOLS and refresh first.
+let yahooTickerOffset = 0;
+const YAHOO_TICKER_BATCH = 12;
+async function fetchFromYahooTickerFeeds() {
+  const total = US_SYMBOLS.length;
+  if (!total) return [];
+  const batch = [];
+  for (let i = 0; i < Math.min(YAHOO_TICKER_BATCH, total); i++) {
+    batch.push(US_SYMBOLS[(yahooTickerOffset + i) % total]);
+  }
+  yahooTickerOffset = (yahooTickerOffset + batch.length) % total;
+
+  const results = await Promise.allSettled(batch.map(async (symbol) => {
+    const feedSymbol = symbol.replace(/\./g, '-');
+    const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(feedSymbol)}&region=US&lang=en-US`;
+    const res = await fetchRssWithRetry(url, 1);
+    const data = await rssParser.parseString(res.data);
+    return { symbol, data };
+  }));
+
+  const articles = [];
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    const { symbol, data } = result.value;
+    for (const item of (data.items || []).slice(0, 8)) {
+      const title = String(item.title || '').trim();
+      if (!title || title.length < 10) continue;
+      const pubDate = item.isoDate ? new Date(item.isoDate) : (item.pubDate ? new Date(item.pubDate) : new Date());
+      const excerpt = stripHtml(item.contentSnippet || item.summary || item.content || '')
+        .replace(/\s+/g, ' ').trim().slice(0, 300);
+      const relatedStocks = [...new Set([symbol, ...extractRelatedStocks(`${title} ${excerpt}`)])];
+      articles.push({
+        id: `yt-${symbol}-${String(item.link || title).replace(/[^a-z0-9]/gi, '').slice(-32)}`,
+        headline: title.substring(0, 200),
+        source: 'Yahoo Finance',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: classifyArticle(title, excerpt, relatedStocks),
+        relatedStocks,
+        sentiment: analyzeSentiment(`${title} ${excerpt}`),
+        excerpt: excerpt || 'Read the full story on Yahoo Finance.',
+        url: item.link || '#',
+        imageUrl: extractRssImage(item),
+      });
+    }
+  }
+  console.log(`✅ Fetched ${articles.length} ticker-specific articles from Yahoo Finance`);
+  return articles;
+}
+
+// Nasdaq's company-news feeds carry earnings, guidance, contracts and management
+// changes for NYSE/Nasdaq names. Keep only items that resolve to a tracked ticker.
+const NASDAQ_FEEDS = [
+  { url: 'https://www.nasdaq.com/feed/rssoutbound?category=Markets', source: 'Nasdaq', max: 15 },
+  { url: 'https://www.nasdaq.com/feed/rssoutbound?category=Stocks', source: 'Nasdaq', max: 15 },
+];
+async function fetchFromNasdaq() {
+  const results = await Promise.allSettled(
+    NASDAQ_FEEDS.map(async (feed) => {
+      const res = await fetchRssWithRetry(feed.url, 1);
+      const data = await rssParser.parseString(res.data);
+      return { feed, data };
+    })
+  );
+  const articles = [];
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    const { feed, data } = result.value;
+    for (const item of (data.items || []).slice(0, feed.max || 15)) {
+      const title = String(item.title || '').trim();
+      if (!title || title.length < 10) continue;
+      const excerpt = stripHtml(item.contentSnippet || item.summary || item.content || '')
+        .replace(/\s+/g, ' ').trim().slice(0, 300);
+      const relatedStocks = extractRelatedStocks(`${title} ${excerpt}`);
+      if (!relatedStocks.length) continue;
+      const pubDate = item.isoDate ? new Date(item.isoDate) : (item.pubDate ? new Date(item.pubDate) : new Date());
+      articles.push({
+        id: `nasdaq-${String(item.link || title).replace(/[^a-z0-9]/gi, '').slice(-32)}`,
+        headline: title.substring(0, 200),
+        source: feed.source,
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: 'global',
+        relatedStocks,
+        sentiment: analyzeSentiment(`${title} ${excerpt}`),
+        excerpt,
+        url: item.link || '#',
+        imageUrl: extractRssImage(item),
+      });
+    }
+  }
+  console.log(`✅ Fetched ${articles.length} tracked-company articles from Nasdaq`);
+  return articles;
+}
+
+// FDA press releases are the primary binary catalyst for biotech/small-cap
+// pharma. Only keep releases that name a tracked company.
+async function fetchFromFDA() {
+  try {
+    const res = await fetchRssWithRetry('https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/press-releases/rss.xml', 1);
+    const data = await rssParser.parseString(res.data);
+    const articles = [];
+    for (const item of (data.items || []).slice(0, 20)) {
+      const title = String(item.title || '').trim();
+      if (!title || title.length < 10) continue;
+      const excerpt = stripHtml(item.contentSnippet || item.summary || item.content || '')
+        .replace(/\s+/g, ' ').trim().slice(0, 300);
+      const relatedStocks = extractRelatedStocks(`${title} ${excerpt}`);
+      if (!relatedStocks.length) continue;
+      const pubDate = item.isoDate ? new Date(item.isoDate) : (item.pubDate ? new Date(item.pubDate) : new Date());
+      articles.push({
+        id: `fda-${String(item.link || title).replace(/[^a-z0-9]/gi, '').slice(-32)}`,
+        headline: title.substring(0, 200),
+        source: 'FDA',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: 'global',
+        relatedStocks,
+        sentiment: analyzeSentiment(`${title} ${excerpt}`),
+        excerpt,
+        url: item.link || '#',
+        imageUrl: extractRssImage(item),
+      });
+    }
+    console.log(`✅ Fetched ${articles.length} tracked-company articles from FDA`);
+    return articles;
+  } catch (e) {
+    console.error('Error fetching from FDA:', e.message);
+    return [];
+  }
+}
+
 // Wrapper that aborts slow calls (rate-limiters can queue for minutes)
 async function withTimeout(promise, ms = 8000) {
   return Promise.race([
@@ -1767,7 +2021,7 @@ async function getAllNews(limit = 50, categoryFilter) {
   }
 
   try {
-    const [kenyanBusinessNews, kwsNews, globalRssNews, googleNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews, yahooNews, kenyanMarketsNews] = await Promise.allSettled([
+    const [kenyanBusinessNews, kwsNews, globalRssNews, googleNews, newsApiNews, finnhubNews, benzingaNews, alphaVantageNews, kenyanMarketsNews, stockTitanNews, yahooTickerNews, nasdaqNews, fdaNews] = await Promise.allSettled([
       getKenyanBusinessNews(),
       withTimeout(fetchFromKWS(), 12000),
       withTimeout(fetchFromGlobalRSS(), 20000),
@@ -1776,20 +2030,26 @@ async function getAllNews(limit = 50, categoryFilter) {
       withTimeout(fetchFromFinnhub(), 8000),
       withTimeout(fetchFromBenzinga(), 8000),
       withTimeout(fetchFromAlphaVantage(), 12000),
-      withTimeout(fetchFromYahoo(), 12000),
       withTimeout(fetchFromKenyanMarkets(), 18000),
+      withTimeout(fetchFromStockTitan(), 12000),
+      withTimeout(fetchFromYahooTickerFeeds(), 20000),
+      withTimeout(fetchFromNasdaq(), 15000),
+      withTimeout(fetchFromFDA(), 12000),
     ]);
 
     const extract = r => r.status === 'fulfilled' ? r.value : [];
     let allNews = [
+      ...extract(stockTitanNews),
       ...extract(benzingaNews),
+      ...extract(yahooTickerNews),
       ...extract(kwsNews),
       ...extract(kenyanBusinessNews),
       ...extract(kenyanMarketsNews),
       ...extract(googleNews),
       ...extract(globalRssNews),
+      ...extract(nasdaqNews),
+      ...extract(fdaNews),
       ...extract(alphaVantageNews),
-      ...extract(yahooNews),
       ...extract(newsApiNews),
       ...extract(finnhubNews),
     ];
