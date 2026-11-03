@@ -170,6 +170,23 @@ async function getBatchQuotes(tickers, exchange) {
 // ── Historical OHLCV ──────────────────────────────────────────────────────────
 const RANGE_TO_PERIOD = { '1d': '1W', '5d': '1W', '1mo': '1MO', '3mo': '3MO', '6mo': '6MO', '1y': '1Y', '2y': '2Y', '5y': '5Y', 'max': '5Y' };
 
+// The partner history endpoint rate-limits aggressively when the expanded NSE /
+// NGX / JSE universe is prefetched. Serialize requests with a minimum gap so one
+// signal cycle cannot consume the whole quota (observed as HTTP 429 for every
+// NSE name, which starves technicals and suppresses otherwise valid signals).
+const HISTORY_MIN_GAP_MS = Number(process.env.MYSTOCKS_HISTORY_GAP_MS) || 1100;
+let historyQueue = Promise.resolve();
+let lastHistoryAt = 0;
+function paceHistory() {
+  const run = historyQueue.then(async () => {
+    const wait = Math.max(0, HISTORY_MIN_GAP_MS - (Date.now() - lastHistoryAt));
+    if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
+    lastHistoryAt = Date.now();
+  });
+  historyQueue = run.catch(() => {});
+  return run;
+}
+
 async function fetchHistorical(rawSymbol, range = '6mo', exchange) {
   if (!API_KEY) return null;
   const ex = exchangeOf(rawSymbol, exchange || 'NSE');
@@ -178,6 +195,7 @@ async function fetchHistorical(rawSymbol, range = '6mo', exchange) {
 
   const apiSymbol = ticker.includes('.') ? ticker : ticker + (EXCHANGES[ex] || EXCHANGES.NSE).suffix;
   const period = RANGE_TO_PERIOD[range.toLowerCase()] || '6MO';
+  await paceHistory();
 
   try {
     const resp = await axios.get(`${API_BASE}/stocks/${encodeURIComponent(apiSymbol)}/history`, {
