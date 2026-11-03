@@ -257,4 +257,161 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
   }
 }
 
-module.exports = { getFinancialReport };
+function parseMetricValue(raw) {
+  if (raw == null) return null;
+  const s = String(raw).trim().replace(/,/g, '');
+  if (!s || /^(n\/a|upgrade|pro|-|—)$/i.test(s)) return null;
+  const num = Number(s.replace(/[^0-9.+-]/g, ''));
+  if (!Number.isFinite(num)) return null;
+  const mult = /T$/i.test(s) ? 1e12 : /B$/i.test(s) ? 1e9 : /M$/i.test(s) ? 1e6 : /K$/i.test(s) ? 1e3 : 1;
+  return num * mult;
+}
+
+async function fetchStatsPage(ticker, section) {
+  const resp = await axios.get(`${BASE_STOCKS}/${encodeURIComponent(ticker)}/${section}/`, {
+    timeout: 20000,
+    headers: HEADERS,
+  });
+  return cheerio.load(resp.data);
+}
+
+async function getStatistics(symbol) {
+  const m = String(symbol).toUpperCase().match(/^([A-Z]+):(.+)$/);
+  const ticker = m ? m[2] : String(symbol).toUpperCase();
+  const exchange = m ? m[1] : 'US';
+  if (exchange !== 'US' && exchange !== 'STOCKS') return { success: false, source: 'stockanalysis', error: 'Statistics supported for US only' };
+  try {
+    const $ = await fetchStatsPage(ticker, 'statistics');
+    const rows = new Map();
+    $('table tr').each((_, tr) => {
+      const cells = $(tr).find('th,td').map((__, c) => $(c).text().replace(/\s+/g, ' ').trim()).get();
+      if (cells.length >= 2 && cells[0] && !rows.has(cells[0])) rows.set(cells[0], cells[1]);
+    });
+    const raw = (labels) => {
+      for (const label of labels) {
+        if (rows.has(label)) return rows.get(label);
+        const key = [...rows.keys()].find(k => k.toLowerCase().includes(String(label).toLowerCase()));
+        if (key) return rows.get(key);
+      }
+      return null;
+    };
+    const value = (labels) => parseMetricValue(raw(labels));
+    const pct = (labels) => value(labels);
+    const data = {
+      marketCap: value(['Market Cap']),
+      enterpriseValue: value(['Enterprise Value']),
+      sharesOutstanding: value(['Shares Outstanding']),
+      floatShares: value(['Float']),
+      insiderOwnershipPct: pct(['Owned by Insiders (%)', 'Owned by Insiders']),
+      institutionalOwnershipPct: pct(['Owned by Institutions (%)', 'Owned by Institutions']),
+      beta: value(['Beta (5Y)', 'Beta']),
+      week52ChangePct: pct(['52-Week Price Change']),
+      sma50: value(['50-Day Moving Average']),
+      sma200: value(['200-Day Moving Average']),
+      rsi: value(['Relative Strength Index (RSI)']),
+      averageVolume20: value(['Average Volume (20 Days)']),
+      peRatio: value(['PE Ratio']),
+      forwardPE: value(['Forward PE']),
+      psRatio: value(['PS Ratio']),
+      pbRatio: value(['PB Ratio']),
+      pegRatio: value(['PEG Ratio']),
+      evEbitda: value(['EV / EBITDA']),
+      evFcf: value(['EV / FCF']),
+      currentRatio: value(['Current Ratio']),
+      quickRatio: value(['Quick Ratio']),
+      debtToEquity: value(['Debt / Equity']),
+      interestCoverage: value(['Interest Coverage']),
+      roePct: pct(['Return on Equity (ROE)', 'ROE']),
+      roaPct: pct(['Return on Assets (ROA)', 'ROA']),
+      roicPct: pct(['Return on Invested Capital (ROIC)', 'ROIC']),
+      rocePct: pct(['Return on Capital Employed (ROCE)']),
+      waccPct: pct(['Weighted Average Cost of Capital (WACC)']),
+      assetTurnover: value(['Asset Turnover']),
+      inventoryTurnover: value(['Inventory Turnover']),
+      revenueTTM: value(['Revenue']),
+      grossProfitTTM: value(['Gross Profit']),
+      operatingIncomeTTM: value(['Operating Income']),
+      netIncomeTTM: value(['Net Income']),
+      ebitdaTTM: value(['EBITDA']),
+      epsTTM: value(['Earnings Per Share (EPS)']),
+      cashAndInvestments: value(['Cash & Marketable Securities', 'Cash & Investments']),
+      totalDebt: value(['Total Debt']),
+      netCash: value(['Net Cash']),
+      bookEquity: value(['Equity (Book Value)']),
+      workingCapital: value(['Working Capital']),
+      operatingCashFlowTTM: value(['Operating Cash Flow']),
+      capexTTM: value(['Capital Expenditures']),
+      depreciationTTM: value(['Depreciation & Amortization']),
+      freeCashFlowTTM: value(['Free Cash Flow']),
+      grossMarginPct: pct(['Gross Margin']),
+      operatingMarginPct: pct(['Operating Margin']),
+      profitMarginPct: pct(['Profit Margin']),
+      ebitdaMarginPct: pct(['EBITDA Margin']),
+      fcfMarginPct: pct(['FCF Margin']),
+      dividendPerShare: value(['Dividend Per Share']),
+      dividendYieldPct: pct(['Dividend Yield']),
+      payoutRatioPct: pct(['Payout Ratio']),
+      fcfYieldPct: pct(['FCF Yield']),
+      earningsYieldPct: pct(['Earnings Yield']),
+      shortInterest: value(['Short Interest']),
+      shortPreviousMonth: value(['Short Previous Month']),
+      shortPctSharesOut: pct(['Short % of Shares Out']),
+      shortPctFloat: pct(['Short % of Float']),
+      shortRatio: value(['Short Ratio (days to cover)']),
+      priceTarget: value(['Price Target']),
+      analystConsensus: raw(['Analyst Consensus']),
+      analystCount: value(['Analyst Count']),
+      revenueGrowthForecast3Y: pct(['Revenue Growth Forecast (3Y)']),
+      epsGrowthForecast3Y: pct(['EPS Growth Forecast (3Y)']),
+      altmanZ: value(['Altman Z-Score']),
+      piotroskiF: value(['Piotroski F-Score']),
+      effectiveTaxRatePct: pct(['Effective Tax Rate']),
+    };
+    return { success: true, source: 'stockanalysis', providers: ['S&P Global Market Intelligence', 'TipRanks'], asOf: new Date().toISOString(), data };
+  } catch (e) {
+    return { success: false, source: 'stockanalysis', error: e.message };
+  }
+}
+
+async function getForecast(symbol) {
+  const m = String(symbol).toUpperCase().match(/^([A-Z]+):(.+)$/);
+  const ticker = m ? m[2] : String(symbol).toUpperCase();
+  const exchange = m ? m[1] : 'US';
+  if (exchange !== 'US' && exchange !== 'STOCKS') return { success: false, source: 'stockanalysis', error: 'Forecast supported for US only' };
+  try {
+    const $ = await fetchStatsPage(ticker, 'forecast');
+    const text = $('body').text().replace(/\s+/g, ' ').trim();
+    const num = (re) => { const x = text.match(re); return x ? parseMetricValue(x[1]) : null; };
+    const count = num(/According to\s+([\d,]+)\s+analysts/i);
+    const consensus = (text.match(/consensus rating of\s+"([^"]+)"/i) || [])[1] || null;
+    const average = num(/average price target of\s+\$?([\d,.]+)/i);
+    const low = num(/lowest is\s+\$?([\d,.]+)/i);
+    const high = num(/highest is\s+\$?([\d,.]+)/i);
+    const revenueThisYear = num(/Revenue This Year\s+([\d.,]+[BM])/i);
+    const revenueNextYear = num(/Revenue Next Year\s+([\d.,]+[BM])/i);
+    const epsThisYear = num(/EPS This Year\s+([\d.,-]+)/i);
+    const epsNextYear = num(/EPS Next Year\s+([\d.,-]+)/i);
+    return {
+      success: !!(average || revenueThisYear || epsThisYear),
+      source: 'stockanalysis',
+      providers: ['S&P Global Market Intelligence', 'TipRanks'],
+      asOf: new Date().toISOString(),
+      data: {
+        analystCount: count,
+        consensus,
+        priceTarget: average,
+        priceTargetLow: low,
+        priceTargetHigh: high,
+        revenueThisYear,
+        revenueNextYear,
+        epsThisYear,
+        epsNextYear,
+        reliability: 'secondary; S&P/TipRanks consensus, not a guarantee',
+      },
+    };
+  } catch (e) {
+    return { success: false, source: 'stockanalysis', error: e.message };
+  }
+}
+
+module.exports = { getFinancialReport, getStatistics, getForecast };

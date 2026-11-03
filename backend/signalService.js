@@ -1109,6 +1109,48 @@ async function fetchRealFinancialMetrics(symbol) {
 
     // Insider / institutional ownership (US only — NSE returns null from Yahoo)
     if (d.ownership) metrics.ownership = d.ownership;
+    // StockAnalysis enrichment (forecast/statistics) carried by the fallback
+    // report. These are secondary-source fields and are labelled as such.
+    const saStats = d.statistics || null;
+    const saForecast = d.forecast || null;
+    if (saStats) {
+      if (!metrics.marketCap && saStats.marketCap) metrics.marketCap = saStats.marketCap;
+      if (!metrics.peRatio && saStats.peRatio) metrics.peRatio = saStats.peRatio;
+      if (!metrics.pbRatio && saStats.pbRatio) metrics.pbRatio = saStats.pbRatio;
+      if (!metrics.evEbitda && saStats.evEbitda) metrics.evEbitda = saStats.evEbitda;
+      if (!metrics.debtToEquity && saStats.debtToEquity) metrics.debtToEquity = saStats.debtToEquity;
+      if (!metrics.currentRatio && saStats.currentRatio) metrics.currentRatio = saStats.currentRatio;
+      if (metrics.roe == null && saStats.roePct != null) metrics.roe = saStats.roePct;
+      if (metrics.roa == null && saStats.roaPct != null) metrics.roa = saStats.roaPct;
+      if (metrics.roic == null && saStats.roicPct != null) metrics.roic = saStats.roicPct;
+      if (metrics.assetTurnover == null && saStats.assetTurnover != null) metrics.assetTurnover = saStats.assetTurnover;
+      if (metrics.fcfYield == null && saStats.fcfYieldPct != null) metrics.fcfYield = saStats.fcfYieldPct;
+      if (metrics.beta == null && saStats.beta != null) metrics.beta = saStats.beta;
+      if (metrics.sharesOutstanding == null && saStats.sharesOutstanding != null) metrics.sharesOutstanding = saStats.sharesOutstanding;
+      if (metrics.shortInterest == null && saStats.shortInterest != null) metrics.shortInterest = saStats.shortInterest;
+      if (metrics.shortPctSharesOut == null && saStats.shortPctSharesOut != null) metrics.shortPctSharesOut = saStats.shortPctSharesOut;
+      if (metrics.shortRatio == null && saStats.shortRatio != null) metrics.shortRatio = saStats.shortRatio;
+      if (metrics.institutionalOwnershipPct == null && saStats.institutionalOwnershipPct != null) metrics.institutionalOwnershipPct = saStats.institutionalOwnershipPct;
+      if (metrics.insiderOwnershipPct == null && saStats.insiderOwnershipPct != null) metrics.insiderOwnershipPct = saStats.insiderOwnershipPct;
+      if (metrics.analystTarget == null && saStats.priceTarget != null) metrics.analystTarget = saStats.priceTarget;
+      if (metrics.analystCount == null && saStats.analystCount != null) metrics.analystCount = saStats.analystCount;
+      if (metrics.analystConsensus == null && saStats.analystConsensus) metrics.analystConsensus = saStats.analystConsensus;
+      if (metrics.revenueGrowthForecast3Y == null && saStats.revenueGrowthForecast3Y != null) metrics.revenueGrowthForecast3Y = saStats.revenueGrowthForecast3Y;
+      if (metrics.epsGrowthForecast3Y == null && saStats.epsGrowthForecast3Y != null) metrics.epsGrowthForecast3Y = saStats.epsGrowthForecast3Y;
+      metrics.statisticsSource = 'stockanalysis';
+      metrics.statisticsAsOf = saStats.asOf || null;
+    }
+    if (saForecast) {
+      if (metrics.analystTarget == null && saForecast.priceTarget != null) metrics.analystTarget = saForecast.priceTarget;
+      if (metrics.analystCount == null && saForecast.analystCount != null) metrics.analystCount = saForecast.analystCount;
+      if (metrics.analystConsensus == null && saForecast.consensus) metrics.analystConsensus = saForecast.consensus;
+      if (metrics.analystRevenueThisYear == null) metrics.analystRevenueThisYear = saForecast.revenueThisYear ?? null;
+      if (metrics.analystRevenueNextYear == null) metrics.analystRevenueNextYear = saForecast.revenueNextYear ?? null;
+      if (metrics.analystEpsThisYear == null) metrics.analystEpsThisYear = saForecast.epsThisYear ?? null;
+      if (metrics.analystEpsNextYear == null) metrics.analystEpsNextYear = saForecast.epsNextYear ?? null;
+      metrics.forecastSource = 'stockanalysis';
+      metrics.forecastAsOf = saForecast.asOf || null;
+    }
 
     const hasUsableMetrics = metrics.peRatio || metrics.roe || metrics.revenueGrowth || metrics.currentRatio;
     _financialReportCache.set(symbol, hasUsableMetrics ? metrics : null);

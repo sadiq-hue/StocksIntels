@@ -1131,23 +1131,28 @@ async function buildFinancialReport(symbol, period = 'annual', limit = 4, provid
       // NGX/JSE above. Enrich its bare ticker profile with the live quote/profile
       // already used by the rest of the engine.
       console.log(`[FinancialReports] Yahoo Finance empty for ${symbol}; trying StockAnalysis fallback`);
-      const saReport = await require('./stockAnalysisScraper')
-        .getFinancialReport(symbol, period, limit)
-        .catch(() => null);
+      const sa = require('./stockAnalysisScraper');
+      const saReport = await sa.getFinancialReport(symbol, period, limit).catch(() => null);
       if (saReport?.success && (saReport.data?.incomeStatementHistory || []).length > 0) {
         availableProviders.push('stockanalysis');
-        const [quote, profile] = await Promise.allSettled([
+        const [quote, profile, statistics, forecast] = await Promise.allSettled([
           getQuote(symbol),
           getCompanyProfile(symbol),
+          sa.getStatistics(symbol),
+          sa.getForecast(symbol),
         ]);
         const q = quote.status === 'fulfilled' ? quote.value : null;
         const p = profile.status === 'fulfilled' ? profile.value : null;
+        const stats = statistics.status === 'fulfilled' && statistics.value?.success ? statistics.value.data : null;
+        const fc = forecast.status === 'fulfilled' && forecast.value?.success ? forecast.value.data : null;
         const saEnriched = {
           ...saReport,
           source: 'stockanalysis',
           availableProviders,
           data: {
             ...saReport.data,
+            statistics: stats,
+            forecast: fc,
             profile: {
               ...(saReport.data.profile || {}),
               companyName: p?.companyName || q?.company_name || symbol,
