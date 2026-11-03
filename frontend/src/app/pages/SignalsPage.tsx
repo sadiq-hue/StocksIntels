@@ -18,6 +18,7 @@ import type { Signal as StockSignal } from "../types/signals";
 import { StaleLevelsNotice } from "../components/StaleLevelsNotice";
 import { MarketIntelligenceCard } from "../components/MarketIntelligenceCard";
 import { authFetch } from "../auth/tokenStore";
+import { currencyPrefix } from "../utils/currency";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -115,7 +116,11 @@ function formatCurrency(value: number) {
 }
 
 function curSym(s: { currency?: string; market?: string; country?: string }): string {
-  return s.currency === "KES" || s.market === "NSE" || s.country === "KE" ? "KSh " : "$";
+  if (s.currency) return currencyPrefix(s.currency);
+  if (s.market === "NSE" || s.country === "KE") return "KSh ";
+  if (s.market === "NGX" || s.country === "NG") return "₦ ";
+  if (s.market === "JSE" || s.country === "ZA") return "R ";
+  return "$";
 }
 
 function fmtPrice(

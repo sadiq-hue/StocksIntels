@@ -18,7 +18,7 @@ const { ALL_SYMBOLS } = require('./stockData');
 
 const CORE = new Set(ALL_SYMBOLS.map(s => String(s).toUpperCase()));
 const dynamic = new Map();
-const TIER_RANK = { catalyst: 0, 'on-demand': 1, mover: 2, catalog: 3 };
+const TIER_RANK = { catalyst: 0, 'on-demand': 1, mover: 2, africa: 3, catalog: 4 };
 const MAX_DYNAMIC = 15000;
 const SEC_HEADERS = {
   'User-Agent': 'StocksIntels research contact@stocksintels.com',
@@ -27,11 +27,18 @@ const SEC_HEADERS = {
 
 let readyPromise = null;
 let cycleCursor = 0;
+let africaCursor = 0;
 let lastMoverRefresh = 0;
 let catalogRefreshedAt = 0;
+let africaRefreshedAt = 0;
 
 function normalizeSymbol(value) {
   let s = String(value || '').trim().toUpperCase();
+  if (/^(NGX|JSE):/.test(s)) {
+    const [exchange, ticker] = s.split(':');
+    if (!/^[A-Z][A-Z0-9.-]{0,14}$/.test(ticker || '')) return null;
+    return `${exchange}:${ticker}`;
+  }
   if (s.startsWith('US:')) s = s.slice(3);
   if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(s)) return null;
   return s;
@@ -135,6 +142,9 @@ async function persist(entries) {
           WHEN universe_symbols.tier = 'on-demand' THEN 'on-demand'
           WHEN EXCLUDED.tier = 'on-demand' THEN 'on-demand'
           WHEN universe_symbols.tier = 'mover' THEN 'mover'
+          WHEN EXCLUDED.tier = 'mover' THEN 'mover'
+          WHEN universe_symbols.tier = 'africa' THEN 'africa'
+          WHEN EXCLUDED.tier = 'africa' THEN 'africa'
           ELSE 'catalog'
         END,
         cik = COALESCE(EXCLUDED.cik, universe_symbols.cik),
@@ -159,6 +169,7 @@ async function init() {
   // Catalog refresh is background: the core universe and any persisted dynamic
   // names remain usable while the ~10k SEC list is upserted.
   refreshCatalog().catch(() => {});
+  refreshAfricanCatalog().catch(() => {});
 }
 
 function ready() {
@@ -184,7 +195,8 @@ async function addSymbols(input, opts = {}) {
     if (!prev && tier === 'catalog' && dynamic.size >= MAX_DYNAMIC) continue;
     const meta = {
       symbol,
-      market: item.market || prev?.market || 'US',
+      market: item.market || prev?.market
+        || (symbol.startsWith('NGX:') ? 'NGX' : symbol.startsWith('JSE:') ? 'JSE' : 'US'),
       name: item.name || prev?.name || null,
       sector: item.sector || prev?.sector || null,
       source: item.source || prev?.source || null,
@@ -289,6 +301,37 @@ async function refreshCatalog() {
   }
 }
 
+async function refreshAfricanCatalog() {
+  if (Date.now() - africaRefreshedAt < 24 * 60 * 60 * 1000) return;
+  africaRefreshedAt = Date.now();
+  const msa = require('./mystocksAfricaApi');
+  for (const exchange of ['NGX', 'JSE']) {
+    try {
+      const res = await msa.listAllStocks(exchange, { limit: 200, maxPages: 25 });
+      const entries = (res.data || [])
+        .map(r => {
+          const ticker = String(r.ticker || r.symbol || '').toUpperCase().replace(/^[A-Z]+:/, '');
+          if (!ticker) return null;
+          return {
+            symbol: `${exchange}:${ticker}`,
+            market: exchange,
+            name: r.name || null,
+            sector: r.sector || null,
+            source: 'mystocks-africa',
+            tier: 'africa',
+            changePct: r.changePct != null ? Number(r.changePct) : null,
+            volume: r.volume != null ? Number(r.volume) : null,
+          };
+        })
+        .filter(Boolean);
+      await addSymbols(entries, { tier: 'africa', source: 'mystocks-africa' });
+      console.log(`[Universe] ${exchange} catalog refreshed: ${entries.length} rows`);
+    } catch (e) {
+      console.warn(`[Universe] ${exchange} catalog refresh failed: ${e.message}`);
+    }
+  }
+}
+
 function sortPriority(a, b) {
   return (tierOf(a) - tierOf(b))
     || ((Number(b.catalystStrength) || 0) - (Number(a.catalystStrength) || 0))
@@ -301,11 +344,12 @@ async function getCycleSymbols(limit = 60) {
   const out = [];
   const add = (symbol) => { if (out.length < limit && !out.includes(symbol)) out.push(symbol); };
 
-  // Catalysts and on-demand names lead; a fixed share of the budget is left for
-  // rotating movers/catalog so the broad universe keeps advancing.
-  const catalystBudget = Math.ceil(limit * 0.4);
-  const onDemandBudget = Math.ceil(limit * 0.2);
-  const moverBudget = Math.ceil(limit * 0.2);
+  // Catalysts and on-demand names lead; fixed shares go to movers and the
+  // rotating NGX/JSE catalog, with the rest advancing the US catalog.
+  const catalystBudget = Math.ceil(limit * 0.30);
+  const onDemandBudget = Math.ceil(limit * 0.15);
+  const moverBudget = Math.ceil(limit * 0.15);
+  const africaBudget = Math.ceil(limit * 0.15);
 
   rows.filter(r => r.tier === 'catalyst').sort(sortPriority)
     .slice(0, catalystBudget).forEach(r => add(r.symbol));
@@ -313,6 +357,15 @@ async function getCycleSymbols(limit = 60) {
     .slice(0, onDemandBudget).forEach(r => add(r.symbol));
   rows.filter(r => r.tier === 'mover').sort(sortPriority)
     .slice(0, moverBudget).forEach(r => add(r.symbol));
+
+  const africa = rows.filter(r => r.tier === 'africa');
+  if (africa.length && out.length < limit) {
+    const start = africaCursor % africa.length;
+    const rotated = [...africa.slice(start), ...africa.slice(0, start)];
+    const take = Math.min(africaBudget, limit - out.length, rotated.length);
+    rotated.slice(0, take).forEach(r => add(r.symbol));
+    africaCursor = (africaCursor + Math.max(take, 1)) % africa.length;
+  }
 
   const catalog = rows.filter(r => r.tier === 'catalog');
   if (catalog.length && out.length < limit) {
@@ -342,6 +395,7 @@ function getStats() {
     dynamic: dynamic.size,
     byTier,
     catalogRefreshedAt: catalogRefreshedAt ? new Date(catalogRefreshedAt).toISOString() : null,
+    africaRefreshedAt: africaRefreshedAt ? new Date(africaRefreshedAt).toISOString() : null,
     lastMoverRefresh: lastMoverRefresh ? new Date(lastMoverRefresh).toISOString() : null,
     maxDynamic: MAX_DYNAMIC,
   };
@@ -359,6 +413,7 @@ module.exports = {
   observeCatalysts,
   refreshMovers,
   refreshCatalog,
+  refreshAfricanCatalog,
   getCycleSymbols,
   getMeta,
   isDynamic,

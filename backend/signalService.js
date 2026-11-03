@@ -616,7 +616,8 @@ function getMonitoredSignals() {
     const qc = _quoteCache.get(ticker);
     const price = (cached && cached.price) || (qc && qc.price) || null;
     const change = cached && cached.change != null ? cached.change : (qc && qc.changePercent != null ? qc.changePercent : null);
-    const isNse = NSE_SYMBOLS.includes(ticker);
+    const monitoredMarket = marketForSymbol(ticker);
+    const monitoredCurrency = currencyForSymbol(ticker);
     const monitoredHorizon = resolveHorizon(v.horizon, v.type, v.timeframe);
     const monitoredTf = monitoredTimeframe(ticker, v, cached);
     out.push({
@@ -638,8 +639,8 @@ function getMonitoredSignals() {
       timeframe: normalizeTimeframe(v.type, monitoredTf, monitoredHorizon),
       horizon: monitoredHorizon,
       specVersion: v.specVersion || null,
-      market: isNse ? 'NSE' : 'Global',
-      currency: isNse ? 'KES' : 'USD',
+      market: monitoredMarket,
+      currency: monitoredCurrency,
       openedAt: new Date(v.timestamp).toISOString(),
       generatedAt: new Date(v.timestamp).toISOString(),
       daysHeld: Math.max(0, Math.round((Date.now() - v.timestamp) / 86400000)),
@@ -770,8 +771,30 @@ const INSIDER_MAX_DELTA = 8;   // max composite swing from insider-activity conv
 
 // Stop/target resolution is only valid while the exchange's live session is open;
 // resolving on after-hours/stale quotes fabricates stop-fills and entries.
+function marketForSymbol(symbol) {
+  const s = String(symbol || '').toUpperCase();
+  if (NSE_SYMBOLS.includes(s) || s.startsWith('NSE:')) return 'NSE';
+  if (s.startsWith('NGX:')) return 'NGX';
+  if (s.startsWith('JSE:')) return 'JSE';
+  return 'Global';
+}
+
+function currencyForSymbol(symbol) {
+  const market = marketForSymbol(symbol);
+  return market === 'NSE' ? 'KES' : market === 'NGX' ? 'NGN' : market === 'JSE' ? 'ZAR' : 'USD';
+}
+
+function isAfricanSymbol(symbol) {
+  const s = String(symbol || '').toUpperCase();
+  return NSE_SYMBOLS.includes(s) || s.startsWith('NSE:') || s.startsWith('NGX:') || s.startsWith('JSE:');
+}
+
 function isExchangeOpen(symbol, now = new Date()) {
-  return NSE_SYMBOLS.includes(symbol) ? marketHours.nseOpen(now) : marketHours.usOpen(now);
+  const s = String(symbol || '').toUpperCase();
+  if (NSE_SYMBOLS.includes(s) || s.startsWith('NSE:')) return marketHours.nseOpen(now);
+  if (s.startsWith('NGX:')) return marketHours.ngxOpen(now);
+  if (s.startsWith('JSE:')) return marketHours.jseOpen(now);
+  return marketHours.usOpen(now);
 }
 
 // Whether any exchange the engine tracks (NSE 06:30-12:00 UTC, US 13:30-20:00
@@ -781,7 +804,9 @@ function isExchangeOpen(symbol, now = new Date()) {
 function anyTrackedExchangeOpen(now = new Date()) {
   const nseOpen = NSE_SYMBOLS.length > 0 && marketHours.nseOpen(now);
   const usOpen = marketHours.usOpen(now);
-  return nseOpen || usOpen;
+  const ngxOpen = marketHours.ngxOpen(now);
+  const jseOpen = marketHours.jseOpen(now);
+  return nseOpen || usOpen || ngxOpen || jseOpen;
 }
 
 // NSE trades Mon-Fri 09:00-15:00 Nairobi (UTC+3). Return the current Nairobi
@@ -928,6 +953,25 @@ async function getPriceHistory(symbol) {
     return null;
   }
 
+  // NGX / JSE: MyStocks Africa history (the same partner feed used for quotes).
+  if (symbol.startsWith('NGX:') || symbol.startsWith('JSE:')) {
+    try {
+      const msa = require('./mystocksAfricaApi');
+      const bars = await msa.fetchHistorical(symbol, '1y');
+      if (bars && bars.length >= 2) {
+        const valid = bars.filter(b => b.close != null);
+        const prices = valid.map(b => b.close);
+        prices.volumes = valid.map(b => b.volume || 0).filter(v => v > 0);
+        prices.highs = valid.map(b => b.high);
+        prices.lows = valid.map(b => b.low);
+        _priceHistoryCache.set(symbol, { data: prices, ts: Date.now() });
+        return prices;
+      }
+    } catch { /* fall through */ }
+    _priceHistoryCache.set(symbol, { data: null, ts: Date.now() });
+    return null;
+  }
+
   // Non-NSE: Yahoo Finance V8
   const bars = await fetchHistoricalQuotes(symbol, '3mo', '1d');
   if (bars && bars.length >= 2) {
@@ -945,10 +989,10 @@ async function getPriceHistory(symbol) {
 }
 
 async function prefetchPriceHistories(symbols) {
-  const nseSymbols = symbols.filter(s => NSE_SYMBOLS.includes(s));
-  const otherSymbols = symbols.filter(s => !NSE_SYMBOLS.includes(s));
+  const africanSymbols = symbols.filter(s => isAfricanSymbol(s));
+  const otherSymbols = symbols.filter(s => !isAfricanSymbol(s));
   // NSE stocks all hit the same MyStocks Africa API — process one at a time to avoid rate limits
-  for (const s of nseSymbols) {
+  for (const s of africanSymbols) {
     await getPriceHistory(s).catch(() => {});
     await new Promise(r => setTimeout(r, 300));
   }
@@ -965,9 +1009,9 @@ async function prefetchPriceHistories(symbols) {
 }
 
 async function prefetchWeeklyData(symbols) {
-  const nseSymbols = symbols.filter(s => NSE_SYMBOLS.includes(s));
-  const otherSymbols = symbols.filter(s => !NSE_SYMBOLS.includes(s));
-  for (const s of nseSymbols) {
+  const africanSymbols = symbols.filter(s => isAfricanSymbol(s));
+  const otherSymbols = symbols.filter(s => !isAfricanSymbol(s));
+  for (const s of africanSymbols) {
     await getWeeklyData(s).catch(() => {});
     await new Promise(r => setTimeout(r, 200));
   }
@@ -1860,11 +1904,12 @@ async function getWeeklyData(symbol) {
   const cached = _weeklyPriceCache.get(symbol);
   if (cached && Date.now() - cached.ts < WEEKLY_CACHE_TTL) return cached.data;
   try {
-    const isNse = NSE_SYMBOLS.includes(symbol);
-    if (isNse) {
+    const market = marketForSymbol(symbol);
+    if (market === 'NSE' || market === 'NGX' || market === 'JSE') {
       try {
         const msa = require('./mystocksAfricaApi');
-        const bars = await msa.fetchHistorical(`NSE:${symbol}`, '6mo');
+        const qualified = market === 'NSE' ? `NSE:${symbol}` : symbol;
+        const bars = await msa.fetchHistorical(qualified, '6mo');
         if (bars && bars.length >= 4) {
           const closes = bars.map(b => b.close).filter(p => p != null);
           _weeklyPriceCache.set(symbol, { data: closes, ts: Date.now() });
@@ -3101,7 +3146,7 @@ async function getForwardTestStats() {
       returnPct: entry && exit ? Math.round(((exit - entry) / entry) * 1000) / 10 : null,
       generatedAt: gAt ? new Date(gAt).toISOString() : null,
       resolvedAt: rAt ? new Date(rAt).toISOString() : null,
-      currency: NSE_SYMBOLS.includes(sym) ? 'KES' : 'USD',
+      currency: currencyForSymbol(sym),
     });
   }
 
@@ -3132,7 +3177,7 @@ async function getForwardTestStats() {
         returnPct: ret,
         generatedAt: p.generated_at ? new Date(p.generated_at).toISOString() : null,
         resolvedAt: p.resolved_at ? new Date(p.resolved_at).toISOString() : null,
-        currency: NSE_SYMBOLS.includes(p.symbol) ? 'KES' : 'USD',
+        currency: currencyForSymbol(p.symbol),
       });
     }
   } catch (e) {
@@ -3428,7 +3473,7 @@ async function getSellAudit() {
         benchPrice: p.bench_price != null ? parseFloat(p.bench_price) : null,
         actualReturn: p.actual_return != null ? parseFloat(p.actual_return) : null,
         correct: p.correct, resolved: !!p.resolved,
-        currency: NSE_SYMBOLS.includes(p.symbol) ? 'KES' : 'USD',
+        currency: currencyForSymbol(p.symbol),
         generatedAt: p.generated_at ? new Date(p.generated_at).getTime() : null,
         resolvedAt: p.resolved_at ? new Date(p.resolved_at).getTime() : null,
       });
@@ -3538,7 +3583,7 @@ function getForwardTestPredictions({ symbol, resolved, limit = 50, offset = 0, a
       // An explicit `action` query still lets a caller request a side.
       const side = p.action || 'buy';
       if (action ? side !== action : side !== 'buy') continue;
-      all.push({ symbol: sym, ...p, currency: NSE_SYMBOLS.includes(sym) ? 'KES' : 'USD', generatedAt: new Date(p.generatedAt).toISOString(), resolvedAt: p.resolvedAt ? new Date(p.resolvedAt).toISOString() : null, supersededAt: p.supersededAt ? new Date(p.supersededAt).toISOString() : null });
+      all.push({ symbol: sym, ...p, currency: currencyForSymbol(sym), generatedAt: new Date(p.generatedAt).toISOString(), resolvedAt: p.resolvedAt ? new Date(p.resolvedAt).toISOString() : null, supersededAt: p.supersededAt ? new Date(p.supersededAt).toISOString() : null });
     }
   }
   // Collapse to ONE row per thesis using the SAME predicate the write path uses
@@ -5141,7 +5186,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
           // Flipped/faded while the exchange is closed: defer the close until the
           // next live session so the exit price isn't a stale after-hours quote.
           emitSignal = false;
-          console.log(`[SignalService] ${symbol} previous ${prevAction} signal ${sc.close === 'score flipped' ? 'flipped' : 'conviction faded'} but ${NSE_SYMBOLS.includes(symbol) ? 'NSE' : 'US'} market closed - deferring close until next session`);
+          console.log(`[SignalService] ${symbol} previous ${prevAction} signal ${sc.close === 'score flipped' ? 'flipped' : 'conviction faded'} but ${marketForSymbol(symbol)} market closed - deferring close until next session`);
         }
       }
     }
@@ -5149,7 +5194,7 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     // 25% in a single cycle is a corrupt feed row (e.g. SCOM 24.88 vs 35.20 entry
     // on 2026-09-14) — passing a tight cap keeps it from resolving a phantom stop.
     // US symbols keep the wider 50% default (overnight gaps to targets are real).
-    trackSignalOutcomes(_portfolioState, _performanceStats, _signalOutcomes, symbol, currentPrice, sigObj, marketOpen, NSE_SYMBOLS.includes(symbol) ? 0.25 : 0.5);
+    trackSignalOutcomes(_portfolioState, _performanceStats, _signalOutcomes, symbol, currentPrice, sigObj, marketOpen, isAfricanSymbol(symbol) ? 0.25 : 0.5);
     // Sell persistence gate: one sell forward-prediction per symbol until it
     // resolves. A persistent sell must not create a new prediction every cycle
     // — the audit counts every persisted row, so duplicates inflate the totals.
@@ -5428,7 +5473,7 @@ async function getSignalForStock(symbol) {
       }
       return {
         ticker: upper, signal: open.signal, action: open.action,
-        currency: NSE_SYMBOLS.includes(upper) ? 'KES' : 'USD',
+        currency: currencyForSymbol(upper),
         entry: entry, entryPrice: entry, stopLoss: stop, target1: t1,
         target2: open.target2 != null ? open.target2 : null,
         target3: open.target3 != null ? open.target3 : null,
@@ -6396,7 +6441,8 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // per-type label when no target exists (Sell/Avoid ratings have no levels).
   const timeframes = { 'Aggressive Buy': '1-4 weeks', 'Momentum Trade': '1-3 weeks', 'Swing Trade': '2-4 weeks', 'Long Term Value': '1-3+ years', 'Long Term': '1-3+ years', 'Avoid': 'N/A' };
   const holdingPeriod = formatHoldingPeriod(tradeLevels.expectedDays, tradeType);
-  const isNse = NSE_SYMBOLS.includes(symbol);
+  const market = marketForSymbol(symbol);
+  const currency = currencyForSymbol(symbol);
   // Recent-news digest: every article that mentions this ticker, newest first.
   // A coarse sentiment label alone hides the actual events that can move the
   // stock, so the list travels with the signal and is rendered per stock.
@@ -6473,7 +6519,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const obj = {
     id: `signal-${symbol}-${Date.now()}`, ticker: symbol, name: stock.name,
     price: Math.round(currentPrice * 100) / 100, change: Math.round(priceChange * 100) / 100,
-    market: isNse ? 'NSE' : 'Global', country: getCountryForSymbol(symbol), currency: isNse ? 'KES' : 'USD',
+    market, country: getCountryForSymbol(symbol), currency,
     type: tradeType, signal: sig.signal, action: sig.action, entry: tradeLevels.entry,
     stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2, target3: tradeLevels.target3,
     riskReward: tradeLevels.riskReward, confidence, positionSize: positionSize + '%',
@@ -6720,27 +6766,27 @@ function assessDataQuality({ marketOpen, quoteAgeMs, currentPrice, volume, price
 }
 
 function assessLiquidity({ symbol, currentPrice, volume, priceHistory }) {
-  const isNse = NSE_SYMBOLS.includes(symbol);
+  const market = marketForSymbol(symbol);
   const vols = Array.isArray(priceHistory?.volumes) ? priceHistory.volumes.filter(v => Number(v) > 0).slice(-20) : [];
   const avgVolume = vols.length
     ? vols.reduce((a, b) => a + Number(b), 0) / vols.length
     : Number(volume) || 0;
   const dollarVolume = avgVolume * (Number(currentPrice) || 0);
-  const minDollarAdv = isNse ? 500000 : 1000000;
+  const minDollarAdv = market === 'NSE' ? 500000 : market === 'NGX' ? 50000000 : 1000000;
   return {
     ok: dollarVolume >= minDollarAdv,
     avgVolume: Math.round(avgVolume),
     dollarVolume: Math.round(dollarVolume),
     minDollarAdv,
     thin: dollarVolume < minDollarAdv * 2,
-    currency: isNse ? 'KES' : 'USD',
+    currency: currencyForSymbol(symbol),
   };
 }
 
 function estimateCostBps(symbol, horizon) {
-  const isNse = NSE_SYMBOLS.includes(symbol);
-  const base = isNse ? 55 : 12;
-  const shortExtra = horizon === 'short' ? (isNse ? 30 : 10) : 0;
+  const african = isAfricanSymbol(symbol);
+  const base = african ? 55 : 12;
+  const shortExtra = horizon === 'short' ? (african ? 30 : 10) : 0;
   return base + shortExtra;
 }
 

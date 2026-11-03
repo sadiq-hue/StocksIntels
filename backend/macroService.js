@@ -16,13 +16,18 @@ const COUNTRY_MACRO = {
   EU: { name: 'Eurozone', code: 'eu', currency: 'EUR', centralBank: 'European Central Bank (ECB)' },
   JP: { name: 'Japan', code: 'jp', currency: 'JPY', centralBank: 'Bank of Japan (BoJ)' },
   UK: { name: 'United Kingdom', code: 'gb', currency: 'GBP', centralBank: 'Bank of England (BoE)' },
+  NG: { name: 'Nigeria', code: 'ng', currency: 'NGN', centralBank: 'Central Bank of Nigeria (CBN)' },
+  ZA: { name: 'South Africa', code: 'za', currency: 'ZAR', centralBank: 'South African Reserve Bank (SARB)' },
 };
 
 // ─── Country Mapping ───────────────────────────────────────────────────────
 function getCountryForSymbol(symbol) {
+  const s = String(symbol || '').toUpperCase();
+  if (s.startsWith('NGX:')) return 'NG';
+  if (s.startsWith('JSE:')) return 'ZA';
   // Use the canonical NSE universe from stockData so every NSE name (KQ, SCAN,
   // KEGN, BRIT, ...) gets Kenya macro context instead of falling through to US.
-  return NSE_SYMBOLS.includes(String(symbol).toUpperCase()) ? 'KE' : 'US';
+  return NSE_SYMBOLS.includes(s) || s.startsWith('NSE:') ? 'KE' : 'US';
 }
 
 function getMacroBundle(country) {
@@ -68,8 +73,8 @@ function cacheSet(key, data, ttl = CACHE_TTL) {
 // conditions without a live value are excluded from the score, and the three
 // conditions with no free live source (PMI, sovereign credit rating, political
 // risk) were removed entirely.
-const worldBankCountry = { US: 'US', KE: 'KE', EU: 'XC', JP: 'JP', UK: 'GB' };
-const imfCountry = { US: 'USA', KE: 'KEN', EU: 'EU', JP: 'JPN', UK: 'GBR' };
+const worldBankCountry = { US: 'US', KE: 'KE', EU: 'XC', JP: 'JP', UK: 'GB', NG: 'NG', ZA: 'ZA' };
+const imfCountry = { US: 'USA', KE: 'KEN', EU: 'EU', JP: 'JPN', UK: 'GBR', NG: 'NGA', ZA: 'ZAF' };
 
 const WB_FIELDS = {
   gdpGrowth: 'NY.GDP.MKTP.KD.ZG',
