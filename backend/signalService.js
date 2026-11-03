@@ -6233,6 +6233,26 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const confAfterIntelligence = confidence;
   const confFinal = confidence;
 
+  // Catalyst fast path: a high-strength positive catalyst can still produce a
+  // short-term Buy when confidence is just under the normal bar. It must pass a
+  // minimum-target R:R, liquidity, data-quality and positive-expectancy check,
+  // and is sized at half the normal risk budget. Provisional acceptance here is
+  // re-validated after the levels/scenario targets are built below.
+  const catalystFastCfg = sc.catalyst_fast_path || {};
+  const catalystFastEnabled = catalystFastCfg.enabled !== false;
+  const catalystFastConfidence = catalystFastCfg.min_confidence ?? 50;
+  const catalystFastMinRr = catalystFastCfg.min_target_rr ?? 0.5;
+  const catalystFastMinExpectancy = catalystFastCfg.min_expectancy ?? 0.05;
+  const catalystFastMaxAgeDays = catalystFastCfg.max_age_days ?? 10;
+  const catalystFastSizeMult = catalystFastCfg.size_multiplier ?? 0.5;
+  const catalystAgeDays = cat.publishedAt ? (Date.now() - new Date(cat.publishedAt).getTime()) / 86400000 : Infinity;
+  const catalystCandidate = catalystFastEnabled
+    && cat.direction === 'positive'
+    && Number(cat.strength || 0) >= 2
+    && catalystAgeDays <= catalystFastMaxAgeDays
+    && confidence >= catalystFastConfidence;
+  let catalystFastPath = false;
+
   // ── Confidence gate: label must be backed by scaled conviction ───────
   // The bucket label comes from overallScore alone; after variance/skew
   // deductions the confidence can fall below the bucket's bar, making the
@@ -6256,8 +6276,9 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   const _origSignalLabel = sig.signal;
   let _confidenceGateNote = null;
   if (sig.action === 'buy') {
-    if (confidence < thresholds.buy) {
-      _confidenceGateNote = `${_origSignalLabel} (confidence ${confidence}% < buy bar ${thresholds.buy}%)`;
+    const buyBar = catalystCandidate ? Math.min(thresholds.buy, catalystFastConfidence) : thresholds.buy;
+    if (confidence < buyBar) {
+      _confidenceGateNote = `${_origSignalLabel} (confidence ${confidence}% < buy bar ${buyBar}%)`;
       sig = { ...sig, signal: 'Hold', action: 'hold', strength: 'neutral' };
     } else if (confidence < thresholds.strong_buy && sig.signal === 'Strong Buy') {
       _confidenceGateNote = `Strong Buy (confidence ${confidence}% < strong_buy bar ${thresholds.strong_buy}%) -> Buy`;
@@ -6333,6 +6354,18 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
       };
     }
   }
+  if (sig.action === 'buy' && catalystCandidate && confidence < thresholds.buy) {
+    catalystFastPath = horizon === 'short'
+      && scenarioTargets?.available === true
+      && Number(scenarioTargets.rewardRiskMinimum) >= catalystFastMinRr
+      && liquidity?.ok === true
+      && dataQuality?.ok !== false;
+    if (!catalystFastPath) {
+      _confidenceGateNote = `${_origSignalLabel} (catalyst fast path rejected: ${scenarioTargets?.available ? `min R:R ${scenarioTargets.rewardRiskMinimum}` : 'no scenario target'}, ${liquidity?.ok === false ? 'illiquid' : 'liquidity ok'}, horizon ${horizon || 'none'})`;
+      sig = { ...sig, signal: 'Hold', action: 'hold', strength: 'neutral' };
+      console.log(`[SignalService] ${symbol} confidence-gate: ${_confidenceGateNote}`);
+    }
+  }
   // Assess the business thesis for every symbol, not only a fresh Buy: an open
   // long-term position can turn into a Hold/Sell while it is being monitored,
   // and the thesis review still needs the current fundamental evidence.
@@ -6371,9 +6404,9 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     const netR = Math.max(0, R - costR);
     const p = confidence / 100;
     expectancy = Math.round((p * netR - (1 - p)) * 1000) / 1000;
-    const minE = qualityCfg.min_expectancy ?? 0.2;
+    const minE = catalystFastPath ? catalystFastMinExpectancy : (qualityCfg.min_expectancy ?? 0.2);
     if (expectancy < minE) {
-      _expectancyGateNote = `${sig.signal} (net expectancy ${expectancy}R < ${minE}R: p=${Math.round(p * 100)}%, R=${netR.toFixed(2)}, cost=${estCostBps}bps)`;
+      _expectancyGateNote = `${sig.signal} (net expectancy ${expectancy}R < ${minE}R: p=${Math.round(p * 100)}%, R=${netR.toFixed(2)}, cost=${estCostBps}bps${catalystFastPath ? ', catalyst fast path' : ''})`;
       sig = { ...sig, signal: 'Hold', action: 'hold', strength: 'neutral' };
       console.log(`[SignalService] ${symbol} expectancy-gate: ${_expectancyGateNote}`);
     }
@@ -6407,6 +6440,9 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     positionSize = calculatePositionSize(sig, regime.regime, confidence, scoreVariance);
     positionSize = Math.round(positionSize * regimePenalty * circuitBreaker);
     positionSize = Math.max(1, Math.min(positionSize, maxPositionPct));
+  }
+  if (catalystFastPath && sig.action === 'buy') {
+    positionSize = Math.max(1, Math.floor(positionSize * catalystFastSizeMult));
   }
   const formattedVolume = volume >= 1000000 ? (volume / 1000000).toFixed(1) + 'M' : (volume / 1000).toFixed(1) + 'K';
   const macroReason = generateMacroReason(macro);
@@ -6537,8 +6573,9 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     stopDistancePct: tradeLevels.stopDistancePct != null ? tradeLevels.stopDistancePct : Math.round(stopPct * 10000) / 100,
     riskBudgetPct: Math.round(effectiveRiskBudgetPct * 100) / 100,
     riskSizedPct: Math.round(riskSizedPct * 100) / 100,
-    positionSizeModel: 'risk-budget',
+    positionSizeModel: catalystFastPath ? 'risk-budget-catalyst' : 'risk-budget',
     targetMethod: tradeLevels.targetMethod || null,
+    catalystFastPath,
     fairValue: tradeLevels.fairValue || null,
     valuation,
     advancedFundamentals,

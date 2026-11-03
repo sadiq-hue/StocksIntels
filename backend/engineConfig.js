@@ -184,6 +184,17 @@ const DEFAULTS = {
         fundamental_max_score: 40,
         cap_score: 54,
       },
+      // Short-term, high-strength positive catalyst exception. It only bypasses
+      // the normal confidence bar by a few points and keeps a positive
+      // expectancy, minimum-target R:R >= 0.5, liquidity and live-data checks.
+      catalyst_fast_path: {
+        enabled: true,
+        min_confidence: 50,
+        min_target_rr: 0.5,
+        min_expectancy: 0.05,
+        max_age_days: 10,
+        size_multiplier: 0.5,
+      },
       sparse_fund_tech: -4,
       sparse_fund_fin: -3,
       direction_buy_threshold: 55,
