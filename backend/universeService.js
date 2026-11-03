@@ -218,6 +218,26 @@ async function observeCatalysts(catalysts = {}) {
   return addSymbols(entries, { tier: 'catalyst' });
 }
 
+async function fetchYahooMovers() {
+  const screener = async (id) => {
+    const res = await axios.get(
+      `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&scrIds=${id}&count=25`,
+      { timeout: 12000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    return res.data?.finance?.result?.[0]?.quotes || [];
+  };
+  const [gainers, losers] = await Promise.all([screener('day_gainers'), screener('day_losers')]);
+  return [...gainers, ...losers].map(q => ({
+    symbol: q.symbol,
+    name: q.shortName || q.longName || q.symbol,
+    source: 'yahoo-movers',
+    tier: 'mover',
+    changePct: q.regularMarketChangePercent,
+    volume: q.regularMarketVolume,
+    marketCap: q.marketCap,
+  })).filter(m => m.symbol);
+}
+
 async function refreshMovers() {
   if (Date.now() - lastMoverRefresh < 5 * 60 * 1000) return [];
   lastMoverRefresh = Date.now();
@@ -233,9 +253,14 @@ async function refreshMovers() {
       volume: m.volume,
       marketCap: m.marketCap,
     }));
-    return addSymbols(entries, { tier: 'mover' });
+    if (entries.length) return addSymbols(entries, { tier: 'mover' });
   } catch (e) {
-    console.warn(`[Universe] movers refresh failed: ${e.message}`);
+    console.warn(`[Universe] stockanalysis movers failed: ${e.message}`);
+  }
+  try {
+    return addSymbols(await fetchYahooMovers(), { tier: 'mover' });
+  } catch (e) {
+    console.warn(`[Universe] yahoo movers failed: ${e.message}`);
     return [];
   }
 }
@@ -254,6 +279,7 @@ async function refreshCatalog() {
         symbol: r.ticker,
         name: r.title,
         source: 'sec-catalog',
+        cik: r.cik_str != null ? String(r.cik_str).padStart(10, '0') : null,
       }))
       .filter(r => r.symbol && r.name);
     await addSymbols(entries, { tier: 'catalog', source: 'sec-catalog' });
