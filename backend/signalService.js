@@ -763,6 +763,7 @@ const NSE_QUOTE_MAX_DEVIATION = 0.25;
 // trustworthiness — see meetsSignalConditions() below.
 const MIN_SIGNAL_HISTORY = 20; // enough bars for ATR/RSI/SMA to be meaningful
 const MIN_RISK_REWARD = 1.2;   // buy setups must offer a sane reward vs the stop
+const SHORT_MIN_REWARD_RISK = 0.5; // 2-week–3-month scenario minimum target floor
 const INSIDER_MAX_DELTA = 8;   // max composite swing from insider-activity conviction (0 = no data)
 
 // Stop/target resolution is only valid while the exchange's live session is open;
@@ -6176,6 +6177,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     horizon,
     atrPct,
     targetOverride: scenarioTargets?.available ? scenarioTargets.average : null,
+    minimumTargetOverride: scenarioTargets?.available ? scenarioTargets.minimum : null,
   });
   const segmentViews = buildSegmentViews({
     horizon,
@@ -6386,7 +6388,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     horizonCriteria: horizon === 'long'
       ? ['fundamental score ≥55', 'financial score ≥45', 'D/E ≤2.5', 'current ratio ≥0.8', 'Altman Z ≥1.8', 'scenario targets', 'thesis-break exit']
       : horizon === 'short'
-        ? ['technical score ≥55', 'no death cross', 'MACD not bearish', 'risk-on regime', 'R:R ≥1.5', 'scenario targets', '20% stop policy', '2-week-3-month horizon', 'liquidity/event/cost']
+        ? ['technical score ≥55', 'no death cross', 'MACD not bearish', 'risk-on regime', 'minimum-target R:R >=0.5', 'scenario targets', '20% stop policy', '2-week-3-month horizon', 'liquidity/event/cost']
         : ['score/confidence gates', 'R:R ≥1.2', 'scenario targets'],
     timeframe: holdingPeriod || timeframes[tradeType], sector: stock.sector, volume: formattedVolume, rawVolume: volume || 0,
     weeklyTrend: weeklyTrend.trend, regime: regime.regime,
@@ -6680,8 +6682,13 @@ function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fun
     } else if (!(s < e && e < t1)) {
       reasons.push(`non-monotonic buy levels (stop=${s} >= entry=${e} >= target=${t1})`);
     }
-    if (Number.isFinite(sigObj.riskReward) && sigObj.riskReward < MIN_RISK_REWARD) {
-      reasons.push(`low risk/reward ${sigObj.riskReward}`);
+    const shortScenario = sigObj.horizon === 'short' && sigObj.targets && sigObj.targets.available !== false;
+    const validationRr = shortScenario
+      ? Number(sigObj.targets.rewardRiskMinimum)
+      : Number(sigObj.riskReward);
+    const validationFloor = shortScenario ? SHORT_MIN_REWARD_RISK : MIN_RISK_REWARD;
+    if (Number.isFinite(validationRr) && validationRr < validationFloor) {
+      reasons.push(`${shortScenario ? 'short-term minimum-target' : 'average-target'} reward/risk ${validationRr} <${validationFloor}`);
     }
     if (sigObj.targets && sigObj.targets.available === false) {
       reasons.push(`target: insufficient evidence (${(sigObj.targetEvidence || []).join(', ') || 'no structure'})`);
@@ -6721,7 +6728,7 @@ function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fun
       reasons.push('short-term: risk-off regime');
     }
     if (sigObj.hybrid && sigObj.hybrid.shortTermEligible === false) {
-      reasons.push(`short-term: average-target R:R ${sigObj.hybrid.riskReward ?? 'n/a'} <1.2`);
+      reasons.push(`short-term: minimum-target R:R ${sigObj.hybrid.minimumRewardRisk ?? 'n/a'} <${SHORT_MIN_REWARD_RISK}`);
     }
   }
 

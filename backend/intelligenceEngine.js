@@ -297,13 +297,16 @@ function analyzeCrossFactors({ stock = {}, fundamental = {}, technical = {}, fin
   };
 }
 
-function computeHybridRisk({ entry, stop, valuation = null, horizon = null, atrPct = null, targetOverride = null }) {
+function computeHybridRisk({ entry, stop, valuation = null, horizon = null, atrPct = null, targetOverride = null, minimumTargetOverride = null }) {
   const e = num(entry);
   const s = num(stop);
   const risk = e != null && s != null ? e - s : null;
   const target = num(targetOverride) ?? num(valuation?.base) ?? num(valuation?.fairValue);
+  const minimumTarget = num(minimumTargetOverride) ?? target;
   const reward = e != null && target != null ? target - e : null;
   const rr = risk > 0 && reward != null ? reward / risk : null;
+  const minReward = e != null && minimumTarget != null ? minimumTarget - e : null;
+  const minRr = risk > 0 && minReward != null ? minReward / risk : null;
   const atrMultiplier = num(atrPct) != null ? (atrPct >= 0.05 ? 3 : 2) : null;
   return {
     riskPerShare: round(risk),
@@ -311,8 +314,10 @@ function computeHybridRisk({ entry, stop, valuation = null, horizon = null, atrP
     rewardPerShare: round(reward),
     riskReward: round(rr),
     atrMultiplier,
-    shortTermEligible: horizon === 'short' && rr != null ? rr >= 1.2 : null,
-    rule: horizon === 'short' ? 'short-term alerts require average-target R:R >= 1.2' : 'long-term target uses average scenario',
+    shortTermEligible: horizon === 'short' && minRr != null ? minRr >= 0.5 : null,
+    minimumTarget: round(minimumTarget),
+    minimumRewardRisk: round(minRr),
+    rule: horizon === 'short' ? 'short-term alerts require minimum-target R:R >= 0.5' : 'long-term target uses average scenario',
   };
 }
 

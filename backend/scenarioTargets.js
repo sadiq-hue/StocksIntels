@@ -120,6 +120,8 @@ function buildScenarioTargets({
   const risk = e - s;
   const reward = average - e;
   const rewardRisk = risk > 0 ? reward / risk : null;
+  const rewardRiskMinimum = risk > 0 ? (minimum - e) / risk : null;
+  const rewardRiskExtended = risk > 0 && extended != null ? (extended - e) / risk : null;
   const averageDistance = Math.max(0, average - e);
   const targetDays = atrValue > 0 ? Math.ceil(averageDistance / (atrValue * pathEfficiency)) : null;
   const feasible = targetDays == null || (shortHorizon ? targetDays <= 90 : targetDays <= 365);
@@ -137,7 +139,9 @@ function buildScenarioTargets({
     extended: extended != null ? round(extended) : null,
     expected: round(expected),
     probabilities,
+    rewardRiskMinimum: round(rewardRiskMinimum),
     rewardRiskAverage: round(rewardRisk),
+    rewardRiskExtended: round(rewardRiskExtended),
     targetDays,
     feasible,
     evidence,

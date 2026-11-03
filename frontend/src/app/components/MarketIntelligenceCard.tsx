@@ -612,6 +612,13 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
                 assess=""
               />
             )}
+            {s.targets?.rewardRiskMinimum != null && (
+              <Fact
+                label="Target R:R (min / avg)"
+                value={`${s.targets.rewardRiskMinimum} : 1 / ${s.targets.rewardRiskAverage ?? "—"} : 1`}
+                assess=""
+              />
+            )}
             {s.hybrid?.riskReward != null && (
               <Fact
                 label="Hybrid R:R"
