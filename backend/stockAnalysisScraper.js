@@ -260,7 +260,7 @@ async function getFinancialReport(symbol, period = 'annual', limit = 4) {
 function parseMetricValue(raw) {
   if (raw == null) return null;
   const s = String(raw).trim().replace(/,/g, '');
-  if (!s || /^(n\/a|upgrade|pro|-|—)$/i.test(s)) return null;
+  if (!s || /^(n\/a|upgrade|pro|-|ï¿½)$/i.test(s)) return null;
   const num = Number(s.replace(/[^0-9.+-]/g, ''));
   if (!Number.isFinite(num)) return null;
   const mult = /T$/i.test(s) ? 1e12 : /B$/i.test(s) ? 1e9 : /M$/i.test(s) ? 1e6 : /K$/i.test(s) ? 1e3 : 1;
@@ -414,4 +414,101 @@ async function getForecast(symbol) {
   }
 }
 
-module.exports = { getFinancialReport, getStatistics, getForecast };
+// Near-real-time quote scrape used as a parallel provider for US/global names.
+// The financial-statistics endpoint does not expose a live price, so this reads
+// the stock overview page (price header plus the quote summary table).
+const quoteCache = new Map();
+const QUOTE_CACHE_TTL_MS = 45 * 1000;
+
+function parseQuoteValue(raw) {
+  if (raw == null) return null;
+  const match = String(raw).match(/[+-]?[\d,]+(?:\.\d+)?\s*[TBMK]?/i);
+  return match ? parseMetricValue(match[0]) : null;
+}
+
+function parseRange(raw) {
+  if (!raw) return { low: null, high: null };
+  const parts = String(raw).split(/\s*[-\u2013]\s*/);
+  return {
+    low: parseQuoteValue(parts[0]),
+    high: parseQuoteValue(parts[1]),
+  };
+}
+
+async function getQuote(symbol) {
+  const clean = String(symbol || '').toUpperCase().replace(/^US:/, '');
+  if (!clean || /[:=^]/.test(clean)) {
+    return { success: false, source: 'stockanalysis', error: 'Quote supported for US/global tickers only' };
+  }
+  const cached = quoteCache.get(clean);
+  if (cached && Date.now() - cached.ts < QUOTE_CACHE_TTL_MS) return cached.value;
+  try {
+    const resp = await axios.get(`${BASE_STOCKS}/${encodeURIComponent(clean)}/`, {
+      timeout: 10000,
+      headers: HEADERS,
+    });
+    const $ = cheerio.load(resp.data);
+    const rows = new Map();
+    $('table tr').each((_, tr) => {
+      const cells = $(tr).find('th,td').map((__, c) => $(c).text().replace(/\s+/g, ' ').trim()).get();
+      if (cells.length >= 2 && cells[0] && !rows.has(cells[0])) rows.set(cells[0], cells[1]);
+    });
+    const raw = (labels) => {
+      for (const label of labels) {
+        if (rows.has(label)) return rows.get(label);
+        const key = [...rows.keys()].find(k => k.toLowerCase().includes(String(label).toLowerCase()));
+        if (key) return rows.get(key);
+      }
+      return null;
+    };
+    const value = (labels) => parseQuoteValue(raw(labels));
+    const priceEl = $('div.text-4xl').filter((_, el) => /^\$?[\d,]+(?:\.\d+)?$/.test($(el).text().trim())).first();
+    const price = parseMetricValue(priceEl.text());
+    if (!(price > 0)) throw new Error('price not found');
+    const changeText = priceEl.next('div').text().trim();
+    const changeMatch = changeText.match(/([+-]?[\d,]+\.?\d*)\s*\(\s*([+-]?[\d.]+)%\)/);
+    const previousClose = value(['Previous Close']);
+    const change = changeMatch ? parseMetricValue(changeMatch[1]) : previousClose ? price - previousClose : 0;
+    const changePercent = changeMatch ? Number(changeMatch[2]) : previousClose ? (change / previousClose) * 100 : 0;
+    const dayRange = parseRange(raw(["Day's Range", 'Days Range']));
+    const yearRange = parseRange(raw(['52-Week Range']));
+    const companyName = ($('h1').first().text().trim() || clean)
+      .replace(/\s*\([A-Z0-9.-]+\)\s*$/, '')
+      .trim() || clean;
+    const data = {
+      symbol: clean,
+      company_name: companyName,
+      name: companyName,
+      price,
+      currency: 'USD',
+      change: Math.round(change * 100) / 100,
+      changePercent: Math.round(changePercent * 100) / 100,
+      changesPercentage: Math.round(changePercent * 100) / 100,
+      volume: value(['Volume']) || 0,
+      open: value(['Open']),
+      previousClose: previousClose != null ? previousClose : price - change,
+      dayLow: dayRange.low != null ? dayRange.low : price,
+      dayHigh: dayRange.high != null ? dayRange.high : price,
+      yearLow: yearRange.low,
+      yearHigh: yearRange.high,
+      marketCap: value(['Market Cap']) || 0,
+      pe: value(['PE Ratio']),
+      eps: value(['EPS']),
+      beta: value(['Beta']),
+      priceTarget: value(['Price Target']),
+      analystConsensus: raw(['Analysts']),
+      timestamp: Math.floor(Date.now() / 1000),
+      lastUpdated: new Date().toISOString(),
+      exchange: 'Global',
+      provider: 'stockanalysis',
+    };
+    const result = { success: true, source: 'stockanalysis', asOf: data.lastUpdated, data };
+    if (quoteCache.size > 300) quoteCache.delete(quoteCache.keys().next().value);
+    quoteCache.set(clean, { value: result, ts: Date.now() });
+    return result;
+  } catch (e) {
+    return { success: false, source: 'stockanalysis', error: e.message };
+  }
+}
+
+module.exports = { getFinancialReport, getStatistics, getForecast, getQuote };

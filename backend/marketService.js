@@ -1,5 +1,6 @@
 const { KENYAN_STOCKS } = require('./newsService');
 const yahooService = require('./yahooService');
+const stockAnalysisScraper = require('./stockAnalysisScraper');
 
 // Background NSE price cache from mystocks.co.ke
 // The mystocks.co.ke scraper is currently failing on all 70 NSE tickers
@@ -617,6 +618,53 @@ function cacheQuote(symbol, quote) {
   return normalized;
 }
 
+function stockAnalysisQuoteEligible(symbol) {
+  const s = String(symbol || '').toUpperCase();
+  return /^[A-Z][A-Z0-9.-]{0,9}$/.test(s) && !/[:=^]/.test(s);
+}
+
+function mergeQuoteSources(primary, secondary) {
+  const p = primary && Number(primary.price) > 0 ? primary : null;
+  const s = secondary && Number(secondary.price) > 0 ? secondary : null;
+  if (!p) return s;
+  if (!s) return p;
+  const merged = { ...p };
+  // StockAnalysis is near-real-time and carries ratios/consensus that the
+  // price providers often omit. Fill gaps only; never overwrite the primary.
+  const fill = [
+    'marketCap', 'pe', 'eps', 'beta', 'priceTarget', 'analystConsensus',
+    'open', 'previousClose', 'dayHigh', 'dayLow', 'yearHigh', 'yearLow', 'volume',
+  ];
+  for (const key of fill) {
+    if (merged[key] == null || merged[key] === 0 || merged[key] === '') {
+      if (s[key] != null && s[key] !== 0 && s[key] !== '') merged[key] = s[key];
+    }
+  }
+  if (!merged.company_name || merged.company_name === merged.symbol) {
+    if (s.company_name) merged.company_name = s.company_name;
+  }
+  merged.enrichedBy = 'stockanalysis';
+  return merged;
+}
+
+/**
+ * Fetch a global quote from Yahoo and StockAnalysis concurrently. Yahoo remains
+ * the primary price source; StockAnalysis is the near-real-time fallback and
+ * fills metrics Yahoo does not return. Both calls are bounded independently so
+ * one slow provider cannot hold the quote request open.
+ */
+async function fetchGlobalQuote(symbol, timeoutMs = 8000, { stockAnalysis = true } = {}) {
+  const yahoo = withTimeout(yahooService.fetchQuote(symbol), timeoutMs, symbol)
+    .catch(() => null);
+  const sa = stockAnalysis && stockAnalysisQuoteEligible(symbol)
+    ? withTimeout(stockAnalysisScraper.getQuote(symbol), timeoutMs, symbol)
+      .then(r => (r?.success ? r.data : null))
+      .catch(() => null)
+    : Promise.resolve(null);
+  const [yahooQuote, saQuote] = await Promise.all([yahoo, sa]);
+  return mergeQuoteSources(yahooQuote, saQuote);
+}
+
 async function getStockQuote(symbol) {
   if (!symbol) return null;
 
@@ -644,9 +692,11 @@ async function getStockQuote(symbol) {
     }
   }
 
-  // Fallback: Yahoo Finance (skipped for African exchanges — no Yahoo coverage)
+  // Fallback: Yahoo Finance + StockAnalysis in parallel (skipped for African
+  // exchanges - no Yahoo coverage). StockAnalysis provides a near-real-time
+  // price fallback and fills metrics Yahoo omits.
   if (!quote && !symbol.startsWith('NSE:') && !symbol.startsWith('NGX:') && !symbol.startsWith('JSE:')) {
-    quote = await yahooService.fetchQuote(symbol);
+    quote = await fetchGlobalQuote(symbol);
   }
 
   if (quote) {
@@ -674,7 +724,7 @@ function withTimeout(promise, ms, label) {
   return Promise.race([promise, t]).finally(() => clearTimeout(timer));
 }
 
-async function fetchQuoteForSymbol(s) {
+async function fetchQuoteForSymbol(s, { stockAnalysis = true } = {}) {
   let quote = null;
 
   if (s.startsWith('NSE:')) {
@@ -697,9 +747,9 @@ async function fetchQuoteForSymbol(s) {
     }
   } else {
     try {
-      quote = await withTimeout(yahooService.fetchQuote(s), 12000, s);
+      quote = await fetchGlobalQuote(s, 12000, { stockAnalysis });
     } catch (e) {
-      console.warn(`[fetchQuoteForSymbol] Yahoo ${s} failed: ${e.message}`);
+      console.warn(`[fetchQuoteForSymbol] ${s} failed: ${e.message}`);
     }
   }
 
@@ -799,7 +849,9 @@ async function getQuotesBatch(symbols) {
   for (let i = 0; i < remaining.length; i += CONCURRENCY) {
     if (timedOut) break;
     const batch = remaining.slice(i, i + CONCURRENCY);
-    const batchResults = await Promise.allSettled(batch.map(s => fetchQuoteForSymbol(s)));
+    const batchResults = await Promise.allSettled(batch.map(s => fetchQuoteForSymbol(s, {
+      stockAnalysis: remaining.length <= 40,
+    })));
 
     for (let j = 0; j < batch.length; j++) {
       const s = batch[j];
