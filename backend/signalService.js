@@ -284,6 +284,11 @@ let _signalsCache = null;
 let _signalsCacheTime = 0;
 let _signalsInProgress = false;
 let _signalsCacheReady = null;
+// Latest full analysis per symbol, including monitored positions that are held
+// by the monitor-first gate and therefore excluded from _signalsCache. Without
+// this, an old open position can render with empty fundamentals/financials after
+// a restart even though the engine is assessing it every cycle.
+const _latestAnalyses = new Map();
 // Signals are considered stale after 15 min, so during market hours a fresh
 // cycle is kicked off around every 15 min (the _signalsInProgress guard means
 // cycles never overlap, so a slow cycle simply delays the next one).
@@ -600,6 +605,7 @@ function getMonitoredSignals() {
   for (const [ticker, v] of _signalOutcomes) {
     if (v.result || !v.timestamp || v.action === 'hold' || v.stopLoss == null || v.target1 == null) continue;
     const cached = Array.isArray(_signalsCache) ? _signalsCache.find(s => s.ticker === ticker) : null;
+    const latest = _latestAnalyses.get(ticker);
     // Monitored positions are held by the monitor-first gate and thus never appear
     // in the fresh generation cache, so their live price/change come from the
     // batch quote cache (warmed by prefetchQuotes during generation cycles and by
@@ -625,23 +631,28 @@ function getMonitoredSignals() {
       price,
       change,
       confidence: v.confidence != null ? v.confidence : (cached && cached.confidence != null ? cached.confidence : null),
-      name: cached && cached.name ? cached.name : null,
-      sector: normalizeSector(cached?.sector || v.sector, ticker),
+      name: latest?.name || (cached && cached.name ? cached.name : null),
+      sector: normalizeSector(latest?.sector || cached?.sector || v.sector, ticker),
       timeframe: normalizeTimeframe(v.type, monitoredTf, monitoredHorizon),
       horizon: monitoredHorizon,
       specVersion: v.specVersion || null,
       market: isNse ? 'NSE' : 'Global',
       currency: isNse ? 'KES' : 'USD',
       openedAt: new Date(v.timestamp).toISOString(),
+      generatedAt: new Date(v.timestamp).toISOString(),
       daysHeld: Math.max(0, Math.round((Date.now() - v.timestamp) / 86400000)),
-      // Surface the original signal's rationale + analysis so monitored cards show
-      // the same comprehensive explanation as fresh signals instead of a generic
-      // "being monitored" placeholder. Double periods are collapsed: older stored
-      // reasons carry ".." both trailing ("...risk..") and mid-string before a
-      // catalyst append ("...pressure.. | Deal catalyst") from the macro-reason
-      // embed bug in generateReason.
-      reason: (v.reason || '').replace(/\.{2,}/g, '.') || null,
-      analysis: liveTechnicalAnalysis(ticker, price, qc && qc.volume, v.analysis),
+      // Surface the latest full assessment so an old open position does not
+      // render as "not scored" after a restart or legacy restore.
+      reason: (latest?.reason || v.reason || '').replace(/\.{2,}/g, '.') || null,
+      analysis: liveTechnicalAnalysis(ticker, price, qc && qc.volume, latest?.analysis || v.analysis),
+      valuation: latest?.valuation || v.valuation || null,
+      advancedFundamentals: latest?.advancedFundamentals || v.advancedFundamentals || null,
+      intelligence: latest?.intelligence || v.intelligence || null,
+      hybrid: latest?.hybrid || v.hybrid || null,
+      targets: latest?.targets || v.targets || null,
+      segments: latest?.segments || v.segments || null,
+      thesis: latest?.thesis || v.thesis || null,
+      dataSource: latest ? 'engine' : 'monitor',
     });
   }
   _warmMonitoredQuotes().catch(() => {});
@@ -5285,6 +5296,7 @@ async function getSignalForStock(symbol) {
     // state instead of a fresh (suppressed) signal.
     const open = _signalOutcomes.get(upper);
     if (open && !open.result && open.timestamp) {
+      const latest = _latestAnalyses.get(upper);
       // Surface the full monitored position state (type, target2/3, riskReward,
       // timeframe, position size, reason) — not just the bare levels — so the AI
       // analyst and dashboard render a complete card instead of "N/A"/undefined
@@ -5317,8 +5329,15 @@ async function getSignalForStock(symbol) {
         confidence: open.confidence || 0,
         timeframe: open.timeframe || null,
         positionSize: open.positionSize != null ? open.positionSize + '%' : null,
-        reason: open.reason || '',
-        analysis: open.analysis || null,
+        reason: latest?.reason || open.reason || '',
+        analysis: latest?.analysis || open.analysis || null,
+        valuation: latest?.valuation || null,
+        advancedFundamentals: latest?.advancedFundamentals || null,
+        intelligence: latest?.intelligence || null,
+        hybrid: latest?.hybrid || null,
+        targets: latest?.targets || null,
+        segments: latest?.segments || null,
+        thesis: latest?.thesis || null,
         status: 'monitoring',
       };
     }
@@ -6424,6 +6443,20 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // Log prediction for accuracy tracking (fire-and-forget)
   persistPredictionLog(symbol, sig.signal, mlWinProb, confidence).catch(() => {});
   _lastCycleScores.set(symbol, overallScore);
+  _latestAnalyses.set(symbol, {
+    analysis: obj.analysis,
+    reason: obj.reason,
+    name: obj.name,
+    sector: obj.sector,
+    valuation,
+    advancedFundamentals,
+    intelligence: crossFactor,
+    hybrid,
+    targets: scenarioTargets,
+    segments: segmentViews,
+    thesis,
+    timestamp: Date.now(),
+  });
   return obj;
 }
 

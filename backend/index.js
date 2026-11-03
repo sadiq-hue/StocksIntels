@@ -4316,9 +4316,17 @@ app.get('/api/signals', async (req, res) => {
         market: m.market,
         country: isNse ? 'KE' : 'US',
         positionSize: m.positionSize + '%',
-        dataSource: 'monitor',
+        generatedAt: m.generatedAt || m.openedAt,
+        dataSource: m.dataSource || 'monitor',
         reason: m.reason || `Open ${m.type} position the engine is actively monitoring — held ${m.daysHeld} day(s) with stop/target levels live (no expiry; runs until stop/target).`,
         analysis: m.analysis || null,
+        valuation: m.valuation || null,
+        advancedFundamentals: m.advancedFundamentals || null,
+        intelligence: m.intelligence || null,
+        hybrid: m.hybrid || null,
+        targets: m.targets || null,
+        segments: m.segments || null,
+        thesis: m.thesis || null,
       };
       const stopDist = m.entryPrice - m.stopLoss;
       base.signal = m.signal;
@@ -4329,6 +4337,16 @@ app.get('/api/signals', async (req, res) => {
   base.target3 = m.target3;
   base.horizon = m.horizon || base.horizon || null;
   base.specVersion = m.specVersion || base.specVersion || null;
+  base.generatedAt = base.generatedAt || m.generatedAt || m.openedAt;
+  base.dataSource = m.dataSource || base.dataSource || 'monitor';
+  base.analysis = base.analysis || m.analysis || null;
+  base.valuation = base.valuation || m.valuation || null;
+  base.advancedFundamentals = base.advancedFundamentals || m.advancedFundamentals || null;
+  base.intelligence = base.intelligence || m.intelligence || null;
+  base.hybrid = base.hybrid || m.hybrid || null;
+  base.targets = base.targets || m.targets || null;
+  base.segments = base.segments || m.segments || null;
+  base.thesis = base.thesis || m.thesis || null;
       base.riskReward = stopDist > 0 ? Math.round(((m.target1 - m.entryPrice) / stopDist) * 10) / 10 : null;
       // A monitored card carries the analysis snapshot frozen when the position
       // was opened, so its macro block can be months stale (and predate the live
