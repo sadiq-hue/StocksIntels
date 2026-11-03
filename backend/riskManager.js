@@ -386,13 +386,13 @@ function trackSignalOutcomes(portfolioState, performanceStats, signalOutcomes, s
   const MIN_SIGNAL_AGE_MS = 5 * 60 * 1000; // 5 minutes
   // Max age of a position before it is closed at market and booked as 'expired'.
   // Horizon-specific: medium positions run up to 6 months, long-term positions up
-  // to 3 years. Short positions use their dedicated 28-day time stop below.
+  // to 3 years. Short positions use their dedicated 90-day time stop below.
   // 0 disables the expiry.
   const MEDIUM_HORIZON_MS = Math.max(0, parseInt(process.env.MEDIUM_POSITION_HORIZON_DAYS || '180', 10) || 180) * 24 * 60 * 60 * 1000;
   const LONG_HORIZON_MS = Math.max(0, parseInt(process.env.LONG_POSITION_HORIZON_DAYS || '1095', 10) || 1095) * 24 * 60 * 60 * 1000;
-  // Phase 1 short cohort: close at market after 20 trading days (~28 calendar
-  // days) if neither the 1.5R target nor the stop has been hit.
-  const SHORT_HORIZON_MS = 28 * 24 * 60 * 60 * 1000;
+  // Short-term horizon: 2 weeks to 3 months. Close at market after 90 calendar
+  // days if neither the scenario target nor the stop has been hit.
+  const SHORT_HORIZON_MS = 90 * 24 * 60 * 60 * 1000;
   // Long-term thesis review: a material fundamental break must be confirmed on
   // two separate checks at least 24h apart before the position is exited. Price
   // alone never triggers this path.

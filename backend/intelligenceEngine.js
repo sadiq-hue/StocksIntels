@@ -297,11 +297,11 @@ function analyzeCrossFactors({ stock = {}, fundamental = {}, technical = {}, fin
   };
 }
 
-function computeHybridRisk({ entry, stop, valuation = null, horizon = null, atrPct = null }) {
+function computeHybridRisk({ entry, stop, valuation = null, horizon = null, atrPct = null, targetOverride = null }) {
   const e = num(entry);
   const s = num(stop);
   const risk = e != null && s != null ? e - s : null;
-  const target = num(valuation?.base) ?? num(valuation?.fairValue);
+  const target = num(targetOverride) ?? num(valuation?.base) ?? num(valuation?.fairValue);
   const reward = e != null && target != null ? target - e : null;
   const rr = risk > 0 && reward != null ? reward / risk : null;
   const atrMultiplier = num(atrPct) != null ? (atrPct >= 0.05 ? 3 : 2) : null;
@@ -311,8 +311,8 @@ function computeHybridRisk({ entry, stop, valuation = null, horizon = null, atrP
     rewardPerShare: round(reward),
     riskReward: round(rr),
     atrMultiplier,
-    shortTermEligible: horizon === 'short' && rr != null ? rr >= 3 : null,
-    rule: horizon === 'short' ? 'short-term alerts require hybrid R:R ≥ 3.0' : 'long-term target uses base fair value',
+    shortTermEligible: horizon === 'short' && rr != null ? rr >= 1.2 : null,
+    rule: horizon === 'short' ? 'short-term alerts require average-target R:R >= 1.2' : 'long-term target uses average scenario',
   };
 }
 

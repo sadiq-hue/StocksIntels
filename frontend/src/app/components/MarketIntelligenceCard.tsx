@@ -174,7 +174,7 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
 
   const price = live.price ?? pos(s.price);
   const priceIsLive = live.price != null;
-  const entry = pos(s.entry), stop = pos(s.stopLoss), t1 = pos(s.target1), t3 = pos(s.target3);
+  const entry = pos(s.entry), stop = pos(s.stopLoss), t1 = pos(s.target1), t2 = pos(s.target2), t3 = pos(s.target3);
 
   const genAt = useMemo(() => {
     const t = s.generatedAt ? new Date(s.generatedAt).getTime() : NaN;
@@ -651,7 +651,8 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
         <div className="space-y-0.5 text-[12px]">
           <Fact label="Analysis Price" value={money(entry)} assess="" />
           <Fact label="Downside Level" value={money(stop)} assess="" />
-          <Fact label="Target 1" value={money(t1)} assess="" />
+          <Fact label="Minimum Target" value={money(t1)} assess="" />
+          <Fact label="Average Target" value={money(t2)} assess="" />
           <Fact label="Extended Target" value={money(t3)} assess="" />
         </div>
         {drift != null && Math.abs(drift) >= 3 && (

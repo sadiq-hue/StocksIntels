@@ -25,6 +25,7 @@ const {
   computeHybridRisk,
   buildSegmentViews,
 } = require('./intelligenceEngine');
+const { buildScenarioTargets } = require('./scenarioTargets');
 const engineConfig = require('./engineConfig');
 const marketHours = require('./marketHours');
 const { ENGINE_VERSION } = require('./engineVersion');
@@ -1995,25 +1996,24 @@ const _forwardTestStore = new Map(); // symbol -> { predictions: [{id, signal, c
 // Phase 1 short-term profile: 20 trading days (~28 calendar days). A short
 // signal that has not hit its stop or 1.5R target is closed at market so the
 // benchmark cohort always resolves and short-term ideas cannot ride for months.
-const SHORT_MAX_HOLD_MS = 28 * 24 * 60 * 60 * 1000;
-const SHORT_SPEC_VERSION = 'short-1.5R-v1';
+const SHORT_MAX_HOLD_MS = 90 * 24 * 60 * 60 * 1000;
+const SHORT_SPEC_VERSION = 'short-scenario-v1';
 const SHORT_SHADOW_SPEC_VERSION = 'short-2R-v1';
-const SHORT_TARGET_MULTS = { target1: 1.5, target2: 2, target3: 2.5 };
 const HORIZON_SPEC_VERSIONS = { short: SHORT_SPEC_VERSION, medium: 'medium-legacy-v1', long: 'long-legacy-v1' };
 
 function classifyHorizon(tradeType, expectedDays, timeframe) {
   const tt = String(tradeType || '').toLowerCase();
   const tf = String(timeframe || '').toLowerCase();
   if (tt.includes('long term')) return 'long';
-  // The displayed holding period is the primary signal; trade type is only a
-  // fallback when no timeframe/expected duration is available.
-  if (tf.includes('year') || tf.includes('3-6') || tf.includes('6-12') || tf.includes('12 month') || tf.includes('6 month')) return 'long';
-  if (tf.includes('1-3 month') || tf.includes('1-3months') || tf.includes('~1 month') || tf.includes('1 month')) return 'medium';
-  if (tf.includes('week') || tf.includes('2-4') || tf.includes('1-4') || tf.includes('1-2')) return 'short';
+  // Short-term is 2 weeks to 3 months. 3-6 months is medium; 6 months+ is long.
+  if (tf.includes('year') || tf.includes('6-12') || tf.includes('12 month') || tf.includes('6 month') || tf.includes('6+ month')) return 'long';
+  if (tf.includes('3-6')) return 'medium';
+  if (tf.includes('week') || tf.includes('2-4') || tf.includes('1-4') || tf.includes('1-2')
+      || tf.includes('1-3 month') || tf.includes('1-3months') || tf.includes('~1 month') || tf.includes('1 month')) return 'short';
   const days = Number(expectedDays);
   if (Number.isFinite(days) && days > 0) {
-    if (days <= 20) return 'short';
-    if (days <= 63) return 'medium';
+    if (days <= 63) return 'short';
+    if (days <= 130) return 'medium';
     return 'long';
   }
   if (tt.includes('aggressive') || tt.includes('momentum')) return 'short';
@@ -6086,67 +6086,77 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // the medium floor until their actual expected holding period is classified
   // below, so we do not force a 15% floor on a 3-6 month swing.
   const initialHorizonHint = /momentum|aggressive/i.test(String(tradeType || '')) ? 'short' : null;
+  const horizonTypeTimeframe = {
+    'Aggressive Buy': '1-3 weeks',
+    'Momentum Trade': '1-3 weeks',
+    'Swing Trade': '2-4 weeks',
+    'Long Term Value': '1-3+ years',
+    'Long Term': '1-3+ years',
+    'Avoid': 'N/A',
+  };
   let tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType, null, initialHorizonHint);
-  // Phase 1 horizon classification uses the current (2R) expected holding
-  // period, so the entry set is unchanged; only short signals get the 1.5R exit.
-  const horizon = sig.action === 'buy' ? classifyHorizon(tradeType, tradeLevels.expectedDays) : null;
+  // Classify from the trade's stated timeframe first (2 weeks–3 months is the
+  // short-term window), then fall back to the expected holding period.
+  const horizon = sig.action === 'buy'
+    ? classifyHorizon(tradeType, tradeLevels.expectedDays, horizonTypeTimeframe[tradeType])
+    : null;
   if (sig.action === 'buy' && horizon === 'short' && tradeLevels.entry > 0 && tradeLevels.stopLoss != null
       && (tradeLevels.entry - tradeLevels.stopLoss) / tradeLevels.entry < 0.20) {
     // A short Swing can initially receive the 20% medium floor; once classified
     // short, re-level with the 20% short-term floor before expectancy/sizing.
     tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType, null, 'short');
   }
-  if (sig.action === 'buy' && horizon === 'long') {
-    // Long-term targets must be valuation-feasible, not 2R/4R/6R of a 30% stop
-    // (which would imply 60%/120%/180%). Prefer the DCF/comps blend; fall back
-    // to the sector-relative fair value, then to a capped risk multiple.
-    const blendedFair = valuation?.reliable && valuation.fairValue > tradeLevels.entry
-      ? { value: valuation.fairValue, metric: 'DCF + sector-relative', method: 'integrated valuation' }
-      : null;
-    const fair = blendedFair || (valuation?.reliable === false ? null : computeFairValueTarget(sectorValuation, currentPrice));
-    const entry = tradeLevels.entry;
-    const risk = entry - tradeLevels.stopLoss;
-    let t1, t2, t3, method;
-    if (fair && fair.value > entry) {
-      t1 = Math.min(fair.value, entry * 2.0);
-      t2 = Math.min(t1 * 1.2, entry * 2.25);
-      t3 = Math.min(t1 * 1.4, entry * 2.5);
-      method = 'fair-value';
+  const atrPct = calculateATR(priceHistory);
+  let scenarioTargets = null;
+  if (sig.action === 'buy') {
+    scenarioTargets = buildScenarioTargets({
+      entry: tradeLevels.entry,
+      stop: tradeLevels.stopLoss,
+      priceHistory,
+      atrPct,
+      technical,
+      fundamental,
+      valuation,
+      catalyst: cat,
+      horizon,
+      regime: regime.regime,
+      weeklyTrend: weeklyTrend.trend,
+    });
+    if (scenarioTargets.available) {
+      tradeLevels = {
+        ...tradeLevels,
+        target1: scenarioTargets.minimum,
+        target2: scenarioTargets.average,
+        target3: scenarioTargets.extended,
+        riskReward: scenarioTargets.rewardRiskAverage,
+        targetMethod: 'scenario',
+        targetEvidence: scenarioTargets.evidence,
+        targetProbabilities: scenarioTargets.probabilities,
+        targetExpected: scenarioTargets.expected,
+        targetFeasible: scenarioTargets.feasible,
+        targetDays: scenarioTargets.targetDays,
+      };
     } else {
-      t1 = Math.min(tradeLevels.target1, entry * 1.5);
-      t2 = Math.min(tradeLevels.target2, entry * 1.8);
-      t3 = Math.min(tradeLevels.target3, entry * 2.2);
-      method = fair ? 'fair-value-below-price/capped-risk' : 'capped-risk';
+      // Do not manufacture a target when the evidence is inadequate. The
+      // eligibility gate will reject the position rather than publish a number.
+      tradeLevels = {
+        ...tradeLevels,
+        targetMethod: 'insufficient-evidence',
+        targetEvidence: scenarioTargets.evidence || [],
+      };
     }
-    t1 = Math.max(t1, entry * 1.05);
-    t2 = Math.max(t2, t1 * 1.05);
-    t3 = Math.max(t3, t2 * 1.05);
-    const rr = risk > 0 ? Math.round(((t1 - entry) / risk) * 10) / 10 : 1;
-    tradeLevels = {
-      ...tradeLevels,
-      target1: Math.round(t1 * 100) / 100,
-      target2: Math.round(t2 * 100) / 100,
-      target3: Math.round(t3 * 100) / 100,
-      riskReward: rr,
-      targetMethod: method,
-      fairValue: fair ? {
-        ...fair,
-        value: Math.round(fair.value * 100) / 100,
-        usedTarget1: Math.round(t1 * 100) / 100,
-      } : null,
-    };
   }
   // Assess the business thesis for every symbol, not only a fresh Buy: an open
   // long-term position can turn into a Hold/Sell while it is being monitored,
   // and the thesis review still needs the current fundamental evidence.
   const thesis = assessThesisRisk(stock, fundamental, financial);
-  const atrPct = calculateATR(priceHistory);
   const hybrid = computeHybridRisk({
     entry: tradeLevels.entry,
     stop: tradeLevels.stopLoss,
     valuation,
     horizon,
     atrPct,
+    targetOverride: scenarioTargets?.available ? scenarioTargets.average : null,
   });
   const segmentViews = buildSegmentViews({
     horizon,
@@ -6181,13 +6191,6 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     }
   }
 
-  // Phase 1: short-term buys exit at target1 = 1.5R instead of riding to the
-  // ultimate 2R/4R/6R ladder. Stop distance is unchanged, so this isolates the
-  // effect of the exit rule. The 2R shadow cohort is recorded separately.
-  if (sig.action === 'buy' && horizon === 'short') {
-    tradeLevels = calculateTradeLevels(symbol, currentPrice, sig, priceHistory, holdStopLossPct, tradeType, SHORT_TARGET_MULTS, 'short');
-  }
-
   const regimePenalty = regime.regime === 'crash' ? regimePenaltyCrash : 1;
 
   let kellyPct = null;
@@ -6200,7 +6203,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
   // conviction guess. Risk budget / stop distance gives the % of equity to
   // allocate; the horizon cap and liquidity/concentration rules then bound it.
   const maxPositionPct = horizon === 'long' ? 5 : horizon === 'short' ? 3 : 4;
-  const riskPerTradePct = Math.max(0.05, Number(portfolioCfg.riskPerTradePct ?? 0.5));
+  const riskPerTradePct = Math.max(0.05, Number(portfolioCfg.riskPerTradePct ?? 1.0));
   const regimeRiskScale = regime.regime === 'crash' ? 0.3 : regime.regime === 'bear' ? 0.6 : 1;
   const effectiveRiskBudgetPct = riskPerTradePct * regimeRiskScale * (circuitBreaker || 1);
   const riskSizedPct = stopPct > 0 ? effectiveRiskBudgetPct / stopPct : 0;
@@ -6302,17 +6305,21 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     console.log(`[SignalService][diag] ${symbol} ${sig.signal} score=${overallScore} (base=${diagnostics.compositeBase} news=${newsScore} ov: cat=${overlayCatalyst} ins=${overlayInsider} sparse=${overlaySparse}) regime=${regime.regime} conf=${confRaw}->${confFinal} ml=${diagnostics.mlWinProb} gate=${_confidenceGateNote || 'none'}`);
   }
 
-  const bullTarget = tradeLevels.target3 || tradeLevels.target2 || tradeLevels.target1;
+  const averageTarget = tradeLevels.target2 || tradeLevels.target1;
+  const bullTarget = tradeLevels.target3 || averageTarget;
   const scenarioReturn = (price) => tradeLevels.entry > 0 && price != null
     ? Math.round(((price - tradeLevels.entry) / tradeLevels.entry) * 1000) / 10 : null;
   const scenarios = sig.action === 'buy' && tradeLevels.stopLoss != null && tradeLevels.target1 != null
     ? {
+        minimum: { price: tradeLevels.target1, returnPct: scenarioReturn(tradeLevels.target1) },
+        average: { price: averageTarget, returnPct: scenarioReturn(averageTarget) },
         bear: { price: tradeLevels.stopLoss, returnPct: scenarioReturn(tradeLevels.stopLoss) },
-        base: { price: tradeLevels.target1, returnPct: scenarioReturn(tradeLevels.target1) },
+        base: { price: averageTarget, returnPct: scenarioReturn(averageTarget) },
         bull: { price: bullTarget, returnPct: scenarioReturn(bullTarget) },
+        probabilities: scenarioTargets?.probabilities || null,
         expectedReturnPct: (() => {
           const b = scenarioReturn(tradeLevels.stopLoss);
-          const ba = scenarioReturn(tradeLevels.target1);
+          const ba = scenarioReturn(averageTarget);
           const bu = scenarioReturn(bullTarget);
           if (b == null || ba == null || bu == null) return null;
           return Math.round((0.25 * bu + 0.5 * ba + 0.25 * b) * 10) / 10;
@@ -6349,13 +6356,19 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     intelligence: crossFactor,
     hybrid,
     segments: segmentViews,
+    targets: scenarioTargets,
+    targetEvidence: tradeLevels.targetEvidence || null,
+    targetProbabilities: tradeLevels.targetProbabilities || null,
+    targetExpected: tradeLevels.targetExpected || null,
+    targetFeasible: tradeLevels.targetFeasible ?? null,
+    targetDays: tradeLevels.targetDays ?? null,
     thesis: thesis || null,
     horizonProfile: weightProfile,
     horizonCriteria: horizon === 'long'
-      ? ['fundamental score ≥55', 'financial score ≥45', 'D/E ≤2.5', 'current ratio ≥0.8', 'Altman Z ≥1.8', 'fair-value/capped target', 'thesis-break exit']
+      ? ['fundamental score ≥55', 'financial score ≥45', 'D/E ≤2.5', 'current ratio ≥0.8', 'Altman Z ≥1.8', 'scenario targets', 'thesis-break exit']
       : horizon === 'short'
-        ? ['technical score ≥55', 'no death cross', 'MACD not bearish', 'risk-on regime', 'R:R ≥1.5', '1.5R target', '20-day time stop', 'liquidity/event/cost']
-        : ['score/confidence gates', 'R:R ≥1.2', '2R targets'],
+        ? ['technical score ≥55', 'no death cross', 'MACD not bearish', 'risk-on regime', 'R:R ≥1.5', 'scenario targets', '20% stop policy', '2-week-3-month horizon', 'liquidity/event/cost']
+        : ['score/confidence gates', 'R:R ≥1.2', 'scenario targets'],
     timeframe: holdingPeriod || timeframes[tradeType], sector: stock.sector, volume: formattedVolume, rawVolume: volume || 0,
     weeklyTrend: weeklyTrend.trend, regime: regime.regime,
     catalyst: cat.direction ? {
@@ -6637,6 +6650,9 @@ function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fun
     if (Number.isFinite(sigObj.riskReward) && sigObj.riskReward < MIN_RISK_REWARD) {
       reasons.push(`low risk/reward ${sigObj.riskReward}`);
     }
+    if (sigObj.targets && sigObj.targets.available === false) {
+      reasons.push(`target: insufficient evidence (${(sigObj.targetEvidence || []).join(', ') || 'no structure'})`);
+    }
   } else if (sigObj.action === 'sell') {
     // Sell/Avoid ratings are exit references, not mirrored shorts - no levels
     // are produced for them, so geometry checks don't apply.
@@ -6671,9 +6687,8 @@ function meetsSignalConditions(sigObj, { currentPrice, priceHistory, volume, fun
     if (String(regimeName || '').toLowerCase() === 'bear' || String(regimeName || '').toLowerCase() === 'crash') {
       reasons.push('short-term: risk-off regime');
     }
-    if (Number(sigObj.riskReward) < 1.5) reasons.push('short-term: R:R <1.5');
     if (sigObj.hybrid && sigObj.hybrid.shortTermEligible === false) {
-      reasons.push(`short-term: hybrid analyst-target R:R ${sigObj.hybrid.riskReward ?? 'n/a'} <3.0`);
+      reasons.push(`short-term: average-target R:R ${sigObj.hybrid.riskReward ?? 'n/a'} <1.2`);
     }
   }
 

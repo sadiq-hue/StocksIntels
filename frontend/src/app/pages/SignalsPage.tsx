@@ -287,9 +287,10 @@ function horizonOf(s: StockSignal | any): "short" | "medium" | "long" {
   const tf = String(s?.timeframe || "").toLowerCase();
   // The displayed holding period wins over a stale stored horizon.
   if (type.includes("long term")) return "long";
-  if (tf.includes("year") || tf.includes("3-6") || tf.includes("6-12") || tf.includes("12 month") || tf.includes("6 month")) return "long";
-  if (tf.includes("1-3 month") || tf.includes("1-3months") || tf.includes("~1 month") || tf.includes("1 month")) return "medium";
-  if (tf.includes("week") || tf.includes("2-4") || tf.includes("1-4") || tf.includes("1-2")) return "short";
+  if (tf.includes("year") || tf.includes("6-12") || tf.includes("12 month") || tf.includes("6 month")) return "long";
+  if (tf.includes("3-6")) return "medium";
+  if (tf.includes("week") || tf.includes("2-4") || tf.includes("1-4") || tf.includes("1-2")
+      || tf.includes("1-3 month") || tf.includes("1-3months") || tf.includes("~1 month") || tf.includes("1 month")) return "short";
   const h = String(s?.horizon || "").toLowerCase();
   if (h === "short" || h === "medium" || h === "long") return h;
   if (type.includes("aggressive") || type.includes("momentum")) return "short";
@@ -620,11 +621,12 @@ export function SignalsPage() {
               </div>
 
               {/* Entry / Stop / Targets */}
-              <div className={`px-4 pb-3 grid grid-cols-2 gap-2 ${s.target3 ? "sm:grid-cols-4" : "sm:grid-cols-3"}`} data-tour={idx === 0 ? "signal-levels" : undefined}>
+              <div className="px-4 pb-3 grid grid-cols-2 gap-2 sm:grid-cols-5" data-tour={idx === 0 ? "signal-levels" : undefined}>
                 <div className="bg-blue-50 dark:bg-blue-950/30 rounded-md p-2 text-center border border-blue-100 dark:border-blue-800/50"><p className="text-[9px] font-medium text-blue-600 dark:text-blue-400 uppercase">Entry</p><p className="text-xs font-bold text-blue-900 dark:text-blue-200 font-mono">{fmtPrice(s, s.entry)}</p></div>
                 <div className="bg-red-50 dark:bg-red-950/30 rounded-md p-2 text-center border border-red-100 dark:border-red-800/50"><p className="text-[9px] font-medium text-red-600 dark:text-red-400 uppercase">Stop</p><p className="text-xs font-bold text-red-900 dark:text-red-200 font-mono">{fmtPrice(s, s.stopLoss)}</p></div>
-                <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Target 1</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target1)}</p></div>
-                {s.target3 && <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Ultimate Target</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target3)}</p></div>}
+                <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Minimum</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target1)}</p></div>
+                <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Average</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target2)}</p></div>
+                <div className="bg-emerald-50 dark:bg-emerald-950/30 rounded-md p-2 text-center border border-emerald-100 dark:border-emerald-800/50"><p className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 uppercase">Extended</p><p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 font-mono">{fmtPrice(s, s.target3)}</p></div>
               </div>
 
               {/* Risk / ML badges */}
