@@ -7,6 +7,7 @@ const alphaVantageService = require('./alphaVantageFinancialsService');
 const { pool } = require('./db');
 const PersistentCache = require('./cacheService');
 const { NSE_SYMBOLS } = require('./stockData');
+const stockAnalysisEnrichmentService = require('./stockAnalysisEnrichmentService');
 
 async function createYf() {
   const { default: YahooFinance } = await import('yahoo-finance2');
@@ -1124,6 +1125,24 @@ async function buildFinancialReport(symbol, period = 'annual', limit = 4, provid
           ownershipVal = ownership.status === 'fulfilled' ? ownership.value : null;
           quarterlyVal = quarterlyShares.status === 'fulfilled' ? quarterlyShares.value : null;
         }
+        // Secondary enrichment: analyst consensus/forecasts and market
+        // statistics from S&P Global/TipRanks via StockAnalysis. Detail pages
+        // fetch it; the signal hot path only consumes an already-warmed cache.
+        try {
+          const enrichment = options.lite
+            ? stockAnalysisEnrichmentService.peek(symbol)
+            : await stockAnalysisEnrichmentService.getEnrichment(symbol).catch(() => null);
+          if (enrichment) {
+            yahooResult.data.statistics = enrichment.statistics || null;
+            yahooResult.data.forecast = enrichment.forecast || null;
+            yahooResult.data.enrichment = {
+              source: enrichment.source,
+              providers: enrichment.providers,
+              reliability: enrichment.reliability,
+              asOf: enrichment.asOf,
+            };
+          }
+        } catch { /* enrichment is optional */ }
         return enrichReportData(yahooResult, ownershipVal, quarterlyVal, validateFinancialData(yahooResult));
       }
       // StockAnalysis.com is a high-quality fallback for US/global names when
@@ -1153,6 +1172,12 @@ async function buildFinancialReport(symbol, period = 'annual', limit = 4, provid
             ...saReport.data,
             statistics: stats,
             forecast: fc,
+            enrichment: {
+              source: 'stockanalysis',
+              providers: ['S&P Global Market Intelligence', 'TipRanks'],
+              reliability: 'secondary',
+              asOf: new Date().toISOString(),
+            },
             profile: {
               ...(saReport.data.profile || {}),
               companyName: p?.companyName || q?.company_name || symbol,

@@ -189,6 +189,7 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
   const fund = scored("fundamental"), tech = scored("technical");
   const fin = scored("financial"), macro = scored("macro"), ins = scored("insider");
   const overall = scored("overall");
+  const metrics = a.fundamental?.metrics || {}
 
   // Factors, parsed once and reused by every section and by the narrative.
   const factors = useMemo(() => {
@@ -604,6 +605,27 @@ export function MarketIntelligenceCard({ signal }: { signal: any }) {
             )}
             {s.advancedFundamentals?.roic != null && (
               <Fact label="ROIC / Cash Conversion" value={`${s.advancedFundamentals.roic}% / ${s.advancedFundamentals.cashConversion ?? "—"}`} assess="" />
+            )}
+            {metrics.analystTarget != null && (
+              <Fact
+                label="Analyst Target"
+                value={`${money(metrics.analystTarget)}${metrics.analystConsensus ? ` · ${metrics.analystConsensus}` : ""}${metrics.analystCount ? ` (${metrics.analystCount})` : ""}`}
+                assess=""
+              />
+            )}
+            {(metrics.shortPctSharesOut != null || metrics.beta != null) && (
+              <Fact
+                label="Short Interest / Beta"
+                value={`${metrics.shortPctSharesOut != null ? `${metrics.shortPctSharesOut}%` : "—"} / ${metrics.beta != null ? metrics.beta : "—"}`}
+                assess=""
+              />
+            )}
+            {(metrics.institutionalOwnershipPct != null || metrics.insiderOwnershipPct != null) && (
+              <Fact
+                label="Institutional / Insider"
+                value={`${metrics.institutionalOwnershipPct != null ? `${metrics.institutionalOwnershipPct}%` : "—"} / ${metrics.insiderOwnershipPct != null ? `${metrics.insiderOwnershipPct}%` : "—"}`}
+                assess=""
+              />
             )}
             {s.valuation?.bear != null && s.valuation?.base != null && s.valuation?.bull != null && (
               <Fact

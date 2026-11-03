@@ -26,6 +26,7 @@ const {
   buildSegmentViews,
 } = require('./intelligenceEngine');
 const { buildScenarioTargets } = require('./scenarioTargets');
+const stockAnalysisEnrichmentService = require('./stockAnalysisEnrichmentService');
 const engineConfig = require('./engineConfig');
 const marketHours = require('./marketHours');
 const { ENGINE_VERSION } = require('./engineVersion');
@@ -985,9 +986,60 @@ async function prefetchWeeklyData(symbols) {
 // Yahoo Finance → Alpha Vantage → SEC EDGAR with per-source rate limiting & caching.
 // getFinancialReport() returns everything (income, balance, cash flow, ratios)
 // in one call with 24h caching, so subsequent signal cycles are fast.
+// Secondary-source fields from StockAnalysis (S&P Global/TipRanks). Applied
+// after primary metrics so they only fill gaps and never overwrite Yahoo/EDGAR.
+function mergeStockAnalysisMetrics(metrics, saStats, saForecast) {
+  if (!metrics) return metrics;
+  if (saStats) {
+    if (!metrics.marketCap && saStats.marketCap) metrics.marketCap = saStats.marketCap;
+    if (!metrics.peRatio && saStats.peRatio) metrics.peRatio = saStats.peRatio;
+    if (!metrics.pbRatio && saStats.pbRatio) metrics.pbRatio = saStats.pbRatio;
+    if (!metrics.evEbitda && saStats.evEbitda) metrics.evEbitda = saStats.evEbitda;
+    if (!metrics.debtToEquity && saStats.debtToEquity) metrics.debtToEquity = saStats.debtToEquity;
+    if (!metrics.currentRatio && saStats.currentRatio) metrics.currentRatio = saStats.currentRatio;
+    if (metrics.roe == null && saStats.roePct != null) metrics.roe = saStats.roePct;
+    if (metrics.roa == null && saStats.roaPct != null) metrics.roa = saStats.roaPct;
+    if (metrics.roic == null && saStats.roicPct != null) metrics.roic = saStats.roicPct;
+    if (metrics.assetTurnover == null && saStats.assetTurnover != null) metrics.assetTurnover = saStats.assetTurnover;
+    if (metrics.fcfYield == null && saStats.fcfYieldPct != null) metrics.fcfYield = saStats.fcfYieldPct;
+    if (metrics.beta == null && saStats.beta != null) metrics.beta = saStats.beta;
+    if (metrics.sharesOutstanding == null && saStats.sharesOutstanding != null) metrics.sharesOutstanding = saStats.sharesOutstanding;
+    if (metrics.shortInterest == null && saStats.shortInterest != null) metrics.shortInterest = saStats.shortInterest;
+    if (metrics.shortPctSharesOut == null && saStats.shortPctSharesOut != null) metrics.shortPctSharesOut = saStats.shortPctSharesOut;
+    if (metrics.shortRatio == null && saStats.shortRatio != null) metrics.shortRatio = saStats.shortRatio;
+    if (metrics.institutionalOwnershipPct == null && saStats.institutionalOwnershipPct != null) metrics.institutionalOwnershipPct = saStats.institutionalOwnershipPct;
+    if (metrics.insiderOwnershipPct == null && saStats.insiderOwnershipPct != null) metrics.insiderOwnershipPct = saStats.insiderOwnershipPct;
+    if (metrics.analystTarget == null && saStats.priceTarget != null) metrics.analystTarget = saStats.priceTarget;
+    if (metrics.analystCount == null && saStats.analystCount != null) metrics.analystCount = saStats.analystCount;
+    if (metrics.analystConsensus == null && saStats.analystConsensus) metrics.analystConsensus = saStats.analystConsensus;
+    if (metrics.revenueGrowthForecast3Y == null && saStats.revenueGrowthForecast3Y != null) metrics.revenueGrowthForecast3Y = saStats.revenueGrowthForecast3Y;
+    if (metrics.epsGrowthForecast3Y == null && saStats.epsGrowthForecast3Y != null) metrics.epsGrowthForecast3Y = saStats.epsGrowthForecast3Y;
+    metrics.statisticsSource = 'stockanalysis';
+    metrics.statisticsAsOf = saStats.asOf || null;
+  }
+  if (saForecast) {
+    if (metrics.analystTarget == null && saForecast.priceTarget != null) metrics.analystTarget = saForecast.priceTarget;
+    if (metrics.analystCount == null && saForecast.analystCount != null) metrics.analystCount = saForecast.analystCount;
+    if (metrics.analystConsensus == null && saForecast.consensus) metrics.analystConsensus = saForecast.consensus;
+    if (metrics.analystRevenueThisYear == null) metrics.analystRevenueThisYear = saForecast.revenueThisYear ?? null;
+    if (metrics.analystRevenueNextYear == null) metrics.analystRevenueNextYear = saForecast.revenueNextYear ?? null;
+    if (metrics.analystEpsThisYear == null) metrics.analystEpsThisYear = saForecast.epsThisYear ?? null;
+    if (metrics.analystEpsNextYear == null) metrics.analystEpsNextYear = saForecast.epsNextYear ?? null;
+    metrics.forecastSource = 'stockanalysis';
+    metrics.forecastAsOf = saForecast.asOf || null;
+  }
+  return metrics;
+}
+
 async function fetchRealFinancialMetrics(symbol) {
   const cached = _financialReportCache.get(symbol);
-  if (cached) return cached;
+  if (cached) {
+    // The enriched cache may have been built before the background pass ran;
+    // apply any enrichment that has arrived since without refetching filings.
+    const enrichment = stockAnalysisEnrichmentService.peek(symbol);
+    if (enrichment) mergeStockAnalysisMetrics(cached, enrichment.statistics, enrichment.forecast);
+    return cached;
+  }
   try {
     const isNse = NSE_SYMBOLS.includes(symbol);
     const metrics = {};
@@ -1109,48 +1161,9 @@ async function fetchRealFinancialMetrics(symbol) {
 
     // Insider / institutional ownership (US only — NSE returns null from Yahoo)
     if (d.ownership) metrics.ownership = d.ownership;
-    // StockAnalysis enrichment (forecast/statistics) carried by the fallback
-    // report. These are secondary-source fields and are labelled as such.
-    const saStats = d.statistics || null;
-    const saForecast = d.forecast || null;
-    if (saStats) {
-      if (!metrics.marketCap && saStats.marketCap) metrics.marketCap = saStats.marketCap;
-      if (!metrics.peRatio && saStats.peRatio) metrics.peRatio = saStats.peRatio;
-      if (!metrics.pbRatio && saStats.pbRatio) metrics.pbRatio = saStats.pbRatio;
-      if (!metrics.evEbitda && saStats.evEbitda) metrics.evEbitda = saStats.evEbitda;
-      if (!metrics.debtToEquity && saStats.debtToEquity) metrics.debtToEquity = saStats.debtToEquity;
-      if (!metrics.currentRatio && saStats.currentRatio) metrics.currentRatio = saStats.currentRatio;
-      if (metrics.roe == null && saStats.roePct != null) metrics.roe = saStats.roePct;
-      if (metrics.roa == null && saStats.roaPct != null) metrics.roa = saStats.roaPct;
-      if (metrics.roic == null && saStats.roicPct != null) metrics.roic = saStats.roicPct;
-      if (metrics.assetTurnover == null && saStats.assetTurnover != null) metrics.assetTurnover = saStats.assetTurnover;
-      if (metrics.fcfYield == null && saStats.fcfYieldPct != null) metrics.fcfYield = saStats.fcfYieldPct;
-      if (metrics.beta == null && saStats.beta != null) metrics.beta = saStats.beta;
-      if (metrics.sharesOutstanding == null && saStats.sharesOutstanding != null) metrics.sharesOutstanding = saStats.sharesOutstanding;
-      if (metrics.shortInterest == null && saStats.shortInterest != null) metrics.shortInterest = saStats.shortInterest;
-      if (metrics.shortPctSharesOut == null && saStats.shortPctSharesOut != null) metrics.shortPctSharesOut = saStats.shortPctSharesOut;
-      if (metrics.shortRatio == null && saStats.shortRatio != null) metrics.shortRatio = saStats.shortRatio;
-      if (metrics.institutionalOwnershipPct == null && saStats.institutionalOwnershipPct != null) metrics.institutionalOwnershipPct = saStats.institutionalOwnershipPct;
-      if (metrics.insiderOwnershipPct == null && saStats.insiderOwnershipPct != null) metrics.insiderOwnershipPct = saStats.insiderOwnershipPct;
-      if (metrics.analystTarget == null && saStats.priceTarget != null) metrics.analystTarget = saStats.priceTarget;
-      if (metrics.analystCount == null && saStats.analystCount != null) metrics.analystCount = saStats.analystCount;
-      if (metrics.analystConsensus == null && saStats.analystConsensus) metrics.analystConsensus = saStats.analystConsensus;
-      if (metrics.revenueGrowthForecast3Y == null && saStats.revenueGrowthForecast3Y != null) metrics.revenueGrowthForecast3Y = saStats.revenueGrowthForecast3Y;
-      if (metrics.epsGrowthForecast3Y == null && saStats.epsGrowthForecast3Y != null) metrics.epsGrowthForecast3Y = saStats.epsGrowthForecast3Y;
-      metrics.statisticsSource = 'stockanalysis';
-      metrics.statisticsAsOf = saStats.asOf || null;
-    }
-    if (saForecast) {
-      if (metrics.analystTarget == null && saForecast.priceTarget != null) metrics.analystTarget = saForecast.priceTarget;
-      if (metrics.analystCount == null && saForecast.analystCount != null) metrics.analystCount = saForecast.analystCount;
-      if (metrics.analystConsensus == null && saForecast.consensus) metrics.analystConsensus = saForecast.consensus;
-      if (metrics.analystRevenueThisYear == null) metrics.analystRevenueThisYear = saForecast.revenueThisYear ?? null;
-      if (metrics.analystRevenueNextYear == null) metrics.analystRevenueNextYear = saForecast.revenueNextYear ?? null;
-      if (metrics.analystEpsThisYear == null) metrics.analystEpsThisYear = saForecast.epsThisYear ?? null;
-      if (metrics.analystEpsNextYear == null) metrics.analystEpsNextYear = saForecast.epsNextYear ?? null;
-      metrics.forecastSource = 'stockanalysis';
-      metrics.forecastAsOf = saForecast.asOf || null;
-    }
+    // StockAnalysis enrichment (forecast/statistics) carried by the report.
+    // These are secondary-source fields and are labelled as such.
+    mergeStockAnalysisMetrics(metrics, d.statistics || null, d.forecast || null);
 
     const hasUsableMetrics = metrics.peRatio || metrics.roe || metrics.revenueGrowth || metrics.currentRatio;
     _financialReportCache.set(symbol, hasUsableMetrics ? metrics : null);
@@ -5315,6 +5328,19 @@ async function generateSignals(marketData = null, quick = false, force = false) 
 
     const minConfidence = cfg.minConfidence || 40;
     const filteredSignals = constrainedSignals.filter(s => s.confidence >= minConfidence);
+
+    // Separate, rate-limited enrichment pass: fill analyst forecasts/statistics
+    // for monitored and actionable US names without blocking the signal cycle.
+    if (!quick) {
+      const priority = filteredSignals
+        .filter(s => s.action === 'buy')
+        .slice(0, 50)
+        .map(s => s.ticker);
+      const monitored = [..._signalOutcomes.keys()];
+      stockAnalysisEnrichmentService
+        .warm([...new Set([...priority, ...monitored])])
+        .catch(() => {});
+    }
 
     if (!marketData && filteredSignals.length > 0) {
       _signalsCache = filteredSignals;
