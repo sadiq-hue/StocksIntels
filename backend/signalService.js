@@ -4854,6 +4854,15 @@ async function generateSignals(marketData = null, quick = false, force = false) 
       newsBySymbol = await buildNewsBySymbol(allNews);
     } catch { /* silent */ }
 
+    // The news fan-out is cold on the first cycle and can exceed the per-source
+    // race above. Re-run the derived maps now that getAllNews has populated its
+    // 60s cache, so catalysts are not silently empty for a whole cycle.
+    try {
+      if (!Object.keys(catalysts).length) catalysts = await getCatalysts();
+      if (!Object.keys(newsSentiment).length) newsSentiment = await getAggregatedSentiment();
+      if (!Object.keys(insiderNews).length) insiderNews = await getInsiderNewsSignals();
+    } catch { /* silent */ }
+
     // Expand the cycle with catalyst/mover/catalog names. Catalysts lead, then
     // on-demand lookups and current movers; the SEC catalog rotates so the whole
     // US universe is eventually covered without a 10k-symbol scan per cycle.
