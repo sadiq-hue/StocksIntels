@@ -4936,15 +4936,16 @@ async function generateSignals(marketData = null, quick = false, force = false) 
         ]);
         const budget = Math.max(0, maxSymbols - symbols.length);
         const dynamicSymbols = await universeService.getCycleSymbols(Math.min(60, budget));
+        const dueDynamic = await signalSnapshotsService.getDueSymbols(dynamicSymbols).catch(() => dynamicSymbols);
         const seen = new Set(symbols);
-        for (const symbol of dynamicSymbols) {
+        for (const symbol of dueDynamic) {
           if (!seen.has(symbol)) {
             symbols.push(symbol);
             seen.add(symbol);
           }
         }
-        if (dynamicSymbols.length) {
-          console.log(`[SignalService] Dynamic universe: +${dynamicSymbols.length} names (total ${symbols.length})`);
+        if (dueDynamic.length) {
+          console.log(`[SignalService] Dynamic universe: +${dueDynamic.length} names (total ${symbols.length})`);
         }
       } catch (e) {
         console.warn(`[SignalService] Dynamic universe expansion failed: ${e.message}`);

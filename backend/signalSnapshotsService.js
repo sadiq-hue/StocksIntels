@@ -35,12 +35,15 @@ function ensureSchema() {
           news_summary JSONB,
           data_source TEXT,
           analyzed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          payload JSONB
+          payload JSONB,
+          next_refresh_at TIMESTAMPTZ
         )
       `);
+      await pool.query('ALTER TABLE signal_snapshots ADD COLUMN IF NOT EXISTS next_refresh_at TIMESTAMPTZ');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_snapshots_action_score ON signal_snapshots (action, score DESC)');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_snapshots_market_score ON signal_snapshots (market, score DESC)');
       await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_snapshots_analyzed ON signal_snapshots (analyzed_at DESC)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_signal_snapshots_next_refresh ON signal_snapshots (next_refresh_at)');
     })().catch(e => {
       schemaPromise = null;
       console.warn('[SignalSnapshots] schema unavailable:', e.message);
@@ -55,8 +58,23 @@ function cleanNumber(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+// Tiered refresh policy. Actionable/catalyst names are refreshed more often;
+// catalog names are allowed to age so the engine never tries to rescan 10k
+// symbols every cycle.
+function refreshMinutes(row) {
+  if (row.catalyst) return 15;
+  if (row.tier === 'catalyst') return 15;
+  if (row.tier === 'mover' || row.tier === 'on-demand') return 30;
+  if (row.tier === 'africa') return 360;
+  if (row.tier === 'catalog') return 1440;
+  if (row.tier === 'core') {
+    return row.action === 'buy' || row.action === 'sell' ? 30 : 60;
+  }
+  return 60;
+}
+
 function toRow(s) {
-  return {
+  const row = {
     ticker: String(s.ticker || '').toUpperCase(),
     name: s.name || null,
     market: s.market || null,
@@ -79,6 +97,8 @@ function toRow(s) {
     data_source: s.dataSource || null,
     payload: s,
   };
+  row.next_refresh_at = new Date(Date.now() + refreshMinutes(row) * 60 * 1000).toISOString();
+  return row;
 }
 
 async function upsertMany(signals = []) {
@@ -101,21 +121,21 @@ async function upsertMany(signals = []) {
     const params = [];
     for (const r of chunk) {
       const p = params.length + 1;
-      values.push(`($${p},$${p + 1},$${p + 2},$${p + 3},$${p + 4},$${p + 5},$${p + 6},$${p + 7},$${p + 8},$${p + 9},$${p + 10},$${p + 11},$${p + 12},$${p + 13},$${p + 14},$${p + 15},$${p + 16},$${p + 17},$${p + 18},$${p + 19},NOW(),$${p + 20})`);
+      values.push(`($${p},$${p + 1},$${p + 2},$${p + 3},$${p + 4},$${p + 5},$${p + 6},$${p + 7},$${p + 8},$${p + 9},$${p + 10},$${p + 11},$${p + 12},$${p + 13},$${p + 14},$${p + 15},$${p + 16},$${p + 17},$${p + 18},$${p + 19},NOW(),$${p + 20},$${p + 21})`);
       params.push(
         r.ticker, r.name, r.market, r.sector, r.tier, r.signal, r.action,
         r.confidence != null ? Math.round(r.confidence) : null,
         r.score != null ? Math.round(r.score) : null,
         r.price, r.entry, r.stop_loss, r.target1, r.target2, r.target3,
         r.horizon, r.timeframe, r.catalyst, r.news_summary, r.data_source,
-        JSON.stringify(r.payload || {})
+        JSON.stringify(r.payload || {}), r.next_refresh_at
       );
     }
     await pool.query(`
       INSERT INTO signal_snapshots (
         ticker,name,market,sector,tier,signal,action,confidence,score,price,
         entry,stop_loss,target1,target2,target3,horizon,timeframe,catalyst,
-        news_summary,data_source,analyzed_at,payload
+        news_summary,data_source,analyzed_at,payload,next_refresh_at
       ) VALUES ${values.join(',')}
       ON CONFLICT (ticker) DO UPDATE SET
         name=COALESCE(EXCLUDED.name,signal_snapshots.name),
@@ -138,7 +158,8 @@ async function upsertMany(signals = []) {
         news_summary=EXCLUDED.news_summary,
         data_source=EXCLUDED.data_source,
         analyzed_at=NOW(),
-        payload=EXCLUDED.payload
+        payload=EXCLUDED.payload,
+        next_refresh_at=EXCLUDED.next_refresh_at
     `, params);
     written += chunk.length;
   }
@@ -149,6 +170,38 @@ async function getSnapshot(ticker) {
   await ensureSchema();
   const res = await pool.query('SELECT * FROM signal_snapshots WHERE ticker=$1', [String(ticker || '').toUpperCase()]);
   return res.rows[0] || null;
+}
+
+// Return the subset of candidates whose tiered refresh window has elapsed.
+// New symbols (not in the snapshot table) are always due.
+async function getDueSymbols(symbols = []) {
+  if (!Array.isArray(symbols) || symbols.length === 0) return [];
+  await ensureSchema();
+  const unique = [...new Set(symbols.map(s => String(s || '').toUpperCase()).filter(Boolean))];
+  if (!unique.length) return [];
+  const res = await pool.query(
+    'SELECT ticker, next_refresh_at FROM signal_snapshots WHERE ticker = ANY($1)',
+    [unique]
+  );
+  const byTicker = new Map(res.rows.map(r => [r.ticker, r.next_refresh_at]));
+  const now = Date.now();
+  return unique.filter(s => {
+    if (!byTicker.has(s)) return true;
+    const next = byTicker.get(s);
+    return !next || new Date(next).getTime() <= now;
+  });
+}
+
+async function getRefreshStats() {
+  await ensureSchema();
+  const [due, tiers] = await Promise.all([
+    pool.query("SELECT COUNT(*)::int AS count FROM signal_snapshots WHERE next_refresh_at IS NULL OR next_refresh_at <= NOW()"),
+    pool.query("SELECT COALESCE(tier,'core') AS tier, COUNT(*)::int AS count FROM signal_snapshots WHERE next_refresh_at IS NULL OR next_refresh_at <= NOW() GROUP BY tier"),
+  ]);
+  return {
+    dueNow: due.rows[0]?.count || 0,
+    dueByTier: Object.fromEntries(tiers.rows.map(r => [r.tier, r.count])),
+  };
 }
 
 async function listSnapshots({ page = 1, limit = 50, market, action, minScore, sort = 'score' } = {}) {
@@ -178,7 +231,7 @@ async function listSnapshots({ page = 1, limit = 50, market, action, minScore, s
   const rows = await pool.query(
     `SELECT ticker,name,market,sector,tier,signal,action,confidence,score,price,
             entry,stop_loss,target1,target2,target3,horizon,timeframe,
-            catalyst,news_summary,data_source,analyzed_at
+            catalyst,news_summary,data_source,analyzed_at,next_refresh_at
      FROM signal_snapshots ${whereSql}
      ORDER BY ${order}
      LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}`,
@@ -200,13 +253,15 @@ async function getCoverage() {
     pool.query('SELECT market, COUNT(*)::int AS count FROM signal_snapshots GROUP BY market'),
     pool.query('SELECT tier, COUNT(*)::int AS count FROM signal_snapshots GROUP BY tier'),
   ]);
+  const refresh = await getRefreshStats();
   return {
     total: totals.rows[0]?.total || 0,
     freshLastHour: totals.rows[0]?.fresh || 0,
+    ...refresh,
     byAction: Object.fromEntries(actions.rows.map(r => [r.action, r.count])),
     byMarket: Object.fromEntries(markets.rows.map(r => [r.market, r.count])),
     byTier: Object.fromEntries(tiers.rows.map(r => [r.tier, r.count])),
   };
 }
 
-module.exports = { upsertMany, getSnapshot, listSnapshots, getCoverage, ensureSchema };
+module.exports = { upsertMany, getSnapshot, getDueSymbols, getRefreshStats, listSnapshots, getCoverage, ensureSchema };

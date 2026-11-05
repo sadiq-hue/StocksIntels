@@ -28,6 +28,7 @@ type Snapshot = {
 type Coverage = {
   total: number;
   freshLastHour: number;
+  dueNow?: number;
   byAction?: Record<string, number>;
   byMarket?: Record<string, number>;
   byTier?: Record<string, number>;
@@ -116,7 +117,7 @@ export function MarketUniversePanel() {
           <div>
             <h3 className="text-sm font-semibold text-foreground">Universe Intelligence</h3>
             <p className="text-[11px] text-muted-foreground">
-              Latest scored snapshot per symbol · {coverage ? `${coverage.total.toLocaleString()} analyzed · ${coverage.freshLastHour.toLocaleString()} fresh this hour` : "loading coverage…"}
+              Latest scored snapshot per symbol · {coverage ? `${coverage.total.toLocaleString()} analyzed · ${coverage.freshLastHour.toLocaleString()} fresh this hour${coverage.dueNow != null ? ` · ${coverage.dueNow.toLocaleString()} due` : ""}` : "loading coverage…"}
             </p>
           </div>
         </div>
