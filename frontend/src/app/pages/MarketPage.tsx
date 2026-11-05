@@ -17,6 +17,7 @@ import { useRealtimeQuotes } from '../contexts/RealtimeQuotesContext';
 import { fetchAllNews, type NewsArticle } from '../services/newsService';
 import { fetchRealtimeQuotesBatch, type RealtimeStockQuote } from '../services/marketDataService';
 import { useAuth } from '../auth/AuthContext';
+import { MarketUniversePanel } from '../components/MarketUniversePanel';
 
 interface MarketStatusInfo {
   open: boolean;
@@ -663,6 +664,9 @@ const MarketPage: React.FC = () => {
           </div>
         </Card>
       </div>
+
+      {/* Universe-wide read model: cached snapshots, paginated, independent of the engine cycle */}
+      <MarketUniversePanel />
 
       {/* Indices */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
