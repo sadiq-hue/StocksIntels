@@ -24,6 +24,10 @@ const SEC_HEADERS = {
   'User-Agent': 'StocksIntels research contact@stocksintels.com',
   Accept: 'application/json',
 };
+const EXCHANGE_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+  Accept: 'text/plain,*/*',
+};
 
 let readyPromise = null;
 let cycleCursor = 0;
@@ -31,6 +35,7 @@ let africaCursor = 0;
 let lastMoverRefresh = 0;
 let catalogRefreshedAt = 0;
 let africaRefreshedAt = 0;
+let exchangeRefreshedAt = 0;
 
 function normalizeSymbol(value) {
   let s = String(value || '').trim().toUpperCase();
@@ -170,6 +175,7 @@ async function init() {
   // names remain usable while the ~10k SEC list is upserted.
   refreshCatalog().catch(() => {});
   refreshAfricanCatalog().catch(() => {});
+  refreshExchangeCatalog().catch(() => {});
 }
 
 function ready() {
@@ -301,6 +307,55 @@ async function refreshCatalog() {
   }
 }
 
+// Complete NYSE/Nasdaq/AME listing master from Nasdaq Trader. The SEC catalog
+// is filing-based and misses listed ADRs/test issues; this fills the exchange
+// gaps while excluding test issues and ETFs from stock scoring.
+const EXCHANGE_SYMBOL_FILES = [
+  { url: 'https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt', kind: 'nasdaq' },
+  { url: 'https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt', kind: 'other' },
+];
+
+async function refreshExchangeCatalog() {
+  if (Date.now() - exchangeRefreshedAt < 24 * 60 * 60 * 1000) return;
+  exchangeRefreshedAt = Date.now();
+  const entriesBySymbol = new Map();
+  for (const file of EXCHANGE_SYMBOL_FILES) {
+    try {
+      const res = await axios.get(file.url, {
+        timeout: 30000,
+        headers: EXCHANGE_HEADERS,
+        responseType: 'text',
+      });
+      const lines = String(res.data || '').split(/\r?\n/).filter(Boolean);
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split('|');
+        if (parts.length < 7) continue;
+        const symbol = file.kind === 'nasdaq' ? parts[0] : (parts[0] || parts[7]);
+        const name = parts[1];
+        const etf = file.kind === 'nasdaq' ? parts[6] : parts[4];
+        const testIssue = file.kind === 'nasdaq' ? parts[3] : parts[6];
+        if (testIssue === 'Y' || etf === 'Y') continue;
+        const sym = normalizeSymbol(symbol);
+        if (!sym || !name) continue;
+        entriesBySymbol.set(sym, {
+          symbol: sym,
+          name: name.trim(),
+          source: 'nasdaq-trader',
+          tier: 'catalog',
+          market: 'Global',
+        });
+      }
+    } catch (e) {
+      console.warn(`[Universe] exchange symbol file failed (${file.kind}): ${e.message}`);
+    }
+  }
+  const entries = [...entriesBySymbol.values()];
+  if (entries.length) {
+    await addSymbols(entries, { tier: 'catalog', source: 'nasdaq-trader' });
+    console.log(`[Universe] Nasdaq/NYSE listing master refreshed: ${entries.length} stocks (ETFs/test issues excluded)`);
+  }
+}
+
 async function refreshAfricanCatalog() {
   if (Date.now() - africaRefreshedAt < 24 * 60 * 60 * 1000) return;
   africaRefreshedAt = Date.now();
@@ -396,6 +451,7 @@ function getStats() {
     byTier,
     catalogRefreshedAt: catalogRefreshedAt ? new Date(catalogRefreshedAt).toISOString() : null,
     africaRefreshedAt: africaRefreshedAt ? new Date(africaRefreshedAt).toISOString() : null,
+    exchangeRefreshedAt: exchangeRefreshedAt ? new Date(exchangeRefreshedAt).toISOString() : null,
     lastMoverRefresh: lastMoverRefresh ? new Date(lastMoverRefresh).toISOString() : null,
     maxDynamic: MAX_DYNAMIC,
   };
@@ -414,6 +470,7 @@ module.exports = {
   refreshMovers,
   refreshCatalog,
   refreshAfricanCatalog,
+  refreshExchangeCatalog,
   getCycleSymbols,
   getMeta,
   isDynamic,
