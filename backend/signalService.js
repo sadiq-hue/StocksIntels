@@ -335,6 +335,7 @@ async function _loadSignalCacheFromDb() {
           });
         }
         _signalsCacheTime = 0;
+        signalSnapshotsService.upsertMany(_signalsCache).catch(() => {});
         console.log(`[SignalService] Loaded ${_signalsCache.length} signals from cache DB (will regenerate in background)`);
         return;
       }
@@ -366,6 +367,7 @@ async function _loadSignalCacheFromDb() {
         analysis: { overall: { score: 50, grade: 'C' }, fundamental: { score: 50 }, technical: { score: 50 }, financial: { score: 50 }, macro: { score: 50 } },
       })));
       _signalsCacheTime = Date.now();
+      signalSnapshotsService.upsertMany(_signalsCache).catch(() => {});
       console.log(`[SignalService] Loaded ${_signalsCache.length} signals from signal_history (fallback)`);
       return;
     }
