@@ -1851,6 +1851,11 @@ async function fetchFromStockTitan() {
       const excerpt = stripHtml(item.contentSnippet || item.summary || item.content || '')
         .replace(/\s+/g, ' ').trim().slice(0, 300);
       const relatedStocks = [...new Set([ticker, ...extractRelatedStocks(`${headline} ${excerpt}`)])];
+      const originalUrl = item.link || '#';
+      // StockTitan's article pages return 403 to many readers behind
+      // Cloudflare. Keep the feed for ticker/catalyst extraction, but send the
+      // clickable link to Yahoo Finance's live news page for the ticker.
+      const fallbackUrl = `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}/news`;
       articles.push({
         id: `st-${ticker}-${String(item.link || headline).replace(/[^a-z0-9]/gi, '').slice(-32)}`,
         headline: headline.substring(0, 200),
@@ -1861,7 +1866,8 @@ async function fetchFromStockTitan() {
         relatedStocks,
         sentiment: analyzeSentiment(`${headline} ${excerpt}`),
         excerpt: excerpt || `Company press release: ${headline}`,
-        url: item.link || '#',
+        url: fallbackUrl,
+        originalUrl,
         imageUrl: extractRssImage(item),
       });
     }
