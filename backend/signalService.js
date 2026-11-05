@@ -5462,13 +5462,16 @@ async function getSignalForStock(symbol) {
   const isDynamic = universeService.isDynamic(upper);
   // First check if it's in our main list
   if (isCore || isDynamic) {
+    // An open monitored position is the source of truth. The compact cache can
+    // still contain the pre-hydration snapshot from before a restart; returning
+    // that first made the detail page show "Not scored" even though the full
+    // analysis_data is available in signal_history.
+    const open = _signalOutcomes.get(upper);
+    const hasOpen = !!(open && !open.result && open.timestamp);
     const signals = isCore ? await generateSignals() : (_signalsCache || []);
     const found = signals.find(s => s.ticker === upper);
-    if (found) return found;
-    // The symbol's prior signal is still open and being monitored — surface that
-    // state instead of a fresh (suppressed) signal.
-    const open = _signalOutcomes.get(upper);
-    if (open && !open.result && open.timestamp) {
+    if (found && !hasOpen) return found;
+    if (hasOpen) {
       const latest = _latestAnalyses.get(upper);
       const rawStored = latest?.analysis || open.analysis || null;
       let storedAnalysis = rawStored;
