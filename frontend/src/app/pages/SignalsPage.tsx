@@ -352,7 +352,9 @@ export function SignalsPage() {
     try {
       const res = await authFetch(`${API_URL}/signal/${encodeURIComponent(signal.ticker)}?fresh=${Date.now()}`, { cache: "no-store" });
       const payload = await res.json();
-      const full = payload?.signal || payload;
+      // The API returns a flat signal object: { signal: "Buy", analysis: {...} }.
+      // Only unwrap an envelope when `signal` is itself an object.
+      const full = payload?.signal && typeof payload.signal === "object" ? payload.signal : payload;
       if (full && (full.ticker || full.analysis)) {
         const merged = { ...signal, ...full } as StockSignal;
         fullSignalCache.current.set(signal.ticker, merged);
