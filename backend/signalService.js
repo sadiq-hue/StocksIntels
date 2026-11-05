@@ -5468,9 +5468,10 @@ async function getSignalForStock(symbol) {
     // analysis_data is available in signal_history.
     const open = _signalOutcomes.get(upper);
     const hasOpen = !!(open && !open.result && open.timestamp);
-    const signals = isCore ? await generateSignals() : (_signalsCache || []);
-    const found = signals.find(s => s.ticker === upper);
-    if (found && !hasOpen) return found;
+    // Do not run a full market cycle just to open an already-monitored position.
+    const signals = hasOpen ? [] : (isCore ? await generateSignals() : (_signalsCache || []));
+    const found = hasOpen ? null : signals.find(s => s.ticker === upper);
+    if (found) return found;
     if (hasOpen) {
       const latest = _latestAnalyses.get(upper);
       const rawStored = latest?.analysis || open.analysis || null;
