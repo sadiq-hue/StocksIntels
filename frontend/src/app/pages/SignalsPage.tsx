@@ -350,7 +350,7 @@ export function SignalsPage() {
     if (cached) setSelected(cached);
     setDetailLoading(true);
     try {
-      const res = await authFetch(`${API_URL}/signal/${encodeURIComponent(signal.ticker)}`);
+      const res = await authFetch(`${API_URL}/signal/${encodeURIComponent(signal.ticker)}?fresh=${Date.now()}`, { cache: "no-store" });
       const payload = await res.json();
       const full = payload?.signal || payload;
       if (full && (full.ticker || full.analysis)) {
