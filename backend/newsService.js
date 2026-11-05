@@ -11,7 +11,7 @@ const rssParser = new RssParser({
 });
 const { newsapi, finnhub: finnhubClient, generic } = require('./apiClient');
 const sentimentHistory = require('./sentimentHistoryService');
-const { US_SYMBOLS } = require('./stockData');
+const { US_SYMBOLS, KNOWN_NAMES } = require('./stockData');
 
 // API keys must come from the environment — no hardcoded fallbacks. Without
 // them the NewsAPI/Finnhub sources are skipped and the RSS/KWS scrapers carry
@@ -495,6 +495,25 @@ const AMBIGUOUS_TICKERS = new Set([
 // Alias keys too generic to match as a standalone word ("visa-free travel",
 // "metaverse", "zoom call"). Their companies only tag via cashtag/uppercase.
 const AMBIGUOUS_ALIASES = new Set(['meta', 'visa', 'zoom']);
+
+// Company names for the full tracked US universe. Without these, general news
+// feeds only tag the handful of mega-caps in the hand-written alias map, so
+// mid-caps like Teck/Suncor/Shopify appeared to have no news at all.
+for (const [symbol, rawName] of Object.entries(KNOWN_NAMES || {})) {
+  if (!rawName) continue;
+  const name = String(rawName).toLowerCase().replace(/\s+/g, ' ').trim();
+  if (name.length >= 6 && name !== String(symbol).toLowerCase() && !NAME_ALIASES[name] && !AMBIGUOUS_ALIASES.has(name)) {
+    NAME_ALIASES[name] = symbol;
+  }
+  // Headlines normally omit the legal suffix ("Suncor Energy beats estimates",
+  // not "Suncor Energy Inc."), so also register the stripped company name.
+  const base = name.replace(/\b(inc|incorporated|corp|corporation|company|co|ltd|limited|plc|group|holdings|the)\b\.?/g, '')
+    .replace(/\s+/g, ' ').trim();
+  if (base.length >= 6 && base !== name && !NAME_ALIASES[base] && !AMBIGUOUS_ALIASES.has(base)) {
+    NAME_ALIASES[base] = symbol;
+  }
+}
+if (!NAME_ALIASES.shopify) NAME_ALIASES.shopify = 'SHOP';
 
 // Attribution around an *opinion giver* (analyst/broker), not the subject stock:
 // "UBS says…", "GS raises its target", "…per UBS.", "according to UBS", "Citi research".
@@ -1931,6 +1950,63 @@ async function fetchFromYahooTickerFeeds() {
   return articles;
 }
 
+// On-demand per-symbol news. The batch news cycle only polls a rotating slice of
+// the US universe, so a mid-cap detail page could open with no news at all. This
+// fetches Yahoo's ticker feed for that exact symbol and classifies catalysts.
+const symbolNewsCache = new Map();
+const SYMBOL_NEWS_TTL_MS = 3 * 60 * 1000;
+async function getSymbolNews(symbol, limit = 10) {
+  const upper = String(symbol || '').toUpperCase().replace(/^US:/, '');
+  if (!upper) return [];
+  const cached = symbolNewsCache.get(upper);
+  if (cached && Date.now() - cached.ts < SYMBOL_NEWS_TTL_MS) return cached.value;
+  const articles = [];
+  try {
+    const feedSymbol = upper.replace(/\./g, '-');
+    const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(feedSymbol)}&region=US&lang=en-US`;
+    const res = await fetchRssWithRetry(url, 1);
+    const data = await rssParser.parseString(res.data);
+    for (const item of (data.items || []).slice(0, limit)) {
+      const title = String(item.title || '').trim();
+      if (!title || title.length < 10) continue;
+      const excerpt = stripHtml(item.contentSnippet || item.summary || item.content || '')
+        .replace(/\s+/g, ' ').trim().slice(0, 300);
+      const pubDate = item.isoDate ? new Date(item.isoDate) : (item.pubDate ? new Date(item.pubDate) : new Date());
+      const cat = classifyCatalyst(title, excerpt);
+      const ins = classifyInsider(title, excerpt);
+      const hot = classifyHotNews(title, excerpt);
+      articles.push({
+        id: `sym-${upper}-${String(item.link || title).replace(/[^a-z0-9]/gi, '').slice(-32)}`,
+        headline: title.substring(0, 200),
+        source: 'Yahoo Finance',
+        timestamp: getTimeAgo(pubDate),
+        publishedAt: pubDate.toISOString(),
+        category: classifyArticle(title, excerpt, [upper]),
+        relatedStocks: [upper],
+        sentiment: analyzeSentiment(`${title} ${excerpt}`),
+        excerpt: excerpt || 'Read the full story on Yahoo Finance.',
+        url: item.link || '#',
+        imageUrl: extractRssImage(item),
+        hot: hot.hot,
+        hotType: hot.hotType,
+        catalyst: cat.catalyst,
+        catalystDirection: cat.direction,
+        catalystStrength: cat.strength,
+        insiderDirection: ins.direction,
+        insiderType: ins.type,
+      });
+    }
+  } catch { /* fall through to cached general feed */ }
+  if (!articles.length) {
+    try {
+      const all = await getAllNews(300);
+      articles.push(...all.filter(a => (a.relatedStocks || []).includes(upper)).slice(0, limit));
+    } catch { /* no news available */ }
+  }
+  symbolNewsCache.set(upper, { value: articles, ts: Date.now() });
+  return articles;
+}
+
 // Nasdaq's company-news feeds carry earnings, guidance, contracts and management
 // changes for NYSE/Nasdaq names. Keep only items that resolve to a tracked ticker.
 const NASDAQ_FEEDS = [
@@ -2525,5 +2601,5 @@ async function getPositiveStockNews(limit = 5) {
 
 module.exports = { getAllNews, getPositiveStockNews, getNewsSummary, getAggregatedSentiment, getCatalysts, getInsiderNewsSignals, classifyHotNews,
     classifyCatalyst, classifyInsider, extractRelatedStocks, getAfricaCompanyName, backfillSentimentHistory, initNewsHistory, KENYAN_STOCKS,
-    STOCK_SYMBOLS };
+    getSymbolNews, STOCK_SYMBOLS };
 

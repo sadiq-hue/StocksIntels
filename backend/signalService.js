@@ -8,7 +8,7 @@ const { getStockQuote, getQuotesBatch } = require('./marketService');
 const { fetchHistoricalQuotes } = require('./globalScraper');
 const nseHistory = require('./nseHistoryService');
 const { getMacroScore, getCountryForSymbol, generateMacroReason, startMacroRefresh } = require('./macroService');
-const { getAggregatedSentiment, getCatalysts, getInsiderNewsSignals, initNewsHistory, getAllNews } = require('./newsService');
+const { getAggregatedSentiment, getCatalysts, getInsiderNewsSignals, initNewsHistory, getAllNews, getSymbolNews } = require('./newsService');
 const sentimentHistory = require('./sentimentHistoryService');
 const { getKeyMetrics, getQuote, getCompanyProfile } = require('./financialReportsService');
 const { calculateSMA, calculateATR } = require('./technicalIndicators');
@@ -5455,6 +5455,26 @@ async function generateSignals(marketData = null, quick = false, force = false) 
   }
 }
 
+// Detail pages get a per-ticker Yahoo news pull so a mid-cap that missed the
+// rotating batch feed still shows its catalyst/news block.
+async function attachFreshNews(sig, symbol) {
+  if (!sig) return sig;
+  try {
+    const fresh = await getSymbolNews(symbol, 10).catch(() => []);
+    if (!fresh.length) return sig;
+    const catalystArticle = fresh.find(a => a.catalyst && a.catalystDirection);
+    const catalyst = catalystArticle ? {
+      type: catalystArticle.catalyst,
+      direction: catalystArticle.catalystDirection,
+      strength: catalystArticle.catalystStrength,
+      headline: catalystArticle.headline,
+      source: catalystArticle.source,
+      publishedAt: catalystArticle.publishedAt,
+    } : sig.catalyst || null;
+    return { ...sig, news: fresh, newsSummary: summarizeNews(fresh), catalyst };
+  } catch { return sig; }
+}
+
 // Get signal for a specific stock (works for ANY stock symbol)
 async function getSignalForStock(symbol) {
   const upper = symbol.toUpperCase();
@@ -5471,7 +5491,7 @@ async function getSignalForStock(symbol) {
     // Do not run a full market cycle just to open an already-monitored position.
     const signals = hasOpen ? [] : (isCore ? await generateSignals() : (_signalsCache || []));
     const found = hasOpen ? null : signals.find(s => s.ticker === upper);
-    if (found) return found;
+    if (found) return attachFreshNews(found, upper);
     if (hasOpen) {
       const latest = _latestAnalyses.get(upper);
       const rawStored = latest?.analysis || open.analysis || null;
@@ -5516,7 +5536,7 @@ async function getSignalForStock(symbol) {
         const reward = Math.abs(t1 - entry);
         riskReward = risk > 0 ? parseFloat((reward / risk).toFixed(1)) : null;
       }
-      return {
+      const detail = {
         ticker: upper, signal: open.signal, action: open.action,
         currency: currencyForSymbol(upper),
         entry: entry, entryPrice: entry, stopLoss: stop, target1: t1,
@@ -5548,6 +5568,7 @@ async function getSignalForStock(symbol) {
         thesis: latest?.thesis || null,
         status: 'monitoring',
       };
+      return attachFreshNews(detail, upper);
     }
     if (isDynamic) return generateSingleSignal(upper);
     return null;
