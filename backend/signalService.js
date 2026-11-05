@@ -5470,6 +5470,34 @@ async function getSignalForStock(symbol) {
     const open = _signalOutcomes.get(upper);
     if (open && !open.result && open.timestamp) {
       const latest = _latestAnalyses.get(upper);
+      const rawStored = latest?.analysis || open.analysis || null;
+      let storedAnalysis = rawStored;
+      if (typeof rawStored === 'string') {
+        try { storedAnalysis = JSON.parse(rawStored); } catch { storedAnalysis = null; }
+      }
+      let companyProfile = latest?.companyProfile || storedAnalysis?.company || null;
+      let profile = null;
+      if (!companyProfile?.description) {
+        try {
+          let rich = null;
+          try {
+            rich = await require('./yahooFinanceFinancialsScraper').getCompanyProfile(upper);
+          } catch { /* optional */ }
+          profile = (rich && rich.description) ? rich : await financialReportsService.getCompanyProfile(upper);
+          if (profile) {
+            companyProfile = {
+              description: profile.description || null,
+              industry: profile.industry || null,
+              website: profile.website || null,
+              employees: profile.employees || null,
+              ceo: profile.ceo || null,
+              country: profile.country || getCountryForSymbol(upper),
+              market: marketForSymbol(upper),
+              currency: currencyForSymbol(upper),
+            };
+          }
+        } catch { /* profile is optional */ }
+      }
       // Surface the full monitored position state (type, target2/3, riskReward,
       // timeframe, position size, reason) — not just the bare levels — so the AI
       // analyst and dashboard render a complete card instead of "N/A"/undefined
@@ -5497,14 +5525,16 @@ async function getSignalForStock(symbol) {
         activeTarget: activeStageTarget(open),
         ultimateTarget: ultimateTargetOf(open),
         type: open.type || 'Swing Trade',
+        name: latest?.name || profile?.companyName || resolveStockName(upper) || upper,
+        sector: latest?.sector || profile?.sector || normalizeSector(open.sector, upper),
         riskReward,
         winBooked: open.milestoneWinBooked === true,
         confidence: open.confidence || 0,
         timeframe: open.timeframe || null,
         positionSize: open.positionSize != null ? open.positionSize + '%' : null,
         reason: latest?.reason || open.reason || '',
-        analysis: latest?.analysis || open.analysis || null,
-        companyProfile: latest?.companyProfile || open.analysis?.company || null,
+        analysis: storedAnalysis,
+        companyProfile,
         valuation: latest?.valuation || null,
         advancedFundamentals: latest?.advancedFundamentals || null,
         intelligence: latest?.intelligence || null,

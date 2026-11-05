@@ -347,10 +347,7 @@ export function SignalsPage() {
     setSelected(signal);
     window.scrollTo({ top: 0, behavior: "smooth" });
     const cached = fullSignalCache.current.get(signal.ticker);
-    if (cached) {
-      setSelected(cached);
-      return;
-    }
+    if (cached) setSelected(cached);
     setDetailLoading(true);
     try {
       const res = await authFetch(`${API_URL}/signal/${encodeURIComponent(signal.ticker)}`);
