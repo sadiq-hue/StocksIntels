@@ -28,6 +28,7 @@ const {
 const { buildScenarioTargets } = require('./scenarioTargets');
 const stockAnalysisEnrichmentService = require('./stockAnalysisEnrichmentService');
 const universeService = require('./universeService');
+const signalSnapshotsService = require('./signalSnapshotsService');
 const engineConfig = require('./engineConfig');
 const marketHours = require('./marketHours');
 const { ENGINE_VERSION } = require('./engineVersion');
@@ -5388,6 +5389,10 @@ async function generateSignals(marketData = null, quick = false, force = false) 
     }
   }
   
+  // Persist the complete latest assessment (including Hold) as the durable read
+  // model for paginated market-intelligence browsing.
+  signalSnapshotsService.upsertMany(signals).catch(() => {});
+
   console.log(`[SignalService] Generated ${signals.length} raw signals before constraints (${signals.filter(s => s.signal !== 'Hold').length} non-Hold)`);
   if (blockedNoFundamentals.length) {
     console.log(`[SignalService] NSE coverage gate: skipped ${blockedNoFundamentals.length} symbol(s) without filing-derived fundamentals: ${blockedNoFundamentals.join(', ')}`);
@@ -5651,6 +5656,7 @@ async function generateSingleSignal(symbol) {
       newsSent, catalyst, insiderNews, news: signalNews, priceHistory, degFactor, dataQuality, liquidity
     });
     if (sigObj) {
+      signalSnapshotsService.upsertMany([sigObj]).catch(() => {});
       // Same strict all-conditions gate as the batch path: an on-demand lookup
       // only returns a signal when the stock genuinely qualifies.
       const eligibility = meetsSignalConditions(sigObj, {
@@ -6637,6 +6643,7 @@ async function _buildSignal({ symbol, stock, currentPrice, priceChange, volume, 
     companyProfile,
     price: Math.round(currentPrice * 100) / 100, change: Math.round(priceChange * 100) / 100,
     market, country: getCountryForSymbol(symbol), currency,
+    tier: universeService.getMeta(symbol)?.tier || 'core',
     type: tradeType, signal: sig.signal, action: sig.action, entry: tradeLevels.entry,
     stopLoss: tradeLevels.stopLoss, target1: tradeLevels.target1, target2: tradeLevels.target2, target3: tradeLevels.target3,
     riskReward: tradeLevels.riskReward, confidence, positionSize: positionSize + '%',

@@ -25,6 +25,7 @@ const { generateSignals, getSignalForStock, getSignalsSummary, warmFMPCache, ALL
             getForwardTestPredictions, getSellAudit, resolveAllForwardPredictions, getAuditLog, logAuditEvent, getEngineConfig, updateEngineConfig, getSignalsCacheTime, signalEventBus, getLiveTestSnapshot, getMonitoredSignals, refreshMonitoredQuotes, getPhase1Benchmark } = require('./signalService');
 const stockAnalysisEnrichmentService = require('./stockAnalysisEnrichmentService');
 const universeService = require('./universeService');
+const signalSnapshotsService = require('./signalSnapshotsService');
 const { getStockQuote, getQuotesBatch, getCompanyName } = require('./marketService');
 const marketHours = require('./marketHours');
 const { refitParameters } = require('./paramRefit');
@@ -3933,6 +3934,32 @@ app.get('/api/universe/status', async (req, res) => {
     res.json(universeService.getStats());
   } catch (error) {
     res.status(500).json({ error: 'Universe status unavailable' });
+  }
+});
+
+// Durable read model for the market-intelligence page. Reads the last completed
+// assessment per symbol, so pagination/filtering never waits for a signal cycle.
+app.get('/api/market/intelligence', async (req, res) => {
+  try {
+    const result = await signalSnapshotsService.listSnapshots({
+      page: req.query.page,
+      limit: req.query.limit,
+      market: req.query.market,
+      action: req.query.action,
+      minScore: req.query.minScore,
+      sort: req.query.sort,
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Market intelligence unavailable' });
+  }
+});
+
+app.get('/api/market/intelligence/coverage', async (req, res) => {
+  try {
+    res.json(await signalSnapshotsService.getCoverage());
+  } catch (error) {
+    res.status(500).json({ error: 'Coverage unavailable' });
   }
 });
 
